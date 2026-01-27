@@ -169,54 +169,6 @@ Keep commits atomic. One ticket = one commit (unless it's large).
 
 ---
 
-## Pull Request Guidelines
-
-When creating a PR for your completed work:
-
-### Branch Targeting
-
-**Always target the parent branch** - your PR should merge back into the branch you created your feature branch from, not necessarily `main`.
-
-```
-Example:
-- You're on branch: feature/user-auth
-- You create: feature/user-auth-tests
-- Your PR targets: feature/user-auth (the parent), NOT main
-```
-
-This allows nested feature branches to work correctly.
-
-### PR Naming
-
-**Format: `{What you built} [Ticket X.Y]`**
-
-The title should describe the implementation AND include the ticket reference for traceability.
-
-```
-Good PR titles:
-- "Add user authentication endpoint [Ticket 2.3]"
-- "Implement task status transitions [Ticket 1.4]"
-- "Add database migration for agents table [Ticket 1.5]"
-
-BAD - Never use these patterns:
-- "Ticket 1.2 implementation" ← leads with ticket ID, not descriptive
-- "Milestone 2 work" ← milestone number doesn't help
-- "decomp 1" ← meaningless to reviewers
-- "Fix stuff" ← too vague
-```
-
-The implementation description comes first so it's readable at a glance.
-
-### PR Body
-
-Include:
-- Summary of what was implemented
-- List of files changed
-- Link to the issue (use "Fixes #N" to auto-close)
-- Any notes for reviewers
-
----
-
 ## Example Session
 
 ```
