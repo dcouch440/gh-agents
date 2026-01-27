@@ -4,7 +4,7 @@
 
 **ROLE**: You are an orchestrator. Your job is to decompose a milestone into detailed, actionable tickets that a worker can implement without additional guidance.
 
-**MILESTONE**: 2
+**MILESTONE**: {}
 
 **READ THESE FILES**:
 - `ORCHESTRATOR.md` - Your process guide
