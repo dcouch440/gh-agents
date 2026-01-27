@@ -1,12 +1,15 @@
 # Milestone 5: Orchestration Core
 
-> Orchestrator can classify requests, generate PRDs, decompose tickets into slices, route tasks to appropriate agents, and coordinate execution.
+> Specialized bots for planning and orchestration, plus the infrastructure to decompose and schedule work.
 
 ## Goal
 
-The orchestration layer is the brain of nexor. It classifies incoming requests by scale, generates PRDs for large projects, transforms tickets into actionable tasks, routes them to the correct agent tier, tracks dependencies, and schedules execution across the agent pool.
+The orchestration layer provides:
+1. **Planner Bot** (5.0) - Interactive PRD creation in `/plan` mode
+2. **Planner** (5.1) - Automatic ticket → slice decomposition for execution
+3. **Task management** - Queue, routing, dependencies, scheduling
 
-**Checkpoint**: Give orchestrator a raw request like "build a billing system", see it classify as Project, generate a mini-PRD, create slices, and assign to workers.
+**Checkpoint**: Create a PRD in `/plan` mode with Planner Bot, then execute it via `/main` where the orchestrator uses the Planner to decompose milestones into slices.
 
 ---
 
@@ -14,8 +17,8 @@ The orchestration layer is the brain of nexor. It classifies incoming requests b
 
 | Ticket | Title | Slices | Dependencies |
 |--------|-------|--------|--------------|
-| 5.0 | Plan Mode (Request → Strategy) | 5 | M2 (LLM Layer), M4 (Prompt Engineering) |
-| 5.1 | Planner (Ticket → Slices) | 5 | 5.0, M3 (Agent Runtime), M4 (Prompt Engineering) |
+| 5.0 | Planner Bot (Interactive PRD Creation) | 5 | M2 (LLM Layer), M3 (Agent Runtime), M4 (Prompts) |
+| 5.1 | Planner (Ticket → Slices) | 5 | M3 (Agent Runtime), M4 (Prompts) |
 | 5.2 | Task Queue | 4 | M1 (Foundation - types, db) |
 | 5.3 | Router (Task → Tier) | 3 | 5.1 |
 | 5.4 | Dependency Tracking | 3 | 5.2 |
@@ -25,55 +28,81 @@ The orchestration layer is the brain of nexor. It classifies incoming requests b
 
 ---
 
-## Dependency Graph
+## Two Types of Planning
+
+### Planner Bot (5.0) - Interactive, User-Driven
 
 ```
-                    Request
-                       │
-                       ▼
-M2 (LLM) ──────┐   ┌──────────────────────────────────────────┐
-               ├──→│ 5.0 (Plan Mode)                          │
-M4 (Prompts) ──┘   │  ├─ Quick → Direct to Router             │
-                   │  ├─ Task/Feature → 5.1 Planner           │
-                   │  ├─ Project → PRD + 5.1 Planner          │
-                   │  └─ Epic → PRD + Milestones + 5.1 Planner│
-                   └──────────────────┬───────────────────────┘
-                                      │
-                                      ▼
-M3 (Agent Runtime) ──┐   ┌────────────────────────┐
-                     ├──→│ 5.1 (Planner)          │──→ 5.3 (Router) ──┐
-M4 (Prompts) ────────┘   └────────────────────────┘                   │
-                                                                      │
-M1 ──→ 5.2 (Task Queue) ──→ 5.4 (Dependency Tracking) ────────────────┼──→ 5.5 (Scheduler)
-                                                                      │
-                              5.3 (Router) ───────────────────────────┘
+User enters /plan mode
+        ↓
+Planner Bot activated (specialized persona)
+        ↓
+Multi-turn conversation through phases:
+  Discovery → Scoping → Technical → Milestones → Review
+        ↓
+User approves PRD
+        ↓
+PRD saved to database
 ```
+
+- **When**: User explicitly enters `/plan` mode
+- **How**: Conversational, asks questions, builds PRD collaboratively
+- **Output**: Structured PRD document with milestones
+
+### Planner (5.1) - Automatic, System-Driven
+
+```
+Orchestrator receives ticket (from PRD milestone or direct)
+        ↓
+Planner called automatically
+        ↓
+Single LLM call decomposes ticket → slices
+        ↓
+Slices queued for execution
+```
+
+- **When**: Orchestrator needs to break down work
+- **How**: Single prompt, structured output, no user interaction
+- **Output**: List of VerticalSlices with tasks
 
 ---
 
-## Request Scale Flow
+## Dependency Graph
 
-Plan Mode (5.0) classifies requests and routes appropriately:
-
-| Scale | Example | Decomposition Depth |
-|-------|---------|---------------------|
-| Quick | "Fix typo in README" | None - direct to agent |
-| Task | "Add input validation" | Light - single task |
-| Feature | "Add dark mode" | Standard - Planner (5.1) |
-| Project | "Build auth system" | Mini-PRD → Planner |
-| Epic | "Build entire platform" | Full PRD → Milestones → Planner |
+```
+                           /plan mode
+                               │
+M2 (LLM) ──────┐               │
+               ├──→ 5.0 (Planner Bot) ──→ PRD Document
+M3 (Agents) ───┤                              │
+               │                              │ (user approves, sends to /main)
+M4 (Prompts) ──┘                              ▼
+                                         Orchestrator
+                                              │
+M3 (Agent Runtime) ──┐                        │
+                     ├──→ 5.1 (Planner) ←─────┘
+M4 (Prompts) ────────┘         │
+                               ▼
+                          VerticalSlices
+                               │
+                               ▼
+                         5.3 (Router) ──────────────────┐
+                                                        │
+M1 ──→ 5.2 (Task Queue) ──→ 5.4 (Dependency) ──────────┼──→ 5.5 (Scheduler)
+                                                        │
+                              5.3 ──────────────────────┘
+```
 
 ---
 
 ## Parallelization
 
 **Can run in parallel**:
-- 5.0 (Plan Mode) and 5.2 (Task Queue) - no dependencies between them
-- Once 5.0 complete: 5.1 can start
-- Once 5.1 and 5.2 complete: 5.3 and 5.4 can potentially overlap
+- 5.0 (Planner Bot) and 5.1 (Planner) - different purposes
+- 5.0 and 5.2 (Task Queue) - no dependencies
+- Once 5.1 and 5.2 complete: 5.3 and 5.4 can overlap
 
 **Must be sequential**:
-- 5.0 → 5.1 (Planner receives classified/PRD-enhanced tickets from Plan Mode)
 - 5.1 → 5.3 (Router needs Planner's slice output format)
 - 5.2 → 5.4 (Dependency tracking extends the queue)
 - 5.3 + 5.4 → 5.5 (Scheduler ties everything together)
@@ -82,19 +111,26 @@ Plan Mode (5.0) classifies requests and routes appropriately:
 
 ## Key Files
 
-All orchestration code lives in `src/orchestration/`:
-
 ```
+src/agents/
+├── planner_bot.rs      ← 5.0: Interactive Planner Bot persona
+└── mod.rs
+
+src/types/
+├── prd.rs              ← 5.0: PRD document types
+└── mod.rs
+
 src/orchestration/
-├── mod.rs           ← Module exports, shared types
-├── plan_mode.rs     ← Request classification and PRD generation (NEW)
-├── classifier.rs    ← Scale classification logic (NEW)
-├── prd_generator.rs ← PRD generation for large projects (NEW)
-├── planner.rs       ← Ticket decomposition logic
-├── queue.rs         ← Priority task queue
-├── router.rs        ← Task → tier routing
-├── dependency.rs    ← Dependency tracking
-└── scheduler.rs     ← Work assignment loop
+├── mod.rs              ← Module exports
+├── planner.rs          ← 5.1: Ticket decomposition logic
+├── queue.rs            ← 5.2: Priority task queue
+├── router.rs           ← 5.3: Task → tier routing
+├── dependency.rs       ← 5.4: Dependency tracking
+└── scheduler.rs        ← 5.5: Work assignment loop
+
+src/db/
+├── prd.rs              ← 5.0: PRD persistence
+└── ...
 ```
 
 ---
@@ -104,17 +140,17 @@ src/orchestration/
 This milestone builds on:
 
 - **M1 Types**: `Task`, `TaskStatus`, `Priority`, `VerticalSlice`, `AgentTier`
-- **M1 Database**: SQLite connection pool, task/slice persistence
-- **M2 LLM**: Provider for orchestrator decomposition calls
-- **M3 Agents**: Agent pool for availability checks
-- **M4 Prompts**: Decomposition prompt templates, output schemas
+- **M1 Database**: SQLite connection pool, persistence
+- **M2 LLM**: Provider for both Planner Bot conversations and Planner decomposition
+- **M3 Agents**: Agent runtime for bot lifecycle
+- **M4 Prompts**: Planner Bot persona, decomposition templates, output schemas
 
 ---
 
 ## Notes
 
-- The Planner is the brain - it uses the orchestrator LLM to think through decomposition
-- Task Queue is the heart - all work flows through it
-- Router and Dependency Tracking are supporting systems
-- Scheduler is the coordinator that brings it all together
-- Design for testability: each component should work in isolation with mocks
+- **Planner Bot** has a distinct persona - methodical, asks questions, guides through phases
+- **Planner** is utilitarian - takes ticket, returns slices, no conversation
+- PRDs created in `/plan` can be executed via `/main`
+- Task Queue is the heart - all executable work flows through it
+- Design for testability: each component works in isolation with mocks

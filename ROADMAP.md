@@ -631,27 +631,28 @@ Please regenerate your response, being careful to:
 
 ## Milestone 5: Orchestration Core
 
-**Goal**: Orchestrator can classify requests by scale, generate PRDs for large projects, decompose tickets into slices, and route to appropriate agents.
+**Goal**: Specialized bots for planning (Planner Bot in `/plan`) and execution (Orchestrator in `/main`), plus infrastructure to decompose tickets and schedule work.
 
-**Checkpoint**: Give orchestrator a raw request like "build a billing system", see it classify as Project, generate a mini-PRD, create slices, assign to workers.
+**Checkpoint**: Create a PRD in `/plan` mode with the Planner Bot, then execute it via `/main` where the orchestrator decomposes milestones into slices.
 
-### Ticket 5.0: Plan Mode (Request → Strategy)
+### Ticket 5.0: Planner Bot (Interactive PRD Creation)
 
-Classify incoming requests by scale and route to appropriate decomposition strategy.
+Specialized bot for `/plan` mode that helps users create PRDs through conversation.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 5.0.1 | Define `RequestScale` enum (Quick, Task, Feature, Project, Epic) and `PlanModeOutput` types | Types compile |
-| 5.0.2 | Implement `Classifier::classify(request)` using LLM | Returns scale with confidence |
-| 5.0.3 | Implement `PrdGenerator::generate(request, scale)` for Project/Epic | Returns structured PRD |
-| 5.0.4 | Implement `PlanMode::process(request)` orchestrating classification and routing | Routes to correct path |
-| 5.0.5 | Persist generated PRDs and milestone specs to database | PRDs saved and queryable |
+| 5.0.1 | Define `PRDDocument`, `MilestoneSpec`, `TechnicalDecision` types | Types compile, serialize |
+| 5.0.2 | Create Planner Bot persona with phase-based system prompts | Persona works through Discovery → Scoping → Technical → Milestones → Review |
+| 5.0.3 | Implement conversation loop with history and phase transitions | Multi-turn chat works |
+| 5.0.4 | Implement PRD finalization and markdown export | PRD exports correctly |
+| 5.0.5 | Persist PRDs and planning sessions to database | Sessions resumable |
 
-**Scale Routing**:
-- Quick → Direct to agent (skip Planner)
-- Task/Feature → Standard Planner flow
-- Project → Mini-PRD + Planner with context
-- Epic → Full PRD + Milestones + Planner per milestone
+**Planning Phases**:
+- Discovery → Understanding the problem
+- Scoping → Defining boundaries
+- Technical → Making tech decisions
+- Milestones → Breaking into milestones
+- Review → Final approval
 
 ### Ticket 5.1: Planner (Ticket → Slices)
 
@@ -787,6 +788,17 @@ Technical log viewer.
 | 6.7.1 | Create log viewer widget | Logs display |
 | 6.7.2 | Stream logs from tracing subscriber | New logs appear |
 | 6.7.3 | Add log level filtering | Can filter by level |
+
+### Ticket 6.8: Plan View (/plan)
+
+Interactive PRD creation with Planner Bot.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 6.8.1 | Create two-panel layout (chat + PRD preview) with phase indicator | Layout renders |
+| 6.8.2 | Implement input handling (typing, submit, scroll) | Can chat |
+| 6.8.3 | Connect to Planner Bot, handle async responses | Bot responds |
+| 6.8.4 | Add `/plan` commands to router (`/plan`, `/plan new`, `/plan approve`) | Commands work |
 
 ---
 

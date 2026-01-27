@@ -26,8 +26,9 @@ Build a working terminal user interface using ratatui and crossterm that allows 
 | 6.5 | Chat View (/main) | 5 | 6.2, M3 (Agent Runtime) |
 | 6.6 | Slash Command Router | 4 | 6.2 |
 | 6.7 | Logs View (/logs) | 3 | 6.2, M1.5 (Logging) |
+| 6.8 | Plan View (/plan) | 4 | 6.2, M5.0 (Planner Bot) |
 
-**Total Slices**: 25
+**Total Slices**: 29
 
 ---
 
@@ -42,14 +43,14 @@ M1 (Foundation)
     ▼
    6.2 Layout System
     │
-    ├──────────┬──────────┬──────────┬──────────┐
-    ▼          ▼          ▼          ▼          ▼
-   6.3        6.4        6.5        6.6        6.7
-  Home       Feed       Chat     Commands     Logs
- Screen     View       View      Router      View
-                        │
-                        ▼
-                   M3 (Agents)
+    ├──────────┬──────────┬──────────┬──────────┬──────────┐
+    ▼          ▼          ▼          ▼          ▼          ▼
+   6.3        6.4        6.5        6.6        6.7        6.8
+  Home       Feed       Chat     Commands     Logs       Plan
+ Screen     View       View      Router      View       View
+                        │                                 │
+                        ▼                                 ▼
+                   M3 (Agents)                    M5.0 (Planner Bot)
 ```
 
 ---
@@ -65,12 +66,14 @@ M1 (Foundation)
 **Must be sequential**:
 - 6.1 → 6.2 (layout needs terminal)
 - 6.5 Chat View needs M3 Agent Runtime for orchestrator integration
+- 6.8 Plan View needs M5.0 Planner Bot
 
 **Recommended execution order**:
 1. 6.1 Terminal Setup
 2. 6.2 Layout System
 3. 6.3, 6.4, 6.6, 6.7 in parallel
 4. 6.5 Chat View (after M3 is ready)
+5. 6.8 Plan View (after M5.0 is ready)
 
 ---
 
@@ -89,8 +92,9 @@ src/tui/
     ├── mod.rs          ← View exports
     ├── home.rs         ← Home screen with logo
     ├── feed.rs         ← Agent activity feed
-    ├── chat.rs         ← Orchestrator conversation
-    └── logs.rs         ← Technical log viewer
+    ├── chat.rs         ← Orchestrator conversation (/main)
+    ├── logs.rs         ← Technical log viewer
+    └── plan.rs         ← Planner Bot conversation (/plan) [NEW]
 ```
 
 ---
