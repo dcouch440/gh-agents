@@ -5,7 +5,7 @@
 ## Current Focus
 
 **Active:** None
-**Next:** 2.2 Anthropic Client (M2)
+**Next:** 2.3 Cost Tracking (M2)
 **Blocked:** None
 
 **Milestone 1 Decomposition:** Complete - see `decomp/M1/`
@@ -43,11 +43,11 @@
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
 | 2.1 Provider Abstraction | done | 3/3 | LLMProvider trait, types, streaming |
-| 2.2 Anthropic Client | pending | 0/4 | Needs 2.1 |
+| 2.2 Anthropic Client | done | 4/4 | HTTP client, send_message, streaming, token counts |
 | 2.3 Cost Tracking | pending | 0/3 | Needs 2.2 |
 | 2.4 Retry Logic | pending | 0/3 | Needs 2.2 |
 
-**Milestone Status:** Not Started
+**Milestone Status:** In Progress (2/4 tickets done)
 
 ---
 
