@@ -107,6 +107,13 @@ M1 ──→ 5.2 (Task Queue) ──→ 5.4 (Dependency) ───────�
 - 5.2 → 5.4 (Dependency tracking extends the queue)
 - 5.3 + 5.4 → 5.5 (Scheduler ties everything together)
 
+**Recommended execution order**:
+1. Start with 5.2 (Task Queue) - only depends on M1
+2. After M2, M3, M4: Start 5.0 (Planner Bot) and 5.1 (Planner) in parallel
+3. After 5.1: Start 5.3 (Router)
+4. After 5.2: Start 5.4 (Dependency Tracking)
+5. After 5.2, 5.3, 5.4: Start 5.5 (Scheduler)
+
 ---
 
 ## Key Files
