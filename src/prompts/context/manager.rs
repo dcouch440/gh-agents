@@ -401,16 +401,13 @@ pub struct ContextRequestHandler {
     pending: Vec<ContextRequest>,
     /// Fulfilled requests
     fulfilled: Vec<FulfilledRequest>,
-    /// File selector for finding files
-    file_selector: FileSelector,
 }
 
 impl ContextRequestHandler {
-    pub fn new(base_path: impl Into<std::path::PathBuf>) -> Self {
+    pub fn new(_base_path: impl Into<std::path::PathBuf>) -> Self {
         Self {
             pending: Vec::new(),
             fulfilled: Vec::new(),
-            file_selector: FileSelector::new(base_path),
         }
     }
 
