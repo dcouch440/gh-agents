@@ -5,7 +5,7 @@
 ## Current Focus
 
 **Active:** None
-**Next:** 2.2 Anthropic Client (M2)
+**Next:** 2.3 Cost Tracking (M2)
 **Blocked:** None
 
 **Milestone 1 Decomposition:** Complete - see `decomp/M1/`
@@ -43,11 +43,11 @@
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
 | 2.1 Provider Abstraction | done | 3/3 | LLMProvider trait, types, streaming |
-| 2.2 Anthropic Client | pending | 0/4 | Needs 2.1 |
+| 2.2 Anthropic Client | done | 4/4 | HTTP client, send_message, streaming, token counts |
 | 2.3 Cost Tracking | pending | 0/3 | Needs 2.2 |
-| 2.4 Retry Logic | pending | 0/3 | Needs 2.2 |
+| 2.4 Retry Logic | done | 3/3 | ExponentialBackoff, RetryPolicy, RetryingProvider wrapper, 14 tests |
 
-**Milestone Status:** Not Started
+**Milestone Status:** In Progress (2/4 tickets done)
 
 ---
 
@@ -82,12 +82,12 @@
 | 4.5 Structured Output Design | pending | 0/5 | Needs 4.1 |
 | 4.6 Few-Shot Examples Library | pending | 0/5 | Needs 4.2-4.4 |
 | 4.7 Prompt Testing Framework | pending | 0/6 | Needs 4.5, M2 |
-| 4.8 Context Management Strategy | pending | 0/5 | Needs 4.1 |
+| 4.8 Context Management Strategy | done | 5/5 | ContextBudget, FileSelector, FileSummarizer, ContextRequestHandler, HistoryManager, 35 tests |
 | 4.9 Self-Correction & Recovery Prompts | pending | 0/5 | Needs 4.5 |
-| 4.10 Tool Definition & Selection | pending | 0/6 | Needs 4.1 |
+| 4.10 Tool Definition & Selection | done | 6/6 | ToolDefinition, ToolRegistry, file/git/test tools, selection prompts, parser, 31 tests |
 | 4.11 Context Window Validation | pending | 0/5 | Needs M2 |
 
-**Milestone Status:** Not Started
+**Milestone Status:** In Progress (2/11 tickets done)
 
 ---
 
