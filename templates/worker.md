@@ -28,6 +28,9 @@
    - `cargo check` passes
    - `cargo test` passes ← **Required, not optional**
    - Update `PROGRESS.md` → status = `done`
+5. Create PR (if applicable):
+   - **Target the parent branch** (branch you created from, not necessarily `main`)
+   - **Name it after the implementation** (e.g., "Add user authentication", not "Ticket 1.2")
 
 ---
 
@@ -37,6 +40,7 @@
 - **Tests for all new functionality**
 - All verification steps passing
 - `PROGRESS.md` updated
+- PR created (if applicable) targeting the parent branch
 
 ---
 
