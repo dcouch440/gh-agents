@@ -188,7 +188,7 @@ This allows nested feature branches to work correctly.
 
 ### PR Naming
 
-**Name PRs after the implementation** - use a clear, implementation-focused title that describes what was built.
+**Name PRs after what you built** - use a clear, implementation-focused title that describes the actual work.
 
 ```
 Good PR titles:
@@ -196,11 +196,15 @@ Good PR titles:
 - "Implement task status transitions"
 - "Add database migration for agents table"
 
-Avoid:
-- "Ticket 1.2 implementation" (not descriptive)
-- "Fix stuff" (too vague)
-- "Add user authentication endpoint: Issue #42" (redundant - issue is linked in body)
+BAD - Never use these patterns:
+- "Ticket 1.2 implementation" ← ticket ID is not descriptive
+- "Milestone 2 work" ← milestone number is not descriptive
+- "decomp 1" ← meaningless to reviewers
+- "Fix stuff" ← too vague
+- "Add user auth: Issue #42" ← redundant, issue is in body
 ```
+
+The PR title should make sense to someone who hasn't read the ticket.
 
 ### PR Body
 
