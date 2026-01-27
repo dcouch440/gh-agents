@@ -77,7 +77,7 @@
 |--------|--------|----------|-------|
 | 4.1 Prompt Architecture Design | done | 4/4 | PromptBuilder, ContextInjector, PromptVersion, 23 tests |
 | 4.2 Orchestrator Thinking Patterns | pending | 0/5 | Needs 4.1 |
-| 4.3 Worker Thinking Patterns | pending | 0/5 | Needs 4.1 |
+| 4.3 Worker Thinking Patterns | done | 5/5 | Implementation, context-gathering, progress, self-check, stuck-detection prompts |
 | 4.4 Utility Thinking Patterns | pending | 0/4 | Needs 4.1 |
 | 4.5 Structured Output Design | pending | 0/5 | Needs 4.1 |
 | 4.6 Few-Shot Examples Library | pending | 0/5 | Needs 4.2-4.4 |
