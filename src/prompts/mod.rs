@@ -5,9 +5,11 @@
 //! - `PromptBuilder` - Fluent API for assembling prompts
 //! - `ContextInjector` - Priority-based context injection
 //! - `PromptVersion` - Version tracking for debugging/replay
+//! - `schemas` - JSON schemas for structured LLM outputs
 
 mod builder;
 mod context;
+pub mod schemas;
 mod version;
 
 pub use builder::*;
