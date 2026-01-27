@@ -28,10 +28,6 @@
    - `cargo check` passes
    - `cargo test` passes ← **Required, not optional**
    - Update `PROGRESS.md` → status = `done`
-5. Create PR (if applicable):
-   - **Target the parent branch** (branch you created from, not necessarily `main`)
-   - **PR title format**: `{What you built} [Ticket X.Y]`
-   - Example: "Add user authentication endpoint [Ticket 2.3]"
 
 ---
 
@@ -41,7 +37,6 @@
 - **Tests for all new functionality**
 - All verification steps passing
 - `PROGRESS.md` updated
-- PR created (if applicable) targeting the parent branch
 
 ---
 
