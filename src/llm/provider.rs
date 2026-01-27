@@ -70,7 +70,10 @@ mod tests {
             let model = self.model.clone();
 
             let stream = futures::stream::iter(vec![
-                Ok(StreamChunk::MessageStart { model }),
+                Ok(StreamChunk::MessageStart {
+                    model,
+                    input_tokens: 10,
+                }),
                 Ok(StreamChunk::ContentDelta {
                     text: content,
                     index: 0,
