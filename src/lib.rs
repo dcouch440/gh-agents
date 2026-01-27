@@ -8,5 +8,6 @@ pub mod github;
 pub mod llm;
 pub mod logging;
 pub mod orchestration;
+pub mod prompts;
 pub mod tui;
 pub mod types;

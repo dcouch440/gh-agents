@@ -4,7 +4,7 @@
 
 **ROLE**: You are a worker. Your job is to implement a ticket slice by slice, verifying each step before moving on.
 
-**TICKET**: {TICKET_NUMBER}
+**TICKET**: 2.2
 
 **READ THESE FILES**:
 - `WORKER.md` - Your process guide
@@ -27,8 +27,6 @@
    - `cargo check` passes
    - `cargo test` passes (if tests exist)
    - Update `PROGRESS.md` → status = `done`
-5. Write a progress report using /templates/report.md,
-   keep it brief.
 
 ---
 
