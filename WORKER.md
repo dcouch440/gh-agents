@@ -59,15 +59,23 @@ Each slice has a "Verify" section. Run those checks:
 - `cargo test` passes (if tests exist)
 - Specific verification steps from the decomp file
 
-### 5. Update Progress
+### 5. Update Documentation
 
 When ticket is complete:
 
 ```markdown
 # In PROGRESS.md, update your ticket row:
-
 | 1.2 Core Type Definitions | done | 6/6 | Completed all types |
+
+# In .nexor/work/current.md, update status:
+**Status:** Ready for next ticket
+**Next:** {next ticket}
+
+# Create a brief report (optional but recommended):
+.nexor/reports/{ticket}.md
 ```
+
+Use `templates/report.md` for the report format.
 
 ---
 
@@ -156,7 +164,9 @@ Task: Implement Ticket 1.2
    - cargo check → passes
 5. ... continue through all slices ...
 6. Update PROGRESS.md: 1.2 = done, 6/6
-7. Commit changes
+7. Update .nexor/work/current.md with status
+8. Create .nexor/reports/1.2.md (optional)
+9. Commit changes
 ```
 
 ---
@@ -167,4 +177,4 @@ Task: Implement Ticket 1.2
 - **Trust the decomp** - It has what you need
 - **Verify each slice** - Don't accumulate unknowns
 - **Stay focused** - One ticket, done well
-- **Update progress** - Others depend on knowing your status
+- **Update docs** - Others depend on knowing the status
