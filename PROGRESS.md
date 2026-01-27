@@ -176,8 +176,11 @@
 | 9.7 Refactor Mode Foundation | done | 4/4 | Types, DB, scheduler pause/resume |
 | 9.8 Refactor Agent | done | 4/4 | Intent detection, change proposals, apply changes |
 | 9.9 TUI Integration | done | 3/3 | /refactor command, mode switching, status bar |
+| 9.10 Menu Types & Data | pending | 0/3 | Needs 9.7, 9.9 |
+| 9.11 Menu Widget & Rendering | pending | 0/3 | Needs 9.10 |
+| 9.12 App Integration | pending | 0/3 | Needs 9.10, 9.11, 9.9 |
 
-**Milestone Status:** In Progress (3/9 tickets done)
+**Milestone Status:** In Progress (3/12 tickets done)
 
 ---
 
@@ -193,8 +196,8 @@
 | M6: TUI Basic | 7 | 25 | Not Started |
 | M7: Execution Layer | 6 | 28 | Not Started |
 | M8: GitHub Integration | 8 | 32 | Not Started |
-| M9: Polish & Production | 9 | 33 | In Progress (3/9 tickets) |
-| **Total** | **62** | **254** | |
+| M9: Polish & Production | 12 | 42 | In Progress (3/12 tickets) |
+| **Total** | **65** | **263** | |
 
 ---
 
