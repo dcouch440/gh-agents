@@ -52,6 +52,12 @@ M6 (TUI) ──────────────→ 7.5 (Approval Gates)
 - 7.5 integration with 7.1-7.3 (adding approval checks) comes last
 - 7.6 (Git Merge Operations) needs 7.2 complete first
 
+**Recommended execution order**:
+1. Start with 7.1, 7.2, 7.3 in parallel (all depend only on M1)
+2. After 7.2: Start 7.6 (Git Merge Operations)
+3. After 7.1, 7.2, 7.3: Start 7.4 (Docker Sandbox)
+4. After M6 complete: Start 7.5 (Approval Gates)
+
 ---
 
 ## Key Files
