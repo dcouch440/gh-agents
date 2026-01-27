@@ -45,7 +45,7 @@
 | 2.1 Provider Abstraction | done | 3/3 | LLMProvider trait, types, streaming |
 | 2.2 Anthropic Client | pending | 0/4 | Needs 2.1 |
 | 2.3 Cost Tracking | pending | 0/3 | Needs 2.2 |
-| 2.4 Retry Logic | pending | 0/3 | Needs 2.2 |
+| 2.4 Retry Logic | done | 3/3 | ExponentialBackoff, RetryPolicy, RetryingProvider wrapper, 14 tests |
 
 **Milestone Status:** Not Started
 
