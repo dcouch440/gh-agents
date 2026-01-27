@@ -136,6 +136,7 @@
 | 7.3 Test Runner | pending | 0/4 | Needs M1 |
 | 7.4 Docker Sandbox | pending | 0/4 | Needs 7.1-7.3 |
 | 7.5 Approval Gates | pending | 0/4 | Needs M6 (TUI) |
+| 7.6 Git Merge Operations | pending | 0/6 | Needs 7.2 |
 
 **Milestone Status:** Not Started
 
@@ -143,14 +144,18 @@
 
 ## Milestone 8: GitHub Integration
 
-**Goal**: Can pull issues from GitHub, create PRs.
+**Goal**: Can pull issues from GitHub, create PRs, and manage PR merge queue.
 
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
-| 8.1 GitHub API Client | pending | 0/4 | Needs M1 |
+| 8.0 GitHub Authentication | pending | 0/5 | Needs M1 |
+| 8.1 GitHub API Client | pending | 0/4 | Needs 8.0 |
 | 8.2 Issue Sync | pending | 0/3 | Needs 8.1 |
 | 8.3 PR Creation | pending | 0/3 | Needs 8.1, M7 |
 | 8.4 Progress Updates | pending | 0/3 | Needs 8.1 |
+| 8.5 PR Retrieval & Review | pending | 0/4 | Needs 8.1 |
+| 8.6 PR Merge Operations | pending | 0/4 | Needs 8.1, 8.5 |
+| 8.7 PR Merge Queue & Conflict Resolution | pending | 0/6 | Needs 7.6, 8.5, 8.6, 8.4 |
 
 **Milestone Status:** Not Started
 
@@ -183,10 +188,10 @@
 | M4: Prompt Engineering | 11 | 55 | Not Started |
 | M5: Orchestration Core | 5 | 18 | Not Started |
 | M6: TUI Basic | 7 | 25 | Not Started |
-| M7: Execution Layer | 5 | 22 | Not Started |
-| M8: GitHub Integration | 4 | 13 | Not Started |
+| M7: Execution Layer | 6 | 28 | Not Started |
+| M8: GitHub Integration | 8 | 32 | Not Started |
 | M9: Polish & Production | 6 | 22 | Not Started |
-| **Total** | **55** | **222** | |
+| **Total** | **59** | **243** | |
 
 ---
 
