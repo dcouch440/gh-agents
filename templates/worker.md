@@ -27,6 +27,8 @@
    - `cargo check` passes
    - `cargo test` passes (if tests exist)
    - Update `PROGRESS.md` → status = `done`
+5. Write a progress report using /templates/report.md,
+   keep it brief.
 
 ---
 

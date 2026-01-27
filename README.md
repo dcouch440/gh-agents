@@ -30,6 +30,7 @@ decomp/                   ← Detailed Breakdowns (the "do this")
 | `ROADMAP.md` | Milestones, tickets, slices, dependencies | Source of truth |
 | `PROGRESS.md` | Current status, what's done, what's blocked | Track progress |
 | `CONVENTIONS.md` | Code style, patterns, naming | Workers |
+| `docs/parallelization-guide.md` | What can run in parallel | Coordinators |
 | `templates/ticket.md` | Template for decomp files | Orchestrators |
 | `decomp/M{n}/` | Detailed ticket breakdowns for implementation | Workers |
 
@@ -116,11 +117,16 @@ nexor/
 │   ├── handoff.md         ← Work handoff context
 │   ├── blocker.md         ← Blocker documentation
 │   └── review.md          ← Code review feedback
+├── docs/
+│   └── parallelization-guide.md  ← What milestones/tickets can run together
 ├── decomp/                ← Detailed ticket breakdowns
 │   ├── M1/                ← Milestone 1 tickets
 │   ├── M2/                ← Milestone 2 tickets
 │   └── ...
-└── src/                   ← Source code (coming soon)
+├── .nexor/
+│   ├── work/              ← Current work tracking
+│   └── reports/           ← Completed work reports
+└── src/                   ← Rust source code
 ```
 
 ---

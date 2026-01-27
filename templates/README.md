@@ -19,6 +19,7 @@ Copy-paste templates for common documents.
 | `handoff.md` | Context capture when pausing work | Workers |
 | `blocker.md` | Document blockers clearly | Workers |
 | `review.md` | Code review feedback | Reviewers |
+| `report.md` | Work completion report | Workers |
 
 ## Usage
 
@@ -52,3 +53,7 @@ Copy-paste templates for common documents.
 **review.md**
 - Reviewing completed work
 - Output inline or attached to PR
+
+**report.md**
+- Completed a ticket or significant piece of work
+- Output goes to `.nexor/reports/{ticket}.md` or inline in PR

@@ -1,57 +1,22 @@
 # Current Work
 
-> Active work details and context for handoff between agents/sessions
-
-## Active Ticket
-
-**Ticket:** None
-**Status:** Ready to start M1
+**Status:** M1 Complete, ready for M2
+**Next:** Ticket 2.1 (Provider Abstraction)
 
 ---
 
-## Context
+## Recent Completions
 
-No work in progress. Ready to begin with Milestone 1: Foundation.
-
-### Recommended Starting Point
-
-**Ticket 1.1: Project Scaffolding** and **Ticket 1.2: Core Type Definitions** can be worked in parallel.
-
-After 1.2.6 (config types) is complete:
-- 1.3 (Configuration System) can start
-- 1.4 (Database Setup) can start
-
-Ticket 1.5 (Logging Infrastructure) is independent and can start anytime.
+| Ticket | What |
+|--------|------|
+| 1.4 | Database setup with SQLite, 6 migrations, CRUD queries |
+| 1.3 | Configuration system with global + project config |
 
 ---
 
-## Work Log
+## Ready to Start
 
-| Timestamp | Action | Notes |
-|-----------|--------|-------|
-| | | |
+- **2.1** Provider Abstraction (LLM trait)
+- **2.2** Anthropic Client (after 2.1)
 
----
-
-## Handoff Notes
-
-*Use this section when pausing work mid-ticket to capture context for the next agent/session.*
-
-### Current State
-- N/A
-
-### Next Steps
-- Begin Ticket 1.1: Project Scaffolding
-- Create `Cargo.toml` with workspace config
-
-### Open Questions
-- None
-
-### Files Modified
-- None
-
----
-
-## Blockers
-
-None currently.
+See `PROGRESS.md` for full status.

@@ -5,7 +5,7 @@
 ## Current Focus
 
 **Active:** None
-**Next:** 1.1 Project Scaffolding
+**Next:** 2.2 Anthropic Client (M2)
 **Blocked:** None
 
 **Milestone 1 Decomposition:** Complete - see `decomp/M1/`
@@ -26,13 +26,13 @@
 
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
-| 1.1 Project Scaffolding | pending | 0/3 | Start here |
-| 1.2 Core Type Definitions | pending | 0/6 | Can parallel with 1.1 |
-| 1.3 Configuration System | pending | 0/4 | Needs 1.2.6 (config types) |
-| 1.4 Database Setup | pending | 0/8 | Needs 1.2.x (all types) |
-| 1.5 Logging Infrastructure | pending | 0/3 | Independent |
+| 1.1 Project Scaffolding | done | 3/3 | Cargo.toml, directory structure, main.rs with tokio |
+| 1.2 Core Type Definitions | done | 6/6 | All types: task, agent, message, ticket, cost, config |
+| 1.3 Configuration System | done | 4/4 | Global + project config loading, merging, validation |
+| 1.4 Database Setup | done | 8/8 | SQLite init, 6 migrations, CRUD queries |
+| 1.5 Logging Infrastructure | done | 3/3 | Tracing with env filter, file appender, helper spans/macros |
 
-**Milestone Status:** Not Started
+**Milestone Status:** Complete (5/5 tickets done)
 
 ---
 
@@ -42,7 +42,7 @@
 
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
-| 2.1 Provider Abstraction | pending | 0/3 | Needs M1 types |
+| 2.1 Provider Abstraction | done | 3/3 | LLMProvider trait, types, streaming |
 | 2.2 Anthropic Client | pending | 0/4 | Needs 2.1 |
 | 2.3 Cost Tracking | pending | 0/3 | Needs 2.2 |
 | 2.4 Retry Logic | pending | 0/3 | Needs 2.2 |
@@ -75,7 +75,7 @@
 
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
-| 4.1 Prompt Architecture Design | pending | 0/4 | Can start early (design work) |
+| 4.1 Prompt Architecture Design | in_progress | 0/4 | Starting implementation |
 | 4.2 Orchestrator Thinking Patterns | pending | 0/5 | Needs 4.1 |
 | 4.3 Worker Thinking Patterns | pending | 0/5 | Needs 4.1 |
 | 4.4 Utility Thinking Patterns | pending | 0/4 | Needs 4.1 |
@@ -177,7 +177,7 @@
 
 | Milestone | Tickets | Slices | Status |
 |-----------|---------|--------|--------|
-| M1: Foundation | 5 | 24 | Not Started |
+| M1: Foundation | 5 | 24 | Complete |
 | M2: LLM Layer | 4 | 13 | Not Started |
 | M3: Agent Runtime | 7 | 26 | Not Started |
 | M4: Prompt Engineering | 11 | 55 | Not Started |
