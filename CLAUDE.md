@@ -12,6 +12,7 @@ This file provides guidance for AI assistants working with the gh-agents reposit
 gh-agents/
 ├── CLAUDE.md          # AI assistant guidelines (this file)
 ├── README.md          # Project documentation
+├── ROADMAP.md
 └── (more to come)
 ```
 
@@ -70,3 +71,5 @@ Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
 - Use the TodoWrite tool for multi-step tasks
 - Verify changes work before committing
 - Ask for clarification when requirements are ambiguous
+- Keep things beautiful, if we can make it look modern, lets do it!
+- Remember to shine!
