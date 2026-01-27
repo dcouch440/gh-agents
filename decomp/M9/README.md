@@ -18,16 +18,19 @@ Finalize nexor for production use:
 
 ## Tickets
 
-| Ticket | Title | Slices | Dependencies |
-|--------|-------|--------|--------------|
-| 9.1 | Remaining TUI Views | 3 | M6 (TUI Basic) |
-| 9.2 | Headless Mode | 4 | M5 (Orchestration Core) |
-| 9.3 | Error Handling Polish | 3 | M1-M8 (all prior milestones) |
-| 9.4 | Docker Packaging | 3 | M1-M8 |
-| 9.5 | Documentation | 4 | M1-M8 |
-| 9.6 | Observability & Replay | 5 | M2 (LLM), M5 (Orchestration) |
+| Ticket | Title | Slices | Dependencies | Status |
+|--------|-------|--------|--------------|--------|
+| 9.1 | Remaining TUI Views | 3 | M6 (TUI Basic) | pending |
+| 9.2 | Headless Mode | 4 | M5 (Orchestration Core) | pending |
+| 9.3 | Error Handling Polish | 3 | M1-M8 (all prior milestones) | pending |
+| 9.4 | Docker Packaging | 3 | M1-M8 | pending |
+| 9.5 | Documentation | 4 | M1-M8 | pending |
+| 9.6 | Observability & Replay | 5 | M2 (LLM), M5 (Orchestration) | pending |
+| 9.7 | Refactor Mode Foundation | 4 | M1, M5 | **done** |
+| 9.8 | Refactor Agent | 4 | 9.7, M4 | **done** |
+| 9.9 | TUI Integration | 3 | 9.7, 9.8, M6 | **done** |
 
-**Total Slices**: 22
+**Total Slices**: 33
 
 ---
 

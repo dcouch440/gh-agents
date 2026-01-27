@@ -173,8 +173,11 @@
 | 9.4 Docker Packaging | pending | 0/3 | Needs M1-M8 |
 | 9.5 Documentation | pending | 0/4 | Needs M1-M8 |
 | 9.6 Observability & Replay | pending | 0/5 | Needs M2, M5 |
+| 9.7 Refactor Mode Foundation | done | 4/4 | Types, DB, scheduler pause/resume |
+| 9.8 Refactor Agent | done | 4/4 | Intent detection, change proposals, apply changes |
+| 9.9 TUI Integration | done | 3/3 | /refactor command, mode switching, status bar |
 
-**Milestone Status:** Not Started
+**Milestone Status:** In Progress (3/9 tickets done)
 
 ---
 
@@ -190,8 +193,8 @@
 | M6: TUI Basic | 7 | 25 | Not Started |
 | M7: Execution Layer | 6 | 28 | Not Started |
 | M8: GitHub Integration | 8 | 32 | Not Started |
-| M9: Polish & Production | 6 | 22 | Not Started |
-| **Total** | **59** | **243** | |
+| M9: Polish & Production | 9 | 33 | In Progress (3/9 tickets) |
+| **Total** | **62** | **254** | |
 
 ---
 
