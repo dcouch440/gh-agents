@@ -76,7 +76,7 @@
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
 | 4.1 Prompt Architecture Design | done | 4/4 | PromptBuilder, ContextInjector, PromptVersion, 23 tests |
-| 4.2 Orchestrator Thinking Patterns | pending | 0/5 | Needs 4.1 |
+| 4.2 Orchestrator Thinking Patterns | done | 5/5 | Decomposition, review, routing, conversation, recovery prompts, 25 tests |
 | 4.3 Worker Thinking Patterns | pending | 0/5 | Needs 4.1 |
 | 4.4 Utility Thinking Patterns | pending | 0/4 | Needs 4.1 |
 | 4.5 Structured Output Design | pending | 0/5 | Needs 4.1 |
