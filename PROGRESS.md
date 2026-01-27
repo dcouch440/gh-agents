@@ -5,9 +5,9 @@
 ## Current Focus
 
 **Active:** None
-**Next:** 2.2 Anthropic Client (M2)
+**Next:** M3 Agent Runtime
 **Blocked:** None
-**Completed:** 2.3 Cost Tracking
+**Completed:** M2 LLM Layer (2.1-2.4)
 
 **Milestone 1 Decomposition:** Complete - see `decomp/M1/`
 **Milestone 2 Decomposition:** Complete - see `decomp/M2/`
@@ -44,11 +44,11 @@
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
 | 2.1 Provider Abstraction | done | 3/3 | LLMProvider trait, types, streaming |
-| 2.2 Anthropic Client | pending | 0/4 | Needs 2.1 |
+| 2.2 Anthropic Client | done | 4/4 | HTTP client, send_message, streaming, token counts |
 | 2.3 Cost Tracking | done | 3/3 | ModelPricing, CostTracker, aggregation methods |
-| 2.4 Retry Logic | pending | 0/3 | Needs 2.2 |
+| 2.4 Retry Logic | done | 3/3 | ExponentialBackoff, RetryPolicy, RetryingProvider wrapper, 14 tests |
 
-**Milestone Status:** Not Started
+**Milestone Status:** Complete (4/4 tickets done)
 
 ---
 
@@ -77,18 +77,18 @@
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
 | 4.1 Prompt Architecture Design | done | 4/4 | PromptBuilder, ContextInjector, PromptVersion, 23 tests |
-| 4.2 Orchestrator Thinking Patterns | pending | 0/5 | Needs 4.1 |
+| 4.2 Orchestrator Thinking Patterns | done | 5/5 | Decomposition, review, routing, conversation, recovery prompts, 25 tests |
 | 4.3 Worker Thinking Patterns | pending | 0/5 | Needs 4.1 |
 | 4.4 Utility Thinking Patterns | pending | 0/4 | Needs 4.1 |
 | 4.5 Structured Output Design | pending | 0/5 | Needs 4.1 |
 | 4.6 Few-Shot Examples Library | pending | 0/5 | Needs 4.2-4.4 |
 | 4.7 Prompt Testing Framework | pending | 0/6 | Needs 4.5, M2 |
-| 4.8 Context Management Strategy | pending | 0/5 | Needs 4.1 |
+| 4.8 Context Management Strategy | done | 5/5 | ContextBudget, FileSelector, FileSummarizer, ContextRequestHandler, HistoryManager, 35 tests |
 | 4.9 Self-Correction & Recovery Prompts | pending | 0/5 | Needs 4.5 |
-| 4.10 Tool Definition & Selection | pending | 0/6 | Needs 4.1 |
+| 4.10 Tool Definition & Selection | done | 6/6 | ToolDefinition, ToolRegistry, file/git/test tools, selection prompts, parser, 31 tests |
 | 4.11 Context Window Validation | pending | 0/5 | Needs M2 |
 
-**Milestone Status:** Not Started
+**Milestone Status:** In Progress (2/11 tickets done)
 
 ---
 

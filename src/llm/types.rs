@@ -181,6 +181,8 @@ pub enum StreamChunk {
     MessageStart {
         /// The model being used
         model: String,
+        /// Input tokens used for this request
+        input_tokens: u32,
     },
 
     /// Content block started
@@ -243,8 +245,12 @@ impl StreamAccumulator {
             StreamChunk::ContentDelta { text, .. } => {
                 self.content.push_str(text);
             }
-            StreamChunk::MessageStart { model } => {
+            StreamChunk::MessageStart {
+                model,
+                input_tokens,
+            } => {
                 self.model = Some(model.clone());
+                self.input_tokens = Some(*input_tokens);
             }
             StreamChunk::MessageDelta {
                 stop_reason,
@@ -329,6 +335,7 @@ mod tests {
         let mut acc = StreamAccumulator::new();
         acc.apply(&StreamChunk::MessageStart {
             model: "claude-3".to_string(),
+            input_tokens: 10,
         });
         acc.apply(&StreamChunk::ContentDelta {
             text: "Hello ".to_string(),

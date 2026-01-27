@@ -6,8 +6,11 @@
 //! - `ContextInjector` - Priority-based context injection
 //! - `PromptVersion` - Version tracking for debugging/replay
 
+pub mod templates;
 mod builder;
 mod context;
+pub mod tools;
+
 mod version;
 
 pub use builder::*;
