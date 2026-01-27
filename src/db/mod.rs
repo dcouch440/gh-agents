@@ -2,9 +2,11 @@
 
 mod migrations;
 mod queries;
+mod refactor;
 
 pub use migrations::run_migrations;
 pub use queries::*;
+pub use refactor::*;
 
 use anyhow::{Context, Result};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
