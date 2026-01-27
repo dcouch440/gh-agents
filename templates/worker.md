@@ -30,7 +30,8 @@
    - Update `PROGRESS.md` → status = `done`
 5. Create PR (if applicable):
    - **Target the parent branch** (branch you created from, not necessarily `main`)
-   - **Name it after the implementation** (e.g., "Add user authentication", not "Ticket 1.2")
+   - **PR title = what you built** (e.g., "Add user authentication endpoint")
+   - **NOT** ticket IDs, milestone numbers, or "decomp" references
 
 ---
 
