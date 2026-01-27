@@ -631,9 +631,27 @@ Please regenerate your response, being careful to:
 
 ## Milestone 5: Orchestration Core
 
-**Goal**: Orchestrator can decompose tickets into slices, route to appropriate agents.
+**Goal**: Orchestrator can classify requests by scale, generate PRDs for large projects, decompose tickets into slices, and route to appropriate agents.
 
-**Checkpoint**: Give orchestrator a ticket description, see it create slices, assign to workers.
+**Checkpoint**: Give orchestrator a raw request like "build a billing system", see it classify as Project, generate a mini-PRD, create slices, assign to workers.
+
+### Ticket 5.0: Plan Mode (Request → Strategy)
+
+Classify incoming requests by scale and route to appropriate decomposition strategy.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 5.0.1 | Define `RequestScale` enum (Quick, Task, Feature, Project, Epic) and `PlanModeOutput` types | Types compile |
+| 5.0.2 | Implement `Classifier::classify(request)` using LLM | Returns scale with confidence |
+| 5.0.3 | Implement `PrdGenerator::generate(request, scale)` for Project/Epic | Returns structured PRD |
+| 5.0.4 | Implement `PlanMode::process(request)` orchestrating classification and routing | Routes to correct path |
+| 5.0.5 | Persist generated PRDs and milestone specs to database | PRDs saved and queryable |
+
+**Scale Routing**:
+- Quick → Direct to agent (skip Planner)
+- Task/Feature → Standard Planner flow
+- Project → Mini-PRD + Planner with context
+- Epic → Full PRD + Milestones + Planner per milestone
 
 ### Ticket 5.1: Planner (Ticket → Slices)
 
