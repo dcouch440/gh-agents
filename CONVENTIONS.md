@@ -1,6 +1,6 @@
 # Code Conventions
 
-> How we write code in gh-agents. Follow these for consistency.
+> How we write code in nexor. Follow these for consistency.
 
 ---
 
@@ -250,7 +250,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 
 ```rust
 // Create once at startup
-let pool = SqlitePool::connect("sqlite:.gh-agents/state.db").await?;
+let pool = SqlitePool::connect("sqlite:.nexor/state.db").await?;
 
 // Pass by reference everywhere
 async fn do_work(pool: &SqlitePool) -> Result<()> {
@@ -490,7 +490,7 @@ Implements ticket 1.2 slice 1:
 fix(config): handle missing config file gracefully
 
 Returns default config instead of panicking when
-~/.config/gh-agents/config.toml doesn't exist.
+~/.config/nexor/config.toml doesn't exist.
 ```
 
 ---

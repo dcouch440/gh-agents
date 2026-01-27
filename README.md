@@ -1,4 +1,4 @@
-# gh-agents
+# nexor
 
 > AI Agent Orchestration TUI for GitHub Workflows
 
@@ -96,7 +96,7 @@ The Worker:
 ## Project Structure
 
 ```
-gh-agents/
+nexor/
 ├── README.md              ← You are here
 ├── QUICKSTART.md          ← 60-second overview (read first)
 ├── PHILOSOPHY.md          ← How and why this system works

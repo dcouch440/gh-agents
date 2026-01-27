@@ -1,10 +1,10 @@
-# gh-agents ROADMAP
+# nexor ROADMAP
 
 > Living document for AI agent orchestration. Orchestrator reads this for context.
 
 ---
 
-## Epic: gh-agents v1.0
+## Epic: nexor v1.0
 
 Build a Rust TUI that orchestrates AI agents for GitHub workflows.
 
@@ -45,8 +45,8 @@ Load and merge global + project configs.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 1.3.1 | Implement `config/global.rs`: load from `~/.config/gh-agents/config.toml`, return defaults if missing | Unit test: loads file or returns defaults |
-| 1.3.2 | Implement `config/project.rs`: load from `.gh-agents/config.toml`, return None if missing | Unit test: loads file or returns None |
+| 1.3.1 | Implement `config/global.rs`: load from `~/.config/nexor/config.toml`, return defaults if missing | Unit test: loads file or returns defaults |
+| 1.3.2 | Implement `config/project.rs`: load from `.nexor/config.toml`, return None if missing | Unit test: loads file or returns None |
 | 1.3.3 | Implement config merge logic: global ← project overrides | Unit test: project values override global |
 | 1.3.4 | Add config validation (required fields, valid enum values) | Unit test: invalid config returns error |
 
@@ -56,7 +56,7 @@ SQLite with migrations and connection pooling.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 1.4.1 | Set up sqlx with SQLite, create `.gh-agents/state.db` on startup | `cargo run` creates database file |
+| 1.4.1 | Set up sqlx with SQLite, create `.nexor/state.db` on startup | `cargo run` creates database file |
 | 1.4.2 | Create migration for `tasks` table (id, slice_id, title, description, assigned_tier, status, priority, created_at, updated_at) | Migration runs, table exists |
 | 1.4.3 | Create migration for `task_events` table (append-only log) | Migration runs, table exists |
 | 1.4.4 | Create migration for `agents` table | Migration runs, table exists |
@@ -72,7 +72,7 @@ Set up tracing with configurable levels.
 | Slice | Description | Test |
 |-------|-------------|------|
 | 1.5.1 | Initialize tracing-subscriber with env filter | `RUST_LOG=debug cargo run` shows debug logs |
-| 1.5.2 | Add file appender for `.gh-agents/logs/` | Logs written to file |
+| 1.5.2 | Add file appender for `.nexor/logs/` | Logs written to file |
 | 1.5.3 | Create log macros/helpers for consistent formatting | Logs show module, level, message |
 
 ---
@@ -1072,7 +1072,7 @@ Features to explore after core functionality is stable.
 |---------|-------------|
 | `/view <path>` | Read-only scrollable file viewer |
 | `/edit <path>` | Shell out to $EDITOR or in-app editing |
-| `/browse` | File picker for navigating `.gh-agents/slices/` |
+| `/browse` | File picker for navigating `.nexor/slices/` |
 | **Syntax highlighting** | Use `syntect` crate for code highlighting |
 | **Diff viewer** | Show before/after for agent modifications |
 

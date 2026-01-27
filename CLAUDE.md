@@ -1,15 +1,15 @@
 # CLAUDE.md
 
-This file provides guidance for AI assistants working with the gh-agents repository.
+This file provides guidance for AI assistants working with the nexor repository.
 
 ## Project Overview
 
-**gh-agents** is a repository for GitHub agent integrations and workflows. This project is in early development.
+**nexor** is a repository for GitHub agent integrations and workflows. This project is in early development.
 
 ## Repository Structure
 
 ```
-gh-agents/
+nexor/
 ├── CLAUDE.md          # AI assistant guidelines (this file)
 ├── README.md          # Project documentation
 ├── ROADMAP.md
