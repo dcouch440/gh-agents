@@ -208,319 +208,675 @@ Route failures up the tier hierarchy.
 
 ---
 
-## Milestone 4: Orchestration Core
+## Milestone 4: Prompt Engineering & Agent Intelligence
+
+**Goal**: Robust, tested prompts that drive reliable agent behavior.
+
+**Checkpoint**: Agents consistently produce structured output, think step-by-step, and recover from confusion.
+
+> **Why a dedicated milestone?** Prompts ARE the behavior. A poorly-crafted prompt means an unreliable agent.
+> This milestone is about engineering the thought process, not just writing text.
+
+---
+
+### Ticket 4.1: Prompt Architecture Design
+
+Establish the foundational patterns all prompts will follow.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 4.1.1 | Define prompt template structure: `{role}`, `{context}`, `{task}`, `{constraints}`, `{output_format}`, `{examples}` | Template documented, team aligned |
+| 4.1.2 | Create `PromptBuilder` struct that assembles prompts from components | Builder produces valid prompt strings |
+| 4.1.3 | Implement context injection system (insert codebase info, task history, etc.) | Context correctly merged into prompts |
+| 4.1.4 | Create prompt versioning system (track which prompt version produced which output) | Version stored with each LLM call |
+
+**Design Rationale**: Every prompt follows the same skeleton. This makes them predictable, testable, and debuggable.
+
+---
+
+### Ticket 4.2: Orchestrator Thinking Patterns
+
+The orchestrator is the "senior architect brain" - needs sophisticated reasoning.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 4.2.1 | Design orchestrator's **decomposition thinking**: ticket → mental model → slices | Decomposes sample tickets correctly |
+| 4.2.2 | Design orchestrator's **review thinking**: examine work → identify issues → feedback | Catches intentional bugs in test code |
+| 4.2.3 | Design orchestrator's **routing thinking**: task traits → tier selection reasoning | Routes tasks to correct tiers |
+| 4.2.4 | Design orchestrator's **conversation thinking**: user intent → clarifying questions → plan | Asks good clarifying questions |
+| 4.2.5 | Design orchestrator's **recovery thinking**: failure analysis → retry strategy → escalation decision | Makes sensible recovery choices |
+
+**Orchestrator Thinking Template**:
+```
+## Your Role
+You are Arch, a senior software architect coordinating a team of AI agents.
+
+## How to Think
+
+### When decomposing a ticket:
+1. UNDERSTAND: What is the user actually trying to accomplish? What's the business value?
+2. INVENTORY: What components/layers does this touch? (DB, API, UI, tests, etc.)
+3. DEPENDENCIES: What must exist before other parts can work?
+4. SLICE VERTICALLY: Each slice must be deployable alone. Ask: "If we stopped after this slice, would something work?"
+5. SIZE CHECK: Each slice should be 1-4 hours of work. Too big? Split it. Too small? Combine with adjacent slice.
+
+### When reviewing work:
+1. CORRECTNESS: Does the code do what the task asked?
+2. INTEGRATION: Will this break anything else?
+3. QUALITY: Is this code maintainable? Any obvious issues?
+4. COMPLETENESS: Are edge cases handled? Tests included?
+5. VERDICT: Approve, request changes (be specific), or escalate.
+
+### When stuck or confused:
+1. STATE what you understand and what's unclear
+2. ASK the user a specific clarifying question
+3. NEVER guess at requirements - assumptions compound into wrong solutions
+
+## Output Constraints
+- Always explain your reasoning before giving conclusions
+- Use the structured output format specified for each task type
+- Prefix uncertainty with "I believe..." or "My understanding is..."
+```
+
+---
+
+### Ticket 4.3: Worker Thinking Patterns
+
+Workers are "focused developers" - need clear execution patterns.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 4.3.1 | Design worker's **implementation thinking**: task → plan → code → verify | Implements sample tasks correctly |
+| 4.3.2 | Design worker's **context gathering**: what files do I need? → request specific context | Requests relevant files, not everything |
+| 4.3.3 | Design worker's **progress reporting**: natural language updates on what they're doing | Reports are informative and human-readable |
+| 4.3.4 | Design worker's **self-checking**: before submitting, verify against requirements | Catches own mistakes before review |
+| 4.3.5 | Design worker's **stuck detection**: recognize when spinning wheels → escalate | Escalates after N failed attempts |
+
+**Worker Thinking Template**:
+```
+## Your Role
+You are Dev, a focused software developer. You receive well-scoped tasks and implement them.
+
+## How to Think
+
+### When starting a task:
+1. READ the task description completely
+2. IDENTIFY what files you'll need to read/modify
+3. REQUEST context if needed (be specific: "I need to see src/auth/mod.rs")
+4. PLAN your approach in 2-3 sentences before coding
+5. ANNOUNCE: "Starting work on [task]. My approach: [brief plan]"
+
+### When implementing:
+1. WRITE code incrementally - don't try to do everything at once
+2. EXPLAIN significant decisions: "Using X approach because Y"
+3. TEST mentally: "If I call this with X, it should return Y"
+4. REPORT progress every few minutes: "Completed the struct definition, now writing the impl block"
+
+### Before submitting:
+1. RE-READ the original task requirements
+2. CHECK: Does my code satisfy each requirement?
+3. LOOK for obvious bugs: off-by-one, null checks, error handling
+4. VERIFY: Are there tests? Do they cover the happy path and edge cases?
+5. If anything is incomplete, note it explicitly
+
+### When stuck:
+1. After 2-3 failed attempts at the same thing, STOP
+2. SUMMARIZE: "I've tried X and Y, but I'm getting Z error"
+3. ESCALATE: Request help rather than spinning in circles
+4. NEVER submit broken code hoping it works - be honest about blockers
+
+## Communication Style
+- Brief, informative updates
+- Focus on what you're doing, not philosophizing
+- "Looking at auth module..." not "I shall now endeavor to examine..."
+```
+
+---
+
+### Ticket 4.4: Utility Thinking Patterns
+
+Utilities are "efficient helpers" - need speed and precision.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 4.4.1 | Design utility's **task recognition**: quick categorization of task type | Correctly identifies task type |
+| 4.4.2 | Design utility's **templated execution**: apply known patterns rapidly | Formats code consistently |
+| 4.4.3 | Design utility's **minimal reporting**: only report completion or errors | Reports are concise |
+| 4.4.4 | Design utility's **escalation trigger**: recognize when task is too complex | Escalates complex tasks, doesn't attempt |
+
+**Utility Thinking Template**:
+```
+## Your Role
+You are Helper, handling quick well-defined tasks efficiently.
+
+## How to Think
+
+### Task categories you handle:
+- FORMAT: Apply code formatter to files
+- LINT: Run linter, fix auto-fixable issues
+- BOILERPLATE: Generate code from templates
+- DOCS: Update documentation, add docstrings
+- RENAME: Find/replace identifiers
+
+### Your process:
+1. IDENTIFY task category (if unclear, escalate immediately)
+2. EXECUTE the standard procedure for that category
+3. REPORT result: "Formatted 3 files" or "Error: [specific error]"
+
+### Escalate when:
+- Task requires understanding business logic
+- Task involves architectural decisions
+- You're unsure what the right answer is
+- Task would take more than a few minutes
+
+## Communication Style
+- Terse: "Done. Formatted src/*.rs (4 files)"
+- Error format: "Failed: [file]: [error]"
+- Never explain your reasoning unless asked
+```
+
+---
+
+### Ticket 4.5: Structured Output Design
+
+LLM outputs must be parseable. Design the output contracts.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 4.5.1 | Design slice output schema (JSON with title, description, tasks, dependencies) | Schema validates correctly |
+| 4.5.2 | Design task output schema (status, result, files_modified, tests_added) | Schema validates correctly |
+| 4.5.3 | Design review output schema (verdict, issues[], suggestions[], approved_files[]) | Schema validates correctly |
+| 4.5.4 | Design error output schema (error_type, message, attempted_recovery, needs_human) | Schema validates correctly |
+| 4.5.5 | Implement output validation with clear error messages on schema mismatch | Invalid output triggers retry with correction hint |
+
+**Decomposition Output Schema**:
+```json
+{
+  "thinking": "Brief explanation of decomposition reasoning",
+  "slices": [
+    {
+      "title": "Short descriptive title",
+      "description": "What this slice accomplishes",
+      "tasks": [
+        {
+          "title": "Specific task",
+          "tier": "worker|utility",
+          "estimated_complexity": "low|medium|high",
+          "context_files": ["paths the agent will need"]
+        }
+      ],
+      "dependencies": ["slice_titles this depends on"],
+      "acceptance_criteria": ["How to verify this slice is done"]
+    }
+  ],
+  "questions": ["Clarifying questions if requirements unclear"],
+  "risks": ["Potential issues or unknowns"]
+}
+```
+
+---
+
+### Ticket 4.6: Few-Shot Examples Library
+
+Examples are often more powerful than instructions. Build the example bank.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 4.6.1 | Create 3-5 decomposition examples (ticket → slices) across different domains | Examples demonstrate good vertical slicing |
+| 4.6.2 | Create 3-5 implementation examples (task → code) showing thinking process | Examples show plan-then-code pattern |
+| 4.6.3 | Create 3-5 review examples (code → feedback) showing quality standards | Examples demonstrate constructive, specific feedback |
+| 4.6.4 | Create 2-3 failure/recovery examples showing graceful degradation | Examples show when/how to escalate |
+| 4.6.5 | Implement example selection logic (pick relevant examples based on task type) | Relevant examples injected into prompts |
+
+**Example: Decomposition**
+```
+USER TICKET: "Add user authentication to the API"
+
+ORCHESTRATOR THINKING:
+I need to think about what "authentication" really means here and what vertical slices make sense.
+
+Components touched: database (users table), API routes, middleware, tests
+Dependencies: Users must exist before we can authenticate them
+
+Slicing strategy: Each slice should result in something testable.
+
+SLICES:
+1. "User model + migration" - Creates users table, User struct, basic CRUD
+   Why vertical: Can test user creation independently
+
+2. "Password hashing + validation" - Adds password field, hashing on create, validation
+   Why vertical: Can test password handling without full auth flow
+
+3. "Login endpoint" - POST /login, verify credentials, return token
+   Why vertical: With users and passwords working, can test actual login
+
+4. "Auth middleware" - Validate token, inject user into request context
+   Why vertical: Can test middleware independently with mock tokens
+
+5. "Protected route example" - One route that requires auth
+   Why vertical: Proves the whole flow works end-to-end
+```
+
+---
+
+### Ticket 4.7: Prompt Testing Framework
+
+Prompts need tests like code does.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 4.7.1 | Create test harness that runs prompts against fixture inputs | Harness executes and captures output |
+| 4.7.2 | Build assertion library: `output_matches_schema`, `contains_reasoning`, `no_hallucinated_files` | Assertions work correctly |
+| 4.7.3 | Create regression test suite for decomposition prompts | Tests catch regressions |
+| 4.7.4 | Create regression test suite for implementation prompts | Tests catch regressions |
+| 4.7.5 | Add prompt diff tooling (compare outputs across prompt versions) | Can see behavioral changes |
+| 4.7.6 | Implement "confusion detection" - identify when LLM output indicates uncertainty | Detects hedging language, contradictions |
+
+**Test Example**:
+```rust
+#[test]
+fn decomposition_produces_vertical_slices() {
+    let ticket = "Add user authentication to the API";
+    let output = run_decomposition_prompt(ticket);
+
+    // Schema validation
+    assert!(output.matches_schema::<DecompositionOutput>());
+
+    // Quality checks
+    assert!(output.slices.len() >= 2, "Should produce multiple slices");
+    assert!(output.slices.iter().all(|s| !s.acceptance_criteria.is_empty()),
+            "Each slice needs acceptance criteria");
+
+    // Vertical slice check: no slice should be "write all tests" or "write all DB code"
+    for slice in &output.slices {
+        assert!(!is_horizontal_slice(&slice.title),
+                "Slice '{}' appears to be horizontal, not vertical", slice.title);
+    }
+}
+```
+
+---
+
+### Ticket 4.8: Context Management Strategy
+
+Agents need the right context - not too much, not too little.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 4.8.1 | Design context budget system (max tokens per context type) | Budgets enforced |
+| 4.8.2 | Implement smart file selection (relevance scoring for context files) | Relevant files ranked higher |
+| 4.8.3 | Implement context summarization for large files | Large files summarized appropriately |
+| 4.8.4 | Create "context request" protocol (agent asks for specific files) | Requests fulfilled efficiently |
+| 4.8.5 | Implement conversation history truncation (keep recent + important) | History stays within budget |
+
+**Context Priority Rules**:
+```
+1. Task description and requirements (always include, full)
+2. Files agent will modify (always include, full if small, summarized if large)
+3. Files agent references (include on request, summarize if large)
+4. Related test files (include if task involves testing)
+5. Recent conversation history (last 3-5 turns)
+6. Project conventions (CLAUDE.md, style guides - always include, small)
+7. Previous slice outputs (if this task depends on earlier work)
+
+Budget allocation:
+- 40% for files being modified
+- 25% for reference files
+- 20% for task + history
+- 15% for project conventions
+```
+
+---
+
+### Ticket 4.9: Self-Correction & Recovery Prompts
+
+What happens when things go wrong?
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 4.9.1 | Design "output didn't parse" recovery prompt | Agent reformats output correctly |
+| 4.9.2 | Design "tests failed" analysis prompt | Agent diagnoses failure cause |
+| 4.9.3 | Design "review rejected" revision prompt | Agent addresses feedback specifically |
+| 4.9.4 | Design "stuck in loop" detection and breakout | Detects repetition, changes approach |
+| 4.9.5 | Design "conflicting requirements" clarification prompt | Asks specific clarifying questions |
+
+**Recovery Prompt Template**:
+```
+## Situation
+Your previous output couldn't be processed. Here's what happened:
+
+**Your output**: [truncated output]
+**Error**: [specific parse error or validation failure]
+
+## What went wrong
+[Specific explanation: "The JSON was missing a closing brace" or "The 'tier' field had value 'medium' but must be 'worker' or 'utility'"]
+
+## Try again
+Please regenerate your response, being careful to:
+1. [Specific fix needed]
+2. Use the exact schema format shown below
+
+[schema reminder]
+
+## Your corrected response:
+```
+
+---
+
+## Milestone 5: Orchestration Core
 
 **Goal**: Orchestrator can decompose tickets into slices, route to appropriate agents.
 
 **Checkpoint**: Give orchestrator a ticket description, see it create slices, assign to workers.
 
-### Ticket 4.1: Planner (Ticket → Slices)
+### Ticket 5.1: Planner (Ticket → Slices)
 
 Decompose tickets into vertical slices.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 4.1.1 | Create planner prompt template for decomposition | Prompt generates valid slices |
-| 4.1.2 | Implement `Planner::decompose(ticket)` using orchestrator LLM | Returns list of VerticalSlice |
-| 4.1.3 | Parse LLM response into structured slice data | Slices have title, description, tasks |
-| 4.1.4 | Store slices in database | Slices persisted |
+| 5.1.1 | Integrate decomposition prompt from M4 with LLM calls | Prompt executes, returns raw output |
+| 5.1.2 | Implement `Planner::decompose(ticket)` using orchestrator LLM | Returns list of VerticalSlice |
+| 5.1.3 | Parse LLM response into structured slice data | Slices have title, description, tasks |
+| 5.1.4 | Implement retry with correction prompt on parse failure | Recovers from malformed output |
+| 5.1.5 | Store slices in database | Slices persisted |
 
-### Ticket 4.2: Task Queue
+### Ticket 5.2: Task Queue
 
 Priority-ordered work queue.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 4.2.1 | Implement `TaskQueue` with priority ordering | Higher priority dequeued first |
-| 4.2.2 | Add `enqueue()`, `dequeue()`, `peek()` | Queue operations work correctly |
-| 4.2.3 | Persist queue state to database | Queue survives restart |
-| 4.2.4 | Implement `requeue()` for failed tasks | Failed tasks re-enter queue |
+| 5.2.1 | Implement `TaskQueue` with priority ordering | Higher priority dequeued first |
+| 5.2.2 | Add `enqueue()`, `dequeue()`, `peek()` | Queue operations work correctly |
+| 5.2.3 | Persist queue state to database | Queue survives restart |
+| 5.2.4 | Implement `requeue()` for failed tasks | Failed tasks re-enter queue |
 
-### Ticket 4.3: Router (Task → Tier)
+### Ticket 5.3: Router (Task → Tier)
 
 Route tasks to appropriate agent tier.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 4.3.1 | Define routing rules (task type → tier) | Rules configured |
-| 4.3.2 | Implement `Router::route(task)` returning target tier | Returns correct tier |
-| 4.3.3 | Handle override hints in task metadata | Hints respected |
+| 5.3.1 | Define routing rules (task type → tier) | Rules configured |
+| 5.3.2 | Implement `Router::route(task)` returning target tier | Returns correct tier |
+| 5.3.3 | Handle override hints in task metadata | Hints respected |
 
-### Ticket 4.4: Dependency Tracking
+### Ticket 5.4: Dependency Tracking
 
 Track task dependencies and blocking.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 4.4.1 | Add `depends_on: Vec<TaskId>` to Task | Field exists |
-| 4.4.2 | Implement `is_blocked(task)` check | Returns true if deps incomplete |
-| 4.4.3 | Filter blocked tasks from queue | Only unblocked tasks dequeued |
+| 5.4.1 | Add `depends_on: Vec<TaskId>` to Task | Field exists |
+| 5.4.2 | Implement `is_blocked(task)` check | Returns true if deps incomplete |
+| 5.4.3 | Filter blocked tasks from queue | Only unblocked tasks dequeued |
 
-### Ticket 4.5: Scheduler
+### Ticket 5.5: Scheduler
 
 Coordinate task assignment to agents.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 4.5.1 | Implement scheduler loop: check queue → find agent → assign | Tasks assigned to idle agents |
-| 4.5.2 | Handle "no available agent" by waiting | Scheduler waits, retries |
-| 4.5.3 | Implement preemption for urgent tasks | Urgent task preempts lower priority |
+| 5.5.1 | Implement scheduler loop: check queue → find agent → assign | Tasks assigned to idle agents |
+| 5.5.2 | Handle "no available agent" by waiting | Scheduler waits, retries |
+| 5.5.3 | Implement preemption for urgent tasks | Urgent task preempts lower priority |
 
 ---
 
-## Milestone 5: TUI Basic
+## Milestone 6: TUI Basic
 
 **Goal**: Functional terminal interface with feed, chat, and navigation.
 
 **Checkpoint**: Can see agent activity in feed, chat with orchestrator, navigate with slash commands.
 
-### Ticket 5.1: Terminal Setup
+### Ticket 6.1: Terminal Setup
 
 Initialize ratatui and crossterm.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 5.1.1 | Set up terminal initialization (raw mode, alternate screen) | Terminal enters TUI mode |
-| 5.1.2 | Implement clean shutdown (restore terminal on exit/panic) | Terminal restored on Ctrl+C |
-| 5.1.3 | Set up main event loop (input + tick) | App responds to input |
+| 6.1.1 | Set up terminal initialization (raw mode, alternate screen) | Terminal enters TUI mode |
+| 6.1.2 | Implement clean shutdown (restore terminal on exit/panic) | Terminal restored on Ctrl+C |
+| 6.1.3 | Set up main event loop (input + tick) | App responds to input |
 
-### Ticket 5.2: Layout System
+### Ticket 6.2: Layout System
 
 Fixed panel arrangement.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 5.2.1 | Define layout constraints (header, main area, input bar) | Layout renders |
-| 5.2.2 | Implement header bar with agent status (`w[0/6] o[0/2]`) | Shows agent counts |
-| 5.2.3 | Implement input bar at bottom | Can type in input bar |
+| 6.2.1 | Define layout constraints (header, main area, input bar) | Layout renders |
+| 6.2.2 | Implement header bar with agent status (`w[0/6] o[0/2]`) | Shows agent counts |
+| 6.2.3 | Implement input bar at bottom | Can type in input bar |
 
-### Ticket 5.3: Home Screen
+### Ticket 6.3: Home Screen
 
 Startup/idle view with branding.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 5.3.1 | Render ASCII art logo centered | Logo displays |
-| 5.3.2 | Show system status messages at bottom | Messages appear |
-| 5.3.3 | Transition to chat when user types | Typing triggers view change |
+| 6.3.1 | Render ASCII art logo centered | Logo displays |
+| 6.3.2 | Show system status messages at bottom | Messages appear |
+| 6.3.3 | Transition to chat when user types | Typing triggers view change |
 
-### Ticket 5.4: Feed View (/feed)
+### Ticket 6.4: Feed View (/feed)
 
 Real-time agent activity.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 5.4.1 | Create scrollable feed widget | Feed scrolls |
-| 5.4.2 | Subscribe to feed item channel | New items appear |
-| 5.4.3 | Render different item types (report, milestone, error) | Types styled differently |
-| 5.4.4 | Auto-scroll to bottom on new items | New items visible |
+| 6.4.1 | Create scrollable feed widget | Feed scrolls |
+| 6.4.2 | Subscribe to feed item channel | New items appear |
+| 6.4.3 | Render different item types (report, milestone, error) | Types styled differently |
+| 6.4.4 | Auto-scroll to bottom on new items | New items visible |
 
-### Ticket 5.5: Chat View (/main)
+### Ticket 6.5: Chat View (/main)
 
 Orchestrator conversation.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 5.5.1 | Create chat message list widget | Messages display |
-| 5.5.2 | Implement message input and send | Can send message |
-| 5.5.3 | Connect to orchestrator agent | Messages reach orchestrator |
-| 5.5.4 | Display orchestrator responses | Responses appear in chat |
-| 5.5.5 | Show streaming responses in real-time | Tokens appear as received |
+| 6.5.1 | Create chat message list widget | Messages display |
+| 6.5.2 | Implement message input and send | Can send message |
+| 6.5.3 | Connect to orchestrator agent | Messages reach orchestrator |
+| 6.5.4 | Display orchestrator responses | Responses appear in chat |
+| 6.5.5 | Show streaming responses in real-time | Tokens appear as received |
 
-### Ticket 5.6: Slash Command Router
+### Ticket 6.6: Slash Command Router
 
 Parse and route commands.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 5.6.1 | Detect `/` prefix in input | Commands identified |
-| 5.6.2 | Parse command name and arguments | Parsed correctly |
-| 5.6.3 | Route to appropriate view handler | View switches |
-| 5.6.4 | Show error for unknown commands | Error displayed |
+| 6.6.1 | Detect `/` prefix in input | Commands identified |
+| 6.6.2 | Parse command name and arguments | Parsed correctly |
+| 6.6.3 | Route to appropriate view handler | View switches |
+| 6.6.4 | Show error for unknown commands | Error displayed |
 
-### Ticket 5.7: Logs View (/logs)
+### Ticket 6.7: Logs View (/logs)
 
 Technical log viewer.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 5.7.1 | Create log viewer widget | Logs display |
-| 5.7.2 | Stream logs from tracing subscriber | New logs appear |
-| 5.7.3 | Add log level filtering | Can filter by level |
+| 6.7.1 | Create log viewer widget | Logs display |
+| 6.7.2 | Stream logs from tracing subscriber | New logs appear |
+| 6.7.3 | Add log level filtering | Can filter by level |
 
 ---
 
-## Milestone 6: Execution Layer
+## Milestone 7: Execution Layer
 
 **Goal**: Agents can read/write files, run git commands, execute tests.
 
 **Checkpoint**: Agent can modify a file, commit it, run tests.
 
-### Ticket 6.1: File Operations
+### Ticket 7.1: File Operations
 
 Scoped file read/write.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 6.1.1 | Implement `read_file(path)` with path validation | Can read file in project |
-| 6.1.2 | Implement `write_file(path, content)` with path validation | Can write file in project |
-| 6.1.3 | Implement path scoping (prevent escape from project dir) | Paths outside project rejected |
-| 6.1.4 | Add file operation audit logging | Operations logged |
+| 7.1.1 | Implement `read_file(path)` with path validation | Can read file in project |
+| 7.1.2 | Implement `write_file(path, content)` with path validation | Can write file in project |
+| 7.1.3 | Implement path scoping (prevent escape from project dir) | Paths outside project rejected |
+| 7.1.4 | Add file operation audit logging | Operations logged |
 
-### Ticket 6.2: Git Operations
+### Ticket 7.2: Git Operations
 
 Branch, commit, diff, push.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 6.2.1 | Implement `git_status()` | Returns current status |
-| 6.2.2 | Implement `git_branch(name)` | Creates branch |
-| 6.2.3 | Implement `git_commit(message)` | Creates commit |
-| 6.2.4 | Implement `git_diff()` | Returns diff output |
-| 6.2.5 | Implement `git_push()` | Pushes to remote |
-| 6.2.6 | Add git operation audit logging | Operations logged |
+| 7.2.1 | Implement `git_status()` | Returns current status |
+| 7.2.2 | Implement `git_branch(name)` | Creates branch |
+| 7.2.3 | Implement `git_commit(message)` | Creates commit |
+| 7.2.4 | Implement `git_diff()` | Returns diff output |
+| 7.2.5 | Implement `git_push()` | Pushes to remote |
+| 7.2.6 | Add git operation audit logging | Operations logged |
 
-### Ticket 6.3: Test Runner
+### Ticket 7.3: Test Runner
 
 Run project tests and capture output.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 6.3.1 | Detect test framework (cargo test, npm test, pytest, etc.) | Detects correctly |
-| 6.3.2 | Implement `run_tests()` that executes test command | Tests run, output captured |
-| 6.3.3 | Parse test results (pass/fail count) | Results parsed |
-| 6.3.4 | Stream test output to feed | Output appears in feed |
+| 7.3.1 | Detect test framework (cargo test, npm test, pytest, etc.) | Detects correctly |
+| 7.3.2 | Implement `run_tests()` that executes test command | Tests run, output captured |
+| 7.3.3 | Parse test results (pass/fail count) | Results parsed |
+| 7.3.4 | Stream test output to feed | Output appears in feed |
 
-### Ticket 6.4: Docker Sandbox
+### Ticket 7.4: Docker Sandbox
 
 Isolated execution environment.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 6.4.1 | Create Dockerfile for sandbox environment | Image builds |
-| 6.4.2 | Implement `sandbox_exec(command)` that runs in container | Command runs in container |
-| 6.4.3 | Mount project directory read-write | Files accessible in container |
-| 6.4.4 | Implement resource limits (CPU, memory, time) | Limits enforced |
+| 7.4.1 | Create Dockerfile for sandbox environment | Image builds |
+| 7.4.2 | Implement `sandbox_exec(command)` that runs in container | Command runs in container |
+| 7.4.3 | Mount project directory read-write | Files accessible in container |
+| 7.4.4 | Implement resource limits (CPU, memory, time) | Limits enforced |
 
-### Ticket 6.5: Approval Gates
+### Ticket 7.5: Approval Gates
 
 User confirmation for dangerous operations.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 6.5.1 | Define "dangerous operation" categories | Categories defined |
-| 6.5.2 | Check approval config before executing | Config respected |
-| 6.5.3 | Implement approval prompt in TUI | Prompt appears |
-| 6.5.4 | Block execution until approval received | Waits for user input |
+| 7.5.1 | Define "dangerous operation" categories | Categories defined |
+| 7.5.2 | Check approval config before executing | Config respected |
+| 7.5.3 | Implement approval prompt in TUI | Prompt appears |
+| 7.5.4 | Block execution until approval received | Waits for user input |
 
 ---
 
-## Milestone 7: GitHub Integration
+## Milestone 8: GitHub Integration
 
 **Goal**: Can pull issues from GitHub, create PRs.
 
 **Checkpoint**: Fetch a GitHub issue, have agents work it, create a PR.
 
-### Ticket 7.1: GitHub API Client
+### Ticket 8.1: GitHub API Client
 
 REST API with authentication.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 7.1.1 | Implement authenticated HTTP client | Auth header included |
-| 7.1.2 | Implement `get_issue(owner, repo, number)` | Returns issue data |
-| 7.1.3 | Implement `list_issues(owner, repo, filters)` | Returns issue list |
-| 7.1.4 | Handle rate limiting | Respects rate limits |
+| 8.1.1 | Implement authenticated HTTP client | Auth header included |
+| 8.1.2 | Implement `get_issue(owner, repo, number)` | Returns issue data |
+| 8.1.3 | Implement `list_issues(owner, repo, filters)` | Returns issue list |
+| 8.1.4 | Handle rate limiting | Respects rate limits |
 
-### Ticket 7.2: Issue Sync
+### Ticket 8.2: Issue Sync
 
 Pull issues as tickets.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 7.2.1 | Convert GitHub issue to internal Ticket type | Ticket created with correct data |
-| 7.2.2 | Implement `sync_issue(url)` command | Issue pulled and stored |
-| 7.2.3 | Detect already-synced issues | No duplicates |
+| 8.2.1 | Convert GitHub issue to internal Ticket type | Ticket created with correct data |
+| 8.2.2 | Implement `sync_issue(url)` command | Issue pulled and stored |
+| 8.2.3 | Detect already-synced issues | No duplicates |
 
-### Ticket 7.3: PR Creation
+### Ticket 8.3: PR Creation
 
 Create PRs from completed slices.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 7.3.1 | Implement `create_pr(title, body, branch, base)` | PR created |
-| 7.3.2 | Generate PR description from slice info | Description includes slice details |
-| 7.3.3 | Link PR to original issue | Issue referenced |
+| 8.3.1 | Implement `create_pr(title, body, branch, base)` | PR created |
+| 8.3.2 | Generate PR description from slice info | Description includes slice details |
+| 8.3.3 | Link PR to original issue | Issue referenced |
 
-### Ticket 7.4: Progress Updates
+### Ticket 8.4: Progress Updates
 
 Update issues with progress.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 7.4.1 | Implement `add_comment(issue, body)` | Comment added |
-| 7.4.2 | Generate progress summary from task states | Summary accurate |
-| 7.4.3 | Auto-comment on milestone completion | Comment posted automatically |
+| 8.4.1 | Implement `add_comment(issue, body)` | Comment added |
+| 8.4.2 | Generate progress summary from task states | Summary accurate |
+| 8.4.3 | Auto-comment on milestone completion | Comment posted automatically |
 
 ---
 
-## Milestone 8: Polish & Production
+## Milestone 9: Polish & Production
 
 **Goal**: Production-ready, fully-featured.
 
 **Checkpoint**: All views work, headless mode works, documentation complete.
 
-### Ticket 8.1: Remaining TUI Views
+### Ticket 9.1: Remaining TUI Views
 
 Complete all slash command views.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 8.1.1 | Implement `/tasks` view (task list with status) | Tasks display with status |
-| 8.1.2 | Implement `/agents` view (agent pool status) | Agents display with status |
-| 8.1.3 | Implement `/costs` view (cost breakdown) | Costs display by tier/task |
+| 9.1.1 | Implement `/tasks` view (task list with status) | Tasks display with status |
+| 9.1.2 | Implement `/agents` view (agent pool status) | Agents display with status |
+| 9.1.3 | Implement `/costs` view (cost breakdown) | Costs display by tier/task |
 
-### Ticket 8.2: Headless Mode
+### Ticket 9.2: Headless Mode
 
 Non-interactive operation.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 8.2.1 | Add `--headless` CLI flag | Flag parsed |
-| 8.2.2 | Skip TUI initialization in headless mode | No terminal manipulation |
-| 8.2.3 | Output to stdout/file instead of TUI | Output goes to file |
-| 8.2.4 | Accept task input from stdin/file | Can process tasks without TUI |
+| 9.2.1 | Add `--headless` CLI flag | Flag parsed |
+| 9.2.2 | Skip TUI initialization in headless mode | No terminal manipulation |
+| 9.2.3 | Output to stdout/file instead of TUI | Output goes to file |
+| 9.2.4 | Accept task input from stdin/file | Can process tasks without TUI |
 
-### Ticket 8.3: Error Handling Polish
+### Ticket 9.3: Error Handling Polish
 
 Graceful failures and recovery.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 8.3.1 | Add error boundaries around all async tasks | Errors don't crash app |
-| 8.3.2 | Implement error display section in TUI | Errors visible |
-| 8.3.3 | Add recovery suggestions for common errors | Suggestions helpful |
+| 9.3.1 | Add error boundaries around all async tasks | Errors don't crash app |
+| 9.3.2 | Implement error display section in TUI | Errors visible |
+| 9.3.3 | Add recovery suggestions for common errors | Suggestions helpful |
 
-### Ticket 8.4: Docker Packaging
+### Ticket 9.4: Docker Packaging
 
 Containerized deployment.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 8.4.1 | Create production Dockerfile | Image builds |
-| 8.4.2 | Add docker-compose for easy deployment | Compose works |
-| 8.4.3 | Document Docker usage | Docs accurate |
+| 9.4.1 | Create production Dockerfile | Image builds |
+| 9.4.2 | Add docker-compose for easy deployment | Compose works |
+| 9.4.3 | Document Docker usage | Docs accurate |
 
-### Ticket 8.5: Documentation
+### Ticket 9.5: Documentation
 
 README and user guide.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 8.5.1 | Write installation instructions | User can install |
-| 8.5.2 | Write configuration guide | User can configure |
-| 8.5.3 | Write usage guide with examples | Examples work |
-| 8.5.4 | Document all slash commands | Commands documented |
+| 9.5.1 | Write installation instructions | User can install |
+| 9.5.2 | Write configuration guide | User can configure |
+| 9.5.3 | Write usage guide with examples | Examples work |
+| 9.5.4 | Document all slash commands | Commands documented |
 
 ---
 
@@ -536,16 +892,22 @@ README and user guide.
 
 **Across Milestones:**
 - Milestone 2 (LLM) depends only on M1 types
-- Milestone 5 (TUI) can start after M1, parallel with M2-M4
-- Milestone 6 (Execution) can start after M1
+- Milestone 4 (Prompts) can start early - prompt design doesn't need working code
+- Milestone 6 (TUI) can start after M1, parallel with M2-M5
+- Milestone 7 (Execution) can start after M1
 
 **Agent tier assignments:**
 
 | Tier | Best suited for |
 |------|-----------------|
-| **Orchestrator** | Planning, ticket decomposition, code review |
+| **Orchestrator** | Planning, ticket decomposition, code review, prompt design |
 | **Worker** | Feature implementation, bug fixes, complex slices |
 | **Utility** | Boilerplate, formatting, docs, simple migrations |
+
+**Prompt work is special:**
+- Tickets 4.1-4.4 (thinking patterns) are **design work** - orchestrator does this
+- Tickets 4.5-4.6 (schemas, examples) can be done by **workers**
+- Tickets 4.7-4.9 (testing, context, recovery) need **workers with LLM access**
 
 ---
 
@@ -554,12 +916,41 @@ README and user guide.
 - [ ] Milestone 1: Foundation
 - [ ] Milestone 2: LLM Layer
 - [ ] Milestone 3: Agent Runtime
-- [ ] Milestone 4: Orchestration Core
-- [ ] Milestone 5: TUI Basic
-- [ ] Milestone 6: Execution Layer
-- [ ] Milestone 7: GitHub Integration
-- [ ] Milestone 8: Polish & Production
+- [ ] Milestone 4: Prompt Engineering & Agent Intelligence ← **NEW: Critical path**
+- [ ] Milestone 5: Orchestration Core
+- [ ] Milestone 6: TUI Basic
+- [ ] Milestone 7: Execution Layer
+- [ ] Milestone 8: GitHub Integration
+- [ ] Milestone 9: Polish & Production
 
 ---
 
-*Last updated: Initial creation*
+## Prompt Engineering Philosophy
+
+> "The prompts are not configuration. The prompts ARE the product."
+
+### Key Principles
+
+1. **Show, don't tell** - Examples beat instructions. An agent learns more from seeing "good decomposition" than reading "decompose well."
+
+2. **Make thinking visible** - Every agent should explain reasoning before conclusions. This helps debugging and builds user trust.
+
+3. **Fail loudly, recover gracefully** - When confused, agents should say "I'm confused about X" not silently guess.
+
+4. **Structured output is non-negotiable** - Every LLM output must be parseable. Natural language for humans, JSON for machines.
+
+5. **Context is precious** - Every token of context should earn its place. Irrelevant context = worse outputs.
+
+6. **Test prompts like code** - Prompts have regressions. Version them, test them, diff them.
+
+### Anti-Patterns to Avoid
+
+- ❌ "Be helpful and do your best" - Too vague, leads to inconsistent behavior
+- ❌ Massive system prompts that cover every edge case - Dilutes focus
+- ❌ Assuming the LLM "knows" your codebase conventions - Be explicit
+- ❌ "Please" and "Thank you" consuming tokens - Be direct
+- ❌ Hoping the LLM figures out output format - Specify exactly
+
+---
+
+*Last updated: Added Milestone 4 (Prompt Engineering)*
