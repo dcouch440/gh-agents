@@ -1,0 +1,116 @@
+# Milestone 9: Polish & Production
+
+> Production-ready, fully-featured nexor with complete documentation and observability.
+
+## Goal
+
+Finalize nexor for production use:
+- Complete remaining TUI views (/tasks, /agents, /costs)
+- Add headless mode for CI/CD and automation
+- Polish error handling throughout
+- Package for Docker deployment
+- Write comprehensive documentation
+- Add observability for debugging agent decisions
+
+**Checkpoint**: All views work, headless mode works, documentation complete.
+
+---
+
+## Tickets
+
+| Ticket | Title | Slices | Dependencies |
+|--------|-------|--------|--------------|
+| 9.1 | Remaining TUI Views | 3 | M6 (TUI Basic) |
+| 9.2 | Headless Mode | 4 | M5 (Orchestration Core) |
+| 9.3 | Error Handling Polish | 3 | M1-M8 (all prior milestones) |
+| 9.4 | Docker Packaging | 3 | M1-M8 |
+| 9.5 | Documentation | 4 | M1-M8 |
+| 9.6 | Observability & Replay | 5 | M2 (LLM), M5 (Orchestration) |
+
+**Total Slices**: 22
+
+---
+
+## Dependency Graph
+
+```
+M1-M8 (All Prior Milestones)
+    │
+    ├─────────────────────────────────────────────┐
+    │                                             │
+    ▼                                             │
+M6 (TUI) ────────► 9.1 Remaining TUI Views        │
+                                                  │
+M5 (Orchestration) ──► 9.2 Headless Mode          │
+                                                  │
+M2 (LLM) + M5 ───────► 9.6 Observability          │
+                                                  │
+    ├──────────────────────────────────────────────┤
+    │                                              │
+    ▼                                              ▼
+   9.3 Error Handling         9.4 Docker    9.5 Documentation
+        Polish                 Packaging
+```
+
+---
+
+## Parallelization
+
+**Can run in parallel** (once dependencies are met):
+- 9.1 Remaining TUI Views (after M6)
+- 9.2 Headless Mode (after M5)
+- 9.6 Observability & Replay (after M2, M5)
+
+**Should be done last** (need complete system):
+- 9.3 Error Handling Polish
+- 9.4 Docker Packaging
+- 9.5 Documentation
+
+**Recommended execution order**:
+1. 9.1, 9.2, 9.6 in parallel (different dependencies)
+2. 9.3 Error Handling Polish
+3. 9.4 Docker Packaging
+4. 9.5 Documentation (last, describes final system)
+
+---
+
+## File Structure
+
+New files for this milestone:
+
+```
+src/
+├── tui/views/
+│   ├── tasks.rs        ← /tasks view (9.1)
+│   ├── agents.rs       ← /agents view (9.1)
+│   └── costs.rs        ← /costs view (9.1)
+├── cli.rs              ← CLI argument parsing (9.2)
+├── headless.rs         ← Headless mode runner (9.2)
+├── error.rs            ← Centralized error handling (9.3)
+└── observability/
+    ├── mod.rs          ← Observability module (9.6)
+    ├── logging.rs      ← LLM call logging (9.6)
+    ├── replay.rs       ← Decision replay (9.6)
+    └── export.rs       ← Session export (9.6)
+
+docker/
+├── Dockerfile          ← Production container (9.4)
+└── docker-compose.yml  ← Easy deployment (9.4)
+
+docs/
+├── installation.md     ← Setup guide (9.5)
+├── configuration.md    ← Config reference (9.5)
+├── usage.md            ← User guide (9.5)
+└── commands.md         ← Command reference (9.5)
+```
+
+---
+
+## Notes
+
+- **Polish milestone**: This is about making existing functionality production-ready
+- **Documentation timing**: Write docs last so they reflect the final system
+- **Error handling**: Focus on user-facing errors - internal errors should be logged
+- **Docker**: Enables deployment without Rust toolchain
+- **Observability**: Critical for debugging agent behavior in production
+- **Headless mode**: Enables CI/CD integration and scripting

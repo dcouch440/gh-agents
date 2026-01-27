@@ -9,6 +9,14 @@
 **Blocked:** None
 
 **Milestone 1 Decomposition:** Complete - see `decomp/M1/`
+**Milestone 2 Decomposition:** Complete - see `decomp/M2/`
+**Milestone 3 Decomposition:** Complete - see `decomp/M3/`
+**Milestone 4 Decomposition:** Complete - see `decomp/M4/`
+**Milestone 5 Decomposition:** Complete - see `decomp/M5/`
+**Milestone 6 Decomposition:** Complete - see `decomp/M6/`
+**Milestone 7 Decomposition:** Complete - see `decomp/M7/`
+**Milestone 8 Decomposition:** Complete - see `decomp/M8/`
+**Milestone 9 Decomposition:** Complete - see `decomp/M9/`
 
 ---
 
