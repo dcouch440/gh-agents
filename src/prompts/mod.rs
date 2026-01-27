@@ -5,9 +5,11 @@
 //! - `PromptBuilder` - Fluent API for assembling prompts
 //! - `ContextInjector` - Priority-based context injection
 //! - `PromptVersion` - Version tracking for debugging/replay
+//! - `tools` - Tool definitions and selection prompts
 
 mod builder;
 mod context;
+pub mod tools;
 mod version;
 
 pub use builder::*;
