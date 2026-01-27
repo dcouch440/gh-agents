@@ -1,4 +1,4 @@
-# gh-agents Product Requirements Document
+# nexor Product Requirements Document
 
 > AI Agent Orchestration TUI for GitHub Workflows
 
@@ -27,7 +27,7 @@
 
 ## Overview
 
-**gh-agents** is a Rust-based terminal application that orchestrates multiple AI agents to handle software engineering tasks. It provides a rich TUI interface for managing GitHub workflows, breaking down tickets into vertical slices, and coordinating work across agent tiers.
+**nexor** is a Rust-based terminal application that orchestrates multiple AI agents to handle software engineering tasks. It provides a rich TUI interface for managing GitHub workflows, breaking down tickets into vertical slices, and coordinating work across agent tiers.
 
 ### Core Value Proposition
 
@@ -47,7 +47,7 @@
 |-----------|--------|-----------|
 | **Core Language** | Rust | Performance, safety, excellent async support |
 | **TUI Framework** | ratatui | Modern, well-maintained, flexible |
-| **Database** | SQLite | Embedded, zero-config, stored in `.gh-agents/state.db` |
+| **Database** | SQLite | Embedded, zero-config, stored in `.nexor/state.db` |
 | **Config Format** | TOML | Rust-native, readable, well-supported |
 | **Async Runtime** | tokio | Industry standard for Rust async |
 | **LLM Integration** | Pure Rust HTTP | No SDK dependencies, full control |
@@ -56,7 +56,7 @@
 
 - **Primary**: Local execution with Docker sandboxing
 - **Headless Mode**: Supported for CI/CD and automation pipelines
-- **State**: Project-local in `.gh-agents/` directory
+- **State**: Project-local in `.nexor/` directory
 
 ---
 
@@ -430,7 +430,7 @@ struct AgentPoolConfig {
 ├─────────────────────────────────────────────────────────────────┤
 │                     Persistence                                  │
 │                      SQLite                                      │
-│            .gh-agents/state.db (append-only log)                │
+│            .nexor/state.db (append-only log)                │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -652,7 +652,7 @@ Orchestrator adds notes, questions, updates back to ROADMAP.md
 ```
 project/
 ├── ROADMAP.md                      ← High-level milestones (always loaded)
-└── .gh-agents/
+└── .nexor/
     ├── config.toml                 ← Project config
     ├── state.db                    ← SQLite state
     └── slices/                     ← Detailed slice breakdowns
@@ -666,7 +666,7 @@ project/
 | What | Where | When Loaded |
 |------|-------|-------------|
 | Big picture | ROADMAP.md | Always (small file) |
-| Slice details | .gh-agents/slices/*.md | On-demand |
+| Slice details | .nexor/slices/*.md | On-demand |
 | Task state | SQLite | Queried as needed |
 | Old notes | Archived/deleted | After resolved |
 
@@ -846,9 +846,9 @@ Example: "Formatted 3 files" or "Lint error in src/main.rs:42"
 ### Layered Config
 
 ```
-~/.config/gh-agents/config.toml     ← Global defaults
+~/.config/nexor/config.toml     ← Global defaults
      ↓ merged with
-.gh-agents/config.toml              ← Project overrides
+.nexor/config.toml              ← Project overrides
      ↓ merged with
 CLI flags / env vars                ← Runtime overrides
 ```
@@ -856,7 +856,7 @@ CLI flags / env vars                ← Runtime overrides
 ### Example Global Config
 
 ```toml
-# ~/.config/gh-agents/config.toml
+# ~/.config/nexor/config.toml
 
 [models]
 orchestrator = { provider = "anthropic", model = "claude-sonnet-4-20250514", max_tokens = 8192 }
@@ -875,7 +875,7 @@ verbosity = "normal"  # quiet, normal, verbose
 ### Example Project Config
 
 ```toml
-# .gh-agents/config.toml
+# .nexor/config.toml
 
 [models]
 worker = { provider = "openai", model = "gpt-4o", max_tokens = 4096 }
@@ -964,10 +964,10 @@ The orchestrator handles internal coordination.
 ## File Structure
 
 ```
-gh-agents/
+nexor/
 ├── Cargo.toml                    # Workspace root
 ├── Cargo.lock
-├── .gh-agents/
+├── .nexor/
 │   └── config.toml.example
 ├── src/
 │   ├── main.rs

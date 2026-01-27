@@ -1,4 +1,4 @@
-# gh-agents Progress
+# nexor Progress
 
 > Work tracking for ROADMAP.md implementation
 
@@ -7,6 +7,8 @@
 **Active:** None
 **Next:** 1.1 Project Scaffolding
 **Blocked:** None
+
+**Milestone 1 Decomposition:** Complete - see `decomp/M1/`
 
 ---
 

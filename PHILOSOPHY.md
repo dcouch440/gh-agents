@@ -1,6 +1,6 @@
 # Philosophy: Building with AI Agents
 
-> How we build gh-agents, and how gh-agents will build software.
+> How we build nexor, and how nexor will build software.
 
 ---
 
@@ -9,14 +9,19 @@
 We're building an AI agent orchestration system **using** AI agent orchestration.
 
 ```
-This repo                          The product we're building
-────────────                       ──────────────────────────
-Human + AI agents        →         Software that does this automatically
-ORCHESTRATOR.md          →         Orchestrator agent with prompts
-WORKER.md                →         Worker agents with prompts
-decomp/ files            →         .gh-agents/slices/ files
-PROGRESS.md              →         SQLite state database
+How we build nexor                 What nexor will automate
+──────────────────                 ────────────────────────
+Human writes ROADMAP.md      →     User provides ticket/issue
+AI orchestrator expands      →     Orchestrator agent decomposes
+  into decomp/ files               into slices (stored in SQLite)
+AI worker implements         →     Worker agents implement
+PROGRESS.md (manual)         →     SQLite state (automatic)
 ```
+
+**The flow today:**
+1. Human writes high-level specs in `ROADMAP.md` (tickets + brief slices)
+2. Orchestrator (AI) expands into detailed `decomp/` files with code examples
+3. Worker (AI) implements slice by slice
 
 The system we use to build is the system we're building. Every pain point we feel, every friction we smooth—that's product insight.
 
@@ -77,7 +82,7 @@ Humans infer. AI agents follow instructions.
 
 ```
 Bad:  "Make the config system robust"
-Good: "Load ~/.config/gh-agents/config.toml, fall back to defaults if missing,
+Good: "Load ~/.config/nexor/config.toml, fall back to defaults if missing,
        validate required fields, return typed Config struct"
 ```
 
@@ -203,7 +208,7 @@ We fix the process, not just the code.
 
 ---
 
-## Building gh-agents This Way
+## Building nexor This Way
 
 We're not just building software. We're building **the system that builds software**.
 
@@ -213,7 +218,7 @@ Every friction point we encounter is a feature opportunity:
 - "Progress tracking is tedious" → Automate it in the TUI
 - "Verification is manual" → Build it into the execution layer
 
-By building gh-agents with this manual process, we deeply understand what needs to be automated.
+By building nexor with this manual process, we deeply understand what needs to be automated.
 
 **The goal**: Eventually, the software we're building will do what we're doing now—automatically.
 

@@ -43,11 +43,11 @@ Copy-paste templates for common documents.
 
 **handoff.md**
 - Pausing work mid-ticket
-- Output goes to `.gh-agents/work/handoff.md`
+- Output goes to `.nexor/work/handoff.md`
 
 **blocker.md**
 - Can't proceed, need help
-- Output goes to `.gh-agents/work/blocker.md` or inline in PROGRESS.md
+- Output goes to `.nexor/work/blocker.md` or inline in PROGRESS.md
 
 **review.md**
 - Reviewing completed work

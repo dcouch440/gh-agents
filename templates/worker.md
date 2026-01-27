@@ -59,5 +59,5 @@
 ## If Handing Off Mid-Work
 
 1. Use `templates/handoff.md` to capture context
-2. Save to `.gh-agents/work/handoff.md`
+2. Save to `.nexor/work/handoff.md`
 3. Update `PROGRESS.md` with current slice progress
