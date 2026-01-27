@@ -206,6 +206,43 @@ Route failures up the tier hierarchy.
 | 3.6.2 | Implement escalation trigger on repeated failure | Failed task escalates |
 | 3.6.3 | Handle "needs human" terminal state | Task marked for human review |
 
+### Ticket 3.7: Inter-Agent Protocol
+
+Define exactly how agents communicate.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 3.7.1 | Define `TaskAssignment` message format (task_id, description, context_files, constraints) | Message serializes/deserializes |
+| 3.7.2 | Define `TaskResult` message format (task_id, status, output, files_modified, errors) | Message serializes/deserializes |
+| 3.7.3 | Define `ContextRequest` / `ContextResponse` for agents requesting more info | Request/response cycle works |
+| 3.7.4 | Define `ProgressUpdate` for feed streaming | Updates appear in feed |
+| 3.7.5 | Implement message validation (reject malformed messages) | Invalid messages rejected with clear error |
+
+**Message Schema Example**:
+```rust
+struct TaskAssignment {
+    task_id: Uuid,
+    title: String,
+    description: String,
+    context: TaskContext,
+    constraints: TaskConstraints,
+    timeout: Duration,
+}
+
+struct TaskContext {
+    files: Vec<FileContent>,      // Pre-loaded file contents
+    history: Vec<HistoryEntry>,   // Relevant prior work
+    conventions: String,          // CLAUDE.md or similar
+}
+
+struct TaskConstraints {
+    max_files_modified: Option<u32>,
+    allowed_paths: Vec<PathPattern>,
+    require_tests: bool,
+    require_review: bool,
+}
+```
+
 ---
 
 ## Milestone 4: Prompt Engineering & Agent Intelligence
@@ -539,6 +576,46 @@ What happens when things go wrong?
 | 4.9.3 | Design "review rejected" revision prompt | Agent addresses feedback specifically |
 | 4.9.4 | Design "stuck in loop" detection and breakout | Detects repetition, changes approach |
 | 4.9.5 | Design "conflicting requirements" clarification prompt | Asks specific clarifying questions |
+
+### Ticket 4.10: Tool Definition & Selection
+
+Agents need to know what tools exist and how to use them.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 4.10.1 | Define tool schema format (name, description, parameters, returns, side_effects) | Schema documented |
+| 4.10.2 | Create tool definitions for file ops: `read_file`, `write_file`, `list_dir` | Definitions valid |
+| 4.10.3 | Create tool definitions for git ops: `git_status`, `git_diff`, `git_commit`, `git_branch` | Definitions valid |
+| 4.10.4 | Create tool definitions for test ops: `run_tests`, `run_single_test` | Definitions valid |
+| 4.10.5 | Design tool selection prompt (given task, which tools needed?) | Agent selects appropriate tools |
+| 4.10.6 | Design tool invocation format (how agent requests tool use) | Format parseable, unambiguous |
+
+**Tool Definition Schema**:
+```json
+{
+  "name": "write_file",
+  "description": "Write content to a file, creating it if it doesn't exist",
+  "parameters": {
+    "path": { "type": "string", "description": "Relative path from project root" },
+    "content": { "type": "string", "description": "Full file content to write" }
+  },
+  "returns": { "type": "object", "properties": { "success": "bool", "bytes_written": "int" } },
+  "side_effects": ["modifies_filesystem"],
+  "requires_approval": false
+}
+```
+
+### Ticket 4.11: Context Window Validation
+
+Ensure prompts fit within model limits.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 4.11.1 | Create token counter (tiktoken or similar) | Counts tokens accurately for target models |
+| 4.11.2 | Define context budgets per model (claude-sonnet: 200k, gpt-4: 128k, etc.) | Budgets documented |
+| 4.11.3 | Implement pre-flight check before LLM calls | Rejects prompts that exceed budget |
+| 4.11.4 | Implement automatic truncation strategy (what to cut first) | Truncates least-important context first |
+| 4.11.5 | Add "context pressure" warning when approaching limits | Warning shown in feed |
 
 **Recovery Prompt Template**:
 ```
@@ -878,6 +955,18 @@ README and user guide.
 | 9.5.3 | Write usage guide with examples | Examples work |
 | 9.5.4 | Document all slash commands | Commands documented |
 
+### Ticket 9.6: Observability & Replay
+
+Debug why agents made specific decisions.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 9.6.1 | Log full prompt + response for every LLM call | Logs stored with task_id reference |
+| 9.6.2 | Implement `/replay <task_id>` to view agent's thinking | Shows prompt, response, tool calls |
+| 9.6.3 | Add decision tracing (why did orchestrator choose this decomposition?) | Reasoning captured and viewable |
+| 9.6.4 | Create export format for debugging sessions | Can export full session for analysis |
+| 9.6.5 | Add cost attribution per decision | Can see "this decomposition cost $0.12" |
+
 ---
 
 ## Parallelization Notes
@@ -953,4 +1042,49 @@ README and user guide.
 
 ---
 
-*Last updated: Added Milestone 4 (Prompt Engineering)*
+## Future Considerations (Post v1.0)
+
+Features to explore after core functionality is stable.
+
+### Collaborative Planning
+
+**Vision**: Connect with other people and share plans with AI.
+
+| Feature | Description |
+|---------|-------------|
+| **Shared ROADMAP** | Multiple users can view/edit the same ROADMAP.md in real-time |
+| **Plan export/import** | Export a decomposition as shareable JSON, import into another instance |
+| **Team orchestration** | Multiple orchestrators coordinate across a team's agents |
+| **Review handoff** | Human reviewer approves slices, AI picks up approved work |
+| **Async collaboration** | Leave notes for other humans/agents, pick up where they left off |
+
+**Technical considerations**:
+- WebSocket or CRDT for real-time sync
+- Authentication layer (GitHub OAuth?)
+- Conflict resolution when two users edit same slice
+- Permission model (who can approve, who can only suggest)
+
+### In-App File Viewer/Editor
+
+**Vision**: View and edit files without leaving the TUI.
+
+| Feature | Description |
+|---------|-------------|
+| `/view <path>` | Read-only scrollable file viewer |
+| `/edit <path>` | Shell out to $EDITOR or in-app editing |
+| `/browse` | File picker for navigating `.gh-agents/slices/` |
+| **Syntax highlighting** | Use `syntect` crate for code highlighting |
+| **Diff viewer** | Show before/after for agent modifications |
+
+### Other Ideas
+
+- **Learning system** - Improve prompts based on success/failure patterns
+- **Multi-repo support** - Orchestrate across multiple repositories
+- **Plugin architecture** - Extensible integrations beyond GitHub
+- **Pause/resume agents** - Save and restore agent state mid-task
+- **Voice interface** - Speak to orchestrator, hear progress updates
+- **Mobile companion** - Monitor agent progress from phone
+
+---
+
+*Last updated: Added gap-filling tickets (3.7, 4.10, 4.11, 9.6) and Future Considerations*
