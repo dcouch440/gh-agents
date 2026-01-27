@@ -52,14 +52,34 @@ For each slice in your decomp file:
 
 **Do not skip ahead.** Each slice builds on the previous.
 
-### 4. Verify Your Work
+### 4. Write Tests
+
+**Tests are mandatory.** Every slice that adds functionality must include tests.
+
+```
+For each slice:
+1. Implement the feature/struct/function
+2. Write tests that verify it works
+3. Run `cargo test` - all tests must pass
+4. Only then move to next slice
+```
+
+**Test requirements:**
+- Unit tests live in `#[cfg(test)]` modules alongside code
+- Test both success cases AND error cases
+- Test edge cases (empty inputs, invalid data, boundaries)
+- If the decomp shows test code, implement ALL of it
+
+**Do not skip tests.** Code without tests is incomplete work.
+
+### 5. Verify Your Work
 
 Each slice has a "Verify" section. Run those checks:
 - `cargo check` passes
-- `cargo test` passes (if tests exist)
+- `cargo test` passes ← **Required, not optional**
 - Specific verification steps from the decomp file
 
-### 5. Update Documentation
+### 6. Update Documentation
 
 When ticket is complete:
 
@@ -175,6 +195,7 @@ Task: Implement Ticket 1.2
 
 - **You implement** - The orchestrator already planned
 - **Trust the decomp** - It has what you need
+- **Write tests** - Code without tests is incomplete
 - **Verify each slice** - Don't accumulate unknowns
 - **Stay focused** - One ticket, done well
 - **Update docs** - Others depend on knowing the status
