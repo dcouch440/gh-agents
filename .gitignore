@@ -1,0 +1,29 @@
+# Rust/Cargo
+target/
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Runtime data
+.nexor/state.db
+.nexor/state.db-*
+.nexor/logs/
+
+# Build artifacts
+*.so
+*.dylib
+*.dll
