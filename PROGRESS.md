@@ -30,15 +30,14 @@
 
 ## Milestone 2: LLM Layer
 
-**Goal**: Can send prompts to Anthropic/OpenAI and get streaming responses.
+**Goal**: Can send prompts to Anthropic and get streaming responses.
 
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
 | 2.1 Provider Abstraction | pending | 0/3 | Needs M1 types |
 | 2.2 Anthropic Client | pending | 0/4 | Needs 2.1 |
-| 2.3 OpenAI Client | pending | 0/4 | Needs 2.1 |
-| 2.4 Cost Tracking | pending | 0/3 | Needs 2.1 |
-| 2.5 Retry Logic | pending | 0/3 | Needs 2.1 |
+| 2.3 Cost Tracking | pending | 0/3 | Needs 2.2 |
+| 2.4 Retry Logic | pending | 0/3 | Needs 2.2 |
 
 **Milestone Status:** Not Started
 
@@ -171,7 +170,7 @@
 | Milestone | Tickets | Slices | Status |
 |-----------|---------|--------|--------|
 | M1: Foundation | 5 | 24 | Not Started |
-| M2: LLM Layer | 5 | 17 | Not Started |
+| M2: LLM Layer | 4 | 13 | Not Started |
 | M3: Agent Runtime | 7 | 26 | Not Started |
 | M4: Prompt Engineering | 11 | 55 | Not Started |
 | M5: Orchestration Core | 5 | 18 | Not Started |

@@ -79,7 +79,7 @@ Set up tracing with configurable levels.
 
 ## Milestone 2: LLM Layer
 
-**Goal**: Can send prompts to Anthropic/OpenAI and get streaming responses.
+**Goal**: Can send prompts to Anthropic and get streaming responses.
 
 **Checkpoint**: Can chat with Claude via CLI, see tokens stream in, see cost tracked.
 
@@ -104,36 +104,25 @@ Implement Anthropic Messages API.
 | 2.2.3 | Implement streaming response parsing (SSE) | Can receive and parse stream chunks |
 | 2.2.4 | Extract token counts from response for cost tracking | Token counts captured correctly |
 
-### Ticket 2.3: OpenAI Client
-
-Implement OpenAI Chat Completions API.
-
-| Slice | Description | Test |
-|-------|-------------|------|
-| 2.3.1 | Implement basic HTTP client with auth headers | Can make authenticated request |
-| 2.3.2 | Implement `send_message()` for non-streaming | Unit test with mock |
-| 2.3.3 | Implement streaming response parsing (SSE) | Can receive and parse stream chunks |
-| 2.3.4 | Extract token counts from response | Token counts captured correctly |
-
-### Ticket 2.4: Cost Tracking
+### Ticket 2.3: Cost Tracking
 
 Track token usage and calculate costs.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 2.4.1 | Create cost-per-token lookup table for known models | Lookup returns correct rates |
-| 2.4.2 | Implement `CostTracker` that records each API call | Costs recorded to database |
-| 2.4.3 | Implement `get_summary()` for cost aggregation | Summary shows by-tier, by-task, by-model |
+| 2.3.1 | Create cost-per-token lookup table for known models | Lookup returns correct rates |
+| 2.3.2 | Implement `CostTracker` that records each API call | Costs recorded to database |
+| 2.3.3 | Implement `get_summary()` for cost aggregation | Summary shows by-tier, by-task, by-model |
 
-### Ticket 2.5: Retry Logic
+### Ticket 2.4: Retry Logic
 
 Handle rate limits and transient failures.
 
 | Slice | Description | Test |
 |-------|-------------|------|
-| 2.5.1 | Implement exponential backoff helper | Backoff increases correctly |
-| 2.5.2 | Wrap provider calls with retry logic | Retries on 429, 500, 503 |
-| 2.5.3 | Add configurable max retries | Respects config limit |
+| 2.4.1 | Implement exponential backoff helper | Backoff increases correctly |
+| 2.4.2 | Wrap provider calls with retry logic | Retries on 429, 500, 503 |
+| 2.4.3 | Add configurable max retries | Respects config limit |
 
 ---
 
