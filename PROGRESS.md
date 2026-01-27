@@ -7,6 +7,7 @@
 **Active:** None
 **Next:** 2.2 Anthropic Client (M2)
 **Blocked:** None
+**Completed:** 2.3 Cost Tracking
 
 **Milestone 1 Decomposition:** Complete - see `decomp/M1/`
 **Milestone 2 Decomposition:** Complete - see `decomp/M2/`
@@ -44,7 +45,7 @@
 |--------|--------|----------|-------|
 | 2.1 Provider Abstraction | done | 3/3 | LLMProvider trait, types, streaming |
 | 2.2 Anthropic Client | pending | 0/4 | Needs 2.1 |
-| 2.3 Cost Tracking | pending | 0/3 | Needs 2.2 |
+| 2.3 Cost Tracking | done | 3/3 | ModelPricing, CostTracker, aggregation methods |
 | 2.4 Retry Logic | pending | 0/3 | Needs 2.2 |
 
 **Milestone Status:** Not Started
