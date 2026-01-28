@@ -29,8 +29,10 @@ nexor/
 │   └── ...
 ├── decomp/                # Detailed ticket breakdowns
 │   ├── M1/                # Milestone 1 (Foundation) - Complete
-│   ├── M2/                # Milestone 2 (LLM Layer)
-│   └── M3-M9/             # Future milestones
+│   ├── M2/                # Milestone 2 (LLM Layer) - Complete
+│   ├── M3-M9/             # Milestones 3-9 - Complete
+│   ├── M10/               # Milestone 10 (File Editor) - In Progress
+│   └── M11/               # Milestone 11 (Analytics)
 ├── migrations/            # SQLite database migrations
 ├── src/
 │   ├── lib.rs             # Library root
@@ -39,7 +41,22 @@ nexor/
 │   ├── config/            # Configuration loading
 │   ├── db/                # Database operations
 │   ├── logging.rs         # Logging infrastructure
-│   └── ...                # Future modules
+│   ├── llm/               # LLM provider clients
+│   ├── agents/            # Agent runtime & execution
+│   ├── orchestration/     # Task planning, routing, scheduling
+│   ├── prompts/           # Prompt templates & engineering
+│   ├── execution/         # File/git/test operations
+│   ├── github/            # GitHub API integration
+│   ├── tui/               # Terminal user interface
+│   │   ├── app.rs         # Main app state & logic
+│   │   ├── theme.rs       # Holy Knight color theme
+│   │   ├── syntax.rs      # Syntax highlighting (syntect)
+│   │   ├── layout.rs      # Header & layout widgets
+│   │   ├── input.rs       # Input bar widget
+│   │   ├── views/         # View components (home, chat, feed, etc.)
+│   │   └── menu/          # Menu system
+│   ├── cli.rs             # CLI argument parsing
+│   └── headless.rs        # Headless mode execution
 └── .nexor/                # Runtime data
     ├── logs/              # Log files
     ├── work/              # Work tracking
@@ -137,11 +154,15 @@ RUST_LOG=debug cargo run          # Run with debug logging
 
 ## Current Status
 
-**Milestone 1: Foundation** - Complete (5/5 tickets)
+**Milestones 1-9:** Complete
 
-- Project scaffolding, types, config, database, logging all done
+- Foundation, LLM Layer, Agent Runtime, Prompt Engineering
+- Orchestration Core, TUI Basic, Execution Layer
+- GitHub Integration, Polish & Production
 
-**Next:** Milestone 2: LLM Layer
+**Current:** Milestone 10: In-TUI File Editor (in progress)
+
+**Next:** Milestone 11: Usage Analytics
 
 - See `PROGRESS.md` for details
 
