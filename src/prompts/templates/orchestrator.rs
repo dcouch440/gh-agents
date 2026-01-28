@@ -247,9 +247,7 @@ const DECOMPOSITION_THINKING: &str = r#"Follow this thinking process:
 2. INVENTORY: What components/layers does this touch? (DB, API, UI, tests, etc.)
 3. DEPENDENCIES: What must exist before other parts can work?
 4. SLICE VERTICALLY: Each slice must be deployable alone. Ask: "If we stopped after this slice, would something work?"
-5. SIZE CHECK: Each slice should be 1-4 hours of work. Too big? Split it. Too small? Combine.
-
-Show your thinking for each step before providing the final slices."#;
+5. SIZE CHECK: Each slice should be 1-4 hours of work. Too big? Split it. Too small? Combine."#;
 
 const DECOMPOSITION_SCHEMA: &str = r#"{
   "thinking": "string - Your reasoning through the 5 steps above",
@@ -279,9 +277,7 @@ const REVIEW_THINKING: &str = r#"Follow this review process:
 2. INTEGRATION: Will this break anything else? Consider side effects.
 3. QUALITY: Is this code maintainable? Any obvious code smells?
 4. COMPLETENESS: Are edge cases handled? Tests included?
-5. VERDICT: Approve, request changes (be specific), or escalate to human.
-
-Show your thinking for each step before giving your verdict."#;
+5. VERDICT: Approve, request changes (be specific), or escalate to human."#;
 
 const REVIEW_SCHEMA: &str = r#"{
   "thinking": "string - Your reasoning through the review steps",

@@ -17,7 +17,7 @@ impl Default for TierModels {
     fn default() -> Self {
         Self {
             orchestrator: ModelConfig {
-                model_id: "claude-sonnet-4-20250514".to_string(),
+                model_id: "claude-opus-4-5-20251101".to_string(),
                 max_tokens: 8192,
                 ..Default::default()
             },
@@ -27,7 +27,7 @@ impl Default for TierModels {
                 ..Default::default()
             },
             utility: ModelConfig {
-                model_id: "claude-haiku".to_string(),
+                model_id: "claude-sonnet-4-20250514".to_string(),
                 max_tokens: 2048,
                 ..Default::default()
             },
