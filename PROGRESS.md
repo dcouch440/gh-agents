@@ -6,6 +6,7 @@
 
 **Active:** M11 React Foundation
 **Next:** 11.1 Project Setup
+**Planned:** M14 Dynamic Agent Selection (can run in parallel with M10-M13)
 **Blocked:** None
 
 ---
