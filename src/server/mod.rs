@@ -7,6 +7,7 @@
 
 pub mod api;
 pub mod state;
+pub mod ws;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -81,6 +82,7 @@ fn create_router(state: AppState) -> Router {
 
     Router::new()
         .nest("/api", api_routes)
+        .route("/ws", get(ws::ws_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
