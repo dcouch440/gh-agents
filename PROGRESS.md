@@ -4,8 +4,8 @@
 
 ## Current Focus
 
-**Active:** M10 Server Layer (Architectural Pivot)
-**Next:** 10.6 Static File Serving
+**Active:** M11 React Foundation
+**Next:** 11.1 Project Setup
 **Blocked:** None
 
 ---
@@ -206,9 +206,9 @@
 | 10.3 REST API - Chat Endpoint | done | 4/4 | POST /chat, GET/DELETE /chat/history, SSE streaming |
 | 10.4 WebSocket Gateway | done | 5/5 | WS handler, subscriptions, broadcast channels, ping/pong |
 | 10.5 Authentication | done | 5/5 | Password auth, JWT tokens, auth middleware, /auth endpoints |
-| 10.6 Static File Serving | pending | 0/3 | |
+| 10.6 Static File Serving | done | 3/3 | ServeDir, SPA fallback, cache headers, 6 tests |
 
-**Milestone Status:** In Progress (5/6 tickets done)
+**Milestone Status:** Complete (6/6 tickets done)
 
 ---
 
@@ -273,7 +273,7 @@
 | M7: Execution Layer | 6 | Complete |
 | M8: GitHub Integration | 8 | Complete |
 | M9: Polish & Production | 12 | Complete |
-| M10: Server Layer | 6 | In Progress (3/6) |
+| M10: Server Layer | 6 | Complete |
 | M11: React Foundation | 4 | Not Started |
 | M12: React Features | 6 | Not Started |
 | M13: React Polish | 5 | Not Started |
@@ -348,4 +348,5 @@ jsonwebtoken = "9"
 7. [x] Ticket 10.3: REST API - Chat Endpoint - DONE (POST /chat, GET/DELETE /chat/history, SSE streaming)
 8. [x] Ticket 10.4: WebSocket Gateway - DONE (ws handler, subscriptions, broadcast channels, ping/pong)
 9. [x] Ticket 10.5: Authentication - DONE (password auth, JWT tokens, auth middleware, /auth endpoints)
-10. [ ] Start Ticket 10.6: Static File Serving
+10. [x] Ticket 10.6: Static File Serving - DONE (ServeDir, SPA fallback, cache headers)
+11. [ ] Start Milestone 11: React Foundation
