@@ -59,6 +59,7 @@ Build a **Rust backend + React frontend** web application that orchestrates AI a
 | M11: React Foundation | **NEW** | Auth, layout, routing |
 | M12: React Features | **NEW** | Chat, feed, tasks, files |
 | M13: React Polish | **NEW** | Analytics, settings, mobile |
+| M14: Dynamic Agent Selection | **NEW** | Difficulty-based model routing, prompt fixes |
 
 ---
 
@@ -376,6 +377,22 @@ Update all docs for new architecture.
 
 ---
 
+## NEW: Milestone 14: Dynamic Agent Selection
+
+**Goal**: Route tasks to the right model based on difficulty. Fix prompt verbosity.
+
+**Checkpoint**: Orchestrator tags slices with difficulty. Complex → Opus, standard/simple → Sonnet.
+
+| Ticket | Title | Slices |
+|--------|-------|--------|
+| 14.1 | Fix prompt verbosity | 2 (orchestrator + worker prompts) |
+| 14.2 | Add difficulty metadata routing | 2 (router rules + orchestrator instruction) |
+| 14.3 | Wire model override through agent pool | 2 (config defaults + pool spawn) |
+
+**Note**: Can be done independently of M10-M13. Only touches `src/prompts/`, `src/orchestration/router.rs`, `src/agents/pool.rs`, `src/types/config.rs`, and `templates/orchestrator.md`.
+
+---
+
 ## Parallelization Notes
 
 ### Can be parallelized:
@@ -421,6 +438,7 @@ M12 complete → M13 (Polish)
 - [ ] Milestone 11: React Foundation
 - [ ] Milestone 12: React Features
 - [ ] Milestone 13: React Polish
+- [ ] Milestone 14: Dynamic Agent Selection
 
 ---
 
