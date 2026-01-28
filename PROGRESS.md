@@ -4,8 +4,8 @@
 
 ## Current Focus
 
-**Active:** None
-**Next:** M7 Execution Layer
+**Active:** M7 Execution Layer (3/6 done)
+**Next:** M7.4 Docker Sandbox, M7.5 Approval Gates, M7.6 Git Merge Operations
 **Blocked:** None
 **Completed:** M1 Foundation, M2 LLM Layer, M3 Agent Runtime, M4 Prompt Engineering, M5 Orchestration Core, M6 TUI Basic
 
@@ -18,6 +18,7 @@
 **Milestone 7 Decomposition:** Complete - see `decomp/M7/`
 **Milestone 8 Decomposition:** Complete - see `decomp/M8/`
 **Milestone 9 Decomposition:** Complete - see `decomp/M9/`
+**Milestone 10 Decomposition:** Complete - see `decomp/M10/`
 
 ---
 
@@ -132,14 +133,14 @@
 
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
-| 7.1 File Operations | pending | 0/4 | Needs M1 |
-| 7.2 Git Operations | pending | 0/6 | Needs M1 |
-| 7.3 Test Runner | pending | 0/4 | Needs M1 |
+| 7.1 File Operations | done | 3/4 | FileOps with read/write/delete/list, path validation, 13 tests |
+| 7.2 Git Operations | done | 5/6 | GitOps with status/branch/commit/diff/push, 9 tests |
+| 7.3 Test Runner | done | 4/4 | TestRunner with framework detection, run/parse/streaming, 11 tests |
 | 7.4 Docker Sandbox | pending | 0/4 | Needs 7.1-7.3 |
 | 7.5 Approval Gates | pending | 0/4 | Needs M6 (TUI) |
 | 7.6 Git Merge Operations | pending | 0/6 | Needs 7.2 |
 
-**Milestone Status:** Not Started
+**Milestone Status:** In Progress (3/6 tickets done)
 
 ---
 
@@ -185,6 +186,24 @@
 
 ---
 
+## Milestone 10: In-TUI File Editor
+
+**Goal**: Users can view and edit files directly within the TUI, including files agents are working on.
+
+| Ticket | Status | Progress | Notes |
+|--------|--------|----------|-------|
+| 10.1 File Viewer Widget | pending | 0/4 | Needs M6 |
+| 10.2 File Editor Widget | pending | 0/5 | Needs M6 |
+| 10.3 File Browser Widget | pending | 0/4 | Needs M6, M7.1 |
+| 10.4 Diff Viewer | pending | 0/4 | Needs M6, M7.2 |
+| 10.5 Save & Commit Flow | pending | 0/5 | Needs 10.2, M7.1, M7.2 |
+| 10.6 Slash Commands Integration | pending | 0/5 | Needs 10.1-10.4, M6.6 |
+| 10.7 Agent Integration | pending | 0/4 | Needs 10.1-10.2, M3, M5 |
+
+**Milestone Status:** Not Started
+
+---
+
 ## Summary
 
 | Milestone | Tickets | Slices | Status |
@@ -198,7 +217,8 @@
 | M7: Execution Layer | 6 | 28 | Not Started |
 | M8: GitHub Integration | 8 | 32 | Not Started |
 | M9: Polish & Production | 12 | 42 | In Progress (3/12 tickets) |
-| **Total** | **65** | **263** | |
+| M10: In-TUI File Editor | 7 | 31 | Not Started |
+| **Total** | **72** | **294** | |
 
 ---
 

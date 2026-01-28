@@ -1109,6 +1109,61 @@ nexor/
 
 ---
 
+## Usage Analytics
+
+**Vision**: Full visibility into agent activity, costs, and performance over time.
+
+### Dashboard (`/stats`)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ Usage Statistics                          Last 7 days  │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  Tasks                    Costs                         │
+│  ────────────────         ────────────────              │
+│  Completed: 47            Total: $12.34                 │
+│  Failed: 3                Orchestrator: $8.20           │
+│  In Progress: 2           Worker: $3.89                 │
+│  Success Rate: 94%        Utility: $0.25                │
+│                                                         │
+│  Tokens                   Sessions                      │
+│  ────────────────         ────────────────              │
+│  Input: 1.2M              Total: 12                     │
+│  Output: 340K             Avg Duration: 45m             │
+│  Avg/Task: 28K            Active Now: 1                 │
+│                                                         │
+├─────────────────────────────────────────────────────────┤
+│  Cost Trend (7 days)                                    │
+│  $4 │    ╭─╮                                            │
+│  $2 │ ╭──╯ ╰──╮  ╭─                                     │
+│  $0 └─────────────────                                  │
+│      M  T  W  T  F  S  S                                │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| `/stats` | Overview dashboard with key metrics |
+| `/costs` | Detailed cost breakdown by tier, task, model, time |
+| Session tracking | Track work sessions with duration and outcomes |
+| Export | CSV/JSON export for external analysis |
+| Trends | Historical comparison (day/week/month) |
+
+### Metrics Tracked
+
+| Category | Metrics |
+|----------|---------|
+| **Tasks** | Completed, failed, success rate, avg duration |
+| **Costs** | Total, by tier, by model, by task |
+| **Tokens** | Input/output counts, averages |
+| **Agents** | Utilization, idle time, escalation rate |
+| **Sessions** | Count, duration, tasks per session |
+
+---
+
 ## Future Considerations
 
 Features to consider after v1:

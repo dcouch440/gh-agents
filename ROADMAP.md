@@ -1174,15 +1174,9 @@ Features to explore after core functionality is stable.
 
 ### In-App File Viewer/Editor
 
-**Vision**: View and edit files without leaving the TUI.
+> **Now implemented as Milestone 10** - See M10 for full decomposition.
 
-| Feature | Description |
-|---------|-------------|
-| `/view <path>` | Read-only scrollable file viewer |
-| `/edit <path>` | Shell out to $EDITOR or in-app editing |
-| `/browse` | File picker for navigating `.nexor/slices/` |
-| **Syntax highlighting** | Use `syntect` crate for code highlighting |
-| **Diff viewer** | Show before/after for agent modifications |
+Full in-TUI file editing with syntax highlighting, nano-style keybindings, git integration, and agent-aware conflict handling.
 
 ### Other Ideas
 
