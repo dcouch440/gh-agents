@@ -5,7 +5,7 @@
 ## Current Focus
 
 **Active:** M11 React Foundation
-**Next:** 11.2 API Client
+**Next:** 11.3 Authentication UI
 **Planned:** M14 Dynamic Agent Selection (can run in parallel with M10-M13)
 **Blocked:** None
 
@@ -220,11 +220,11 @@
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
 | 11.1 Project Setup | done | 5/5 | Vite + React + TypeScript, TailwindCSS v4, React Router, Zustand, proxy configured |
-| 11.2 API Client | pending | 0/4 | |
+| 11.2 API Client | done | 4/4 | Typed HTTP client, auth token expiry, WebSocket with reconnection, React hooks (useChat, useFeed, useTasks) |
 | 11.3 Authentication UI | pending | 0/4 | |
 | 11.4 Layout Components | pending | 0/4 | |
 
-**Milestone Status:** In Progress (1/4 tickets done)
+**Milestone Status:** In Progress (2/4 tickets done)
 
 ---
 
