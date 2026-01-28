@@ -5,6 +5,7 @@
 //! - WebSocket connections for real-time updates
 //! - Static files for the React frontend
 
+pub mod api;
 pub mod state;
 
 use std::net::SocketAddr;
@@ -60,19 +61,19 @@ fn create_router(state: AppState) -> Router {
         .allow_methods(Any)
         .allow_headers(Any);
 
+    // Build API routes
+    let api_routes = Router::new()
+        .route("/health", get(api::health_check))
+        .route("/tasks", get(api::list_tasks).post(api::create_task))
+        .route("/tasks/{id}", get(api::get_task))
+        .route("/agents", get(api::list_agents))
+        .route("/config", get(api::get_config).patch(api::update_config));
+
     Router::new()
-        .route("/api/health", get(health_check))
+        .nest("/api", api_routes)
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
-}
-
-/// Health check endpoint
-///
-/// Returns "ok" if the server is running.
-/// Used by load balancers and monitoring systems.
-async fn health_check() -> &'static str {
-    "ok"
 }
 
 /// Wait for shutdown signal
@@ -105,10 +106,109 @@ async fn shutdown_signal() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use tempfile::TempDir;
+    use tower::util::ServiceExt;
+
+    async fn setup_test_app() -> (Router, TempDir) {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let db = crate::db::init_db_at(db_path.to_str().unwrap())
+            .await
+            .unwrap();
+        let scheduler = Scheduler::new(db.clone()).await.unwrap();
+        let scheduler = Arc::new(RwLock::new(scheduler));
+        let config = AppConfig::default();
+        let state = AppState::new(db, scheduler, config);
+        let router = create_router(state);
+        (router, temp_dir)
+    }
 
     #[tokio::test]
-    async fn health_check_returns_ok() {
-        let response = health_check().await;
-        assert_eq!(response, "ok");
+    async fn health_endpoint_returns_json() {
+        let (app, _temp_dir) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn tasks_endpoint_returns_list() {
+        let (app, _temp_dir) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/tasks")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn agents_endpoint_returns_stats() {
+        let (app, _temp_dir) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/agents")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn config_endpoint_returns_config() {
+        let (app, _temp_dir) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/config")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn unknown_task_returns_404() {
+        let (app, _temp_dir) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/tasks/00000000-0000-0000-0000-000000000000")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 }
