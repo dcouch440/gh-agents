@@ -118,10 +118,6 @@ When ticket is complete:
 # In PROGRESS.md, update your ticket row:
 | 1.2 Core Type Definitions | done | 6/6 | Completed all types |
 
-# In .nexor/work/current.md, update status:
-**Status:** Ready for next ticket
-**Next:** {next ticket}
-
 # Create a brief report (optional but recommended):
 .nexor/reports/{ticket}.md
 ```
