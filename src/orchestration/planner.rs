@@ -313,6 +313,8 @@ impl<P: LLMProvider> Planner<P> {
                         .into_iter()
                         .map(PathBuf::from)
                         .collect(),
+                    metadata: None,
+                    depends_on: vec![],
                     created_at: now,
                     updated_at: now,
                 };

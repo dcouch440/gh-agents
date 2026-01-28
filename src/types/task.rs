@@ -2,6 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -20,6 +21,12 @@ impl TaskId {
 impl Default for TaskId {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl std::fmt::Display for TaskId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -87,8 +94,45 @@ pub struct Task {
     pub status: TaskStatus,
     pub priority: Priority,
     pub context_files: Vec<PathBuf>,
+    /// Optional metadata for routing hints and tracking
+    pub metadata: Option<HashMap<String, String>>,
+    /// Tasks that must complete before this task can start
+    pub depends_on: Vec<TaskId>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+impl Task {
+    /// Create a new task with default values
+    pub fn new(title: impl Into<String>, tier: super::agent::AgentTier) -> Self {
+        Self {
+            id: TaskId::new(),
+            slice_id: None,
+            title: title.into(),
+            description: String::new(),
+            assigned_tier: tier,
+            assigned_agent: None,
+            status: TaskStatus::Pending,
+            priority: Priority::Normal,
+            context_files: vec![],
+            metadata: None,
+            depends_on: vec![],
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+
+    /// Add a dependency to this task
+    pub fn with_dependency(mut self, dep: TaskId) -> Self {
+        self.depends_on.push(dep);
+        self
+    }
+
+    /// Set dependencies for this task
+    pub fn with_dependencies(mut self, deps: Vec<TaskId>) -> Self {
+        self.depends_on = deps;
+        self
+    }
 }
 
 /// Types of task events (for append-only log)

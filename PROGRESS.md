@@ -5,9 +5,9 @@
 ## Current Focus
 
 **Active:** None
-**Next:** M5 Orchestration Core or M6 TUI Basic
+**Next:** M6 TUI Basic or M7 Execution Layer
 **Blocked:** None
-**Completed:** M1 Foundation, M2 LLM Layer, M3 Agent Runtime, M4 Prompt Engineering
+**Completed:** M1 Foundation, M2 LLM Layer, M3 Agent Runtime, M4 Prompt Engineering, M5 Orchestration Core
 
 **Milestone 1 Decomposition:** Complete - see `decomp/M1/`
 **Milestone 2 Decomposition:** Complete - see `decomp/M2/`
@@ -99,12 +99,12 @@
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
 | 5.1 Planner (Ticket → Slices) | done | 5/5 | Planner, PlannerConfig, DecompositionError, PlannerOutput, retry logic, 13 tests |
-| 5.2 Task Queue | pending | 0/4 | Needs M1 |
-| 5.3 Router (Task → Tier) | pending | 0/3 | Needs 5.1 |
-| 5.4 Dependency Tracking | pending | 0/3 | Needs 5.2 |
-| 5.5 Scheduler | pending | 0/3 | Needs 5.2-5.4 |
+| 5.2 Task Queue | done | 4/4 | TaskQueue, PersistentTaskQueue, RequeuePolicy, priority ordering, 20 tests |
+| 5.3 Router (Task → Tier) | done | 3/3 | Router, RouterConfig, RoutingRule, RuleMatcher, metadata field added to Task, 21 tests |
+| 5.4 Dependency Tracking | done | 3/3 | DependencyTracker, DependencyAwareQueue, depends_on field, circular detection, 11 tests |
+| 5.5 Scheduler | done | 3/3 | TaskScheduler, SchedulerConfig, agent wait with Notify, preemption check, 2 tests |
 
-**Milestone Status:** In Progress (1/5 tickets done)
+**Milestone Status:** Complete (5/5 tickets done)
 
 ---
 
@@ -193,7 +193,7 @@
 | M2: LLM Layer | 4 | 13 | Complete |
 | M3: Agent Runtime | 7 | 26 | Complete |
 | M4: Prompt Engineering | 11 | 55 | Complete |
-| M5: Orchestration Core | 5 | 18 | Not Started |
+| M5: Orchestration Core | 5 | 18 | Complete |
 | M6: TUI Basic | 7 | 25 | Not Started |
 | M7: Execution Layer | 6 | 28 | Not Started |
 | M8: GitHub Integration | 8 | 32 | Not Started |

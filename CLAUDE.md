@@ -57,6 +57,7 @@ nexor/
 ### Agent Workflow
 
 **As a Worker:**
+
 1. Receive ticket assignment (e.g., "Ticket 2.1")
 2. Read `WORKER.md` for process
 3. Read `decomp/M{n}/{ticket}.md` for spec
@@ -65,6 +66,7 @@ nexor/
 6. Optionally create a report using `templates/report.md`
 
 **As an Orchestrator:**
+
 1. Receive milestone assignment (e.g., "Milestone 2")
 2. Read `ORCHESTRATOR.md` for process
 3. Create decomp files in `decomp/M{n}/`
@@ -94,6 +96,7 @@ nexor/
 Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
 
 Example:
+
 ```
 feat(db): implement task CRUD operations
 
@@ -135,9 +138,11 @@ RUST_LOG=debug cargo run          # Run with debug logging
 ## Current Status
 
 **Milestone 1: Foundation** - Complete (5/5 tickets)
+
 - Project scaffolding, types, config, database, logging all done
 
 **Next:** Milestone 2: LLM Layer
+
 - See `PROGRESS.md` for details
 
 ## Key Conventions
@@ -156,3 +161,4 @@ RUST_LOG=debug cargo run          # Run with debug logging
 - Update `PROGRESS.md` when completing tickets
 - Use `templates/report.md` to document significant work
 - Ask for clarification when requirements are ambiguous
+- Please safe file in doc/ when I request for you to take notes.
