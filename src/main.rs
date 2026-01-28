@@ -9,11 +9,12 @@ use tokio::sync::RwLock;
 use tracing::{debug, info};
 
 use nexor::cli::Args;
+use nexor::config::load_config;
 use nexor::db::init_db;
 use nexor::headless::HeadlessRunner;
 use nexor::logging::{init_logging_with_file, LOG_DIR};
 use nexor::orchestration::Scheduler;
-use nexor::server::run_server;
+use nexor::server::start_server;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -73,6 +74,9 @@ async fn run_server_mode(args: Args) -> Result<()> {
     info!("nexor server starting...");
     debug!("Debug logging enabled (verbosity: {})", args.verbose);
 
+    // Load configuration
+    let config = load_config().unwrap_or_default();
+
     // Initialize database
     let pool = init_db().await?;
 
@@ -80,11 +84,11 @@ async fn run_server_mode(args: Args) -> Result<()> {
     let scheduler = Scheduler::new(pool.clone()).await?;
     let scheduler = Arc::new(RwLock::new(scheduler));
 
-    // Server address (TODO: make configurable)
-    let addr: SocketAddr = "127.0.0.1:8080".parse()?;
+    // Server address from CLI
+    let addr: SocketAddr = format!("0.0.0.0:{}", args.port).parse()?;
 
     // Run server
-    run_server(pool, scheduler, addr).await?;
+    start_server(pool, scheduler, config, addr).await?;
 
     info!("nexor shutting down");
     Ok(())
