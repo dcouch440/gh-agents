@@ -21,7 +21,7 @@ use ratatui::{
 
 use crate::tui::input::InputBar;
 use crate::tui::layout::{AppLayout, HeaderBar};
-use crate::tui::views::HomeView;
+use crate::tui::views::{ChatMessage, ChatView, FeedItem, FeedView, HomeView};
 use std::io::{self, Stdout};
 use std::panic;
 use std::path::PathBuf;
@@ -118,6 +118,12 @@ pub struct App {
     should_quit: bool,
     /// Message buffer for displaying messages to the user
     message: Option<String>,
+    /// Activity feed
+    feed: FeedView,
+    /// Chat conversation with orchestrator
+    chat: ChatView,
+    /// Pending streaming response from orchestrator
+    pending_response: Option<ChatMessage>,
 }
 
 impl App {
@@ -127,6 +133,10 @@ impl App {
         pool: sqlx::SqlitePool,
         project_root: PathBuf,
     ) -> Self {
+        // Initialize feed with startup message
+        let mut feed = FeedView::new();
+        feed.push(FeedItem::system("nexor started"));
+
         Self {
             mode: AppMode::Normal,
             view: View::Home,
@@ -136,6 +146,9 @@ impl App {
             project_root,
             should_quit: false,
             message: None,
+            feed,
+            chat: ChatView::new(),
+            pending_response: None,
         }
     }
 
@@ -167,6 +180,51 @@ impl App {
     /// Set a message to display
     pub fn set_message(&mut self, msg: impl Into<String>) {
         self.message = Some(msg.into());
+    }
+
+    /// Add an item to the activity feed.
+    pub fn push_feed_item(&mut self, item: FeedItem) {
+        self.feed.push(item);
+    }
+
+    /// Get a reference to the feed.
+    pub fn feed(&self) -> &FeedView {
+        &self.feed
+    }
+
+    /// Get a reference to the chat.
+    pub fn chat(&self) -> &ChatView {
+        &self.chat
+    }
+
+    /// Submit a chat message to the orchestrator.
+    ///
+    /// Adds the user message to chat history and generates a mock response
+    /// (real orchestrator integration happens in M3).
+    fn submit_chat_message(&mut self, content: String) {
+        // Add user message to history
+        self.chat.push(ChatMessage::user(&content));
+
+        // Add to feed
+        self.feed.push(FeedItem::new(
+            "You",
+            &content,
+            crate::tui::views::FeedItemType::AgentReport,
+        ));
+
+        // Mock response - in real implementation, this would go through the orchestrator
+        let response = format!(
+            "I received your message: \"{}\". (Mock response - orchestrator integration pending)",
+            content
+        );
+        self.chat.push(ChatMessage::orchestrator(&response));
+
+        // Add orchestrator response to feed
+        self.feed.push(FeedItem::new(
+            "Orchestrator",
+            "Responded to user message",
+            crate::tui::views::FeedItemType::AgentReport,
+        ));
     }
 
     /// Get the status bar text
@@ -210,9 +268,22 @@ impl App {
             return Ok(true);
         }
 
-        // In normal mode, non-command input goes to the orchestrator
-        // (To be implemented when orchestrator is complete)
-        self.set_message(format!("Input: {}", input));
+        // In normal mode, handle chat messages
+        match self.view {
+            View::Main => {
+                // Submit to chat
+                self.submit_chat_message(input.to_string());
+            }
+            View::Home => {
+                // From home, transition to Main and submit
+                self.view = View::Main;
+                self.submit_chat_message(input.to_string());
+            }
+            _ => {
+                // Other views: just show the input as a message
+                self.set_message(format!("Input: {}", input));
+            }
+        }
         Ok(true)
     }
 
@@ -457,7 +528,7 @@ impl App {
             };
             frame.render_widget(header, layout.header);
 
-            // Main content area - HomeView renders directly, others use Paragraph+Block
+            // Main content area - custom widgets for Home and Feed, Paragraph for others
             match self.view {
                 View::Home => {
                     let home_view = if let Some(msg) = self.message() {
@@ -466,6 +537,26 @@ impl App {
                         HomeView::default()
                     };
                     frame.render_widget(home_view, layout.main);
+                }
+                View::Feed => {
+                    // Clone feed for rendering (Widget consumes self)
+                    let feed_view = FeedView {
+                        items: self.feed.items.clone(),
+                        scroll_offset: self.feed.scroll_offset,
+                    };
+                    frame.render_widget(feed_view, layout.main);
+                }
+                View::Main => {
+                    // Build messages list including pending streaming response
+                    let mut messages = self.chat.messages.clone();
+                    if let Some(ref pending) = self.pending_response {
+                        messages.push(pending.clone());
+                    }
+                    let chat_view = ChatView {
+                        messages,
+                        scroll_offset: self.chat.scroll_offset,
+                    };
+                    frame.render_widget(chat_view, layout.main);
                 }
                 _ => {
                     let content = self.render_view_content();
@@ -491,12 +582,12 @@ impl App {
         Ok(())
     }
 
-    /// Render the content for the current view (non-Home views).
+    /// Render the content for the current view (non-Home/Feed views).
     fn render_view_content(&self) -> String {
         match self.view {
             View::Home => String::new(), // Handled separately by HomeView widget
-            View::Feed => "Feed view - Agent activity will appear here".to_string(),
-            View::Main => "Main view - Chat with the orchestrator".to_string(),
+            View::Feed => String::new(), // Handled separately by FeedView widget
+            View::Main => String::new(), // Handled separately by ChatView widget
             View::Logs => "Logs view - Technical logs will appear here".to_string(),
             View::Tasks => "Tasks view - Task list will appear here".to_string(),
             View::Agents => "Agents view - Agent status will appear here".to_string(),
