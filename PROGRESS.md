@@ -5,8 +5,9 @@
 ## Current Focus
 
 **Active:** None
-**Next:** 2.3 Cost Tracking (M2)
+**Next:** M3 Agent Runtime
 **Blocked:** None
+**Completed:** M2 LLM Layer (2.1-2.4)
 
 **Milestone 1 Decomposition:** Complete - see `decomp/M1/`
 **Milestone 2 Decomposition:** Complete - see `decomp/M2/`
@@ -44,10 +45,10 @@
 |--------|--------|----------|-------|
 | 2.1 Provider Abstraction | done | 3/3 | LLMProvider trait, types, streaming |
 | 2.2 Anthropic Client | done | 4/4 | HTTP client, send_message, streaming, token counts |
-| 2.3 Cost Tracking | pending | 0/3 | Needs 2.2 |
+| 2.3 Cost Tracking | done | 3/3 | ModelPricing, CostTracker, aggregation methods |
 | 2.4 Retry Logic | done | 3/3 | ExponentialBackoff, RetryPolicy, RetryingProvider wrapper, 14 tests |
 
-**Milestone Status:** In Progress (2/4 tickets done)
+**Milestone Status:** Complete (4/4 tickets done)
 
 ---
 
