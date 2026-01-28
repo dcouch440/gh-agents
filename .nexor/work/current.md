@@ -1,7 +1,7 @@
 # Current Work
 
-**Status:** M1 Complete, ready for M2
-**Next:** Ticket 2.1 (Provider Abstraction)
+**Status:** M3 in progress, 3.1 complete
+**Next:** Ticket 3.2 (Agent Pool Manager)
 
 ---
 
@@ -9,14 +9,16 @@
 
 | Ticket | What |
 |--------|------|
-| 1.4 | Database setup with SQLite, 6 migrations, CRUD queries |
-| 1.3 | Configuration system with global + project config |
+| 3.1 | Agent struct with state transitions, shutdown, 9 tests |
+| 2.4 | Retry logic with exponential backoff, 14 tests |
+| 2.3 | Cost tracking for LLM usage |
 
 ---
 
 ## Ready to Start
 
-- **2.1** Provider Abstraction (LLM trait)
-- **2.2** Anthropic Client (after 2.1)
+- **3.2** Agent Pool Manager (needs 3.1) ✓ ready
+- **3.3** Message Passing (needs 3.1) ✓ ready
+- **3.4** Persona System (needs M1 config) ✓ ready
 
 See `PROGRESS.md` for full status.
