@@ -97,6 +97,42 @@ pub async fn list_tasks_by_status(pool: &SqlitePool, status: TaskStatus) -> Resu
     rows.into_iter().map(|r| r.into_task()).collect()
 }
 
+/// List all tasks with optional status filter and limit
+pub async fn list_tasks(
+    pool: &SqlitePool,
+    status: Option<&str>,
+    limit: Option<u32>,
+) -> Result<Vec<Task>> {
+    let limit = limit.unwrap_or(100).min(1000) as i64;
+
+    let rows: Vec<TaskRow> = if let Some(status_filter) = status {
+        sqlx::query_as(
+            "SELECT id, slice_id, title, description, assigned_tier, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks WHERE status = ? ORDER BY created_at DESC LIMIT ?"
+        )
+        .bind(status_filter)
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+        .context("Failed to list tasks")?
+    } else {
+        sqlx::query_as(
+            "SELECT id, slice_id, title, description, assigned_tier, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks ORDER BY created_at DESC LIMIT ?"
+        )
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+        .context("Failed to list tasks")?
+    };
+
+    rows.into_iter().map(|r| r.into_task()).collect()
+}
+
+/// Get a task by UUID (string version for API)
+pub async fn get_task_by_uuid(pool: &SqlitePool, id: uuid::Uuid) -> Result<Option<Task>> {
+    let task_id = TaskId(id);
+    get_task(pool, &task_id).await
+}
+
 // Internal row type for sqlx
 #[derive(sqlx::FromRow)]
 struct TaskRow {

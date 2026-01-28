@@ -5,7 +5,7 @@
 ## Current Focus
 
 **Active:** M10 Server Layer (Architectural Pivot)
-**Next:** 10.2 REST API - Core Endpoints
+**Next:** 10.3 REST API - Chat Endpoint
 **Blocked:** None
 
 ---
@@ -202,13 +202,13 @@
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
 | 10.1 Axum Server Setup | done | 4/4 | Server, state, graceful shutdown, CLI port flag |
-| 10.2 REST API - Core Endpoints | pending | 0/5 | |
+| 10.2 REST API - Core Endpoints | done | 5/5 | Health, tasks CRUD, agents, config endpoints |
 | 10.3 REST API - Chat Endpoint | pending | 0/4 | |
 | 10.4 WebSocket Gateway | pending | 0/5 | |
 | 10.5 Authentication | pending | 0/5 | |
 | 10.6 Static File Serving | pending | 0/3 | |
 
-**Milestone Status:** In Progress (1/6 tickets done)
+**Milestone Status:** In Progress (2/6 tickets done)
 
 ---
 
@@ -344,4 +344,5 @@ jsonwebtoken = "9"
 3. [x] Update `src/main.rs` to launch server instead of TUI - DONE
 4. [x] Create `src/server/mod.rs` - DONE (stub with health check)
 5. [x] Ticket 10.1: Axum Server Setup - DONE (state module, graceful shutdown, port CLI flag)
-6. [ ] Start Ticket 10.2: REST API - Core Endpoints
+6. [x] Ticket 10.2: REST API - Core Endpoints - DONE (health, tasks, agents, config endpoints)
+7. [ ] Start Ticket 10.3: REST API - Chat Endpoint
