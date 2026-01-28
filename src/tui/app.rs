@@ -7,14 +7,71 @@
 //! - Command routing
 
 use anyhow::Result;
+use crossterm::{
+    event::{self, Event, KeyCode, KeyModifiers},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
+use ratatui::{
+    backend::CrosstermBackend,
+    style::{Color, Style},
+    widgets::{Block, Borders, Paragraph},
+    Terminal,
+};
+
+use crate::tui::input::InputBar;
+use crate::tui::layout::{AppLayout, HeaderBar};
+use crate::tui::views::HomeView;
+use std::io::{self, Stdout};
+use std::panic;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
 
 use crate::orchestration::Scheduler;
 use crate::refactor::RefactorAgent;
 use crate::tui::commands::{generate_help_text, Command, CommandResult};
 use crate::tui::mode::{AppMode, RefactorModeState};
+
+/// Terminal type alias for convenience
+pub type Tui = Terminal<CrosstermBackend<Stdout>>;
+
+/// Initialize the terminal for TUI rendering.
+///
+/// Enables raw mode and enters alternate screen so the TUI doesn't
+/// overwrite terminal history.
+pub fn init_terminal() -> io::Result<Tui> {
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen)?;
+    let backend = CrosstermBackend::new(stdout);
+    Terminal::new(backend)
+}
+
+/// Restore the terminal to its original state.
+///
+/// Disables raw mode, leaves alternate screen, and shows cursor.
+pub fn restore_terminal(terminal: &mut Tui) -> io::Result<()> {
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    terminal.show_cursor()?;
+    Ok(())
+}
+
+/// Install a panic hook that restores the terminal before printing panic info.
+///
+/// Without this, a panic would leave the terminal in raw mode with the
+/// alternate screen still active, making it unusable.
+pub fn install_panic_hook() {
+    let original_hook = panic::take_hook();
+    panic::set_hook(Box::new(move |panic_info| {
+        // Best effort to restore terminal
+        let _ = disable_raw_mode();
+        let _ = execute!(io::stdout(), LeaveAlternateScreen);
+        original_hook(panic_info);
+    }));
+}
 
 /// Current view being displayed
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -326,6 +383,125 @@ impl App {
         }
 
         Ok(applied)
+    }
+
+    /// Run the main TUI event loop.
+    ///
+    /// This handles:
+    /// - Rendering the UI
+    /// - Polling for keyboard events
+    /// - Dispatching commands and input
+    pub async fn run(&mut self, terminal: &mut Tui) -> Result<()> {
+        // Input buffer for building commands/messages
+        let mut input_buffer = String::new();
+
+        while !self.should_quit {
+            // Render the UI
+            self.render(terminal, &input_buffer)?;
+
+            // Poll for events with timeout (100ms for responsiveness)
+            if event::poll(Duration::from_millis(100))? {
+                if let Event::Key(key) = event::read()? {
+                    // Ctrl+C always quits
+                    if key.code == KeyCode::Char('c')
+                        && key.modifiers.contains(KeyModifiers::CONTROL)
+                    {
+                        self.should_quit = true;
+                        continue;
+                    }
+
+                    match key.code {
+                        KeyCode::Enter => {
+                            if !input_buffer.is_empty() {
+                                let input = input_buffer.clone();
+                                input_buffer.clear();
+                                self.handle_input(&input).await?;
+                            }
+                        }
+                        KeyCode::Backspace => {
+                            input_buffer.pop();
+                        }
+                        KeyCode::Esc => {
+                            // Return to Home and clear state
+                            self.view = View::Home;
+                            input_buffer.clear();
+                            self.clear_message();
+                        }
+                        KeyCode::Char(c) => {
+                            // Transition from Home to Main on first keypress
+                            if self.view == View::Home {
+                                self.view = View::Main;
+                            }
+                            input_buffer.push(c);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Render the UI to the terminal.
+    fn render(&self, terminal: &mut Tui, input_buffer: &str) -> io::Result<()> {
+        terminal.draw(|frame| {
+            let layout = AppLayout::new(frame.area());
+
+            // Header bar with agent status
+            let mode_indicator = self.mode.status_indicator();
+            let header = HeaderBar::default().with_mode(&mode_indicator);
+            let header = HeaderBar {
+                current_view: format!("/{}", self.view.name().to_lowercase()),
+                ..header
+            };
+            frame.render_widget(header, layout.header);
+
+            // Main content area - HomeView renders directly, others use Paragraph+Block
+            match self.view {
+                View::Home => {
+                    let home_view = if let Some(msg) = self.message() {
+                        HomeView::default().with_message(msg)
+                    } else {
+                        HomeView::default()
+                    };
+                    frame.render_widget(home_view, layout.main);
+                }
+                _ => {
+                    let content = self.render_view_content();
+                    let content_block = Block::default()
+                        .title(format!(" {} ", self.view.name()))
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(Color::Blue));
+                    let content_widget = Paragraph::new(content).block(content_block);
+                    frame.render_widget(content_widget, layout.main);
+                }
+            }
+
+            // Input bar
+            let hint = if self.mode.is_refactor() {
+                "Refactor mode - describe changes or /exit"
+            } else {
+                "Type /help for commands"
+            };
+            let input_bar = InputBar::new(input_buffer).with_hint(hint);
+            frame.render_widget(input_bar, layout.input);
+        })?;
+
+        Ok(())
+    }
+
+    /// Render the content for the current view (non-Home views).
+    fn render_view_content(&self) -> String {
+        match self.view {
+            View::Home => String::new(), // Handled separately by HomeView widget
+            View::Feed => "Feed view - Agent activity will appear here".to_string(),
+            View::Main => "Main view - Chat with the orchestrator".to_string(),
+            View::Logs => "Logs view - Technical logs will appear here".to_string(),
+            View::Tasks => "Tasks view - Task list will appear here".to_string(),
+            View::Agents => "Agents view - Agent status will appear here".to_string(),
+            View::Costs => "Costs view - Cost tracking will appear here".to_string(),
+        }
     }
 }
 
