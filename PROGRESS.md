@@ -151,13 +151,13 @@
 
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
-| 8.0 GitHub Authentication | in_progress | 0/5 | Needs M1 |
-| 8.1 GitHub API Client | pending | 0/4 | Needs 8.0 |
-| 8.2 Issue Sync | pending | 0/3 | Needs 8.1 |
-| 8.3 PR Creation | pending | 0/3 | Needs 8.1, M7 |
-| 8.4 Progress Updates | pending | 0/3 | Needs 8.1 |
-| 8.5 PR Retrieval & Review | pending | 0/4 | Needs 8.1 |
-| 8.6 PR Merge Operations | pending | 0/4 | Needs 8.1, 8.5 |
+| 8.0 GitHub Authentication | done | 5/5 | Device flow, token storage, git config, 9 tests |
+| 8.1 GitHub API Client | done | 4/4 | Client, issues, PRs, rate limiting, 6 tests |
+| 8.2 Issue Sync | done | 3/3 | IssueRef parsing, conversion, IssueSync service, 9 tests |
+| 8.3 PR Creation | done | 3/3 | PrBodyGenerator, PrService, PrResult, 6 tests |
+| 8.4 Progress Updates | done | 3/3 | ProgressSummary, CommentService, update comments, 6 tests |
+| 8.5 PR Retrieval & Review | done | 4/4 | PrFile, reviews, approve/request changes, 3 tests |
+| 8.6 PR Merge Operations | in_progress | 0/4 | Needs 8.1, 8.5 |
 | 8.7 PR Merge Queue & Conflict Resolution | pending | 0/6 | Needs 7.6, 8.5, 8.6, 8.4 |
 
 **Milestone Status:** Not Started

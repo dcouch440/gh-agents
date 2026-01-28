@@ -1,0 +1,368 @@
+//! Pull request creation and management
+
+use crate::execution::BranchInfo;
+use crate::github::{CreatePullRequest, GitHubClient, GitHubError, GitHubPullRequest};
+use crate::types::{Ticket, TicketSource, VerticalSlice};
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum PrError {
+    #[error("cannot create PR for manually created ticket - no GitHub repository associated")]
+    ManualTicket,
+
+    #[error("github API error: {0}")]
+    GitHubError(#[from] GitHubError),
+
+    #[error("PR creation failed: {0}")]
+    CreationFailed(String),
+}
+
+/// Result of creating a PR
+#[derive(Debug, Clone)]
+pub struct PrResult {
+    pub number: u32,
+    pub url: String,
+    pub title: String,
+}
+
+impl std::fmt::Display for PrResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PR #{}: {} ({})", self.number, self.title, self.url)
+    }
+}
+
+/// Generate PR body from slice information
+pub struct PrBodyGenerator {
+    summary: String,
+    tasks: Vec<String>,
+    files_modified: Vec<String>,
+    issue_ref: Option<(String, String, u32)>, // (owner, repo, number)
+}
+
+impl PrBodyGenerator {
+    pub fn new(summary: impl Into<String>) -> Self {
+        Self {
+            summary: summary.into(),
+            tasks: Vec::new(),
+            files_modified: Vec::new(),
+            issue_ref: None,
+        }
+    }
+
+    pub fn from_slice(slice: &VerticalSlice) -> Self {
+        Self::new(&slice.description)
+    }
+
+    pub fn with_tasks(mut self, tasks: Vec<String>) -> Self {
+        self.tasks = tasks;
+        self
+    }
+
+    pub fn with_files(mut self, files: Vec<String>) -> Self {
+        self.files_modified = files;
+        self
+    }
+
+    pub fn with_issue(mut self, owner: impl Into<String>, repo: impl Into<String>, number: u32) -> Self {
+        self.issue_ref = Some((owner.into(), repo.into(), number));
+        self
+    }
+
+    pub fn from_ticket_source(slice: &VerticalSlice, source: &TicketSource) -> Self {
+        let mut gen = Self::from_slice(slice);
+
+        if let TicketSource::GitHub {
+            owner,
+            repo,
+            issue_number,
+        } = source
+        {
+            gen = gen.with_issue(owner, repo, *issue_number);
+        }
+
+        gen
+    }
+
+    pub fn generate(&self) -> String {
+        let mut body = String::new();
+
+        // Summary section
+        body.push_str("## Summary\n\n");
+        body.push_str(&self.summary);
+        body.push_str("\n\n");
+
+        // Tasks completed
+        if !self.tasks.is_empty() {
+            body.push_str("## Changes\n\n");
+            for task in &self.tasks {
+                body.push_str(&format!("- {}\n", task));
+            }
+            body.push('\n');
+        }
+
+        // Files modified
+        if !self.files_modified.is_empty() {
+            body.push_str("## Files Modified\n\n");
+            for file in &self.files_modified {
+                body.push_str(&format!("- `{}`\n", file));
+            }
+            body.push('\n');
+        }
+
+        // Issue linking
+        if let Some((owner, repo, number)) = &self.issue_ref {
+            body.push_str(&format!("Fixes {}/{}#{}\n\n", owner, repo, number));
+        }
+
+        // Attribution
+        body.push_str("---\n\n");
+        body.push_str("*Created by [nexor](https://github.com/nexor) AI agents*\n");
+
+        body
+    }
+}
+
+/// Service for creating pull requests
+pub struct PrService {
+    client: GitHubClient,
+    fallback_base: String,
+}
+
+impl PrService {
+    pub fn new(client: GitHubClient) -> Self {
+        Self {
+            client,
+            fallback_base: "main".to_string(),
+        }
+    }
+
+    /// Set the fallback base branch (used when parent branch is unknown)
+    pub fn with_fallback_base(mut self, base: impl Into<String>) -> Self {
+        self.fallback_base = base.into();
+        self
+    }
+
+    /// Create a PR for a completed slice
+    pub async fn create_pr_for_slice(
+        &self,
+        slice: &VerticalSlice,
+        ticket: &Ticket,
+        branch_info: &BranchInfo,
+        files_modified: Vec<String>,
+    ) -> Result<PrResult, PrError> {
+        // Extract repo info from ticket source
+        let (owner, repo, issue_number) = match &ticket.source {
+            TicketSource::GitHub {
+                owner,
+                repo,
+                issue_number,
+            } => (owner.clone(), repo.clone(), Some(*issue_number)),
+            TicketSource::Manual => {
+                return Err(PrError::ManualTicket);
+            }
+        };
+
+        // Generate PR title
+        let title = slice.title.clone();
+
+        // Determine base branch: use parent branch if known, otherwise fallback
+        let base_branch = branch_info
+            .parent_branch
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| self.fallback_base.clone());
+
+        // Generate PR body
+        let mut body_gen = PrBodyGenerator::from_slice(slice).with_files(files_modified);
+
+        if let Some(num) = issue_number {
+            body_gen = body_gen.with_issue(&owner, &repo, num);
+        }
+
+        let body = body_gen.generate();
+
+        // Create the PR request
+        let request = CreatePullRequest {
+            title: title.clone(),
+            body,
+            head: branch_info.name.clone(),
+            base: base_branch.clone(),
+            draft: None,
+        };
+
+        tracing::info!(
+            owner = %owner,
+            repo = %repo,
+            branch = %branch_info.name,
+            base = %base_branch,
+            "Creating pull request"
+        );
+
+        let pr: GitHubPullRequest = self.client.create_pull_request(&owner, &repo, &request).await?;
+
+        tracing::info!(
+            pr_number = pr.number,
+            url = %pr.html_url,
+            "Pull request created"
+        );
+
+        Ok(PrResult {
+            number: pr.number,
+            url: pr.html_url,
+            title: pr.title,
+        })
+    }
+
+    /// Create a simple PR without slice context
+    pub async fn create_simple_pr(
+        &self,
+        owner: &str,
+        repo: &str,
+        title: &str,
+        body: &str,
+        head: &str,
+        base: &str,
+    ) -> Result<PrResult, PrError> {
+        let request = CreatePullRequest {
+            title: title.to_string(),
+            body: body.to_string(),
+            head: head.to_string(),
+            base: base.to_string(),
+            draft: None,
+        };
+
+        let pr = self.client.create_pull_request(owner, repo, &request).await?;
+
+        Ok(PrResult {
+            number: pr.number,
+            url: pr.html_url,
+            title: pr.title,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{SliceId, TaskStatus, TicketId};
+    use chrono::Utc;
+
+    fn mock_slice() -> VerticalSlice {
+        VerticalSlice {
+            id: SliceId::new(),
+            ticket_id: uuid::Uuid::new_v4(),
+            title: "Add user authentication".to_string(),
+            description: "Implements basic auth flow with JWT tokens".to_string(),
+            tasks: vec![],
+            status: TaskStatus::Completed,
+            created_at: Utc::now(),
+        }
+    }
+
+    fn mock_ticket_github() -> Ticket {
+        Ticket {
+            id: TicketId::new(),
+            source: TicketSource::GitHub {
+                owner: "owner".to_string(),
+                repo: "repo".to_string(),
+                issue_number: 42,
+            },
+            title: "Feature request".to_string(),
+            description: "Add auth".to_string(),
+            labels: vec![],
+            slices: vec![],
+            status: crate::types::TicketStatus::New,
+            created_at: Utc::now(),
+        }
+    }
+
+    fn mock_ticket_manual() -> Ticket {
+        Ticket {
+            id: TicketId::new(),
+            source: TicketSource::Manual,
+            title: "Manual ticket".to_string(),
+            description: "Manual".to_string(),
+            labels: vec![],
+            slices: vec![],
+            status: crate::types::TicketStatus::New,
+            created_at: Utc::now(),
+        }
+    }
+
+    fn mock_branch_info() -> BranchInfo {
+        BranchInfo {
+            name: "feature/auth".to_string(),
+            parent_branch: Some("main".to_string()),
+            base_commit: "abc123".to_string(),
+        }
+    }
+
+    #[test]
+    fn pr_body_generator_basic() {
+        let slice = mock_slice();
+        let body = PrBodyGenerator::from_slice(&slice).generate();
+
+        assert!(body.contains("## Summary"));
+        assert!(body.contains("Implements basic auth flow"));
+        assert!(body.contains("nexor"));
+    }
+
+    #[test]
+    fn pr_body_generator_with_issue_link() {
+        let slice = mock_slice();
+        let body = PrBodyGenerator::from_slice(&slice)
+            .with_issue("owner", "repo", 42)
+            .generate();
+
+        assert!(body.contains("Fixes owner/repo#42"));
+    }
+
+    #[test]
+    fn pr_body_generator_with_files() {
+        let slice = mock_slice();
+        let body = PrBodyGenerator::from_slice(&slice)
+            .with_files(vec!["src/auth.rs".to_string(), "src/main.rs".to_string()])
+            .generate();
+
+        assert!(body.contains("## Files Modified"));
+        assert!(body.contains("`src/auth.rs`"));
+        assert!(body.contains("`src/main.rs`"));
+    }
+
+    #[test]
+    fn pr_body_generator_with_tasks() {
+        let body = PrBodyGenerator::new("Summary here")
+            .with_tasks(vec!["Task 1".to_string(), "Task 2".to_string()])
+            .generate();
+
+        assert!(body.contains("## Changes"));
+        assert!(body.contains("- Task 1"));
+        assert!(body.contains("- Task 2"));
+    }
+
+    #[test]
+    fn pr_body_generator_from_ticket_source() {
+        let slice = mock_slice();
+        let ticket = mock_ticket_github();
+        let body = PrBodyGenerator::from_ticket_source(&slice, &ticket.source).generate();
+
+        assert!(body.contains("Fixes owner/repo#42"));
+    }
+
+    #[test]
+    fn pr_result_display() {
+        let result = PrResult {
+            number: 123,
+            url: "https://github.com/owner/repo/pull/123".to_string(),
+            title: "Test PR".to_string(),
+        };
+
+        let display = format!("{}", result);
+        assert!(display.contains("PR #123"));
+        assert!(display.contains("Test PR"));
+        assert!(display.contains("https://github.com"));
+    }
+
+    // Note: Integration tests with actual API calls would go in tests/ directory
+    // These unit tests verify the local logic only
+}

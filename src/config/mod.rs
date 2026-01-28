@@ -1,9 +1,11 @@
 //! Configuration loading and management
 
+mod credentials;
 mod global;
 mod project;
 mod validation;
 
+pub use credentials::{CredentialsError, CredentialsStore, StoredCredentials};
 pub use global::{global_config_path, load_global_config};
 pub use project::{load_project_config, project_config_path};
 pub use validation::{validate_config, ConfigValidationError};
