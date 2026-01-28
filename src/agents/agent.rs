@@ -21,10 +21,17 @@ pub enum AgentError {
     NoCurrentTask,
     #[error("response channel closed")]
     ResponseChannelClosed,
+    #[error("LLM error: {0}")]
+    LLMError(String),
+    #[error("task {task_id} timed out after {timeout:?}")]
+    TaskTimeout {
+        task_id: uuid::Uuid,
+        timeout: std::time::Duration,
+    },
 }
 
 /// Unique identifier for an agent
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct AgentId(pub Uuid);
 
 impl AgentId {
@@ -240,6 +247,11 @@ impl Agent {
     /// Get a clone of the response sender (for spawned tasks)
     pub fn response_sender(&self) -> mpsc::Sender<AgentResponse> {
         self.response_tx.clone()
+    }
+
+    /// Get a reference to the LLM provider
+    pub fn llm_provider(&self) -> &(dyn LLMProvider + Send + Sync) {
+        self.llm_provider.as_ref()
     }
 }
 

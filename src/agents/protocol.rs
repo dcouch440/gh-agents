@@ -1,77 +1,22 @@
-# Ticket 3.7: Inter-Agent Protocol
-
-> Define exactly how agents communicate with role-aware delegation.
-
-## Goal
-
-A well-defined, validated message protocol for inter-agent communication with structured message types that can be serialized, validated, and logged. **Includes delegation protocol** that respects role hierarchy and delegation permissions.
-
-**Checkpoint**: Messages serialize/deserialize correctly, validation catches malformed messages, delegation respects role permissions (can_delegate_to), and message flow is traceable.
-
----
-
-## Context
-
-The protocol defines the contract between agents. Clear, validated messages:
-- Prevent miscommunication between agents
-- Enable debugging and replay
-- Support future versioning
-- Make the system predictable
-- **Enforce delegation rules** based on role permissions
-
-**Key files**:
-- `src/agents/channels.rs` - Basic channel types with role context (3.3)
-- `src/agents/roles.rs` - Role definitions with can_delegate_to (3.4)
-- `ROADMAP.md` Ticket 3.7 - Message schema examples
-
-**Dependencies**:
-- Requires Ticket 3.3 complete (message passing works)
-- Requires Ticket 3.4 complete (Role system with delegation permissions)
-
-**References**:
-- See `ROADMAP.md` Ticket 3.7 for full schema spec
-- See `PRD.md` "Communication Model"
-- See `decomp/ideas/knowledge-rooms.md` for delegation hierarchy design
-
----
-
-## Slices
-
-### Slice 3.7.1: Define TaskAssignment Message Format
-
-**Do this**:
-- Create `src/agents/protocol.rs`
-- Define complete `TaskAssignment` struct with all fields from ROADMAP.md
-- Add `TaskContext` struct with files, history, conventions
-- Add `TaskConstraints` struct with limits and requirements
-- Implement `serde::Serialize` and `serde::Deserialize`
-- Add validation method
-
-**Create/modify**:
-- `src/agents/protocol.rs` (create)
-- `src/agents/mod.rs` (add module export)
-
-**Verify**:
-- [ ] `cargo check` passes
-- [ ] `TaskAssignment` serializes to JSON correctly
-- [ ] `TaskAssignment` deserializes from JSON correctly
-- [ ] Round-trip serialization preserves all fields
-
-**Code**:
-```rust
-// src/agents/protocol.rs
+//! Inter-agent communication protocol with serialization and validation
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::time::Duration;
+use tracing::warn;
 use uuid::Uuid;
 
-use crate::types::AgentTier;
-use super::roles::RoleId;
 use super::agent::AgentId;
+use super::roles::RoleId;
+use crate::types::{AgentTier, TaskStatus};
 
 /// Protocol version for compatibility checking
 pub const PROTOCOL_VERSION: &str = "1.0";
+
+// =============================================================================
+// Slice 3.7.1: TaskAssignment Message Format
+// =============================================================================
 
 /// Task assignment message from orchestrator to worker
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -118,6 +63,8 @@ impl TaskAssignment {
             timeout_secs: 300, // 5 minute default
             created_at: Utc::now(),
             target_tier,
+            role_id: RoleId::new("worker"),
+            delegation: DelegationContext::default(),
         }
     }
 
@@ -143,6 +90,18 @@ impl TaskAssignment {
         self.timeout_secs = timeout.as_secs();
         self
     }
+
+    /// Builder-style: set role
+    pub fn with_role(mut self, role_id: RoleId) -> Self {
+        self.role_id = role_id;
+        self
+    }
+
+    /// Builder-style: set delegation context
+    pub fn with_delegation(mut self, delegation: DelegationContext) -> Self {
+        self.delegation = delegation;
+        self
+    }
 }
 
 /// Context provided with a task assignment
@@ -156,7 +115,7 @@ pub struct TaskContext {
     pub conventions: String,
     /// Additional metadata
     #[serde(default)]
-    pub metadata: std::collections::HashMap<String, String>,
+    pub metadata: HashMap<String, String>,
 }
 
 /// File content for context
@@ -178,6 +137,11 @@ impl FileContent {
             line_range: None,
         }
     }
+
+    pub fn with_range(mut self, start: usize, end: usize) -> Self {
+        self.line_range = Some((start, end));
+        self
+    }
 }
 
 /// History entry for context
@@ -189,6 +153,16 @@ pub struct HistoryEntry {
     pub summary: String,
     /// When this occurred
     pub timestamp: DateTime<Utc>,
+}
+
+impl HistoryEntry {
+    pub fn new(task_id: Uuid, summary: impl Into<String>) -> Self {
+        Self {
+            task_id,
+            summary: summary.into(),
+            timestamp: Utc::now(),
+        }
+    }
 }
 
 /// Constraints on task execution
@@ -204,7 +178,7 @@ pub struct TaskConstraints {
     pub require_review: bool,
     /// Additional constraints as key-value pairs
     #[serde(default)]
-    pub extra: std::collections::HashMap<String, String>,
+    pub extra: HashMap<String, String>,
 }
 
 impl Default for TaskConstraints {
@@ -214,7 +188,7 @@ impl Default for TaskConstraints {
             allowed_paths: vec!["**/*".to_string()], // Allow all by default
             require_tests: false,
             require_review: true, // Review by default
-            extra: std::collections::HashMap::new(),
+            extra: HashMap::new(),
         }
     }
 }
@@ -288,56 +262,9 @@ pub struct DelegationHop {
     pub timestamp: DateTime<Utc>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn task_assignment_serialization() {
-        let assignment = TaskAssignment::new(
-            Uuid::new_v4(),
-            "Implement feature",
-            "Add a new button to the UI",
-            AgentTier::Worker,
-        );
-
-        // Serialize to JSON
-        let json = serde_json::to_string(&assignment).unwrap();
-
-        // Deserialize back
-        let parsed: TaskAssignment = serde_json::from_str(&json).unwrap();
-
-        assert_eq!(assignment.task_id, parsed.task_id);
-        assert_eq!(assignment.title, parsed.title);
-        assert_eq!(assignment.version, PROTOCOL_VERSION);
-    }
-}
-```
-
----
-
-### Slice 3.7.2: Define TaskResult Message Format
-
-**Do this**:
-- Define complete `TaskResult` struct with all fields
-- Include status, output, files modified, errors
-- Add optional structured output for future use
-- Implement serialization
-- Add validation method
-
-**Create/modify**:
-- `src/agents/protocol.rs`
-
-**Verify**:
-- [ ] `cargo check` passes
-- [ ] `TaskResult` serializes/deserializes correctly
-- [ ] Success and failure cases both work
-
-**Code**:
-```rust
-// Add to src/agents/protocol.rs
-
-use crate::types::TaskStatus;
+// =============================================================================
+// Slice 3.7.2: TaskResult Message Format
+// =============================================================================
 
 /// Result of task execution
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -425,6 +352,12 @@ impl TaskResult {
         self.duration_ms = duration_ms;
         self
     }
+
+    /// Set structured output
+    pub fn with_structured_output(mut self, output: serde_json::Value) -> Self {
+        self.structured_output = Some(output);
+        self
+    }
 }
 
 /// Record of a file modification
@@ -438,6 +371,35 @@ pub struct FileModification {
     pub lines_added: u32,
     /// Lines removed
     pub lines_removed: u32,
+}
+
+impl FileModification {
+    pub fn created(path: impl Into<String>) -> Self {
+        Self {
+            path: path.into(),
+            modification_type: ModificationType::Created,
+            lines_added: 0,
+            lines_removed: 0,
+        }
+    }
+
+    pub fn modified(path: impl Into<String>, added: u32, removed: u32) -> Self {
+        Self {
+            path: path.into(),
+            modification_type: ModificationType::Modified,
+            lines_added: added,
+            lines_removed: removed,
+        }
+    }
+
+    pub fn deleted(path: impl Into<String>) -> Self {
+        Self {
+            path: path.into(),
+            modification_type: ModificationType::Deleted,
+            lines_added: 0,
+            lines_removed: 0,
+        }
+    }
 }
 
 /// Type of file modification
@@ -480,6 +442,11 @@ impl TaskError {
             recoverable: false,
         }
     }
+
+    pub fn with_details(mut self, details: impl Into<String>) -> Self {
+        self.details = Some(details.into());
+        self
+    }
 }
 
 /// Token usage for cost tracking
@@ -490,62 +457,23 @@ pub struct TokenUsage {
     pub model_id: String,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn task_result_success_serialization() {
-        let result = TaskResult::success(Uuid::new_v4(), "Task completed successfully")
-            .with_file_modified(FileModification {
-                path: "src/main.rs".to_string(),
-                modification_type: ModificationType::Modified,
-                lines_added: 10,
-                lines_removed: 2,
-            });
-
-        let json = serde_json::to_string(&result).unwrap();
-        let parsed: TaskResult = serde_json::from_str(&json).unwrap();
-
-        assert!(parsed.is_success());
-        assert_eq!(parsed.files_modified.len(), 1);
+impl TokenUsage {
+    pub fn new(model_id: impl Into<String>, input: u32, output: u32) -> Self {
+        Self {
+            model_id: model_id.into(),
+            input_tokens: input,
+            output_tokens: output,
+        }
     }
 
-    #[test]
-    fn task_result_failure_serialization() {
-        let result = TaskResult::failure(Uuid::new_v4(), "Compilation error");
-
-        let json = serde_json::to_string(&result).unwrap();
-        let parsed: TaskResult = serde_json::from_str(&json).unwrap();
-
-        assert!(!parsed.is_success());
-        assert_eq!(parsed.errors.len(), 1);
+    pub fn total(&self) -> u32 {
+        self.input_tokens + self.output_tokens
     }
 }
-```
 
----
-
-### Slice 3.7.3: Define ContextRequest/ContextResponse
-
-**Do this**:
-- Define `ContextRequest` struct for agents requesting more info
-- Define `ContextResponse` struct for providing requested info
-- Include file requests, questions, and answers
-- Implement serialization
-- Add correlation ID for matching requests to responses
-
-**Create/modify**:
-- `src/agents/protocol.rs`
-
-**Verify**:
-- [ ] `cargo check` passes
-- [ ] Request/response cycle works
-- [ ] Correlation ID links request to response
-
-**Code**:
-```rust
-// Add to src/agents/protocol.rs
+// =============================================================================
+// Slice 3.7.3: ContextRequest/ContextResponse
+// =============================================================================
 
 /// Request for additional context from an agent
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -593,6 +521,11 @@ impl ContextRequest {
         self.questions.push(Question::new(question));
         self
     }
+
+    pub fn with_priority(mut self, priority: RequestPriority) -> Self {
+        self.priority = priority;
+        self
+    }
 }
 
 /// File request specification
@@ -622,6 +555,11 @@ impl FileRequest {
             reason: None,
         }
     }
+
+    pub fn with_reason(mut self, reason: impl Into<String>) -> Self {
+        self.reason = Some(reason.into());
+        self
+    }
 }
 
 /// Question from agent
@@ -642,6 +580,19 @@ impl Question {
             category: QuestionCategory::Clarification,
             required: true,
         }
+    }
+
+    pub fn optional(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            category: QuestionCategory::Clarification,
+            required: false,
+        }
+    }
+
+    pub fn with_category(mut self, category: QuestionCategory) -> Self {
+        self.category = category;
+        self
     }
 }
 
@@ -724,6 +675,32 @@ pub struct Answer {
     pub source: AnswerSource,
 }
 
+impl Answer {
+    pub fn from_user(question: impl Into<String>, answer: impl Into<String>) -> Self {
+        Self {
+            question: question.into(),
+            answer: answer.into(),
+            source: AnswerSource::User,
+        }
+    }
+
+    pub fn from_orchestrator(question: impl Into<String>, answer: impl Into<String>) -> Self {
+        Self {
+            question: question.into(),
+            answer: answer.into(),
+            source: AnswerSource::Orchestrator,
+        }
+    }
+
+    pub fn from_system(question: impl Into<String>, answer: impl Into<String>) -> Self {
+        Self {
+            question: question.into(),
+            answer: answer.into(),
+            source: AnswerSource::System,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum AnswerSource {
     User,
@@ -738,61 +715,32 @@ pub struct UnavailableFile {
     pub reason: String,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+impl UnavailableFile {
+    pub fn not_found(path: impl Into<String>) -> Self {
+        Self {
+            path: path.into(),
+            reason: "File not found".to_string(),
+        }
+    }
 
-    #[test]
-    fn context_request_response_cycle() {
-        let task_id = Uuid::new_v4();
+    pub fn permission_denied(path: impl Into<String>) -> Self {
+        Self {
+            path: path.into(),
+            reason: "Permission denied".to_string(),
+        }
+    }
 
-        // Create request
-        let request = ContextRequest::new(task_id)
-            .with_file("src/main.rs")
-            .with_question("What testing framework should I use?");
-
-        let request_json = serde_json::to_string(&request).unwrap();
-        let parsed_request: ContextRequest = serde_json::from_str(&request_json).unwrap();
-
-        // Create response
-        let response = ContextResponse::new(parsed_request.request_id, task_id)
-            .with_file(FileContent::new("src/main.rs", "fn main() {}"))
-            .with_answer(Answer {
-                question: "What testing framework should I use?".to_string(),
-                answer: "Use the built-in Rust test framework".to_string(),
-                source: AnswerSource::Orchestrator,
-            });
-
-        let response_json = serde_json::to_string(&response).unwrap();
-        let parsed_response: ContextResponse = serde_json::from_str(&response_json).unwrap();
-
-        assert_eq!(parsed_request.request_id, parsed_response.request_id);
+    pub fn too_large(path: impl Into<String>) -> Self {
+        Self {
+            path: path.into(),
+            reason: "File too large".to_string(),
+        }
     }
 }
-```
 
----
-
-### Slice 3.7.4: Define ProgressUpdate for Feed
-
-**Do this**:
-- Define `ProgressUpdate` struct for feed streaming
-- Include message, progress percentage, timestamp
-- Add activity type (thinking, coding, reviewing, etc.)
-- Support different verbosity levels
-- Implement serialization
-
-**Create/modify**:
-- `src/agents/protocol.rs`
-
-**Verify**:
-- [ ] `cargo check` passes
-- [ ] Updates appear correctly in feed
-- [ ] Different activity types render appropriately
-
-**Code**:
-```rust
-// Add to src/agents/protocol.rs
+// =============================================================================
+// Slice 3.7.4: ProgressUpdate for Feed
+// =============================================================================
 
 /// Progress update for the activity feed
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -841,10 +789,20 @@ impl ProgressUpdate {
         Self::new(task_id, message).with_activity(ActivityType::Reviewing)
     }
 
+    pub fn testing(task_id: Uuid, message: impl Into<String>) -> Self {
+        Self::new(task_id, message).with_activity(ActivityType::Testing)
+    }
+
     pub fn milestone(task_id: Uuid, message: impl Into<String>) -> Self {
         Self::new(task_id, message)
             .with_activity(ActivityType::Milestone)
             .with_verbosity(VerbosityLevel::Quiet) // Always show milestones
+    }
+
+    pub fn error(task_id: Uuid, message: impl Into<String>) -> Self {
+        Self::new(task_id, message)
+            .with_activity(ActivityType::Error)
+            .with_verbosity(VerbosityLevel::Quiet) // Always show errors
     }
 
     pub fn with_progress(mut self, percent: u8) -> Self {
@@ -903,6 +861,20 @@ impl ActivityType {
             Self::Error => "✗",
         }
     }
+
+    /// Get a display name
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Working => "Working",
+            Self::Thinking => "Thinking",
+            Self::Coding => "Coding",
+            Self::Reviewing => "Reviewing",
+            Self::Testing => "Testing",
+            Self::Waiting => "Waiting",
+            Self::Milestone => "Milestone",
+            Self::Error => "Error",
+        }
+    }
 }
 
 /// Verbosity level for filtering
@@ -916,57 +888,9 @@ pub enum VerbosityLevel {
     Verbose,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn progress_update_serialization() {
-        let update = ProgressUpdate::coding(Uuid::new_v4(), "Writing authentication module")
-            .with_progress(45)
-            .with_details("Adding JWT validation");
-
-        let json = serde_json::to_string(&update).unwrap();
-        let parsed: ProgressUpdate = serde_json::from_str(&json).unwrap();
-
-        assert_eq!(parsed.activity, ActivityType::Coding);
-        assert_eq!(parsed.progress_percent, Some(45));
-    }
-
-    #[test]
-    fn milestone_always_shown() {
-        let update = ProgressUpdate::milestone(Uuid::new_v4(), "Feature complete");
-
-        assert_eq!(update.verbosity, VerbosityLevel::Quiet);
-    }
-}
-```
-
----
-
-### Slice 3.7.5: Implement Message Validation
-
-**Do this**:
-- Create `MessageValidator` struct
-- Add `validate()` method to each protocol message type
-- Return structured validation errors
-- Check required fields, valid ranges, protocol version
-- Log validation failures
-
-**Create/modify**:
-- `src/agents/protocol.rs`
-
-**Verify**:
-- [ ] `cargo check` passes
-- [ ] Valid messages pass validation
-- [ ] Invalid messages return clear errors
-- [ ] Validation errors are structured
-
-**Code**:
-```rust
-// Add to src/agents/protocol.rs
-
-use tracing::warn;
+// =============================================================================
+// Slice 3.7.5: Message Validation
+// =============================================================================
 
 /// Validation error with structured information
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1002,6 +926,12 @@ impl ValidationError {
             code: "version_mismatch".to_string(),
             message: format!("expected version {}, got {}", expected, got),
         }
+    }
+}
+
+impl std::fmt::Display for ValidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {} ({})", self.field, self.message, self.code)
     }
 }
 
@@ -1043,6 +973,17 @@ impl Validatable for TaskAssignment {
             errors.push(ValidationError::invalid(
                 "timeout_secs",
                 "timeout cannot exceed 24 hours",
+            ));
+        }
+
+        // Delegation depth check
+        if self.delegation.depth > self.delegation.max_depth {
+            errors.push(ValidationError::invalid(
+                "delegation.depth",
+                format!(
+                    "delegation depth {} exceeds max_depth {}",
+                    self.delegation.depth, self.delegation.max_depth
+                ),
             ));
         }
 
@@ -1153,6 +1094,36 @@ impl Validatable for ContextRequest {
     }
 }
 
+impl Validatable for ContextResponse {
+    fn validate(&self) -> Result<(), Vec<ValidationError>> {
+        let mut errors = Vec::new();
+
+        // Version check
+        if self.version != PROTOCOL_VERSION {
+            errors.push(ValidationError::version_mismatch(
+                PROTOCOL_VERSION,
+                &self.version,
+            ));
+        }
+
+        // Validate file paths
+        for (i, file) in self.files.iter().enumerate() {
+            if file.path.trim().is_empty() {
+                errors.push(ValidationError::invalid(
+                    &format!("files[{}].path", i),
+                    "file path cannot be empty",
+                ));
+            }
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+}
+
 impl Validatable for ProgressUpdate {
     fn validate(&self) -> Result<(), Vec<ValidationError>> {
         let mut errors = Vec::new();
@@ -1197,6 +1168,147 @@ pub fn validate_message<T: Validatable>(message: &T) -> Result<(), Vec<Validatio
 mod tests {
     use super::*;
 
+    // Slice 3.7.1 tests
+    #[test]
+    fn task_assignment_serialization() {
+        let assignment = TaskAssignment::new(
+            Uuid::new_v4(),
+            "Implement feature",
+            "Add a new button to the UI",
+            AgentTier::Worker,
+        );
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&assignment).unwrap();
+
+        // Deserialize back
+        let parsed: TaskAssignment = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(assignment.task_id, parsed.task_id);
+        assert_eq!(assignment.title, parsed.title);
+        assert_eq!(assignment.version, PROTOCOL_VERSION);
+    }
+
+    #[test]
+    fn delegation_context_tracks_chain() {
+        let user_ctx = DelegationContext::from_user();
+        assert_eq!(user_ctx.depth, 0);
+        assert!(user_ctx.can_delegate());
+
+        let agent1 = AgentId::new();
+        let role1 = RoleId::new("orchestrator");
+        let delegated1 =
+            DelegationContext::delegated_from(agent1.clone(), role1.clone(), &user_ctx);
+
+        assert_eq!(delegated1.depth, 1);
+        assert!(delegated1.can_delegate());
+        assert_eq!(delegated1.delegation_chain.len(), 1);
+
+        let agent2 = AgentId::new();
+        let role2 = RoleId::new("worker");
+        let delegated2 = DelegationContext::delegated_from(agent2, role2, &delegated1);
+
+        assert_eq!(delegated2.depth, 2);
+        assert!(!delegated2.can_delegate()); // max_depth = 2, depth = 2
+        assert_eq!(delegated2.delegation_chain.len(), 2);
+    }
+
+    // Slice 3.7.2 tests
+    #[test]
+    fn task_result_success_serialization() {
+        let result = TaskResult::success(Uuid::new_v4(), "Task completed successfully")
+            .with_file_modified(FileModification::modified("src/main.rs", 10, 2));
+
+        let json = serde_json::to_string(&result).unwrap();
+        let parsed: TaskResult = serde_json::from_str(&json).unwrap();
+
+        assert!(parsed.is_success());
+        assert_eq!(parsed.files_modified.len(), 1);
+    }
+
+    #[test]
+    fn task_result_failure_serialization() {
+        let result = TaskResult::failure(Uuid::new_v4(), "Compilation error");
+
+        let json = serde_json::to_string(&result).unwrap();
+        let parsed: TaskResult = serde_json::from_str(&json).unwrap();
+
+        assert!(!parsed.is_success());
+        assert_eq!(parsed.errors.len(), 1);
+    }
+
+    #[test]
+    fn token_usage_total() {
+        let usage = TokenUsage::new("claude-3-opus", 1000, 500);
+        assert_eq!(usage.total(), 1500);
+    }
+
+    // Slice 3.7.3 tests
+    #[test]
+    fn context_request_response_cycle() {
+        let task_id = Uuid::new_v4();
+
+        // Create request
+        let request = ContextRequest::new(task_id)
+            .with_file("src/main.rs")
+            .with_question("What testing framework should I use?");
+
+        let request_json = serde_json::to_string(&request).unwrap();
+        let parsed_request: ContextRequest = serde_json::from_str(&request_json).unwrap();
+
+        // Create response
+        let response = ContextResponse::new(parsed_request.request_id, task_id)
+            .with_file(FileContent::new("src/main.rs", "fn main() {}"))
+            .with_answer(Answer::from_orchestrator(
+                "What testing framework should I use?",
+                "Use the built-in Rust test framework",
+            ));
+
+        let response_json = serde_json::to_string(&response).unwrap();
+        let parsed_response: ContextResponse = serde_json::from_str(&response_json).unwrap();
+
+        assert_eq!(parsed_request.request_id, parsed_response.request_id);
+    }
+
+    #[test]
+    fn file_request_with_range() {
+        let request =
+            FileRequest::range("src/lib.rs", 10, 50).with_reason("Need function definition");
+
+        assert_eq!(request.line_range, Some((10, 50)));
+        assert!(request.reason.is_some());
+    }
+
+    // Slice 3.7.4 tests
+    #[test]
+    fn progress_update_serialization() {
+        let update = ProgressUpdate::coding(Uuid::new_v4(), "Writing authentication module")
+            .with_progress(45)
+            .with_details("Adding JWT validation");
+
+        let json = serde_json::to_string(&update).unwrap();
+        let parsed: ProgressUpdate = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed.activity, ActivityType::Coding);
+        assert_eq!(parsed.progress_percent, Some(45));
+    }
+
+    #[test]
+    fn milestone_always_shown() {
+        let update = ProgressUpdate::milestone(Uuid::new_v4(), "Feature complete");
+
+        assert_eq!(update.verbosity, VerbosityLevel::Quiet);
+        assert_eq!(update.activity, ActivityType::Milestone);
+    }
+
+    #[test]
+    fn activity_type_icons() {
+        assert_eq!(ActivityType::Coding.icon(), "◆");
+        assert_eq!(ActivityType::Error.icon(), "✗");
+        assert_eq!(ActivityType::Milestone.icon(), "★");
+    }
+
+    // Slice 3.7.5 tests
     #[test]
     fn valid_task_assignment_passes() {
         let assignment = TaskAssignment::new(
@@ -1211,12 +1323,8 @@ mod tests {
 
     #[test]
     fn empty_title_fails_validation() {
-        let assignment = TaskAssignment::new(
-            Uuid::new_v4(),
-            "",
-            "Valid description",
-            AgentTier::Worker,
-        );
+        let assignment =
+            TaskAssignment::new(Uuid::new_v4(), "", "Valid description", AgentTier::Worker);
 
         let errors = assignment.validate().unwrap_err();
         assert!(errors.iter().any(|e| e.field == "title"));
@@ -1224,16 +1332,23 @@ mod tests {
 
     #[test]
     fn zero_timeout_fails_validation() {
-        let mut assignment = TaskAssignment::new(
-            Uuid::new_v4(),
-            "Title",
-            "Description",
-            AgentTier::Worker,
-        );
+        let mut assignment =
+            TaskAssignment::new(Uuid::new_v4(), "Title", "Description", AgentTier::Worker);
         assignment.timeout_secs = 0;
 
         let errors = assignment.validate().unwrap_err();
         assert!(errors.iter().any(|e| e.field == "timeout_secs"));
+    }
+
+    #[test]
+    fn exceeded_delegation_depth_fails_validation() {
+        let mut assignment =
+            TaskAssignment::new(Uuid::new_v4(), "Title", "Description", AgentTier::Worker);
+        assignment.delegation.depth = 5;
+        assignment.delegation.max_depth = 2;
+
+        let errors = assignment.validate().unwrap_err();
+        assert!(errors.iter().any(|e| e.field == "delegation.depth"));
     }
 
     #[test]
@@ -1254,45 +1369,35 @@ mod tests {
         let errors = result.validate().unwrap_err();
         assert!(errors.iter().any(|e| e.field == "errors"));
     }
+
+    #[test]
+    fn empty_context_request_fails_validation() {
+        let request = ContextRequest::new(Uuid::new_v4());
+        // No files or questions
+
+        let errors = request.validate().unwrap_err();
+        assert!(errors.iter().any(|e| e.field == "files_needed/questions"));
+    }
+
+    #[test]
+    fn valid_context_request_passes() {
+        let request = ContextRequest::new(Uuid::new_v4()).with_file("src/main.rs");
+
+        assert!(request.validate().is_ok());
+    }
+
+    #[test]
+    fn empty_progress_message_fails_validation() {
+        let update = ProgressUpdate::new(Uuid::new_v4(), "");
+
+        let errors = update.validate().unwrap_err();
+        assert!(errors.iter().any(|e| e.field == "message"));
+    }
+
+    #[test]
+    fn progress_clamped_to_100() {
+        let update = ProgressUpdate::new(Uuid::new_v4(), "Working").with_progress(150);
+
+        assert_eq!(update.progress_percent, Some(100));
+    }
 }
-```
-
----
-
-## Notes
-
-- Protocol version should be checked on all incoming messages
-- Consider adding message envelope type for routing/logging
-- Validation should be called before processing any message
-- Structured errors make debugging easier
-- Consider adding message signing for security in multi-user scenarios
-- The protocol supports future extension through metadata fields
-- **Delegation Rules**:
-  - DelegationContext tracks depth and parent agent
-  - max_depth is typically 2 (user → agent → sub-agent)
-  - Before delegating, check role's can_delegate_to permissions
-  - delegation_chain provides full traceability for debugging
-  - Validation should reject tasks where depth > max_depth
-
----
-
-## Completion Checklist
-
-Before marking this ticket done:
-
-- [x] All slices verified
-- [x] `cargo check` passes with no errors
-- [x] `cargo test` passes for protocol module (19 tests)
-- [x] `TaskAssignment` fully defined and serializable
-- [x] **TaskAssignment includes role_id field**
-- [x] **TaskAssignment includes delegation context**
-- [x] **DelegationContext tracks depth, max_depth, parent, chain**
-- [x] `TaskResult` fully defined and serializable
-- [x] `ContextRequest`/`ContextResponse` work correctly
-- [x] `ProgressUpdate` works for feed
-- [x] All message types validatable
-- [x] **Validation rejects delegation depth > max_depth**
-- [x] Validation catches common errors
-- [x] Validation errors are clear and actionable
-- [x] Code follows `CONVENTIONS.md`
-- [x] `PROGRESS.md` updated with 3.7 status

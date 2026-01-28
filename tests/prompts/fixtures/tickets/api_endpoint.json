@@ -1,0 +1,7 @@
+{
+  "name": "REST API Endpoint",
+  "input": "Create a new REST API endpoint for managing user profiles",
+  "additional_context": "Using Axum framework with SQLx for database. Need GET, PUT, DELETE endpoints.",
+  "expected_output": null,
+  "tags": ["api", "backend", "crud"]
+}
