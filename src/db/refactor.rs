@@ -55,6 +55,59 @@ pub async fn set_production_mode(pool: &SqlitePool, mode: ProductionMode) -> Res
 }
 
 // =============================================================================
+// Milestone Limit
+// =============================================================================
+
+/// Get the current milestone limit (None = no limit)
+pub async fn get_milestone_limit(pool: &SqlitePool) -> Result<Option<u8>> {
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT value FROM system_state WHERE key = 'milestone_limit'")
+            .fetch_optional(pool)
+            .await
+            .context("Failed to fetch milestone limit")?;
+
+    Ok(row.and_then(|(v,)| v.parse::<u8>().ok()))
+}
+
+/// Set the milestone limit (None clears it)
+pub async fn set_milestone_limit(pool: &SqlitePool, milestone: Option<u8>) -> Result<()> {
+    let updated_at = Utc::now().to_rfc3339();
+
+    match milestone {
+        Some(m) => {
+            // Validate milestone is in range 1-9
+            if m < 1 || m > 9 {
+                anyhow::bail!("Milestone must be between 1 and 9");
+            }
+            let value = m.to_string();
+            sqlx::query(
+                r#"
+                INSERT INTO system_state (key, value, updated_at)
+                VALUES ('milestone_limit', ?, ?)
+                ON CONFLICT(key) DO UPDATE SET
+                    value = excluded.value,
+                    updated_at = excluded.updated_at
+                "#,
+            )
+            .bind(&value)
+            .bind(&updated_at)
+            .execute(pool)
+            .await
+            .context("Failed to set milestone limit")?;
+        }
+        None => {
+            // Delete the entry to clear the limit
+            sqlx::query("DELETE FROM system_state WHERE key = 'milestone_limit'")
+                .execute(pool)
+                .await
+                .context("Failed to clear milestone limit")?;
+        }
+    }
+
+    Ok(())
+}
+
+// =============================================================================
 // Refactor Sessions
 // =============================================================================
 
@@ -619,6 +672,59 @@ mod tests {
             .unwrap();
         assert_eq!(retrieved.proposed_changes.len(), 1);
         assert_eq!(retrieved.proposed_changes[0].file_path, "test.md");
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn milestone_limit_default_is_none() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        let limit = get_milestone_limit(&pool).await.unwrap();
+        assert!(limit.is_none());
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn can_set_and_get_milestone_limit() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        set_milestone_limit(&pool, Some(3)).await.unwrap();
+        let limit = get_milestone_limit(&pool).await.unwrap();
+        assert_eq!(limit, Some(3));
+
+        set_milestone_limit(&pool, Some(7)).await.unwrap();
+        let limit = get_milestone_limit(&pool).await.unwrap();
+        assert_eq!(limit, Some(7));
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn can_clear_milestone_limit() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        set_milestone_limit(&pool, Some(5)).await.unwrap();
+        assert_eq!(get_milestone_limit(&pool).await.unwrap(), Some(5));
+
+        set_milestone_limit(&pool, None).await.unwrap();
+        assert!(get_milestone_limit(&pool).await.unwrap().is_none());
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn milestone_limit_validates_range() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        // Valid range 1-9
+        assert!(set_milestone_limit(&pool, Some(1)).await.is_ok());
+        assert!(set_milestone_limit(&pool, Some(9)).await.is_ok());
+
+        // Invalid: 0 and 10
+        assert!(set_milestone_limit(&pool, Some(0)).await.is_err());
+        assert!(set_milestone_limit(&pool, Some(10)).await.is_err());
 
         pool.close().await;
     }
