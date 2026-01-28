@@ -208,8 +208,18 @@ impl RefactorAgent {
 
         // Check for REFACTOR_NEEDED patterns
         let refactor_patterns = [
-            "change", "modify", "update", "restructure", "split", "merge", "delete", "remove",
-            "add", "new ticket", "isn't working", "not working",
+            "change",
+            "modify",
+            "update",
+            "restructure",
+            "split",
+            "merge",
+            "delete",
+            "remove",
+            "add",
+            "new ticket",
+            "isn't working",
+            "not working",
         ];
         if refactor_patterns.iter().any(|p| message_lower.contains(p)) {
             return IntentAnalysis {
@@ -228,7 +238,10 @@ impl RefactorAgent {
 
         // Check for CLARIFYING patterns
         let clarifying_patterns = ["what if", "could we", "maybe", "thinking about", "consider"];
-        if clarifying_patterns.iter().any(|p| message_lower.contains(p)) {
+        if clarifying_patterns
+            .iter()
+            .any(|p| message_lower.contains(p))
+        {
             return IntentAnalysis {
                 intent: RefactorIntent::Clarifying,
                 confidence: Confidence::Medium,

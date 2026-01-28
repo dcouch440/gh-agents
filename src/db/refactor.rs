@@ -11,8 +11,7 @@ use sqlx::SqlitePool;
 use std::str::FromStr;
 
 use crate::types::{
-    ChangeId, ChangeStatus, ChangeType, ProductionMode, RefactorChange, RefactorId,
-    RefactorSession,
+    ChangeId, ChangeStatus, ChangeType, ProductionMode, RefactorChange, RefactorId, RefactorSession,
 };
 
 // =============================================================================
@@ -310,7 +309,9 @@ impl RefactorSessionRow {
             chrono::DateTime::parse_from_rfc3339(&self.started_at)?.with_timezone(&chrono::Utc);
         let ended_at = self
             .ended_at
-            .map(|s| chrono::DateTime::parse_from_rfc3339(&s).map(|d| d.with_timezone(&chrono::Utc)))
+            .map(|s| {
+                chrono::DateTime::parse_from_rfc3339(&s).map(|d| d.with_timezone(&chrono::Utc))
+            })
             .transpose()?;
 
         Ok(RefactorSession {
@@ -515,9 +516,7 @@ mod tests {
         insert_refactor_change(&pool, &change1).await.unwrap();
         insert_refactor_change(&pool, &change2).await.unwrap();
 
-        let changes = list_changes_for_session(&pool, &session.id)
-            .await
-            .unwrap();
+        let changes = list_changes_for_session(&pool, &session.id).await.unwrap();
         assert_eq!(changes.len(), 2);
 
         pool.close().await;

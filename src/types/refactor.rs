@@ -53,10 +53,7 @@ impl ProductionMode {
 
     /// Returns true if in any refactor-related state
     pub fn is_refactoring(&self) -> bool {
-        matches!(
-            self,
-            ProductionMode::RefactorMode | ProductionMode::Paused
-        )
+        matches!(self, ProductionMode::RefactorMode | ProductionMode::Paused)
     }
 
     /// Convert to string for database storage
@@ -100,12 +97,18 @@ pub enum RefactorIntent {
 impl RefactorIntent {
     /// Returns true if this intent should halt production
     pub fn should_halt(&self) -> bool {
-        matches!(self, RefactorIntent::HaltNow | RefactorIntent::RefactorNeeded)
+        matches!(
+            self,
+            RefactorIntent::HaltNow | RefactorIntent::RefactorNeeded
+        )
     }
 
     /// Returns true if this is a conversational intent (no action needed)
     pub fn is_conversational(&self) -> bool {
-        matches!(self, RefactorIntent::Clarifying | RefactorIntent::JustChatting)
+        matches!(
+            self,
+            RefactorIntent::Clarifying | RefactorIntent::JustChatting
+        )
     }
 }
 

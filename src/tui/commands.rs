@@ -104,7 +104,10 @@ impl Command {
     /// Get all available commands with descriptions
     pub fn all_commands() -> Vec<(&'static str, &'static str)> {
         vec![
-            ("/refactor", "Enter refactor mode to modify the project plan"),
+            (
+                "/refactor",
+                "Enter refactor mode to modify the project plan",
+            ),
             ("/exit", "Exit current mode or quit"),
             ("/help", "Show available commands"),
             ("/quit", "Quit the application"),

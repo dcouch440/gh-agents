@@ -116,7 +116,10 @@ mod tests {
     async fn scheduler_starts_in_running_mode() {
         let (scheduler, _temp_dir) = setup_scheduler().await;
 
-        assert_eq!(scheduler.get_production_mode().await, ProductionMode::Running);
+        assert_eq!(
+            scheduler.get_production_mode().await,
+            ProductionMode::Running
+        );
         assert!(scheduler.should_assign().await);
         assert!(!scheduler.is_paused().await);
     }
@@ -141,7 +144,10 @@ mod tests {
 
         scheduler.pause_for_refactor().await.unwrap();
 
-        assert_eq!(scheduler.get_production_mode().await, ProductionMode::Paused);
+        assert_eq!(
+            scheduler.get_production_mode().await,
+            ProductionMode::Paused
+        );
         assert!(!scheduler.should_assign().await);
         assert!(scheduler.is_paused().await);
     }
@@ -162,7 +168,10 @@ mod tests {
 
         scheduler.resume().await.unwrap();
 
-        assert_eq!(scheduler.get_production_mode().await, ProductionMode::Running);
+        assert_eq!(
+            scheduler.get_production_mode().await,
+            ProductionMode::Running
+        );
         assert!(scheduler.should_assign().await);
     }
 
@@ -199,6 +208,9 @@ mod tests {
 
         // In running mode, begin_resume does nothing
         scheduler.begin_resume().await.unwrap();
-        assert_eq!(scheduler.get_production_mode().await, ProductionMode::Running);
+        assert_eq!(
+            scheduler.get_production_mode().await,
+            ProductionMode::Running
+        );
     }
 }
