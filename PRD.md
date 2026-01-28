@@ -1030,6 +1030,85 @@ nexor/
 
 ---
 
+## In-TUI File Editor
+
+**Vision**: Users can view and edit files directly within the TUI while agents are working, providing a seamless development experience without leaving nexor.
+
+### Core Features
+
+| Feature | Description |
+|---------|-------------|
+| **File Viewer** | Read-only view with syntax highlighting for any project file |
+| **File Editor** | Full in-app editing with nano-style keybindings (Ctrl+X to exit) |
+| **Agent File Access** | Open files that agents are currently working on |
+| **Save & Commit** | Save changes and optionally commit to current branch |
+| **Diff View** | See before/after for agent modifications |
+
+### User Flow
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Agent working on: src/auth/login.rs                    │
+│  Status: in_progress                                    │
+│                                                         │
+│  [View File]  [Edit File]  [View Diff]                  │
+└─────────────────────────────────────────────────────────┘
+                    │
+                    ▼ (user presses Edit or /edit path)
+┌─────────────────────────────────────────────────────────┐
+│  src/auth/login.rs                        [Ctrl+X Exit] │
+├─────────────────────────────────────────────────────────┤
+│  1 │ use crate::auth::Session;                          │
+│  2 │ use crate::db::UserRepo;                           │
+│  3 │                                                    │
+│  4 │ pub async fn login(creds: Credentials) -> Result { │
+│  5 │     let user = UserRepo::find_by_email(&creds.em   │
+│  6 │ ...                                                │
+├─────────────────────────────────────────────────────────┤
+│  Ln 4, Col 12 | Modified                                │
+└─────────────────────────────────────────────────────────┘
+                    │
+                    ▼ (Ctrl+X to exit)
+┌─────────────────────────────────────────────────────────┐
+│  Save changes to src/auth/login.rs?                     │
+│                                                         │
+│  [Save]  [Save & Commit]  [Discard]  [Cancel]           │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Slash Commands
+
+| Command | Description |
+|---------|-------------|
+| `/view <path>` | Open file in read-only viewer |
+| `/edit <path>` | Open file in editor |
+| `/diff <path>` | Show diff for file (if modified by agent) |
+| `/files` | Browse project files with tree view |
+
+### Technical Components
+
+| Component | Crate/Approach |
+|-----------|----------------|
+| Text editor widget | `tui-textarea` or `edtui` |
+| Syntax highlighting | `syntect` |
+| File tree browser | Custom widget with `tui-tree-widget` |
+| Git integration | `git2` crate (from M7) |
+
+### Keybindings (nano-style)
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+X` | Exit (prompt to save if modified) |
+| `Ctrl+O` | Save file |
+| `Ctrl+G` | Go to line |
+| `Ctrl+W` | Search |
+| `Ctrl+K` | Cut line |
+| `Ctrl+U` | Paste |
+| `Arrow keys` | Navigate |
+| `Page Up/Down` | Scroll |
+
+---
+
 ## Future Considerations
 
 Features to consider after v1:

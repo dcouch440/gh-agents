@@ -21,7 +21,7 @@ use ratatui::{
 
 use crate::tui::input::InputBar;
 use crate::tui::layout::{AppLayout, HeaderBar};
-use crate::tui::views::{ChatMessage, ChatView, FeedItem, FeedView, HomeView};
+use crate::tui::views::{ChatMessage, ChatView, FeedItem, FeedView, HomeView, LogEntry, LogsView};
 use std::io::{self, Stdout};
 use std::panic;
 use std::path::PathBuf;
@@ -124,6 +124,8 @@ pub struct App {
     chat: ChatView,
     /// Pending streaming response from orchestrator
     pending_response: Option<ChatMessage>,
+    /// Technical logs
+    logs: LogsView,
 }
 
 impl App {
@@ -137,6 +139,12 @@ impl App {
         let mut feed = FeedView::new();
         feed.push(FeedItem::system("nexor started"));
 
+        // Initialize logs with startup messages
+        let mut logs = LogsView::new();
+        logs.push(LogEntry::info("nexor::tui", "Terminal initialized"));
+        logs.push(LogEntry::info("nexor::db", "Database connected"));
+        logs.push(LogEntry::info("nexor::app", "Application started"));
+
         Self {
             mode: AppMode::Normal,
             view: View::Home,
@@ -149,6 +157,7 @@ impl App {
             feed,
             chat: ChatView::new(),
             pending_response: None,
+            logs,
         }
     }
 
@@ -195,6 +204,16 @@ impl App {
     /// Get a reference to the chat.
     pub fn chat(&self) -> &ChatView {
         &self.chat
+    }
+
+    /// Get a reference to the logs.
+    pub fn logs(&self) -> &LogsView {
+        &self.logs
+    }
+
+    /// Add a log entry.
+    pub fn push_log(&mut self, entry: LogEntry) {
+        self.logs.push(entry);
     }
 
     /// Submit a chat message to the orchestrator.
@@ -294,6 +313,10 @@ impl App {
             Command::Exit => self.handle_exit().await,
             Command::Help => Ok(CommandResult::Help(generate_help_text())),
             Command::Quit => Ok(CommandResult::Quit),
+            Command::Home => {
+                self.view = View::Home;
+                Ok(CommandResult::ViewChanged)
+            }
             Command::Feed => {
                 self.view = View::Feed;
                 Ok(CommandResult::ViewChanged)
@@ -558,6 +581,14 @@ impl App {
                     };
                     frame.render_widget(chat_view, layout.main);
                 }
+                View::Logs => {
+                    let logs_view = LogsView {
+                        entries: self.logs.entries.clone(),
+                        scroll_offset: self.logs.scroll_offset,
+                        min_level: self.logs.min_level,
+                    };
+                    frame.render_widget(logs_view, layout.main);
+                }
                 _ => {
                     let content = self.render_view_content();
                     let content_block = Block::default()
@@ -588,7 +619,7 @@ impl App {
             View::Home => String::new(), // Handled separately by HomeView widget
             View::Feed => String::new(), // Handled separately by FeedView widget
             View::Main => String::new(), // Handled separately by ChatView widget
-            View::Logs => "Logs view - Technical logs will appear here".to_string(),
+            View::Logs => String::new(), // Handled separately by LogsView widget
             View::Tasks => "Tasks view - Task list will appear here".to_string(),
             View::Agents => "Agents view - Agent status will appear here".to_string(),
             View::Costs => "Costs view - Cost tracking will appear here".to_string(),

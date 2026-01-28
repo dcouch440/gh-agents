@@ -18,6 +18,8 @@ pub enum Command {
     Help,
     /// Quit the application
     Quit,
+    /// Show the home screen
+    Home,
     /// Show the feed view
     Feed,
     /// Show the main chat view
@@ -52,6 +54,7 @@ impl Command {
             "exit" | "done" => Command::Exit,
             "help" | "?" => Command::Help,
             "quit" | "q" => Command::Quit,
+            "home" => Command::Home,
             "feed" => Command::Feed,
             "main" | "chat" => Command::Main,
             "logs" => Command::Logs,
@@ -69,6 +72,7 @@ impl Command {
             Command::Exit => "exit",
             Command::Help => "help",
             Command::Quit => "quit",
+            Command::Home => "home",
             Command::Feed => "feed",
             Command::Main => "main",
             Command::Logs => "logs",
@@ -86,6 +90,7 @@ impl Command {
             Command::Exit => "Exit current mode or quit",
             Command::Help => "Show available commands",
             Command::Quit => "Quit the application",
+            Command::Home => "Return to home screen",
             Command::Feed => "Show the activity feed",
             Command::Main => "Show the main chat view",
             Command::Logs => "Show application logs",
@@ -111,6 +116,7 @@ impl Command {
             ("/exit", "Exit current mode or quit"),
             ("/help", "Show available commands"),
             ("/quit", "Quit the application"),
+            ("/home", "Return to home screen"),
             ("/feed", "Show the activity feed"),
             ("/main", "Show the main chat view"),
             ("/logs", "Show application logs"),
@@ -173,6 +179,7 @@ mod tests {
         assert_eq!(Command::parse("/?"), Some(Command::Help));
         assert_eq!(Command::parse("/quit"), Some(Command::Quit));
         assert_eq!(Command::parse("/q"), Some(Command::Quit));
+        assert_eq!(Command::parse("/home"), Some(Command::Home));
         assert_eq!(Command::parse("/feed"), Some(Command::Feed));
         assert_eq!(Command::parse("/main"), Some(Command::Main));
         assert_eq!(Command::parse("/chat"), Some(Command::Main));

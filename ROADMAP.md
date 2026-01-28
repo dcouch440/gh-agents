@@ -988,6 +988,94 @@ Debug why agents made specific decisions.
 
 ---
 
+## Milestone 10: In-TUI File Editor
+
+**Goal**: Users can view and edit files directly within the TUI, including files agents are working on.
+
+**Checkpoint**: Can open a file from agent's task, edit it in-app with syntax highlighting, save and commit changes.
+
+### Ticket 10.1: File Viewer Widget
+
+Read-only file viewing with syntax highlighting.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 10.1.1 | Create `FileViewer` widget with scrollable content | Can display file, scroll with arrow keys |
+| 10.1.2 | Add line numbers and cursor position display | Line numbers visible, status bar shows position |
+| 10.1.3 | Integrate `syntect` for syntax highlighting | Rust/JS/Python files highlighted correctly |
+| 10.1.4 | Add search functionality (Ctrl+W) | Can search, highlights matches |
+
+### Ticket 10.2: File Editor Widget
+
+Full text editing using tui-textarea.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 10.2.1 | Integrate `tui-textarea` as editor core | Basic text input works |
+| 10.2.2 | Add nano-style keybindings (Ctrl+X exit, Ctrl+O save, etc.) | Keybindings work as documented |
+| 10.2.3 | Track modified state, show in status bar | "Modified" indicator appears on changes |
+| 10.2.4 | Add undo/redo support | Ctrl+Z/Ctrl+Y work |
+| 10.2.5 | Add go-to-line (Ctrl+G) and search (Ctrl+W) | Navigation features work |
+
+### Ticket 10.3: File Browser Widget
+
+Tree view for navigating project files.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 10.3.1 | Create `FileBrowser` widget with directory tree | Shows project structure |
+| 10.3.2 | Add expand/collapse for directories | Can navigate tree |
+| 10.3.3 | Filter by file type (show only .rs, .ts, etc.) | Filter works |
+| 10.3.4 | Open file in viewer/editor on Enter | Selection opens file |
+
+### Ticket 10.4: Diff Viewer
+
+Show changes made by agents.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 10.4.1 | Create `DiffViewer` widget with side-by-side or unified view | Diff displays correctly |
+| 10.4.2 | Integrate with git for file diffs | Shows uncommitted changes |
+| 10.4.3 | Highlight additions (green) and deletions (red) | Colors applied |
+| 10.4.4 | Navigate between diff hunks | Can jump between changes |
+
+### Ticket 10.5: Save & Commit Flow
+
+Save changes and optionally commit.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 10.5.1 | Implement save file functionality | File saved to disk |
+| 10.5.2 | Add "unsaved changes" prompt on exit | Prompt appears, respects choice |
+| 10.5.3 | Implement save & commit dialog | Can enter commit message |
+| 10.5.4 | Create commit on current branch via git2 | Commit created successfully |
+| 10.5.5 | Show success/error notification | User informed of result |
+
+### Ticket 10.6: Slash Commands Integration
+
+Wire up /view, /edit, /diff, /files commands.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 10.6.1 | Add `/view <path>` command to open FileViewer | Command opens viewer |
+| 10.6.2 | Add `/edit <path>` command to open FileEditor | Command opens editor |
+| 10.6.3 | Add `/diff <path>` command to open DiffViewer | Command opens diff |
+| 10.6.4 | Add `/files` command to open FileBrowser | Command opens browser |
+| 10.6.5 | Add file quick-open from agent task context | Can open files agent is working on |
+
+### Ticket 10.7: Agent Integration
+
+Connect editor to agent workflow.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 10.7.1 | Show "View/Edit" actions on files in task context | Actions visible in task view |
+| 10.7.2 | Highlight files modified by agent in file browser | Modified files marked |
+| 10.7.3 | Refresh file content when agent modifies it | User sees agent's changes |
+| 10.7.4 | Handle conflicts when user and agent edit same file | Warning shown, user can resolve |
+
+---
+
 ## Parallelization Notes
 
 ### Can be parallelized (no dependencies):
@@ -1021,15 +1109,16 @@ Debug why agents made specific decisions.
 
 ## Status
 
-- [ ] Milestone 1: Foundation
-- [ ] Milestone 2: LLM Layer
-- [ ] Milestone 3: Agent Runtime
-- [ ] Milestone 4: Prompt Engineering & Agent Intelligence ← **NEW: Critical path**
-- [ ] Milestone 5: Orchestration Core
+- [x] Milestone 1: Foundation
+- [x] Milestone 2: LLM Layer
+- [x] Milestone 3: Agent Runtime
+- [x] Milestone 4: Prompt Engineering & Agent Intelligence
+- [x] Milestone 5: Orchestration Core
 - [ ] Milestone 6: TUI Basic
 - [ ] Milestone 7: Execution Layer
 - [ ] Milestone 8: GitHub Integration
 - [ ] Milestone 9: Polish & Production
+- [ ] Milestone 10: In-TUI File Editor ← **NEW**
 
 ---
 
