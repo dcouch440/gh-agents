@@ -87,6 +87,14 @@ Create a comprehensive prompt system where agents consistently produce structure
 - 4.9 needs 4.5 complete (recovery needs output schemas)
 - 4.7 needs 4.5 and M2 (testing framework needs schemas and LLM)
 
+**Recommended execution order**:
+1. Start with 4.1 (Prompt Architecture Design)
+2. After 4.1: Start 4.2, 4.3, 4.4, 4.5, 4.8, 4.10 in parallel
+3. After 4.2, 4.3, 4.4: Start 4.6 (Few-Shot Examples)
+4. After 4.5: Start 4.9 (Self-Correction)
+5. After 4.5 + M2 complete: Start 4.7 (Prompt Testing Framework)
+6. After 4.8 + M2 complete: Start 4.11 (Context Window Validation)
+
 ---
 
 ## File Structure
