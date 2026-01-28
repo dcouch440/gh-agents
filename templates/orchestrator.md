@@ -50,7 +50,7 @@ A worker should be able to:
 - Know exactly how to verify each slice works
 - Complete the work without asking questions
 
-If your decomp requires the worker to make decisions, it's not detailed enough.
+Define what to build, why, and how slices connect. The worker decides implementation details. Each slice spec should fit on one screen.
 
 ---
 
