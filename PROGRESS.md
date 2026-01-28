@@ -4,10 +4,10 @@
 
 ## Current Focus
 
-**Active:** None
-**Next:** M9 Polish & Production
+**Active:** M10 In-TUI File Editor
+**Next:** 10.1 File Viewer Widget
 **Blocked:** None
-**Completed:** M1 Foundation, M2 LLM Layer, M3 Agent Runtime, M4 Prompt Engineering, M5 Orchestration Core, M6 TUI Basic, M7 Execution Layer, M8 GitHub Integration
+**Completed:** M1 Foundation, M2 LLM Layer, M3 Agent Runtime, M4 Prompt Engineering, M5 Orchestration Core, M6 TUI Basic, M7 Execution Layer, M8 GitHub Integration, M9 Polish & Production
 
 **Milestone 1 Decomposition:** Complete - see `decomp/M1/`
 **Milestone 2 Decomposition:** Complete - see `decomp/M2/`
@@ -170,20 +170,20 @@
 
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
-| 9.1 Remaining TUI Views | pending | 0/3 | Needs M6 |
-| 9.2 Headless Mode | pending | 0/4 | Needs M5 |
-| 9.3 Error Handling Polish | pending | 0/3 | Needs M1-M8 |
-| 9.4 Docker Packaging | pending | 0/3 | Needs M1-M8 |
-| 9.5 Documentation | pending | 0/4 | Needs M1-M8 |
-| 9.6 Observability & Replay | pending | 0/5 | Needs M2, M5 |
+| 9.1 Remaining TUI Views | done | 3/3 | TasksView, AgentsView, CostsView widgets, 49 tests |
+| 9.2 Headless Mode | done | 4/4 | cli.rs, headless.rs, task input parsing, 13 tests |
+| 9.3 Error Handling Polish | done | 3/3 | NexorError, ErrorDisplay, suggestions, 34 tests |
+| 9.4 Docker Packaging | done | 3/3 | Dockerfile, docker-compose.yml, docs/docker.md |
+| 9.5 Documentation | done | 4/4 | installation.md, configuration.md, usage.md, commands.md |
+| 9.6 Observability & Replay | done | 5/5 | LlmCallLogger, DecisionReplay, SessionExporter, ReplayView, 29 tests |
 | 9.7 Refactor Mode Foundation | done | 4/4 | Types, DB, scheduler pause/resume |
 | 9.8 Refactor Agent | done | 4/4 | Intent detection, change proposals, apply changes |
 | 9.9 TUI Integration | done | 3/3 | /refactor command, mode switching, status bar |
-| 9.10 Menu Types & Data | pending | 0/3 | Needs 9.7, 9.9 |
-| 9.11 Menu Widget & Rendering | pending | 0/3 | Needs 9.10 |
-| 9.12 App Integration | pending | 0/3 | Needs 9.10, 9.11, 9.9 |
+| 9.10 Menu Types & Data | done | 3/3 | MenuItem, MenuAction, Menu types, MenuState, build_menu_tree(), milestone limit DB, 24 tests |
+| 9.11 Menu Widget & Rendering | done | 3/3 | MenuWidget, MenuController, centered_rect, 22 tests |
+| 9.12 App Integration | done | 3/3 | Menu command, status, actions, Esc trigger, milestone limit |
 
-**Milestone Status:** In Progress (3/12 tickets done)
+**Milestone Status:** Complete (12/12 tickets done)
 
 ---
 
@@ -233,7 +233,7 @@
 | M6: TUI Basic | 7 | 25 | Complete |
 | M7: Execution Layer | 6 | 28 | Complete |
 | M8: GitHub Integration | 8 | 32 | Complete |
-| M9: Polish & Production | 12 | 42 | In Progress (3/12 tickets) |
+| M9: Polish & Production | 12 | 42 | Complete |
 | M10: In-TUI File Editor | 7 | 31 | Not Started |
 | M11: Usage Analytics | 5 | 16 | Not Started |
 | **Total** | **77** | **310** | |

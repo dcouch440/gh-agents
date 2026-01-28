@@ -12,16 +12,14 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{
-    backend::CrosstermBackend,
-    style::{Color, Style},
-    widgets::{Block, Borders, Paragraph},
-    Terminal,
-};
+use ratatui::{backend::CrosstermBackend, Terminal};
 
 use crate::tui::input::InputBar;
 use crate::tui::layout::{AppLayout, HeaderBar};
-use crate::tui::views::{ChatMessage, ChatView, FeedItem, FeedView, HomeView, LogEntry, LogsView};
+use crate::tui::views::{
+    AgentsView, ChatMessage, ChatView, CostsView, FeedItem, FeedView, HomeView, LogEntry, LogsView,
+    TasksView,
+};
 use std::io::{self, Stdout};
 use std::panic;
 use std::path::PathBuf;
@@ -29,9 +27,11 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 
+use crate::db::{get_milestone_limit, set_milestone_limit};
 use crate::orchestration::Scheduler;
 use crate::refactor::RefactorAgent;
 use crate::tui::commands::{generate_help_text, Command, CommandResult};
+use crate::tui::menu::{build_menu_tree, centered_rect, menu_size, MenuAction, MenuController, MenuStatus, MenuWidget};
 use crate::tui::mode::{AppMode, RefactorModeState};
 
 /// Terminal type alias for convenience
@@ -126,6 +126,10 @@ pub struct App {
     pending_response: Option<ChatMessage>,
     /// Technical logs
     logs: LogsView,
+    /// Cached milestone limit for quick access
+    cached_milestone_limit: Option<u8>,
+    /// Whether the menu is currently open
+    menu_open: bool,
 }
 
 impl App {
@@ -158,6 +162,8 @@ impl App {
             chat: ChatView::new(),
             pending_response: None,
             logs,
+            cached_milestone_limit: None,
+            menu_open: false,
         }
     }
 
@@ -313,6 +319,10 @@ impl App {
             Command::Exit => self.handle_exit().await,
             Command::Help => Ok(CommandResult::Help(generate_help_text())),
             Command::Quit => Ok(CommandResult::Quit),
+            Command::Menu => {
+                self.menu_open = true;
+                Ok(CommandResult::Success("Opening menu...".to_string()))
+            }
             Command::Home => {
                 self.view = View::Home;
                 Ok(CommandResult::ViewChanged)
@@ -460,6 +470,172 @@ impl App {
         self.refactor_agent.as_mut()
     }
 
+    // =====================
+    // Menu-related methods
+    // =====================
+
+    /// Generate status info for menu header
+    pub fn get_menu_status(&self) -> MenuStatus {
+        MenuStatus::new()
+            .with_production_state(self.production_state_string())
+            .with_milestone(self.milestone_status_string())
+            .with_pending_changes(self.pending_change_count())
+    }
+
+    /// Get production state as a string
+    fn production_state_string(&self) -> String {
+        match &self.mode {
+            AppMode::Normal => {
+                if self.is_production_paused() {
+                    "Paused".to_string()
+                } else {
+                    "Running".to_string()
+                }
+            }
+            AppMode::Refactor(_) => "Refactor Mode".to_string(),
+        }
+    }
+
+    /// Get milestone status string for display
+    fn milestone_status_string(&self) -> String {
+        let current = self.current_milestone();
+        match self.milestone_limit() {
+            Some(limit) => format!("{} (limit: M{})", current, limit),
+            None => current,
+        }
+    }
+
+    /// Get count of pending changes
+    fn pending_change_count(&self) -> usize {
+        match &self.mode {
+            AppMode::Refactor(state) => state.pending_changes,
+            AppMode::Normal => 0,
+        }
+    }
+
+    /// Check if production is paused
+    fn is_production_paused(&self) -> bool {
+        // Check scheduler state - will need to make this async or cache the state
+        false // Default to not paused until scheduler integration
+    }
+
+    /// Get current milestone identifier
+    fn current_milestone(&self) -> String {
+        // This would come from the scheduler or current work
+        "M9".to_string() // Placeholder
+    }
+
+    /// Get cached milestone limit
+    fn milestone_limit(&self) -> Option<u8> {
+        self.cached_milestone_limit
+    }
+
+    /// Load milestone limit from database
+    pub async fn load_milestone_limit(&mut self) -> Result<()> {
+        self.cached_milestone_limit = get_milestone_limit(&self.pool).await?;
+        Ok(())
+    }
+
+    /// Execute a menu action
+    async fn execute_menu_action(&mut self, action: MenuAction) -> Result<()> {
+        match action {
+            // Production control
+            MenuAction::StartProduction => {
+                let scheduler = self.scheduler.read().await;
+                scheduler.resume().await?;
+                drop(scheduler);
+                self.set_message("Production resumed");
+            }
+            MenuAction::PauseProduction => {
+                let scheduler = self.scheduler.read().await;
+                scheduler.pause_for_refactor().await?;
+                drop(scheduler);
+                self.set_message("Production paused");
+            }
+            MenuAction::SetMilestoneLimit(milestone) => {
+                set_milestone_limit(&self.pool, Some(milestone)).await?;
+                self.cached_milestone_limit = Some(milestone);
+                self.set_message(format!("Milestone limit set to M{}", milestone));
+            }
+            MenuAction::ClearMilestoneLimit => {
+                set_milestone_limit(&self.pool, None).await?;
+                self.cached_milestone_limit = None;
+                self.set_message("Milestone limit cleared");
+            }
+
+            // Refactor mode
+            MenuAction::ExitRefactorMode => {
+                self.exit_refactor_mode().await?;
+            }
+            MenuAction::CancelRefactor => {
+                // Cancel without applying - just exit
+                if let Some(agent) = &mut self.refactor_agent {
+                    agent.end_session().await?;
+                }
+                self.mode = AppMode::Normal;
+                self.refactor_agent = None;
+                self.set_message("Refactor cancelled");
+            }
+            MenuAction::ApplyChanges => {
+                let applied = self.apply_refactor_changes().await?;
+                self.set_message(format!("Applied {} changes", applied.len()));
+            }
+            MenuAction::DiscardChanges => {
+                if let AppMode::Refactor(state) = &mut self.mode {
+                    state.pending_changes = 0;
+                }
+                self.set_message("Pending changes discarded");
+            }
+            MenuAction::ReviewChanges => {
+                // Switch to a view that shows pending changes
+                self.set_message("Review changes (not yet implemented)");
+            }
+
+            // Navigation
+            MenuAction::GoToView(view) => {
+                self.view = view;
+                self.set_message(format!("Switched to {} view", view.name()));
+            }
+
+            // App
+            MenuAction::OpenSettings => {
+                self.set_message("Settings (not yet implemented)");
+            }
+            MenuAction::Quit => {
+                self.should_quit = true;
+            }
+        }
+        Ok(())
+    }
+
+    /// Configure menu items based on current app state
+    fn configure_menu_items(&self, controller: &mut MenuController) {
+        let in_refactor = self.mode.is_refactor();
+        let has_changes = self.pending_change_count() > 0;
+        let is_paused = self.is_production_paused();
+
+        // Production control items
+        controller.set_enabled("start", is_paused);
+        controller.set_enabled("pause", !is_paused && !in_refactor);
+
+        // Refactor mode items
+        controller.set_enabled("exit_refactor", in_refactor);
+        controller.set_enabled("cancel_refactor", in_refactor);
+
+        // Pending changes items
+        controller.set_enabled("apply", has_changes);
+        controller.set_enabled("discard", has_changes);
+        controller.set_enabled("review", has_changes);
+
+        // Update dynamic labels
+        if has_changes {
+            controller.update_label(
+                "pending_ctrl",
+                &format!("Pending Changes ({})", self.pending_change_count()),
+            );
+        }
+    }
+
     /// Apply approved refactor changes
     pub async fn apply_refactor_changes(&mut self) -> Result<Vec<String>> {
         let agent = self
@@ -489,9 +665,20 @@ impl App {
         // Input buffer for building commands/messages
         let mut input_buffer = String::new();
 
+        // Menu controller for when menu is open
+        let mut menu_controller: Option<MenuController> = None;
+
         while !self.should_quit {
-            // Render the UI
-            self.render(terminal, &input_buffer)?;
+            // If menu should open, create controller
+            if self.menu_open && menu_controller.is_none() {
+                let mut controller = MenuController::new(build_menu_tree());
+                self.configure_menu_items(&mut controller);
+                controller.open();
+                menu_controller = Some(controller);
+            }
+
+            // Render the UI (with menu overlay if open)
+            self.render_with_menu(terminal, &input_buffer, menu_controller.as_ref())?;
 
             // Poll for events with timeout (100ms for responsiveness)
             if event::poll(Duration::from_millis(100))? {
@@ -504,6 +691,23 @@ impl App {
                         continue;
                     }
 
+                    // Handle menu input if menu is open
+                    if let Some(ref mut controller) = menu_controller {
+                        if let Some(action) = controller.handle_key(key.code) {
+                            // Execute the action
+                            self.execute_menu_action(action).await?;
+                            // Close menu
+                            self.menu_open = false;
+                            menu_controller = None;
+                        } else if !controller.is_open() {
+                            // Menu was closed by Esc
+                            self.menu_open = false;
+                            menu_controller = None;
+                        }
+                        continue;
+                    }
+
+                    // Normal input handling
                     match key.code {
                         KeyCode::Enter => {
                             if !input_buffer.is_empty() {
@@ -516,10 +720,14 @@ impl App {
                             input_buffer.pop();
                         }
                         KeyCode::Esc => {
-                            // Return to Home and clear state
-                            self.view = View::Home;
-                            input_buffer.clear();
-                            self.clear_message();
+                            if input_buffer.is_empty() {
+                                // Open menu when Esc pressed with empty input
+                                self.menu_open = true;
+                            } else {
+                                // Clear input
+                                input_buffer.clear();
+                                self.clear_message();
+                            }
                         }
                         KeyCode::Char(c) => {
                             // Transition from Home to Main on first keypress
@@ -537,8 +745,13 @@ impl App {
         Ok(())
     }
 
-    /// Render the UI to the terminal.
-    fn render(&self, terminal: &mut Tui, input_buffer: &str) -> io::Result<()> {
+    /// Render the UI with optional menu overlay
+    fn render_with_menu(
+        &self,
+        terminal: &mut Tui,
+        input_buffer: &str,
+        menu_controller: Option<&MenuController>,
+    ) -> io::Result<()> {
         terminal.draw(|frame| {
             let layout = AppLayout::new(frame.area());
 
@@ -551,7 +764,7 @@ impl App {
             };
             frame.render_widget(header, layout.header);
 
-            // Main content area - custom widgets for Home and Feed, Paragraph for others
+            // Main content area
             match self.view {
                 View::Home => {
                     let home_view = if let Some(msg) = self.message() {
@@ -562,7 +775,6 @@ impl App {
                     frame.render_widget(home_view, layout.main);
                 }
                 View::Feed => {
-                    // Clone feed for rendering (Widget consumes self)
                     let feed_view = FeedView {
                         items: self.feed.items.clone(),
                         scroll_offset: self.feed.scroll_offset,
@@ -570,7 +782,6 @@ impl App {
                     frame.render_widget(feed_view, layout.main);
                 }
                 View::Main => {
-                    // Build messages list including pending streaming response
                     let mut messages = self.chat.messages.clone();
                     if let Some(ref pending) = self.pending_response {
                         messages.push(pending.clone());
@@ -589,14 +800,17 @@ impl App {
                     };
                     frame.render_widget(logs_view, layout.main);
                 }
-                _ => {
-                    let content = self.render_view_content();
-                    let content_block = Block::default()
-                        .title(format!(" {} ", self.view.name()))
-                        .borders(Borders::ALL)
-                        .border_style(Style::default().fg(Color::Blue));
-                    let content_widget = Paragraph::new(content).block(content_block);
-                    frame.render_widget(content_widget, layout.main);
+                View::Tasks => {
+                    let tasks_view = TasksView::default();
+                    frame.render_widget(tasks_view, layout.main);
+                }
+                View::Agents => {
+                    let agents_view = AgentsView::default();
+                    frame.render_widget(agents_view, layout.main);
+                }
+                View::Costs => {
+                    let costs_view = CostsView::default();
+                    frame.render_widget(costs_view, layout.main);
                 }
             }
 
@@ -604,27 +818,26 @@ impl App {
             let hint = if self.mode.is_refactor() {
                 "Refactor mode - describe changes or /exit"
             } else {
-                "Type /help for commands"
+                "Type /help for commands, Esc for menu"
             };
             let input_bar = InputBar::new(input_buffer).with_hint(hint);
             frame.render_widget(input_bar, layout.input);
+
+            // Menu overlay (if open)
+            if let Some(controller) = menu_controller {
+                if let Some(menu) = controller.current_menu() {
+                    let status = self.get_menu_status();
+                    let (width, height) = menu_size(menu, &status);
+                    let menu_area = centered_rect(width, height, frame.area());
+                    let widget = MenuWidget::new(menu, controller.state(), &status);
+                    frame.render_widget(widget, menu_area);
+                }
+            }
         })?;
 
         Ok(())
     }
 
-    /// Render the content for the current view (non-Home/Feed views).
-    fn render_view_content(&self) -> String {
-        match self.view {
-            View::Home => String::new(), // Handled separately by HomeView widget
-            View::Feed => String::new(), // Handled separately by FeedView widget
-            View::Main => String::new(), // Handled separately by ChatView widget
-            View::Logs => String::new(), // Handled separately by LogsView widget
-            View::Tasks => "Tasks view - Task list will appear here".to_string(),
-            View::Agents => "Agents view - Agent status will appear here".to_string(),
-            View::Costs => "Costs view - Cost tracking will appear here".to_string(),
-        }
-    }
 }
 
 #[cfg(test)]

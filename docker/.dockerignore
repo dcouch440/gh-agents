@@ -1,0 +1,34 @@
+# Build artifacts
+target/
+
+# Git
+.git/
+.github/
+
+# Documentation (except README)
+*.md
+!README.md
+
+# Runtime data
+.nexor/
+*.log
+
+# Environment files
+.env
+.env.*
+
+# Docker (avoid recursive copy)
+docker/
+!docker/Dockerfile
+
+# Development
+docs/
+tests/
+decomp/
+templates/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

@@ -1,0 +1,62 @@
+# =============================================================================
+# nexor Docker Compose Configuration
+# =============================================================================
+version: "3.8"
+
+services:
+  # Main nexor service (interactive TUI mode)
+  nexor:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: nexor:latest
+    container_name: nexor
+
+    # For TUI mode, need TTY
+    stdin_open: true
+    tty: true
+
+    # Environment variables (API keys)
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - RUST_LOG=${RUST_LOG:-info}
+
+    # Mount project directory for code access
+    volumes:
+      - ${PROJECT_DIR:-.}:/project:rw
+      - nexor-data:/data/.nexor
+
+    # Working directory
+    working_dir: /project
+
+    # Override default command for interactive mode (no args = TUI)
+    command: []
+
+  # Headless worker for batch jobs
+  nexor-headless:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: nexor:latest
+    container_name: nexor-headless
+    profiles:
+      - headless  # Only start with --profile headless
+
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - RUST_LOG=${RUST_LOG:-info}
+
+    volumes:
+      - ${PROJECT_DIR:-.}:/project:rw
+      - nexor-data:/data/.nexor
+
+    working_dir: /project
+
+    # Default headless command
+    command: ["--headless", "--task", "${TASK:-help}"]
+
+volumes:
+  nexor-data:
+    name: nexor-data
