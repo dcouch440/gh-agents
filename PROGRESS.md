@@ -5,9 +5,9 @@
 ## Current Focus
 
 **Active:** None
-**Next:** M8 GitHub Integration
+**Next:** M9 Polish & Production
 **Blocked:** None
-**Completed:** M1 Foundation, M2 LLM Layer, M3 Agent Runtime, M4 Prompt Engineering, M5 Orchestration Core, M6 TUI Basic, M7 Execution Layer
+**Completed:** M1 Foundation, M2 LLM Layer, M3 Agent Runtime, M4 Prompt Engineering, M5 Orchestration Core, M6 TUI Basic, M7 Execution Layer, M8 GitHub Integration
 
 **Milestone 1 Decomposition:** Complete - see `decomp/M1/`
 **Milestone 2 Decomposition:** Complete - see `decomp/M2/`
@@ -157,10 +157,10 @@
 | 8.3 PR Creation | done | 3/3 | PrBodyGenerator, PrService, PrResult, 6 tests |
 | 8.4 Progress Updates | done | 3/3 | ProgressSummary, CommentService, update comments, 6 tests |
 | 8.5 PR Retrieval & Review | done | 4/4 | PrFile, reviews, approve/request changes, 3 tests |
-| 8.6 PR Merge Operations | in_progress | 0/4 | Needs 8.1, 8.5 |
-| 8.7 PR Merge Queue & Conflict Resolution | pending | 0/6 | Needs 7.6, 8.5, 8.6, 8.4 |
+| 8.6 PR Merge Operations | done | 4/4 | MergeMethod, MergePrRequest/Response/Result, MergeableStatus, MergeError, client methods, 7 tests |
+| 8.7 PR Merge Queue & Conflict Resolution | done | 6/6 | MergeQueue, QueueStatus, MergeQueueProcessor, conflict resolution flow, progress notifications, 8 tests |
 
-**Milestone Status:** Not Started
+**Milestone Status:** Complete (8/8 tickets done)
 
 ---
 
@@ -231,8 +231,8 @@
 | M4: Prompt Engineering | 11 | 55 | Complete |
 | M5: Orchestration Core | 5 | 18 | Complete |
 | M6: TUI Basic | 7 | 25 | Complete |
-| M7: Execution Layer | 6 | 28 | In Progress (3/6 tickets) |
-| M8: GitHub Integration | 8 | 32 | Not Started |
+| M7: Execution Layer | 6 | 28 | Complete |
+| M8: GitHub Integration | 8 | 32 | Complete |
 | M9: Polish & Production | 12 | 42 | In Progress (3/12 tickets) |
 | M10: In-TUI File Editor | 7 | 31 | Not Started |
 | M11: Usage Analytics | 5 | 16 | Not Started |

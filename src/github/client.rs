@@ -593,6 +593,181 @@ impl GitHubClient {
 
         self.handle_response(response).await
     }
+
+    // =========================================================================
+    // PR Merge Operations
+    // =========================================================================
+
+    /// Merge a pull request
+    pub async fn merge_pr(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u32,
+        request: &crate::github::merge::MergePrRequest,
+    ) -> Result<crate::github::merge::MergePrResult, GitHubError> {
+        use crate::github::merge::{MergePrResponse, MergePrResult};
+
+        let url = format!(
+            "{}/repos/{}/{}/pulls/{}/merge",
+            self.base_url, owner, repo, number
+        );
+
+        tracing::debug!(
+            url = %url,
+            method = ?request.merge_method,
+            "Merging PR"
+        );
+
+        let response = self
+            .client
+            .put(&url)
+            .json(request)
+            .send()
+            .await
+            .map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
+
+        match response.status() {
+            reqwest::StatusCode::OK => {
+                let result: MergePrResponse = response
+                    .json()
+                    .await
+                    .map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
+
+                tracing::info!(
+                    pr = number,
+                    sha = %result.sha,
+                    method = ?request.merge_method,
+                    "PR merged successfully"
+                );
+
+                Ok(MergePrResult::Merged {
+                    sha: result.sha,
+                    message: result.message,
+                })
+            }
+            reqwest::StatusCode::METHOD_NOT_ALLOWED => {
+                let body = response.text().await.unwrap_or_default();
+                tracing::warn!(pr = number, "PR not mergeable: {}", body);
+
+                if body.contains("already merged") {
+                    Ok(MergePrResult::AlreadyMerged)
+                } else {
+                    Ok(MergePrResult::NotMergeable { reason: body })
+                }
+            }
+            reqwest::StatusCode::CONFLICT => {
+                let body = response.text().await.unwrap_or_default();
+                tracing::warn!(pr = number, "Merge conflict: {}", body);
+
+                if body.contains("Head branch was modified") {
+                    Ok(MergePrResult::HeadMismatch {
+                        expected: request.sha.clone().unwrap_or_default(),
+                        actual: "unknown".to_string(),
+                    })
+                } else {
+                    Ok(MergePrResult::HasConflicts)
+                }
+            }
+            status => {
+                let body = response.text().await.unwrap_or_default();
+                Ok(MergePrResult::Failed {
+                    status: status.as_u16(),
+                    message: body,
+                })
+            }
+        }
+    }
+
+    /// Merge PR with simple options
+    pub async fn merge_pr_simple(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u32,
+        method: crate::github::merge::MergeMethod,
+    ) -> Result<crate::github::merge::MergePrResult, GitHubError> {
+        use crate::github::merge::MergePrRequest;
+        self.merge_pr(owner, repo, number, &MergePrRequest::new(method))
+            .await
+    }
+
+    /// Get the current mergeable status of a PR
+    pub async fn get_mergeable_status(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u32,
+    ) -> Result<crate::github::merge::MergeableStatus, GitHubError> {
+        use crate::github::merge::MergeableStatus;
+
+        let pr = self.get_pull_request(owner, repo, number).await?;
+
+        // Check if already merged or closed
+        if pr.merged == Some(true) {
+            return Ok(MergeableStatus::Merged);
+        }
+
+        if pr.state == "closed" {
+            return Ok(MergeableStatus::Closed);
+        }
+
+        // Check mergeable status
+        match (pr.mergeable, pr.mergeable_state.as_deref()) {
+            (Some(true), _) => Ok(MergeableStatus::Mergeable),
+            (Some(false), Some("dirty")) => Ok(MergeableStatus::HasConflicts),
+            (Some(false), Some(state)) => Ok(MergeableStatus::Blocked {
+                reason: state.to_string(),
+            }),
+            (Some(false), None) => Ok(MergeableStatus::Blocked {
+                reason: "unknown".to_string(),
+            }),
+            (None, _) => Ok(MergeableStatus::Unknown),
+        }
+    }
+
+    /// Wait for PR to become mergeable (or definitely not)
+    pub async fn wait_for_mergeable(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u32,
+        timeout: std::time::Duration,
+        poll_interval: std::time::Duration,
+    ) -> Result<crate::github::merge::MergeableStatus, GitHubError> {
+        use crate::github::merge::MergeableStatus;
+
+        let start = std::time::Instant::now();
+
+        loop {
+            let status = self.get_mergeable_status(owner, repo, number).await?;
+
+            match status {
+                MergeableStatus::Unknown => {
+                    if start.elapsed() >= timeout {
+                        tracing::warn!(
+                            pr = number,
+                            elapsed = ?start.elapsed(),
+                            "Timeout waiting for mergeable status"
+                        );
+                        return Ok(MergeableStatus::Unknown);
+                    }
+
+                    tracing::debug!(
+                        pr = number,
+                        "Mergeable status unknown, retrying in {:?}",
+                        poll_interval
+                    );
+
+                    tokio::time::sleep(poll_interval).await;
+                }
+                _ => {
+                    tracing::debug!(pr = number, status = ?status, "Got mergeable status");
+                    return Ok(status);
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
