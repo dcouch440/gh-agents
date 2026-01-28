@@ -229,7 +229,6 @@ struct ModelConfig {
 
 enum LLMProvider {
     Anthropic,
-    OpenAI,
 }
 ```
 
@@ -418,9 +417,9 @@ struct AgentPoolConfig {
 │              tokio channels (mpsc)                               │
 ├─────────────────────────────────────────────────────────────────┤
 │                   LLM Provider Layer                             │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐                        │
-│  │Anthropic │ │  OpenAI  │ │  (more)  │   ← Thin HTTP wrappers │
-│  └──────────┘ └──────────┘ └──────────┘                        │
+│  ┌──────────┐ ┌──────────┐                                      │
+│  │Anthropic │ │  (more)  │              ← Thin HTTP wrappers   │
+│  └──────────┘ └──────────┘                                      │
 ├─────────────────────────────────────────────────────────────────┤
 │                    Execution Layer                               │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
@@ -458,7 +457,6 @@ struct AgentPoolConfig {
 | Task | Description |
 |------|-------------|
 | Implement Anthropic HTTP client | Messages API with streaming |
-| Implement OpenAI HTTP client | Chat completions with streaming |
 | Create provider abstraction trait | Unified interface for all providers |
 | Add streaming response support | Real-time token output |
 | Implement cost tracking | Token counting and cost calculation |
@@ -878,7 +876,7 @@ verbosity = "normal"  # quiet, normal, verbose
 # .nexor/config.toml
 
 [models]
-worker = { provider = "openai", model = "gpt-4o", max_tokens = 4096 }
+worker = { provider = "anthropic", model = "claude-sonnet-4-20250514", max_tokens = 4096 }
 
 [autonomy]
 level = "approval_gates"  # full_auto, approval_gates, supervised
@@ -908,7 +906,6 @@ You are working on a Rust TUI application. Prioritize:
 ```bash
 # API keys (never in config files)
 export ANTHROPIC_API_KEY="sk-ant-..."
-export OPENAI_API_KEY="sk-..."
 export GITHUB_TOKEN="ghp_..."
 ```
 
@@ -990,8 +987,7 @@ nexor/
 │   ├── llm/
 │   │   ├── mod.rs
 │   │   ├── provider.rs
-│   │   ├── anthropic.rs
-│   │   └── openai.rs
+│   │   └── anthropic.rs
 │   ├── agents/
 │   │   ├── mod.rs
 │   │   ├── runtime.rs
