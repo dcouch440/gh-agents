@@ -10,7 +10,7 @@ description = "AI Agent Orchestration for GitHub Workflows"
 tokio = { version = "1", features = ["full"] }
 
 # Web server
-axum = "0.7"
+axum = { version = "0.7", features = ["ws"] }
 tower = { version = "0.4", features = ["util"] }
 tower-http = { version = "0.5", features = ["cors", "fs", "trace", "compression-gzip"] }
 

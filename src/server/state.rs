@@ -11,6 +11,8 @@ use uuid::Uuid;
 use crate::orchestration::Scheduler;
 use crate::types::AppConfig;
 
+use super::ws::{AgentUpdate, FeedUpdate, TaskUpdate};
+
 /// Message sent to the orchestrator
 #[derive(Debug, Clone)]
 pub struct OrchestratorMessage {
@@ -45,12 +47,21 @@ pub struct AppState {
     orchestrator_rx: Arc<RwLock<mpsc::Receiver<OrchestratorMessage>>>,
     /// Map of message IDs to response broadcast senders
     response_streams: Arc<RwLock<HashMap<Uuid, broadcast::Sender<StreamChunk>>>>,
+    /// Broadcast channel for feed updates
+    pub feed_tx: broadcast::Sender<FeedUpdate>,
+    /// Broadcast channel for task updates
+    pub task_tx: broadcast::Sender<TaskUpdate>,
+    /// Broadcast channel for agent updates
+    pub agent_tx: broadcast::Sender<AgentUpdate>,
 }
 
 impl AppState {
     /// Create new application state
     pub fn new(db: SqlitePool, scheduler: Arc<RwLock<Scheduler>>, config: AppConfig) -> Self {
         let (orchestrator_tx, orchestrator_rx) = mpsc::channel(100);
+        let (feed_tx, _) = broadcast::channel(100);
+        let (task_tx, _) = broadcast::channel(100);
+        let (agent_tx, _) = broadcast::channel(100);
 
         Self {
             db,
@@ -59,7 +70,40 @@ impl AppState {
             orchestrator_tx,
             orchestrator_rx: Arc::new(RwLock::new(orchestrator_rx)),
             response_streams: Arc::new(RwLock::new(HashMap::new())),
+            feed_tx,
+            task_tx,
+            agent_tx,
         }
+    }
+
+    /// Subscribe to feed updates
+    pub fn subscribe_feed(&self) -> broadcast::Receiver<FeedUpdate> {
+        self.feed_tx.subscribe()
+    }
+
+    /// Subscribe to task updates
+    pub fn subscribe_tasks(&self) -> broadcast::Receiver<TaskUpdate> {
+        self.task_tx.subscribe()
+    }
+
+    /// Subscribe to agent updates
+    pub fn subscribe_agents(&self) -> broadcast::Receiver<AgentUpdate> {
+        self.agent_tx.subscribe()
+    }
+
+    /// Broadcast a feed update to all subscribers
+    pub fn broadcast_feed(&self, update: FeedUpdate) {
+        let _ = self.feed_tx.send(update);
+    }
+
+    /// Broadcast a task update to all subscribers
+    pub fn broadcast_task(&self, update: TaskUpdate) {
+        let _ = self.task_tx.send(update);
+    }
+
+    /// Broadcast an agent update to all subscribers
+    pub fn broadcast_agent(&self, update: AgentUpdate) {
+        let _ = self.agent_tx.send(update);
     }
 
     /// Get a receiver for streaming responses for a specific message
