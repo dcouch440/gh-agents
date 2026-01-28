@@ -495,6 +495,446 @@ Returns default config instead of panicking when
 
 ---
 
+---
+
+## React & TypeScript
+
+### Component Structure
+
+**Production Pattern:** Reusable, type-safe, composable components.
+
+```tsx
+// components/Button/Button.tsx
+import { ButtonHTMLAttributes, forwardRef } from 'react';
+import styles from './Button.module.css';
+
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: 'primary' | 'secondary' | 'danger';
+  size?: 'sm' | 'md' | 'lg';
+  isLoading?: boolean;
+}
+
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ variant = 'primary', size = 'md', isLoading, children, ...props }, ref) => {
+    return (
+      <button
+        ref={ref}
+        className={`${styles.button} ${styles[variant]} ${styles[size]}`}
+        disabled={isLoading || props.disabled}
+        {...props}
+      >
+        {isLoading ? <Spinner size={size} /> : children}
+      </button>
+    );
+  }
+);
+
+Button.displayName = 'Button';
+```
+
+### File Organization
+
+```
+src/
+├── components/
+│   ├── Button/
+│   │   ├── Button.tsx
+│   │   ├── Button.module.css
+│   │   ├── Button.test.tsx
+│   │   └── index.ts          # export { Button } from './Button'
+│   ├── Card/
+│   │   ├── Card.tsx
+│   │   ├── CardHeader.tsx
+│   │   ├── CardBody.tsx
+│   │   ├── Card.module.css
+│   │   └── index.ts
+│   └── index.ts              # Barrel exports
+├── hooks/
+│   ├── useAsync.ts
+│   ├── useDebounce.ts
+│   └── index.ts
+├── types/
+│   ├── api.ts
+│   ├── models.ts
+│   └── index.ts
+└── utils/
+    ├── cn.ts                 # className utilities
+    └── format.ts
+```
+
+### Component Composition Pattern
+
+```tsx
+// components/Card/Card.tsx
+interface CardProps {
+  children: React.ReactNode;
+  className?: string;
+}
+
+export function Card({ children, className }: CardProps) {
+  return <div className={cn(styles.card, className)}>{children}</div>;
+}
+
+// Subcomponents
+interface CardHeaderProps {
+  title: string;
+  action?: React.ReactNode;
+}
+
+export function CardHeader({ title, action }: CardHeaderProps) {
+  return (
+    <div className={styles.header}>
+      <h3>{title}</h3>
+      {action}
+    </div>
+  );
+}
+
+export function CardBody({ children }: { children: React.ReactNode }) {
+  return <div className={styles.body}>{children}</div>;
+}
+
+// Usage
+<Card>
+  <CardHeader title="Task Details" action={<Button>Edit</Button>} />
+  <CardBody>
+    <p>Content here</p>
+  </CardBody>
+</Card>
+```
+
+### Custom Hooks Pattern
+
+```tsx
+// hooks/useAsync.ts
+interface UseAsyncState<T> {
+  data: T | null;
+  error: Error | null;
+  isLoading: boolean;
+}
+
+export function useAsync<T>(
+  asyncFn: () => Promise<T>,
+  deps: React.DependencyList = []
+): UseAsyncState<T> {
+  const [state, setState] = React.useState<UseAsyncState<T>>({
+    data: null,
+    error: null,
+    isLoading: true,
+  });
+
+  React.useEffect(() => {
+    let mounted = true;
+
+    setState({ data: null, error: null, isLoading: true });
+
+    asyncFn()
+      .then((data) => {
+        if (mounted) {
+          setState({ data, error: null, isLoading: false });
+        }
+      })
+      .catch((error) => {
+        if (mounted) {
+          setState({ data: null, error, isLoading: false });
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, deps);
+
+  return state;
+}
+```
+
+### Props Patterns
+
+```tsx
+// Discriminated unions for variant props
+type ButtonProps =
+  | {
+      variant: 'link';
+      href: string;
+      onClick?: never;
+    }
+  | {
+      variant: 'button';
+      href?: never;
+      onClick: () => void;
+    };
+
+// Render props for flexibility
+interface DataTableProps<T> {
+  data: T[];
+  renderRow: (item: T, index: number) => React.ReactNode;
+  emptyState?: React.ReactNode;
+}
+
+// Children as render function
+interface CollapsibleProps {
+  children: (isOpen: boolean, toggle: () => void) => React.ReactNode;
+}
+```
+
+### Type Safety
+
+```tsx
+// types/api.ts
+export interface Task {
+  id: string;
+  title: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  createdAt: string;
+}
+
+export interface APIResponse<T> {
+  data: T;
+  error?: string;
+}
+
+// Type guards
+export function isTask(value: unknown): value is Task {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'id' in value &&
+    'title' in value &&
+    'status' in value
+  );
+}
+```
+
+### Naming Conventions
+
+```tsx
+// Components: PascalCase
+export function TaskList() {}
+export const Button = () => {};
+
+// Hooks: camelCase with 'use' prefix
+export function useAuth() {}
+export function useLocalStorage() {}
+
+// Utilities: camelCase
+export function formatDate() {}
+export function cn(...classes) {}
+
+// Types/Interfaces: PascalCase
+interface UserProfile {}
+type TaskStatus = 'pending' | 'in_progress';
+
+// Props: ComponentNameProps
+interface ButtonProps {}
+interface TaskListProps {}
+```
+
+### Avoid: Quick Prototypes
+
+```tsx
+// ❌ BAD: Not reusable, tightly coupled
+function TaskCard({ task }) {
+  const [isEditing, setEditing] = useState(false);
+
+  return (
+    <div style={{ padding: '20px', border: '1px solid gray' }}>
+      <h3>{task.title}</h3>
+      {isEditing && <input value={task.title} />}
+      <button onClick={() => setEditing(!isEditing)}>Edit</button>
+    </div>
+  );
+}
+
+// ✅ GOOD: Reusable, composable, type-safe
+interface TaskCardProps {
+  task: Task;
+  onEdit?: (task: Task) => void;
+  className?: string;
+}
+
+export function TaskCard({ task, onEdit, className }: TaskCardProps) {
+  return (
+    <Card className={className}>
+      <CardHeader
+        title={task.title}
+        action={onEdit && <Button onClick={() => onEdit(task)}>Edit</Button>}
+      />
+      <CardBody>
+        <TaskStatus status={task.status} />
+      </CardBody>
+    </Card>
+  );
+}
+```
+
+### State Management
+
+```tsx
+// Local state: useState
+const [count, setCount] = useState(0);
+
+// Context for shared state
+interface AppContextValue {
+  user: User | null;
+  setUser: (user: User | null) => void;
+}
+
+const AppContext = createContext<AppContextValue | null>(null);
+
+export function useAppContext() {
+  const context = useContext(AppContext);
+  if (!context) {
+    throw new Error('useAppContext must be used within AppProvider');
+  }
+  return context;
+}
+```
+
+### useEffect Cleanup
+
+**Always clean up side effects.** Prevent memory leaks, race conditions, and stale updates.
+
+```tsx
+// ✅ GOOD: Clean up subscriptions
+useEffect(() => {
+  const subscription = apiClient.subscribe((data) => {
+    setData(data);
+  });
+
+  return () => {
+    subscription.unsubscribe();
+  };
+}, []);
+
+// ✅ GOOD: Clean up timers
+useEffect(() => {
+  const timer = setTimeout(() => {
+    setShowMessage(true);
+  }, 3000);
+
+  return () => {
+    clearTimeout(timer);
+  };
+}, []);
+
+// ✅ GOOD: Clean up intervals
+useEffect(() => {
+  const interval = setInterval(() => {
+    fetchLatestData();
+  }, 5000);
+
+  return () => {
+    clearInterval(interval);
+  };
+}, []);
+
+// ✅ GOOD: Prevent stale state updates after unmount
+useEffect(() => {
+  let mounted = true;
+
+  fetchData().then((data) => {
+    if (mounted) {
+      setData(data);
+    }
+  });
+
+  return () => {
+    mounted = false;
+  };
+}, []);
+
+// ✅ GOOD: Clean up event listeners
+useEffect(() => {
+  const handleResize = () => {
+    setWindowWidth(window.innerWidth);
+  };
+
+  window.addEventListener('resize', handleResize);
+
+  return () => {
+    window.removeEventListener('resize', handleResize);
+  };
+}, []);
+
+// ✅ GOOD: Clean up WebSocket connections
+useEffect(() => {
+  const ws = new WebSocket('ws://localhost:8080');
+
+  ws.onmessage = (event) => {
+    setMessages((prev) => [...prev, event.data]);
+  };
+
+  return () => {
+    ws.close();
+  };
+}, []);
+
+// ✅ GOOD: Abort fetch requests on unmount
+useEffect(() => {
+  const abortController = new AbortController();
+
+  fetch('/api/data', { signal: abortController.signal })
+    .then((res) => res.json())
+    .then((data) => setData(data))
+    .catch((err) => {
+      if (err.name !== 'AbortError') {
+        console.error(err);
+      }
+    });
+
+  return () => {
+    abortController.abort();
+  };
+}, []);
+
+// ❌ BAD: No cleanup
+useEffect(() => {
+  const subscription = apiClient.subscribe((data) => {
+    setData(data); // Memory leak if component unmounts
+  });
+  // Missing cleanup!
+}, []);
+
+// ❌ BAD: No cleanup for timer
+useEffect(() => {
+  setTimeout(() => {
+    setShowMessage(true); // Error if component unmounts
+  }, 3000);
+  // Missing cleanup!
+}, []);
+```
+
+### Testing
+
+```tsx
+// Button.test.tsx
+import { render, screen, fireEvent } from '@testing-library/react';
+import { Button } from './Button';
+
+describe('Button', () => {
+  it('renders children', () => {
+    render(<Button>Click me</Button>);
+    expect(screen.getByText('Click me')).toBeInTheDocument();
+  });
+
+  it('calls onClick when clicked', () => {
+    const handleClick = vi.fn();
+    render(<Button onClick={handleClick}>Click</Button>);
+
+    fireEvent.click(screen.getByText('Click'));
+    expect(handleClick).toHaveBeenCalledOnce();
+  });
+
+  it('shows loading state', () => {
+    render(<Button isLoading>Submit</Button>);
+    expect(screen.getByRole('button')).toBeDisabled();
+  });
+});
+```
+
+---
+
 ## Quick Reference
 
 | Thing | Convention |
@@ -509,3 +949,6 @@ Returns default config instead of panicking when
 | Tests | Same file for unit, `tests/` for integration |
 | Comments | WHY not WHAT, doc comments for public API |
 | Commits | `type(scope): description` |
+| React components | `PascalCase`, type-safe props |
+| React hooks | `useCamelCase` |
+| Component files | `ComponentName/ComponentName.tsx` |
