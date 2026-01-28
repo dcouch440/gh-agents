@@ -1,1 +1,5 @@
-//! Agent runtime and lifecycle management
+//! Agent runtime and management
+
+mod agent;
+
+pub use agent::{Agent, AgentError, AgentId};
