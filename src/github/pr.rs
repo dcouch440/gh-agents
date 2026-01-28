@@ -63,7 +63,12 @@ impl PrBodyGenerator {
         self
     }
 
-    pub fn with_issue(mut self, owner: impl Into<String>, repo: impl Into<String>, number: u32) -> Self {
+    pub fn with_issue(
+        mut self,
+        owner: impl Into<String>,
+        repo: impl Into<String>,
+        number: u32,
+    ) -> Self {
         self.issue_ref = Some((owner.into(), repo.into(), number));
         self
     }
@@ -198,7 +203,10 @@ impl PrService {
             "Creating pull request"
         );
 
-        let pr: GitHubPullRequest = self.client.create_pull_request(&owner, &repo, &request).await?;
+        let pr: GitHubPullRequest = self
+            .client
+            .create_pull_request(&owner, &repo, &request)
+            .await?;
 
         tracing::info!(
             pr_number = pr.number,
@@ -231,7 +239,10 @@ impl PrService {
             draft: None,
         };
 
-        let pr = self.client.create_pull_request(owner, repo, &request).await?;
+        let pr = self
+            .client
+            .create_pull_request(owner, repo, &request)
+            .await?;
 
         Ok(PrResult {
             number: pr.number,

@@ -100,14 +100,16 @@ impl TaskTimeline {
 
     /// Find the decision associated with an LLM call
     pub fn decision_for_call(&self, call_id: Uuid) -> Option<&Decision> {
-        self.decisions.iter().find(|d| d.llm_call_id == Some(call_id))
+        self.decisions
+            .iter()
+            .find(|d| d.llm_call_id == Some(call_id))
     }
 
     /// Find the LLM call associated with a decision
     pub fn call_for_decision(&self, decision: &Decision) -> Option<&LlmCall> {
-        decision.llm_call_id.and_then(|id| {
-            self.calls.iter().find(|c| c.id == id)
-        })
+        decision
+            .llm_call_id
+            .and_then(|id| self.calls.iter().find(|c| c.id == id))
     }
 }
 
@@ -124,12 +126,7 @@ mod tests {
     }
 
     fn mock_decision(task_id: Uuid) -> Decision {
-        Decision::new(
-            task_id,
-            DecisionType::Decomposition,
-            "reasoning",
-            "outcome",
-        )
+        Decision::new(task_id, DecisionType::Decomposition, "reasoning", "outcome")
     }
 
     #[test]
@@ -154,10 +151,7 @@ mod tests {
     fn task_timeline_with_calls() {
         let timeline = TaskTimeline {
             task_id: Uuid::new_v4(),
-            calls: vec![
-                mock_call(0.01, 100, 500),
-                mock_call(0.02, 200, 1000),
-            ],
+            calls: vec![mock_call(0.01, 100, 500), mock_call(0.02, 200, 1000)],
             decisions: vec![],
             total_cost: 0.03,
             total_tokens: 300,

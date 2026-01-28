@@ -193,10 +193,7 @@ impl ReplayView {
             "Call {} of {} | {} | {} in / {} out tokens | ${:.4}",
             self.selected_index + 1,
             self.calls.len(),
-            call.model
-                .split('/')
-                .last()
-                .unwrap_or(&call.model),
+            call.model.split('/').last().unwrap_or(&call.model),
             call.input_tokens,
             call.output_tokens,
             call.cost_usd
@@ -210,7 +207,12 @@ impl ReplayView {
         y += 1;
 
         let latency_info = format!("Latency: {}ms", call.latency_ms);
-        buf.set_string(area.x, y, &latency_info, Style::default().fg(Color::DarkGray));
+        buf.set_string(
+            area.x,
+            y,
+            &latency_info,
+            Style::default().fg(Color::DarkGray),
+        );
         y += 2;
 
         // System prompt section
@@ -218,7 +220,9 @@ impl ReplayView {
             area.x,
             y,
             "SYSTEM PROMPT:",
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
         );
         y += 1;
 
@@ -234,7 +238,10 @@ impl ReplayView {
         };
 
         let max_width = (area.width as usize).saturating_sub(2);
-        for line in system_preview.lines().take(if self.show_full_prompt { 20 } else { 4 }) {
+        for line in system_preview
+            .lines()
+            .take(if self.show_full_prompt { 20 } else { 4 })
+        {
             if y >= area.bottom() - 10 {
                 break;
             }
@@ -250,7 +257,9 @@ impl ReplayView {
                 area.x,
                 y,
                 "MESSAGES:",
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
             );
             y += 1;
 
@@ -285,7 +294,9 @@ impl ReplayView {
 
         let response_lines: Vec<&str> = call.response.lines().collect();
         let visible_lines = (area.bottom() - y) as usize;
-        let start = self.scroll_offset.min(response_lines.len().saturating_sub(visible_lines));
+        let start = self
+            .scroll_offset
+            .min(response_lines.len().saturating_sub(visible_lines));
 
         for line in response_lines.iter().skip(start).take(visible_lines) {
             if y >= area.bottom() {
@@ -319,10 +330,14 @@ mod tests {
     use crate::observability::LlmPrompt;
 
     fn mock_call(model: &str, cost: f64, tokens: u32) -> LlmCall {
-        LlmCall::new(model, LlmPrompt::new("System prompt here"), "Response text here")
-            .with_cost(cost)
-            .with_tokens(tokens / 2, tokens / 2)
-            .with_latency(500)
+        LlmCall::new(
+            model,
+            LlmPrompt::new("System prompt here"),
+            "Response text here",
+        )
+        .with_cost(cost)
+        .with_tokens(tokens / 2, tokens / 2)
+        .with_latency(500)
     }
 
     #[test]

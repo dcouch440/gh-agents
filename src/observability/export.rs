@@ -202,13 +202,7 @@ mod tests {
     }
 
     fn mock_decision(decision_type: DecisionType, cost: f64) -> Decision {
-        Decision::new(
-            Uuid::new_v4(),
-            decision_type,
-            "reasoning",
-            "outcome",
-        )
-        .with_cost(cost)
+        Decision::new(Uuid::new_v4(), decision_type, "reasoning", "outcome").with_cost(cost)
     }
 
     #[test]
@@ -248,7 +242,10 @@ mod tests {
         assert_eq!(summary.total_llm_calls, 3);
         assert_eq!(summary.total_tokens, 350);
         assert!((summary.total_cost_usd - 0.035).abs() < f64::EPSILON);
-        assert_eq!(summary.calls_by_model.get("claude-sonnet-4-20250514"), Some(&2));
+        assert_eq!(
+            summary.calls_by_model.get("claude-sonnet-4-20250514"),
+            Some(&2)
+        );
         assert_eq!(summary.calls_by_model.get("claude-haiku"), Some(&1));
     }
 
@@ -282,8 +279,7 @@ mod tests {
                 < f64::EPSILON
         );
         assert!(
-            (summary.cost_by_decision_type.get("TierRouting").unwrap() - 0.02).abs()
-                < f64::EPSILON
+            (summary.cost_by_decision_type.get("TierRouting").unwrap() - 0.02).abs() < f64::EPSILON
         );
     }
 

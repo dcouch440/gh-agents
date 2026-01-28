@@ -230,7 +230,9 @@ impl TestRunner {
 
     /// Run tests using detected or configured framework
     pub async fn run_tests(&mut self) -> Result<TestResult, TestError> {
-        let framework = self.detect_framework().ok_or(TestError::NoFrameworkDetected)?;
+        let framework = self
+            .detect_framework()
+            .ok_or(TestError::NoFrameworkDetected)?;
 
         self.run_with_command(&framework.default_command()).await
     }
@@ -323,7 +325,9 @@ impl TestRunner {
         &mut self,
         output_tx: mpsc::Sender<TestOutputEvent>,
     ) -> Result<TestResult, TestError> {
-        let framework = self.detect_framework().ok_or(TestError::NoFrameworkDetected)?;
+        let framework = self
+            .detect_framework()
+            .ok_or(TestError::NoFrameworkDetected)?;
 
         let command = framework.default_command();
 
@@ -348,12 +352,14 @@ impl TestRunner {
             .stderr(Stdio::piped())
             .spawn()?;
 
-        let stdout = child.stdout.take().ok_or_else(|| {
-            TestError::CommandFailed("Failed to capture stdout".to_string())
-        })?;
-        let stderr = child.stderr.take().ok_or_else(|| {
-            TestError::CommandFailed("Failed to capture stderr".to_string())
-        })?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| TestError::CommandFailed("Failed to capture stdout".to_string()))?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| TestError::CommandFailed("Failed to capture stderr".to_string()))?;
 
         // Spawn tasks to read stdout and stderr
         let output_tx_clone = output_tx.clone();
@@ -399,7 +405,8 @@ impl TestRunner {
         let exit_code = status.code().unwrap_or(-1);
         let success = status.success();
 
-        let (passed, failed, skipped) = self.parse_results(framework, &stdout_output, &stderr_output);
+        let (passed, failed, skipped) =
+            self.parse_results(framework, &stdout_output, &stderr_output);
 
         let result = TestResult {
             framework,
@@ -422,7 +429,10 @@ impl TestRunner {
     }
 
     /// Run tests with a timeout
-    pub async fn run_tests_with_timeout(&mut self, timeout_secs: u64) -> Result<TestResult, TestError> {
+    pub async fn run_tests_with_timeout(
+        &mut self,
+        timeout_secs: u64,
+    ) -> Result<TestResult, TestError> {
         let result = tokio::time::timeout(
             std::time::Duration::from_secs(timeout_secs),
             self.run_tests(),
@@ -675,8 +685,7 @@ mod tests {
     fn parse_cargo_output() {
         let ctx = ExecutionContext::new("/tmp".into());
         let runner = TestRunner::new(ctx);
-        let stdout =
-            "running 5 tests\ntest result: ok. 4 passed; 1 failed; 0 ignored; 0 measured";
+        let stdout = "running 5 tests\ntest result: ok. 4 passed; 1 failed; 0 ignored; 0 measured";
 
         let (passed, failed, ignored) = runner.parse_cargo_output(stdout, "");
         assert_eq!(passed, Some(4));

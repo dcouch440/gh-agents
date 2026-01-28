@@ -35,7 +35,11 @@ impl MenuItem {
     }
 
     /// Create a submenu item
-    pub fn submenu(id: impl Into<String>, label: impl Into<String>, submenu_id: impl Into<String>) -> Self {
+    pub fn submenu(
+        id: impl Into<String>,
+        label: impl Into<String>,
+        submenu_id: impl Into<String>,
+    ) -> Self {
         Self::new(id, label, MenuItemType::Submenu(submenu_id.into()))
     }
 
@@ -297,7 +301,10 @@ mod tests {
         let item = MenuItem::action("start", "Start Production", MenuAction::StartProduction);
         assert_eq!(item.id, "start");
         assert_eq!(item.label, "Start Production");
-        assert!(matches!(item.item_type, MenuItemType::Action(MenuAction::StartProduction)));
+        assert!(matches!(
+            item.item_type,
+            MenuItemType::Action(MenuAction::StartProduction)
+        ));
         assert!(item.enabled);
     }
 
@@ -322,15 +329,13 @@ mod tests {
 
     #[test]
     fn menu_item_shortcut() {
-        let item = MenuItem::action("quit", "Quit", MenuAction::Quit)
-            .with_shortcut('q');
+        let item = MenuItem::action("quit", "Quit", MenuAction::Quit).with_shortcut('q');
         assert_eq!(item.shortcut, Some('q'));
     }
 
     #[test]
     fn menu_item_enabled() {
-        let item = MenuItem::action("test", "Test", MenuAction::Quit)
-            .with_enabled(false);
+        let item = MenuItem::action("test", "Test", MenuAction::Quit).with_enabled(false);
         assert!(!item.enabled);
         assert!(!item.is_selectable());
     }

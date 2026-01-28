@@ -178,10 +178,7 @@ impl GitHubAuth {
                     "slow_down" => {
                         // We're polling too fast, increase interval
                         interval += Duration::from_secs(5);
-                        tracing::debug!(
-                            interval_secs = interval.as_secs(),
-                            "Slowing down polling"
-                        );
+                        tracing::debug!(interval_secs = interval.as_secs(), "Slowing down polling");
                         continue;
                     }
                     "expired_token" => {

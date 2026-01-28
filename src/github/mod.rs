@@ -18,8 +18,8 @@ pub use merge::{
     RepoMergeSettings,
 };
 pub use merge_queue::{
-    ConflictInfoJson, MergeQueue, MergeQueueProcessor, NotificationOptions, ProcessResult,
-    PrQueueEntry, QueueError, QueueStats, QueueStatus,
+    ConflictInfoJson, MergeQueue, MergeQueueProcessor, NotificationOptions, PrQueueEntry,
+    ProcessResult, QueueError, QueueStats, QueueStatus,
 };
 pub use pr::{PrBodyGenerator, PrError, PrResult, PrService};
 pub use types::{

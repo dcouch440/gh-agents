@@ -17,9 +17,7 @@ pub struct AgentsView {
 
 impl Default for AgentsView {
     fn default() -> Self {
-        Self {
-            agents: Vec::new(),
-        }
+        Self { agents: Vec::new() }
     }
 }
 

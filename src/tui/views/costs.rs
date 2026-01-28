@@ -53,7 +53,10 @@ impl Widget for CostsView {
         let mut y = area.y + 1;
 
         // Session total (prominent)
-        let total_str = format!("Session Total: {}", Self::format_cost(self.summary.session_total));
+        let total_str = format!(
+            "Session Total: {}",
+            Self::format_cost(self.summary.session_total)
+        );
         buf.set_string(
             area.x,
             y,
@@ -100,12 +103,7 @@ impl Widget for CostsView {
                     break;
                 }
                 let bar = Self::render_bar(*cost, tier_max, 15);
-                let line = format!(
-                    "  {:12} [{}] {}",
-                    tier,
-                    bar,
-                    Self::format_cost(*cost)
-                );
+                let line = format!("  {:12} [{}] {}", tier, bar, Self::format_cost(*cost));
                 buf.set_string(area.x, y, &line, Style::default());
                 y += 1;
             }
