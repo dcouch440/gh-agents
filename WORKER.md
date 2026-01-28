@@ -4,6 +4,37 @@
 
 ---
 
+## Quick Start (READ THIS FIRST)
+
+When given a command like **"Work on 5.1"** or **"Go work on ticket 2.3"**:
+
+1. **Parse the ticket number** - The format is `M.T` where M=milestone, T=ticket
+   - `5.1` → Milestone 5, Ticket 1 → File: `decomp/M5/5.1.md`
+   - `2.3` → Milestone 2, Ticket 3 → File: `decomp/M2/2.3.md`
+
+2. **Immediately read these files**:
+   ```
+   decomp/M{M}/{M.T}.md   ← Your ticket spec (e.g., decomp/M5/5.1.md)
+   PROGRESS.md            ← Check dependencies and current status
+   CONVENTIONS.md         ← Code style (read once, reference as needed)
+   ```
+
+3. **Execute the work**:
+   - Implement each slice in order
+   - **Write tests for every slice** (mandatory)
+   - Run `cargo check` and `cargo test` after each slice
+   - Do not proceed until tests pass
+   - Update `PROGRESS.md` when complete
+
+**Example**: "Work on 5.1" means:
+```
+Read: decomp/M5/5.1.md
+Read: PROGRESS.md
+Then: Implement slice by slice, write tests, verify, update progress
+```
+
+---
+
 ## Your Task
 
 You've been given a **Ticket** to implement. Your job:
@@ -52,14 +83,34 @@ For each slice in your decomp file:
 
 **Do not skip ahead.** Each slice builds on the previous.
 
-### 4. Verify Your Work
+### 4. Write Tests
+
+**Tests are mandatory.** Every slice that adds functionality must include tests.
+
+```
+For each slice:
+1. Implement the feature/struct/function
+2. Write tests that verify it works
+3. Run `cargo test` - all tests must pass
+4. Only then move to next slice
+```
+
+**Test requirements:**
+- Unit tests live in `#[cfg(test)]` modules alongside code
+- Test both success cases AND error cases
+- Test edge cases (empty inputs, invalid data, boundaries)
+- If the decomp shows test code, implement ALL of it
+
+**Do not skip tests.** Code without tests is incomplete work.
+
+### 5. Verify Your Work
 
 Each slice has a "Verify" section. Run those checks:
 - `cargo check` passes
-- `cargo test` passes (if tests exist)
+- `cargo test` passes ← **Required, not optional**
 - Specific verification steps from the decomp file
 
-### 5. Update Documentation
+### 6. Update Documentation
 
 When ticket is complete:
 
@@ -175,6 +226,7 @@ Task: Implement Ticket 1.2
 
 - **You implement** - The orchestrator already planned
 - **Trust the decomp** - It has what you need
+- **Write tests** - Code without tests is incomplete
 - **Verify each slice** - Don't accumulate unknowns
 - **Stay focused** - One ticket, done well
 - **Update docs** - Others depend on knowing the status
