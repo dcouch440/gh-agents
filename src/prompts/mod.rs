@@ -8,11 +8,13 @@
 //! - `templates` - Agent-specific prompt templates
 //! - `schemas` - JSON schemas for structured LLM outputs
 //! - `tools` - Tool definitions and selection
+//! - `examples` - Few-shot examples library
 
 mod builder;
 mod context;
 mod version;
 
+pub mod examples;
 pub mod schemas;
 pub mod templates;
 pub mod tools;

@@ -1,56 +1,18 @@
-# Ticket 4.4: Utility Thinking Patterns
-
-> Design the "efficient helper brain" that quickly categorizes tasks, applies templates, and escalates when appropriate.
-
-## Goal
-
-Create prompt templates that guide utility agents to handle quick, well-defined tasks efficiently with minimal overhead.
-
-**Checkpoint**: Utility prompts correctly categorize tasks, apply appropriate templates, and escalate complex tasks rather than attempting them.
-
----
-
-## Context
-
-Utilities are the cheapest agent tier, using smaller/faster models. They handle well-defined, repeatable tasks like formatting, linting, and boilerplate generation. They must recognize when a task is beyond their scope.
-
-**Key files**:
-- `src/prompts/templates/utility.rs` - Utility-specific prompts
-- `src/prompts/templates/mod.rs` - Module exports
-- `src/prompts/builder.rs` - PromptBuilder from 4.1
-
-**Dependencies**:
-- Requires ticket 4.1 (PromptBuilder, PromptVersion)
-- Can use 4.2, 4.3 as template references
-
-**References**:
-- See `ROADMAP.md` section "Ticket 4.4" for Utility Thinking Template
-- See `PRD.md` section "Agent Personas" for utility persona ("Helper")
-
----
-
-## Slices
-
-### Slice 4.4.1: Task Recognition Prompt
-
-**Do this**:
-- Create `src/prompts/templates/utility.rs`
-- Implement task categorization prompt that quickly identifies task type
-- Support categories: FORMAT, LINT, BOILERPLATE, DOCS, RENAME
-- Include escalation triggers for complex tasks
-
-**Create/modify**:
-- `src/prompts/templates/utility.rs`
-- `src/prompts/templates/mod.rs` (add export)
-
-**Code to implement**:
-```rust
-// src/prompts/templates/utility.rs
+//! Utility prompt templates for quick, well-defined tasks.
+//!
+//! Utilities are the cheapest agent tier, using smaller/faster models.
+//! They handle well-defined, repeatable tasks like formatting, linting,
+//! and boilerplate generation. They must recognize when a task is beyond
+//! their scope and escalate immediately.
 
 use crate::prompts::{PromptBuilder, PromptVersion};
 
 /// Utility prompt templates for quick, well-defined tasks.
 pub struct UtilityPrompts;
+
+// =============================================================================
+// Slice 4.4.1: Task Recognition Prompt
+// =============================================================================
 
 impl UtilityPrompts {
     /// Current version for task recognition prompts
@@ -66,10 +28,7 @@ impl UtilityPrompts {
         PromptBuilder::new()
             .version(Self::recognition_version())
             .role(UTILITY_ROLE)
-            .task(format!(
-                "Categorize this task:\n\n{}",
-                task_description
-            ))
+            .task(format!("Categorize this task:\n\n{}", task_description))
             .constraint(RECOGNITION_THINKING)
             .constraint("If unsure about the category, escalate immediately")
             .constraint("Never attempt tasks that require understanding business logic")
@@ -120,42 +79,10 @@ const RECOGNITION_SCHEMA: &str = r#"{
   "escalation_reason": "string | null - If escalating, why",
   "can_proceed": "boolean"
 }"#;
-```
 
-**Update mod.rs**:
-```rust
-// src/prompts/templates/mod.rs
-
-mod orchestrator;
-mod worker;
-mod utility;
-
-pub use orchestrator::*;
-pub use worker::*;
-pub use utility::*;
-```
-
-**Verify**:
-- [ ] `cargo check` passes
-- [ ] All task categories defined
-- [ ] Escalation triggers are clear
-- [ ] Output is concise
-
----
-
-### Slice 4.4.2: Templated Execution Prompt
-
-**Do this**:
-- Add execution prompts for each task category
-- Apply known patterns rapidly
-- Produce consistent, predictable output
-
-**Create/modify**:
-- `src/prompts/templates/utility.rs`
-
-**Code to implement**:
-```rust
-// Add to src/prompts/templates/utility.rs
+// =============================================================================
+// Slice 4.4.2: Templated Execution Prompts
+// =============================================================================
 
 impl UtilityPrompts {
     /// Current version for execution prompts
@@ -191,11 +118,7 @@ impl UtilityPrompts {
     }
 
     /// Build a prompt for fixing lint issues.
-    pub fn lint_execution(
-        file_path: &str,
-        file_content: &str,
-        lint_errors: &str,
-    ) -> PromptBuilder {
+    pub fn lint_execution(file_path: &str, file_content: &str, lint_errors: &str) -> PromptBuilder {
         PromptBuilder::new()
             .version(Self::execution_version())
             .role(UTILITY_ROLE)
@@ -235,11 +158,7 @@ impl UtilityPrompts {
     }
 
     /// Build a prompt for updating documentation.
-    pub fn docs_execution(
-        file_path: &str,
-        file_content: &str,
-        doc_request: &str,
-    ) -> PromptBuilder {
+    pub fn docs_execution(file_path: &str, file_content: &str, doc_request: &str) -> PromptBuilder {
         PromptBuilder::new()
             .version(Self::execution_version())
             .role(UTILITY_ROLE)
@@ -270,7 +189,7 @@ impl UtilityPrompts {
                 "Rename identifier in this file.\n\n\
                  **File**: {}\n\n\
                  **Content**:\n```\n{}\n```\n\n\
-                 **Rename**: `{}` → `{}`",
+                 **Rename**: `{}` -> `{}`",
                 file_path, file_content, old_name, new_name
             ))
             .constraint("Rename all occurrences of the identifier")
@@ -324,29 +243,10 @@ const RENAME_SCHEMA: &str = r#"{
   "status": "success | error",
   "error": "string | null"
 }"#;
-```
 
-**Verify**:
-- [ ] `cargo check` passes
-- [ ] Each task category has dedicated execution prompt
-- [ ] Output schemas are task-specific
-- [ ] Escalation paths exist for complex cases
-
----
-
-### Slice 4.4.3: Minimal Reporting Prompt
-
-**Do this**:
-- Add prompt for generating concise completion/error reports
-- Reports should be terse and actionable
-- Format: "Done. Formatted 3 files" or "Error: [file]: [error]"
-
-**Create/modify**:
-- `src/prompts/templates/utility.rs`
-
-**Code to implement**:
-```rust
-// Add to src/prompts/templates/utility.rs
+// =============================================================================
+// Slice 4.4.3: Minimal Reporting Prompt
+// =============================================================================
 
 impl UtilityPrompts {
     /// Current version for reporting prompts
@@ -358,7 +258,9 @@ impl UtilityPrompts {
     ///
     /// # Arguments
     /// * `task_category` - What type of task was performed
-    /// * `result` - The execution result to report on
+    /// * `files_affected` - List of files that were affected
+    /// * `success` - Whether the task succeeded
+    /// * `error_message` - Error message if task failed
     pub fn completion_report(
         task_category: &str,
         files_affected: &[&str],
@@ -413,29 +315,10 @@ const REPORT_SCHEMA: &str = r#"{
     "error_line": "number | null"
   }
 }"#;
-```
 
-**Verify**:
-- [ ] `cargo check` passes
-- [ ] Reports are one line
-- [ ] Error reports include file and line when available
-- [ ] Counts are included
-
----
-
-### Slice 4.4.4: Escalation Trigger Prompt
-
-**Do this**:
-- Add prompt for recognizing when a task is too complex
-- Quick decision: handle or escalate
-- Never attempt tasks beyond capability
-
-**Create/modify**:
-- `src/prompts/templates/utility.rs`
-
-**Code to implement**:
-```rust
-// Add to src/prompts/templates/utility.rs
+// =============================================================================
+// Slice 4.4.4: Escalation Trigger Prompt
+// =============================================================================
 
 impl UtilityPrompts {
     /// Current version for escalation prompts
@@ -499,53 +382,213 @@ const ESCALATION_SCHEMA: &str = r#"{
   "recommended_tier": "worker | orchestrator | null",
   "simplified_version": "string | null - If task could be simplified to be handleable"
 }"#;
-```
 
-**Verify**:
-- [ ] `cargo check` passes
-- [ ] Escalation decision is quick (5-second rule)
-- [ ] Output includes recommended tier
-- [ ] Can suggest simplified version
+#[cfg(test)]
+mod tests {
+    use super::*;
 
----
+    // Slice 4.4.1 tests
+    #[test]
+    fn test_task_recognition_builds() {
+        let prompt = UtilityPrompts::task_recognition("Format the file src/main.rs").build();
 
-## Notes
+        assert!(prompt.text.contains("Helper"));
+        assert!(prompt.text.contains("Format the file src/main.rs"));
+        assert!(prompt.text.contains("category"));
+    }
 
-- **Speed over sophistication**: Utilities use smaller models and should complete tasks quickly.
-- **Conservative escalation**: Better to escalate unnecessarily than attempt something beyond capability.
-- **Predictable output**: Templated execution produces consistent results.
-- **Minimal communication**: Reports are terse - "Done" or "Failed: reason"
+    #[test]
+    fn test_task_recognition_includes_categories() {
+        let prompt = UtilityPrompts::task_recognition("Any task").build();
 
-### Key design decisions
+        assert!(prompt.text.contains("FORMAT"));
+        assert!(prompt.text.contains("LINT"));
+        assert!(prompt.text.contains("BOILERPLATE"));
+        assert!(prompt.text.contains("DOCS"));
+        assert!(prompt.text.contains("RENAME"));
+    }
 
-1. **Clear categories** - Five well-defined task types, nothing ambiguous
-2. **Fast recognition** - Category decision should be instant
-3. **No business logic** - If understanding WHY is needed, escalate
-4. **Terse reporting** - One line, include counts, be specific about errors
+    #[test]
+    fn test_task_recognition_includes_escalation() {
+        let prompt = UtilityPrompts::task_recognition("Any task").build();
 
-### Comparison with other tiers
+        assert!(prompt.text.contains("escalate"));
+        assert!(prompt.text.contains("If unsure"));
+    }
 
-| Aspect | Utility | Worker | Orchestrator |
-|--------|---------|--------|--------------|
-| Thinking depth | Minimal | Moderate | Deep |
-| Report length | 1 line | 2-3 sentences | Detailed |
-| Escalation threshold | Very low | Medium | High |
-| Decision time | 5 seconds | Minutes | As needed |
+    #[test]
+    fn test_recognition_version() {
+        let version = UtilityPrompts::recognition_version();
+        assert_eq!(version.family, "utility-recognition");
+        assert_eq!(version.major, 1);
+    }
 
----
+    // Slice 4.4.2 tests
+    #[test]
+    fn test_format_execution_builds() {
+        let prompt = UtilityPrompts::format_execution("src/main.rs", "fn main() {}", None).build();
 
-## Completion Checklist
+        assert!(prompt.text.contains("src/main.rs"));
+        assert!(prompt.text.contains("fn main()"));
+        assert!(prompt.text.contains("formatted_content"));
+    }
 
-Before marking this ticket done:
+    #[test]
+    fn test_format_execution_with_rules() {
+        let prompt = UtilityPrompts::format_execution(
+            "src/main.rs",
+            "fn main() {}",
+            Some("Use 4-space indentation"),
+        )
+        .build();
 
-- [x] All slices verified
-- [x] `cargo check` passes
-- [x] All four utility prompt types implemented
-- [x] Each prompt type has its own version
-- [x] Task recognition is quick and accurate
-- [x] Execution prompts cover all categories (format, lint, boilerplate, docs, rename)
-- [x] Reports are appropriately terse
-- [x] Escalation triggers are conservative
-- [x] Code follows `CONVENTIONS.md`
-- [x] `PROGRESS.md` updated
-- [x] 20 tests passing
+        assert!(prompt.text.contains("4-space indentation"));
+    }
+
+    #[test]
+    fn test_lint_execution_builds() {
+        let prompt = UtilityPrompts::lint_execution(
+            "src/lib.rs",
+            "let x = 5;",
+            "warning: unused variable `x`",
+        )
+        .build();
+
+        assert!(prompt.text.contains("src/lib.rs"));
+        assert!(prompt.text.contains("unused variable"));
+        assert!(prompt.text.contains("fixed_content"));
+    }
+
+    #[test]
+    fn test_boilerplate_execution_builds() {
+        let prompt = UtilityPrompts::boilerplate_execution(
+            "struct",
+            "name: User\nfields: id, name, email",
+            "src/models/user.rs",
+        )
+        .build();
+
+        assert!(prompt.text.contains("struct"));
+        assert!(prompt.text.contains("User"));
+        assert!(prompt.text.contains("generated_content"));
+    }
+
+    #[test]
+    fn test_docs_execution_builds() {
+        let prompt = UtilityPrompts::docs_execution(
+            "src/lib.rs",
+            "pub fn calculate() {}",
+            "Add docstring explaining the function",
+        )
+        .build();
+
+        assert!(prompt.text.contains("calculate"));
+        assert!(prompt.text.contains("Add docstring"));
+        assert!(prompt.text.contains("updated_content"));
+    }
+
+    #[test]
+    fn test_rename_execution_builds() {
+        let prompt =
+            UtilityPrompts::rename_execution("src/main.rs", "let foo = 5;", "foo", "bar").build();
+
+        assert!(prompt.text.contains("foo"));
+        assert!(prompt.text.contains("bar"));
+        assert!(prompt.text.contains("occurrences_renamed"));
+    }
+
+    #[test]
+    fn test_execution_version() {
+        let version = UtilityPrompts::execution_version();
+        assert_eq!(version.family, "utility-execution");
+    }
+
+    // Slice 4.4.3 tests
+    #[test]
+    fn test_completion_report_success() {
+        let prompt =
+            UtilityPrompts::completion_report("format", &["src/main.rs", "src/lib.rs"], true, None)
+                .build();
+
+        assert!(prompt.text.contains("format"));
+        assert!(prompt.text.contains("src/main.rs"));
+        assert!(prompt.text.contains("true")); // Success value
+    }
+
+    #[test]
+    fn test_completion_report_failure() {
+        let prompt = UtilityPrompts::completion_report(
+            "lint",
+            &["src/broken.rs"],
+            false,
+            Some("Syntax error on line 42"),
+        )
+        .build();
+
+        assert!(prompt.text.contains("lint"));
+        assert!(prompt.text.contains("false")); // Success value
+        assert!(prompt.text.contains("Syntax error"));
+    }
+
+    #[test]
+    fn test_report_includes_terse_rules() {
+        let prompt = UtilityPrompts::completion_report("format", &["test.rs"], true, None).build();
+
+        assert!(prompt.text.contains("One line only"));
+        assert!(prompt.text.contains("Include counts"));
+    }
+
+    #[test]
+    fn test_reporting_version() {
+        let version = UtilityPrompts::reporting_version();
+        assert_eq!(version.family, "utility-reporting");
+    }
+
+    // Slice 4.4.4 tests
+    #[test]
+    fn test_escalation_check_builds() {
+        let prompt = UtilityPrompts::escalation_check(
+            "Refactor the authentication module",
+            &[
+                "Multiple files involved",
+                "Requires understanding auth flow",
+            ],
+        )
+        .build();
+
+        assert!(prompt.text.contains("Refactor"));
+        assert!(prompt.text.contains("Multiple files"));
+        assert!(prompt.text.contains("decision"));
+    }
+
+    #[test]
+    fn test_escalation_check_includes_triggers() {
+        let prompt = UtilityPrompts::escalation_check("Any task", &[]).build();
+
+        assert!(prompt.text.contains("business logic"));
+        assert!(prompt.text.contains("architectural decisions"));
+        assert!(prompt.text.contains("5-second decision"));
+    }
+
+    #[test]
+    fn test_escalation_conservative() {
+        let prompt = UtilityPrompts::escalation_check("Any task", &[]).build();
+
+        assert!(prompt.text.contains("When in doubt, escalate"));
+        assert!(prompt.text.contains("Better to escalate unnecessarily"));
+    }
+
+    #[test]
+    fn test_escalation_schema_includes_simplified_version() {
+        let prompt = UtilityPrompts::escalation_check("Complex task", &[]).build();
+
+        assert!(prompt.text.contains("simplified_version"));
+        assert!(prompt.text.contains("recommended_tier"));
+    }
+
+    #[test]
+    fn test_escalation_version() {
+        let version = UtilityPrompts::escalation_version();
+        assert_eq!(version.family, "utility-escalation");
+    }
+}

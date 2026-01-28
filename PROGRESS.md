@@ -5,9 +5,9 @@
 ## Current Focus
 
 **Active:** None
-**Next:** M3 Agent Runtime (continuing with 3.3)
+**Next:** M4 Prompt Engineering or M5 Orchestration Core
 **Blocked:** None
-**Completed:** M2 LLM Layer (2.1-2.4), M3 Tickets 3.1-3.2
+**Completed:** M1 Foundation, M2 LLM Layer, M3 Agent Runtime
 
 **Milestone 1 Decomposition:** Complete - see `decomp/M1/`
 **Milestone 2 Decomposition:** Complete - see `decomp/M2/`
@@ -61,12 +61,12 @@
 | 3.1 Agent Struct & Lifecycle | done | 3/3 | Agent struct with state transitions, shutdown, 9 tests |
 | 3.2 Agent Pool Manager | done | 4/4 | AgentPool, spawn/release/remove, PoolStats, 19 tests |
 | 3.3 Message Passing | done | 4/4 | Channels, AgentHandle, Dispatcher, response/command flow |
-| 3.4 Persona System | pending | 0/3 | Needs M1 config |
-| 3.5 Task Execution Loop | pending | 0/4 | Needs 3.1-3.4 |
-| 3.6 Escalation Flow | pending | 0/3 | Needs 3.5 |
-| 3.7 Inter-Agent Protocol | pending | 0/5 | Needs 3.3 |
+| 3.4 Role System | done | 5/5 | RoleLibrary, prompts, RequiredReadingLoader, RoleManager, 12 tests |
+| 3.5 Task Execution Loop | done | 4/4 | Run loop, LLM integration with role context, progress updates, timeout handling |
+| 3.6 Escalation Flow | done | 3/3 | EscalationPolicy, EscalationManager, HumanReview types, 12 tests |
+| 3.7 Inter-Agent Protocol | done | 5/5 | Protocol types, serialization, validation, DelegationContext, 19 tests |
 
-**Milestone Status:** In Progress (3/7 tickets done)
+**Milestone Status:** Complete (7/7 tickets done)
 
 ---
 
@@ -79,16 +79,16 @@
 | 4.1 Prompt Architecture Design | done | 4/4 | PromptBuilder, ContextInjector, PromptVersion, 23 tests |
 | 4.2 Orchestrator Thinking Patterns | done | 5/5 | Decomposition, review, routing, conversation, recovery prompts, 25 tests |
 | 4.3 Worker Thinking Patterns | done | 5/5 | Implementation, context-gathering, progress, self-check, stuck-detection prompts |
-| 4.4 Utility Thinking Patterns | pending | 0/4 | Needs 4.1 |
+| 4.4 Utility Thinking Patterns | done | 4/4 | Task recognition, execution, reporting, escalation prompts, 20 tests |
 | 4.5 Structured Output Design | done | 5/5 | DecompositionOutput, TaskResultOutput, ReviewOutput, ErrorOutput, OutputValidator with 69 tests |
-| 4.6 Few-Shot Examples Library | pending | 0/5 | Needs 4.2-4.4 |
-| 4.7 Prompt Testing Framework | pending | 0/6 | Needs 4.5, M2 |
+| 4.6 Few-Shot Examples Library | done | 5/5 | Decomposition, implementation, review, recovery examples + selector, 30 tests |
+| 4.7 Prompt Testing Framework | done | 6/6 | Harness, assertions, decomp/impl tests, diff tooling, confusion detection, 74 tests |
 | 4.8 Context Management Strategy | done | 5/5 | ContextBudget, FileSelector, FileSummarizer, ContextRequestHandler, HistoryManager, 35 tests |
 | 4.9 Self-Correction & Recovery Prompts | pending | 0/5 | Needs 4.5 |
 | 4.10 Tool Definition & Selection | done | 6/6 | ToolDefinition, ToolRegistry, file/git/test tools, selection prompts, parser, 31 tests |
 | 4.11 Context Window Validation | pending | 0/5 | Needs M2 |
 
-**Milestone Status:** In Progress (2/11 tickets done)
+**Milestone Status:** In Progress (9/11 tickets done)
 
 ---
 
@@ -191,7 +191,7 @@
 |-----------|---------|--------|--------|
 | M1: Foundation | 5 | 24 | Complete |
 | M2: LLM Layer | 4 | 13 | Not Started |
-| M3: Agent Runtime | 7 | 26 | Not Started |
+| M3: Agent Runtime | 7 | 26 | Complete |
 | M4: Prompt Engineering | 11 | 55 | Not Started |
 | M5: Orchestration Core | 5 | 18 | Not Started |
 | M6: TUI Basic | 7 | 25 | Not Started |

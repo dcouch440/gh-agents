@@ -1,0 +1,7 @@
+{
+  "name": "API Handler Implementation",
+  "input": "Implement the user profile GET handler",
+  "additional_context": "Axum handler that fetches user by ID from database and returns JSON",
+  "expected_output": null,
+  "tags": ["api", "handler"]
+}

@@ -1,60 +1,8 @@
-# Ticket 3.6: Escalation Flow
+//! Escalation flow for routing task failures up the tier hierarchy
 
-> Route failures up the tier hierarchy.
-
-## Goal
-
-A working escalation system where failed tasks are automatically routed up the tier hierarchy (Utility → Worker → Orchestrator → Human) based on configurable policies.
-
-**Checkpoint**: When a Utility agent fails a task repeatedly, it escalates to a Worker. When a Worker fails, it escalates to Orchestrator. Terminal failures are marked for human review.
-
----
-
-## Context
-
-Escalation is a safety mechanism. When agents fail or are confused:
-- Cheaper agents escalate to more capable (expensive) agents
-- Repeated failures at higher tiers escalate to human review
-- The policy is configurable (retry counts, escalation thresholds)
-
-**Key files**:
-- `src/agents/executor.rs` - Task execution loop (3.5)
-- `src/agents/channels.rs` - Response types (3.3)
-- `src/types/task.rs` - TaskStatus, escalation states
-
-**Dependencies**:
-- Requires Ticket 3.5 complete (task execution works)
-
-**References**:
-- See `ROADMAP.md` Ticket 3.6 for the spec
-- See `PRD.md` "Error Handling" - agent failure recovery
-
----
-
-## Slices
-
-### Slice 3.6.1: Define Escalation Policy
-
-**Do this**:
-- Create `src/agents/escalation.rs`
-- Define `EscalationPolicy` struct with configurable thresholds
-- Define escalation path: `Utility → Worker → Orchestrator → Human`
-- Implement `should_escalate(tier, failure_count) -> EscalationDecision`
-- Define `EscalationDecision` enum: `Retry`, `Escalate(AgentTier)`, `NeedsHuman`
-
-**Create/modify**:
-- `src/agents/escalation.rs` (create)
-- `src/agents/mod.rs` (add module export)
-
-**Verify**:
-- [ ] `cargo check` passes
-- [ ] Policy respects retry limits per tier
-- [ ] Correct next tier returned for escalation
-- [ ] `NeedsHuman` returned at end of chain
-
-**Code**:
-```rust
-// src/agents/escalation.rs
+use std::collections::HashMap;
+use tracing::{info, warn};
+use uuid::Uuid;
 
 use crate::types::AgentTier;
 
@@ -72,8 +20,8 @@ pub struct EscalationPolicy {
 impl Default for EscalationPolicy {
     fn default() -> Self {
         Self {
-            utility_retries: 1,    // Utilities fail fast
-            worker_retries: 2,     // Workers get a couple tries
+            utility_retries: 1,      // Utilities fail fast
+            worker_retries: 2,       // Workers get a couple tries
             orchestrator_retries: 1, // Orchestrators escalate to human quickly
         }
     }
@@ -108,14 +56,10 @@ impl EscalationPolicy {
     ///
     /// # Returns
     /// Decision on whether to retry, escalate, or request human help
-    pub fn evaluate(
-        &self,
-        current_tier: AgentTier,
-        failure_count: u32,
-    ) -> EscalationDecision {
+    pub fn evaluate(&self, current_tier: AgentTier, failure_count: u32) -> EscalationDecision {
         let max_retries = self.max_retries_for_tier(current_tier);
 
-        if failure_count < max_retries {
+        if failure_count <= max_retries {
             return EscalationDecision::Retry;
         }
 
@@ -162,7 +106,7 @@ impl EscalationPolicy {
 #[derive(Debug, Clone)]
 pub struct TaskEscalationState {
     /// Task ID
-    pub task_id: uuid::Uuid,
+    pub task_id: Uuid,
     /// Current tier attempting the task
     pub current_tier: AgentTier,
     /// Number of failures at current tier
@@ -183,7 +127,7 @@ pub struct TierAttempt {
 
 impl TaskEscalationState {
     /// Create new escalation state for a task
-    pub fn new(task_id: uuid::Uuid, initial_tier: AgentTier) -> Self {
+    pub fn new(task_id: Uuid, initial_tier: AgentTier) -> Self {
         Self {
             task_id,
             current_tier: initial_tier,
@@ -199,8 +143,11 @@ impl TaskEscalationState {
         self.total_failure_count += 1;
 
         // Update or add tier attempt record
-        if let Some(attempt) = self.tier_history.iter_mut()
-            .find(|a| a.tier == self.current_tier) {
+        if let Some(attempt) = self
+            .tier_history
+            .iter_mut()
+            .find(|a| a.tier == self.current_tier)
+        {
             attempt.attempts += 1;
             attempt.final_error = error.to_string();
         } else {
@@ -218,79 +165,6 @@ impl TaskEscalationState {
         self.failure_count_at_tier = 0;
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn escalation_policy_retries_first() {
-        let policy = EscalationPolicy::default();
-
-        // First failure at utility - should retry
-        let decision = policy.evaluate(AgentTier::Utility, 0);
-        assert_eq!(decision, EscalationDecision::Retry);
-    }
-
-    #[test]
-    fn escalation_policy_escalates_after_retries() {
-        let policy = EscalationPolicy::default();
-
-        // After utility_retries failures, should escalate
-        let decision = policy.evaluate(AgentTier::Utility, 1);
-        assert_eq!(decision, EscalationDecision::Escalate(AgentTier::Worker));
-    }
-
-    #[test]
-    fn escalation_policy_human_at_end() {
-        let policy = EscalationPolicy::default();
-
-        // After orchestrator exhausted, needs human
-        let decision = policy.evaluate(AgentTier::Orchestrator, 1);
-        assert_eq!(decision, EscalationDecision::NeedsHuman);
-    }
-
-    #[test]
-    fn escalation_path_correct() {
-        let policy = EscalationPolicy::default();
-
-        let path = policy.escalation_path(AgentTier::Utility);
-        assert_eq!(path, vec![
-            AgentTier::Utility,
-            AgentTier::Worker,
-            AgentTier::Orchestrator,
-        ]);
-    }
-}
-```
-
----
-
-### Slice 3.6.2: Implement Escalation Trigger
-
-**Do this**:
-- Create `EscalationManager` that tracks task failure state
-- Integrate with task execution to trigger escalation on failure
-- Implement `on_task_failed(task_id, tier, error) -> EscalationDecision`
-- Track failure counts per task per tier
-- Log escalation decisions using tracing
-
-**Create/modify**:
-- `src/agents/escalation.rs`
-
-**Verify**:
-- [ ] `cargo check` passes
-- [ ] Manager tracks failures correctly
-- [ ] Escalation triggered after retry threshold
-- [ ] Decision logged with context
-
-**Code**:
-```rust
-// Add to src/agents/escalation.rs
-
-use std::collections::HashMap;
-use tracing::{info, warn};
-use uuid::Uuid;
 
 /// Manages escalation decisions across tasks
 pub struct EscalationManager {
@@ -316,10 +190,8 @@ impl EscalationManager {
 
     /// Start tracking a new task
     pub fn track_task(&mut self, task_id: Uuid, initial_tier: AgentTier) {
-        self.task_states.insert(
-            task_id,
-            TaskEscalationState::new(task_id, initial_tier),
-        );
+        self.task_states
+            .insert(task_id, TaskEscalationState::new(task_id, initial_tier));
     }
 
     /// Handle a task failure and return the decision
@@ -330,7 +202,8 @@ impl EscalationManager {
         error: &str,
     ) -> EscalationDecision {
         // Get or create task state
-        let state = self.task_states
+        let state = self
+            .task_states
             .entry(task_id)
             .or_insert_with(|| TaskEscalationState::new(task_id, current_tier));
 
@@ -343,10 +216,9 @@ impl EscalationManager {
         state.record_failure(error);
 
         // Evaluate the policy
-        let decision = self.policy.evaluate(
-            state.current_tier,
-            state.failure_count_at_tier,
-        );
+        let decision = self
+            .policy
+            .evaluate(state.current_tier, state.failure_count_at_tier);
 
         // Log the decision
         match &decision {
@@ -404,10 +276,9 @@ impl EscalationManager {
         self.task_states
             .iter()
             .filter(|(_, state)| {
-                let decision = self.policy.evaluate(
-                    state.current_tier,
-                    state.failure_count_at_tier,
-                );
+                let decision = self
+                    .policy
+                    .evaluate(state.current_tier, state.failure_count_at_tier);
                 matches!(decision, EscalationDecision::NeedsHuman)
             })
             .map(|(id, _)| *id)
@@ -418,93 +289,7 @@ impl EscalationManager {
     pub fn clear_task(&mut self, task_id: &Uuid) {
         self.task_states.remove(task_id);
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn manager_tracks_failures() {
-        let mut manager = EscalationManager::with_default_policy();
-        let task_id = Uuid::new_v4();
-
-        manager.track_task(task_id, AgentTier::Utility);
-
-        // First failure - should retry
-        let decision = manager.on_task_failed(task_id, AgentTier::Utility, "error 1");
-        assert_eq!(decision, EscalationDecision::Retry);
-
-        // Second failure - should escalate (default utility_retries = 1)
-        let decision = manager.on_task_failed(task_id, AgentTier::Utility, "error 2");
-        assert_eq!(decision, EscalationDecision::Escalate(AgentTier::Worker));
-    }
-
-    #[test]
-    fn manager_escalates_through_chain() {
-        let mut manager = EscalationManager::new(EscalationPolicy::new(0, 0, 0));
-        let task_id = Uuid::new_v4();
-
-        // Utility -> Worker
-        let decision = manager.on_task_failed(task_id, AgentTier::Utility, "error");
-        assert_eq!(decision, EscalationDecision::Escalate(AgentTier::Worker));
-
-        // Worker -> Orchestrator
-        let decision = manager.on_task_failed(task_id, AgentTier::Worker, "error");
-        assert_eq!(decision, EscalationDecision::Escalate(AgentTier::Orchestrator));
-
-        // Orchestrator -> Human
-        let decision = manager.on_task_failed(task_id, AgentTier::Orchestrator, "error");
-        assert_eq!(decision, EscalationDecision::NeedsHuman);
-    }
-}
-```
-
----
-
-### Slice 3.6.3: Handle "Needs Human" Terminal State
-
-**Do this**:
-- Add `TaskStatus::NeedsHuman` variant (or use existing Failed with flag)
-- Implement logic to mark task for human review
-- Create `HumanReviewRequest` structure with context
-- Integrate with task result to include escalation history
-- Add method to retrieve tasks awaiting human review
-
-**Create/modify**:
-- `src/agents/escalation.rs`
-- `src/types/task.rs` (if needed for status variant)
-
-**Verify**:
-- [ ] `cargo check` passes
-- [ ] Tasks marked correctly as needing human review
-- [ ] Escalation history available for human context
-- [ ] Human review queue can be queried
-
-**Code**:
-```rust
-// Add to src/agents/escalation.rs
-
-/// Request for human review of a task
-#[derive(Debug, Clone)]
-pub struct HumanReviewRequest {
-    /// Task ID
-    pub task_id: Uuid,
-    /// Original task title
-    pub title: String,
-    /// Original task description
-    pub description: String,
-    /// Escalation history showing what was tried
-    pub escalation_history: Vec<TierAttempt>,
-    /// Total attempts across all tiers
-    pub total_attempts: u32,
-    /// Reason human review is needed
-    pub reason: String,
-    /// Timestamp when human review was requested
-    pub requested_at: chrono::DateTime<chrono::Utc>,
-}
-
-impl EscalationManager {
     /// Create a human review request for a task
     pub fn create_human_review_request(
         &self,
@@ -515,14 +300,15 @@ impl EscalationManager {
         let state = self.task_states.get(&task_id)?;
 
         // Build reason from last error
-        let reason = state.tier_history
+        let reason = state
+            .tier_history
             .last()
-            .map(|a| format!(
-                "Failed at {} tier after {} attempts: {}",
-                format!("{:?}", a.tier),
-                a.attempts,
-                a.final_error
-            ))
+            .map(|a| {
+                format!(
+                    "Failed at {:?} tier after {} attempts: {}",
+                    a.tier, a.attempts, a.final_error
+                )
+            })
             .unwrap_or_else(|| "Unknown failure".to_string());
 
         Some(HumanReviewRequest {
@@ -541,17 +327,17 @@ impl EscalationManager {
         self.task_states
             .iter()
             .filter_map(|(task_id, state)| {
-                let decision = self.policy.evaluate(
-                    state.current_tier,
-                    state.failure_count_at_tier,
-                );
+                let decision = self
+                    .policy
+                    .evaluate(state.current_tier, state.failure_count_at_tier);
 
                 if matches!(decision, EscalationDecision::NeedsHuman) {
                     Some(HumanReviewSummary {
                         task_id: *task_id,
                         total_failures: state.total_failure_count,
                         tiers_attempted: state.tier_history.iter().map(|a| a.tier).collect(),
-                        last_error: state.tier_history
+                        last_error: state
+                            .tier_history
                             .last()
                             .map(|a| a.final_error.clone())
                             .unwrap_or_default(),
@@ -562,38 +348,16 @@ impl EscalationManager {
             })
             .collect()
     }
-}
 
-/// Summary of a task awaiting human review
-#[derive(Debug, Clone)]
-pub struct HumanReviewSummary {
-    pub task_id: Uuid,
-    pub total_failures: u32,
-    pub tiers_attempted: Vec<AgentTier>,
-    pub last_error: String,
-}
-
-/// Response type for tasks needing human action
-#[derive(Debug, Clone)]
-pub enum HumanAction {
-    /// Retry at a specific tier
-    RetryAt(AgentTier),
-    /// Provide guidance and retry
-    RetryWithGuidance { tier: AgentTier, guidance: String },
-    /// Cancel the task
-    Cancel,
-    /// Mark as complete (human did it manually)
-    MarkComplete,
-}
-
-impl EscalationManager {
     /// Apply a human action to a task
     pub fn apply_human_action(
         &mut self,
         task_id: Uuid,
         action: HumanAction,
     ) -> Result<(), EscalationError> {
-        let state = self.task_states.get_mut(&task_id)
+        let state = self
+            .task_states
+            .get_mut(&task_id)
             .ok_or(EscalationError::TaskNotFound(task_id))?;
 
         match action {
@@ -627,6 +391,47 @@ impl EscalationManager {
     }
 }
 
+/// Request for human review of a task
+#[derive(Debug, Clone)]
+pub struct HumanReviewRequest {
+    /// Task ID
+    pub task_id: Uuid,
+    /// Original task title
+    pub title: String,
+    /// Original task description
+    pub description: String,
+    /// Escalation history showing what was tried
+    pub escalation_history: Vec<TierAttempt>,
+    /// Total attempts across all tiers
+    pub total_attempts: u32,
+    /// Reason human review is needed
+    pub reason: String,
+    /// Timestamp when human review was requested
+    pub requested_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Summary of a task awaiting human review
+#[derive(Debug, Clone)]
+pub struct HumanReviewSummary {
+    pub task_id: Uuid,
+    pub total_failures: u32,
+    pub tiers_attempted: Vec<AgentTier>,
+    pub last_error: String,
+}
+
+/// Response type for tasks needing human action
+#[derive(Debug, Clone)]
+pub enum HumanAction {
+    /// Retry at a specific tier
+    RetryAt(AgentTier),
+    /// Provide guidance and retry
+    RetryWithGuidance { tier: AgentTier, guidance: String },
+    /// Cancel the task
+    Cancel,
+    /// Mark as complete (human did it manually)
+    MarkComplete,
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum EscalationError {
     #[error("task not found: {0}")]
@@ -638,6 +443,85 @@ mod tests {
     use super::*;
 
     #[test]
+    fn escalation_policy_retries_first() {
+        let policy = EscalationPolicy::default();
+
+        // First failure at utility - should retry
+        let decision = policy.evaluate(AgentTier::Utility, 0);
+        assert_eq!(decision, EscalationDecision::Retry);
+    }
+
+    #[test]
+    fn escalation_policy_escalates_after_retries() {
+        let policy = EscalationPolicy::default();
+
+        // With utility_retries = 1, we get 1 retry, so need 2 failures to escalate
+        let decision = policy.evaluate(AgentTier::Utility, 2);
+        assert_eq!(decision, EscalationDecision::Escalate(AgentTier::Worker));
+    }
+
+    #[test]
+    fn escalation_policy_human_at_end() {
+        let policy = EscalationPolicy::default();
+
+        // After orchestrator exhausted (orchestrator_retries = 1, so need 2 failures)
+        let decision = policy.evaluate(AgentTier::Orchestrator, 2);
+        assert_eq!(decision, EscalationDecision::NeedsHuman);
+    }
+
+    #[test]
+    fn escalation_path_correct() {
+        let policy = EscalationPolicy::default();
+
+        let path = policy.escalation_path(AgentTier::Utility);
+        assert_eq!(
+            path,
+            vec![
+                AgentTier::Utility,
+                AgentTier::Worker,
+                AgentTier::Orchestrator,
+            ]
+        );
+    }
+
+    #[test]
+    fn manager_tracks_failures() {
+        let mut manager = EscalationManager::with_default_policy();
+        let task_id = Uuid::new_v4();
+
+        manager.track_task(task_id, AgentTier::Utility);
+
+        // First failure - should retry
+        let decision = manager.on_task_failed(task_id, AgentTier::Utility, "error 1");
+        assert_eq!(decision, EscalationDecision::Retry);
+
+        // Second failure - should escalate (default utility_retries = 1)
+        let decision = manager.on_task_failed(task_id, AgentTier::Utility, "error 2");
+        assert_eq!(decision, EscalationDecision::Escalate(AgentTier::Worker));
+    }
+
+    #[test]
+    fn manager_escalates_through_chain() {
+        let mut manager = EscalationManager::new(EscalationPolicy::new(0, 0, 0));
+        let task_id = Uuid::new_v4();
+
+        // Utility -> Worker
+        let decision = manager.on_task_failed(task_id, AgentTier::Utility, "error");
+        assert_eq!(decision, EscalationDecision::Escalate(AgentTier::Worker));
+
+        // Worker -> Orchestrator
+        let decision = manager.on_task_failed(task_id, AgentTier::Worker, "error");
+        assert_eq!(
+            decision,
+            EscalationDecision::Escalate(AgentTier::Orchestrator)
+        );
+
+        // Orchestrator -> Human
+        let decision = manager.on_task_failed(task_id, AgentTier::Orchestrator, "error");
+        assert_eq!(decision, EscalationDecision::NeedsHuman);
+    }
+
+    #[test]
     fn human_review_request_includes_history() {
         let mut manager = EscalationManager::new(EscalationPolicy::new(0, 0, 0));
         let task_id = Uuid::new_v4();
@@ -647,41 +531,65 @@ mod tests {
         manager.on_task_failed(task_id, AgentTier::Worker, "worker error");
         manager.on_task_failed(task_id, AgentTier::Orchestrator, "orchestrator error");
 
-        let request = manager.create_human_review_request(
-            task_id,
-            "Test Task",
-            "Test description",
-        ).unwrap();
+        let request = manager
+            .create_human_review_request(task_id, "Test Task", "Test description")
+            .unwrap();
 
         assert_eq!(request.total_attempts, 3);
         assert_eq!(request.escalation_history.len(), 3);
     }
+
+    #[test]
+    fn human_action_retry_at_resets_count() {
+        let mut manager = EscalationManager::new(EscalationPolicy::new(0, 0, 0));
+        let task_id = Uuid::new_v4();
+
+        // Escalate to needs human
+        manager.on_task_failed(task_id, AgentTier::Utility, "error");
+        manager.on_task_failed(task_id, AgentTier::Worker, "error");
+        manager.on_task_failed(task_id, AgentTier::Orchestrator, "error");
+
+        // Human says retry at worker
+        manager
+            .apply_human_action(task_id, HumanAction::RetryAt(AgentTier::Worker))
+            .unwrap();
+
+        let state = manager.get_state(&task_id).unwrap();
+        assert_eq!(state.current_tier, AgentTier::Worker);
+        assert_eq!(state.failure_count_at_tier, 0);
+    }
+
+    #[test]
+    fn human_action_cancel_removes_task() {
+        let mut manager = EscalationManager::with_default_policy();
+        let task_id = Uuid::new_v4();
+
+        manager.track_task(task_id, AgentTier::Utility);
+        assert!(manager.get_state(&task_id).is_some());
+
+        manager
+            .apply_human_action(task_id, HumanAction::Cancel)
+            .unwrap();
+
+        assert!(manager.get_state(&task_id).is_none());
+    }
+
+    #[test]
+    fn tasks_needing_human_filters_correctly() {
+        let mut manager = EscalationManager::new(EscalationPolicy::new(0, 0, 0));
+        let task1 = Uuid::new_v4();
+        let task2 = Uuid::new_v4();
+
+        // Task 1 needs human
+        manager.on_task_failed(task1, AgentTier::Utility, "error");
+        manager.on_task_failed(task1, AgentTier::Worker, "error");
+        manager.on_task_failed(task1, AgentTier::Orchestrator, "error");
+
+        // Task 2 only failed at utility, escalated to worker
+        manager.on_task_failed(task2, AgentTier::Utility, "error");
+
+        let needing_human = manager.tasks_needing_human();
+        assert_eq!(needing_human.len(), 1);
+        assert!(needing_human.contains(&task1));
+    }
 }
-```
-
----
-
-## Notes
-
-- Escalation policy should be configurable in project config
-- The escalation history is valuable for debugging and improving prompts
-- Human review should capture enough context to make a decision
-- Consider adding "escalation reasons" beyond just error messages
-- The UI will need to display human review queue (TUI M6 or later)
-
----
-
-## Completion Checklist
-
-Before marking this ticket done:
-
-- [x] All slices verified
-- [x] `cargo check` passes with no errors
-- [x] `cargo test` passes for escalation module (12 tests)
-- [x] Escalation policy configurable
-- [x] Retry/Escalate/NeedsHuman decisions work correctly
-- [x] Failure tracking across tiers is accurate
-- [x] Human review requests contain sufficient context
-- [x] Human actions can be applied to tasks
-- [x] Code follows `CONVENTIONS.md`
-- [x] `PROGRESS.md` updated with 3.6 status
