@@ -5,7 +5,7 @@
 ## Current Focus
 
 **Active:** M10 Server Layer (Architectural Pivot)
-**Next:** 10.5 Authentication
+**Next:** 10.6 Static File Serving
 **Blocked:** None
 
 ---
@@ -205,10 +205,10 @@
 | 10.2 REST API - Core Endpoints | done | 5/5 | Health, tasks CRUD, agents, config endpoints |
 | 10.3 REST API - Chat Endpoint | done | 4/4 | POST /chat, GET/DELETE /chat/history, SSE streaming |
 | 10.4 WebSocket Gateway | done | 5/5 | WS handler, subscriptions, broadcast channels, ping/pong |
-| 10.5 Authentication | pending | 0/5 | |
+| 10.5 Authentication | done | 5/5 | Password auth, JWT tokens, auth middleware, /auth endpoints |
 | 10.6 Static File Serving | pending | 0/3 | |
 
-**Milestone Status:** In Progress (4/6 tickets done)
+**Milestone Status:** In Progress (5/6 tickets done)
 
 ---
 
@@ -347,4 +347,5 @@ jsonwebtoken = "9"
 6. [x] Ticket 10.2: REST API - Core Endpoints - DONE (health, tasks, agents, config endpoints)
 7. [x] Ticket 10.3: REST API - Chat Endpoint - DONE (POST /chat, GET/DELETE /chat/history, SSE streaming)
 8. [x] Ticket 10.4: WebSocket Gateway - DONE (ws handler, subscriptions, broadcast channels, ping/pong)
-9. [ ] Start Ticket 10.5: Authentication
+9. [x] Ticket 10.5: Authentication - DONE (password auth, JWT tokens, auth middleware, /auth endpoints)
+10. [ ] Start Ticket 10.6: Static File Serving

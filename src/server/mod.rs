@@ -6,6 +6,7 @@
 //! - Static files for the React frontend
 
 pub mod api;
+pub mod auth;
 pub mod state;
 pub mod ws;
 
@@ -65,9 +66,15 @@ fn create_router(state: AppState) -> Router {
         .allow_methods(Any)
         .allow_headers(Any);
 
-    // Build API routes
-    let api_routes = Router::new()
+    // Public routes (no auth required)
+    let public_routes = Router::new()
         .route("/health", get(api::health_check))
+        .route("/auth/setup", post(api::auth_setup))
+        .route("/auth/login", post(api::auth_login));
+
+    // Protected routes (auth required)
+    let protected_routes = Router::new()
+        .route("/auth/me", get(api::auth_me))
         .route("/tasks", get(api::list_tasks).post(api::create_task))
         .route("/tasks/{id}", get(api::get_task))
         .route("/agents", get(api::list_agents))
@@ -81,7 +88,7 @@ fn create_router(state: AppState) -> Router {
         .route("/chat/{message_id}/stream", get(api::chat_stream));
 
     Router::new()
-        .nest("/api", api_routes)
+        .nest("/api", public_routes.merge(protected_routes))
         .route("/ws", get(ws::ws_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
