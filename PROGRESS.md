@@ -5,9 +5,9 @@
 ## Current Focus
 
 **Active:** None
-**Next:** M6 TUI Basic or M7 Execution Layer
+**Next:** M7 Execution Layer
 **Blocked:** None
-**Completed:** M1 Foundation, M2 LLM Layer, M3 Agent Runtime, M4 Prompt Engineering, M5 Orchestration Core
+**Completed:** M1 Foundation, M2 LLM Layer, M3 Agent Runtime, M4 Prompt Engineering, M5 Orchestration Core, M6 TUI Basic
 
 **Milestone 1 Decomposition:** Complete - see `decomp/M1/`
 **Milestone 2 Decomposition:** Complete - see `decomp/M2/`
@@ -119,10 +119,10 @@
 | 6.3 Home Screen | done | 3/3 | HomeView widget, view state management, typing transitions to Main |
 | 6.4 Feed View (/feed) | done | 4/4 | FeedView widget, FeedItem types, scrolling, App integration, 13 tests |
 | 6.5 Chat View (/main) | done | 5/5 | ChatView widget, message types, submission, mock orchestrator, 9 tests |
-| 6.6 Slash Command Router | pending | 0/4 | Needs 6.2 |
-| 6.7 Logs View (/logs) | pending | 0/3 | Needs 6.2, M1.5 |
+| 6.6 Slash Command Router | done | 4/4 | Command parsing, /home added, execute_command, error handling, 8 tests |
+| 6.7 Logs View (/logs) | done | 3/3 | LogsView widget, LogEntry/LogLevel types, level filtering, 8 tests |
 
-**Milestone Status:** In Progress (5/7 tickets done)
+**Milestone Status:** Complete (7/7 tickets done)
 
 ---
 
@@ -194,7 +194,7 @@
 | M3: Agent Runtime | 7 | 26 | Complete |
 | M4: Prompt Engineering | 11 | 55 | Complete |
 | M5: Orchestration Core | 5 | 18 | Complete |
-| M6: TUI Basic | 7 | 25 | Not Started |
+| M6: TUI Basic | 7 | 25 | Complete |
 | M7: Execution Layer | 6 | 28 | Not Started |
 | M8: GitHub Integration | 8 | 32 | Not Started |
 | M9: Polish & Production | 12 | 42 | In Progress (3/12 tickets) |
