@@ -64,6 +64,18 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
         include_str!("../../migrations/007_create_refactors.sql"),
     )
     .await?;
+    run_migration(
+        pool,
+        "008_add_task_metadata",
+        include_str!("../../migrations/008_add_task_metadata.sql"),
+    )
+    .await?;
+    run_migration(
+        pool,
+        "009_add_task_dependencies",
+        include_str!("../../migrations/009_add_task_dependencies.sql"),
+    )
+    .await?;
 
     tracing::info!("All migrations complete");
     Ok(())

@@ -15,13 +15,17 @@ pub async fn insert_task(pool: &SqlitePool, task: &Task) -> Result<()> {
     let status = format!("{:?}", task.status).to_lowercase();
     let priority = format!("{:?}", task.priority).to_lowercase();
     let context_files = serde_json::to_string(&task.context_files)?;
+    let metadata = task
+        .metadata
+        .as_ref()
+        .map(|m| serde_json::to_string(m).unwrap_or_default());
     let created_at = task.created_at.to_rfc3339();
     let updated_at = task.updated_at.to_rfc3339();
 
     sqlx::query(
         r#"
-        INSERT INTO tasks (id, slice_id, title, description, assigned_tier, assigned_agent, status, priority, context_files, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO tasks (id, slice_id, title, description, assigned_tier, assigned_agent, status, priority, context_files, metadata, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(&id)
@@ -33,6 +37,7 @@ pub async fn insert_task(pool: &SqlitePool, task: &Task) -> Result<()> {
     .bind(&status)
     .bind(&priority)
     .bind(&context_files)
+    .bind(&metadata)
     .bind(&created_at)
     .bind(&updated_at)
     .execute(pool)
@@ -47,7 +52,7 @@ pub async fn get_task(pool: &SqlitePool, id: &TaskId) -> Result<Option<Task>> {
     let id_str = id.0.to_string();
 
     let row: Option<TaskRow> = sqlx::query_as(
-        "SELECT id, slice_id, title, description, assigned_tier, assigned_agent, status, priority, context_files, created_at, updated_at FROM tasks WHERE id = ?"
+        "SELECT id, slice_id, title, description, assigned_tier, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks WHERE id = ?"
     )
     .bind(&id_str)
     .fetch_optional(pool)
@@ -82,7 +87,7 @@ pub async fn list_tasks_by_status(pool: &SqlitePool, status: TaskStatus) -> Resu
     let status_str = format!("{:?}", status).to_lowercase();
 
     let rows: Vec<TaskRow> = sqlx::query_as(
-        "SELECT id, slice_id, title, description, assigned_tier, assigned_agent, status, priority, context_files, created_at, updated_at FROM tasks WHERE status = ? ORDER BY created_at DESC"
+        "SELECT id, slice_id, title, description, assigned_tier, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks WHERE status = ? ORDER BY created_at DESC"
     )
     .bind(&status_str)
     .fetch_all(pool)
@@ -104,6 +109,7 @@ struct TaskRow {
     status: String,
     priority: String,
     context_files: String,
+    metadata: Option<String>,
     created_at: String,
     updated_at: String,
 }
@@ -145,6 +151,8 @@ impl TaskRow {
         };
 
         let context_files: Vec<std::path::PathBuf> = serde_json::from_str(&self.context_files)?;
+        let metadata: Option<std::collections::HashMap<String, String>> =
+            self.metadata.and_then(|m| serde_json::from_str(&m).ok());
         let created_at =
             chrono::DateTime::parse_from_rfc3339(&self.created_at)?.with_timezone(&chrono::Utc);
         let updated_at =
@@ -160,6 +168,8 @@ impl TaskRow {
             status,
             priority,
             context_files,
+            metadata,
+            depends_on: vec![], // Dependencies loaded separately via DependencyTracker
             created_at,
             updated_at,
         })
@@ -191,6 +201,8 @@ mod tests {
             status: TaskStatus::Pending,
             priority: Priority::Normal,
             context_files: vec![],
+            metadata: None,
+            depends_on: vec![],
             created_at: Utc::now(),
             updated_at: Utc::now(),
         }
