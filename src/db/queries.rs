@@ -212,6 +212,72 @@ impl TaskRow {
     }
 }
 
+// ============================================================================
+// Chat Message Queries
+// ============================================================================
+
+/// A chat message between user and assistant
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct ChatMessageRow {
+    pub id: String,
+    pub role: String,
+    pub content: String,
+    pub timestamp: String,
+}
+
+/// Insert a new chat message
+pub async fn insert_chat_message(
+    pool: &SqlitePool,
+    id: &uuid::Uuid,
+    role: &str,
+    content: &str,
+) -> Result<()> {
+    let id_str = id.to_string();
+    let timestamp = Utc::now().to_rfc3339();
+
+    sqlx::query("INSERT INTO chat_messages (id, role, content, timestamp) VALUES (?, ?, ?, ?)")
+        .bind(&id_str)
+        .bind(role)
+        .bind(content)
+        .bind(&timestamp)
+        .execute(pool)
+        .await
+        .context("Failed to insert chat message")?;
+
+    Ok(())
+}
+
+/// Get chat history with pagination
+pub async fn get_chat_history(
+    pool: &SqlitePool,
+    limit: u32,
+    offset: u32,
+) -> Result<Vec<ChatMessageRow>> {
+    let limit = limit.min(1000) as i64;
+    let offset = offset as i64;
+
+    let rows: Vec<ChatMessageRow> = sqlx::query_as(
+        "SELECT id, role, content, timestamp FROM chat_messages ORDER BY timestamp ASC LIMIT ? OFFSET ?",
+    )
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await
+    .context("Failed to get chat history")?;
+
+    Ok(rows)
+}
+
+/// Clear all chat history
+pub async fn clear_chat_history(pool: &SqlitePool) -> Result<()> {
+    sqlx::query("DELETE FROM chat_messages")
+        .execute(pool)
+        .await
+        .context("Failed to clear chat history")?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -289,6 +355,78 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(pending.len(), 2);
+
+        pool.close().await;
+    }
+
+    // Chat message tests
+
+    #[tokio::test]
+    async fn can_insert_and_get_chat_message() {
+        let (pool, _temp_dir) = setup_test_db().await;
+        let id = uuid::Uuid::new_v4();
+
+        insert_chat_message(&pool, &id, "user", "Hello, world!")
+            .await
+            .unwrap();
+
+        let history = get_chat_history(&pool, 50, 0).await.unwrap();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].role, "user");
+        assert_eq!(history[0].content, "Hello, world!");
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn chat_history_pagination_works() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        // Insert 5 messages
+        for i in 0..5 {
+            let id = uuid::Uuid::new_v4();
+            insert_chat_message(&pool, &id, "user", &format!("Message {}", i))
+                .await
+                .unwrap();
+        }
+
+        // Get first 2
+        let history = get_chat_history(&pool, 2, 0).await.unwrap();
+        assert_eq!(history.len(), 2);
+
+        // Get next 2
+        let history = get_chat_history(&pool, 2, 2).await.unwrap();
+        assert_eq!(history.len(), 2);
+
+        // Get last 1
+        let history = get_chat_history(&pool, 2, 4).await.unwrap();
+        assert_eq!(history.len(), 1);
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn can_clear_chat_history() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        // Insert some messages
+        for _ in 0..3 {
+            let id = uuid::Uuid::new_v4();
+            insert_chat_message(&pool, &id, "user", "Test message")
+                .await
+                .unwrap();
+        }
+
+        // Verify they exist
+        let history = get_chat_history(&pool, 50, 0).await.unwrap();
+        assert_eq!(history.len(), 3);
+
+        // Clear history
+        clear_chat_history(&pool).await.unwrap();
+
+        // Verify empty
+        let history = get_chat_history(&pool, 50, 0).await.unwrap();
+        assert_eq!(history.len(), 0);
 
         pool.close().await;
     }
