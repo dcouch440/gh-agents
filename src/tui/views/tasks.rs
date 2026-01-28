@@ -63,9 +63,7 @@ impl TasksView {
             Priority::Low => Style::default().fg(Color::DarkGray),
             Priority::Normal => Style::default(),
             Priority::High => Style::default().fg(Color::Yellow),
-            Priority::Urgent => Style::default()
-                .fg(Color::Red)
-                .add_modifier(Modifier::BOLD),
+            Priority::Urgent => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         }
     }
 }
@@ -131,11 +129,11 @@ impl Widget for TasksView {
         let table = Table::new(
             rows,
             [
-                Constraint::Length(10),  // ID
-                Constraint::Min(20),     // Title
-                Constraint::Length(8),   // Status
-                Constraint::Length(10),  // Priority
-                Constraint::Length(10),  // Agent
+                Constraint::Length(10), // ID
+                Constraint::Min(20),    // Title
+                Constraint::Length(8),  // Status
+                Constraint::Length(10), // Priority
+                Constraint::Length(10), // Agent
             ],
         )
         .header(header)

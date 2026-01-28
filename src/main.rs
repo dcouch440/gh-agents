@@ -39,10 +39,7 @@ async fn main() -> Result<()> {
 async fn run_headless(args: Args) -> Result<()> {
     // Initialize logging based on verbosity (to stderr so stdout is clean for output)
     let log_level = args.log_level();
-    let filter = tracing_subscriber::EnvFilter::new(format!(
-        "nexor={},sqlx=warn",
-        log_level
-    ));
+    let filter = tracing_subscriber::EnvFilter::new(format!("nexor={},sqlx=warn", log_level));
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_writer(std::io::stderr)
@@ -64,7 +61,9 @@ async fn run_tui(args: Args) -> Result<()> {
     install_panic_hook();
 
     // Initialize logging with file output
-    let log_path = args.config.as_ref()
+    let log_path = args
+        .config
+        .as_ref()
         .and_then(|p| p.parent())
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| Path::new(LOG_DIR).to_path_buf());

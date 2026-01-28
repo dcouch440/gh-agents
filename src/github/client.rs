@@ -54,7 +54,9 @@ impl GitHubClient {
         let client = Client::builder()
             .default_headers(headers)
             .build()
-            .map_err(|e| GitHubError::ConfigError(format!("Failed to create HTTP client: {}", e)))?;
+            .map_err(|e| {
+                GitHubError::ConfigError(format!("Failed to create HTTP client: {}", e))
+            })?;
 
         Ok(Self {
             client,
@@ -119,10 +121,9 @@ impl GitHubClient {
         let status = response.status();
 
         match status {
-            s if s.is_success() => response
-                .json()
-                .await
-                .map_err(|e| GitHubError::RequestFailed(format!("Failed to parse response: {}", e))),
+            s if s.is_success() => response.json().await.map_err(|e| {
+                GitHubError::RequestFailed(format!("Failed to parse response: {}", e))
+            }),
 
             StatusCode::FORBIDDEN => {
                 if let Some(info) = rate_limit {
@@ -240,7 +241,10 @@ impl GitHubClient {
         repo: &str,
         number: u32,
     ) -> Result<GitHubPullRequest, GitHubError> {
-        let url = format!("{}/repos/{}/{}/pulls/{}", self.base_url, owner, repo, number);
+        let url = format!(
+            "{}/repos/{}/{}/pulls/{}",
+            self.base_url, owner, repo, number
+        );
 
         tracing::debug!(url = %url, "Fetching pull request");
 

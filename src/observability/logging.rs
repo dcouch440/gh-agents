@@ -148,7 +148,12 @@ pub struct Decision {
 
 impl Decision {
     /// Create a new decision
-    pub fn new(task_id: Uuid, decision_type: DecisionType, reasoning: impl Into<String>, outcome: impl Into<String>) -> Self {
+    pub fn new(
+        task_id: Uuid,
+        decision_type: DecisionType,
+        reasoning: impl Into<String>,
+        outcome: impl Into<String>,
+    ) -> Self {
         Self {
             id: Uuid::new_v4(),
             task_id,
@@ -397,8 +402,7 @@ impl TryFrom<LlmCallRow> for LlmCall {
             input_tokens: row.input_tokens as u32,
             output_tokens: row.output_tokens as u32,
             latency_ms: row.latency_ms as u64,
-            timestamp: DateTime::parse_from_rfc3339(&row.timestamp)?
-                .with_timezone(&Utc),
+            timestamp: DateTime::parse_from_rfc3339(&row.timestamp)?.with_timezone(&Utc),
             cost_usd: row.cost_usd,
         })
     }
@@ -428,8 +432,7 @@ impl TryFrom<DecisionRow> for Decision {
             outcome: row.outcome,
             llm_call_id: row.llm_call_id.map(|s| Uuid::parse_str(&s)).transpose()?,
             cost_usd: row.cost_usd,
-            timestamp: DateTime::parse_from_rfc3339(&row.timestamp)?
-                .with_timezone(&Utc),
+            timestamp: DateTime::parse_from_rfc3339(&row.timestamp)?.with_timezone(&Utc),
         })
     }
 }
@@ -525,9 +528,7 @@ mod tests {
 
     #[test]
     fn llm_call_serialization() {
-        let prompt = LlmPrompt::new("System").with_messages(vec![
-            PromptMessage::user("Hello"),
-        ]);
+        let prompt = LlmPrompt::new("System").with_messages(vec![PromptMessage::user("Hello")]);
         let call = LlmCall::new("model", prompt, "response");
 
         let json = serde_json::to_string(&call).unwrap();

@@ -331,8 +331,7 @@ impl ApprovalResponse {
 }
 
 /// Channel types for TUI communication
-pub type ApprovalRequestSender =
-    mpsc::Sender<(ApprovalRequest, oneshot::Sender<ApprovalResponse>)>;
+pub type ApprovalRequestSender = mpsc::Sender<(ApprovalRequest, oneshot::Sender<ApprovalResponse>)>;
 pub type ApprovalRequestReceiver =
     mpsc::Receiver<(ApprovalRequest, oneshot::Sender<ApprovalResponse>)>;
 
@@ -362,10 +361,7 @@ impl InteractiveApprovalGate {
     }
 
     /// Request approval for an operation
-    pub async fn request_approval(
-        &self,
-        request: ApprovalRequest,
-    ) -> Result<bool, ApprovalError> {
+    pub async fn request_approval(&self, request: ApprovalRequest) -> Result<bool, ApprovalError> {
         // Check "always" lists first
         {
             let always_approved = self.always_approved.lock().unwrap();

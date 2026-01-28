@@ -180,7 +180,10 @@ impl NexorError {
     /// Create error for GitHub rate limiting
     pub fn github_rate_limited(reset_time: Option<DateTime<Utc>>) -> Self {
         let suggestion = match reset_time {
-            Some(time) => format!("Rate limited. Try again after {}", time.format("%H:%M:%S UTC")),
+            Some(time) => format!(
+                "Rate limited. Try again after {}",
+                time.format("%H:%M:%S UTC")
+            ),
             None => "Rate limited. Wait a moment and try again.".to_string(),
         };
         NexorError::GitHubApi {
@@ -470,8 +473,7 @@ mod tests {
     #[tokio::test]
     async fn spawn_with_boundary_success() {
         let (tx, mut rx) = mpsc::channel(1);
-        let handle =
-            spawn_with_boundary("test", tx, async { Ok::<_, anyhow::Error>("success") });
+        let handle = spawn_with_boundary("test", tx, async { Ok::<_, anyhow::Error>("success") });
         handle.await.unwrap();
         // No error should be sent
         assert!(rx.try_recv().is_err());

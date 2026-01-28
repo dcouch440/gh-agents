@@ -17,7 +17,9 @@ pub use git::{
     DiffOptions, FetchResult, FileChange, GitError, GitOps, GitStatus, MergeResult, PushOptions,
     PushResult,
 };
-pub use sandbox::{MountSpec, Sandbox, SandboxConfig, SandboxConfigBuilder, SandboxError, SandboxResult};
+pub use sandbox::{
+    MountSpec, Sandbox, SandboxConfig, SandboxConfigBuilder, SandboxError, SandboxResult,
+};
 pub use test_runner::{
     TestError, TestFailure, TestFramework, TestOutputEvent, TestResult, TestRunner,
 };

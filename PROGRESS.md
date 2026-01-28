@@ -5,7 +5,7 @@
 ## Current Focus
 
 **Active:** M10 In-TUI File Editor
-**Next:** 10.1 File Viewer Widget
+**Next:** 10.2 File Editor Widget
 **Blocked:** None
 **Completed:** M1 Foundation, M2 LLM Layer, M3 Agent Runtime, M4 Prompt Engineering, M5 Orchestration Core, M6 TUI Basic, M7 Execution Layer, M8 GitHub Integration, M9 Polish & Production
 
@@ -193,7 +193,7 @@
 
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
-| 10.1 File Viewer Widget | pending | 0/4 | Needs M6 |
+| 10.1 File Viewer Widget | done | 4/4 | FileViewer with scrolling, line numbers, syntax highlighting, search. 34 tests. |
 | 10.2 File Editor Widget | pending | 0/5 | Needs M6 |
 | 10.3 File Browser Widget | pending | 0/4 | Needs M6, M7.1 |
 | 10.4 Diff Viewer | pending | 0/4 | Needs M6, M7.2 |
@@ -201,7 +201,7 @@
 | 10.6 Slash Commands Integration | pending | 0/5 | Needs 10.1-10.4, M6.6 |
 | 10.7 Agent Integration | pending | 0/4 | Needs 10.1-10.2, M3, M5 |
 
-**Milestone Status:** Not Started
+**Milestone Status:** In Progress (1/7 tickets done)
 
 ---
 
@@ -234,7 +234,7 @@
 | M7: Execution Layer | 6 | 28 | Complete |
 | M8: GitHub Integration | 8 | 32 | Complete |
 | M9: Polish & Production | 12 | 42 | Complete |
-| M10: In-TUI File Editor | 7 | 31 | Not Started |
+| M10: In-TUI File Editor | 7 | 31 | In Progress |
 | M11: Usage Analytics | 5 | 16 | Not Started |
 | **Total** | **77** | **310** | |
 

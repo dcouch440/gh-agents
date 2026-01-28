@@ -6,6 +6,7 @@
 //! - `Command` - Slash command parsing and execution
 //! - `AppLayout`, `HeaderBar` - Layout system
 //! - `InputBar` - Input widget
+//! - `SyntaxHighlighter` - Code syntax highlighting
 //! - Views for different screens
 
 mod app;
@@ -15,6 +16,7 @@ mod input;
 mod layout;
 pub mod menu;
 mod mode;
+pub mod syntax;
 pub mod views;
 
 pub use app::{init_terminal, install_panic_hook, restore_terminal, App, Tui, View};
@@ -27,3 +29,4 @@ pub use menu::{
     MenuItemType, MenuState, MenuStatus, MenuWidget,
 };
 pub use mode::{AppMode, RefactorModeState};
+pub use syntax::SyntaxHighlighter;

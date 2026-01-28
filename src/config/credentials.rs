@@ -99,8 +99,8 @@ impl CredentialsStore {
             return Err(CredentialsError::NotFound);
         }
 
-        let json =
-            fs::read_to_string(&self.path).map_err(|e| CredentialsError::ReadError(e.to_string()))?;
+        let json = fs::read_to_string(&self.path)
+            .map_err(|e| CredentialsError::ReadError(e.to_string()))?;
 
         let credentials: StoredCredentials =
             serde_json::from_str(&json).map_err(|e| CredentialsError::ParseError(e.to_string()))?;

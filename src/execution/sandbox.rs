@@ -226,10 +226,7 @@ impl Sandbox {
             format!("--memory={}", self.config.memory_limit),
             format!("--cpus={}", self.config.cpu_limit),
             // Mount project directory
-            format!(
-                "--volume={}:/workspace:rw",
-                self.ctx.project_root.display()
-            ),
+            format!("--volume={}:/workspace:rw", self.ctx.project_root.display()),
             "--workdir=/workspace".to_string(),
         ];
 

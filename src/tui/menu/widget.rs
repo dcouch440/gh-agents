@@ -20,7 +20,11 @@ pub struct MenuWidget<'a> {
 impl<'a> MenuWidget<'a> {
     /// Create a new menu widget
     pub fn new(menu: &'a Menu, state: &'a MenuState, status: &'a MenuStatus) -> Self {
-        Self { menu, state, status }
+        Self {
+            menu,
+            state,
+            status,
+        }
     }
 }
 
@@ -89,8 +93,8 @@ impl Widget for MenuWidget<'_> {
                     )));
                 }
                 _ => {
-                    let is_selected = item.is_selectable()
-                        && selectable_index == self.state.selected_index;
+                    let is_selected =
+                        item.is_selectable() && selectable_index == self.state.selected_index;
 
                     // Build the line
                     let mut spans = Vec::new();
@@ -121,9 +125,8 @@ impl Widget for MenuWidget<'_> {
                     // Calculate available width for label
                     let prefix_width = 2; // "> " or "  "
                     let suffix_width = 4; // " → " or " X " (shortcut) or "   "
-                    let label_max_width = inner
-                        .width
-                        .saturating_sub(prefix_width + suffix_width) as usize;
+                    let label_max_width =
+                        inner.width.saturating_sub(prefix_width + suffix_width) as usize;
 
                     // Truncate label if needed
                     let label = if item.label.len() > label_max_width {
@@ -230,12 +233,7 @@ pub fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
     let x = area.x + (area.width.saturating_sub(width)) / 2;
     let y = area.y + (area.height.saturating_sub(height)) / 2;
 
-    Rect::new(
-        x,
-        y,
-        width.min(area.width),
-        height.min(area.height),
-    )
+    Rect::new(x, y, width.min(area.width), height.min(area.height))
 }
 
 #[cfg(test)]

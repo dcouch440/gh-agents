@@ -21,26 +21,51 @@ pub fn build_menu_tree() -> HashMap<String, Menu> {
 /// Build the main menu
 fn build_main_menu() -> Menu {
     Menu::new("main", "Menu")
-        .add_item(MenuItem::submenu("prod_ctrl", "Production Control", "production"))
-        .add_item(MenuItem::submenu("refactor_ctrl", "Refactor Mode", "refactor"))
-        .add_item(MenuItem::submenu("pending_ctrl", "Pending Changes", "pending"))
+        .add_item(MenuItem::submenu(
+            "prod_ctrl",
+            "Production Control",
+            "production",
+        ))
+        .add_item(MenuItem::submenu(
+            "refactor_ctrl",
+            "Refactor Mode",
+            "refactor",
+        ))
+        .add_item(MenuItem::submenu(
+            "pending_ctrl",
+            "Pending Changes",
+            "pending",
+        ))
         .add_item(MenuItem::submenu("nav", "Navigate", "navigate"))
         .add_item(MenuItem::separator())
-        .add_item(MenuItem::action("settings", "Settings", MenuAction::OpenSettings))
+        .add_item(MenuItem::action(
+            "settings",
+            "Settings",
+            MenuAction::OpenSettings,
+        ))
         .add_item(MenuItem::separator())
-        .add_item(
-            MenuItem::action("quit", "Quit", MenuAction::Quit)
-                .with_shortcut('q'),
-        )
+        .add_item(MenuItem::action("quit", "Quit", MenuAction::Quit).with_shortcut('q'))
 }
 
 /// Build the production control submenu
 fn build_production_control_menu() -> Menu {
     Menu::new("production", "Production Control")
-        .add_item(MenuItem::action("start", "Start Production", MenuAction::StartProduction))
-        .add_item(MenuItem::action("pause", "Pause Production", MenuAction::PauseProduction))
+        .add_item(MenuItem::action(
+            "start",
+            "Start Production",
+            MenuAction::StartProduction,
+        ))
+        .add_item(MenuItem::action(
+            "pause",
+            "Pause Production",
+            MenuAction::PauseProduction,
+        ))
         .add_item(MenuItem::separator())
-        .add_item(MenuItem::submenu("milestone_ctrl", "Set Milestone Limit", "milestone"))
+        .add_item(MenuItem::submenu(
+            "milestone_ctrl",
+            "Set Milestone Limit",
+            "milestone",
+        ))
         .add_item(MenuItem::action(
             "clear_limit",
             "Clear Milestone Limit",
@@ -99,9 +124,21 @@ fn build_refactor_mode_menu() -> Menu {
 /// Build the pending changes submenu
 fn build_pending_changes_menu() -> Menu {
     Menu::new("pending", "Pending Changes")
-        .add_item(MenuItem::action("apply", "Apply Changes", MenuAction::ApplyChanges))
-        .add_item(MenuItem::action("discard", "Discard Changes", MenuAction::DiscardChanges))
-        .add_item(MenuItem::action("review", "Review Changes", MenuAction::ReviewChanges))
+        .add_item(MenuItem::action(
+            "apply",
+            "Apply Changes",
+            MenuAction::ApplyChanges,
+        ))
+        .add_item(MenuItem::action(
+            "discard",
+            "Discard Changes",
+            MenuAction::DiscardChanges,
+        ))
+        .add_item(MenuItem::action(
+            "review",
+            "Review Changes",
+            MenuAction::ReviewChanges,
+        ))
         .add_item(MenuItem::separator())
         .add_item(MenuItem::back())
 }
@@ -109,13 +146,41 @@ fn build_pending_changes_menu() -> Menu {
 /// Build the navigate submenu
 fn build_navigate_menu() -> Menu {
     Menu::new("navigate", "Navigate")
-        .add_item(MenuItem::action("nav_home", "Home", MenuAction::GoToView(View::Home)))
-        .add_item(MenuItem::action("nav_feed", "Feed", MenuAction::GoToView(View::Feed)))
-        .add_item(MenuItem::action("nav_main", "Main Chat", MenuAction::GoToView(View::Main)))
-        .add_item(MenuItem::action("nav_logs", "Logs", MenuAction::GoToView(View::Logs)))
-        .add_item(MenuItem::action("nav_tasks", "Tasks", MenuAction::GoToView(View::Tasks)))
-        .add_item(MenuItem::action("nav_agents", "Agents", MenuAction::GoToView(View::Agents)))
-        .add_item(MenuItem::action("nav_costs", "Costs", MenuAction::GoToView(View::Costs)))
+        .add_item(MenuItem::action(
+            "nav_home",
+            "Home",
+            MenuAction::GoToView(View::Home),
+        ))
+        .add_item(MenuItem::action(
+            "nav_feed",
+            "Feed",
+            MenuAction::GoToView(View::Feed),
+        ))
+        .add_item(MenuItem::action(
+            "nav_main",
+            "Main Chat",
+            MenuAction::GoToView(View::Main),
+        ))
+        .add_item(MenuItem::action(
+            "nav_logs",
+            "Logs",
+            MenuAction::GoToView(View::Logs),
+        ))
+        .add_item(MenuItem::action(
+            "nav_tasks",
+            "Tasks",
+            MenuAction::GoToView(View::Tasks),
+        ))
+        .add_item(MenuItem::action(
+            "nav_agents",
+            "Agents",
+            MenuAction::GoToView(View::Agents),
+        ))
+        .add_item(MenuItem::action(
+            "nav_costs",
+            "Costs",
+            MenuAction::GoToView(View::Costs),
+        ))
         .add_item(MenuItem::separator())
         .add_item(MenuItem::back())
 }

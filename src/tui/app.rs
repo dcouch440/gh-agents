@@ -31,7 +31,9 @@ use crate::db::{get_milestone_limit, set_milestone_limit};
 use crate::orchestration::Scheduler;
 use crate::refactor::RefactorAgent;
 use crate::tui::commands::{generate_help_text, Command, CommandResult};
-use crate::tui::menu::{build_menu_tree, centered_rect, menu_size, MenuAction, MenuController, MenuStatus, MenuWidget};
+use crate::tui::menu::{
+    build_menu_tree, centered_rect, menu_size, MenuAction, MenuController, MenuStatus, MenuWidget,
+};
 use crate::tui::mode::{AppMode, RefactorModeState};
 
 /// Terminal type alias for convenience
@@ -837,7 +839,6 @@ impl App {
 
         Ok(())
     }
-
 }
 
 #[cfg(test)]

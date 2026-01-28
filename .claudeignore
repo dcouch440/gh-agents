@@ -1,0 +1,39 @@
+# Build artifacts
+target/
+
+# Dependencies lock file (large, auto-generated)
+Cargo.lock
+
+# Git
+.git/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment (may contain secrets)
+.env
+.env.local
+.env.*.local
+
+# Runtime data
+.nexor/state.db
+.nexor/state.db-*
+.nexor/logs/
+
+# Binary/compiled files
+*.so
+*.dylib
+*.dll
+*.rlib
+*.rmeta
+
+# Claude session data
+.claude/

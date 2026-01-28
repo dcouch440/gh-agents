@@ -250,7 +250,11 @@ impl MergeQueue {
     }
 
     /// Get all entries in the queue for a repo, ordered by position
-    pub async fn get_queue(&self, owner: &str, repo: &str) -> Result<Vec<PrQueueEntry>, QueueError> {
+    pub async fn get_queue(
+        &self,
+        owner: &str,
+        repo: &str,
+    ) -> Result<Vec<PrQueueEntry>, QueueError> {
         let rows: Vec<(
             String,
             String,
@@ -604,8 +608,8 @@ impl MergeQueue {
         repo: &str,
         older_than: std::time::Duration,
     ) -> Result<u32, QueueError> {
-        let cutoff =
-            Utc::now() - chrono::Duration::from_std(older_than).unwrap_or(chrono::Duration::days(7));
+        let cutoff = Utc::now()
+            - chrono::Duration::from_std(older_than).unwrap_or(chrono::Duration::days(7));
 
         let result = sqlx::query(
             r#"
@@ -698,12 +702,7 @@ pub struct MergeQueueProcessor {
 }
 
 impl MergeQueueProcessor {
-    pub fn new(
-        pool: SqlitePool,
-        github: GitHubClient,
-        git: GitOps,
-        config: PrMergeConfig,
-    ) -> Self {
+    pub fn new(pool: SqlitePool, github: GitHubClient, git: GitOps, config: PrMergeConfig) -> Self {
         Self {
             queue: MergeQueue::new(pool),
             github,

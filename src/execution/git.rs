@@ -245,8 +245,9 @@ impl GitOps {
             }
         }
 
-        status.is_dirty =
-            !status.staged.is_empty() || !status.unstaged.is_empty() || !status.untracked.is_empty();
+        status.is_dirty = !status.staged.is_empty()
+            || !status.unstaged.is_empty()
+            || !status.untracked.is_empty();
 
         tracing::debug!(
             branch = ?status.branch,
@@ -748,9 +749,7 @@ impl GitOps {
 
                 Ok(MergeResult::Conflict { conflicting_files })
             } else {
-                Ok(MergeResult::Failed {
-                    reason: combined,
-                })
+                Ok(MergeResult::Failed { reason: combined })
             }
         }
     }

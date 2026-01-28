@@ -78,8 +78,7 @@ impl HeadlessRunner {
 
     /// Parse input file into tasks
     fn parse_input_file(path: &PathBuf) -> Result<Vec<TaskInput>> {
-        let content = std::fs::read_to_string(path)
-            .context("failed to read input file")?;
+        let content = std::fs::read_to_string(path).context("failed to read input file")?;
 
         // Try JSON array first
         if let Ok(tasks) = serde_json::from_str::<Vec<TaskInput>>(&content) {
@@ -254,7 +253,8 @@ mod tests {
 
     #[test]
     fn task_input_deserializes() {
-        let json = r#"{"description": "Test", "priority": "high", "github_issue": "https://example.com"}"#;
+        let json =
+            r#"{"description": "Test", "priority": "high", "github_issue": "https://example.com"}"#;
         let task: TaskInput = serde_json::from_str(json).unwrap();
         assert_eq!(task.description, "Test");
         assert_eq!(task.priority, Some("high".to_string()));
