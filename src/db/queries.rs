@@ -430,4 +430,78 @@ mod tests {
 
         pool.close().await;
     }
+
+    // Auth tests
+
+    #[tokio::test]
+    async fn test_password_flow() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        // Initially no password
+        assert!(!has_password(&pool).await.unwrap());
+        assert!(get_password(&pool).await.unwrap().is_none());
+
+        // Set password
+        set_password(&pool, "test_hash_123").await.unwrap();
+
+        // Now has password
+        assert!(has_password(&pool).await.unwrap());
+        let stored = get_password(&pool).await.unwrap();
+        assert_eq!(stored, Some("test_hash_123".to_string()));
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn test_set_password_twice_fails() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        // Set password first time
+        set_password(&pool, "hash1").await.unwrap();
+
+        // Setting again should fail (unique constraint on id=1)
+        let result = set_password(&pool, "hash2").await;
+        assert!(result.is_err());
+
+        // Original password should still be there
+        let stored = get_password(&pool).await.unwrap();
+        assert_eq!(stored, Some("hash1".to_string()));
+
+        pool.close().await;
+    }
+}
+
+// ============================================================================
+// Auth queries
+// ============================================================================
+
+/// Check if a password has been configured
+pub async fn has_password(pool: &SqlitePool) -> Result<bool> {
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM auth_config WHERE id = 1")
+        .fetch_one(pool)
+        .await
+        .context("Failed to check password existence")?;
+
+    Ok(count.0 > 0)
+}
+
+/// Store the password hash (first-time setup)
+pub async fn set_password(pool: &SqlitePool, password_hash: &str) -> Result<()> {
+    sqlx::query("INSERT INTO auth_config (id, password_hash) VALUES (1, ?)")
+        .bind(password_hash)
+        .execute(pool)
+        .await
+        .context("Failed to set password")?;
+
+    Ok(())
+}
+
+/// Get the stored password hash
+pub async fn get_password(pool: &SqlitePool) -> Result<Option<String>> {
+    let row: Option<(String,)> = sqlx::query_as("SELECT password_hash FROM auth_config WHERE id = 1")
+        .fetch_optional(pool)
+        .await
+        .context("Failed to get password")?;
+
+    Ok(row.map(|r| r.0))
 }

@@ -15,6 +15,7 @@ use tokio::sync::broadcast;
 use uuid::Uuid;
 
 use super::state::{AppState, OrchestratorMessage, StreamChunk};
+use super::auth;
 use crate::db;
 use crate::types::{AgentPoolConfig, AgentTier, Priority, Task, TierModels};
 
@@ -429,6 +430,119 @@ pub async fn clear_chat_history(State(state): State<AppState>) -> StatusCode {
         Ok(_) => StatusCode::NO_CONTENT,
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
+}
+
+// ============================================================================
+// Auth Endpoints (Ticket 10.5)
+// ============================================================================
+
+/// Request body for auth setup
+#[derive(Deserialize)]
+pub struct SetupRequest {
+    pub password: String,
+}
+
+/// Response for auth setup
+#[derive(Serialize)]
+pub struct SetupResponse {
+    pub message: String,
+}
+
+/// POST /api/auth/setup - First-run password configuration
+///
+/// This endpoint is only available when no password has been configured yet.
+/// Once a password is set, this endpoint returns 409 Conflict.
+pub async fn auth_setup(
+    State(state): State<AppState>,
+    Json(request): Json<SetupRequest>,
+) -> Result<Json<SetupResponse>, (StatusCode, String)> {
+    // Check if already setup
+    if db::has_password(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    {
+        return Err((
+            StatusCode::CONFLICT,
+            "Password already configured".to_string(),
+        ));
+    }
+
+    // Validate password strength
+    if request.password.len() < 8 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Password must be at least 8 characters".to_string(),
+        ));
+    }
+
+    // Hash and store
+    let hash = auth::hash_password(&request.password)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    db::set_password(&state.db, &hash)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(SetupResponse {
+        message: "Password configured successfully".to_string(),
+    }))
+}
+
+/// Request body for login
+#[derive(Deserialize)]
+pub struct LoginRequest {
+    pub password: String,
+}
+
+/// Response for successful login
+#[derive(Serialize)]
+pub struct LoginResponse {
+    pub token: String,
+    pub expires_in: u64,
+}
+
+/// POST /api/auth/login - Authenticate and get JWT token
+///
+/// Verifies the provided password and returns a JWT token valid for 24 hours.
+pub async fn auth_login(
+    State(state): State<AppState>,
+    Json(request): Json<LoginRequest>,
+) -> Result<Json<LoginResponse>, StatusCode> {
+    let stored_hash = db::get_password(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?; // No password configured
+
+    if !auth::verify_password(&request.password, &stored_hash) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    let token = auth::create_token(&state.jwt_secret, 24) // 24 hour expiry
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(LoginResponse {
+        token,
+        expires_in: 86400, // seconds
+    }))
+}
+
+/// Response for /api/auth/me
+#[derive(Serialize)]
+pub struct MeResponse {
+    pub user: String,
+    pub authenticated: bool,
+    pub token_expires: usize,
+}
+
+/// GET /api/auth/me - Get current user info from token
+///
+/// Requires a valid JWT token in Authorization header.
+pub async fn auth_me(auth: auth::AuthUser) -> Json<MeResponse> {
+    Json(MeResponse {
+        user: auth.claims.sub,
+        authenticated: true,
+        token_expires: auth.claims.exp,
+    })
 }
 
 // ============================================================================
