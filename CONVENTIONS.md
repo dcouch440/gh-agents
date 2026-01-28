@@ -774,12 +774,6 @@ export function TaskCard({ task, onEdit, className }: TaskCardProps) {
 // Local state: useState
 const [count, setCount] = useState(0);
 
-// Side effects: useEffect
-useEffect(() => {
-  const subscription = subscribe();
-  return () => subscription.unsubscribe();
-}, [deps]);
-
 // Context for shared state
 interface AppContextValue {
   user: User | null;
@@ -795,6 +789,120 @@ export function useAppContext() {
   }
   return context;
 }
+```
+
+### useEffect Cleanup
+
+**Always clean up side effects.** Prevent memory leaks, race conditions, and stale updates.
+
+```tsx
+// ✅ GOOD: Clean up subscriptions
+useEffect(() => {
+  const subscription = apiClient.subscribe((data) => {
+    setData(data);
+  });
+
+  return () => {
+    subscription.unsubscribe();
+  };
+}, []);
+
+// ✅ GOOD: Clean up timers
+useEffect(() => {
+  const timer = setTimeout(() => {
+    setShowMessage(true);
+  }, 3000);
+
+  return () => {
+    clearTimeout(timer);
+  };
+}, []);
+
+// ✅ GOOD: Clean up intervals
+useEffect(() => {
+  const interval = setInterval(() => {
+    fetchLatestData();
+  }, 5000);
+
+  return () => {
+    clearInterval(interval);
+  };
+}, []);
+
+// ✅ GOOD: Prevent stale state updates after unmount
+useEffect(() => {
+  let mounted = true;
+
+  fetchData().then((data) => {
+    if (mounted) {
+      setData(data);
+    }
+  });
+
+  return () => {
+    mounted = false;
+  };
+}, []);
+
+// ✅ GOOD: Clean up event listeners
+useEffect(() => {
+  const handleResize = () => {
+    setWindowWidth(window.innerWidth);
+  };
+
+  window.addEventListener('resize', handleResize);
+
+  return () => {
+    window.removeEventListener('resize', handleResize);
+  };
+}, []);
+
+// ✅ GOOD: Clean up WebSocket connections
+useEffect(() => {
+  const ws = new WebSocket('ws://localhost:8080');
+
+  ws.onmessage = (event) => {
+    setMessages((prev) => [...prev, event.data]);
+  };
+
+  return () => {
+    ws.close();
+  };
+}, []);
+
+// ✅ GOOD: Abort fetch requests on unmount
+useEffect(() => {
+  const abortController = new AbortController();
+
+  fetch('/api/data', { signal: abortController.signal })
+    .then((res) => res.json())
+    .then((data) => setData(data))
+    .catch((err) => {
+      if (err.name !== 'AbortError') {
+        console.error(err);
+      }
+    });
+
+  return () => {
+    abortController.abort();
+  };
+}, []);
+
+// ❌ BAD: No cleanup
+useEffect(() => {
+  const subscription = apiClient.subscribe((data) => {
+    setData(data); // Memory leak if component unmounts
+  });
+  // Missing cleanup!
+}, []);
+
+// ❌ BAD: No cleanup for timer
+useEffect(() => {
+  setTimeout(() => {
+    setShowMessage(true); // Error if component unmounts
+  }, 3000);
+  // Missing cleanup!
+}, []);
 ```
 
 ### Testing
