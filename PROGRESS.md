@@ -98,13 +98,13 @@
 
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
-| 5.1 Planner (Ticket → Slices) | pending | 0/5 | Needs M3, M4 |
+| 5.1 Planner (Ticket → Slices) | done | 5/5 | Planner, PlannerConfig, DecompositionError, PlannerOutput, retry logic, 13 tests |
 | 5.2 Task Queue | pending | 0/4 | Needs M1 |
 | 5.3 Router (Task → Tier) | pending | 0/3 | Needs 5.1 |
 | 5.4 Dependency Tracking | pending | 0/3 | Needs 5.2 |
 | 5.5 Scheduler | pending | 0/3 | Needs 5.2-5.4 |
 
-**Milestone Status:** Not Started
+**Milestone Status:** In Progress (1/5 tickets done)
 
 ---
 
