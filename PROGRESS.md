@@ -4,26 +4,40 @@
 
 ## Current Focus
 
-**Active:** M10 In-TUI File Editor
-**Next:** 10.2 File Editor Widget
+**Active:** M10 Server Layer (Architectural Pivot)
+**Next:** 10.1 Axum Server Setup
 **Blocked:** None
-**Completed:** M1 Foundation, M2 LLM Layer, M3 Agent Runtime, M4 Prompt Engineering, M5 Orchestration Core, M6 TUI Basic, M7 Execution Layer, M8 GitHub Integration, M9 Polish & Production
-
-**Milestone 1 Decomposition:** Complete - see `decomp/M1/`
-**Milestone 2 Decomposition:** Complete - see `decomp/M2/`
-**Milestone 3 Decomposition:** Complete - see `decomp/M3/`
-**Milestone 4 Decomposition:** Complete - see `decomp/M4/`
-**Milestone 5 Decomposition:** Complete - see `decomp/M5/`
-**Milestone 6 Decomposition:** Complete - see `decomp/M6/`
-**Milestone 7 Decomposition:** Complete - see `decomp/M7/`
-**Milestone 8 Decomposition:** Complete - see `decomp/M8/`
-**Milestone 9 Decomposition:** Complete - see `decomp/M9/`
-**Milestone 10 Decomposition:** Complete - see `decomp/M10/`
-**Milestone 11 Decomposition:** Complete - see `decomp/M11/`
 
 ---
 
-## Milestone 1: Foundation
+## Architectural Pivot (2026-01-27)
+
+**Decision**: Migrate from ratatui TUI to Rust backend + React frontend.
+
+**Rationale**:
+- Web UI provides broader reach (browser, mobile)
+- React ecosystem for faster UI development
+- Rust backend keeps performance where it matters (agents, LLM, orchestration)
+- Path to SaaS deployment
+
+**What's Retained** (83% of work):
+- M1-M5: Foundation, LLM, Agents, Prompts, Orchestration
+- M7-M9: Execution, GitHub, Polish
+
+**What's Deprecated**:
+- M6: TUI Basic (replaced by React frontend)
+- M10-old: TUI File Editor
+- M11-old: TUI Analytics
+
+**New Milestones**:
+- M10: Server Layer (Axum HTTP + WebSocket)
+- M11: React Foundation
+- M12: React Features
+- M13: React Polish
+
+---
+
+## Milestone 1: Foundation - COMPLETE
 
 **Goal**: Project compiles, core types exist, config loads, database works.
 
@@ -39,7 +53,7 @@
 
 ---
 
-## Milestone 2: LLM Layer
+## Milestone 2: LLM Layer - COMPLETE
 
 **Goal**: Can send prompts to Anthropic and get streaming responses.
 
@@ -54,7 +68,7 @@
 
 ---
 
-## Milestone 3: Agent Runtime
+## Milestone 3: Agent Runtime - COMPLETE
 
 **Goal**: Agents can be spawned, receive tasks, execute them, and report back.
 
@@ -72,7 +86,7 @@
 
 ---
 
-## Milestone 4: Prompt Engineering & Agent Intelligence
+## Milestone 4: Prompt Engineering - COMPLETE
 
 **Goal**: Robust, tested prompts that drive reliable agent behavior.
 
@@ -94,7 +108,7 @@
 
 ---
 
-## Milestone 5: Orchestration Core
+## Milestone 5: Orchestration Core - COMPLETE
 
 **Goal**: Orchestrator can decompose tickets into slices, route to appropriate agents.
 
@@ -110,25 +124,19 @@
 
 ---
 
-## Milestone 6: TUI Basic
+## Milestone 6: TUI Basic - DEPRECATED
 
-**Goal**: Functional terminal interface with feed, chat, and navigation.
+> **Status**: DEPRECATED - Superseded by React frontend (M10-M13)
+>
+> This milestone's code will be removed. See "Code Cleanup" section below.
 
-| Ticket | Status | Progress | Notes |
-|--------|--------|----------|-------|
-| 6.1 Terminal Setup | done | 3/3 | init_terminal, restore_terminal, install_panic_hook, App.run(), main.rs integration |
-| 6.2 Layout System | done | 3/3 | AppLayout, HeaderBar, InputBar widgets, 8 tests |
-| 6.3 Home Screen | done | 3/3 | HomeView widget, view state management, typing transitions to Main |
-| 6.4 Feed View (/feed) | done | 4/4 | FeedView widget, FeedItem types, scrolling, App integration, 13 tests |
-| 6.5 Chat View (/main) | done | 5/5 | ChatView widget, message types, submission, mock orchestrator, 9 tests |
-| 6.6 Slash Command Router | done | 4/4 | Command parsing, /home added, execute_command, error handling, 8 tests |
-| 6.7 Logs View (/logs) | done | 3/3 | LogsView widget, LogEntry/LogLevel types, level filtering, 8 tests |
-
-**Milestone Status:** Complete (7/7 tickets done)
+| Ticket | Status | Notes |
+|--------|--------|-------|
+| 6.1-6.7 | deprecated | Code to be removed |
 
 ---
 
-## Milestone 7: Execution Layer
+## Milestone 7: Execution Layer - COMPLETE
 
 **Goal**: Agents can read/write files, run git commands, execute tests.
 
@@ -145,7 +153,7 @@
 
 ---
 
-## Milestone 8: GitHub Integration
+## Milestone 8: GitHub Integration - COMPLETE
 
 **Goal**: Can pull issues from GitHub, create PRs, and manage PR merge queue.
 
@@ -164,13 +172,13 @@
 
 ---
 
-## Milestone 9: Polish & Production
+## Milestone 9: Polish & Production - COMPLETE
 
 **Goal**: Production-ready, fully-featured.
 
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
-| 9.1 Remaining TUI Views | done | 3/3 | TasksView, AgentsView, CostsView widgets, 49 tests |
+| 9.1 Remaining TUI Views | done | 3/3 | TasksView, AgentsView, CostsView widgets, 49 tests - **TO BE REMOVED** |
 | 9.2 Headless Mode | done | 4/4 | cli.rs, headless.rs, task input parsing, 13 tests |
 | 9.3 Error Handling Polish | done | 3/3 | NexorError, ErrorDisplay, suggestions, 34 tests |
 | 9.4 Docker Packaging | done | 3/3 | Dockerfile, docker-compose.yml, docs/docker.md |
@@ -178,65 +186,146 @@
 | 9.6 Observability & Replay | done | 5/5 | LlmCallLogger, DecisionReplay, SessionExporter, ReplayView, 29 tests |
 | 9.7 Refactor Mode Foundation | done | 4/4 | Types, DB, scheduler pause/resume |
 | 9.8 Refactor Agent | done | 4/4 | Intent detection, change proposals, apply changes |
-| 9.9 TUI Integration | done | 3/3 | /refactor command, mode switching, status bar |
+| 9.9 TUI Integration | done | 3/3 | /refactor command, mode switching, status bar - **TO BE REMOVED** |
 | 9.10 Menu Types & Data | done | 3/3 | MenuItem, MenuAction, Menu types, MenuState, build_menu_tree(), milestone limit DB, 24 tests |
-| 9.11 Menu Widget & Rendering | done | 3/3 | MenuWidget, MenuController, centered_rect, 22 tests |
-| 9.12 App Integration | done | 3/3 | Menu command, status, actions, Esc trigger, milestone limit |
+| 9.11 Menu Widget & Rendering | done | 3/3 | MenuWidget, MenuController, centered_rect, 22 tests - **TO BE REMOVED** |
+| 9.12 App Integration | done | 3/3 | Menu command, status, actions, Esc trigger, milestone limit - **TO BE REMOVED** |
 
 **Milestone Status:** Complete (12/12 tickets done)
 
 ---
 
-## Milestone 10: In-TUI File Editor
+## Milestone 10: Server Layer - IN PROGRESS
 
-**Goal**: Users can view and edit files directly within the TUI, including files agents are working on.
+**Goal**: Axum HTTP server exposing REST API and WebSocket for React frontend.
 
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
-| 10.1 File Viewer Widget | done | 4/4 | FileViewer with scrolling, line numbers, syntax highlighting, search. 34 tests. |
-| 10.2 File Editor Widget | pending | 0/5 | Needs M6 |
-| 10.3 File Browser Widget | pending | 0/4 | Needs M6, M7.1 |
-| 10.4 Diff Viewer | pending | 0/4 | Needs M6, M7.2 |
-| 10.5 Save & Commit Flow | pending | 0/5 | Needs 10.2, M7.1, M7.2 |
-| 10.6 Slash Commands Integration | pending | 0/5 | Needs 10.1-10.4, M6.6 |
-| 10.7 Agent Integration | pending | 0/4 | Needs 10.1-10.2, M3, M5 |
+| 10.1 Axum Server Setup | pending | 0/4 | |
+| 10.2 REST API - Core Endpoints | pending | 0/5 | |
+| 10.3 REST API - Chat Endpoint | pending | 0/4 | |
+| 10.4 WebSocket Gateway | pending | 0/5 | |
+| 10.5 Authentication | pending | 0/5 | |
+| 10.6 Static File Serving | pending | 0/3 | |
 
-**Milestone Status:** In Progress (1/7 tickets done)
+**Milestone Status:** Not Started (0/6 tickets done)
 
 ---
 
-## Milestone 11: Usage Analytics
+## Milestone 11: React Foundation - NOT STARTED
 
-**Goal**: Full visibility into agent activity, costs, and performance.
+**Goal**: React app scaffold with auth, routing, and layout.
 
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
-| 11.1 Analytics Query Layer | pending | 0/3 | Needs M1, M2 |
-| 11.2 Stats Dashboard (/stats) | pending | 0/4 | Needs 11.1, M6 |
-| 11.3 Cost Breakdown (/costs) | pending | 0/3 | Needs 11.1, M6 |
-| 11.4 Session Tracking | pending | 0/3 | Needs M1 |
-| 11.5 Export & Reports | pending | 0/3 | Needs 11.1 |
+| 11.1 Project Setup | pending | 0/5 | |
+| 11.2 API Client | pending | 0/4 | |
+| 11.3 Authentication UI | pending | 0/4 | |
+| 11.4 Layout Components | pending | 0/4 | |
 
-**Milestone Status:** Not Started
+**Milestone Status:** Not Started (0/4 tickets done)
+
+---
+
+## Milestone 12: React Features - NOT STARTED
+
+**Goal**: Core feature views - chat, feed, tasks, files.
+
+| Ticket | Status | Progress | Notes |
+|--------|--------|----------|-------|
+| 12.1 Chat View | pending | 0/5 | |
+| 12.2 Feed View | pending | 0/4 | |
+| 12.3 Tasks View | pending | 0/5 | |
+| 12.4 Agents View | pending | 0/4 | |
+| 12.5 File Browser & Editor | pending | 0/5 | |
+| 12.6 Diff Viewer | pending | 0/3 | |
+
+**Milestone Status:** Not Started (0/6 tickets done)
+
+---
+
+## Milestone 13: React Polish - NOT STARTED
+
+**Goal**: Analytics, settings, mobile responsiveness, production readiness.
+
+| Ticket | Status | Progress | Notes |
+|--------|--------|----------|-------|
+| 13.1 Analytics Dashboard | pending | 0/4 | Decomp complete |
+| 13.2 Settings Page | pending | 0/3 | Decomp complete |
+| 13.3 Mobile Responsiveness | pending | 0/3 | Decomp complete |
+| 13.4 Production Build | pending | 0/4 | Decomp complete |
+| 13.5 Documentation Update | pending | 0/2 | Decomp complete |
+
+**Milestone Status:** Not Started (0/5 tickets done)
 
 ---
 
 ## Summary
 
-| Milestone | Tickets | Slices | Status |
-|-----------|---------|--------|--------|
-| M1: Foundation | 5 | 24 | Complete |
-| M2: LLM Layer | 4 | 13 | Complete |
-| M3: Agent Runtime | 7 | 26 | Complete |
-| M4: Prompt Engineering | 11 | 55 | Complete |
-| M5: Orchestration Core | 5 | 18 | Complete |
-| M6: TUI Basic | 7 | 25 | Complete |
-| M7: Execution Layer | 6 | 28 | Complete |
-| M8: GitHub Integration | 8 | 32 | Complete |
-| M9: Polish & Production | 12 | 42 | Complete |
-| M10: In-TUI File Editor | 7 | 31 | In Progress |
-| M11: Usage Analytics | 5 | 16 | Not Started |
-| **Total** | **77** | **310** | |
+| Milestone | Tickets | Status |
+|-----------|---------|--------|
+| M1: Foundation | 5 | Complete |
+| M2: LLM Layer | 4 | Complete |
+| M3: Agent Runtime | 7 | Complete |
+| M4: Prompt Engineering | 11 | Complete |
+| M5: Orchestration Core | 5 | Complete |
+| M6: TUI Basic | - | **DEPRECATED** |
+| M7: Execution Layer | 6 | Complete |
+| M8: GitHub Integration | 8 | Complete |
+| M9: Polish & Production | 12 | Complete |
+| M10: Server Layer | 6 | Not Started |
+| M11: React Foundation | 4 | Not Started |
+| M12: React Features | 6 | Not Started |
+| M13: React Polish | 5 | Not Started |
+| **Total Active** | **79** | |
+
+---
+
+## Code Cleanup (COMPLETE)
+
+The following code will be removed as part of the architectural pivot:
+
+### Files to Delete
+
+```
+src/tui/                    # Entire directory
+├── mod.rs
+├── app.rs
+├── commands.rs
+├── errors.rs
+├── mode.rs
+├── theme.rs
+├── menu/
+│   ├── mod.rs
+│   └── controller.rs
+└── views/
+    ├── mod.rs
+    ├── chat.rs
+    ├── feed.rs
+    ├── logs.rs
+    ├── file_viewer.rs
+    └── ...
+```
+
+### Dependencies to Remove (Cargo.toml)
+
+```toml
+# Remove these:
+ratatui = "0.28"
+crossterm = "0.28"
+syntect = "5"  # Will use JS-based highlighting in React
+```
+
+### Dependencies to Add (Cargo.toml)
+
+```toml
+# Add these:
+axum = "0.7"
+tower-http = { version = "0.5", features = ["cors", "fs", "trace"] }
+tokio-tungstenite = "0.21"
+argon2 = "0.5"
+jsonwebtoken = "9"
+```
 
 ---
 
@@ -244,22 +333,14 @@
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
-| | | |
+| 2026-01-27 | Pivot from TUI to Rust + React | Better UX, broader reach, path to SaaS |
 
 ---
 
-## Agent Workflow
+## Next Steps
 
-When picking up work:
-1. Read `PROGRESS.md` to find next unblocked ticket
-2. Read corresponding section in `ROADMAP.md` for full spec
-3. Update `PROGRESS.md`: set status to `in_progress`
-4. Do the work (implement slices)
-5. Update `PROGRESS.md`: mark slices done, add notes
-6. When ticket complete: set status to `done`
-
-**Status values:**
-- `pending` - Not started
-- `in_progress` - Being worked on
-- `blocked` - Waiting on dependency
-- `done` - Complete and verified
+1. [x] Delete `src/tui/` directory - DONE
+2. [x] Update `Cargo.toml` (remove TUI deps, add server deps) - DONE
+3. [x] Update `src/main.rs` to launch server instead of TUI - DONE
+4. [x] Create `src/server/mod.rs` - DONE (stub with health check)
+5. [ ] Start Ticket 10.1: Axum Server Setup (continue building out server)

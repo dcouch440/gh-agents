@@ -1,89 +1,110 @@
-# Milestone 10: In-TUI File Editor
+# Milestone 10: Server Layer
 
-> View and edit files directly within the TUI
+> Axum HTTP server exposing REST API and WebSocket for React frontend
 
 ## Goal
 
-Users can view and edit files directly within nexor, including files that agents are currently working on. This provides a seamless development experience without leaving the TUI.
+A working HTTP server that exposes the existing orchestration core via REST API and WebSocket.
 
-## Checkpoint
+**Checkpoint**: Can curl `/api/health`, send a chat message via API, receive streaming updates via WebSocket.
 
-Can open a file from an agent's task context, edit it in-app with syntax highlighting, save changes, and optionally commit to the current branch.
+---
 
-## Dependencies
+## Context
 
-- **M6: TUI Basic** - Core TUI infrastructure, layout, views
-- **M7: Execution Layer** - File operations, git operations
+This milestone bridges the Rust backend (M1-M9) with the new React frontend (M11-M13). The orchestration core is complete - we're adding a web layer on top.
+
+**Architecture**:
+```
+React Frontend (M11-M13)
+         │
+         ▼ HTTP + WebSocket
+┌─────────────────────────────────────────────┐
+│            Axum Server (M10)                │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐      │
+│  │REST API │ │WebSocket│ │  Auth   │      │
+│  └─────────┘ └─────────┘ └─────────┘      │
+└─────────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────┐
+│     Existing Orchestration Core (M1-M9)     │
+└─────────────────────────────────────────────┘
+```
+
+---
 
 ## Tickets
 
-| Ticket | Title | Slices | Status |
-|--------|-------|--------|--------|
-| 10.1 | File Viewer Widget | 4 | pending |
-| 10.2 | File Editor Widget | 5 | pending |
-| 10.3 | File Browser Widget | 4 | pending |
-| 10.4 | Diff Viewer | 4 | pending |
-| 10.5 | Save & Commit Flow | 5 | pending |
-| 10.6 | Slash Commands Integration | 5 | pending |
-| 10.7 | Agent Integration | 4 | pending |
+| Ticket | Title | Slices | Dependencies |
+|--------|-------|--------|--------------|
+| 10.1 | Axum Server Setup | 4 | None |
+| 10.2 | REST API - Core Endpoints | 5 | 10.1 |
+| 10.3 | REST API - Chat Endpoint | 4 | 10.1, 10.2 |
+| 10.4 | WebSocket Gateway | 5 | 10.1 |
+| 10.5 | Authentication | 5 | 10.1, 10.2 |
+| 10.6 | Static File Serving | 3 | 10.1 |
 
-**Total Slices:** 31
+---
 
-## Key Features
+## New Dependencies
 
-### User Flow
+Add to `Cargo.toml`:
+
+```toml
+# HTTP Server
+axum = "0.7"
+tower-http = { version = "0.5", features = ["cors", "fs", "trace"] }
+
+# WebSocket
+tokio-tungstenite = "0.21"
+axum-extra = { version = "0.9", features = ["typed-header"] }
+
+# Auth
+argon2 = "0.5"
+jsonwebtoken = "9"
+```
+
+---
+
+## New File Structure
 
 ```
-Agent Task View                    File Editor
-┌─────────────────────┐           ┌─────────────────────────────┐
-│ Task: Implement     │           │ src/auth/login.rs    Ctrl+X │
-│ login endpoint      │  ────►    ├─────────────────────────────┤
-│                     │  /edit    │  1 │ use crate::auth::...   │
-│ Files:              │           │  2 │ use crate::db::...     │
-│  • src/auth/login.rs│           │  3 │                        │
-│    [View] [Edit]    │           │  4 │ pub async fn login()   │
-└─────────────────────┘           └─────────────────────────────┘
+src/server/
+├── mod.rs           # Server entry point, router assembly
+├── api.rs           # REST endpoint handlers
+├── ws.rs            # WebSocket handler
+├── auth.rs          # Authentication middleware and handlers
+├── state.rs         # Shared application state (AppState)
+└── extractors.rs    # Custom Axum extractors
 ```
 
-### Keybindings (nano-style)
+---
 
-| Key | Action |
-|-----|--------|
-| Ctrl+X | Exit (prompts to save) |
-| Ctrl+O | Save file |
-| Ctrl+G | Go to line |
-| Ctrl+W | Search |
-| Ctrl+K | Cut line |
-| Ctrl+U | Paste |
+## Code to Remove
 
-### Slash Commands
+Before starting this milestone, delete the TUI code:
 
-| Command | Description |
-|---------|-------------|
-| `/view <path>` | Open file in read-only viewer |
-| `/edit <path>` | Open file in editor |
-| `/diff <path>` | Show diff for file |
-| `/files` | Open file browser |
+```bash
+rm -rf src/tui/
+```
 
-## Technical Stack
+Update `src/lib.rs` to remove `pub mod tui;`
 
-| Component | Crate |
-|-----------|-------|
-| Editor widget | `tui-textarea` |
-| Syntax highlighting | `syntect` |
-| Git operations | `git2` |
-| File tree | Custom or `tui-tree-widget` |
+Update `Cargo.toml` to remove:
+- `ratatui`
+- `crossterm`
+- `syntect`
 
-## Parallelization
+---
 
-- 10.1 (Viewer) and 10.2 (Editor) can be worked in parallel
-- 10.3 (Browser) and 10.4 (Diff) can be worked in parallel
-- 10.5 (Save/Commit) needs 10.2
-- 10.6 (Commands) needs 10.1-10.4
-- 10.7 (Agent Integration) needs 10.1-10.2
+## Completion Criteria
 
-## Notes
-
-- This milestone enables human-AI collaborative editing
-- Important for debugging agent output and making quick fixes
-- Reduces context switching by keeping users in the TUI
+- [ ] Server starts on configurable port
+- [ ] CORS configured for local development
+- [ ] All core REST endpoints working
+- [ ] WebSocket connects and broadcasts
+- [ ] Local auth with password hash
+- [ ] JWT tokens issued and validated
+- [ ] Static files served in production mode
+- [ ] Graceful shutdown on SIGTERM
