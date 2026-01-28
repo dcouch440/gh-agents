@@ -3,14 +3,18 @@
 use clap::Parser;
 use std::path::PathBuf;
 
-/// AI Agent Orchestration TUI for GitHub Workflows
+/// AI Agent Orchestration for GitHub Workflows
 #[derive(Parser, Debug)]
 #[command(name = "nexor")]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
-    /// Run in headless mode (no TUI)
+    /// Run in headless mode (no server)
     #[arg(short = 'H', long)]
     pub headless: bool,
+
+    /// Port to listen on (server mode only)
+    #[arg(short, long, default_value = "3000")]
+    pub port: u16,
 
     /// Task description to process (headless mode)
     #[arg(short, long)]
@@ -82,6 +86,7 @@ impl Default for Args {
     fn default() -> Self {
         Self {
             headless: false,
+            port: 3000,
             task: None,
             input: None,
             output: None,

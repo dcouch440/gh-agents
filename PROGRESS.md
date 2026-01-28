@@ -5,7 +5,7 @@
 ## Current Focus
 
 **Active:** M10 Server Layer (Architectural Pivot)
-**Next:** 10.1 Axum Server Setup
+**Next:** 10.2 REST API - Core Endpoints
 **Blocked:** None
 
 ---
@@ -201,14 +201,14 @@
 
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
-| 10.1 Axum Server Setup | pending | 0/4 | |
+| 10.1 Axum Server Setup | done | 4/4 | Server, state, graceful shutdown, CLI port flag |
 | 10.2 REST API - Core Endpoints | pending | 0/5 | |
 | 10.3 REST API - Chat Endpoint | pending | 0/4 | |
 | 10.4 WebSocket Gateway | pending | 0/5 | |
 | 10.5 Authentication | pending | 0/5 | |
 | 10.6 Static File Serving | pending | 0/3 | |
 
-**Milestone Status:** Not Started (0/6 tickets done)
+**Milestone Status:** In Progress (1/6 tickets done)
 
 ---
 
@@ -273,7 +273,7 @@
 | M7: Execution Layer | 6 | Complete |
 | M8: GitHub Integration | 8 | Complete |
 | M9: Polish & Production | 12 | Complete |
-| M10: Server Layer | 6 | Not Started |
+| M10: Server Layer | 6 | In Progress (1/6) |
 | M11: React Foundation | 4 | Not Started |
 | M12: React Features | 6 | Not Started |
 | M13: React Polish | 5 | Not Started |
@@ -343,4 +343,5 @@ jsonwebtoken = "9"
 2. [x] Update `Cargo.toml` (remove TUI deps, add server deps) - DONE
 3. [x] Update `src/main.rs` to launch server instead of TUI - DONE
 4. [x] Create `src/server/mod.rs` - DONE (stub with health check)
-5. [ ] Start Ticket 10.1: Axum Server Setup (continue building out server)
+5. [x] Ticket 10.1: Axum Server Setup - DONE (state module, graceful shutdown, port CLI flag)
+6. [ ] Start Ticket 10.2: REST API - Core Endpoints

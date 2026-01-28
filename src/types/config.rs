@@ -203,6 +203,21 @@ pub struct AppConfig {
     pub pr_merge: PrMergeConfig,
 }
 
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            models: TierModels::default(),
+            verbosity: VerbosityLevel::default(),
+            autonomy: AutonomyLevel::default(),
+            approval_gates: ApprovalGates::default(),
+            git_strategy: GitStrategy::default(),
+            sandbox_mode: SandboxMode::default(),
+            pool: AgentPoolConfig::default(),
+            pr_merge: PrMergeConfig::default(),
+        }
+    }
+}
+
 impl AppConfig {
     /// Merge global and project configs (project overrides global)
     pub fn merge(global: GlobalConfig, project: Option<ProjectConfig>) -> Self {
