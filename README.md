@@ -127,6 +127,16 @@ nexor/
 │   ├── work/              ← Current work tracking
 │   └── reports/           ← Completed work reports
 └── src/                   ← Rust source code
+    ├── types/             ← Core type definitions
+    ├── config/            ← Configuration loading
+    ├── db/                ← Database operations
+    ├── llm/               ← LLM provider clients
+    ├── agents/            ← Agent runtime
+    ├── orchestration/     ← Task planning & scheduling
+    ├── prompts/           ← Prompt engineering
+    ├── execution/         ← File/git/test ops
+    ├── github/            ← GitHub API integration
+    └── tui/               ← Terminal UI (theme, views, widgets)
 ```
 
 ---
@@ -136,9 +146,10 @@ nexor/
 See `PROGRESS.md` for detailed status.
 
 **Summary:**
-- 9 Milestones planned
-- 55 Tickets defined
-- 222 Slices total
+- 11 Milestones planned
+- 77 Tickets defined
+- 310 Slices total
+- M1-M9 Complete, M10 In Progress
 
 ---
 
