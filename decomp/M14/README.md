@@ -46,9 +46,27 @@ Let the orchestrator tag each slice with a difficulty level, and have the router
 
 ## Ticket 14.2: Add Difficulty Metadata to Task Routing
 
-> Teach the router to read a `difficulty` metadata key and map it to model tiers.
+> Wire the existing `estimated_complexity` field through to task metadata so the router can use it.
+
+### Key Discovery
+
+The planner already parses `estimated_complexity` (low/medium/high) per task from the LLM's JSON output via `TaskOutput` in `src/prompts/schemas/decomposition.rs:53`. But `convert_to_planner_output` in `src/orchestration/planner.rs:316` sets `metadata: None`, throwing this data away. The LLM output format doesn't need to change.
 
 ### Changes
+
+**`src/orchestration/planner.rs` (~line 299, in `convert_to_planner_output`)**:
+- Map `estimated_complexity` into task metadata instead of discarding it:
+```rust
+let mut metadata = HashMap::new();
+metadata.insert("difficulty".to_string(), match task_output.estimated_complexity {
+    ComplexityOutput::Low => "simple",
+    ComplexityOutput::Medium => "standard",
+    ComplexityOutput::High => "complex",
+}.to_string());
+
+// then in the Task struct:
+metadata: Some(metadata),  // was: metadata: None,
+```
 
 **`src/orchestration/router.rs`**:
 - Add a new `RuleMatcher` variant:
@@ -75,14 +93,11 @@ Priority 0 (existing default): → Worker tier (covers "standard" implicitly)
 
 **Why not use existing matchers:** `HasMetadata` only checks key existence, not value. `ComplexityAbove` uses a numeric threshold which doesn't cleanly map to exact difficulty levels. `MetadataEquals` is ~10 lines and reusable for future metadata-driven routing.
 
-**`src/prompts/templates/orchestrator.rs`**:
-- In the decomposition prompt, add instruction for the orchestrator to tag each slice:
-  - `simple` — mechanical, follows existing patterns, low ambiguity
-  - `standard` — typical implementation work, some decisions needed
-  - `complex` — architectural, cross-cutting, high judgment required
+**No prompt changes needed** — the LLM already outputs `estimated_complexity` per task. The orchestrator prompt in `src/prompts/templates/orchestrator.rs` already asks for this field as part of the JSON schema.
 
 ### Verify
 - `cargo test` — router tests pass
+- `cargo test planner` — planner conversion test shows metadata populated
 - New routing rules resolve correctly for each difficulty level
 
 ---
