@@ -84,6 +84,18 @@ impl AgentPool {
     /// Spawn a new agent of the specified tier
     ///
     /// Returns the new agent's ID, or an error if the pool limit is reached.
+    ///
+    /// # Model Configuration
+    /// The agent uses the provided `model_config`. For difficulty-based model
+    /// selection, tasks are routed to appropriate tiers:
+    /// - `difficulty=complex` → Orchestrator tier → Opus
+    /// - `difficulty=standard` → Worker tier → Sonnet
+    /// - `difficulty=simple` → Utility tier → Sonnet
+    ///
+    /// # Future: Model Override
+    /// TODO: Support per-task model override via task.metadata["model_override"].
+    /// This would require architectural changes to allow agents to switch models
+    /// per task, rather than being bound to a model at spawn time.
     pub fn spawn_agent(
         &mut self,
         tier: AgentTier,

@@ -25,6 +25,9 @@ pub enum RuleMatcher {
     /// Match if task has specific metadata key
     HasMetadata(String),
 
+    /// Match if task metadata key equals a specific value
+    MetadataEquals(String, String),
+
     /// Match if task complexity exceeds threshold ("low", "medium", "high")
     ComplexityAbove(String),
 
@@ -103,7 +106,26 @@ impl Default for RouterConfig {
                     target_tier: AgentTier::Orchestrator,
                     priority: 60,
                 },
-                // Default: Worker tier
+                // Difficulty-based routing
+                RoutingRule {
+                    name: "simple_difficulty".to_string(),
+                    matcher: RuleMatcher::MetadataEquals(
+                        "difficulty".to_string(),
+                        "simple".to_string(),
+                    ),
+                    target_tier: AgentTier::Utility,
+                    priority: 75,
+                },
+                RoutingRule {
+                    name: "complex_difficulty".to_string(),
+                    matcher: RuleMatcher::MetadataEquals(
+                        "difficulty".to_string(),
+                        "complex".to_string(),
+                    ),
+                    target_tier: AgentTier::Orchestrator,
+                    priority: 65,
+                },
+                // Default: Worker tier (handles "standard" difficulty and others)
                 RoutingRule {
                     name: "default_to_worker".to_string(),
                     matcher: RuleMatcher::Always,
@@ -185,6 +207,14 @@ impl Router {
 
             RuleMatcher::HasMetadata(key) => {
                 if self.has_metadata(task, key) {
+                    Some(rule.target_tier)
+                } else {
+                    None
+                }
+            }
+
+            RuleMatcher::MetadataEquals(key, value) => {
+                if self.get_metadata(task, key).as_deref() == Some(value.as_str()) {
                     Some(rule.target_tier)
                 } else {
                     None
