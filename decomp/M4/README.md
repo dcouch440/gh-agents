@@ -87,6 +87,14 @@ Create a comprehensive prompt system where agents consistently produce structure
 - 4.9 needs 4.5 complete (recovery needs output schemas)
 - 4.7 needs 4.5 and M2 (testing framework needs schemas and LLM)
 
+**Recommended execution order**:
+1. Start with 4.1 (Prompt Architecture Design)
+2. After 4.1: Start 4.2, 4.3, 4.4, 4.5, 4.8, 4.10 in parallel
+3. After 4.2, 4.3, 4.4: Start 4.6 (Few-Shot Examples)
+4. After 4.5: Start 4.9 (Self-Correction)
+5. After 4.5 + M2 complete: Start 4.7 (Prompt Testing Framework)
+6. After 4.8 + M2 complete: Start 4.11 (Context Window Validation)
+
 ---
 
 ## File Structure
@@ -184,3 +192,95 @@ Unlike code that compiles, prompts need LLM calls to validate. Plan for:
 - Mocked LLM responses for unit tests (fast, deterministic)
 - Real LLM calls for integration tests (slow, verify actual behavior)
 - Regression suite to detect prompt changes that affect output
+
+---
+
+## Extensions Required for Plan Mode (M5.0)
+
+Plan Mode (ticket 5.0) requires additional prompts and schemas. These should be added as extensions to the existing tickets:
+
+### Ticket 4.2 Extensions (Orchestrator Thinking Patterns)
+
+Add new thinking patterns for Plan Mode:
+
+| Pattern | Purpose |
+|---------|---------|
+| **Request Classification** | Determine scale: Quick, Task, Feature, Project, Epic |
+| **PRD Generation** | Generate product requirements for Project/Epic scale |
+| **Epic Decomposition** | Break epic into milestones with dependencies |
+
+**New file**: `src/prompts/templates/planning.rs`
+
+### Ticket 4.5 Extensions (Structured Output Design)
+
+Add new output schemas:
+
+```rust
+// Classification output
+struct ClassificationOutput {
+    scale: String,           // "quick" | "task" | "feature" | "project" | "epic"
+    confidence: f32,         // 0.0-1.0
+    reasoning: String,
+    suggested_title: String,
+    indicators: Vec<String>,
+}
+
+// PRD output
+struct PrdOutput {
+    title: String,
+    vision: String,
+    milestones: Vec<MilestoneOutput>,
+    technical_decisions: Vec<String>,
+    data_models: Vec<String>,
+}
+
+struct MilestoneOutput {
+    number: u32,
+    title: String,
+    goal: String,
+    checkpoint: String,
+    estimated_tickets: u32,
+    dependencies: Vec<u32>,
+}
+```
+
+**New file**: `src/prompts/schemas/planning.rs`
+
+### Ticket 4.6 Extensions (Few-Shot Examples)
+
+Add examples for Plan Mode:
+
+| Example Type | Count | Purpose |
+|--------------|-------|---------|
+| Classification | 5 | One per scale level |
+| Mini-PRD | 2-3 | Project-level examples |
+| Full PRD | 2-3 | Epic-level examples |
+
+**New file**: `src/prompts/examples/planning.rs`
+
+### Updated File Structure
+
+```
+src/prompts/
+├── templates/
+│   ├── orchestrator.rs
+│   ├── worker.rs
+│   ├── utility.rs
+│   └── planning.rs        ← NEW: Plan Mode prompts
+├── schemas/
+│   ├── decomposition.rs
+│   ├── task_result.rs
+│   ├── review.rs
+│   ├── error.rs
+│   └── planning.rs        ← NEW: Classification, PRD schemas
+└── examples/
+    ├── decomposition.rs
+    ├── implementation.rs
+    ├── review.rs
+    ├── selector.rs
+    └── planning.rs        ← NEW: Plan Mode examples
+```
+
+### Implementation Note
+
+These extensions can be implemented as part of the existing tickets (4.2, 4.5, 4.6) or as a separate "4.12: Plan Mode Prompts" ticket. The latter is cleaner but adds another ticket to track.

@@ -7,6 +7,8 @@ use std::collections::HashMap;
 
 use crate::prompts::builder::PromptBuilder;
 
+use super::manager::{estimate_tokens, ContextCategory};
+
 /// Handles injection of dynamic context into prompts.
 #[derive(Debug, Default)]
 pub struct ContextInjector {
@@ -28,40 +30,6 @@ pub struct ContextSource {
     pub token_estimate: usize,
     /// Category for budget allocation
     pub category: ContextCategory,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ContextCategory {
-    /// Files being modified (40% budget)
-    FilesToModify,
-    /// Reference files (25% budget)
-    ReferenceFiles,
-    /// Task description + history (20% budget)
-    TaskAndHistory,
-    /// Project conventions (15% budget)
-    Conventions,
-}
-
-impl ContextCategory {
-    /// Budget percentage for this category
-    pub fn budget_percent(&self) -> f32 {
-        match self {
-            Self::FilesToModify => 0.40,
-            Self::ReferenceFiles => 0.25,
-            Self::TaskAndHistory => 0.20,
-            Self::Conventions => 0.15,
-        }
-    }
-
-    /// All categories in priority order
-    pub fn all() -> &'static [ContextCategory] {
-        &[
-            ContextCategory::FilesToModify,
-            ContextCategory::ReferenceFiles,
-            ContextCategory::TaskAndHistory,
-            ContextCategory::Conventions,
-        ]
-    }
 }
 
 impl ContextInjector {
@@ -236,34 +204,9 @@ impl ContextInjector {
     }
 }
 
-/// Simple token estimation (roughly 4 chars per token).
-///
-/// Note: This is a placeholder. Ticket 4.11 will implement proper token counting.
-pub fn estimate_tokens(text: &str) -> usize {
-    text.len().div_ceil(4)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_context_category_budget_totals_100() {
-        let total: f32 = ContextCategory::all()
-            .iter()
-            .map(|c| c.budget_percent())
-            .sum();
-        assert!((total - 1.0).abs() < 0.001);
-    }
-
-    #[test]
-    fn test_estimate_tokens() {
-        assert_eq!(estimate_tokens(""), 0);
-        assert_eq!(estimate_tokens("a"), 1);
-        assert_eq!(estimate_tokens("abcd"), 1);
-        assert_eq!(estimate_tokens("abcde"), 2);
-        assert_eq!(estimate_tokens("abcdefgh"), 2);
-    }
 
     #[test]
     fn test_context_injector_add_sources() {
