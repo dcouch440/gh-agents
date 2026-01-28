@@ -7,9 +7,14 @@
 //! - `PromptVersion` - Version tracking for debugging/replay
 //! - `schemas` - JSON schemas for structured LLM outputs
 
+pub mod templates;
 mod builder;
 mod context;
+
 pub mod schemas;
+
+pub mod tools;
+
 mod version;
 
 pub use builder::*;

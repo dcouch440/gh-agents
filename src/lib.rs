@@ -9,5 +9,6 @@ pub mod llm;
 pub mod logging;
 pub mod orchestration;
 pub mod prompts;
+pub mod refactor;
 pub mod tui;
 pub mod types;
