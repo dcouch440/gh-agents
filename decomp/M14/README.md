@@ -51,15 +51,29 @@ Let the orchestrator tag each slice with a difficulty level, and have the router
 ### Changes
 
 **`src/orchestration/router.rs`**:
-- Add three new routing rules (before the default fallback):
-
+- Add a new `RuleMatcher` variant:
+```rust
+/// Match if task metadata key equals a specific value
+MetadataEquals(String, String),  // (key, value)
 ```
-Priority 75: HasMetadata("difficulty=simple") → Utility tier
-Priority 65: HasMetadata("difficulty=complex") → Orchestrator tier
+- Add matching logic in `evaluate_rule`:
+```rust
+RuleMatcher::MetadataEquals(key, value) => {
+    if self.get_metadata(task, key).as_deref() == Some(value.as_str()) {
+        Some(rule.target_tier)
+    } else {
+        None
+    }
+}
+```
+- Add two new routing rules to `RouterConfig::default()` (before the default fallback):
+```
+Priority 75: MetadataEquals("difficulty", "simple") → Utility tier
+Priority 65: MetadataEquals("difficulty", "complex") → Orchestrator tier
 Priority 0 (existing default): → Worker tier (covers "standard" implicitly)
 ```
 
-This uses the existing `RuleMatcher::HasMetadata` and `RoutingRule` types. No new structs needed.
+**Why not use existing matchers:** `HasMetadata` only checks key existence, not value. `ComplexityAbove` uses a numeric threshold which doesn't cleanly map to exact difficulty levels. `MetadataEquals` is ~10 lines and reusable for future metadata-driven routing.
 
 **`src/prompts/templates/orchestrator.rs`**:
 - In the decomposition prompt, add instruction for the orchestrator to tag each slice:
@@ -104,5 +118,5 @@ This means:
 
 - This is intentionally minimal. Three files touched for routing, three for prompts, one config default change.
 - The orchestrator's role stays the same — it still writes the full plan in context. It just writes intent instead of implementation.
-- No new types, no new traits, no new modules. Uses existing metadata, routing rules, and tier config.
+- One new enum variant (`MetadataEquals`) in `RuleMatcher`. No new types, traits, or modules otherwise.
 - Future enhancement: add extended thinking (`budget_tokens`) for complex tasks via the Anthropic API. Not in scope here.
