@@ -1076,6 +1076,65 @@ Connect editor to agent workflow.
 
 ---
 
+## Milestone 11: Usage Analytics
+
+**Goal**: Full visibility into agent activity, costs, and performance through dashboards and reports.
+
+**Checkpoint**: Can view `/stats` dashboard, see cost breakdown in `/costs`, track session history, and export reports.
+
+### Ticket 11.1: Analytics Query Layer
+
+Build query functions for aggregating usage data.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 11.1.1 | Implement cost aggregation queries (by tier, model, task, time period) | Queries return correct aggregates |
+| 11.1.2 | Implement task metrics queries (completion rate, avg duration, by status) | Queries return correct metrics |
+| 11.1.3 | Implement agent utilization queries (active time, idle time, tasks per agent) | Queries return correct utilization |
+
+### Ticket 11.2: Stats Dashboard (`/stats`)
+
+Overview dashboard with key metrics.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 11.2.1 | Create `StatsView` widget with layout sections | Widget renders |
+| 11.2.2 | Display task metrics (completed, failed, in progress, success rate) | Metrics display correctly |
+| 11.2.3 | Display cost summary (total, by tier) | Costs display correctly |
+| 11.2.4 | Add simple ASCII trend chart for costs over time | Chart renders |
+
+### Ticket 11.3: Cost Breakdown (`/costs`)
+
+Detailed cost analysis view.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 11.3.1 | Create `CostsView` widget with tabbed sections (by tier, by model, by task) | Widget renders with tabs |
+| 11.3.2 | Implement cost table with sorting | Can sort by column |
+| 11.3.3 | Add time period filter (today, week, month, all time) | Filter changes data |
+
+### Ticket 11.4: Session Tracking
+
+Track user work sessions.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 11.4.1 | Create `sessions` table (id, started_at, ended_at, tasks_completed, total_cost) | Migration runs |
+| 11.4.2 | Start session on app launch, end on exit | Session recorded |
+| 11.4.3 | Display session history in `/stats` | Sessions listed |
+
+### Ticket 11.5: Export & Reports
+
+Export data for external analysis.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 11.5.1 | Implement CSV export for cost records | CSV file generated |
+| 11.5.2 | Implement JSON export for full analytics snapshot | JSON file generated |
+| 11.5.3 | Add `/export` command with format options | Command works |
+
+---
+
 ## Parallelization Notes
 
 ### Can be parallelized (no dependencies):
@@ -1118,7 +1177,8 @@ Connect editor to agent workflow.
 - [ ] Milestone 7: Execution Layer
 - [ ] Milestone 8: GitHub Integration
 - [ ] Milestone 9: Polish & Production
-- [ ] Milestone 10: In-TUI File Editor ← **NEW**
+- [ ] Milestone 10: In-TUI File Editor
+- [ ] Milestone 11: Usage Analytics ← **NEW**
 
 ---
 

@@ -4,10 +4,10 @@
 
 ## Current Focus
 
-**Active:** M7 Execution Layer (3/6 done)
-**Next:** M7.4 Docker Sandbox, M7.5 Approval Gates, M7.6 Git Merge Operations
+**Active:** None
+**Next:** M8 GitHub Integration
 **Blocked:** None
-**Completed:** M1 Foundation, M2 LLM Layer, M3 Agent Runtime, M4 Prompt Engineering, M5 Orchestration Core, M6 TUI Basic
+**Completed:** M1 Foundation, M2 LLM Layer, M3 Agent Runtime, M4 Prompt Engineering, M5 Orchestration Core, M6 TUI Basic, M7 Execution Layer
 
 **Milestone 1 Decomposition:** Complete - see `decomp/M1/`
 **Milestone 2 Decomposition:** Complete - see `decomp/M2/`
@@ -19,6 +19,7 @@
 **Milestone 8 Decomposition:** Complete - see `decomp/M8/`
 **Milestone 9 Decomposition:** Complete - see `decomp/M9/`
 **Milestone 10 Decomposition:** Complete - see `decomp/M10/`
+**Milestone 11 Decomposition:** Complete - see `decomp/M11/`
 
 ---
 
@@ -134,13 +135,13 @@
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
 | 7.1 File Operations | done | 3/4 | FileOps with read/write/delete/list, path validation, 13 tests |
-| 7.2 Git Operations | done | 5/6 | GitOps with status/branch/commit/diff/push, 9 tests |
+| 7.2 Git Operations | done | 6/6 | GitOps with status/branch/commit/diff/push/merge, 16 tests |
 | 7.3 Test Runner | done | 4/4 | TestRunner with framework detection, run/parse/streaming, 11 tests |
-| 7.4 Docker Sandbox | pending | 0/4 | Needs 7.1-7.3 |
-| 7.5 Approval Gates | pending | 0/4 | Needs M6 (TUI) |
-| 7.6 Git Merge Operations | pending | 0/6 | Needs 7.2 |
+| 7.4 Docker Sandbox | done | 4/4 | Sandbox with config builder, mounts, resource limits, 3 tests |
+| 7.5 Approval Gates | done | 4/4 | ApprovalGate, DangerousOperation, InteractiveApprovalGate, 8 tests |
+| 7.6 Git Merge Operations | done | 6/6 | fetch/merge/pull, conflict detection/resolution/abort, 7 tests |
 
-**Milestone Status:** In Progress (3/6 tickets done)
+**Milestone Status:** Complete (6/6 tickets done)
 
 ---
 
@@ -150,7 +151,7 @@
 
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
-| 8.0 GitHub Authentication | pending | 0/5 | Needs M1 |
+| 8.0 GitHub Authentication | in_progress | 0/5 | Needs M1 |
 | 8.1 GitHub API Client | pending | 0/4 | Needs 8.0 |
 | 8.2 Issue Sync | pending | 0/3 | Needs 8.1 |
 | 8.3 PR Creation | pending | 0/3 | Needs 8.1, M7 |
@@ -204,6 +205,22 @@
 
 ---
 
+## Milestone 11: Usage Analytics
+
+**Goal**: Full visibility into agent activity, costs, and performance.
+
+| Ticket | Status | Progress | Notes |
+|--------|--------|----------|-------|
+| 11.1 Analytics Query Layer | pending | 0/3 | Needs M1, M2 |
+| 11.2 Stats Dashboard (/stats) | pending | 0/4 | Needs 11.1, M6 |
+| 11.3 Cost Breakdown (/costs) | pending | 0/3 | Needs 11.1, M6 |
+| 11.4 Session Tracking | pending | 0/3 | Needs M1 |
+| 11.5 Export & Reports | pending | 0/3 | Needs 11.1 |
+
+**Milestone Status:** Not Started
+
+---
+
 ## Summary
 
 | Milestone | Tickets | Slices | Status |
@@ -214,11 +231,12 @@
 | M4: Prompt Engineering | 11 | 55 | Complete |
 | M5: Orchestration Core | 5 | 18 | Complete |
 | M6: TUI Basic | 7 | 25 | Complete |
-| M7: Execution Layer | 6 | 28 | Not Started |
+| M7: Execution Layer | 6 | 28 | In Progress (3/6 tickets) |
 | M8: GitHub Integration | 8 | 32 | Not Started |
 | M9: Polish & Production | 12 | 42 | In Progress (3/12 tickets) |
 | M10: In-TUI File Editor | 7 | 31 | Not Started |
-| **Total** | **72** | **294** | |
+| M11: Usage Analytics | 5 | 16 | Not Started |
+| **Total** | **77** | **310** | |
 
 ---
 
