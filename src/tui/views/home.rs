@@ -106,12 +106,30 @@ impl Widget for HomeView {
 
             let commands = [
                 ("Commands:", Style::default().fg(Color::White)),
-                ("  /main     - Chat with orchestrator", Style::default().fg(Color::DarkGray)),
-                ("  /feed     - View agent activity", Style::default().fg(Color::DarkGray)),
-                ("  /logs     - View technical logs", Style::default().fg(Color::DarkGray)),
-                ("  /refactor - Enter refactor mode", Style::default().fg(Color::DarkGray)),
-                ("  /help     - Show all commands", Style::default().fg(Color::DarkGray)),
-                ("  /quit     - Exit nexor", Style::default().fg(Color::DarkGray)),
+                (
+                    "  /main     - Chat with orchestrator",
+                    Style::default().fg(Color::DarkGray),
+                ),
+                (
+                    "  /feed     - View agent activity",
+                    Style::default().fg(Color::DarkGray),
+                ),
+                (
+                    "  /logs     - View technical logs",
+                    Style::default().fg(Color::DarkGray),
+                ),
+                (
+                    "  /refactor - Enter refactor mode",
+                    Style::default().fg(Color::DarkGray),
+                ),
+                (
+                    "  /help     - Show all commands",
+                    Style::default().fg(Color::DarkGray),
+                ),
+                (
+                    "  /quit     - Exit nexor",
+                    Style::default().fg(Color::DarkGray),
+                ),
             ];
 
             for (cmd, style) in commands {

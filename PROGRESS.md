@@ -117,12 +117,12 @@
 | 6.1 Terminal Setup | done | 3/3 | init_terminal, restore_terminal, install_panic_hook, App.run(), main.rs integration |
 | 6.2 Layout System | done | 3/3 | AppLayout, HeaderBar, InputBar widgets, 8 tests |
 | 6.3 Home Screen | done | 3/3 | HomeView widget, view state management, typing transitions to Main |
-| 6.4 Feed View (/feed) | pending | 0/4 | Needs 6.2 |
-| 6.5 Chat View (/main) | pending | 0/5 | Needs 6.2, M3 |
+| 6.4 Feed View (/feed) | done | 4/4 | FeedView widget, FeedItem types, scrolling, App integration, 13 tests |
+| 6.5 Chat View (/main) | done | 5/5 | ChatView widget, message types, submission, mock orchestrator, 9 tests |
 | 6.6 Slash Command Router | pending | 0/4 | Needs 6.2 |
 | 6.7 Logs View (/logs) | pending | 0/3 | Needs 6.2, M1.5 |
 
-**Milestone Status:** In Progress (3/7 tickets done)
+**Milestone Status:** In Progress (5/7 tickets done)
 
 ---
 
