@@ -119,7 +119,10 @@ mod tests {
     #[test]
     fn mode_names() {
         assert_eq!(AppMode::Normal.name(), "Normal");
-        assert_eq!(AppMode::Refactor(RefactorModeState::default()).name(), "Refactor");
+        assert_eq!(
+            AppMode::Refactor(RefactorModeState::default()).name(),
+            "Refactor"
+        );
     }
 
     #[test]

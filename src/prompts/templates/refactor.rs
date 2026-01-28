@@ -106,10 +106,7 @@ impl RefactorPrompts {
     /// # Arguments
     /// * `proposed_change` - Description of the proposed change
     /// * `in_progress_tasks` - List of in-progress task summaries
-    pub fn analyze_impact(
-        proposed_change: &str,
-        in_progress_tasks: &[&str],
-    ) -> PromptBuilder {
+    pub fn analyze_impact(proposed_change: &str, in_progress_tasks: &[&str]) -> PromptBuilder {
         let tasks_text = in_progress_tasks
             .iter()
             .enumerate()
@@ -236,17 +233,15 @@ mod tests {
 
     #[test]
     fn test_conversation_prompt_basic() {
-        let builder = RefactorPrompts::conversation(
-            "I want to change how we handle errors",
-            &[],
-            None,
-            None,
-        );
+        let builder =
+            RefactorPrompts::conversation("I want to change how we handle errors", &[], None, None);
 
         let prompt = builder.build();
 
         assert!(prompt.text.contains("Refactor Orchestrator"));
-        assert!(prompt.text.contains("I want to change how we handle errors"));
+        assert!(prompt
+            .text
+            .contains("I want to change how we handle errors"));
         assert!(prompt.text.contains("HALT_NOW"));
         assert!(prompt.text.contains("REFACTOR_NEEDED"));
     }
@@ -297,14 +292,9 @@ mod tests {
 
     #[test]
     fn test_propose_changes_prompt_basic() {
-        let files = vec![
-            ("decomp/M2/2.3.md", "# Ticket 2.3\n\nOld content"),
-        ];
-        let builder = RefactorPrompts::propose_changes(
-            "Split ticket 2.3 into smaller slices",
-            &files,
-            None,
-        );
+        let files = vec![("decomp/M2/2.3.md", "# Ticket 2.3\n\nOld content")];
+        let builder =
+            RefactorPrompts::propose_changes("Split ticket 2.3 into smaller slices", &files, None);
 
         let prompt = builder.build();
 
@@ -344,10 +334,8 @@ mod tests {
             "Implement database schema (ticket 1.4)",
             "Add API endpoints (ticket 2.1)",
         ];
-        let builder = RefactorPrompts::analyze_impact(
-            "Change the database schema for tickets",
-            &tasks,
-        );
+        let builder =
+            RefactorPrompts::analyze_impact("Change the database schema for tickets", &tasks);
 
         let prompt = builder.build();
 

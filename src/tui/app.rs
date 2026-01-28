@@ -124,7 +124,10 @@ impl App {
                 AppMode::Refactor(state) => format!(" | {}", state.summary()),
                 _ => String::new(),
             };
-            format!("{} {} | {}{}", mode_indicator, view_name, "Type /exit to leave", state_summary)
+            format!(
+                "{} {} | {}{}",
+                mode_indicator, view_name, "Type /exit to leave", state_summary
+            )
         }
     }
 
@@ -242,9 +245,7 @@ impl App {
                 // In normal mode, exit quits the app
                 Ok(CommandResult::Quit)
             }
-            AppMode::Refactor(_) => {
-                self.exit_refactor_mode().await
-            }
+            AppMode::Refactor(_) => self.exit_refactor_mode().await,
         }
     }
 
