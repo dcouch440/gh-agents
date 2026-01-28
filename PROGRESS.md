@@ -5,7 +5,7 @@
 ## Current Focus
 
 **Active:** M11 React Foundation
-**Next:** 11.1 Project Setup
+**Next:** 11.2 API Client
 **Planned:** M14 Dynamic Agent Selection (can run in parallel with M10-M13)
 **Blocked:** None
 
@@ -213,18 +213,18 @@
 
 ---
 
-## Milestone 11: React Foundation - NOT STARTED
+## Milestone 11: React Foundation - IN PROGRESS
 
 **Goal**: React app scaffold with auth, routing, and layout.
 
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
-| 11.1 Project Setup | pending | 0/5 | |
+| 11.1 Project Setup | done | 5/5 | Vite + React + TypeScript, TailwindCSS v4, React Router, Zustand, proxy configured |
 | 11.2 API Client | pending | 0/4 | |
 | 11.3 Authentication UI | pending | 0/4 | |
 | 11.4 Layout Components | pending | 0/4 | |
 
-**Milestone Status:** Not Started (0/4 tickets done)
+**Milestone Status:** In Progress (1/4 tickets done)
 
 ---
 
