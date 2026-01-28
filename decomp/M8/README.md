@@ -24,8 +24,11 @@ Build GitHub integration that allows nexor to:
 | 8.2 | Issue Sync | 3 | 8.1 |
 | 8.3 | PR Creation | 3 | 8.1, M7 (Execution Layer) |
 | 8.4 | Progress Updates | 3 | 8.1 |
+| 8.5 | PR Retrieval & Review | 4 | 8.1 |
+| 8.6 | PR Merge Operations | 4 | 8.1, 8.5 |
+| 8.7 | PR Merge Queue & Conflict Resolution | 6 | 7.6, 8.5, 8.6, 8.4 |
 
-**Total Slices**: 18
+**Total Slices**: 32
 
 ---
 
@@ -40,14 +43,26 @@ M1 (Foundation)
     ▼
    8.1 GitHub API Client
     │
-    ├────────────┬────────────┐
-    ▼            ▼            ▼
-   8.2          8.3          8.4
-  Issue         PR         Progress
-   Sync       Creation     Updates
-              │
-              ▼
-         M7 (Execution)
+    ├────────────┬────────────┬────────────┐
+    ▼            ▼            ▼            ▼
+   8.2          8.3          8.4          8.5
+  Issue         PR         Progress    PR Retrieval
+   Sync       Creation     Updates     & Review
+              │                         │
+              ▼                         ▼
+         M7 (Execution)                8.6
+              │                      PR Merge
+              │                      Operations
+              │                         │
+              └─────────┬───────────────┘
+                        │
+                        ▼
+                       8.7
+                  PR Merge Queue
+                  & Conflict Resolution
+                        │
+                        ▼
+                  7.6 (Git Merge Operations)
 ```
 
 ---
@@ -56,19 +71,25 @@ M1 (Foundation)
 
 **Must be sequential**:
 - 8.0 → 8.1 (API client needs auth/token)
+- 8.5 → 8.6 (merge operations need retrieval types)
+- 8.5, 8.6, 7.6 → 8.7 (merge queue needs all merge infrastructure)
 
 **Can run in parallel** (after 8.1 is complete):
 - 8.2 Issue Sync
 - 8.4 Progress Updates
+- 8.5 PR Retrieval & Review
 
 **Must wait for M7**:
 - 8.3 PR Creation (needs git operations from M7)
+- 8.7 PR Merge Queue (needs 7.6 Git Merge Operations)
 
 **Recommended execution order**:
 1. 8.0 GitHub Authentication
 2. 8.1 GitHub API Client
-3. 8.2, 8.4 in parallel
-4. 8.3 PR Creation (after M7)
+3. 8.2, 8.4, 8.5 in parallel
+4. 8.6 PR Merge Operations (after 8.5)
+5. 8.3 PR Creation (after M7)
+6. 8.7 PR Merge Queue (after 7.6, 8.5, 8.6, 8.4)
 
 ---
 
@@ -83,8 +104,9 @@ src/github/
 ├── client.rs           ← GitHub API HTTP client
 ├── types.rs            ← GitHub-specific types (Issue, PR, etc.)
 ├── issue_sync.rs       ← Issue to Ticket conversion
-├── pr.rs               ← Pull request creation
-└── comments.rs         ← Issue commenting
+├── pr.rs               ← Pull request creation, retrieval, review, merge
+├── comments.rs         ← Issue commenting
+└── merge_queue.rs      ← PR merge queue management and conflict resolution
 ```
 
 Credentials storage in `src/config/`:

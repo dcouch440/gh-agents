@@ -114,6 +114,63 @@ pub enum SandboxMode {
     None,
 }
 
+/// Merge strategy for pull requests
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum MergeStrategy {
+    /// Create a merge commit
+    #[default]
+    Merge,
+    /// Squash all commits into one
+    Squash,
+    /// Rebase commits onto base branch
+    Rebase,
+}
+
+/// Configuration for automatic PR merging
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PrMergeConfig {
+    /// Enable automatic PR merging when toggled on
+    #[serde(default)]
+    pub auto_merge_enabled: bool,
+
+    /// Preferred merge strategy
+    #[serde(default)]
+    pub merge_strategy: MergeStrategy,
+
+    /// Require human approval before merging conflict resolutions
+    #[serde(default = "default_require_approval")]
+    pub require_approval_for_conflicts: bool,
+
+    /// Maximum number of concurrent merge operations
+    #[serde(default = "default_max_concurrent")]
+    pub max_concurrent_merges: u8,
+
+    /// Automatically delete branches after merge
+    #[serde(default)]
+    pub delete_branch_after_merge: bool,
+}
+
+fn default_require_approval() -> bool {
+    true
+}
+
+fn default_max_concurrent() -> u8 {
+    1
+}
+
+impl Default for PrMergeConfig {
+    fn default() -> Self {
+        Self {
+            auto_merge_enabled: false,
+            merge_strategy: MergeStrategy::default(),
+            require_approval_for_conflicts: true,
+            max_concurrent_merges: 1,
+            delete_branch_after_merge: false,
+        }
+    }
+}
+
 /// Project-specific configuration (from .nexor/config.toml)
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ProjectConfig {
@@ -129,6 +186,8 @@ pub struct ProjectConfig {
     pub sandbox_mode: SandboxMode,
     #[serde(default)]
     pub pool: Option<AgentPoolConfig>,
+    #[serde(default)]
+    pub pr_merge: PrMergeConfig,
 }
 
 /// Merged configuration (global + project)
@@ -141,6 +200,7 @@ pub struct AppConfig {
     pub git_strategy: GitStrategy,
     pub sandbox_mode: SandboxMode,
     pub pool: AgentPoolConfig,
+    pub pr_merge: PrMergeConfig,
 }
 
 impl AppConfig {
@@ -155,6 +215,7 @@ impl AppConfig {
                 git_strategy: proj.git_strategy,
                 sandbox_mode: proj.sandbox_mode,
                 pool: proj.pool.unwrap_or(global.pool),
+                pr_merge: proj.pr_merge,
             },
             None => Self {
                 models: global.default_models,
@@ -164,6 +225,7 @@ impl AppConfig {
                 git_strategy: GitStrategy::default(),
                 sandbox_mode: SandboxMode::default(),
                 pool: global.pool,
+                pr_merge: PrMergeConfig::default(),
             },
         }
     }
@@ -199,5 +261,36 @@ mod tests {
         let global = GlobalConfig::default();
         let merged = AppConfig::merge(global.clone(), None);
         assert_eq!(merged.models, global.default_models);
+    }
+
+    #[test]
+    fn merge_strategy_default_is_merge() {
+        assert_eq!(MergeStrategy::default(), MergeStrategy::Merge);
+    }
+
+    #[test]
+    fn pr_merge_config_default() {
+        let config = PrMergeConfig::default();
+        assert!(!config.auto_merge_enabled);
+        assert!(config.require_approval_for_conflicts);
+        assert_eq!(config.merge_strategy, MergeStrategy::Merge);
+        assert_eq!(config.max_concurrent_merges, 1);
+        assert!(!config.delete_branch_after_merge);
+    }
+
+    #[test]
+    fn config_merge_includes_pr_merge() {
+        let global = GlobalConfig::default();
+        let project = ProjectConfig {
+            pr_merge: PrMergeConfig {
+                auto_merge_enabled: true,
+                merge_strategy: MergeStrategy::Squash,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let merged = AppConfig::merge(global, Some(project));
+        assert!(merged.pr_merge.auto_merge_enabled);
+        assert_eq!(merged.pr_merge.merge_strategy, MergeStrategy::Squash);
     }
 }
