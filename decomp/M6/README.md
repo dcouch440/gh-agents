@@ -27,8 +27,9 @@ Build a working terminal user interface using ratatui and crossterm that allows 
 | 6.6 | Slash Command Router | 4 | 6.2 |
 | 6.7 | Logs View (/logs) | 3 | 6.2, M1.5 (Logging) |
 | 6.8 | Plan View (/plan) | 4 | 6.2, M5.0 (Planner Bot) |
+| 6.9 | Role Management UI | 5 | 6.2, M3.4 (Role System) |
 
-**Total Slices**: 29
+**Total Slices**: 34
 
 ---
 
@@ -43,14 +44,14 @@ M1 (Foundation)
     ▼
    6.2 Layout System
     │
-    ├──────────┬──────────┬──────────┬──────────┬──────────┐
-    ▼          ▼          ▼          ▼          ▼          ▼
-   6.3        6.4        6.5        6.6        6.7        6.8
-  Home       Feed       Chat     Commands     Logs       Plan
- Screen     View       View      Router      View       View
-                        │                                 │
-                        ▼                                 ▼
-                   M3 (Agents)                    M5.0 (Planner Bot)
+    ├──────────┬──────────┬──────────┬──────────┬──────────┬──────────┐
+    ▼          ▼          ▼          ▼          ▼          ▼          ▼
+   6.3        6.4        6.5        6.6        6.7        6.8        6.9
+  Home       Feed       Chat     Commands     Logs       Plan      Roles
+ Screen     View       View      Router      View       View       UI
+                        │                                 │          │
+                        ▼                                 ▼          ▼
+                   M3 (Agents)                    M5.0 (Planner)  M3.4 (Roles)
 ```
 
 ---
@@ -67,6 +68,7 @@ M1 (Foundation)
 - 6.1 → 6.2 (layout needs terminal)
 - 6.5 Chat View needs M3 Agent Runtime for orchestrator integration
 - 6.8 Plan View needs M5.0 Planner Bot
+- 6.9 Role Management UI needs M3.4 Role System
 
 **Recommended execution order**:
 1. 6.1 Terminal Setup
@@ -74,6 +76,7 @@ M1 (Foundation)
 3. 6.3, 6.4, 6.6, 6.7 in parallel
 4. 6.5 Chat View (after M3 is ready)
 5. 6.8 Plan View (after M5.0 is ready)
+6. 6.9 Role Management UI (after M3.4 is ready)
 
 ---
 
@@ -94,7 +97,8 @@ src/tui/
     ├── feed.rs         ← Agent activity feed
     ├── chat.rs         ← Orchestrator conversation (/main)
     ├── logs.rs         ← Technical log viewer
-    └── plan.rs         ← Planner Bot conversation (/plan) [NEW]
+    ├── plan.rs         ← Planner Bot conversation (/plan)
+    └── roles.rs        ← Role selection, creation, variable input (/roles)
 ```
 
 ---
