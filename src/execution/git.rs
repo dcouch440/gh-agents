@@ -1,7 +1,7 @@
 //! Git operations with audit logging
 
 use crate::execution::ExecutionContext;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use thiserror::Error;
 
@@ -119,6 +119,79 @@ impl Default for PushOptions {
             force: false,
         }
     }
+}
+
+// ============================================================================
+// Merge Operations (Ticket 7.6)
+// ============================================================================
+
+#[derive(Debug, Clone)]
+pub struct FetchResult {
+    /// Remote that was fetched from
+    pub remote: String,
+    /// Refs that were updated
+    pub updated_refs: Vec<String>,
+    /// Whether any refs were updated
+    pub had_updates: bool,
+}
+
+#[derive(Debug, Clone)]
+pub enum MergeResult {
+    /// Merge completed successfully
+    Success {
+        /// Commit hash of the merge commit (if not fast-forward)
+        merge_commit: Option<String>,
+        /// Whether it was a fast-forward merge
+        fast_forward: bool,
+    },
+    /// Merge has conflicts that need resolution
+    Conflict {
+        /// Files with conflicts
+        conflicting_files: Vec<PathBuf>,
+    },
+    /// Merge failed for other reasons
+    Failed { reason: String },
+}
+
+impl MergeResult {
+    pub fn is_success(&self) -> bool {
+        matches!(self, MergeResult::Success { .. })
+    }
+
+    pub fn has_conflicts(&self) -> bool {
+        matches!(self, MergeResult::Conflict { .. })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ConflictInfo {
+    /// Path to the conflicting file
+    pub path: PathBuf,
+    /// Conflict regions in the file
+    pub regions: Vec<ConflictRegion>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConflictRegion {
+    /// Line number where conflict starts (1-indexed)
+    pub start_line: usize,
+    /// Line number where conflict ends (1-indexed)
+    pub end_line: usize,
+    /// Content from "ours" (current branch)
+    pub ours: String,
+    /// Content from "theirs" (merging branch)
+    pub theirs: String,
+    /// Content from common ancestor (if 3-way merge)
+    pub base: Option<String>,
+}
+
+/// Strategy for resolving a conflict
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConflictResolution {
+    /// Accept our version (current branch)
+    Ours,
+    /// Accept their version (merging branch)
+    Theirs,
 }
 
 pub struct GitOps {
@@ -561,6 +634,433 @@ impl GitOps {
         Ok(())
     }
 
+    // ========================================================================
+    // Merge Operations (Ticket 7.6)
+    // ========================================================================
+
+    /// Fetch from a remote with result info
+    pub fn fetch_remote(&self, remote: &str) -> Result<FetchResult, GitError> {
+        self.ensure_git_repo()?;
+
+        let output = self.run_git(&["fetch", remote, "--prune"])?;
+
+        let updated_refs: Vec<String> = output
+            .lines()
+            .filter(|l| l.contains("->"))
+            .map(|l| l.trim().to_string())
+            .collect();
+
+        tracing::info!(
+            remote = %remote,
+            updated = updated_refs.len(),
+            "Fetched from remote"
+        );
+
+        Ok(FetchResult {
+            remote: remote.to_string(),
+            updated_refs: updated_refs.clone(),
+            had_updates: !updated_refs.is_empty(),
+        })
+    }
+
+    /// Fetch a specific refspec from remote
+    pub fn fetch_refspec(&self, remote: &str, refspec: &str) -> Result<FetchResult, GitError> {
+        self.ensure_git_repo()?;
+
+        self.run_git(&["fetch", remote, refspec])?;
+
+        tracing::info!(
+            remote = %remote,
+            refspec = %refspec,
+            "Fetched refspec"
+        );
+
+        Ok(FetchResult {
+            remote: remote.to_string(),
+            updated_refs: vec![refspec.to_string()],
+            had_updates: true,
+        })
+    }
+
+    /// Fetch a PR branch from GitHub (uses refs/pull/{number}/head format)
+    pub fn fetch_pr(&self, remote: &str, pr_number: u32) -> Result<String, GitError> {
+        self.ensure_git_repo()?;
+
+        let local_branch = format!("pr-{}", pr_number);
+        let refspec = format!("refs/pull/{}/head:{}", pr_number, local_branch);
+
+        self.run_git(&["fetch", remote, &refspec])?;
+
+        tracing::info!(
+            remote = %remote,
+            pr_number = pr_number,
+            local_branch = %local_branch,
+            "Fetched PR branch"
+        );
+
+        Ok(local_branch)
+    }
+
+    /// Attempt to merge a branch into the current branch
+    pub fn merge(&self, branch: &str) -> Result<MergeResult, GitError> {
+        self.ensure_git_repo()?;
+
+        // Try to merge - capture both stdout and stderr
+        let output = Command::new("git")
+            .args(["merge", branch, "--no-edit"])
+            .current_dir(&self.ctx.project_root)
+            .output()?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+        if output.status.success() {
+            // Check if fast-forward
+            let fast_forward = stdout.contains("Fast-forward");
+            let merge_commit = if fast_forward {
+                None
+            } else {
+                Some(self.run_git(&["rev-parse", "HEAD"])?.trim().to_string())
+            };
+
+            tracing::info!(
+                branch = %branch,
+                fast_forward = fast_forward,
+                "Merge completed"
+            );
+
+            Ok(MergeResult::Success {
+                merge_commit,
+                fast_forward,
+            })
+        } else {
+            // Check for conflicts (message can be in stdout or stderr)
+            let combined = format!("{}{}", stdout, stderr);
+            if combined.contains("CONFLICT") || combined.contains("Automatic merge failed") {
+                // Get list of conflicting files
+                let conflicting_files = self.get_conflicting_files()?;
+
+                tracing::warn!(
+                    branch = %branch,
+                    conflicts = conflicting_files.len(),
+                    "Merge has conflicts"
+                );
+
+                Ok(MergeResult::Conflict { conflicting_files })
+            } else {
+                Ok(MergeResult::Failed {
+                    reason: combined,
+                })
+            }
+        }
+    }
+
+    /// Get list of files with merge conflicts
+    pub fn get_conflicting_files(&self) -> Result<Vec<PathBuf>, GitError> {
+        self.ensure_git_repo()?;
+
+        let output = self.run_git(&["diff", "--name-only", "--diff-filter=U"])?;
+
+        Ok(output
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(|l| PathBuf::from(l.trim()))
+            .collect())
+    }
+
+    /// Check if we're in a merge state
+    pub fn is_merging(&self) -> Result<bool, GitError> {
+        self.ensure_git_repo()?;
+
+        let merge_head = self.ctx.project_root.join(".git/MERGE_HEAD");
+        Ok(merge_head.exists())
+    }
+
+    /// Pull from remote (fetch + merge)
+    pub fn pull_from(&self, remote: &str, branch: &str) -> Result<MergeResult, GitError> {
+        self.ensure_git_repo()?;
+
+        // Fetch first
+        self.fetch_remote(remote)?;
+
+        // Then merge the remote branch
+        let remote_branch = format!("{}/{}", remote, branch);
+        self.merge(&remote_branch)
+    }
+
+    /// Get detailed conflict information for a file
+    pub fn get_conflict_info(&self, path: &Path) -> Result<ConflictInfo, GitError> {
+        self.ensure_git_repo()?;
+
+        let full_path = self.ctx.project_root.join(path);
+        let content =
+            std::fs::read_to_string(&full_path).map_err(|e| GitError::ExecutionError(e))?;
+
+        let regions = self.parse_conflict_markers(&content)?;
+
+        Ok(ConflictInfo {
+            path: path.to_path_buf(),
+            regions,
+        })
+    }
+
+    /// Parse conflict markers from file content
+    fn parse_conflict_markers(&self, content: &str) -> Result<Vec<ConflictRegion>, GitError> {
+        let mut regions = Vec::new();
+        let mut current_region: Option<ConflictRegionBuilder> = None;
+        let lines: Vec<&str> = content.lines().collect();
+
+        for (i, line) in lines.iter().enumerate() {
+            let line_num = i + 1; // 1-indexed
+
+            if line.starts_with("<<<<<<<") {
+                current_region = Some(ConflictRegionBuilder {
+                    start_line: line_num,
+                    ours_lines: Vec::new(),
+                    theirs_lines: Vec::new(),
+                    base_lines: None,
+                    in_section: ConflictSection::Ours,
+                });
+            } else if line.starts_with("|||||||") {
+                // 3-way merge: base section
+                if let Some(ref mut region) = current_region {
+                    region.base_lines = Some(Vec::new());
+                    region.in_section = ConflictSection::Base;
+                }
+            } else if line.starts_with("=======") {
+                if let Some(ref mut region) = current_region {
+                    region.in_section = ConflictSection::Theirs;
+                }
+            } else if line.starts_with(">>>>>>>") {
+                if let Some(region) = current_region.take() {
+                    regions.push(ConflictRegion {
+                        start_line: region.start_line,
+                        end_line: line_num,
+                        ours: region.ours_lines.join("\n"),
+                        theirs: region.theirs_lines.join("\n"),
+                        base: region.base_lines.map(|l| l.join("\n")),
+                    });
+                }
+            } else if let Some(ref mut region) = current_region {
+                match region.in_section {
+                    ConflictSection::Ours => region.ours_lines.push((*line).to_string()),
+                    ConflictSection::Base => {
+                        if let Some(ref mut base) = region.base_lines {
+                            base.push((*line).to_string());
+                        }
+                    }
+                    ConflictSection::Theirs => region.theirs_lines.push((*line).to_string()),
+                }
+            }
+        }
+
+        Ok(regions)
+    }
+
+    /// Resolve a conflict by accepting one side
+    pub fn resolve_conflict(
+        &self,
+        path: &Path,
+        resolution: ConflictResolution,
+    ) -> Result<(), GitError> {
+        self.ensure_git_repo()?;
+
+        let strategy = match resolution {
+            ConflictResolution::Ours => "--ours",
+            ConflictResolution::Theirs => "--theirs",
+        };
+
+        let path_str = path.to_string_lossy();
+        self.run_git(&["checkout", strategy, "--", &path_str])?;
+        self.mark_resolved(path)?;
+
+        tracing::info!(
+            path = %path_str,
+            resolution = ?resolution,
+            "Resolved conflict"
+        );
+
+        Ok(())
+    }
+
+    /// Resolve all conflicts by accepting one side
+    pub fn resolve_all_conflicts(&self, resolution: ConflictResolution) -> Result<u32, GitError> {
+        self.ensure_git_repo()?;
+
+        let conflicts = self.get_conflicting_files()?;
+        let count = conflicts.len() as u32;
+
+        for path in conflicts {
+            self.resolve_conflict(&path, resolution)?;
+        }
+
+        tracing::info!(
+            count = count,
+            resolution = ?resolution,
+            "Resolved all conflicts"
+        );
+
+        Ok(count)
+    }
+
+    /// Resolve a conflict with custom content
+    pub fn resolve_conflict_manual(&self, path: &Path, content: &str) -> Result<(), GitError> {
+        self.ensure_git_repo()?;
+
+        let full_path = self.ctx.project_root.join(path);
+        std::fs::write(&full_path, content).map_err(|e| GitError::ExecutionError(e))?;
+
+        self.mark_resolved(path)?;
+
+        tracing::info!(
+            path = %path.display(),
+            "Resolved conflict with custom content"
+        );
+
+        Ok(())
+    }
+
+    /// Mark a file as resolved (stage it)
+    pub fn mark_resolved(&self, path: &Path) -> Result<(), GitError> {
+        self.ensure_git_repo()?;
+
+        let path_str = path.to_string_lossy();
+        self.run_git(&["add", &path_str])?;
+
+        Ok(())
+    }
+
+    /// Check if all conflicts are resolved
+    pub fn all_conflicts_resolved(&self) -> Result<bool, GitError> {
+        self.ensure_git_repo()?;
+
+        let conflicts = self.get_conflicting_files()?;
+        Ok(conflicts.is_empty())
+    }
+
+    /// Complete a merge after resolving conflicts
+    pub fn complete_merge(&self) -> Result<CommitInfo, GitError> {
+        self.ensure_git_repo()?;
+
+        if !self.is_merging()? {
+            return Err(GitError::NotAllowed {
+                reason: "Not in a merge state".to_string(),
+            });
+        }
+
+        if !self.all_conflicts_resolved()? {
+            return Err(GitError::NotAllowed {
+                reason: "Conflicts not resolved".to_string(),
+            });
+        }
+
+        // Complete the merge with default message
+        self.run_git(&["commit", "--no-edit"])?;
+
+        let hash = self.run_git(&["rev-parse", "HEAD"])?.trim().to_string();
+        let short_hash = self
+            .run_git(&["rev-parse", "--short", "HEAD"])?
+            .trim()
+            .to_string();
+        let message = self
+            .run_git(&["log", "-1", "--format=%s"])?
+            .trim()
+            .to_string();
+
+        tracing::info!(
+            commit = %short_hash,
+            "Merge completed"
+        );
+
+        Ok(CommitInfo {
+            hash,
+            short_hash,
+            message,
+        })
+    }
+
+    /// Abort an in-progress merge
+    pub fn abort_merge(&self) -> Result<(), GitError> {
+        self.ensure_git_repo()?;
+
+        if !self.is_merging()? {
+            return Err(GitError::NotAllowed {
+                reason: "Not in a merge state".to_string(),
+            });
+        }
+
+        self.run_git(&["merge", "--abort"])?;
+
+        tracing::info!("Merge aborted");
+        Ok(())
+    }
+
+    /// Hard reset to a ref (DESTRUCTIVE - requires confirmation)
+    pub fn reset_hard(&self, target: &str, confirm: bool) -> Result<(), GitError> {
+        self.ensure_git_repo()?;
+
+        if !confirm {
+            return Err(GitError::NotAllowed {
+                reason: "Hard reset requires explicit confirmation".to_string(),
+            });
+        }
+
+        tracing::warn!(
+            target = %target,
+            "Performing hard reset - all uncommitted changes will be lost"
+        );
+
+        self.run_git(&["reset", "--hard", target])?;
+
+        tracing::info!(target = %target, "Hard reset completed");
+        Ok(())
+    }
+
+    /// Discard all changes in working tree (DESTRUCTIVE - requires confirmation)
+    pub fn clean_working_tree(&self, confirm: bool) -> Result<(), GitError> {
+        self.ensure_git_repo()?;
+
+        if !confirm {
+            return Err(GitError::NotAllowed {
+                reason: "Clean requires explicit confirmation".to_string(),
+            });
+        }
+
+        tracing::warn!("Cleaning working tree - all uncommitted changes will be lost");
+
+        // Reset staged changes
+        self.run_git(&["reset", "HEAD"])?;
+
+        // Discard working tree changes
+        self.run_git(&["checkout", "--", "."])?;
+
+        // Remove untracked files
+        self.run_git(&["clean", "-fd"])?;
+
+        tracing::info!("Working tree cleaned");
+        Ok(())
+    }
+
+    /// Soft reset (keeps changes staged)
+    pub fn reset_soft(&self, target: &str) -> Result<(), GitError> {
+        self.ensure_git_repo()?;
+
+        self.run_git(&["reset", "--soft", target])?;
+
+        tracing::info!(target = %target, "Soft reset completed");
+        Ok(())
+    }
+
+    /// Mixed reset (keeps changes unstaged) - default git behavior
+    pub fn reset(&self, target: &str) -> Result<(), GitError> {
+        self.ensure_git_repo()?;
+
+        self.run_git(&["reset", target])?;
+
+        tracing::info!(target = %target, "Reset completed");
+        Ok(())
+    }
+
     /// Check if there are commits to push
     pub fn has_unpushed_commits(&self) -> Result<bool, GitError> {
         self.ensure_git_repo()?;
@@ -664,6 +1164,22 @@ impl GitOps {
 
         Ok(())
     }
+}
+
+// Helper types for conflict parsing
+#[derive(Debug)]
+enum ConflictSection {
+    Ours,
+    Base,
+    Theirs,
+}
+
+struct ConflictRegionBuilder {
+    start_line: usize,
+    ours_lines: Vec<String>,
+    theirs_lines: Vec<String>,
+    base_lines: Option<Vec<String>>,
+    in_section: ConflictSection,
 }
 
 #[cfg(test)]
@@ -872,5 +1388,266 @@ mod tests {
         });
 
         assert!(matches!(result, Err(GitError::NotAllowed { .. })));
+    }
+
+    // ========================================================================
+    // Merge Operation Tests (Ticket 7.6)
+    // ========================================================================
+
+    fn get_default_branch(dir: &TempDir) -> String {
+        let output = Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
+    fn create_conflicting_branches(dir: &TempDir) {
+        // Create a file and commit on main
+        std::fs::write(dir.path().join("file.txt"), "main content").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "main commit"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        // Get the default branch name (may be master or main)
+        let default_branch = get_default_branch(dir);
+
+        // Create branch with different content
+        Command::new("git")
+            .args(["checkout", "-b", "feature"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        std::fs::write(dir.path().join("file.txt"), "feature content").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "feature commit"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        // Go back to main/master and make conflicting change
+        Command::new("git")
+            .args(["checkout", &default_branch])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        std::fs::write(dir.path().join("file.txt"), "different main content").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "main conflict"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+    }
+
+    #[test]
+    fn merge_detects_conflicts() {
+        let tmp = TempDir::new().unwrap();
+        init_git_repo(&tmp);
+        create_conflicting_branches(&tmp);
+
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let git = GitOps::new(ctx);
+
+        let result = git.merge("feature").unwrap();
+        assert!(result.has_conflicts());
+
+        if let MergeResult::Conflict { conflicting_files } = result {
+            assert!(conflicting_files.contains(&PathBuf::from("file.txt")));
+        }
+    }
+
+    #[test]
+    fn merge_fast_forward() {
+        let tmp = TempDir::new().unwrap();
+        init_git_repo(&tmp);
+
+        // Create initial commit
+        std::fs::write(tmp.path().join("file.txt"), "content").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+
+        // Get default branch name
+        let default_branch = get_default_branch(&tmp);
+
+        // Create branch with new commit
+        Command::new("git")
+            .args(["checkout", "-b", "feature"])
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+        std::fs::write(tmp.path().join("new.txt"), "new").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "feature"])
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+
+        // Go back to main
+        Command::new("git")
+            .args(["checkout", &default_branch])
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let git = GitOps::new(ctx);
+
+        let result = git.merge("feature").unwrap();
+        assert!(result.is_success());
+
+        if let MergeResult::Success { fast_forward, .. } = result {
+            assert!(fast_forward);
+        }
+    }
+
+    #[test]
+    fn abort_merge_cancels() {
+        let tmp = TempDir::new().unwrap();
+        init_git_repo(&tmp);
+        create_conflicting_branches(&tmp);
+
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let git = GitOps::new(ctx);
+
+        // Create conflict
+        let result = git.merge("feature").unwrap();
+        assert!(result.has_conflicts());
+        assert!(git.is_merging().unwrap());
+
+        // Abort
+        git.abort_merge().unwrap();
+        assert!(!git.is_merging().unwrap());
+    }
+
+    #[test]
+    fn reset_hard_requires_confirmation() {
+        let tmp = TempDir::new().unwrap();
+        init_git_repo(&tmp);
+
+        // Create commit
+        std::fs::write(tmp.path().join("file.txt"), "content").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let git = GitOps::new(ctx);
+
+        // Without confirmation, should fail
+        let result = git.reset_hard("HEAD~1", false);
+        assert!(result.is_err());
+
+        // With confirmation, should work
+        let result = git.reset_hard("HEAD", true);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn parse_simple_conflict() {
+        let tmp = TempDir::new().unwrap();
+        init_git_repo(&tmp);
+
+        let conflict_content = r#"some code
+<<<<<<< HEAD
+our changes
+=======
+their changes
+>>>>>>> feature
+more code"#;
+
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let git = GitOps::new(ctx);
+
+        let regions = git.parse_conflict_markers(conflict_content).unwrap();
+        assert_eq!(regions.len(), 1);
+        assert_eq!(regions[0].ours, "our changes");
+        assert_eq!(regions[0].theirs, "their changes");
+        assert!(regions[0].base.is_none());
+    }
+
+    #[test]
+    fn parse_3way_conflict() {
+        let tmp = TempDir::new().unwrap();
+        init_git_repo(&tmp);
+
+        let conflict_content = r#"<<<<<<< HEAD
+our version
+||||||| merged common ancestors
+original version
+=======
+their version
+>>>>>>> feature"#;
+
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let git = GitOps::new(ctx);
+
+        let regions = git.parse_conflict_markers(conflict_content).unwrap();
+        assert_eq!(regions.len(), 1);
+        assert_eq!(regions[0].ours, "our version");
+        assert_eq!(regions[0].theirs, "their version");
+        assert_eq!(regions[0].base.as_ref().unwrap(), "original version");
+    }
+
+    #[test]
+    fn resolve_conflict_ours() {
+        let tmp = TempDir::new().unwrap();
+        init_git_repo(&tmp);
+        create_conflicting_branches(&tmp);
+
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let git = GitOps::new(ctx);
+
+        // Create conflict
+        let result = git.merge("feature").unwrap();
+        assert!(result.has_conflicts());
+
+        // Resolve with ours
+        git.resolve_conflict(Path::new("file.txt"), ConflictResolution::Ours)
+            .unwrap();
+
+        // Should be resolved
+        assert!(git.all_conflicts_resolved().unwrap());
+
+        // Complete merge
+        let commit = git.complete_merge().unwrap();
+        assert!(!commit.hash.is_empty());
     }
 }
