@@ -41,6 +41,8 @@ pub struct AppState {
     pub scheduler: Arc<RwLock<Scheduler>>,
     /// Application configuration
     pub config: Arc<AppConfig>,
+    /// JWT secret for token signing
+    pub jwt_secret: Vec<u8>,
     /// Channel to send messages to the orchestrator
     pub orchestrator_tx: mpsc::Sender<OrchestratorMessage>,
     /// Receiver for orchestrator messages (for the orchestrator to consume)
@@ -63,10 +65,15 @@ impl AppState {
         let (task_tx, _) = broadcast::channel(100);
         let (agent_tx, _) = broadcast::channel(100);
 
+        // Generate a random JWT secret
+        // In production, this should be persisted or configured via environment variable
+        let jwt_secret = rand::random::<[u8; 32]>().to_vec();
+
         Self {
             db,
             scheduler,
             config: Arc::new(config),
+            jwt_secret,
             orchestrator_tx,
             orchestrator_rx: Arc::new(RwLock::new(orchestrator_rx)),
             response_streams: Arc::new(RwLock::new(HashMap::new())),
