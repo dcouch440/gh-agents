@@ -76,6 +76,24 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
         include_str!("../../migrations/009_add_task_dependencies.sql"),
     )
     .await?;
+    run_migration(
+        pool,
+        "010_create_pr_merge_queue",
+        include_str!("../../migrations/010_create_pr_merge_queue.sql"),
+    )
+    .await?;
+    run_migration(
+        pool,
+        "011_create_observability_tables",
+        include_str!("../../migrations/011_create_observability_tables.sql"),
+    )
+    .await?;
+    run_migration(
+        pool,
+        "012_create_chat_messages",
+        include_str!("../../migrations/012_create_chat_messages.sql"),
+    )
+    .await?;
 
     tracing::info!("All migrations complete");
     Ok(())

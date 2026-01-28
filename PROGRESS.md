@@ -5,7 +5,7 @@
 ## Current Focus
 
 **Active:** M10 Server Layer (Architectural Pivot)
-**Next:** 10.3 REST API - Chat Endpoint
+**Next:** 10.4 WebSocket Gateway
 **Blocked:** None
 
 ---
@@ -203,12 +203,12 @@
 |--------|--------|----------|-------|
 | 10.1 Axum Server Setup | done | 4/4 | Server, state, graceful shutdown, CLI port flag |
 | 10.2 REST API - Core Endpoints | done | 5/5 | Health, tasks CRUD, agents, config endpoints |
-| 10.3 REST API - Chat Endpoint | pending | 0/4 | |
+| 10.3 REST API - Chat Endpoint | done | 4/4 | POST /chat, GET/DELETE /chat/history, SSE streaming |
 | 10.4 WebSocket Gateway | pending | 0/5 | |
 | 10.5 Authentication | pending | 0/5 | |
 | 10.6 Static File Serving | pending | 0/3 | |
 
-**Milestone Status:** In Progress (2/6 tickets done)
+**Milestone Status:** In Progress (3/6 tickets done)
 
 ---
 
@@ -273,7 +273,7 @@
 | M7: Execution Layer | 6 | Complete |
 | M8: GitHub Integration | 8 | Complete |
 | M9: Polish & Production | 12 | Complete |
-| M10: Server Layer | 6 | In Progress (1/6) |
+| M10: Server Layer | 6 | In Progress (3/6) |
 | M11: React Foundation | 4 | Not Started |
 | M12: React Features | 6 | Not Started |
 | M13: React Polish | 5 | Not Started |
@@ -345,4 +345,5 @@ jsonwebtoken = "9"
 4. [x] Create `src/server/mod.rs` - DONE (stub with health check)
 5. [x] Ticket 10.1: Axum Server Setup - DONE (state module, graceful shutdown, port CLI flag)
 6. [x] Ticket 10.2: REST API - Core Endpoints - DONE (health, tasks, agents, config endpoints)
-7. [ ] Start Ticket 10.3: REST API - Chat Endpoint
+7. [x] Ticket 10.3: REST API - Chat Endpoint - DONE (POST /chat, GET/DELETE /chat/history, SSE streaming)
+8. [ ] Start Ticket 10.4: WebSocket Gateway
