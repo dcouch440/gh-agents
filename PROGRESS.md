@@ -5,7 +5,7 @@
 ## Current Focus
 
 **Active:** None
-**Next:** 2.2 Anthropic Client (M2)
+**Next:** 2.3 Cost Tracking (M2)
 **Blocked:** None
 
 **Milestone 1 Decomposition:** Complete - see `decomp/M1/`
@@ -43,11 +43,11 @@
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
 | 2.1 Provider Abstraction | done | 3/3 | LLMProvider trait, types, streaming |
-| 2.2 Anthropic Client | pending | 0/4 | Needs 2.1 |
+| 2.2 Anthropic Client | done | 4/4 | HTTP client, send_message, streaming, token counts |
 | 2.3 Cost Tracking | pending | 0/3 | Needs 2.2 |
-| 2.4 Retry Logic | pending | 0/3 | Needs 2.2 |
+| 2.4 Retry Logic | done | 3/3 | ExponentialBackoff, RetryPolicy, RetryingProvider wrapper, 14 tests |
 
-**Milestone Status:** Not Started
+**Milestone Status:** In Progress (2/4 tickets done)
 
 ---
 
@@ -76,18 +76,18 @@
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
 | 4.1 Prompt Architecture Design | done | 4/4 | PromptBuilder, ContextInjector, PromptVersion, 23 tests |
-| 4.2 Orchestrator Thinking Patterns | pending | 0/5 | Needs 4.1 |
+| 4.2 Orchestrator Thinking Patterns | done | 5/5 | Decomposition, review, routing, conversation, recovery prompts, 25 tests |
 | 4.3 Worker Thinking Patterns | pending | 0/5 | Needs 4.1 |
 | 4.4 Utility Thinking Patterns | pending | 0/4 | Needs 4.1 |
 | 4.5 Structured Output Design | done | 5/5 | DecompositionOutput, TaskResultOutput, ReviewOutput, ErrorOutput, OutputValidator with 69 tests |
 | 4.6 Few-Shot Examples Library | pending | 0/5 | Needs 4.2-4.4 |
 | 4.7 Prompt Testing Framework | pending | 0/6 | Needs 4.5, M2 |
-| 4.8 Context Management Strategy | pending | 0/5 | Needs 4.1 |
+| 4.8 Context Management Strategy | done | 5/5 | ContextBudget, FileSelector, FileSummarizer, ContextRequestHandler, HistoryManager, 35 tests |
 | 4.9 Self-Correction & Recovery Prompts | pending | 0/5 | Needs 4.5 |
-| 4.10 Tool Definition & Selection | pending | 0/6 | Needs 4.1 |
+| 4.10 Tool Definition & Selection | done | 6/6 | ToolDefinition, ToolRegistry, file/git/test tools, selection prompts, parser, 31 tests |
 | 4.11 Context Window Validation | pending | 0/5 | Needs M2 |
 
-**Milestone Status:** Not Started
+**Milestone Status:** In Progress (2/11 tickets done)
 
 ---
 
@@ -136,6 +136,7 @@
 | 7.3 Test Runner | pending | 0/4 | Needs M1 |
 | 7.4 Docker Sandbox | pending | 0/4 | Needs 7.1-7.3 |
 | 7.5 Approval Gates | pending | 0/4 | Needs M6 (TUI) |
+| 7.6 Git Merge Operations | pending | 0/6 | Needs 7.2 |
 
 **Milestone Status:** Not Started
 
@@ -143,14 +144,18 @@
 
 ## Milestone 8: GitHub Integration
 
-**Goal**: Can pull issues from GitHub, create PRs.
+**Goal**: Can pull issues from GitHub, create PRs, and manage PR merge queue.
 
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
-| 8.1 GitHub API Client | pending | 0/4 | Needs M1 |
+| 8.0 GitHub Authentication | pending | 0/5 | Needs M1 |
+| 8.1 GitHub API Client | pending | 0/4 | Needs 8.0 |
 | 8.2 Issue Sync | pending | 0/3 | Needs 8.1 |
 | 8.3 PR Creation | pending | 0/3 | Needs 8.1, M7 |
 | 8.4 Progress Updates | pending | 0/3 | Needs 8.1 |
+| 8.5 PR Retrieval & Review | pending | 0/4 | Needs 8.1 |
+| 8.6 PR Merge Operations | pending | 0/4 | Needs 8.1, 8.5 |
+| 8.7 PR Merge Queue & Conflict Resolution | pending | 0/6 | Needs 7.6, 8.5, 8.6, 8.4 |
 
 **Milestone Status:** Not Started
 
@@ -168,8 +173,14 @@
 | 9.4 Docker Packaging | pending | 0/3 | Needs M1-M8 |
 | 9.5 Documentation | pending | 0/4 | Needs M1-M8 |
 | 9.6 Observability & Replay | pending | 0/5 | Needs M2, M5 |
+| 9.7 Refactor Mode Foundation | done | 4/4 | Types, DB, scheduler pause/resume |
+| 9.8 Refactor Agent | done | 4/4 | Intent detection, change proposals, apply changes |
+| 9.9 TUI Integration | done | 3/3 | /refactor command, mode switching, status bar |
+| 9.10 Menu Types & Data | pending | 0/3 | Needs 9.7, 9.9 |
+| 9.11 Menu Widget & Rendering | pending | 0/3 | Needs 9.10 |
+| 9.12 App Integration | pending | 0/3 | Needs 9.10, 9.11, 9.9 |
 
-**Milestone Status:** Not Started
+**Milestone Status:** In Progress (3/12 tickets done)
 
 ---
 
@@ -183,10 +194,10 @@
 | M4: Prompt Engineering | 11 | 55 | Not Started |
 | M5: Orchestration Core | 5 | 18 | Not Started |
 | M6: TUI Basic | 7 | 25 | Not Started |
-| M7: Execution Layer | 5 | 22 | Not Started |
-| M8: GitHub Integration | 4 | 13 | Not Started |
-| M9: Polish & Production | 6 | 22 | Not Started |
-| **Total** | **55** | **222** | |
+| M7: Execution Layer | 6 | 28 | Not Started |
+| M8: GitHub Integration | 8 | 32 | Not Started |
+| M9: Polish & Production | 12 | 42 | In Progress (3/12 tickets) |
+| **Total** | **65** | **263** | |
 
 ---
 

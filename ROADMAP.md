@@ -631,9 +631,28 @@ Please regenerate your response, being careful to:
 
 ## Milestone 5: Orchestration Core
 
-**Goal**: Orchestrator can decompose tickets into slices, route to appropriate agents.
+**Goal**: Specialized bots for planning (Planner Bot in `/plan`) and execution (Orchestrator in `/main`), plus infrastructure to decompose tickets and schedule work.
 
-**Checkpoint**: Give orchestrator a ticket description, see it create slices, assign to workers.
+**Checkpoint**: Create a PRD in `/plan` mode with the Planner Bot, then execute it via `/main` where the orchestrator decomposes milestones into slices.
+
+### Ticket 5.0: Planner Bot (Interactive PRD Creation)
+
+Specialized bot for `/plan` mode that helps users create PRDs through conversation.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 5.0.1 | Define `PRDDocument`, `MilestoneSpec`, `TechnicalDecision` types | Types compile, serialize |
+| 5.0.2 | Create Planner Bot persona with phase-based system prompts | Persona works through Discovery → Scoping → Technical → Milestones → Review |
+| 5.0.3 | Implement conversation loop with history and phase transitions | Multi-turn chat works |
+| 5.0.4 | Implement PRD finalization and markdown export | PRD exports correctly |
+| 5.0.5 | Persist PRDs and planning sessions to database | Sessions resumable |
+
+**Planning Phases**:
+- Discovery → Understanding the problem
+- Scoping → Defining boundaries
+- Technical → Making tech decisions
+- Milestones → Breaking into milestones
+- Review → Final approval
 
 ### Ticket 5.1: Planner (Ticket → Slices)
 
@@ -769,6 +788,17 @@ Technical log viewer.
 | 6.7.1 | Create log viewer widget | Logs display |
 | 6.7.2 | Stream logs from tracing subscriber | New logs appear |
 | 6.7.3 | Add log level filtering | Can filter by level |
+
+### Ticket 6.8: Plan View (/plan)
+
+Interactive PRD creation with Planner Bot.
+
+| Slice | Description | Test |
+|-------|-------------|------|
+| 6.8.1 | Create two-panel layout (chat + PRD preview) with phase indicator | Layout renders |
+| 6.8.2 | Implement input handling (typing, submit, scroll) | Can chat |
+| 6.8.3 | Connect to Planner Bot, handle async responses | Bot responds |
+| 6.8.4 | Add `/plan` commands to router (`/plan`, `/plan new`, `/plan approve`) | Commands work |
 
 ---
 

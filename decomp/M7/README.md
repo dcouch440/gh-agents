@@ -19,6 +19,9 @@ The execution layer provides agents with controlled access to the filesystem, gi
 | 7.3 | Test Runner | 4 | M1 (Foundation) |
 | 7.4 | Docker Sandbox | 4 | 7.1, 7.2, 7.3 |
 | 7.5 | Approval Gates | 4 | M6 (TUI for prompts) |
+| 7.6 | Git Merge Operations | 6 | 7.2 (Git Operations) |
+
+**Total Slices**: 28
 
 ---
 
@@ -28,7 +31,9 @@ The execution layer provides agents with controlled access to the filesystem, gi
 M1 (Foundation) ──┬──→ 7.1 (File Operations) ──┐
                   │                             │
                   ├──→ 7.2 (Git Operations) ────┼──→ 7.4 (Docker Sandbox)
-                  │                             │
+                  │         │                   │
+                  │         └──→ 7.6 (Git Merge Operations)
+                  │
                   └──→ 7.3 (Test Runner) ───────┘
 
 M6 (TUI) ──────────────→ 7.5 (Approval Gates)
@@ -45,6 +50,13 @@ M6 (TUI) ──────────────→ 7.5 (Approval Gates)
 **Must be sequential**:
 - 7.4 (Docker Sandbox) needs 7.1-7.3 complete first
 - 7.5 integration with 7.1-7.3 (adding approval checks) comes last
+- 7.6 (Git Merge Operations) needs 7.2 complete first
+
+**Recommended execution order**:
+1. Start with 7.1, 7.2, 7.3 in parallel (all depend only on M1)
+2. After 7.2: Start 7.6 (Git Merge Operations)
+3. After 7.1, 7.2, 7.3: Start 7.4 (Docker Sandbox)
+4. After M6 complete: Start 7.5 (Approval Gates)
 
 ---
 
@@ -56,7 +68,8 @@ All execution code lives in `src/execution/`:
 src/execution/
 ├── mod.rs         ← Module exports, shared types, ExecutionContext
 ├── files.rs       ← File read/write with path scoping
-├── git.rs         ← Git operations wrapper
+├── git.rs         ← Git operations wrapper (status, branch, commit, diff, push)
+├── git_merge.rs   ← Git merge operations (fetch, merge, conflict resolution)
 ├── tests.rs       ← Test runner with framework detection
 ├── sandbox.rs     ← Docker sandbox execution
 └── approval.rs    ← Approval gate system

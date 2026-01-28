@@ -58,6 +58,12 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
         include_str!("../../migrations/006_create_tickets.sql"),
     )
     .await?;
+    run_migration(
+        pool,
+        "007_create_refactors",
+        include_str!("../../migrations/007_create_refactors.sql"),
+    )
+    .await?;
 
     tracing::info!("All migrations complete");
     Ok(())
