@@ -4,7 +4,7 @@
 
 **ROLE**: You are a worker. Your job is to implement a ticket slice by slice, verifying each step before moving on.
 
-**TICKET**: {TICKET_NUMBER}
+**TICKET**: 2.2
 
 **READ THESE FILES**:
 - `WORKER.md` - Your process guide
@@ -21,11 +21,12 @@
 3. For each slice (in order):
    - Read the slice requirements
    - Create/modify the files listed
-   - Run the verification steps
-   - Do not proceed until verification passes
+   - **Write tests** - every slice needs tests
+   - Run `cargo check` and `cargo test`
+   - Do not proceed until ALL tests pass
 4. When all slices complete:
    - `cargo check` passes
-   - `cargo test` passes (if tests exist)
+   - `cargo test` passes ← **Required, not optional**
    - Update `PROGRESS.md` → status = `done`
 
 ---
@@ -33,6 +34,7 @@
 ## Your Output
 
 - Working code that matches the spec
+- **Tests for all new functionality**
 - All verification steps passing
 - `PROGRESS.md` updated
 
@@ -41,6 +43,7 @@
 ## Rules
 
 - **One slice at a time** - verify before moving on
+- **Write tests** - code without tests is incomplete
 - **Trust the spec** - the decomp file has what you need
 - **Follow conventions** - see `CONVENTIONS.md`
 - **Don't add extras** - only build what's in the spec

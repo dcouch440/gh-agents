@@ -1,57 +1,24 @@
 # Current Work
 
-> Active work details and context for handoff between agents/sessions
-
-## Active Ticket
-
-**Ticket:** None
-**Status:** Ready to start M1
+**Status:** M3 in progress, 3.1 complete
+**Next:** Ticket 3.2 (Agent Pool Manager)
 
 ---
 
-## Context
+## Recent Completions
 
-No work in progress. Ready to begin with Milestone 1: Foundation.
-
-### Recommended Starting Point
-
-**Ticket 1.1: Project Scaffolding** and **Ticket 1.2: Core Type Definitions** can be worked in parallel.
-
-After 1.2.6 (config types) is complete:
-- 1.3 (Configuration System) can start
-- 1.4 (Database Setup) can start
-
-Ticket 1.5 (Logging Infrastructure) is independent and can start anytime.
+| Ticket | What |
+|--------|------|
+| 3.1 | Agent struct with state transitions, shutdown, 9 tests |
+| 2.4 | Retry logic with exponential backoff, 14 tests |
+| 2.3 | Cost tracking for LLM usage |
 
 ---
 
-## Work Log
+## Ready to Start
 
-| Timestamp | Action | Notes |
-|-----------|--------|-------|
-| | | |
+- **3.2** Agent Pool Manager (needs 3.1) ✓ ready
+- **3.3** Message Passing (needs 3.1) ✓ ready
+- **3.4** Persona System (needs M1 config) ✓ ready
 
----
-
-## Handoff Notes
-
-*Use this section when pausing work mid-ticket to capture context for the next agent/session.*
-
-### Current State
-- N/A
-
-### Next Steps
-- Begin Ticket 1.1: Project Scaffolding
-- Create `Cargo.toml` with workspace config
-
-### Open Questions
-- None
-
-### Files Modified
-- None
-
----
-
-## Blockers
-
-None currently.
+See `PROGRESS.md` for full status.
