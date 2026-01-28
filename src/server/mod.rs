@@ -12,7 +12,10 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use anyhow::Result;
-use axum::{routing::get, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 use sqlx::SqlitePool;
 use tokio::sync::RwLock;
 use tower_http::cors::{Any, CorsLayer};
@@ -67,7 +70,14 @@ fn create_router(state: AppState) -> Router {
         .route("/tasks", get(api::list_tasks).post(api::create_task))
         .route("/tasks/{id}", get(api::get_task))
         .route("/agents", get(api::list_agents))
-        .route("/config", get(api::get_config).patch(api::update_config));
+        .route("/config", get(api::get_config).patch(api::update_config))
+        // Chat endpoints (Ticket 10.3)
+        .route("/chat", post(api::send_chat))
+        .route(
+            "/chat/history",
+            get(api::get_chat_history).delete(api::clear_chat_history),
+        )
+        .route("/chat/{message_id}/stream", get(api::chat_stream));
 
     Router::new()
         .nest("/api", api_routes)
@@ -210,5 +220,80 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    // Chat endpoint tests
+
+    #[tokio::test]
+    async fn chat_endpoint_accepts_message() {
+        let (app, _temp_dir) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/chat")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"message": "Hello!"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+    }
+
+    #[tokio::test]
+    async fn chat_endpoint_rejects_empty_message() {
+        let (app, _temp_dir) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/chat")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"message": "   "}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn chat_history_returns_empty_list() {
+        let (app, _temp_dir) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/chat/history")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn clear_chat_history_returns_no_content() {
+        let (app, _temp_dir) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/api/chat/history")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
     }
 }

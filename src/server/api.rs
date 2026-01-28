@@ -1,15 +1,20 @@
 //! REST API endpoint handlers
 
+use std::convert::Infallible;
+
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
+    response::sse::{Event, Sse},
     Json,
 };
-use chrono::Utc;
+use chrono::{DateTime, Utc};
+use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
+use tokio::sync::broadcast;
 use uuid::Uuid;
 
-use super::state::AppState;
+use super::state::{AppState, OrchestratorMessage, StreamChunk};
 use crate::db;
 use crate::types::{AgentPoolConfig, AgentTier, Priority, Task, TierModels};
 
@@ -268,6 +273,165 @@ pub async fn update_config(
 }
 
 // ============================================================================
+// Chat Endpoints (Slices 10.3.1 - 10.3.4)
+// ============================================================================
+
+/// Request body for sending a chat message
+#[derive(Deserialize)]
+pub struct ChatRequest {
+    pub message: String,
+}
+
+/// Response for sending a chat message
+#[derive(Serialize)]
+pub struct ChatResponse {
+    pub message_id: Uuid,
+    pub status: String,
+}
+
+/// Send a chat message to the orchestrator
+///
+/// Returns 202 Accepted with the message ID.
+/// The message is queued for processing by the orchestrator.
+pub async fn send_chat(
+    State(state): State<AppState>,
+    Json(request): Json<ChatRequest>,
+) -> Result<(StatusCode, Json<ChatResponse>), StatusCode> {
+    if request.message.trim().is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let message_id = Uuid::new_v4();
+
+    // Store the user message in the database
+    db::insert_chat_message(&state.db, &message_id, "user", &request.message)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Queue message to orchestrator
+    state
+        .orchestrator_tx
+        .send(OrchestratorMessage {
+            id: message_id,
+            content: request.message,
+            timestamp: Utc::now(),
+        })
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(ChatResponse {
+            message_id,
+            status: "queued".to_string(),
+        }),
+    ))
+}
+
+/// Query parameters for chat history
+#[derive(Deserialize)]
+pub struct HistoryQuery {
+    pub limit: Option<u32>,
+    pub offset: Option<u32>,
+}
+
+/// A chat message in the response
+#[derive(Serialize)]
+pub struct ChatMessage {
+    pub id: Uuid,
+    pub role: String,
+    pub content: String,
+    pub timestamp: DateTime<Utc>,
+}
+
+/// Get chat history with pagination
+///
+/// Returns messages in chronological order.
+pub async fn get_chat_history(
+    State(state): State<AppState>,
+    Query(query): Query<HistoryQuery>,
+) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
+    let limit = query.limit.unwrap_or(50);
+    let offset = query.offset.unwrap_or(0);
+
+    let rows = db::get_chat_history(&state.db, limit, offset)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let messages: Vec<ChatMessage> = rows
+        .into_iter()
+        .filter_map(|row| {
+            let id = Uuid::parse_str(&row.id).ok()?;
+            let timestamp = chrono::DateTime::parse_from_rfc3339(&row.timestamp)
+                .ok()?
+                .with_timezone(&Utc);
+            Some(ChatMessage {
+                id,
+                role: row.role,
+                content: row.content,
+                timestamp,
+            })
+        })
+        .collect();
+
+    Ok(Json(messages))
+}
+
+/// Stream chat response via Server-Sent Events
+///
+/// Subscribes to the response stream for a specific message and
+/// streams tokens as they are generated.
+pub async fn chat_stream(
+    State(state): State<AppState>,
+    Path(message_id): Path<Uuid>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let stream = async_stream::stream! {
+        // Subscribe to response stream for this message
+        let mut rx = state.get_response_stream(message_id).await;
+
+        loop {
+            match rx.recv().await {
+                Ok(chunk) => {
+                    match chunk {
+                        StreamChunk::Token(text) => {
+                            yield Ok(Event::default().data(text));
+                        }
+                        StreamChunk::Done => {
+                            yield Ok(Event::default().event("done").data(""));
+                            break;
+                        }
+                        StreamChunk::Error(e) => {
+                            yield Ok(Event::default().event("error").data(e));
+                            break;
+                        }
+                    }
+                }
+                Err(broadcast::error::RecvError::Closed) => {
+                    // Channel closed, end stream
+                    break;
+                }
+                Err(broadcast::error::RecvError::Lagged(_)) => {
+                    // We lagged behind, continue receiving
+                    continue;
+                }
+            }
+        }
+    };
+
+    Sse::new(stream)
+}
+
+/// Clear all chat history
+///
+/// Returns 204 No Content on success.
+pub async fn clear_chat_history(State(state): State<AppState>) -> StatusCode {
+    match db::clear_chat_history(&state.db).await {
+        Ok(_) => StatusCode::NO_CONTENT,
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -339,5 +503,54 @@ mod tests {
         let json = serde_json::to_string(&stats).unwrap();
         assert!(json.contains("\"orchestrators\""));
         assert!(json.contains("\"workers\""));
+    }
+
+    // Chat endpoint tests
+
+    #[test]
+    fn chat_request_deserializes() {
+        let json = r#"{"message": "Hello, world!"}"#;
+        let request: ChatRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.message, "Hello, world!");
+    }
+
+    #[test]
+    fn chat_response_serializes() {
+        let response = ChatResponse {
+            message_id: Uuid::new_v4(),
+            status: "queued".to_string(),
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"message_id\""));
+        assert!(json.contains("\"status\":\"queued\""));
+    }
+
+    #[test]
+    fn history_query_deserializes() {
+        let json = r#"{"limit": 25, "offset": 10}"#;
+        let query: HistoryQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.limit, Some(25));
+        assert_eq!(query.offset, Some(10));
+    }
+
+    #[test]
+    fn history_query_with_defaults() {
+        let json = r#"{}"#;
+        let query: HistoryQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.limit, None);
+        assert_eq!(query.offset, None);
+    }
+
+    #[test]
+    fn chat_message_serializes() {
+        let message = ChatMessage {
+            id: Uuid::new_v4(),
+            role: "user".to_string(),
+            content: "Hello!".to_string(),
+            timestamp: Utc::now(),
+        };
+        let json = serde_json::to_string(&message).unwrap();
+        assert!(json.contains("\"role\":\"user\""));
+        assert!(json.contains("\"content\":\"Hello!\""));
     }
 }
