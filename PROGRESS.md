@@ -5,9 +5,9 @@
 ## Current Focus
 
 **Active:** None
-**Next:** M3 Agent Runtime (continuing with 3.2)
+**Next:** M3 Agent Runtime (continuing with 3.3)
 **Blocked:** None
-**Completed:** M2 LLM Layer (2.1-2.4), M3 Ticket 3.1
+**Completed:** M2 LLM Layer (2.1-2.4), M3 Tickets 3.1-3.2
 
 **Milestone 1 Decomposition:** Complete - see `decomp/M1/`
 **Milestone 2 Decomposition:** Complete - see `decomp/M2/`
@@ -59,14 +59,14 @@
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
 | 3.1 Agent Struct & Lifecycle | done | 3/3 | Agent struct with state transitions, shutdown, 9 tests |
-| 3.2 Agent Pool Manager | pending | 0/4 | Needs 3.1 |
-| 3.3 Message Passing | pending | 0/4 | Needs 3.1 |
+| 3.2 Agent Pool Manager | done | 4/4 | AgentPool, spawn/release/remove, PoolStats, 19 tests |
+| 3.3 Message Passing | done | 4/4 | Channels, AgentHandle, Dispatcher, response/command flow |
 | 3.4 Persona System | pending | 0/3 | Needs M1 config |
 | 3.5 Task Execution Loop | pending | 0/4 | Needs 3.1-3.4 |
 | 3.6 Escalation Flow | pending | 0/3 | Needs 3.5 |
 | 3.7 Inter-Agent Protocol | pending | 0/5 | Needs 3.3 |
 
-**Milestone Status:** In Progress (1/7 tickets done)
+**Milestone Status:** In Progress (3/7 tickets done)
 
 ---
 

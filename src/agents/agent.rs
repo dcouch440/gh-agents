@@ -2,9 +2,11 @@
 
 use std::sync::Arc;
 use thiserror::Error;
+use tokio::sync::mpsc;
 use tracing::{info, warn};
 use uuid::Uuid;
 
+use super::channels::{AgentCommand, AgentResponse};
 use crate::llm::LLMProvider;
 use crate::types::{AgentPersona, AgentStatus, AgentTier, ModelConfig};
 
@@ -17,6 +19,8 @@ pub enum AgentError {
     },
     #[error("agent has no current task")]
     NoCurrentTask,
+    #[error("response channel closed")]
+    ResponseChannelClosed,
 }
 
 /// Unique identifier for an agent
@@ -51,6 +55,10 @@ pub struct Agent {
     pub status: AgentStatus,
     /// Reference to LLM provider (shared across agents)
     llm_provider: Arc<dyn LLMProvider + Send + Sync>,
+    /// Channel for receiving commands
+    command_rx: mpsc::Receiver<AgentCommand>,
+    /// Channel for sending responses
+    response_tx: mpsc::Sender<AgentResponse>,
     /// Whether the agent has been shut down
     is_shutdown: bool,
 }
@@ -62,6 +70,8 @@ impl Agent {
         persona: AgentPersona,
         model_config: ModelConfig,
         llm_provider: Arc<dyn LLMProvider + Send + Sync>,
+        command_rx: mpsc::Receiver<AgentCommand>,
+        response_tx: mpsc::Sender<AgentResponse>,
     ) -> Self {
         Self {
             id: AgentId::new(),
@@ -71,6 +81,8 @@ impl Agent {
             current_task: None,
             status: AgentStatus::Idle,
             llm_provider,
+            command_rx,
+            response_tx,
             is_shutdown: false,
         }
     }
@@ -206,6 +218,29 @@ impl Agent {
     pub fn is_shutdown(&self) -> bool {
         self.is_shutdown
     }
+
+    /// Receive the next command (blocking)
+    pub async fn recv_command(&mut self) -> Option<AgentCommand> {
+        self.command_rx.recv().await
+    }
+
+    /// Try to receive a command without blocking
+    pub fn try_recv_command(&mut self) -> Option<AgentCommand> {
+        self.command_rx.try_recv().ok()
+    }
+
+    /// Send a response to the dispatcher
+    pub async fn send_response(&self, response: AgentResponse) -> Result<(), AgentError> {
+        self.response_tx
+            .send(response)
+            .await
+            .map_err(|_| AgentError::ResponseChannelClosed)
+    }
+
+    /// Get a clone of the response sender (for spawned tasks)
+    pub fn response_sender(&self) -> mpsc::Sender<AgentResponse> {
+        self.response_tx.clone()
+    }
 }
 
 impl Drop for Agent {
@@ -269,11 +304,15 @@ mod tests {
 
     fn create_test_agent() -> Agent {
         let provider = Arc::new(MockLLMProvider);
+        let (_command_tx, command_rx) = mpsc::channel(32);
+        let (response_tx, _response_rx) = mpsc::channel(32);
         Agent::new(
             AgentTier::Worker,
             AgentPersona::default(),
             ModelConfig::default(),
             provider,
+            command_rx,
+            response_tx,
         )
     }
 
