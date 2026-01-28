@@ -5,9 +5,9 @@
 ## Current Focus
 
 **Active:** None
-**Next:** M4 Prompt Engineering or M5 Orchestration Core
+**Next:** M5 Orchestration Core or M6 TUI Basic
 **Blocked:** None
-**Completed:** M1 Foundation, M2 LLM Layer, M3 Agent Runtime
+**Completed:** M1 Foundation, M2 LLM Layer, M3 Agent Runtime, M4 Prompt Engineering
 
 **Milestone 1 Decomposition:** Complete - see `decomp/M1/`
 **Milestone 2 Decomposition:** Complete - see `decomp/M2/`
@@ -84,11 +84,11 @@
 | 4.6 Few-Shot Examples Library | done | 5/5 | Decomposition, implementation, review, recovery examples + selector, 30 tests |
 | 4.7 Prompt Testing Framework | done | 6/6 | Harness, assertions, decomp/impl tests, diff tooling, confusion detection, 74 tests |
 | 4.8 Context Management Strategy | done | 5/5 | ContextBudget, FileSelector, FileSummarizer, ContextRequestHandler, HistoryManager, 35 tests |
-| 4.9 Self-Correction & Recovery Prompts | pending | 0/5 | Needs 4.5 |
+| 4.9 Self-Correction & Recovery Prompts | done | 5/5 | Parse error, test failure, review rejection, stuck loop, conflict resolution prompts, 29 tests |
 | 4.10 Tool Definition & Selection | done | 6/6 | ToolDefinition, ToolRegistry, file/git/test tools, selection prompts, parser, 31 tests |
-| 4.11 Context Window Validation | pending | 0/5 | Needs M2 |
+| 4.11 Context Window Validation | done | 5/5 | TokenCounter, ModelLimits, ContextValidator, ContextTruncator, ContextPressureWarning, 38 tests |
 
-**Milestone Status:** In Progress (9/11 tickets done)
+**Milestone Status:** Complete (11/11 tickets done)
 
 ---
 
@@ -190,9 +190,9 @@
 | Milestone | Tickets | Slices | Status |
 |-----------|---------|--------|--------|
 | M1: Foundation | 5 | 24 | Complete |
-| M2: LLM Layer | 4 | 13 | Not Started |
+| M2: LLM Layer | 4 | 13 | Complete |
 | M3: Agent Runtime | 7 | 26 | Complete |
-| M4: Prompt Engineering | 11 | 55 | Not Started |
+| M4: Prompt Engineering | 11 | 55 | Complete |
 | M5: Orchestration Core | 5 | 18 | Not Started |
 | M6: TUI Basic | 7 | 25 | Not Started |
 | M7: Execution Layer | 6 | 28 | Not Started |
