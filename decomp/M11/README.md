@@ -1,72 +1,115 @@
-# Milestone 11: Usage Analytics
+# Milestone 11: React Foundation
 
-> Full visibility into agent activity, costs, and performance
+> React app scaffold with auth, routing, and layout.
 
 ## Goal
 
-Provide dashboards and reports for understanding agent usage, costs, and performance over time. Surface the data that's already being collected in `cost_records` and `task_events`.
+A working React application with authentication, navigation, and the Claude Code-inspired design system.
 
-## Checkpoint
+**Checkpoint**: Can login, see layout with sidebar, navigate between views.
 
-Can view `/stats` dashboard with key metrics, see detailed cost breakdown in `/costs`, track session history, and export reports to CSV/JSON.
+---
 
-## Dependencies
+## Context
 
-- **M1: Foundation** - Database with cost_records, task_events
-- **M2: LLM Layer** - Cost tracking
-- **M6: TUI Basic** - View infrastructure
+This milestone creates the React frontend that connects to the Rust backend (M10).
+
+**Architecture**:
+```
+┌─────────────────────────────────────────────┐
+│           React App (ui/)                   │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐      │
+│  │  Pages  │ │  Hooks  │ │  Store  │      │
+│  └─────────┘ └─────────┘ └─────────┘      │
+│                    │                        │
+│           ┌───────┴───────┐                │
+│           │   API Client  │                │
+│           └───────────────┘                │
+└─────────────────────────────────────────────┘
+                    │
+                    ▼ HTTP + WebSocket
+┌─────────────────────────────────────────────┐
+│            Rust Server (M10)                │
+└─────────────────────────────────────────────┘
+```
+
+---
 
 ## Tickets
 
-| Ticket | Title | Slices | Status |
-|--------|-------|--------|--------|
-| 11.1 | Analytics Query Layer | 3 | pending |
-| 11.2 | Stats Dashboard (/stats) | 4 | pending |
-| 11.3 | Cost Breakdown (/costs) | 3 | pending |
-| 11.4 | Session Tracking | 3 | pending |
-| 11.5 | Export & Reports | 3 | pending |
+| Ticket | Title | Slices | Dependencies |
+|--------|-------|--------|--------------|
+| 11.1 | Project Setup | 5 | M10.1 |
+| 11.2 | API Client | 4 | M10.2-10.5 |
+| 11.3 | Authentication UI | 4 | 11.1, 11.2, M10.5 |
+| 11.4 | Layout Components | 4 | 11.1, 11.3 |
 
-**Total Slices:** 16
+---
 
-## Key Features
+## Tech Stack
 
-### Stats Dashboard (`/stats`)
+- **Build**: Vite
+- **Framework**: React 18 + TypeScript
+- **Routing**: React Router v6
+- **State**: Zustand
+- **Styling**: TailwindCSS
+- **Icons**: Lucide React
+
+---
+
+## File Structure
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│ Usage Statistics                          Last 7 days  │
-├─────────────────────────────────────────────────────────┤
-│  Tasks              Costs            Tokens            │
-│  ──────────         ──────────       ──────────        │
-│  Completed: 47      Total: $12.34    Input: 1.2M       │
-│  Failed: 3          Orch: $8.20      Output: 340K      │
-│  Success: 94%       Worker: $3.89    Avg/Task: 28K     │
-└─────────────────────────────────────────────────────────┘
+ui/
+├── src/
+│   ├── main.tsx              # Entry point
+│   ├── App.tsx               # Root component with routing
+│   ├── api/
+│   │   ├── client.ts         # HTTP client
+│   │   └── websocket.ts      # WebSocket client
+│   ├── components/
+│   │   ├── Layout.tsx        # App shell
+│   │   ├── Sidebar.tsx       # Navigation
+│   │   ├── Header.tsx        # Top bar
+│   │   └── StatusDot.tsx     # Status indicators
+│   ├── pages/
+│   │   ├── LoginPage.tsx
+│   │   ├── SetupPage.tsx
+│   │   └── DashboardPage.tsx
+│   ├── hooks/
+│   │   ├── useAuth.ts
+│   │   └── useWebSocket.ts
+│   ├── store/
+│   │   └── index.ts          # Zustand store
+│   └── styles/
+│       └── globals.css       # Tailwind imports
+├── index.html
+├── package.json
+├── vite.config.ts
+├── tailwind.config.js
+├── tsconfig.json
+└── .env.example
 ```
 
-### Cost Breakdown (`/costs`)
+---
 
-- By tier (orchestrator, worker, utility)
-- By model (claude-opus, claude-sonnet, etc.)
-- By task
-- Time filtering (today, week, month)
+## Design Reference
 
-### Export
+See `doc/DESIGN-SYSTEM.md` for the Claude Code-inspired design:
+- Dark background (#0d1117)
+- Monospace for agent output
+- Orange accent (#da7756)
+- Minimal chrome
 
-- CSV export for spreadsheet analysis
-- JSON export for programmatic access
-- `/export costs --format csv --period week`
+---
 
-## Technical Notes
+## Completion Criteria
 
-- Most data already exists in `cost_records` and `task_events`
-- Queries should be efficient with proper indexes
-- Consider caching aggregates for performance
-- ASCII charts keep TUI aesthetic consistent
-
-## Parallelization
-
-- 11.1 (Queries) must come first
-- 11.2 (Stats) and 11.3 (Costs) can be parallel after 11.1
-- 11.4 (Sessions) is independent
-- 11.5 (Export) needs 11.1
+- [ ] Vite dev server runs
+- [ ] TailwindCSS configured with design tokens
+- [ ] API client connects to Rust backend
+- [ ] WebSocket connects and receives updates
+- [ ] Login flow works
+- [ ] Layout renders with sidebar
+- [ ] Navigation between routes works
+- [ ] Responsive on mobile

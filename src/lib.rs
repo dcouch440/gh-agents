@@ -1,4 +1,4 @@
-//! nexor: AI Agent Orchestration TUI for GitHub Workflows
+//! nexor: AI Agent Orchestration for GitHub Workflows
 
 pub mod agents;
 pub mod cli;
@@ -14,5 +14,5 @@ pub mod observability;
 pub mod orchestration;
 pub mod prompts;
 pub mod refactor;
-pub mod tui;
+pub mod server;
 pub mod types;

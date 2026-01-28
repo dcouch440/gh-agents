@@ -1,21 +1,25 @@
-//! nexor: AI Agent Orchestration TUI for GitHub Workflows
+//! nexor: AI Agent Orchestration for GitHub Workflows
 
+use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Result;
 use tokio::sync::RwLock;
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 
 use nexor::cli::Args;
 use nexor::db::init_db;
 use nexor::headless::HeadlessRunner;
 use nexor::logging::{init_logging_with_file, LOG_DIR};
 use nexor::orchestration::Scheduler;
-use nexor::tui::{init_terminal, install_panic_hook, restore_terminal, App};
+use nexor::server::run_server;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Load .env file if present (ignore errors if not found)
+    let _ = dotenvy::dotenv();
+
     // Parse command-line arguments
     let args = Args::parse_args();
 
@@ -27,15 +31,15 @@ async fn main() -> Result<()> {
     }
 
     if args.is_headless() {
-        // Headless mode - no TUI
+        // Headless mode - no server
         run_headless(args).await
     } else {
-        // Interactive TUI mode
-        run_tui(args).await
+        // Server mode
+        run_server_mode(args).await
     }
 }
 
-/// Run in headless mode (no TUI)
+/// Run in headless mode (no server)
 async fn run_headless(args: Args) -> Result<()> {
     // Initialize logging based on verbosity (to stderr so stdout is clean for output)
     let log_level = args.log_level();
@@ -55,11 +59,8 @@ async fn run_headless(args: Args) -> Result<()> {
     Ok(())
 }
 
-/// Run in interactive TUI mode
-async fn run_tui(args: Args) -> Result<()> {
-    // Install panic hook first (before any TUI setup)
-    install_panic_hook();
-
+/// Run in server mode (HTTP + WebSocket)
+async fn run_server_mode(args: Args) -> Result<()> {
     // Initialize logging with file output
     let log_path = args
         .config
@@ -69,7 +70,7 @@ async fn run_tui(args: Args) -> Result<()> {
         .unwrap_or_else(|| Path::new(LOG_DIR).to_path_buf());
     let _guard = init_logging_with_file(Some(&log_path))?;
 
-    info!("nexor starting...");
+    info!("nexor server starting...");
     debug!("Debug logging enabled (verbosity: {})", args.verbose);
 
     // Initialize database
@@ -79,28 +80,11 @@ async fn run_tui(args: Args) -> Result<()> {
     let scheduler = Scheduler::new(pool.clone()).await?;
     let scheduler = Arc::new(RwLock::new(scheduler));
 
-    // Get project root (current directory)
-    let project_root = std::env::current_dir()?;
+    // Server address (TODO: make configurable)
+    let addr: SocketAddr = "127.0.0.1:8080".parse()?;
 
-    // Create app
-    let mut app = App::new(scheduler, pool, project_root);
-
-    // Initialize terminal
-    let mut terminal = init_terminal()?;
-
-    // Run the app
-    let result = app.run(&mut terminal).await;
-
-    // Always restore terminal, even on error
-    if let Err(e) = restore_terminal(&mut terminal) {
-        error!("Failed to restore terminal: {}", e);
-    }
-
-    // Now handle any app error
-    if let Err(e) = result {
-        error!("Application error: {}", e);
-        return Err(e);
-    }
+    // Run server
+    run_server(pool, scheduler, addr).await?;
 
     info!("nexor shutting down");
     Ok(())

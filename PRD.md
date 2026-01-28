@@ -1,6 +1,6 @@
 # nexor Product Requirements Document
 
-> AI Agent Orchestration TUI for GitHub Workflows
+> AI Agent Orchestration Web Application for GitHub Workflows
 
 ---
 
@@ -27,7 +27,9 @@
 
 ## Overview
 
-**nexor** is a Rust-based terminal application that orchestrates multiple AI agents to handle software engineering tasks. It provides a rich TUI interface for managing GitHub workflows, breaking down tickets into vertical slices, and coordinating work across agent tiers.
+**nexor** is a web application with a **Rust backend** and **React frontend** that orchestrates multiple AI agents to handle software engineering tasks. It provides a modern web interface for managing GitHub workflows, breaking down tickets into vertical slices, and coordinating work across agent tiers.
+
+> **Architectural Note (2026-01-27)**: nexor has pivoted from a TUI (ratatui) to a Rust + React architecture for broader reach, better UX, and a path to SaaS deployment.
 
 ### Core Value Proposition
 
@@ -45,16 +47,22 @@
 
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
-| **Core Language** | Rust | Performance, safety, excellent async support |
-| **TUI Framework** | ratatui | Modern, well-maintained, flexible |
+| **Backend Language** | Rust | Performance, safety, excellent async support |
+| **HTTP Framework** | Axum | Modern, tower-based, great ergonomics |
+| **Frontend** | React + TypeScript | Fast iteration, rich ecosystem |
+| **Build Tool** | Vite | Fast HMR, modern bundling |
+| **Styling** | TailwindCSS | Utility-first, rapid development |
+| **State Management** | Zustand | Simple, performant React state |
 | **Database** | SQLite | Embedded, zero-config, stored in `.nexor/state.db` |
 | **Config Format** | TOML | Rust-native, readable, well-supported |
 | **Async Runtime** | tokio | Industry standard for Rust async |
+| **Real-time** | WebSocket | Efficient bidirectional updates |
 | **LLM Integration** | Pure Rust HTTP | No SDK dependencies, full control |
 
 ### Deployment
 
-- **Primary**: Local execution with Docker sandboxing
+- **Primary**: Docker container with Rust server + React static files
+- **Development**: Rust server + Vite dev server with proxy
 - **Headless Mode**: Supported for CI/CD and automation pipelines
 - **State**: Project-local in `.nexor/` directory
 
@@ -64,22 +72,46 @@
 
 ### Design Principles
 
-- **Rich TUI** with real-time updates (like Claude Code)
-- **Fixed layout** for predictable, consistent experience
-- **Standard keybindings**: Arrow keys, Tab, Enter, Ctrl+C (not Vim-style)
+- **Claude Code-inspired aesthetic** - Terminal-like feel in a web context
+- **Modern web UI** with real-time updates via WebSocket
+- **Responsive layout** for desktop, tablet, and mobile
+- **Sidebar navigation** for predictable, consistent experience
 - **Minimal chrome**: Content-first design
+- **Dark mode primary** - Light mode secondary
 
-### Slash Commands
+### Visual Style (Claude Code-inspired)
 
-| Command | Description |
-|---------|-------------|
-| `/home` | Return to home screen |
-| `/main` | Chat with orchestrator (your single point of contact) |
+| Element | Style |
+|---------|-------|
+| **Background** | Near-black (#0d1117 or similar) |
+| **Text** | Light gray (#e6edf3) with high contrast |
+| **Accent** | Claude orange/coral for highlights |
+| **Font** | Monospace for code, system font for UI |
+| **Borders** | Subtle, low-contrast dividers |
+| **Cards** | Slightly elevated surfaces (#161b22) |
+| **Scrollbars** | Thin, unobtrusive |
+| **Animations** | Subtle, functional (not decorative) |
+
+### Component Inspiration
+
+- **Chat messages**: Similar to Claude Code's streaming output
+- **Feed items**: Terminal-log style with timestamps
+- **Code blocks**: Syntax highlighted with dark theme
+- **Status indicators**: Colored dots (green/yellow/red)
+- **Progress**: Spinner or pulsing indicator, not progress bars
+
+### Navigation (Routes)
+
+| Route | Description |
+|-------|-------------|
+| `/` | Dashboard / home screen |
+| `/chat` | Chat with orchestrator (your single point of contact) |
 | `/feed` | View agent activity (read-only, natural language reports) |
-| `/logs` | View detailed technical logs |
 | `/tasks` | View/manage task queue |
 | `/agents` | View agent status and pool |
-| `/costs` | View cost breakdown |
+| `/files` | Browse and edit project files |
+| `/stats` | View usage analytics and cost breakdown |
+| `/settings` | Configuration and preferences |
 
 ---
 
@@ -393,15 +425,20 @@ struct AgentPoolConfig {
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         TUI Layer                                │
+│                     React Frontend (ui/)                         │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
-│  │   Feed   │ │  Input   │ │  Status  │ │  Agents  │           │
-│  │   View   │ │   Bar    │ │   Bar    │ │   Bar    │           │
+│  │   Chat   │ │   Feed   │ │  Tasks   │ │  Files   │           │
+│  │   View   │ │   View   │ │   View   │ │  Editor  │           │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────┘           │
-│                        ratatui                                   │
+│           Vite + React + TypeScript + TailwindCSS                │
 ├─────────────────────────────────────────────────────────────────┤
-│                     Command Router                               │
-│            /main  /logs  /tasks  /agents  /costs                │
+│                   HTTP + WebSocket                               │
+├─────────────────────────────────────────────────────────────────┤
+│                     Rust Server (Axum)                           │
+│  ┌────────────────┐ ┌────────────────┐ ┌────────────────┐      │
+│  │   REST API     │ │   WebSocket    │ │  Static Files  │      │
+│  │   /api/*       │ │   /ws          │ │   (prod only)  │      │
+│  └────────────────┘ └────────────────┘ └────────────────┘      │
 ├─────────────────────────────────────────────────────────────────┤
 │                   Orchestration Core                             │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
@@ -429,7 +466,7 @@ struct AgentPoolConfig {
 ├─────────────────────────────────────────────────────────────────┤
 │                     Persistence                                  │
 │                      SQLite                                      │
-│            .nexor/state.db (append-only log)                │
+│            .nexor/state.db (append-only log)                     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -966,9 +1003,14 @@ nexor/
 ├── Cargo.lock
 ├── .nexor/
 │   └── config.toml.example
-├── src/
+├── src/                          # Rust backend
 │   ├── main.rs
 │   ├── lib.rs
+│   ├── server/                   # HTTP server (Axum)
+│   │   ├── mod.rs
+│   │   ├── api.rs                # REST endpoints
+│   │   ├── ws.rs                 # WebSocket handler
+│   │   └── auth.rs               # Authentication
 │   ├── config/
 │   │   ├── mod.rs
 │   │   ├── global.rs
@@ -1006,22 +1048,34 @@ nexor/
 │   │   ├── git.rs
 │   │   ├── tests.rs
 │   │   └── sandbox.rs
-│   ├── github/
-│   │   ├── mod.rs
-│   │   └── client.rs
-│   └── tui/
+│   └── github/
 │       ├── mod.rs
-│       ├── app.rs
-│       ├── layout.rs
-│       ├── views/
-│       │   ├── mod.rs
-│       │   ├── feed.rs
-│       │   ├── main_chat.rs
-│       │   ├── logs.rs
-│       │   ├── tasks.rs
-│       │   ├── agents.rs
-│       │   └── costs.rs
-│       └── input.rs
+│       └── client.rs
+├── ui/                           # React frontend
+│   ├── src/
+│   │   ├── App.tsx
+│   │   ├── main.tsx
+│   │   ├── api/                  # API client
+│   │   │   ├── client.ts
+│   │   │   └── websocket.ts
+│   │   ├── components/           # Shared components
+│   │   │   ├── Layout.tsx
+│   │   │   ├── Sidebar.tsx
+│   │   │   └── Header.tsx
+│   │   ├── pages/                # Route pages
+│   │   │   ├── ChatPage.tsx
+│   │   │   ├── FeedPage.tsx
+│   │   │   ├── TasksPage.tsx
+│   │   │   └── SettingsPage.tsx
+│   │   ├── hooks/                # Custom hooks
+│   │   │   ├── useChat.ts
+│   │   │   └── useFeed.ts
+│   │   └── store/                # Zustand stores
+│   │       └── index.ts
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tailwind.config.js
+│   └── tsconfig.json
 ├── tests/
 │   └── ...
 └── docker/
@@ -1168,11 +1222,14 @@ nexor/
 
 Features to consider after v1:
 
+- **SaaS Deployment** - Fully hosted version with user accounts (see `doc/PRD-SAAS.md`)
+- **Docker Distribution** - Self-hosted server mode (see `doc/PRD-DOCKER-SERVER.md`)
 - **Team collaboration** - Multiple users, shared agent pools, collaborative roadmaps
 - **Pause/resume agents** - Save and restore agent state mid-task
 - **Multi-repo support** - Orchestrate across multiple repositories
 - **Learning system** - Improve prompts based on success/failure patterns
 - **Plugin architecture** - Extensible integrations beyond GitHub
+- **Mobile app** - Native iOS/Android or PWA for monitoring on the go
 
 ---
 
