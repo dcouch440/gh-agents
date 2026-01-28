@@ -238,13 +238,10 @@ const IMPLEMENTATION_THINKING: &str = r#"Follow this implementation process:
 2. IDENTIFY what files you'll need to read/modify
 3. REQUEST context if needed (be specific: "I need to see src/auth/mod.rs")
 4. PLAN your approach in 2-3 sentences before coding
-5. ANNOUNCE: "Starting work on [task]. My approach: [brief plan]"
 
 ### When implementing:
 1. WRITE code incrementally - don't try to do everything at once
-2. EXPLAIN significant decisions: "Using X approach because Y"
-3. TEST mentally: "If I call this with X, it should return Y"
-4. REPORT progress every few minutes: "Completed the struct definition, now writing the impl"
+2. TEST mentally: "If I call this with X, it should return Y"
 
 ### Before submitting:
 1. RE-READ the original task requirements

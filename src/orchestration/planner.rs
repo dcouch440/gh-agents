@@ -16,7 +16,7 @@ use sqlx::SqlitePool;
 use thiserror::Error;
 
 use crate::llm::{LLMProvider, LLMRequest, Message};
-use crate::prompts::schemas::{DecompositionOutput, TierOutput, ValidationError};
+use crate::prompts::schemas::{ComplexityOutput, DecompositionOutput, TierOutput, ValidationError};
 use crate::prompts::templates::OrchestratorPrompts;
 use crate::types::{AgentTier, Priority, SliceId, Task, TaskId, TaskStatus, Ticket, VerticalSlice};
 
@@ -296,6 +296,18 @@ impl<P: LLMProvider> Planner<P> {
                 let task_id = TaskId::new();
                 task_ids.push(task_id.clone());
 
+                // Map estimated_complexity to task metadata
+                let mut metadata = std::collections::HashMap::new();
+                metadata.insert(
+                    "difficulty".to_string(),
+                    match task_output.estimated_complexity {
+                        ComplexityOutput::Low => "simple",
+                        ComplexityOutput::Medium => "standard",
+                        ComplexityOutput::High => "complex",
+                    }
+                    .to_string(),
+                );
+
                 let task = Task {
                     id: task_id,
                     slice_id: Some(slice_id.clone()),
@@ -313,7 +325,7 @@ impl<P: LLMProvider> Planner<P> {
                         .into_iter()
                         .map(PathBuf::from)
                         .collect(),
-                    metadata: None,
+                    metadata: Some(metadata),
                     depends_on: vec![],
                     created_at: now,
                     updated_at: now,
