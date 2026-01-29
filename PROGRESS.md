@@ -258,7 +258,7 @@
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
 | 13.1 WebSocket Client | done | 4/4 | ws package, typed messages, reconnect, tests |
-| 13.2 Agent Types & State | pending | 0/3 | Types, REST fetch, useAgents hook |
+| 13.2 Agent Types & State | done | 3/3 | Types, REST fetch, useAgents hook |
 | 13.3 Agent Station Widget | pending | 0/4 | Unicode box, status icons, progress bar |
 | 13.4 Agent Grid Layout | pending | 0/3 | Tier sections, stats summary, responsive rows |
 | 13.5 Screen Navigation | pending | 0/3 | Tab to switch Chat/Agents, status bar |
