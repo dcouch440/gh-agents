@@ -190,6 +190,9 @@ pub struct ProjectConfig {
     pub pr_merge: PrMergeConfig,
 }
 
+/// Default Postgres connection URL
+pub const DEFAULT_DATABASE_URL: &str = "postgres://nexor:nexor@localhost:5432/nexor";
+
 /// Merged configuration (global + project)
 #[derive(Debug, Clone, PartialEq)]
 pub struct AppConfig {
@@ -201,6 +204,7 @@ pub struct AppConfig {
     pub sandbox_mode: SandboxMode,
     pub pool: AgentPoolConfig,
     pub pr_merge: PrMergeConfig,
+    pub database_url: String,
 }
 
 impl Default for AppConfig {
@@ -214,6 +218,7 @@ impl Default for AppConfig {
             sandbox_mode: SandboxMode::default(),
             pool: AgentPoolConfig::default(),
             pr_merge: PrMergeConfig::default(),
+            database_url: DEFAULT_DATABASE_URL.to_string(),
         }
     }
 }
@@ -221,6 +226,9 @@ impl Default for AppConfig {
 impl AppConfig {
     /// Merge global and project configs (project overrides global)
     pub fn merge(global: GlobalConfig, project: Option<ProjectConfig>) -> Self {
+        let database_url = std::env::var("DATABASE_URL")
+            .unwrap_or_else(|_| DEFAULT_DATABASE_URL.to_string());
+
         match project {
             Some(proj) => Self {
                 models: proj.models.unwrap_or(global.default_models),
@@ -231,6 +239,7 @@ impl AppConfig {
                 sandbox_mode: proj.sandbox_mode,
                 pool: proj.pool.unwrap_or(global.pool),
                 pr_merge: proj.pr_merge,
+                database_url,
             },
             None => Self {
                 models: global.default_models,
@@ -241,6 +250,7 @@ impl AppConfig {
                 sandbox_mode: SandboxMode::default(),
                 pool: global.pool,
                 pr_merge: PrMergeConfig::default(),
+                database_url,
             },
         }
     }
@@ -307,5 +317,28 @@ mod tests {
         let merged = AppConfig::merge(global, Some(project));
         assert!(merged.pr_merge.auto_merge_enabled);
         assert_eq!(merged.pr_merge.merge_strategy, MergeStrategy::Squash);
+    }
+
+    #[test]
+    fn config_default_database_url() {
+        let config = AppConfig::default();
+        assert_eq!(config.database_url, DEFAULT_DATABASE_URL);
+    }
+
+    #[test]
+    fn config_merge_reads_database_url_env() {
+        std::env::set_var("DATABASE_URL", "postgres://test:test@db:5432/testdb");
+        let global = GlobalConfig::default();
+        let merged = AppConfig::merge(global, None);
+        assert_eq!(merged.database_url, "postgres://test:test@db:5432/testdb");
+        std::env::remove_var("DATABASE_URL");
+    }
+
+    #[test]
+    fn config_merge_falls_back_to_default_database_url() {
+        std::env::remove_var("DATABASE_URL");
+        let global = GlobalConfig::default();
+        let merged = AppConfig::merge(global, None);
+        assert_eq!(merged.database_url, DEFAULT_DATABASE_URL);
     }
 }
