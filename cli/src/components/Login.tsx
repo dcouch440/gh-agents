@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import Spinner from 'ink-spinner';
-import { api } from '../api/client.js';
-import { setToken } from '../store/auth.js';
+import { handleLogin } from './loginHandler.js';
 
 interface LoginProps {
   onSuccess: () => void;
@@ -18,12 +17,11 @@ export function Login({ onSuccess }: LoginProps) {
     if (!value) return;
     setLoading(true);
     setError(null);
-    try {
-      const res = await api.auth.login(value);
-      setToken(res.token, res.expires_in);
+    const result = await handleLogin(value);
+    if (result.success) {
       onSuccess();
-    } catch {
-      setError('Authentication failed. Please try again.');
+    } else {
+      setError(result.error ?? 'Unknown error');
       setPassword('');
       setLoading(false);
     }
