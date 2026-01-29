@@ -1,0 +1,39 @@
+.container {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
+.inputWrapper {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.textarea {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--text-primary);
+  resize: none;
+  transition: border-color 0.2s;
+}
+
+.textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.textarea:disabled {
+  opacity: 0.5;
+}
+
+.hint {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  margin-top: 0.5rem;
+}
