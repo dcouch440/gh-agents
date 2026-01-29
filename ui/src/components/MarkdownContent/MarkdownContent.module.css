@@ -1,0 +1,32 @@
+.markdown {
+  max-width: 100%;
+}
+
+.inlineCode {
+  background-color: var(--bg-tertiary);
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  color: var(--accent);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.875em;
+}
+
+.paragraph {
+  margin-bottom: 0.5rem;
+}
+
+.paragraph:last-child {
+  margin-bottom: 0;
+}
+
+.list {
+  list-style-type: disc;
+  list-style-position: inside;
+  margin-bottom: 0.5rem;
+}
+
+.orderedList {
+  list-style-type: decimal;
+  list-style-position: inside;
+  margin-bottom: 0.5rem;
+}
