@@ -1,6 +1,6 @@
 -- PR merge queue for ordered merging
 CREATE TABLE IF NOT EXISTS pr_merge_queue (
-    id TEXT PRIMARY KEY,
+    id UUID PRIMARY KEY,
     repo_owner TEXT NOT NULL,
     repo_name TEXT NOT NULL,
     pr_number INTEGER NOT NULL,
@@ -8,8 +8,8 @@ CREATE TABLE IF NOT EXISTS pr_merge_queue (
     status TEXT NOT NULL DEFAULT 'pending',
     conflict_info TEXT,
     error_message TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
 
     UNIQUE(repo_owner, repo_name, pr_number)
 );
