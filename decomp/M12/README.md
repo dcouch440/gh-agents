@@ -1,32 +1,34 @@
-# Milestone 12: React Features
+# Milestone 12: Terminal CLI (Ink)
 
-> Core feature views - chat, feed, tasks, files.
+> Claude Code-style terminal interface for nexor, built with TypeScript + Ink.
 
 ## Goal
 
-Full feature views that provide parity with the original TUI vision, but in a modern web interface.
+Interactive terminal CLI that connects to the Rust backend. Chat with the orchestrator directly in your terminal — streaming responses, markdown rendering, same UX as Claude Code.
 
-**Checkpoint**: Can chat with orchestrator, see agent feed, manage tasks, browse files.
+**Checkpoint**: Can run `nexor` in terminal, authenticate, send messages, see streaming responses with markdown formatting.
 
 ---
 
 ## Context
 
-This milestone builds the main feature pages on top of the foundation from M11.
+The original M12 was React browser features. This replaces it with a terminal-native CLI using Ink (React for CLIs). The React web UI remains in `ui/` as an alternative.
 
 **Architecture**:
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Feature Pages                             │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐          │
-│  │  Chat   │ │  Feed   │ │  Tasks  │ │  Files  │          │
-│  └─────────┘ └─────────┘ └─────────┘ └─────────┘          │
-├─────────────────────────────────────────────────────────────┤
-│                    Layout (M11)                              │
-├─────────────────────────────────────────────────────────────┤
-│                    API Client (M11)                          │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────┐
+│          Terminal (Ink)              │
+│  ┌───────────┐  ┌────────────────┐  │
+│  │  Input    │  │  MessageList   │  │
+│  └───────────┘  └────────────────┘  │
+├─────────────────────────────────────┤
+│          API Client (HTTP + SSE)    │
+├─────────────────────────────────────┤
+│          Rust Backend (M10)         │
+└─────────────────────────────────────┘
 ```
+
+**Key constraint**: Backend already exists. CLI is a pure client — no backend changes needed.
 
 ---
 
@@ -34,45 +36,32 @@ This milestone builds the main feature pages on top of the foundation from M11.
 
 | Ticket | Title | Slices | Dependencies |
 |--------|-------|--------|--------------|
-| 12.1 | Chat View | 5 | M11, M10.3 |
-| 12.2 | Feed View | 4 | M11, M10.4 |
-| 12.3 | Tasks View | 5 | M11, M10.2 |
-| 12.4 | Agents View | 4 | M11, M10.2 |
-| 12.5 | File Browser & Editor | 5 | M11, M10.2 |
-| 12.6 | Diff Viewer | 3 | 12.5, M10.2 |
+| 12.1 | CLI Scaffolding | 4 | M10 (server) |
+| 12.2 | API Client | 4 | 12.1 |
+| 12.3 | Auth Flow | 3 | 12.2 |
+| 12.4 | Chat UI Components | 5 | 12.3 |
+| 12.5 | Streaming & SSE | 3 | 12.4 |
+| 12.6 | Polish & Integration | 3 | 12.5 |
 
 ---
 
 ## Design Notes
 
-All views should follow the Claude Code-inspired design from `doc/DESIGN-SYSTEM.md`:
-- Dark backgrounds
-- Monospace for agent output
-- Streaming text animations
-- Minimal chrome
-
----
-
-## Key Components to Build
-
-| Component | Used In | Description |
-|-----------|---------|-------------|
-| `<Message>` | Chat | Chat message with streaming |
-| `<FeedItem>` | Feed | Agent activity item |
-| `<TaskCard>` | Tasks | Task status card |
-| `<AgentCard>` | Agents | Agent status card |
-| `<FileTree>` | Files | Directory tree |
-| `<CodeEditor>` | Files | Monaco/CodeMirror editor |
-| `<DiffView>` | Diff | Side-by-side diff |
+Match Claude Code's terminal UX:
+- Flat turn-based conversation (no bubbles, no avatars)
+- Role labels ("You" / "nexor") with timestamps
+- Streaming text token-by-token
+- Markdown rendered in terminal (headers, code blocks, lists)
+- Minimal chrome — content first
+- Input at the bottom, conversation scrolls above
 
 ---
 
 ## Completion Criteria
 
-- [ ] Chat with streaming responses
-- [ ] Live agent activity feed
-- [ ] Task list with real-time updates
-- [ ] Agent pool status
-- [ ] File browser with syntax highlighting
-- [ ] File editing capability
-- [ ] Git diff viewer
+- [ ] `npx nexor` launches the CLI
+- [ ] Can authenticate with the backend
+- [ ] Can send messages and see streaming responses
+- [ ] Markdown renders correctly in terminal
+- [ ] Code blocks display with syntax info
+- [ ] Makefile targets for CLI dev/build
