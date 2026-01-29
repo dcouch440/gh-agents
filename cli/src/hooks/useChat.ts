@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
-import { api } from '../api/client.js';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { api, getBaseUrl, getToken } from '../api/client.js';
+import { streamResponse } from '../api/stream.js';
 import type { ChatMessage } from '../api/types.js';
 
 interface UseChatResult {
@@ -7,6 +8,8 @@ interface UseChatResult {
   loading: boolean;
   sending: boolean;
   error: string | null;
+  streamingContent: string;
+  isStreaming: boolean;
   sendMessage: (content: string) => Promise<void>;
 }
 
@@ -15,6 +18,9 @@ export function useChat(): UseChatResult {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [streamingContent, setStreamingContent] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const cleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,6 +43,12 @@ export function useChat(): UseChatResult {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      cleanupRef.current?.();
+    };
+  }, []);
+
   const sendMessage = useCallback(async (content: string) => {
     const optimistic: ChatMessage = {
       id: `temp-${Date.now()}`,
@@ -45,22 +57,56 @@ export function useChat(): UseChatResult {
       timestamp: new Date().toISOString(),
     };
 
-    setMessages((prev) => [...prev, optimistic]);
+    setMessages((prev: ChatMessage[]) => [...prev, optimistic]);
     setSending(true);
     setError(null);
 
     try {
-      await api.chat.send(content);
-      // Reload history to get the assistant response and real IDs
-      const history = await api.chat.history();
-      setMessages(history);
+      const response = await api.chat.send(content);
+      setSending(false);
+      setIsStreaming(true);
+      setStreamingContent('');
+
+      const cleanup = streamResponse(
+        getBaseUrl(),
+        response.message_id,
+        getToken(),
+        {
+          onToken: (text: string) => {
+            setStreamingContent((prev: string) => prev + text);
+          },
+          onDone: () => {
+            setIsStreaming(false);
+            cleanupRef.current = null;
+            // Reload history to get the full message with real IDs
+            api.chat
+              .history()
+              .then((history) => setMessages(history))
+              .catch(() => {});
+          },
+          onError: (errMsg: string) => {
+            setIsStreaming(false);
+            setStreamingContent('');
+            setError(errMsg);
+            cleanupRef.current = null;
+          },
+        },
+      );
+      cleanupRef.current = cleanup;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Send failed';
       setError(msg);
-    } finally {
       setSending(false);
     }
   }, []);
 
-  return { messages, loading, sending, error, sendMessage };
+  return {
+    messages,
+    loading,
+    sending,
+    error,
+    streamingContent,
+    isStreaming,
+    sendMessage,
+  };
 }
