@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
+import { renderMarkdown } from '../utils/markdown.js';
 
 interface StreamingMessageProps {
   content: string;
@@ -29,7 +30,7 @@ export function StreamingMessage({ content, done }: StreamingMessageProps) {
         <Text dimColor>{time}</Text>
       </Box>
       <Text dimColor>
-        {content}
+        {content ? renderMarkdown(content) : ''}
         {!done && cursorVisible ? '█' : ''}
       </Text>
     </Box>

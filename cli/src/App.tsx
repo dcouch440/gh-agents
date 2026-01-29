@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Box, Text } from 'ink';
+import React, { useEffect, useState, useCallback } from 'react';
+import { Box, Text, useInput } from 'ink';
 import Spinner from 'ink-spinner';
 import { api, setBaseUrl, setToken as setApiToken } from './api/client.js';
 import {
@@ -12,16 +12,32 @@ import {
 import { Login } from './components/Login.js';
 import { ChatView } from './components/ChatView.js';
 
-type AuthState = 'checking' | 'login' | 'authenticated';
+type AuthState = 'checking' | 'login' | 'authenticated' | 'connection_error';
 
 interface AppProps {
   serverUrl?: string;
 }
 
+function isConnectionError(err: unknown): boolean {
+  if (err instanceof TypeError && /fetch/i.test(err.message)) return true;
+  if (err instanceof Error && /ECONNREFUSED/i.test(err.message)) return true;
+  if (
+    err instanceof Error &&
+    err.cause instanceof Error &&
+    /ECONNREFUSED/i.test(err.cause.message)
+  )
+    return true;
+  return false;
+}
+
 export function App({ serverUrl }: AppProps) {
   const [authState, setAuthState] = useState<AuthState>('checking');
+  const [errorMsg, setErrorMsg] = useState<string>('');
 
-  useEffect(() => {
+  const checkAuth = useCallback(() => {
+    setAuthState('checking');
+    setErrorMsg('');
+
     if (serverUrl) {
       setServerUrl(serverUrl);
       setBaseUrl(serverUrl);
@@ -40,11 +56,31 @@ export function App({ serverUrl }: AppProps) {
     api.auth
       .me()
       .then(() => setAuthState('authenticated'))
-      .catch(() => {
-        clearToken();
-        setAuthState('login');
+      .catch((err: unknown) => {
+        if (isConnectionError(err)) {
+          const url = serverUrl ?? getServerUrl();
+          setErrorMsg(
+            `Cannot connect to server at ${url}. Is the backend running?`,
+          );
+          setAuthState('connection_error');
+        } else {
+          clearToken();
+          setAuthState('login');
+        }
       });
   }, [serverUrl]);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  useInput(
+    (input) => {
+      if (authState === 'connection_error' && input === 'r') {
+        checkAuth();
+      }
+    },
+  );
 
   if (authState === 'checking') {
     return (
@@ -52,6 +88,19 @@ export function App({ serverUrl }: AppProps) {
         <Text>
           <Spinner type="dots" />{' '}Verifying authentication…
         </Text>
+      </Box>
+    );
+  }
+
+  if (authState === 'connection_error') {
+    return (
+      <Box flexDirection="column" padding={1}>
+        <Text bold color="cyan">nexor</Text>
+        <Box marginTop={1} flexDirection="column">
+          <Text color="red">Connection Error</Text>
+          <Text>{errorMsg}</Text>
+          <Text dimColor>Press &quot;r&quot; to retry or Ctrl+C to exit.</Text>
+        </Box>
       </Box>
     );
   }

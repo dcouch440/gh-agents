@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import type { ChatMessage } from '../api/types.js';
+import { renderMarkdown } from '../utils/markdown.js';
 
 interface MessageProps {
   message: ChatMessage;
@@ -24,7 +25,9 @@ export function Message({ message }: MessageProps) {
         </Text>
         <Text dimColor>{formatTime(message.timestamp)}</Text>
       </Box>
-      <Text dimColor={!isUser}>{message.content}</Text>
+      <Text dimColor={!isUser}>
+        {isUser ? message.content : renderMarkdown(message.content)}
+      </Text>
     </Box>
   );
 }

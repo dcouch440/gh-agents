@@ -1,5 +1,6 @@
 .PHONY: build check test fmt lint clean run release help \
        ui-install ui-dev ui-build ui-lint ui-preview \
+       cli-install cli-dev cli-build \
        dev build-all lint-all test-all ci
 
 # Default target
@@ -24,12 +25,17 @@ help:
 	@echo "    make ui-lint     - Run eslint"
 	@echo "    make ui-preview  - Preview production build"
 	@echo ""
+	@echo "  CLI (Terminal):"
+	@echo "    make cli-install - Install CLI npm dependencies"
+	@echo "    make cli-dev     - Launch the terminal CLI"
+	@echo "    make cli-build   - Compile CLI TypeScript"
+	@echo ""
 	@echo "  Combined:"
 	@echo "    make dev         - Run backend and frontend dev servers"
-	@echo "    make build-all   - Build backend and frontend"
+	@echo "    make build-all   - Build backend, frontend, and CLI"
 	@echo "    make lint-all    - Lint backend and frontend"
 	@echo "    make test-all    - Run all tests"
-	@echo "    make ci          - Full CI check (fmt, lint, test, ui-build)"
+	@echo "    make ci          - Full CI check (fmt, lint, test, ui-build, cli-build)"
 	@echo "    make clean       - Remove all build artifacts"
 
 # --- Backend (Rust) ---
@@ -81,6 +87,17 @@ ui-lint:
 ui-preview:
 	cd ui && npm run preview
 
+# --- CLI (Terminal) ---
+
+cli-install:
+	cd cli && npm install
+
+cli-dev:
+	cd cli && npm run dev
+
+cli-build:
+	cd cli && npm run build
+
 # --- Combined ---
 
 dev:
@@ -90,14 +107,15 @@ dev:
 		(cd ui && npm run dev) & \
 		wait
 
-build-all: build ui-build
+build-all: build ui-build cli-build
 
 lint-all: lint ui-lint
 
 test-all: test
 
-ci: check fmt lint test ui-build
+ci: check fmt lint test ui-build cli-build
 
 clean:
 	cargo clean
 	rm -rf ui/dist ui/node_modules/.vite
+	rm -rf cli/dist cli/node_modules/.cache
