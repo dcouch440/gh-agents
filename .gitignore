@@ -23,6 +23,9 @@ Thumbs.db
 .nexor/state.db-*
 .nexor/logs/
 
+# Node
+node_modules/
+
 # Build artifacts
 *.so
 *.dylib
