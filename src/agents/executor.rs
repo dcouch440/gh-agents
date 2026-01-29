@@ -699,10 +699,22 @@ mod tests {
     #[test]
     fn temperature_for_style_values() {
         let agent = create_test_agent();
-        assert_eq!(agent.temperature_for_style(&CommunicationStyle::Technical), 0.3);
-        assert_eq!(agent.temperature_for_style(&CommunicationStyle::Casual), 0.7);
-        assert_eq!(agent.temperature_for_style(&CommunicationStyle::Formal), 0.4);
-        assert_eq!(agent.temperature_for_style(&CommunicationStyle::Friendly), 0.6);
+        assert_eq!(
+            agent.temperature_for_style(&CommunicationStyle::Technical),
+            0.3
+        );
+        assert_eq!(
+            agent.temperature_for_style(&CommunicationStyle::Casual),
+            0.7
+        );
+        assert_eq!(
+            agent.temperature_for_style(&CommunicationStyle::Formal),
+            0.4
+        );
+        assert_eq!(
+            agent.temperature_for_style(&CommunicationStyle::Friendly),
+            0.6
+        );
     }
 
     #[test]
@@ -721,7 +733,8 @@ mod tests {
         let result = agent.output_format_instructions(&OutputFormat::Result);
         assert!(result.contains("result"));
 
-        let custom = agent.output_format_instructions(&OutputFormat::Custom("Use YAML".to_string()));
+        let custom =
+            agent.output_format_instructions(&OutputFormat::Custom("Use YAML".to_string()));
         assert!(custom.contains("Use YAML"));
     }
 
@@ -749,7 +762,10 @@ mod tests {
             content: "// File: src/lib.rs\nfn main() {}".to_string(),
             model: "test".to_string(),
             stop_reason: StopReason::EndTurn,
-            usage: TokenUsage { input_tokens: 5, output_tokens: 10 },
+            usage: TokenUsage {
+                input_tokens: 5,
+                output_tokens: 10,
+            },
         };
 
         let result = agent
@@ -769,11 +785,16 @@ mod tests {
             content: "// File: src/lib.rs\nsome output".to_string(),
             model: "test".to_string(),
             stop_reason: StopReason::EndTurn,
-            usage: TokenUsage { input_tokens: 5, output_tokens: 10 },
+            usage: TokenUsage {
+                input_tokens: 5,
+                output_tokens: 10,
+            },
         };
 
         // Plan format should not extract files
-        let result = agent.parse_llm_response(task_id, response, &OutputFormat::Plan).unwrap();
+        let result = agent
+            .parse_llm_response(task_id, response, &OutputFormat::Plan)
+            .unwrap();
         assert!(result.files_modified.is_empty());
     }
 
@@ -1065,8 +1086,7 @@ mod tests {
 
     #[tokio::test]
     async fn run_loop_channel_closed() {
-        let (agent, cmd_tx, _resp_rx) =
-            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+        let (agent, cmd_tx, _resp_rx) = create_test_agent_with_channels(Arc::new(MockLLMProvider));
 
         drop(cmd_tx); // close command channel
 
@@ -1080,7 +1100,10 @@ mod tests {
             create_test_agent_with_channels(Arc::new(MockLLMProvider));
 
         let task_id = Uuid::new_v4();
-        agent.emit_progress(task_id, "working...", Some(50)).await.unwrap();
+        agent
+            .emit_progress(task_id, "working...", Some(50))
+            .await
+            .unwrap();
 
         let resp = resp_rx.recv().await.unwrap();
         match resp {

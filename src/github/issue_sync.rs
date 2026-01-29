@@ -329,4 +329,172 @@ mod tests {
         let updated = SyncResult::Updated(ticket);
         assert!(!updated.is_new());
     }
+
+    #[test]
+    fn parse_http_url() {
+        let url = "http://github.com/owner/repo/issues/99";
+        let issue_ref = IssueRef::parse(url).unwrap();
+        assert_eq!(issue_ref.owner, "owner");
+        assert_eq!(issue_ref.repo, "repo");
+        assert_eq!(issue_ref.number, 99);
+    }
+
+    #[test]
+    fn parse_invalid_issue_number_in_url() {
+        let url = "https://github.com/owner/repo/issues/abc";
+        let err = IssueRef::parse(url).unwrap_err();
+        assert!(matches!(err, IssueSyncError::InvalidNumber(_)));
+        assert!(err.to_string().contains("abc"));
+    }
+
+    #[test]
+    fn parse_invalid_issue_number_in_short_format() {
+        let err = IssueRef::parse("owner/repo#notanumber").unwrap_err();
+        assert!(matches!(err, IssueSyncError::InvalidNumber(_)));
+    }
+
+    #[test]
+    fn parse_short_format_missing_owner() {
+        // No slash means it won't have 2 repo_parts
+        let err = IssueRef::parse("repo#123").unwrap_err();
+        assert!(matches!(err, IssueSyncError::InvalidUrl(_)));
+    }
+
+    #[test]
+    fn parse_github_url_missing_issues_segment() {
+        // Has github.com but not /issues/ -- falls through to InvalidUrl
+        let err = IssueRef::parse("https://github.com/owner/repo/pull/1").unwrap_err();
+        assert!(matches!(err, IssueSyncError::InvalidUrl(_)));
+    }
+
+    #[test]
+    fn parse_url_with_only_hash_no_slash() {
+        // Has # but no / => doesn't enter short_format branch
+        let err = IssueRef::parse("repo#123").unwrap_err();
+        assert!(matches!(err, IssueSyncError::InvalidUrl(_)));
+    }
+
+    #[test]
+    fn issue_ref_new_and_fields() {
+        let r = IssueRef::new("a", "b", 7);
+        assert_eq!(r.owner, "a");
+        assert_eq!(r.repo, "b");
+        assert_eq!(r.number, 7);
+    }
+
+    #[test]
+    fn sync_result_into_ticket() {
+        let ticket = Ticket {
+            id: TicketId::new(),
+            source: TicketSource::Manual,
+            title: "T".to_string(),
+            description: "D".to_string(),
+            labels: vec![],
+            slices: vec![],
+            status: TicketStatus::New,
+            created_at: Utc::now(),
+        };
+
+        let t_clone = ticket.clone();
+        let created = SyncResult::Created(ticket);
+        let t = created.into_ticket();
+        assert_eq!(t.title, "T");
+
+        let updated = SyncResult::Updated(t_clone);
+        let t2 = updated.into_ticket();
+        assert_eq!(t2.title, "T");
+    }
+
+    #[test]
+    fn sync_result_ticket_ref_updated() {
+        let ticket = Ticket {
+            id: TicketId::new(),
+            source: TicketSource::Manual,
+            title: "Updated".to_string(),
+            description: "".to_string(),
+            labels: vec![],
+            slices: vec![],
+            status: TicketStatus::New,
+            created_at: Utc::now(),
+        };
+        let updated = SyncResult::Updated(ticket);
+        assert_eq!(updated.ticket().title, "Updated");
+    }
+
+    #[test]
+    fn convert_issue_multiple_labels() {
+        let issue = GitHubIssue {
+            number: 5,
+            title: "Multi".to_string(),
+            body: Some("body".to_string()),
+            state: "open".to_string(),
+            labels: vec![
+                GitHubLabel {
+                    name: "a".to_string(),
+                    color: "000".to_string(),
+                    description: None,
+                },
+                GitHubLabel {
+                    name: "b".to_string(),
+                    color: "fff".to_string(),
+                    description: None,
+                },
+            ],
+            user: GitHubApiUser {
+                login: "u".to_string(),
+                id: 1,
+                avatar_url: None,
+            },
+            assignees: vec![],
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            html_url: "https://github.com/o/r/issues/5".to_string(),
+            pull_request: None,
+        };
+        let ticket = convert_issue_to_ticket(issue, "o", "r");
+        assert_eq!(ticket.labels, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn convert_issue_preserves_source_owner_repo() {
+        let issue = GitHubIssue {
+            number: 1,
+            title: "T".to_string(),
+            body: None,
+            state: "open".to_string(),
+            labels: vec![],
+            user: GitHubApiUser {
+                login: "u".to_string(),
+                id: 1,
+                avatar_url: None,
+            },
+            assignees: vec![],
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            html_url: "".to_string(),
+            pull_request: None,
+        };
+        let ticket = convert_issue_to_ticket(issue, "myowner", "myrepo");
+        match &ticket.source {
+            TicketSource::GitHub {
+                owner,
+                repo,
+                issue_number,
+            } => {
+                assert_eq!(owner, "myowner");
+                assert_eq!(repo, "myrepo");
+                assert_eq!(*issue_number, 1);
+            }
+            _ => panic!("Expected GitHub source"),
+        }
+    }
+
+    #[test]
+    fn error_display_messages() {
+        let e1 = IssueSyncError::InvalidUrl("bad".to_string());
+        assert!(e1.to_string().contains("bad"));
+
+        let e2 = IssueSyncError::InvalidNumber("nan".to_string());
+        assert!(e2.to_string().contains("nan"));
+    }
 }

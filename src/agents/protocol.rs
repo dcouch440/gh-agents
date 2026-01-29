@@ -1413,8 +1413,7 @@ mod tests {
             conventions: "use fmt".into(),
             metadata: HashMap::new(),
         };
-        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker)
-            .with_context(ctx);
+        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker).with_context(ctx);
         assert_eq!(a.context.files.len(), 1);
         assert_eq!(a.context.conventions, "use fmt");
     }
@@ -1428,8 +1427,8 @@ mod tests {
             require_review: false,
             extra: HashMap::new(),
         };
-        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker)
-            .with_constraints(c);
+        let a =
+            TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker).with_constraints(c);
         assert_eq!(a.constraints.max_files_modified, Some(5));
         assert!(a.constraints.require_tests);
         assert!(!a.constraints.require_review);
@@ -1457,8 +1456,8 @@ mod tests {
         let parent = DelegationContext::from_user();
         let del = DelegationContext::delegated_from(agent.clone(), role, &parent);
 
-        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker)
-            .with_delegation(del);
+        let a =
+            TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker).with_delegation(del);
         assert_eq!(a.delegation.depth, 1);
         assert_eq!(a.delegation.parent_agent, Some(agent));
     }
@@ -1469,8 +1468,14 @@ mod tests {
             .with_file_modified(FileModification::created("new.rs"))
             .with_file_modified(FileModification::deleted("old.rs"));
         assert_eq!(r.files_modified.len(), 2);
-        assert_eq!(r.files_modified[0].modification_type, ModificationType::Created);
-        assert_eq!(r.files_modified[1].modification_type, ModificationType::Deleted);
+        assert_eq!(
+            r.files_modified[0].modification_type,
+            ModificationType::Created
+        );
+        assert_eq!(
+            r.files_modified[1].modification_type,
+            ModificationType::Deleted
+        );
     }
 
     #[test]
@@ -1502,8 +1507,7 @@ mod tests {
     #[test]
     fn task_result_with_structured_output() {
         let val = serde_json::json!({"key": "value"});
-        let r = TaskResult::success(Uuid::new_v4(), "done")
-            .with_structured_output(val.clone());
+        let r = TaskResult::success(Uuid::new_v4(), "done").with_structured_output(val.clone());
         assert_eq!(r.structured_output.unwrap(), val);
     }
 
@@ -1650,15 +1654,14 @@ mod tests {
 
     #[test]
     fn progress_update_with_details() {
-        let u = ProgressUpdate::new(Uuid::new_v4(), "working")
-            .with_details("extra info");
+        let u = ProgressUpdate::new(Uuid::new_v4(), "working").with_details("extra info");
         assert_eq!(u.details.unwrap(), "extra info");
     }
 
     #[test]
     fn progress_update_with_verbosity() {
-        let u = ProgressUpdate::new(Uuid::new_v4(), "working")
-            .with_verbosity(VerbosityLevel::Verbose);
+        let u =
+            ProgressUpdate::new(Uuid::new_v4(), "working").with_verbosity(VerbosityLevel::Verbose);
         assert_eq!(u.verbosity, VerbosityLevel::Verbose);
     }
 
@@ -1767,8 +1770,7 @@ mod tests {
             conventions: String::new(),
             metadata: HashMap::new(),
         };
-        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker)
-            .with_context(ctx);
+        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker).with_context(ctx);
         let errs = a.validate().unwrap_err();
         assert!(errs.iter().any(|e| e.field.contains("context.files")));
     }

@@ -231,7 +231,10 @@ mod tests {
     async fn send_to_unknown_agent_returns_error() {
         let d = Dispatcher::new(16);
         let id = AgentId(Uuid::new_v4());
-        let err = d.send_to_agent(&id, AgentCommand::Shutdown).await.unwrap_err();
+        let err = d
+            .send_to_agent(&id, AgentCommand::Shutdown)
+            .await
+            .unwrap_err();
         assert!(matches!(err, DispatchError::AgentNotFound(_)));
     }
 
@@ -243,7 +246,10 @@ mod tests {
         d.register_agent(h);
         drop(rx); // close receiver
 
-        let err = d.send_to_agent(&id, AgentCommand::Shutdown).await.unwrap_err();
+        let err = d
+            .send_to_agent(&id, AgentCommand::Shutdown)
+            .await
+            .unwrap_err();
         assert!(matches!(err, DispatchError::ChannelClosed(_)));
     }
 
@@ -255,7 +261,9 @@ mod tests {
         d.register_agent(h1);
         d.register_agent(h2);
 
-        let errors = d.broadcast_to_tier(AgentTier::Worker, AgentCommand::Shutdown).await;
+        let errors = d
+            .broadcast_to_tier(AgentTier::Worker, AgentCommand::Shutdown)
+            .await;
         assert!(errors.is_empty());
         assert!(matches!(rx1.recv().await.unwrap(), AgentCommand::Shutdown));
         assert!(matches!(rx2.recv().await.unwrap(), AgentCommand::Shutdown));
@@ -264,7 +272,9 @@ mod tests {
     #[tokio::test]
     async fn broadcast_to_empty_tier_no_errors() {
         let d = Dispatcher::new(16);
-        let errors = d.broadcast_to_tier(AgentTier::Utility, AgentCommand::Shutdown).await;
+        let errors = d
+            .broadcast_to_tier(AgentTier::Utility, AgentCommand::Shutdown)
+            .await;
         assert!(errors.is_empty());
     }
 
@@ -277,7 +287,9 @@ mod tests {
         d.register_agent(h2);
         drop(rx1); // close first receiver
 
-        let errors = d.broadcast_to_tier(AgentTier::Worker, AgentCommand::Shutdown).await;
+        let errors = d
+            .broadcast_to_tier(AgentTier::Worker, AgentCommand::Shutdown)
+            .await;
         assert_eq!(errors.len(), 1);
         assert!(matches!(errors[0], DispatchError::ChannelClosed(_)));
         // second agent should still receive

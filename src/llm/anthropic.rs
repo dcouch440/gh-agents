@@ -657,7 +657,8 @@ mod tests {
 
     #[test]
     fn handle_error_429_rate_limited() {
-        let body = r#"{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}"#;
+        let body =
+            r#"{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}"#;
         let error = AnthropicClient::handle_error_response(429, body);
         match error {
             LLMError::RateLimited { retry_after_ms } => assert_eq!(retry_after_ms, 60000),
@@ -733,7 +734,10 @@ mod tests {
         assert!(result.is_some());
         let chunk = result.unwrap().unwrap();
         match chunk {
-            StreamChunk::MessageDelta { stop_reason, output_tokens } => {
+            StreamChunk::MessageDelta {
+                stop_reason,
+                output_tokens,
+            } => {
                 assert_eq!(stop_reason, Some(StopReason::EndTurn));
                 assert_eq!(output_tokens, Some(42));
             }
@@ -748,7 +752,10 @@ mod tests {
         assert!(result.is_some());
         let chunk = result.unwrap().unwrap();
         match chunk {
-            StreamChunk::MessageDelta { stop_reason, output_tokens } => {
+            StreamChunk::MessageDelta {
+                stop_reason,
+                output_tokens,
+            } => {
                 assert_eq!(stop_reason, Some(StopReason::MaxTokens));
                 assert_eq!(output_tokens, None);
             }
@@ -763,7 +770,10 @@ mod tests {
         assert!(result.is_some());
         let chunk = result.unwrap().unwrap();
         match chunk {
-            StreamChunk::MessageDelta { stop_reason, output_tokens } => {
+            StreamChunk::MessageDelta {
+                stop_reason,
+                output_tokens,
+            } => {
                 assert_eq!(stop_reason, None);
                 assert_eq!(output_tokens, Some(10));
             }
@@ -782,7 +792,8 @@ mod tests {
 
     #[test]
     fn parse_sse_error_event() {
-        let line = r#"data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#;
+        let line =
+            r#"data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#;
         let result = AnthropicClient::parse_sse_line(line);
         assert!(result.is_some());
         let err = result.unwrap().unwrap_err();
@@ -804,7 +815,8 @@ mod tests {
 
     #[test]
     fn parse_sse_content_delta_no_text_returns_none() {
-        let line = r#"data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta"}}"#;
+        let line =
+            r#"data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta"}}"#;
         let result = AnthropicClient::parse_sse_line(line);
         assert!(result.is_none());
     }
@@ -849,8 +861,7 @@ mod tests {
         let config = AnthropicConfig::new("test-key");
         let client = AnthropicClient::new(config).unwrap();
 
-        let request = LLMRequest::new("model", vec![Message::user("Hi")])
-            .with_system("Be helpful");
+        let request = LLMRequest::new("model", vec![Message::user("Hi")]).with_system("Be helpful");
         let api_req = client.build_request(&request);
 
         assert_eq!(api_req.system, Some("Be helpful".to_string()));
@@ -862,8 +873,7 @@ mod tests {
         let config = AnthropicConfig::new("test-key");
         let client = AnthropicClient::new(config).unwrap();
 
-        let request = LLMRequest::new("model", vec![Message::user("Hi")])
-            .with_streaming();
+        let request = LLMRequest::new("model", vec![Message::user("Hi")]).with_streaming();
         let api_req = client.build_request(&request);
 
         assert!(api_req.stream);
@@ -874,8 +884,7 @@ mod tests {
         let config = AnthropicConfig::new("test-key");
         let client = AnthropicClient::new(config).unwrap();
 
-        let request = LLMRequest::new("model", vec![Message::user("Hi")])
-            .with_max_tokens(1000);
+        let request = LLMRequest::new("model", vec![Message::user("Hi")]).with_max_tokens(1000);
         let api_req = client.build_request(&request);
 
         assert_eq!(api_req.max_tokens, 1000);
@@ -902,11 +911,14 @@ mod tests {
         let config = AnthropicConfig::new("test-key");
         let client = AnthropicClient::new(config).unwrap();
 
-        let request = LLMRequest::new("model", vec![
-            Message::user("Hello"),
-            Message::assistant("Hi"),
-            Message::user("How are you?"),
-        ]);
+        let request = LLMRequest::new(
+            "model",
+            vec![
+                Message::user("Hello"),
+                Message::assistant("Hi"),
+                Message::user("How are you?"),
+            ],
+        );
         let api_req = client.build_request(&request);
 
         assert_eq!(api_req.messages.len(), 3);
@@ -935,8 +947,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let config = AnthropicConfig::new("test-key")
-            .with_base_url(mock_server.uri());
+        let config = AnthropicConfig::new("test-key").with_base_url(mock_server.uri());
         let client = AnthropicClient::new(config).unwrap();
 
         let request = LLMRequest::new("claude-3", vec![Message::user("Hi")]);
@@ -973,8 +984,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let config = AnthropicConfig::new("test-key")
-            .with_base_url(mock_server.uri());
+        let config = AnthropicConfig::new("test-key").with_base_url(mock_server.uri());
         let client = AnthropicClient::new(config).unwrap();
 
         let request = LLMRequest::new("claude-3", vec![Message::user("Hi")]);
@@ -991,7 +1001,8 @@ mod tests {
 
         let mock_server = MockServer::start().await;
 
-        let error_body = r#"{"type":"error","error":{"type":"server_error","message":"Internal error"}}"#;
+        let error_body =
+            r#"{"type":"error","error":{"type":"server_error","message":"Internal error"}}"#;
 
         Mock::given(method("POST"))
             .and(path("/v1/messages"))
@@ -999,8 +1010,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let config = AnthropicConfig::new("test-key")
-            .with_base_url(mock_server.uri());
+        let config = AnthropicConfig::new("test-key").with_base_url(mock_server.uri());
         let client = AnthropicClient::new(config).unwrap();
 
         let request = LLMRequest::new("claude-3", vec![Message::user("Hi")]);
@@ -1031,8 +1041,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let config = AnthropicConfig::new("test-key")
-            .with_base_url(mock_server.uri());
+        let config = AnthropicConfig::new("test-key").with_base_url(mock_server.uri());
         let client = AnthropicClient::new(config).unwrap();
 
         let request = LLMRequest::new("claude-3", vec![Message::user("Hi")]);
@@ -1051,7 +1060,8 @@ mod tests {
 
         let mock_server = MockServer::start().await;
 
-        let error_body = r#"{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}"#;
+        let error_body =
+            r#"{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}"#;
 
         Mock::given(method("POST"))
             .and(path("/v1/messages"))
@@ -1059,8 +1069,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let config = AnthropicConfig::new("test-key")
-            .with_base_url(mock_server.uri());
+        let config = AnthropicConfig::new("test-key").with_base_url(mock_server.uri());
         let client = AnthropicClient::new(config).unwrap();
 
         let request = LLMRequest::new("claude-3", vec![Message::user("Hi")]);
@@ -1085,8 +1094,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let config = AnthropicConfig::new("test-key")
-            .with_base_url(mock_server.uri());
+        let config = AnthropicConfig::new("test-key").with_base_url(mock_server.uri());
         let client = AnthropicClient::new(config).unwrap();
 
         let request = LLMRequest::new("claude-3", vec![Message::user("Hi")]);

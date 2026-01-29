@@ -750,10 +750,7 @@ mod tests {
 
     #[test]
     fn check_gate_non_config_ops_default_by_danger_level() {
-        let gate = ApprovalGate::new(
-            ApprovalGatesConfig::default(),
-            AutonomyLevel::ApprovalGates,
-        );
+        let gate = ApprovalGate::new(ApprovalGatesConfig::default(), AutonomyLevel::ApprovalGates);
         // Low risk ops: no approval
         assert!(!gate.requires_approval(DangerousOperation::CreateFile));
         assert!(!gate.requires_approval(DangerousOperation::ModifyFile));

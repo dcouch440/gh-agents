@@ -296,10 +296,7 @@ mod tests {
 
     #[test]
     fn export_summary_latency_totals() {
-        let calls = vec![
-            mock_call("m1", 0.01, 100),
-            mock_call("m2", 0.02, 200),
-        ];
+        let calls = vec![mock_call("m1", 0.01, 100), mock_call("m2", 0.02, 200)];
         let summary = ExportSummary::from_data(&calls, &[]);
         assert_eq!(summary.total_latency_ms, 1000); // 500 + 500
     }
@@ -324,12 +321,7 @@ mod tests {
         assert_eq!(summary.cost_by_model.len(), 2);
         assert_eq!(summary.cost_by_decision_type.len(), 2);
         assert!(
-            (summary
-                .cost_by_decision_type
-                .get("ReviewOutcome")
-                .unwrap()
-                - 0.03)
-                .abs()
+            (summary.cost_by_decision_type.get("ReviewOutcome").unwrap() - 0.03).abs()
                 < f64::EPSILON
         );
     }
@@ -442,8 +434,7 @@ mod tests {
             (summary.cost_by_decision_type.get("Recovery").unwrap() - 0.15).abs() < f64::EPSILON
         );
         assert!(
-            (summary.cost_by_decision_type.get("Escalation").unwrap() - 0.03).abs()
-                < f64::EPSILON
+            (summary.cost_by_decision_type.get("Escalation").unwrap() - 0.03).abs() < f64::EPSILON
         );
     }
 
@@ -611,8 +602,7 @@ mod tests {
         let logger = LlmCallLogger::new(pool);
 
         let task_id = Uuid::new_v4();
-        let decision =
-            Decision::new(task_id, DecisionType::Recovery, "r", "o").with_cost(0.03);
+        let decision = Decision::new(task_id, DecisionType::Recovery, "r", "o").with_cost(0.03);
         logger.log_decision(&decision).await.unwrap();
 
         let exporter = SessionExporter::new(logger);

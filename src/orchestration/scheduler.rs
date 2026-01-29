@@ -712,7 +712,9 @@ mod task_scheduler_integration_tests {
     use crate::llm::{LLMError, LLMRequest, LLMResponse, StopReason, StreamChunk, TokenUsage};
     use crate::orchestration::queue::DependencyAwareQueue;
     use crate::orchestration::router::{Router, RouterConfig};
-    use crate::types::{AgentPoolConfig, AgentPersona, AgentTier, ModelConfig, Priority, Task, TaskId, TaskStatus};
+    use crate::types::{
+        AgentPersona, AgentPoolConfig, AgentTier, ModelConfig, Priority, Task, TaskId, TaskStatus,
+    };
     use async_trait::async_trait;
     use chrono::Utc;
     use futures::Stream;
@@ -767,9 +769,12 @@ mod task_scheduler_integration_tests {
         }
     }
 
-    async fn setup_full(
-    ) -> (Arc<TaskScheduler>, Arc<RwLock<DependencyAwareQueue>>, Arc<RwLock<AgentPool>>, TempDir)
-    {
+    async fn setup_full() -> (
+        Arc<TaskScheduler>,
+        Arc<RwLock<DependencyAwareQueue>>,
+        Arc<RwLock<AgentPool>>,
+        TempDir,
+    ) {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.db");
         let pool = crate::db::init_db_at(db_path.to_str().unwrap())
@@ -816,9 +821,7 @@ mod task_scheduler_integration_tests {
         let (scheduler, _, _, _tmp) = setup_full().await;
         // Start and then stop
         let s = scheduler.clone();
-        let handle = tokio::spawn(async move {
-            s.run().await
-        });
+        let handle = tokio::spawn(async move { s.run().await });
 
         // Give it a moment to start
         tokio::time::sleep(Duration::from_millis(30)).await;
@@ -909,7 +912,11 @@ mod task_scheduler_integration_tests {
         let (scheduler, queue, _, _tmp) = setup_full().await;
 
         // Pause the refactor scheduler
-        scheduler.refactor_scheduler.pause_for_refactor().await.unwrap();
+        scheduler
+            .refactor_scheduler
+            .pause_for_refactor()
+            .await
+            .unwrap();
 
         // Add a task
         {
@@ -919,9 +926,7 @@ mod task_scheduler_integration_tests {
 
         // Run briefly
         let s = scheduler.clone();
-        let handle = tokio::spawn(async move {
-            s.run().await
-        });
+        let handle = tokio::spawn(async move { s.run().await });
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         scheduler.stop().await;

@@ -438,10 +438,7 @@ mod tests {
                 "Task B".to_string(),
                 "Task C".to_string(),
             ])
-            .with_files(vec![
-                "file1.rs".to_string(),
-                "file2.rs".to_string(),
-            ])
+            .with_files(vec!["file1.rs".to_string(), "file2.rs".to_string()])
             .generate();
 
         // Verify all sections present and ordered
@@ -556,12 +553,7 @@ mod tests {
         let branch = mock_branch_info();
 
         let result = svc
-            .create_pr_for_slice(
-                &slice,
-                &ticket,
-                &branch,
-                vec!["src/auth.rs".to_string()],
-            )
+            .create_pr_for_slice(&slice, &ticket, &branch, vec!["src/auth.rs".to_string()])
             .await
             .unwrap();
 

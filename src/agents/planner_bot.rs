@@ -1016,6 +1016,208 @@ Done."#;
         assert!(!md.contains("## Data Models"));
     }
 
+    #[tokio::test]
+    async fn chat_sends_message_and_processes_response() {
+        use crate::llm::{LLMError, LLMRequest, LLMResponse, StreamChunk};
+        use async_trait::async_trait;
+        use futures::Stream;
+        use std::pin::Pin;
+
+        struct MockChatProvider;
+
+        #[async_trait]
+        impl LLMProvider for MockChatProvider {
+            async fn send_message(&self, _req: LLMRequest) -> Result<LLMResponse, LLMError> {
+                Ok(LLMResponse {
+                    content: "Great vision! ```json\n{\"vision\": \"Test vision\"}\n``` Moving to scoping.".to_string(),
+                    usage: crate::llm::TokenUsage { input_tokens: 10, output_tokens: 20 },
+                    model: "mock".to_string(),
+                    stop_reason: crate::llm::StopReason::EndTurn,
+                })
+            }
+            async fn send_message_stream(
+                &self,
+                _req: LLMRequest,
+            ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError>
+            {
+                unimplemented!()
+            }
+            fn provider_name(&self) -> &'static str {
+                "mock"
+            }
+            fn model_id(&self) -> &str {
+                "mock"
+            }
+        }
+
+        let bot = PlannerBot::new(Arc::new(MockChatProvider), "mock");
+        let mut session = bot.start_session("Chat Test");
+        assert_eq!(session.phase, PlanningPhase::Discovery);
+
+        let response = bot.chat(&mut session, "Here is my idea").await.unwrap();
+        assert!(response.contains("Moving to scoping"));
+        assert_eq!(session.phase, PlanningPhase::Scoping);
+        assert_eq!(session.prd.vision, "Test vision");
+        // History should have user + planner messages
+        assert_eq!(session.history.len(), 2);
+        assert_eq!(session.history[0].role, PlanningMessageRole::User);
+        assert_eq!(session.history[0].content, "Here is my idea");
+        assert_eq!(session.history[1].role, PlanningMessageRole::Planner);
+    }
+
+    #[tokio::test]
+    async fn chat_returns_error_on_llm_failure() {
+        use crate::llm::{LLMError, LLMRequest, LLMResponse, StreamChunk};
+        use async_trait::async_trait;
+        use futures::Stream;
+        use std::pin::Pin;
+
+        struct FailProvider;
+
+        #[async_trait]
+        impl LLMProvider for FailProvider {
+            async fn send_message(&self, _req: LLMRequest) -> Result<LLMResponse, LLMError> {
+                Err(LLMError::AuthError("connection refused".into()))
+            }
+            async fn send_message_stream(
+                &self,
+                _req: LLMRequest,
+            ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError>
+            {
+                unimplemented!()
+            }
+            fn provider_name(&self) -> &'static str {
+                "mock"
+            }
+            fn model_id(&self) -> &str {
+                "mock"
+            }
+        }
+
+        let bot = PlannerBot::new(Arc::new(FailProvider), "mock");
+        let mut session = bot.start_session("Fail Test");
+
+        let result = bot.chat(&mut session, "hello").await;
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            PlannerBotError::LlmError(msg) => assert!(msg.contains("connection refused")),
+            other => panic!("expected LlmError, got: {:?}", other),
+        }
+        // User message was added but no planner message
+        assert_eq!(session.history.len(), 1);
+    }
+
+    #[test]
+    fn apply_structured_update_ignores_invalid_typed_arrays() {
+        let mut prd = PRDDocument::new("Test");
+        // success_criteria expects Vec<String> but we give it an object
+        apply_structured_update(&mut prd, r#"{"success_criteria": "not an array"}"#);
+        assert!(prd.success_criteria.is_empty());
+
+        // technical_decisions expects specific structure
+        apply_structured_update(
+            &mut prd,
+            r#"{"technical_decisions": [{"wrong": "fields"}]}"#,
+        );
+        assert!(prd.technical_decisions.is_empty());
+
+        // data_models expects specific structure
+        apply_structured_update(&mut prd, r#"{"data_models": "bad"}"#);
+        assert!(prd.data_models.is_empty());
+
+        // milestones expects specific structure
+        apply_structured_update(&mut prd, r#"{"milestones": [123]}"#);
+        assert!(prd.milestones.is_empty());
+    }
+
+    #[test]
+    fn apply_structured_update_multiple_fields_at_once() {
+        let mut prd = PRDDocument::new("Test");
+        let json = r#"{
+            "vision": "V",
+            "problem_statement": "P",
+            "target_users": "T",
+            "success_criteria": ["A", "B"],
+            "technical_decisions": [{"area": "X", "decision": "Y", "rationale": "Z"}],
+            "data_models": [{"name": "M", "fields": ["f1"], "description": "D"}],
+            "milestones": [{"title": "M1", "description": "D1", "deliverables": ["d"], "dependencies": []}]
+        }"#;
+        apply_structured_update(&mut prd, json);
+        assert_eq!(prd.vision, "V");
+        assert_eq!(prd.problem_statement, "P");
+        assert_eq!(prd.target_users, "T");
+        assert_eq!(prd.success_criteria.len(), 2);
+        assert_eq!(prd.technical_decisions.len(), 1);
+        assert_eq!(prd.data_models.len(), 1);
+        assert_eq!(prd.milestones.len(), 1);
+    }
+
+    #[test]
+    fn extract_json_blocks_multiple() {
+        let text = "Text\n```json\n{\"a\": 1}\n```\nMiddle\n```json\n{\"b\": 2}\n```\nEnd\n```json\n{\"c\": 3}\n```";
+        let blocks = extract_json_blocks(text);
+        assert_eq!(blocks.len(), 3);
+    }
+
+    #[test]
+    fn process_response_no_transition_in_review() {
+        let bot = mock_bot();
+        let mut session = bot.start_session("Test");
+        session.phase = PlanningPhase::Review;
+        bot.process_response(&mut session, "Everything looks good.");
+        assert_eq!(session.phase, PlanningPhase::Review);
+    }
+
+    #[test]
+    fn export_markdown_milestone_empty_deliverables_and_deps() {
+        let bot = mock_bot();
+        let mut prd = PRDDocument::new("Minimal");
+        prd.milestones.push(MilestoneSpec {
+            title: "M1".into(),
+            description: "Basic".into(),
+            deliverables: vec![],
+            dependencies: vec![],
+        });
+
+        let md = bot.export_markdown(&prd);
+        assert!(md.contains("### M1: M1"));
+        assert!(!md.contains("**Deliverables:**"));
+        assert!(!md.contains("**Dependencies:**"));
+    }
+
+    #[test]
+    fn finalize_prd_sets_timestamps() {
+        let bot = mock_bot();
+        let mut session = bot.start_session("Test");
+        session.prd.vision = "Vision".into();
+        session.prd.milestones.push(MilestoneSpec {
+            title: "M1".into(),
+            description: "D".into(),
+            deliverables: vec![],
+            dependencies: vec![],
+        });
+        let before = Utc::now();
+        let prd = bot.finalize_prd(&mut session).unwrap();
+        assert!(prd.updated_at >= before);
+        assert!(session.updated_at >= before);
+    }
+
+    #[test]
+    fn planning_session_serde_roundtrip() {
+        let mut session = PlanningSession::new("Serde Test");
+        session.history.push(PlanningMessage {
+            role: PlanningMessageRole::User,
+            content: "hello".into(),
+            phase: PlanningPhase::Discovery,
+            timestamp: Utc::now(),
+        });
+        let json = serde_json::to_string(&session).unwrap();
+        let parsed: PlanningSession = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.prd.title, "Serde Test");
+        assert_eq!(parsed.history.len(), 1);
+        assert_eq!(parsed.phase, PlanningPhase::Discovery);
+    }
+
     #[test]
     fn system_prompt_contains_persona() {
         let bot = mock_bot();

@@ -725,10 +725,7 @@ mod tests {
 
     #[test]
     fn test_parse_retry_after_http_date_returns_none() {
-        assert_eq!(
-            parse_retry_after("Wed, 21 Oct 2015 07:28:00 GMT"),
-            None
-        );
+        assert_eq!(parse_retry_after("Wed, 21 Oct 2015 07:28:00 GMT"), None);
     }
 
     #[test]
@@ -800,9 +797,14 @@ mod tests {
     #[test]
     fn test_retry_policy_never_rejects_all() {
         let errors = vec![
-            LLMError::RateLimited { retry_after_ms: 100 },
+            LLMError::RateLimited {
+                retry_after_ms: 100,
+            },
             LLMError::Timeout(5000),
-            LLMError::ApiError { status: 500, message: "err".to_string() },
+            LLMError::ApiError {
+                status: 500,
+                message: "err".to_string(),
+            },
         ];
         for error in &errors {
             assert!(!RetryPolicy::Never.should_retry(error));
