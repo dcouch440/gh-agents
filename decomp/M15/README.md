@@ -62,6 +62,7 @@ All features build on the existing Axum server (M10) + React frontend (M11-M13).
 | 15.6 | Report Management Backend | 5 | P1 |
 | 15.7 | Report Viewer & Submission UI | 6 | P1 |
 | 15.8 | Pivotal Points | 5 | P2 |
+| 15.9 | System Prompt Admin | 6 | P1 |
 
 ---
 
@@ -90,6 +91,9 @@ On-screen report rendering (markdown), approve/reject buttons, inline editing, s
 
 ### 15.8: Pivotal Points Dashboard
 Bookmark key decisions, branch points, and milestones. Timeline view across repos, link to commits/PRs/reports, searchable and filterable.
+
+### 15.9: System Prompt Admin
+Seed all agent prompts (orchestrator, worker, utility) into the database on first boot from compiled defaults. Super-admin UI to edit prompts live, view diffs against defaults, version history, reset to default. Runtime reads from DB with in-memory cache.
 
 ---
 
