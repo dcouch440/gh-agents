@@ -16,7 +16,24 @@ describe('Input', () => {
 
   it('does not show prompt when disabled', () => {
     const { lastFrame } = render(<Input onSubmit={vi.fn()} disabled />);
-    // Should not contain the input prompt ">" in isolation
     expect(lastFrame()!).toContain('Waiting');
+  });
+
+  it('defaults to enabled when disabled prop is omitted', () => {
+    const { lastFrame } = render(<Input onSubmit={vi.fn()} />);
+    expect(lastFrame()!).not.toContain('Waiting');
+    expect(lastFrame()!).toContain('>');
+  });
+
+  it('renders typed text in the input', () => {
+    const { stdin, lastFrame } = render(<Input onSubmit={vi.fn()} />);
+    stdin.write('hello');
+    expect(lastFrame()!).toContain('hello');
+  });
+
+  it('does not render input field when disabled', () => {
+    const { lastFrame } = render(<Input onSubmit={vi.fn()} disabled />);
+    const frame = lastFrame()!;
+    expect(frame).not.toContain('>');
   });
 });
