@@ -1,0 +1,58 @@
+.container {
+  position: relative;
+  margin: 0.5rem 0;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background-color: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+}
+
+.language {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.copyButton {
+  padding: 0.375rem;
+  background-color: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 0.25rem;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.copyButton:hover {
+  background-color: var(--border);
+  color: var(--text-primary);
+}
+
+.pre {
+  padding: 0.75rem;
+  background-color: var(--bg-primary);
+  overflow-x: auto;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.line {
+  display: flex;
+}
+
+.lineNumber {
+  color: var(--text-tertiary);
+  margin-right: 1rem;
+  user-select: none;
+  min-width: 1.5rem;
+  text-align: right;
+}

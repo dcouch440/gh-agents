@@ -5,7 +5,7 @@
 ## Current Focus
 
 **Active:** M12 React Features
-**Next:** 12.1 Chat View
+**Next:** 12.2 Feed View
 **Planned:** M14 Dynamic Agent Selection (can run in parallel with M10-M13)
 **Blocked:** None
 
@@ -228,20 +228,20 @@
 
 ---
 
-## Milestone 12: React Features - NOT STARTED
+## Milestone 12: React Features - IN PROGRESS
 
 **Goal**: Core feature views - chat, feed, tasks, files.
 
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
-| 12.1 Chat View | pending | 0/5 | |
+| 12.1 Chat View | done | 5/5 | ChatPage, ChatInput, Message, MarkdownContent, CodeBlock components |
 | 12.2 Feed View | pending | 0/4 | |
 | 12.3 Tasks View | pending | 0/5 | |
 | 12.4 Agents View | pending | 0/4 | |
 | 12.5 File Browser & Editor | pending | 0/5 | |
 | 12.6 Diff Viewer | pending | 0/3 | |
 
-**Milestone Status:** Not Started (0/6 tickets done)
+**Milestone Status:** In Progress (1/6 tickets done)
 
 ---
 
@@ -316,7 +316,7 @@
 | M9: Polish & Production | 12 | Complete |
 | M10: Server Layer | 6 | Complete |
 | M11: React Foundation | 4 | Complete |
-| M12: React Features | 6 | Not Started |
+| M12: React Features | 6 | In Progress (1/6) |
 | M13: React Polish | 5 | Not Started |
 | M15: Repo Mgmt & Workspace | 9 | Not Started |
 | M16: SaaS Foundation | 9 | Not Started |
