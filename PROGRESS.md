@@ -213,7 +213,7 @@
 
 ---
 
-## Milestone 11: React Foundation - IN PROGRESS
+## Milestone 11: React Foundation - COMPLETE
 
 **Goal**: React app scaffold with auth, routing, and layout.
 
@@ -261,6 +261,46 @@
 
 ---
 
+## Milestone 15: Repo Management & Power User Workspace - NOT STARTED
+
+**Goal**: Standalone workspace with multi-repo management, prompt library, full code editor, report review/submission, and pivotal points.
+
+| Ticket | Status | Progress | Notes |
+|--------|--------|----------|-------|
+| 15.1 Multi-Repo Backend | pending | 0/6 | DB schema, CRUD API, active repo switching, git clone/pull |
+| 15.2 Prompt Library Backend | pending | 0/6 | DB schema, CRUD, tagging, versioning, variable engine, launch |
+| 15.3 Multi-Repo Frontend | pending | 0/5 | Repo list, switcher, status indicators |
+| 15.4 Prompt Library Frontend | pending | 0/5 | Browse, search, edit, version history, launch |
+| 15.5 Full Code Editor | pending | 0/7 | Monaco, tabs, splits, command palette, git gutter |
+| 15.6 Report Management Backend | pending | 0/5 | DB schema, review lifecycle, agent hook |
+| 15.7 Report Viewer & Submission UI | pending | 0/6 | Markdown render, approve/reject, inline edit, submit |
+| 15.8 Pivotal Points | pending | 0/5 | Timeline, bookmarks, cross-repo tracking |
+| 15.9 System Prompt Admin | pending | 0/6 | Seed on boot, DB-backed prompts, super-admin editor |
+
+**Milestone Status:** Not Started (0/9 tickets done)
+
+---
+
+## Milestone 16: SaaS Foundation - NOT STARTED
+
+**Goal**: Refactor nexor into a cloud-hosted multi-tenant SaaS platform with real users, GitHub OAuth, Postgres, collaborative chat with AI, and onboarding.
+
+| Ticket | Status | Progress | Notes |
+|--------|--------|----------|-------|
+| 16.1 Postgres Migration | pending | 0/6 | SQLite → Postgres, sqlx, connection pooling |
+| 16.2 User Accounts & Org Model | pending | 0/7 | Users, orgs, roles, invitations, org switcher |
+| 16.3 GitHub OAuth & Connect | pending | 0/6 | OAuth login, account linking, repo browser |
+| 16.4 Cloud Repo Management | pending | 0/7 | Server-side clones, sync, quotas, sandboxed storage |
+| 16.5 Multi-Tenant Isolation | pending | 0/5 | org_id everywhere, middleware, isolation tests |
+| 16.6 Encrypted Secrets | pending | 0/4 | AES-256-GCM, per-org API keys, master key |
+| 16.7 Collaborative Chat Rooms | pending | 0/8 | Multi-user rooms, AI participant, proactive updates |
+| 16.8 Presence & Awareness | pending | 0/5 | Online status, view tracking, typing, cursors |
+| 16.9 Onboarding Wizard | pending | 0/6 | Sign up → GitHub → repos → invite → workspace |
+
+**Milestone Status:** Not Started (0/9 tickets done)
+
+---
+
 ## Summary
 
 | Milestone | Tickets | Status |
@@ -278,7 +318,9 @@
 | M11: React Foundation | 4 | Complete |
 | M12: React Features | 6 | Not Started |
 | M13: React Polish | 5 | Not Started |
-| **Total Active** | **79** | |
+| M15: Repo Mgmt & Workspace | 9 | Not Started |
+| M16: SaaS Foundation | 9 | Not Started |
+| **Total Active** | **97** | |
 
 ---
 
