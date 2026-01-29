@@ -35,4 +35,27 @@ describe('parseArgs', () => {
   it('accepts empty string as server URL value', () => {
     expect(parseArgs(['--server', ''])).toEqual({ serverUrl: '' });
   });
+
+  it('parses --version flag', () => {
+    expect(parseArgs(['--version'])).toEqual({ version: true });
+  });
+
+  it('parses -v shorthand', () => {
+    expect(parseArgs(['-v'])).toEqual({ version: true });
+  });
+
+  it('parses --help flag', () => {
+    expect(parseArgs(['--help'])).toEqual({ help: true });
+  });
+
+  it('parses -h shorthand', () => {
+    expect(parseArgs(['-h'])).toEqual({ help: true });
+  });
+
+  it('combines --version and --server', () => {
+    expect(parseArgs(['--version', '--server', 'http://x'])).toEqual({
+      version: true,
+      serverUrl: 'http://x',
+    });
+  });
 });
