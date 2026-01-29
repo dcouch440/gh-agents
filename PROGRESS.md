@@ -294,7 +294,7 @@
 
 | Ticket | Title | Status | Progress | Notes |
 |--------|-------|--------|----------|-------|
-| 17.1 | Infrastructure & Dependencies | pending | 0/4 | Docker Compose, Cargo.toml, config |
+| 17.1 | Infrastructure & Dependencies | done | 4/4 | Docker Compose Postgres, sqlx postgres features, DATABASE_URL config, .env.example |
 | 17.2 | Migration Files Rewrite | pending | 0/4 | 14 SQLite migrations → Postgres DDL |
 | 17.3 | Connection Pool & Init | pending | 0/3 | SqlitePool → PgPool, sqlx::migrate! |
 | 17.4 | Query Rewrites: Tasks/Chat/Auth | pending | 0/5 | Largest query file |
