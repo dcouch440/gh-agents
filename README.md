@@ -1,8 +1,28 @@
 # nexor
 
-> AI Agent Orchestration TUI for GitHub Workflows
+> AI Agent Orchestration System for GitHub Workflows
 
-A Rust-based terminal application that orchestrates multiple AI agents to handle software engineering tasks.
+A multi-interface AI agent orchestration platform: Rust backend + React web UI + Terminal CLI.
+
+## Architecture
+
+**Rust Backend** (Axum + SQLite)
+- Agent runtime and orchestration
+- LLM integration (Anthropic, OpenAI)
+- GitHub API integration
+- File/git/test execution
+- REST API + WebSocket server
+
+**React Frontend** (Vite + TypeScript + Tailwind)
+- Web-based dashboard
+- Real-time agent monitoring
+- Chat interface
+- Task management
+
+**Terminal CLI** (TypeScript + Ink)
+- Claude Code-inspired interface
+- Chat-only scope (for now)
+- Agent monitoring view (planned)
 
 ---
 
@@ -126,7 +146,21 @@ nexor/
 ├── .nexor/
 │   ├── work/              ← Current work tracking
 │   └── reports/           ← Completed work reports
-└── src/                   ← Rust source code
+├── ui/                    ← React frontend (Vite + TypeScript + Tailwind)
+│   ├── src/
+│   │   ├── api/           ← API client, WebSocket, hooks
+│   │   ├── components/    ← Reusable UI components
+│   │   ├── pages/         ← Page components (Login, Chat, etc.)
+│   │   ├── store/         ← Zustand state management
+│   │   └── App.tsx        ← Root component with routing
+│   └── package.json
+├── cli/                   ← Terminal CLI (TypeScript + Ink)
+│   ├── src/
+│   │   ├── components/    ← Ink UI components
+│   │   ├── api/           ← API client
+│   │   └── index.tsx      ← CLI entry point
+│   └── package.json
+└── src/                   ← Rust backend
     ├── types/             ← Core type definitions
     ├── config/            ← Configuration loading
     ├── db/                ← Database operations
@@ -136,8 +170,33 @@ nexor/
     ├── prompts/           ← Prompt engineering
     ├── execution/         ← File/git/test ops
     ├── github/            ← GitHub API integration
-    └── tui/               ← Terminal UI (theme, views, widgets)
+    └── server/            ← Axum HTTP server (REST + WebSocket)
 ```
+
+---
+
+## Architectural Evolution
+
+**2026-01-27: Pivot from TUI to Multi-Interface Architecture**
+
+The project initially targeted a Ratatui-based TUI but pivoted to a more flexible architecture:
+- **83% of work retained**: Core backend (M1-M5, M7-M9) remains unchanged
+- **New interfaces**: React web UI (M11) + Terminal CLI (M12) replace the TUI (M6, deprecated)
+- **Why**: Broader reach, better UX, path to SaaS deployment
+
+**Completed Work:**
+- M1-M5: Foundation, LLM, Agents, Prompts, Orchestration
+- M7-M9: Execution, GitHub Integration, Polish
+- M10: Server Layer (Axum HTTP + WebSocket)
+- M11: React Foundation (auth, routing, layout, chat)
+
+**In Progress:**
+- M12: Terminal CLI (TypeScript + Ink, Claude Code-inspired)
+
+**Planned:**
+- M13: Agent View (Factorio-inspired monitoring)
+- M15: Workspace & Power User Features
+- M16: SaaS Foundation (multi-tenant, Postgres, OAuth)
 
 ---
 
@@ -146,10 +205,11 @@ nexor/
 See `PROGRESS.md` for detailed status.
 
 **Summary:**
-- 11 Milestones planned
-- 77 Tickets defined
-- 310 Slices total
-- M1-M9 Complete, M10 In Progress
+- 15 Active Milestones (M6 deprecated)
+- 97 Tickets defined
+- M1-M11 Complete (Foundation through React Frontend)
+- M12 In Progress (Terminal CLI with Ink)
+- M13-M16 Planned (Agent View, Workspace, SaaS)
 
 ---
 
