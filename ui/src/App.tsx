@@ -4,9 +4,14 @@ import { api } from './api/client';
 import { useAuthStore } from './store';
 import { LoginPage } from './pages/LoginPage';
 import { SetupPage } from './pages/SetupPage';
-
-// Placeholder until Layout component is built in 11.4
-const Layout = () => <div style={{ padding: '2rem', color: 'var(--text-primary)' }}>Dashboard</div>;
+import { Layout } from './components/Layout';
+import { ChatPage } from './pages/ChatPage';
+import { FeedPage } from './pages/FeedPage';
+import { TasksPage } from './pages/TasksPage';
+import { AgentsPage } from './pages/AgentsPage';
+import { FilesPage } from './pages/FilesPage';
+import { StatsPage } from './pages/StatsPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 function App() {
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
@@ -74,7 +79,7 @@ function App() {
           }
         />
         <Route
-          path="/*"
+          path="/"
           element={
             isAuthenticated ? (
               <Layout />
@@ -84,7 +89,16 @@ function App() {
               <Navigate to="/login" replace />
             )
           }
-        />
+        >
+          <Route index element={<Navigate to="/chat" replace />} />
+          <Route path="chat" element={<ChatPage />} />
+          <Route path="feed" element={<FeedPage />} />
+          <Route path="tasks" element={<TasksPage />} />
+          <Route path="agents" element={<AgentsPage />} />
+          <Route path="files" element={<FilesPage />} />
+          <Route path="stats" element={<StatsPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+        </Route>
       </Routes>
     </BrowserRouter>
   );
