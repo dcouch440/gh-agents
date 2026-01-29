@@ -221,12 +221,9 @@ impl LlmCallLogger {
     /// Log an LLM call
     pub async fn log_call(&self, call: &LlmCall) -> Result<()> {
         let prompt_json = serde_json::to_string(&call.prompt)?;
-        let id = call.id.to_string();
-        let task_id = call.task_id.map(|u| u.to_string());
-        let timestamp = call.timestamp.to_rfc3339();
-        let input_tokens = call.input_tokens as i64;
-        let output_tokens = call.output_tokens as i64;
-        let latency_ms = call.latency_ms as i64;
+        let input_tokens = call.input_tokens as i32;
+        let output_tokens = call.output_tokens as i32;
+        let latency_ms = call.latency_ms as i32;
 
         sqlx::query(
             r#"
@@ -237,8 +234,8 @@ impl LlmCallLogger {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             "#,
         )
-        .bind(&id)
-        .bind(&task_id)
+        .bind(call.id)
+        .bind(call.task_id)
         .bind(&call.agent_id)
         .bind(&call.model)
         .bind(&prompt_json)
@@ -246,7 +243,7 @@ impl LlmCallLogger {
         .bind(input_tokens)
         .bind(output_tokens)
         .bind(latency_ms)
-        .bind(&timestamp)
+        .bind(call.timestamp)
         .bind(call.cost_usd)
         .execute(&self.pool)
         .await?;
@@ -256,7 +253,6 @@ impl LlmCallLogger {
 
     /// Get all LLM calls for a task
     pub async fn get_calls_for_task(&self, task_id: Uuid) -> Result<Vec<LlmCall>> {
-        let task_id_str = task_id.to_string();
         let rows: Vec<LlmCallRow> = sqlx::query_as(
             r#"
             SELECT id, task_id, agent_id, model, prompt, response,
@@ -266,7 +262,7 @@ impl LlmCallLogger {
             ORDER BY timestamp ASC
             "#,
         )
-        .bind(&task_id_str)
+        .bind(task_id)
         .fetch_all(&self.pool)
         .await?;
 
@@ -279,8 +275,6 @@ impl LlmCallLogger {
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<Vec<LlmCall>> {
-        let start_str = start.to_rfc3339();
-        let end_str = end.to_rfc3339();
         let rows: Vec<LlmCallRow> = sqlx::query_as(
             r#"
             SELECT id, task_id, agent_id, model, prompt, response,
@@ -290,8 +284,8 @@ impl LlmCallLogger {
             ORDER BY timestamp ASC
             "#,
         )
-        .bind(&start_str)
-        .bind(&end_str)
+        .bind(start)
+        .bind(end)
         .fetch_all(&self.pool)
         .await?;
 
@@ -300,11 +294,7 @@ impl LlmCallLogger {
 
     /// Log a decision
     pub async fn log_decision(&self, decision: &Decision) -> Result<()> {
-        let id = decision.id.to_string();
-        let task_id = decision.task_id.to_string();
         let decision_type = serde_json::to_string(&decision.decision_type)?;
-        let llm_call_id = decision.llm_call_id.map(|u| u.to_string());
-        let timestamp = decision.timestamp.to_rfc3339();
 
         sqlx::query(
             r#"
@@ -314,14 +304,14 @@ impl LlmCallLogger {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             "#,
         )
-        .bind(&id)
-        .bind(&task_id)
+        .bind(decision.id)
+        .bind(decision.task_id)
         .bind(&decision_type)
         .bind(&decision.reasoning)
         .bind(&decision.outcome)
-        .bind(&llm_call_id)
+        .bind(decision.llm_call_id)
         .bind(decision.cost_usd)
-        .bind(&timestamp)
+        .bind(decision.timestamp)
         .execute(&self.pool)
         .await?;
 
@@ -330,7 +320,6 @@ impl LlmCallLogger {
 
     /// Get all decisions for a task
     pub async fn get_decisions_for_task(&self, task_id: Uuid) -> Result<Vec<Decision>> {
-        let task_id_str = task_id.to_string();
         let rows: Vec<DecisionRow> = sqlx::query_as(
             r#"
             SELECT id, task_id, decision_type, reasoning, outcome, llm_call_id, cost_usd, timestamp
@@ -339,7 +328,7 @@ impl LlmCallLogger {
             ORDER BY timestamp ASC
             "#,
         )
-        .bind(&task_id_str)
+        .bind(task_id)
         .fetch_all(&self.pool)
         .await?;
 
@@ -352,8 +341,6 @@ impl LlmCallLogger {
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<Vec<Decision>> {
-        let start_str = start.to_rfc3339();
-        let end_str = end.to_rfc3339();
         let rows: Vec<DecisionRow> = sqlx::query_as(
             r#"
             SELECT id, task_id, decision_type, reasoning, outcome, llm_call_id, cost_usd, timestamp
@@ -362,8 +349,8 @@ impl LlmCallLogger {
             ORDER BY timestamp ASC
             "#,
         )
-        .bind(&start_str)
-        .bind(&end_str)
+        .bind(start)
+        .bind(end)
         .fetch_all(&self.pool)
         .await?;
 
@@ -375,16 +362,16 @@ impl LlmCallLogger {
 
 #[derive(sqlx::FromRow)]
 struct LlmCallRow {
-    id: String,
-    task_id: Option<String>,
+    id: Uuid,
+    task_id: Option<Uuid>,
     agent_id: Option<String>,
     model: String,
     prompt: String,
     response: String,
-    input_tokens: i64,
-    output_tokens: i64,
-    latency_ms: i64,
-    timestamp: String,
+    input_tokens: i32,
+    output_tokens: i32,
+    latency_ms: i32,
+    timestamp: DateTime<Utc>,
     cost_usd: f64,
 }
 
@@ -393,8 +380,8 @@ impl TryFrom<LlmCallRow> for LlmCall {
 
     fn try_from(row: LlmCallRow) -> Result<Self> {
         Ok(LlmCall {
-            id: Uuid::parse_str(&row.id)?,
-            task_id: row.task_id.map(|s| Uuid::parse_str(&s)).transpose()?,
+            id: row.id,
+            task_id: row.task_id,
             agent_id: row.agent_id,
             model: row.model,
             prompt: serde_json::from_str(&row.prompt)?,
@@ -402,7 +389,7 @@ impl TryFrom<LlmCallRow> for LlmCall {
             input_tokens: row.input_tokens as u32,
             output_tokens: row.output_tokens as u32,
             latency_ms: row.latency_ms as u64,
-            timestamp: DateTime::parse_from_rfc3339(&row.timestamp)?.with_timezone(&Utc),
+            timestamp: row.timestamp,
             cost_usd: row.cost_usd,
         })
     }
@@ -410,14 +397,14 @@ impl TryFrom<LlmCallRow> for LlmCall {
 
 #[derive(sqlx::FromRow)]
 struct DecisionRow {
-    id: String,
-    task_id: String,
+    id: Uuid,
+    task_id: Uuid,
     decision_type: String,
     reasoning: String,
     outcome: String,
-    llm_call_id: Option<String>,
+    llm_call_id: Option<Uuid>,
     cost_usd: f64,
-    timestamp: String,
+    timestamp: DateTime<Utc>,
 }
 
 impl TryFrom<DecisionRow> for Decision {
@@ -425,14 +412,14 @@ impl TryFrom<DecisionRow> for Decision {
 
     fn try_from(row: DecisionRow) -> Result<Self> {
         Ok(Decision {
-            id: Uuid::parse_str(&row.id)?,
-            task_id: Uuid::parse_str(&row.task_id)?,
+            id: row.id,
+            task_id: row.task_id,
             decision_type: serde_json::from_str(&row.decision_type)?,
             reasoning: row.reasoning,
             outcome: row.outcome,
-            llm_call_id: row.llm_call_id.map(|s| Uuid::parse_str(&s)).transpose()?,
+            llm_call_id: row.llm_call_id,
             cost_usd: row.cost_usd,
-            timestamp: DateTime::parse_from_rfc3339(&row.timestamp)?.with_timezone(&Utc),
+            timestamp: row.timestamp,
         })
     }
 }
@@ -767,11 +754,11 @@ mod tests {
         let task_id = Uuid::new_v4();
         let prompt = LlmPrompt::new("sys");
         let prompt_json = serde_json::to_string(&prompt).unwrap();
-        let ts = Utc::now().to_rfc3339();
+        let ts = Utc::now();
 
         let row = LlmCallRow {
-            id: id.to_string(),
-            task_id: Some(task_id.to_string()),
+            id,
+            task_id: Some(task_id),
             agent_id: Some("a1".to_string()),
             model: "m".to_string(),
             prompt: prompt_json,
@@ -790,39 +777,20 @@ mod tests {
     }
 
     #[test]
-    fn llm_call_row_try_from_invalid_uuid() {
-        let row = LlmCallRow {
-            id: "not-a-uuid".to_string(),
-            task_id: None,
-            agent_id: None,
-            model: "m".to_string(),
-            prompt: r#"{"system":"s","messages":[]}"#.to_string(),
-            response: "r".to_string(),
-            input_tokens: 0,
-            output_tokens: 0,
-            latency_ms: 0,
-            timestamp: Utc::now().to_rfc3339(),
-            cost_usd: 0.0,
-        };
-        let result: Result<LlmCall> = row.try_into();
-        assert!(result.is_err());
-    }
-
-    #[test]
     fn decision_row_try_from_valid() {
         let id = Uuid::new_v4();
         let task_id = Uuid::new_v4();
         let call_id = Uuid::new_v4();
-        let ts = Utc::now().to_rfc3339();
+        let ts = Utc::now();
         let dt_json = serde_json::to_string(&DecisionType::ReviewOutcome).unwrap();
 
         let row = DecisionRow {
-            id: id.to_string(),
-            task_id: task_id.to_string(),
+            id,
+            task_id,
             decision_type: dt_json,
             reasoning: "r".to_string(),
             outcome: "o".to_string(),
-            llm_call_id: Some(call_id.to_string()),
+            llm_call_id: Some(call_id),
             cost_usd: 0.02,
             timestamp: ts,
         };
@@ -834,25 +802,9 @@ mod tests {
     }
 
     #[test]
-    fn decision_row_try_from_invalid_uuid() {
-        let row = DecisionRow {
-            id: "bad".to_string(),
-            task_id: Uuid::new_v4().to_string(),
-            decision_type: r#""Decomposition""#.to_string(),
-            reasoning: "r".to_string(),
-            outcome: "o".to_string(),
-            llm_call_id: None,
-            cost_usd: 0.0,
-            timestamp: Utc::now().to_rfc3339(),
-        };
-        let result: Result<Decision> = row.try_into();
-        assert!(result.is_err());
-    }
-
-    #[test]
     fn llm_call_row_try_from_invalid_prompt_json() {
         let row = LlmCallRow {
-            id: Uuid::new_v4().to_string(),
+            id: Uuid::new_v4(),
             task_id: None,
             agent_id: None,
             model: "m".to_string(),
@@ -861,49 +813,7 @@ mod tests {
             input_tokens: 0,
             output_tokens: 0,
             latency_ms: 0,
-            timestamp: Utc::now().to_rfc3339(),
-            cost_usd: 0.0,
-        };
-        let result: Result<LlmCall> = row.try_into();
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn llm_call_row_try_from_invalid_timestamp() {
-        let prompt = LlmPrompt::new("sys");
-        let prompt_json = serde_json::to_string(&prompt).unwrap();
-        let row = LlmCallRow {
-            id: Uuid::new_v4().to_string(),
-            task_id: None,
-            agent_id: None,
-            model: "m".to_string(),
-            prompt: prompt_json,
-            response: "r".to_string(),
-            input_tokens: 0,
-            output_tokens: 0,
-            latency_ms: 0,
-            timestamp: "not-a-timestamp".to_string(),
-            cost_usd: 0.0,
-        };
-        let result: Result<LlmCall> = row.try_into();
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn llm_call_row_try_from_invalid_task_id_uuid() {
-        let prompt = LlmPrompt::new("sys");
-        let prompt_json = serde_json::to_string(&prompt).unwrap();
-        let row = LlmCallRow {
-            id: Uuid::new_v4().to_string(),
-            task_id: Some("not-a-uuid".to_string()),
-            agent_id: None,
-            model: "m".to_string(),
-            prompt: prompt_json,
-            response: "r".to_string(),
-            input_tokens: 0,
-            output_tokens: 0,
-            latency_ms: 0,
-            timestamp: Utc::now().to_rfc3339(),
+            timestamp: Utc::now(),
             cost_usd: 0.0,
         };
         let result: Result<LlmCall> = row.try_into();
@@ -915,7 +825,7 @@ mod tests {
         let prompt = LlmPrompt::new("sys");
         let prompt_json = serde_json::to_string(&prompt).unwrap();
         let row = LlmCallRow {
-            id: Uuid::new_v4().to_string(),
+            id: Uuid::new_v4(),
             task_id: None,
             agent_id: None,
             model: "m".to_string(),
@@ -924,7 +834,7 @@ mod tests {
             input_tokens: 0,
             output_tokens: 0,
             latency_ms: 0,
-            timestamp: Utc::now().to_rfc3339(),
+            timestamp: Utc::now(),
             cost_usd: 0.0,
         };
         let call: LlmCall = row.try_into().unwrap();
@@ -933,64 +843,16 @@ mod tests {
     }
 
     #[test]
-    fn decision_row_try_from_invalid_task_id() {
-        let row = DecisionRow {
-            id: Uuid::new_v4().to_string(),
-            task_id: "bad-uuid".to_string(),
-            decision_type: r#""Decomposition""#.to_string(),
-            reasoning: "r".to_string(),
-            outcome: "o".to_string(),
-            llm_call_id: None,
-            cost_usd: 0.0,
-            timestamp: Utc::now().to_rfc3339(),
-        };
-        let result: Result<Decision> = row.try_into();
-        assert!(result.is_err());
-    }
-
-    #[test]
     fn decision_row_try_from_invalid_decision_type() {
         let row = DecisionRow {
-            id: Uuid::new_v4().to_string(),
-            task_id: Uuid::new_v4().to_string(),
+            id: Uuid::new_v4(),
+            task_id: Uuid::new_v4(),
             decision_type: "not valid json".to_string(),
             reasoning: "r".to_string(),
             outcome: "o".to_string(),
             llm_call_id: None,
             cost_usd: 0.0,
-            timestamp: Utc::now().to_rfc3339(),
-        };
-        let result: Result<Decision> = row.try_into();
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn decision_row_try_from_invalid_timestamp() {
-        let row = DecisionRow {
-            id: Uuid::new_v4().to_string(),
-            task_id: Uuid::new_v4().to_string(),
-            decision_type: r#""Escalation""#.to_string(),
-            reasoning: "r".to_string(),
-            outcome: "o".to_string(),
-            llm_call_id: None,
-            cost_usd: 0.0,
-            timestamp: "bad-ts".to_string(),
-        };
-        let result: Result<Decision> = row.try_into();
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn decision_row_try_from_invalid_llm_call_id() {
-        let row = DecisionRow {
-            id: Uuid::new_v4().to_string(),
-            task_id: Uuid::new_v4().to_string(),
-            decision_type: r#""Recovery""#.to_string(),
-            reasoning: "r".to_string(),
-            outcome: "o".to_string(),
-            llm_call_id: Some("not-a-uuid".to_string()),
-            cost_usd: 0.0,
-            timestamp: Utc::now().to_rfc3339(),
+            timestamp: Utc::now(),
         };
         let result: Result<Decision> = row.try_into();
         assert!(result.is_err());
@@ -999,14 +861,14 @@ mod tests {
     #[test]
     fn decision_row_try_from_no_llm_call_id() {
         let row = DecisionRow {
-            id: Uuid::new_v4().to_string(),
-            task_id: Uuid::new_v4().to_string(),
+            id: Uuid::new_v4(),
+            task_id: Uuid::new_v4(),
             decision_type: r#""TierRouting""#.to_string(),
             reasoning: "r".to_string(),
             outcome: "o".to_string(),
             llm_call_id: None,
             cost_usd: 0.0,
-            timestamp: Utc::now().to_rfc3339(),
+            timestamp: Utc::now(),
         };
         let d: Decision = row.try_into().unwrap();
         assert!(d.llm_call_id.is_none());

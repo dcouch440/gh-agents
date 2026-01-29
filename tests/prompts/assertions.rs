@@ -255,6 +255,7 @@ impl AssertionSuite {
         self.results.iter().filter(|(_, r)| r.is_fail()).collect()
     }
 
+    #[allow(dead_code)]
     pub fn warnings(&self) -> Vec<&(String, AssertionResult)> {
         self.results.iter().filter(|(_, r)| r.is_warn()).collect()
     }

@@ -378,12 +378,12 @@ impl<P: LLMProvider> Planner<P> {
                 VALUES ($1, $2, $3, $4, $5, $6)
                 "#,
             )
-            .bind(slice.id.0.to_string())
-            .bind(slice.ticket_id.to_string())
+            .bind(slice.id.0)
+            .bind(slice.ticket_id)
             .bind(&slice.title)
             .bind(&slice.description)
             .bind("pending")
-            .bind(slice.created_at.to_rfc3339())
+            .bind(slice.created_at)
             .execute(&mut *tx)
             .await
             .map_err(|e| DecompositionError::DatabaseError(e.to_string()))?;
@@ -391,7 +391,7 @@ impl<P: LLMProvider> Planner<P> {
 
         // Insert tasks
         for task in &output.tasks {
-            let slice_id = task.slice_id.as_ref().map(|s| s.0.to_string());
+            let slice_id = task.slice_id.as_ref().map(|s| s.0);
 
             sqlx::query(
                 r#"
@@ -399,15 +399,15 @@ impl<P: LLMProvider> Planner<P> {
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 "#,
             )
-            .bind(task.id.0.to_string())
+            .bind(task.id.0)
             .bind(slice_id)
             .bind(&task.title)
             .bind(&task.description)
             .bind(format!("{:?}", task.assigned_tier))
             .bind("pending")
             .bind(format!("{:?}", task.priority))
-            .bind(task.created_at.to_rfc3339())
-            .bind(task.updated_at.to_rfc3339())
+            .bind(task.created_at)
+            .bind(task.updated_at)
             .execute(&mut *tx)
             .await
             .map_err(|e| DecompositionError::DatabaseError(e.to_string()))?;

@@ -177,14 +177,14 @@ impl MergeQueue {
             DO UPDATE SET updated_at = excluded.updated_at
             "#,
         )
-        .bind(id.to_string())
+        .bind(id)
         .bind(owner)
         .bind(repo)
-        .bind(pr_number as i64)
-        .bind(next_position as i64)
+        .bind(pr_number as i32)
+        .bind(next_position as i32)
         .bind("pending")
-        .bind(now.to_rfc3339())
-        .bind(now.to_rfc3339())
+        .bind(now)
+        .bind(now)
         .execute(&self.pool)
         .await?;
 
@@ -212,7 +212,7 @@ impl MergeQueue {
 
     /// Get the next queue position for a repo
     async fn get_next_position(&self, owner: &str, repo: &str) -> Result<u32, QueueError> {
-        let row: Option<(i64,)> = sqlx::query_as(
+        let row: Option<(i32,)> = sqlx::query_as(
             r#"
             SELECT COALESCE(MAX(queue_position), 0) + 1
             FROM pr_merge_queue
@@ -242,7 +242,7 @@ impl MergeQueue {
         )
         .bind(owner)
         .bind(repo)
-        .bind(pr_number as i64)
+        .bind(pr_number as i32)
         .execute(&self.pool)
         .await?;
 
@@ -256,16 +256,16 @@ impl MergeQueue {
         repo: &str,
     ) -> Result<Vec<PrQueueEntry>, QueueError> {
         let rows: Vec<(
+            Uuid,
             String,
             String,
-            String,
-            i64,
-            i64,
+            i32,
+            i32,
             String,
             Option<String>,
             Option<String>,
-            String,
-            String,
+            DateTime<Utc>,
+            DateTime<Utc>,
         )> = sqlx::query_as(
             r#"
             SELECT
@@ -286,7 +286,7 @@ impl MergeQueue {
             .into_iter()
             .filter_map(|row| {
                 Some(PrQueueEntry {
-                    id: Uuid::parse_str(&row.0).ok()?,
+                    id: row.0,
                     repo_owner: row.1,
                     repo_name: row.2,
                     pr_number: row.3 as u32,
@@ -294,12 +294,8 @@ impl MergeQueue {
                     status: row.5.parse().ok()?,
                     conflict_info: row.6.and_then(|s| serde_json::from_str(&s).ok()),
                     error_message: row.7,
-                    created_at: DateTime::parse_from_rfc3339(&row.8)
-                        .ok()?
-                        .with_timezone(&Utc),
-                    updated_at: DateTime::parse_from_rfc3339(&row.9)
-                        .ok()?
-                        .with_timezone(&Utc),
+                    created_at: row.8,
+                    updated_at: row.9,
                 })
             })
             .collect();
@@ -338,10 +334,10 @@ impl MergeQueue {
         )
         .bind(status.to_string())
         .bind(error_message)
-        .bind(now.to_rfc3339())
+        .bind(now)
         .bind(owner)
         .bind(repo)
-        .bind(pr_number as i64)
+        .bind(pr_number as i32)
         .execute(&self.pool)
         .await?;
 
@@ -368,10 +364,10 @@ impl MergeQueue {
         )
         .bind("conflict")
         .bind(info_json)
-        .bind(now.to_rfc3339())
+        .bind(now)
         .bind(owner)
         .bind(repo)
-        .bind(pr_number as i64)
+        .bind(pr_number as i32)
         .execute(&self.pool)
         .await?;
 
@@ -480,9 +476,9 @@ impl MergeQueue {
                         WHERE id = $3
                         "#,
                     )
-                    .bind(new_position as i64)
-                    .bind(Utc::now().to_rfc3339())
-                    .bind(entry.id.to_string())
+                    .bind(new_position as i32)
+                    .bind(Utc::now())
+                    .bind(entry.id)
                     .execute(&self.pool)
                     .await?;
                 }
@@ -569,7 +565,7 @@ impl MergeQueue {
             AND status = 'in_progress'
             "#,
         )
-        .bind(now.to_rfc3339())
+        .bind(now)
         .bind(owner)
         .bind(repo)
         .execute(&self.pool)
@@ -621,7 +617,7 @@ impl MergeQueue {
         )
         .bind(owner)
         .bind(repo)
-        .bind(cutoff.to_rfc3339())
+        .bind(cutoff)
         .execute(&self.pool)
         .await?;
 

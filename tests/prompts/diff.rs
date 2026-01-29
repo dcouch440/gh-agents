@@ -11,6 +11,7 @@ pub struct PromptDiff {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum StructuralChange {
     FieldAdded(String),
     FieldRemoved(String),
@@ -22,6 +23,7 @@ pub enum StructuralChange {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum ContentChange {
     SliceCountChanged { old: usize, new: usize },
     SliceAdded(String),
