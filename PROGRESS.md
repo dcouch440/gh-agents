@@ -307,6 +307,24 @@
 
 ---
 
+## Milestone 22: Multi-Agent Docker Isolation - NOT STARTED
+
+**Goal**: Per-agent Docker containers with git worktree isolation for concurrent multi-branch work.
+
+| Ticket | Title | Status | Progress | Notes |
+|--------|-------|--------|----------|-------|
+| 22.1 | Git Worktree Manager | pending | 0/5 | WorktreeManager CRUD for isolated checkouts |
+| 22.2 | Agent Worker Dockerfile | pending | 0/3 | Container image with runtimes |
+| 22.3 | Container Lifecycle Management | pending | 0/5 | Spawn, stop, status, health check |
+| 22.4 | Agent Worker Mode | pending | 0/5 | `--worker` binary mode, WS connection |
+| 22.5 | Worker Client Protocol | pending | 0/4 | Host-side client for container communication |
+| 22.6 | Container Pool Integration | pending | 0/5 | Full lifecycle: worktree + container + merge |
+| 22.7 | Cleanup, Monitoring & Health | pending | 0/3 | Orphan cleanup, health monitoring, drain |
+
+**Milestone Status:** Not Started (0/7 tickets done)
+
+---
+
 ## Summary
 
 | Milestone                  | Tickets | Status            |
@@ -327,7 +345,8 @@
 | M15: Repo Mgmt & Workspace | -       | **DEPRECATED**    |
 | M16: SaaS Foundation       | -       | **DEPRECATED**    |
 | M17: SQLite → PostgreSQL   | 8       | In Progress       |
-| **Total Active**           | **87**  |                   |
+| M22: Docker Isolation      | 7       | Not Started       |
+| **Total Active**           | **94**  |                   |
 
 ---
 
