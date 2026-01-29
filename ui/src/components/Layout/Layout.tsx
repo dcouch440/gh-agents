@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from '../Sidebar';
 import { Header } from '../Header';
 import { useAppStore } from '../../store';
@@ -6,6 +6,10 @@ import { useAppStore } from '../../store';
 export function Layout() {
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
   const toggleSidebar = useAppStore((state) => state.toggleSidebar);
+  const location = useLocation();
+
+  const isChat = location.pathname === '/chat' || location.pathname === '/';
+  const contentMaxWidth = isChat ? 'max-w-6xl' : 'max-w-4xl';
 
   return (
     <div className="min-h-screen bg-bg-primary flex">
@@ -23,7 +27,7 @@ export function Layout() {
       <div className="flex-1 flex flex-col min-w-0">
         <Header />
         <main className="flex-1 overflow-auto p-6">
-          <div className="max-w-4xl mx-auto">
+          <div className={`${contentMaxWidth} mx-auto`}>
             <Outlet />
           </div>
         </main>

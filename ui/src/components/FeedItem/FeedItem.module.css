@@ -1,35 +1,37 @@
 .item {
   display: flex;
-  gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0 0.375rem 0.375rem 0;
-  border-left: 2px solid var(--border);
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  font-size: 0.875rem;
-  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: 0 0.25rem 0.25rem 0;
+  border-left: 2px solid var(--color-border);
+  font-family: var(--font-family-mono);
+  font-size: 0.8125rem;
+  align-items: baseline;
+  transition: background-color 0.1s;
+}
+
+.item:hover {
+  background-color: var(--color-bg-tertiary);
 }
 
 .typeDefault {
-  border-left-color: var(--border);
+  border-left-color: var(--color-border);
 }
 
 .typeMilestone {
-  border-left-color: var(--status-success);
-  background-color: rgba(var(--status-success-rgb), 0.05);
+  border-left-color: var(--color-status-success);
 }
 
 .typeError {
-  border-left-color: var(--status-error);
-  background-color: rgba(var(--status-error-rgb), 0.05);
+  border-left-color: var(--color-status-error);
 }
 
 .typeWarning {
-  border-left-color: var(--status-warning);
-  background-color: rgba(var(--status-warning-rgb), 0.05);
+  border-left-color: var(--color-status-warning);
 }
 
 .timestamp {
-  color: var(--text-tertiary);
+  color: var(--color-text-tertiary);
   flex-shrink: 0;
   min-width: 5rem;
 }
@@ -41,18 +43,24 @@
 }
 
 .agentOrchestrator {
-  color: var(--accent);
+  color: var(--color-accent);
 }
 
 .agentWorker {
-  color: var(--accent-secondary);
+  color: var(--color-accent-secondary);
 }
 
 .agentDefault {
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
 }
 
 .content {
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.contentClickable {
+  cursor: pointer;
 }

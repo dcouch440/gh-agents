@@ -1,39 +1,62 @@
 .container {
-  border-top: 1px solid var(--border);
-  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+  padding-top: 0.75rem;
 }
 
 .inputWrapper {
   display: flex;
+  align-items: flex-end;
   gap: 0.5rem;
 }
 
 .textarea {
   flex: 1;
-  padding: 0.75rem 1rem;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  color: var(--text-primary);
+  padding: 0.625rem 0.75rem;
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 0.375rem;
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
   resize: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.15s;
 }
 
 .textarea::placeholder {
-  color: var(--text-tertiary);
+  color: var(--color-text-tertiary);
 }
 
 .textarea:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--color-accent);
 }
 
 .textarea:disabled {
   opacity: 0.5;
 }
 
-.hint {
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
-  margin-top: 0.5rem;
+.sendButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: none;
+  border-radius: 0.25rem;
+  background-color: var(--color-accent);
+  color: white;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-bottom: 0.25rem;
+  transition: opacity 0.15s;
+}
+
+.sendButton:hover {
+  opacity: 0.85;
+}
+
+.sendButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }

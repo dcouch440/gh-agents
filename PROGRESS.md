@@ -234,8 +234,8 @@
 
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
-| 12.1 Chat View | done | 5/5 | ChatPage, ChatInput, Message, MarkdownContent, CodeBlock components |
-| 12.2 Feed View | done | 4/4 | FeedPage, FeedItem, useFeed with WS, auto-scroll + new events indicator |
+| 12.1 Chat View | done | 5/5 | ChatPage, ChatInput, Message, MarkdownContent, CodeBlock components. Refactored: flat turn layout, no bubbles/avatars, auto-grow input, wider content area |
+| 12.2 Feed View | done | 4/4 | FeedPage, FeedItem, useFeed with WS, auto-scroll + new events indicator. Refactored: tighter density, hover states, expand-on-click, removed redundant header |
 | 12.3 Tasks View | pending | 0/5 | |
 | 12.4 Agents View | pending | 0/4 | |
 | 12.5 File Browser & Editor | pending | 0/5 | |

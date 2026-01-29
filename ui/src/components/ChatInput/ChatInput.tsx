@@ -1,7 +1,6 @@
-import { useState, forwardRef } from 'react';
-import type { KeyboardEvent } from 'react';
-import { Send } from 'lucide-react';
-import { Button } from '../Button';
+import { useState, useRef, useCallback, forwardRef } from 'react';
+import type { KeyboardEvent, ChangeEvent } from 'react';
+import { ArrowUp } from 'lucide-react';
 import styles from './ChatInput.module.css';
 
 interface ChatInputProps {
@@ -9,15 +8,36 @@ interface ChatInputProps {
   disabled?: boolean;
 }
 
+const MAX_ROWS = 6;
+
 export const ChatInput = forwardRef<HTMLDivElement, ChatInputProps>(
   ({ onSend, disabled }, ref) => {
     const [value, setValue] = useState('');
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    const adjustHeight = useCallback(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+
+      textarea.style.height = 'auto';
+      const lineHeight = parseInt(getComputedStyle(textarea).lineHeight, 10) || 20;
+      const maxHeight = lineHeight * MAX_ROWS;
+      textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
+    }, []);
 
     const handleSubmit = () => {
       if (value.trim() && !disabled) {
         onSend(value.trim());
         setValue('');
+        if (textareaRef.current) {
+          textareaRef.current.style.height = 'auto';
+        }
       }
+    };
+
+    const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+      setValue(e.target.value);
+      adjustHeight();
     };
 
     const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -27,30 +47,32 @@ export const ChatInput = forwardRef<HTMLDivElement, ChatInputProps>(
       }
     };
 
+    const showSend = value.trim().length > 0;
+
     return (
       <div ref={ref} className={styles.container}>
         <div className={styles.inputWrapper}>
           <textarea
+            ref={textareaRef}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={handleChange}
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."
             disabled={disabled}
             rows={1}
             className={styles.textarea}
           />
-          <Button
-            onClick={handleSubmit}
-            disabled={disabled || !value.trim()}
-            variant="primary"
-            size="md"
-          >
-            <Send size={20} />
-          </Button>
+          {showSend && (
+            <button
+              onClick={handleSubmit}
+              disabled={disabled}
+              className={styles.sendButton}
+              aria-label="Send message"
+            >
+              <ArrowUp size={16} />
+            </button>
+          )}
         </div>
-        <p className={styles.hint}>
-          Press Enter to send, Shift+Enter for new line
-        </p>
       </div>
     );
   }
