@@ -2,33 +2,34 @@
 CREATE TABLE IF NOT EXISTS system_state (
     key TEXT PRIMARY KEY NOT NULL,
     value TEXT NOT NULL,
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Initialize production mode to running
-INSERT OR IGNORE INTO system_state (key, value)
-VALUES ('production_mode', 'running');
+INSERT INTO system_state (key, value)
+VALUES ('production_mode', 'running')
+ON CONFLICT (key) DO NOTHING;
 
 -- Refactor sessions
 CREATE TABLE IF NOT EXISTS refactor_sessions (
-    id TEXT PRIMARY KEY NOT NULL,
-    started_at TEXT NOT NULL,
-    ended_at TEXT,
-    production_halted INTEGER NOT NULL DEFAULT 0,
+    id UUID PRIMARY KEY NOT NULL,
+    started_at TIMESTAMPTZ NOT NULL,
+    ended_at TIMESTAMPTZ,
+    production_halted BOOLEAN NOT NULL DEFAULT FALSE,
     changes_applied INTEGER NOT NULL DEFAULT 0
 );
 
 -- Proposed changes within a session
 CREATE TABLE IF NOT EXISTS refactor_changes (
-    id TEXT PRIMARY KEY NOT NULL,
-    session_id TEXT NOT NULL,
+    id UUID PRIMARY KEY NOT NULL,
+    session_id UUID NOT NULL,
     file_path TEXT NOT NULL,
     change_type TEXT NOT NULL,
     before_content TEXT,
     after_content TEXT,
     reason TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'proposed',
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     FOREIGN KEY (session_id) REFERENCES refactor_sessions(id)
 );

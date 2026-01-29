@@ -1,13 +1,13 @@
 -- Messages table (inter-agent communication)
 CREATE TABLE IF NOT EXISTS messages (
-    id TEXT PRIMARY KEY NOT NULL,
-    from_agent TEXT NOT NULL,
-    to_agent TEXT NOT NULL,
+    id UUID PRIMARY KEY NOT NULL,
+    from_agent UUID NOT NULL,
+    to_agent UUID NOT NULL,
     message_type TEXT NOT NULL,
     content TEXT NOT NULL,
-    task_id TEXT,
+    task_id UUID,
     context TEXT,
-    timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+    timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     FOREIGN KEY (from_agent) REFERENCES agents(id),
     FOREIGN KEY (to_agent) REFERENCES agents(id),

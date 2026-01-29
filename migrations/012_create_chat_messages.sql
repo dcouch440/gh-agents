@@ -1,9 +1,9 @@
 -- Chat messages table (user-orchestrator conversation)
 CREATE TABLE IF NOT EXISTS chat_messages (
-    id TEXT PRIMARY KEY NOT NULL,
+    id UUID PRIMARY KEY NOT NULL,
     role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
     content TEXT NOT NULL,
-    timestamp TEXT NOT NULL DEFAULT (datetime('now'))
+    timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Index for querying chat history

@@ -295,7 +295,7 @@
 | Ticket | Title | Status | Progress | Notes |
 |--------|-------|--------|----------|-------|
 | 17.1 | Infrastructure & Dependencies | done | 4/4 | Docker Compose Postgres, sqlx postgres features, DATABASE_URL config, .env.example |
-| 17.2 | Migration Files Rewrite | pending | 0/4 | 14 SQLite migrations → Postgres DDL |
+| 17.2 | Migration Files Rewrite | done | 4/4 | All 14 migrations rewritten: TEXT→UUID, TEXT→TIMESTAMPTZ, INTEGER→BOOLEAN, TEXT→JSONB, datetime('now')→NOW(), INSERT OR IGNORE→ON CONFLICT DO NOTHING |
 | 17.3 | Connection Pool & Init | pending | 0/3 | SqlitePool → PgPool, sqlx::migrate! |
 | 17.4 | Query Rewrites: Tasks/Chat/Auth | pending | 0/5 | Largest query file |
 | 17.5 | Query Rewrites: Refactor/PRD | pending | 0/4 | Parallel with 17.4 |
@@ -326,7 +326,7 @@
 | M13: Agent View             | 6       | Not Started       |
 | M15: Repo Mgmt & Workspace | -       | **DEPRECATED**    |
 | M16: SaaS Foundation       | -       | **DEPRECATED**    |
-| M17: SQLite → PostgreSQL   | 8       | Not Started       |
+| M17: SQLite → PostgreSQL   | 8       | In Progress       |
 | **Total Active**           | **87**  |                   |
 
 ---

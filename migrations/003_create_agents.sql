@@ -1,6 +1,6 @@
 -- Agents table
 CREATE TABLE IF NOT EXISTS agents (
-    id TEXT PRIMARY KEY NOT NULL,
+    id UUID PRIMARY KEY NOT NULL,
     tier TEXT NOT NULL,
     persona_name TEXT NOT NULL,
     persona_prompt TEXT NOT NULL DEFAULT '',
@@ -9,9 +9,9 @@ CREATE TABLE IF NOT EXISTS agents (
     model_id TEXT NOT NULL,
     model_max_tokens INTEGER NOT NULL DEFAULT 4096,
     model_temperature REAL NOT NULL DEFAULT 0.7,
-    current_task TEXT,
+    current_task UUID,
     status TEXT NOT NULL DEFAULT 'idle',
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     FOREIGN KEY (current_task) REFERENCES tasks(id)
 );
