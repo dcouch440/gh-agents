@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use chrono::Utc;
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use thiserror::Error;
 
 use crate::llm::{LLMProvider, LLMRequest, Message};
@@ -70,7 +70,7 @@ pub type DecompositionResult<T> = Result<T, DecompositionError>;
 /// The Planner decomposes tickets into vertical slices.
 pub struct Planner<P: LLMProvider> {
     provider: Arc<P>,
-    pool: Option<SqlitePool>,
+    pool: Option<PgPool>,
     config: PlannerConfig,
 }
 
@@ -89,7 +89,7 @@ impl<P: LLMProvider> Planner<P> {
     }
 
     /// Create a new Planner with database persistence.
-    pub fn with_db(provider: Arc<P>, pool: SqlitePool, config: PlannerConfig) -> Self {
+    pub fn with_db(provider: Arc<P>, pool: PgPool, config: PlannerConfig) -> Self {
         Self {
             provider,
             pool: Some(pool),
@@ -375,7 +375,7 @@ impl<P: LLMProvider> Planner<P> {
             sqlx::query(
                 r#"
                 INSERT INTO vertical_slices (id, ticket_id, title, description, status, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES ($1, $2, $3, $4, $5, $6)
                 "#,
             )
             .bind(slice.id.0.to_string())
@@ -396,7 +396,7 @@ impl<P: LLMProvider> Planner<P> {
             sqlx::query(
                 r#"
                 INSERT INTO tasks (id, slice_id, title, description, assigned_tier, status, priority, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 "#,
             )
             .bind(task.id.0.to_string())
@@ -1046,11 +1046,8 @@ mod tests {
         // Just verify with_db sets the pool
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let temp_dir = tempfile::TempDir::new().unwrap();
-            let db_path = temp_dir.path().join("test.db");
-            let pool = crate::db::init_db_at(db_path.to_str().unwrap())
-                .await
-                .unwrap();
+            let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+            let pool = crate::db::init_db_with_url(&url).await.unwrap();
 
             let provider = Arc::new(MockProvider::with_response(""));
             let planner = Planner::with_db(provider, pool, PlannerConfig::default());
@@ -1060,17 +1057,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_decompose_and_save_with_db() {
-        let temp_dir = tempfile::TempDir::new().unwrap();
-        let db_path = temp_dir.path().join("test.db");
-        let pool = crate::db::init_db_at(db_path.to_str().unwrap())
-            .await
-            .unwrap();
+        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+        let pool = crate::db::init_db_with_url(&url).await.unwrap();
 
         let ticket = create_test_ticket();
 
         // Insert the ticket into the DB first to satisfy foreign key constraints
         sqlx::query(
-            "INSERT INTO tickets (id, source_type, title, description, status, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+            "INSERT INTO tickets (id, source_type, title, description, status, created_at) VALUES ($1, $2, $3, $4, $5, $6)"
         )
         .bind(ticket.id.0.to_string())
         .bind("manual")

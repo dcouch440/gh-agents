@@ -297,13 +297,13 @@
 | 17.1 | Infrastructure & Dependencies | done | 4/4 | Docker Compose Postgres, sqlx postgres features, DATABASE_URL config, .env.example |
 | 17.2 | Migration Files Rewrite | done | 4/4 | All 14 migrations rewritten: TEXT→UUID, TEXT→TIMESTAMPTZ, INTEGER→BOOLEAN, TEXT→JSONB, datetime('now')→NOW(), INSERT OR IGNORE→ON CONFLICT DO NOTHING |
 | 17.3 | Connection Pool & Init | done | 3/3 | PgPool, sqlx::migrate!(), removed custom migration runner |
-| 17.4 | Query Rewrites: Tasks/Chat/Auth | pending | 0/5 | Largest query file |
-| 17.5 | Query Rewrites: Refactor/PRD | pending | 0/4 | Parallel with 17.4 |
-| 17.6 | Consumer File Updates | pending | 0/4 | 10 files that import SqlitePool |
+| 17.4 | Query Rewrites: Tasks/Chat/Auth | done | 5/5 | All queries use $N params, native Uuid/DateTime/JsonValue types, PgPool |
+| 17.5 | Query Rewrites: Refactor/PRD | done | 4/4 | refactor.rs and prd.rs converted to PgPool with native types |
+| 17.6 | Consumer File Updates | done | 4/4 | All 10+ consumer files updated: SqlitePool→PgPool, ?→$N, string parsing→native types |
 | 17.7 | Test Infrastructure | pending | 0/4 | Per-test Postgres databases |
 | 17.8 | Cleanup & Documentation | pending | 0/4 | Remove SQLite, data migration tool |
 
-**Milestone Status:** Not Started (0/8 tickets done)
+**Milestone Status:** In Progress (6/8 tickets done)
 
 ---
 

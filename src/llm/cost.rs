@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use once_cell::sync::Lazy;
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -196,7 +196,7 @@ mod tests {
 /// Tracks LLM API costs
 pub struct CostTracker {
     /// Database pool (optional for testing without DB)
-    db_pool: Option<SqlitePool>,
+    db_pool: Option<PgPool>,
 
     /// In-memory records for current session
     records: Arc<RwLock<Vec<CostRecord>>>,
@@ -204,7 +204,7 @@ pub struct CostTracker {
 
 impl CostTracker {
     /// Create a new cost tracker with database persistence
-    pub fn new(db_pool: SqlitePool) -> Self {
+    pub fn new(db_pool: PgPool) -> Self {
         Self {
             db_pool: Some(db_pool),
             records: Arc::new(RwLock::new(Vec::new())),
@@ -268,7 +268,7 @@ impl CostTracker {
     /// Persist a record to the database
     async fn persist_record(
         &self,
-        pool: &SqlitePool,
+        pool: &PgPool,
         record: &CostRecord,
     ) -> Result<(), CostTrackerError> {
         let task_id_str = record.task_id.as_ref().map(|id| id.0.to_string());
@@ -279,7 +279,7 @@ impl CostTracker {
             INSERT INTO cost_records (
                 id, task_id, agent_id, agent_tier, model_id,
                 input_tokens, output_tokens, cost_usd, timestamp
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             "#,
         )
         .bind(record.id.to_string())
@@ -330,7 +330,7 @@ impl CostTracker {
                 SELECT id, task_id, agent_id, agent_tier, model_id,
                        input_tokens, output_tokens, cost_usd, timestamp
                 FROM cost_records
-                WHERE timestamp >= ?
+                WHERE timestamp >= $1
                 ORDER BY timestamp DESC
                 "#,
             )
@@ -662,25 +662,21 @@ mod db_tests {
     use super::*;
     use tempfile::TempDir;
 
-    async fn setup_test_db() -> (SqlitePool, TempDir) {
-        let temp_dir = TempDir::new().unwrap();
-        let db_path = temp_dir.path().join("test.db");
-        let pool = crate::db::init_db_at(db_path.to_str().unwrap())
-            .await
-            .unwrap();
-        (pool, temp_dir)
+    async fn setup_test_db() -> PgPool {
+        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+        crate::db::init_db_with_url(&url).await.unwrap()
     }
 
-    async fn insert_agent(pool: &SqlitePool, agent_id: &AgentId) {
-        sqlx::query("INSERT INTO agents (id, tier, persona_name, model_id) VALUES (?, 'Worker', 'test', 'test-model')")
+    async fn insert_agent(pool: &PgPool, agent_id: &AgentId) {
+        sqlx::query("INSERT INTO agents (id, tier, persona_name, model_id) VALUES ($1, 'Worker', 'test', 'test-model')")
             .bind(agent_id.0.to_string())
             .execute(pool)
             .await
             .unwrap();
     }
 
-    async fn insert_task(pool: &SqlitePool, task_id: &TaskId) {
-        sqlx::query("INSERT INTO tasks (id, title) VALUES (?, 'test task')")
+    async fn insert_task(pool: &PgPool, task_id: &TaskId) {
+        sqlx::query("INSERT INTO tasks (id, title) VALUES ($1, 'test task')")
             .bind(task_id.0.to_string())
             .execute(pool)
             .await
@@ -689,14 +685,14 @@ mod db_tests {
 
     #[tokio::test]
     async fn cost_tracker_new_with_db() {
-        let (pool, _dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let tracker = CostTracker::new(pool);
         assert!(tracker.db_pool.is_some());
     }
 
     #[tokio::test]
     async fn record_call_persists_to_db() {
-        let (pool, _dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let task_id = TaskId::new();
         let agent_id = AgentId::new();
         insert_agent(&pool, &agent_id).await;
@@ -733,7 +729,7 @@ mod db_tests {
 
     #[tokio::test]
     async fn get_historical_summary_without_since() {
-        let (pool, _dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let agent_id = AgentId::new();
         insert_agent(&pool, &agent_id).await;
         let tracker = CostTracker::new(pool);
@@ -759,7 +755,7 @@ mod db_tests {
 
     #[tokio::test]
     async fn get_historical_summary_with_since() {
-        let (pool, _dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let agent_id = AgentId::new();
         insert_agent(&pool, &agent_id).await;
         let tracker = CostTracker::new(pool);

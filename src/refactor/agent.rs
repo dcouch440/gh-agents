@@ -125,13 +125,13 @@ pub enum ImpactRecommendation {
 /// The refactor agent handles mid-stream plan modifications
 pub struct RefactorAgent {
     scheduler: Arc<RwLock<Scheduler>>,
-    pool: sqlx::SqlitePool,
+    pool: sqlx::PgPool,
     session: Option<RefactorSession>,
 }
 
 impl RefactorAgent {
     /// Create a new refactor agent
-    pub fn new(scheduler: Arc<RwLock<Scheduler>>, pool: sqlx::SqlitePool) -> Self {
+    pub fn new(scheduler: Arc<RwLock<Scheduler>>, pool: sqlx::PgPool) -> Self {
         Self {
             scheduler,
             pool,
@@ -426,26 +426,22 @@ mod tests {
     use crate::types::ProductionMode;
     use tempfile::TempDir;
 
-    async fn setup_agent() -> (RefactorAgent, TempDir) {
-        let temp_dir = TempDir::new().unwrap();
-        let db_path = temp_dir.path().join("test.db");
-        let pool = crate::db::init_db_at(db_path.to_str().unwrap())
-            .await
-            .unwrap();
+    async fn setup_agent() -> RefactorAgent {
+        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+        let pool = crate::db::init_db_with_url(&url).await.unwrap();
         let scheduler = Scheduler::new(pool.clone()).await.unwrap();
-        let agent = RefactorAgent::new(Arc::new(RwLock::new(scheduler)), pool);
-        (agent, temp_dir)
+        RefactorAgent::new(Arc::new(RwLock::new(scheduler)), pool)
     }
 
     #[tokio::test]
     async fn agent_starts_with_no_session() {
-        let (agent, _temp_dir) = setup_agent().await;
+        let agent = setup_agent().await;
         assert!(agent.session().is_none());
     }
 
     #[tokio::test]
     async fn agent_can_start_session() {
-        let (mut agent, _temp_dir) = setup_agent().await;
+        let mut agent = setup_agent().await;
 
         let session = agent.start_session().await.unwrap();
         assert!(session.is_active());
@@ -454,7 +450,7 @@ mod tests {
 
     #[tokio::test]
     async fn analyze_intent_detects_halt() {
-        let (agent, _temp_dir) = setup_agent().await;
+        let agent = setup_agent().await;
 
         let analysis = agent.analyze_intent_simple("STOP all work right now");
         assert_eq!(analysis.intent, RefactorIntent::HaltNow);
@@ -464,7 +460,7 @@ mod tests {
 
     #[tokio::test]
     async fn analyze_intent_detects_exit() {
-        let (agent, _temp_dir) = setup_agent().await;
+        let agent = setup_agent().await;
 
         let analysis = agent.analyze_intent_simple("done, let's continue");
         assert_eq!(analysis.intent, RefactorIntent::ExitRefactor);
@@ -473,7 +469,7 @@ mod tests {
 
     #[tokio::test]
     async fn analyze_intent_detects_refactor() {
-        let (agent, _temp_dir) = setup_agent().await;
+        let agent = setup_agent().await;
 
         let analysis = agent.analyze_intent_simple("I want to change how ticket 2.3 works");
         assert_eq!(analysis.intent, RefactorIntent::RefactorNeeded);
@@ -482,7 +478,7 @@ mod tests {
 
     #[tokio::test]
     async fn analyze_intent_detects_clarifying() {
-        let (agent, _temp_dir) = setup_agent().await;
+        let agent = setup_agent().await;
 
         let analysis = agent.analyze_intent_simple("What if we approached it differently?");
         assert_eq!(analysis.intent, RefactorIntent::Clarifying);
@@ -491,7 +487,7 @@ mod tests {
 
     #[tokio::test]
     async fn analyze_intent_defaults_to_chatting() {
-        let (agent, _temp_dir) = setup_agent().await;
+        let agent = setup_agent().await;
 
         let analysis = agent.analyze_intent_simple("Hey, how's it going?");
         assert_eq!(analysis.intent, RefactorIntent::JustChatting);
@@ -499,7 +495,7 @@ mod tests {
 
     #[tokio::test]
     async fn agent_can_halt_production() {
-        let (mut agent, _temp_dir) = setup_agent().await;
+        let mut agent = setup_agent().await;
 
         agent.start_session().await.unwrap();
         agent.halt_production().await.unwrap();
@@ -512,7 +508,8 @@ mod tests {
 
     #[tokio::test]
     async fn agent_can_add_and_apply_changes() {
-        let (mut agent, temp_dir) = setup_agent().await;
+        let mut agent = setup_agent().await;
+        let temp_dir = TempDir::new().unwrap();
 
         agent.start_session().await.unwrap();
 
@@ -544,7 +541,7 @@ mod tests {
 
     #[tokio::test]
     async fn agent_can_end_session() {
-        let (mut agent, _temp_dir) = setup_agent().await;
+        let mut agent = setup_agent().await;
 
         agent.start_session().await.unwrap();
         agent.end_session().await.unwrap();
@@ -557,7 +554,7 @@ mod tests {
 
     #[tokio::test]
     async fn agent_resumes_existing_session() {
-        let (mut agent, _temp_dir) = setup_agent().await;
+        let mut agent = setup_agent().await;
 
         // Start a session
         let session1 = agent.start_session().await.unwrap();
@@ -577,7 +574,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_context_includes_session() {
-        let (mut agent, _temp_dir) = setup_agent().await;
+        let mut agent = setup_agent().await;
 
         agent.start_session().await.unwrap();
         let ctx = agent.get_context().await.unwrap();
@@ -588,14 +585,14 @@ mod tests {
 
     #[tokio::test]
     async fn get_context_without_session() {
-        let (agent, _temp_dir) = setup_agent().await;
+        let agent = setup_agent().await;
         let ctx = agent.get_context().await.unwrap();
         assert!(ctx.session.is_none());
     }
 
     #[tokio::test]
     async fn session_mut_returns_mutable_ref() {
-        let (mut agent, _temp_dir) = setup_agent().await;
+        let mut agent = setup_agent().await;
         assert!(agent.session_mut().is_none());
 
         agent.start_session().await.unwrap();
@@ -605,7 +602,7 @@ mod tests {
 
     #[tokio::test]
     async fn analyze_intent_halt_pattern() {
-        let (agent, _temp_dir) = setup_agent().await;
+        let agent = setup_agent().await;
 
         let analysis = agent.analyze_intent_simple("halt everything");
         assert_eq!(analysis.intent, RefactorIntent::HaltNow);
@@ -614,7 +611,7 @@ mod tests {
 
     #[tokio::test]
     async fn analyze_intent_pause_everything() {
-        let (agent, _temp_dir) = setup_agent().await;
+        let agent = setup_agent().await;
 
         let analysis = agent.analyze_intent_simple("pause everything now");
         assert_eq!(analysis.intent, RefactorIntent::HaltNow);
@@ -623,7 +620,7 @@ mod tests {
 
     #[tokio::test]
     async fn analyze_intent_exit_with_resume() {
-        let (agent, _temp_dir) = setup_agent().await;
+        let agent = setup_agent().await;
 
         let analysis = agent.analyze_intent_simple("resume work please");
         assert_eq!(analysis.intent, RefactorIntent::ExitRefactor);
@@ -631,7 +628,7 @@ mod tests {
 
     #[tokio::test]
     async fn analyze_intent_refactor_various_patterns() {
-        let (agent, _temp_dir) = setup_agent().await;
+        let agent = setup_agent().await;
 
         for msg in &[
             "delete that file",
@@ -651,7 +648,7 @@ mod tests {
 
     #[tokio::test]
     async fn analyze_intent_clarifying_patterns() {
-        let (agent, _temp_dir) = setup_agent().await;
+        let agent = setup_agent().await;
 
         for msg in &[
             "could we try something else",
@@ -670,7 +667,8 @@ mod tests {
 
     #[tokio::test]
     async fn apply_changes_no_session_errors() {
-        let (mut agent, temp_dir) = setup_agent().await;
+        let mut agent = setup_agent().await;
+        let temp_dir = TempDir::new().unwrap();
         let result = agent.apply_changes(temp_dir.path()).await;
         assert!(result.is_err());
         assert!(result
@@ -681,7 +679,8 @@ mod tests {
 
     #[tokio::test]
     async fn apply_modify_change() {
-        let (mut agent, temp_dir) = setup_agent().await;
+        let mut agent = setup_agent().await;
+        let temp_dir = TempDir::new().unwrap();
         agent.start_session().await.unwrap();
 
         // Create an existing file to modify
@@ -708,7 +707,8 @@ mod tests {
 
     #[tokio::test]
     async fn apply_delete_change() {
-        let (mut agent, temp_dir) = setup_agent().await;
+        let mut agent = setup_agent().await;
+        let temp_dir = TempDir::new().unwrap();
         agent.start_session().await.unwrap();
 
         let file_path = temp_dir.path().join("to_delete.txt");
@@ -730,7 +730,8 @@ mod tests {
 
     #[tokio::test]
     async fn apply_delete_nonexistent_file_no_error() {
-        let (mut agent, temp_dir) = setup_agent().await;
+        let mut agent = setup_agent().await;
+        let temp_dir = TempDir::new().unwrap();
         agent.start_session().await.unwrap();
 
         let change = RefactorChange::delete(
@@ -749,7 +750,8 @@ mod tests {
 
     #[tokio::test]
     async fn apply_create_in_subdirectory() {
-        let (mut agent, temp_dir) = setup_agent().await;
+        let mut agent = setup_agent().await;
+        let temp_dir = TempDir::new().unwrap();
         agent.start_session().await.unwrap();
 
         let change = RefactorChange::create(
@@ -772,7 +774,7 @@ mod tests {
 
     #[tokio::test]
     async fn build_intent_prompt_with_empty_context() {
-        let (agent, _temp_dir) = setup_agent().await;
+        let agent = setup_agent().await;
         let ctx = RefactorContext::new(ProductionMode::Running);
         let prompt = agent.build_intent_prompt("hello", &[], &ctx);
         assert!(!prompt.is_empty());
@@ -780,7 +782,7 @@ mod tests {
 
     #[tokio::test]
     async fn build_intent_prompt_with_work_status() {
-        let (agent, _temp_dir) = setup_agent().await;
+        let agent = setup_agent().await;
         let mut ctx = RefactorContext::new(ProductionMode::Running);
         ctx.in_progress_work = vec!["task-1".to_string(), "task-2".to_string()];
         let prompt = agent.build_intent_prompt("change something", &[("user", "hi")], &ctx);
@@ -789,7 +791,7 @@ mod tests {
 
     #[tokio::test]
     async fn end_session_without_active_session() {
-        let (mut agent, _temp_dir) = setup_agent().await;
+        let mut agent = setup_agent().await;
         // Should not error even without a session
         let result = agent.end_session().await;
         assert!(result.is_ok());

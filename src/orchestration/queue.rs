@@ -9,7 +9,7 @@ use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 
 use chrono::Utc;
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -193,12 +193,12 @@ fn priority_value(p: Priority) -> u8 {
 /// Persistent task queue with database backing.
 pub struct PersistentTaskQueue {
     inner: TaskQueue,
-    pool: SqlitePool,
+    pool: PgPool,
 }
 
 impl PersistentTaskQueue {
     /// Create a new persistent queue and load pending tasks from database.
-    pub async fn new(pool: SqlitePool) -> Result<Self, QueueError> {
+    pub async fn new(pool: PgPool) -> Result<Self, QueueError> {
         let mut queue = Self {
             inner: TaskQueue::new(),
             pool,
@@ -330,9 +330,9 @@ impl PersistentTaskQueue {
             r#"
             UPDATE tasks
             SET status = 'pending',
-                priority = ?,
-                updated_at = ?
-            WHERE id = ?
+                priority = $1,
+                updated_at = $2
+            WHERE id = $3
             "#,
         )
         .bind(&priority_str)
@@ -346,7 +346,7 @@ impl PersistentTaskQueue {
         sqlx::query(
             r#"
             INSERT INTO task_events (id, task_id, event_type, details, timestamp)
-            VALUES (?, ?, 'requeued', ?, ?)
+            VALUES ($1, $2, 'requeued', $3, $4)
             "#,
         )
         .bind(Uuid::new_v4().to_string())
@@ -406,7 +406,7 @@ pub struct DependencyAwareQueue {
 
 impl DependencyAwareQueue {
     /// Create a new dependency-aware queue
-    pub async fn new(pool: SqlitePool) -> Result<Self, QueueError> {
+    pub async fn new(pool: PgPool) -> Result<Self, QueueError> {
         let queue = PersistentTaskQueue::new(pool.clone()).await?;
         let dependency_tracker = DependencyTracker::new(pool);
 
@@ -968,13 +968,9 @@ mod persistent_queue_tests {
     use crate::types::AgentTier;
     use tempfile::TempDir;
 
-    async fn setup_test_db() -> (SqlitePool, TempDir) {
-        let temp_dir = TempDir::new().unwrap();
-        let db_path = temp_dir.path().join("test.db");
-        let pool = crate::db::init_db_at(db_path.to_str().unwrap())
-            .await
-            .unwrap();
-        (pool, temp_dir)
+    async fn setup_test_db() -> PgPool {
+        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+        crate::db::init_db_with_url(&url).await.unwrap()
     }
 
     fn make_task(priority: Priority) -> Task {
@@ -997,7 +993,7 @@ mod persistent_queue_tests {
 
     #[tokio::test]
     async fn persistent_queue_loads_pending_tasks() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         // Insert a pending task
         let task = make_task(Priority::Normal);
@@ -1012,7 +1008,7 @@ mod persistent_queue_tests {
 
     #[tokio::test]
     async fn persistent_queue_ignores_non_pending() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         // Insert a completed task
         let mut task = make_task(Priority::Normal);
@@ -1028,7 +1024,7 @@ mod persistent_queue_tests {
 
     #[tokio::test]
     async fn dequeue_updates_status_to_in_progress() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let task = make_task(Priority::Normal);
         let task_id = task.id.clone();
@@ -1048,7 +1044,7 @@ mod persistent_queue_tests {
 
     #[tokio::test]
     async fn requeue_updates_priority_and_status() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let task = make_task(Priority::Normal);
         let task_id = task.id.clone();
@@ -1079,7 +1075,7 @@ mod persistent_queue_tests {
 
     #[tokio::test]
     async fn requeue_with_set_priority() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let task = make_task(Priority::Low);
         crate::db::insert_task(&pool, &task).await.unwrap();
@@ -1099,7 +1095,7 @@ mod persistent_queue_tests {
 
     #[tokio::test]
     async fn requeue_creates_event() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let task = make_task(Priority::Normal);
         let task_id = task.id.clone();
@@ -1114,7 +1110,7 @@ mod persistent_queue_tests {
 
         // Check event was created
         let event_count: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM task_events WHERE task_id = ? AND event_type = 'requeued'",
+            "SELECT COUNT(*) FROM task_events WHERE task_id = $1 AND event_type = 'requeued'",
         )
         .bind(task_id.0.to_string())
         .fetch_one(&pool)
@@ -1128,7 +1124,7 @@ mod persistent_queue_tests {
 
     #[tokio::test]
     async fn persistent_queue_dequeue_empty_returns_none() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let mut queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
         let result = queue.dequeue().await.unwrap();
@@ -1139,7 +1135,7 @@ mod persistent_queue_tests {
 
     #[tokio::test]
     async fn persistent_queue_enqueue_and_persist() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let task = make_task(Priority::High);
         let task_id = task.id.clone();
@@ -1163,7 +1159,7 @@ mod persistent_queue_tests {
 
     #[tokio::test]
     async fn persistent_queue_peek() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let mut queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
 
@@ -1184,7 +1180,7 @@ mod persistent_queue_tests {
 
     #[tokio::test]
     async fn persistent_queue_contains() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let task = make_task(Priority::Normal);
         let task_id = task.id.clone();
@@ -1199,7 +1195,7 @@ mod persistent_queue_tests {
 
     #[tokio::test]
     async fn persistent_queue_all_tasks() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let t1 = make_task(Priority::Low);
         let t2 = make_task(Priority::High);
@@ -1218,7 +1214,7 @@ mod persistent_queue_tests {
 
     #[tokio::test]
     async fn persistent_queue_count_by_priority() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let t1 = make_task(Priority::Normal);
         let t2 = make_task(Priority::Normal);
@@ -1237,7 +1233,7 @@ mod persistent_queue_tests {
 
     #[tokio::test]
     async fn persistent_queue_is_empty_and_len() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
         assert!(queue.is_empty());
@@ -1248,7 +1244,7 @@ mod persistent_queue_tests {
 
     #[tokio::test]
     async fn requeue_with_same_priority() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let task = make_task(Priority::High);
         crate::db::insert_task(&pool, &task).await.unwrap();
@@ -1268,7 +1264,7 @@ mod persistent_queue_tests {
 
     #[tokio::test]
     async fn persistent_queue_loads_multiple_pending() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         // Insert multiple pending tasks
         for p in [
@@ -1289,7 +1285,7 @@ mod persistent_queue_tests {
 
     #[tokio::test]
     async fn persistent_queue_dequeue_priority_order() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let low = make_task(Priority::Low);
         let urgent = make_task(Priority::Urgent);
