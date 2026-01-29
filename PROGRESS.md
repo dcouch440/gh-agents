@@ -228,20 +228,22 @@
 
 ---
 
-## Milestone 12: React Features - IN PROGRESS
+## Milestone 12: Terminal CLI (Ink) - NOT STARTED
 
-**Goal**: Core feature views - chat, feed, tasks, files.
+**Goal**: Claude Code-style terminal CLI using TypeScript + Ink. Chat-only scope.
 
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
-| 12.1 Chat View | done | 5/5 | ChatPage, ChatInput, Message, MarkdownContent, CodeBlock components. Refactored: flat turn layout, no bubbles/avatars, auto-grow input, wider content area |
-| 12.2 Feed View | done | 4/4 | FeedPage, FeedItem, useFeed with WS, auto-scroll + new events indicator. Refactored: tighter density, hover states, expand-on-click, removed redundant header |
-| 12.3 Tasks View | pending | 0/5 | |
-| 12.4 Agents View | pending | 0/4 | |
-| 12.5 File Browser & Editor | pending | 0/5 | |
-| 12.6 Diff Viewer | pending | 0/3 | |
+| 12.1 CLI Scaffolding | pending | 0/4 | Package setup, tsconfig, Ink app entry, directory structure |
+| 12.2 API Client | pending | 0/4 | HTTP fetch wrapper, types, API methods |
+| 12.3 Auth Flow | pending | 0/3 | Login prompt, token persistence, auth gate |
+| 12.4 Chat UI Components | pending | 0/5 | Message, MessageList, Input, useChat, ChatView |
+| 12.5 Streaming & SSE | pending | 0/3 | SSE client, streaming message, wire into chat |
+| 12.6 Polish & Integration | pending | 0/3 | Markdown rendering, error handling, Makefile |
 
-**Milestone Status:** In Progress (2/6 tickets done)
+**Milestone Status:** Not Started (0/6 tickets done)
+
+**Note:** Previous M12 (React Features) web UI work remains in `ui/` — chat and feed views are functional. This milestone adds a terminal-native CLI as the primary interface.
 
 ---
 
