@@ -383,124 +383,100 @@ impl RefactorChangeRow {
 mod tests {
     use super::*;
 
-    async fn setup_test_db() -> PgPool {
-        let database_url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://nexor:nexor@localhost:5432/nexor_test".to_string());
-        let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
-        sqlx::migrate!().run(&pool).await.unwrap();
-        // Clean tables for test isolation
-        sqlx::query("DELETE FROM refactor_changes")
-            .execute(&pool)
-            .await
-            .unwrap();
-        sqlx::query("DELETE FROM refactor_sessions")
-            .execute(&pool)
-            .await
-            .unwrap();
-        sqlx::query("DELETE FROM system_state WHERE key != 'production_mode'")
-            .execute(&pool)
-            .await
-            .unwrap();
-        // Reset production mode to default
-        sqlx::query("UPDATE system_state SET value = 'running' WHERE key = 'production_mode'")
-            .execute(&pool)
-            .await
-            .ok();
-        pool
-    }
+    use crate::db::test_utils::TestDb;
 
     #[tokio::test]
     async fn production_mode_default_is_running() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
-        let mode = get_production_mode(&pool).await.unwrap();
+        let mode = get_production_mode(&db.pool).await.unwrap();
         assert_eq!(mode, ProductionMode::Running);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn can_set_and_get_production_mode() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
-        set_production_mode(&pool, ProductionMode::RefactorMode)
+        set_production_mode(&db.pool, ProductionMode::RefactorMode)
             .await
             .unwrap();
-        let mode = get_production_mode(&pool).await.unwrap();
+        let mode = get_production_mode(&db.pool).await.unwrap();
         assert_eq!(mode, ProductionMode::RefactorMode);
 
-        set_production_mode(&pool, ProductionMode::Paused)
+        set_production_mode(&db.pool, ProductionMode::Paused)
             .await
             .unwrap();
-        let mode = get_production_mode(&pool).await.unwrap();
+        let mode = get_production_mode(&db.pool).await.unwrap();
         assert_eq!(mode, ProductionMode::Paused);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn can_insert_and_get_refactor_session() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         let session = RefactorSession::new();
-        insert_refactor_session(&pool, &session).await.unwrap();
+        insert_refactor_session(&db.pool, &session).await.unwrap();
 
-        let retrieved = get_refactor_session(&pool, &session.id).await.unwrap();
+        let retrieved = get_refactor_session(&db.pool, &session.id).await.unwrap();
         assert!(retrieved.is_some());
         let retrieved = retrieved.unwrap();
         assert_eq!(retrieved.id, session.id);
         assert!(retrieved.is_active());
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn can_get_active_refactor_session() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         // No active session initially
-        let active = get_active_refactor_session(&pool).await.unwrap();
+        let active = get_active_refactor_session(&db.pool).await.unwrap();
         assert!(active.is_none());
 
         // Create a session
         let session = RefactorSession::new();
-        insert_refactor_session(&pool, &session).await.unwrap();
+        insert_refactor_session(&db.pool, &session).await.unwrap();
 
         // Now there's an active session
-        let active = get_active_refactor_session(&pool).await.unwrap();
+        let active = get_active_refactor_session(&db.pool).await.unwrap();
         assert!(active.is_some());
         assert_eq!(active.unwrap().id, session.id);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn can_update_refactor_session() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         let mut session = RefactorSession::new();
-        insert_refactor_session(&pool, &session).await.unwrap();
+        insert_refactor_session(&db.pool, &session).await.unwrap();
 
         session.halt_production();
         session.end();
-        update_refactor_session(&pool, &session).await.unwrap();
+        update_refactor_session(&db.pool, &session).await.unwrap();
 
-        let retrieved = get_refactor_session(&pool, &session.id)
+        let retrieved = get_refactor_session(&db.pool, &session.id)
             .await
             .unwrap()
             .unwrap();
         assert!(retrieved.production_halted);
         assert!(!retrieved.is_active());
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn can_insert_and_get_refactor_change() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         let session = RefactorSession::new();
-        insert_refactor_session(&pool, &session).await.unwrap();
+        insert_refactor_session(&db.pool, &session).await.unwrap();
 
         let change = RefactorChange::create(
             session.id.clone(),
@@ -508,24 +484,24 @@ mod tests {
             "# Ticket 2.7\n\nNew ticket content".to_string(),
             "Adding new ticket for feature X".to_string(),
         );
-        insert_refactor_change(&pool, &change).await.unwrap();
+        insert_refactor_change(&db.pool, &change).await.unwrap();
 
-        let retrieved = get_refactor_change(&pool, &change.id).await.unwrap();
+        let retrieved = get_refactor_change(&db.pool, &change.id).await.unwrap();
         assert!(retrieved.is_some());
         let retrieved = retrieved.unwrap();
         assert_eq!(retrieved.file_path, "decomp/M2/2.7.md");
         assert_eq!(retrieved.change_type, ChangeType::Create);
         assert_eq!(retrieved.status, ChangeStatus::Proposed);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn can_list_changes_for_session() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         let session = RefactorSession::new();
-        insert_refactor_session(&pool, &session).await.unwrap();
+        insert_refactor_session(&db.pool, &session).await.unwrap();
 
         let change1 = RefactorChange::create(
             session.id.clone(),
@@ -541,21 +517,21 @@ mod tests {
             "reason2".to_string(),
         );
 
-        insert_refactor_change(&pool, &change1).await.unwrap();
-        insert_refactor_change(&pool, &change2).await.unwrap();
+        insert_refactor_change(&db.pool, &change1).await.unwrap();
+        insert_refactor_change(&db.pool, &change2).await.unwrap();
 
-        let changes = list_changes_for_session(&pool, &session.id).await.unwrap();
+        let changes = list_changes_for_session(&db.pool, &session.id).await.unwrap();
         assert_eq!(changes.len(), 2);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn can_update_change_status() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         let session = RefactorSession::new();
-        insert_refactor_session(&pool, &session).await.unwrap();
+        insert_refactor_session(&db.pool, &session).await.unwrap();
 
         let change = RefactorChange::create(
             session.id.clone(),
@@ -563,27 +539,27 @@ mod tests {
             "content".to_string(),
             "reason".to_string(),
         );
-        insert_refactor_change(&pool, &change).await.unwrap();
+        insert_refactor_change(&db.pool, &change).await.unwrap();
 
-        update_change_status(&pool, &change.id, ChangeStatus::Approved)
+        update_change_status(&db.pool, &change.id, ChangeStatus::Approved)
             .await
             .unwrap();
 
-        let retrieved = get_refactor_change(&pool, &change.id)
+        let retrieved = get_refactor_change(&db.pool, &change.id)
             .await
             .unwrap()
             .unwrap();
         assert_eq!(retrieved.status, ChangeStatus::Approved);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn can_list_changes_by_status() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         let session = RefactorSession::new();
-        insert_refactor_session(&pool, &session).await.unwrap();
+        insert_refactor_session(&db.pool, &session).await.unwrap();
 
         let change1 = RefactorChange::create(
             session.id.clone(),
@@ -598,39 +574,39 @@ mod tests {
             "reason2".to_string(),
         );
 
-        insert_refactor_change(&pool, &change1).await.unwrap();
-        insert_refactor_change(&pool, &change2).await.unwrap();
+        insert_refactor_change(&db.pool, &change1).await.unwrap();
+        insert_refactor_change(&db.pool, &change2).await.unwrap();
 
         // Both are proposed
-        let proposed = list_changes_by_status(&pool, ChangeStatus::Proposed)
+        let proposed = list_changes_by_status(&db.pool, ChangeStatus::Proposed)
             .await
             .unwrap();
         assert_eq!(proposed.len(), 2);
 
         // Approve one
-        update_change_status(&pool, &change1.id, ChangeStatus::Approved)
+        update_change_status(&db.pool, &change1.id, ChangeStatus::Approved)
             .await
             .unwrap();
 
-        let proposed = list_changes_by_status(&pool, ChangeStatus::Proposed)
+        let proposed = list_changes_by_status(&db.pool, ChangeStatus::Proposed)
             .await
             .unwrap();
         assert_eq!(proposed.len(), 1);
 
-        let approved = list_changes_by_status(&pool, ChangeStatus::Approved)
+        let approved = list_changes_by_status(&db.pool, ChangeStatus::Approved)
             .await
             .unwrap();
         assert_eq!(approved.len(), 1);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn session_includes_changes_when_fetched() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         let session = RefactorSession::new();
-        insert_refactor_session(&pool, &session).await.unwrap();
+        insert_refactor_session(&db.pool, &session).await.unwrap();
 
         let change = RefactorChange::create(
             session.id.clone(),
@@ -638,69 +614,69 @@ mod tests {
             "content".to_string(),
             "reason".to_string(),
         );
-        insert_refactor_change(&pool, &change).await.unwrap();
+        insert_refactor_change(&db.pool, &change).await.unwrap();
 
         // Fetch session and verify changes are included
-        let retrieved = get_refactor_session(&pool, &session.id)
+        let retrieved = get_refactor_session(&db.pool, &session.id)
             .await
             .unwrap()
             .unwrap();
         assert_eq!(retrieved.proposed_changes.len(), 1);
         assert_eq!(retrieved.proposed_changes[0].file_path, "test.md");
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn milestone_limit_default_is_none() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
-        let limit = get_milestone_limit(&pool).await.unwrap();
+        let limit = get_milestone_limit(&db.pool).await.unwrap();
         assert!(limit.is_none());
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn can_set_and_get_milestone_limit() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
-        set_milestone_limit(&pool, Some(3)).await.unwrap();
-        let limit = get_milestone_limit(&pool).await.unwrap();
+        set_milestone_limit(&db.pool, Some(3)).await.unwrap();
+        let limit = get_milestone_limit(&db.pool).await.unwrap();
         assert_eq!(limit, Some(3));
 
-        set_milestone_limit(&pool, Some(7)).await.unwrap();
-        let limit = get_milestone_limit(&pool).await.unwrap();
+        set_milestone_limit(&db.pool, Some(7)).await.unwrap();
+        let limit = get_milestone_limit(&db.pool).await.unwrap();
         assert_eq!(limit, Some(7));
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn can_clear_milestone_limit() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
-        set_milestone_limit(&pool, Some(5)).await.unwrap();
-        assert_eq!(get_milestone_limit(&pool).await.unwrap(), Some(5));
+        set_milestone_limit(&db.pool, Some(5)).await.unwrap();
+        assert_eq!(get_milestone_limit(&db.pool).await.unwrap(), Some(5));
 
-        set_milestone_limit(&pool, None).await.unwrap();
-        assert!(get_milestone_limit(&pool).await.unwrap().is_none());
+        set_milestone_limit(&db.pool, None).await.unwrap();
+        assert!(get_milestone_limit(&db.pool).await.unwrap().is_none());
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn milestone_limit_validates_range() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         // Valid range 1-9
-        assert!(set_milestone_limit(&pool, Some(1)).await.is_ok());
-        assert!(set_milestone_limit(&pool, Some(9)).await.is_ok());
+        assert!(set_milestone_limit(&db.pool, Some(1)).await.is_ok());
+        assert!(set_milestone_limit(&db.pool, Some(9)).await.is_ok());
 
         // Invalid: 0 and 10
-        assert!(set_milestone_limit(&pool, Some(0)).await.is_err());
-        assert!(set_milestone_limit(&pool, Some(10)).await.is_err());
+        assert!(set_milestone_limit(&db.pool, Some(0)).await.is_err());
+        assert!(set_milestone_limit(&db.pool, Some(10)).await.is_err());
 
-        pool.close().await;
+        db.cleanup().await;
     }
 }

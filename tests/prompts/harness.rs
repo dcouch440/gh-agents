@@ -73,6 +73,7 @@ impl PromptTestHarness {
     }
 
     /// Run a decomposition prompt test
+    #[allow(dead_code)]
     pub async fn test_decomposition(
         &self,
         fixture_name: &str,
@@ -132,6 +133,7 @@ pub struct TestFixture {
 
 /// Output captured from running a prompt
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct PromptOutput {
     pub response: String,
     pub input_tokens: u32,
@@ -142,6 +144,7 @@ pub struct PromptOutput {
 
 /// Result of a decomposition test
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct DecompositionTestResult {
     pub fixture_name: String,
     pub output: PromptOutput,

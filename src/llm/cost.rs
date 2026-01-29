@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use once_cell::sync::Lazy;
 use sqlx::PgPool;
 use tokio::sync::RwLock;
@@ -271,7 +271,7 @@ impl CostTracker {
         pool: &PgPool,
         record: &CostRecord,
     ) -> Result<(), CostTrackerError> {
-        let task_id_str = record.task_id.as_ref().map(|id| id.0.to_string());
+        let task_id = record.task_id.as_ref().map(|id| id.0);
         let tier_str = format!("{:?}", record.agent_tier);
 
         sqlx::query(
@@ -282,15 +282,15 @@ impl CostTracker {
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             "#,
         )
-        .bind(record.id.to_string())
-        .bind(task_id_str)
-        .bind(record.agent_id.0.to_string())
+        .bind(record.id)
+        .bind(task_id)
+        .bind(record.agent_id.0)
         .bind(tier_str)
         .bind(&record.model_id)
-        .bind(record.input_tokens as i64)
-        .bind(record.output_tokens as i64)
+        .bind(record.input_tokens as i32)
+        .bind(record.output_tokens as i32)
         .bind(record.cost_usd)
-        .bind(record.timestamp.to_rfc3339())
+        .bind(record.timestamp)
         .execute(pool)
         .await
         .map_err(|e| CostTrackerError::DatabaseError(e.to_string()))?;
@@ -334,7 +334,7 @@ impl CostTracker {
                 ORDER BY timestamp DESC
                 "#,
             )
-            .bind(since_time.to_rfc3339())
+            .bind(since_time)
             .fetch_all(pool)
             .await
             .map_err(|e| CostTrackerError::DatabaseError(e.to_string()))?
@@ -431,29 +431,21 @@ pub enum CostTrackerError {
 /// Database row for cost records
 #[derive(Debug, sqlx::FromRow)]
 struct CostRecordRow {
-    id: String,
-    task_id: Option<String>,
-    agent_id: String,
+    id: Uuid,
+    task_id: Option<Uuid>,
+    agent_id: Uuid,
     agent_tier: String,
     model_id: String,
-    input_tokens: i64,
-    output_tokens: i64,
+    input_tokens: i32,
+    output_tokens: i32,
     cost_usd: f64,
-    timestamp: String,
+    timestamp: DateTime<Utc>,
 }
 
 impl TryFrom<CostRecordRow> for CostRecord {
     type Error = String;
 
     fn try_from(row: CostRecordRow) -> Result<Self, Self::Error> {
-        let id = Uuid::parse_str(&row.id).map_err(|e| e.to_string())?;
-        let agent_id = AgentId(Uuid::parse_str(&row.agent_id).map_err(|e| e.to_string())?);
-        let task_id = row
-            .task_id
-            .map(|s| Uuid::parse_str(&s).map(TaskId))
-            .transpose()
-            .map_err(|e: uuid::Error| e.to_string())?;
-
         let agent_tier = match row.agent_tier.as_str() {
             "Orchestrator" => AgentTier::Orchestrator,
             "Worker" => AgentTier::Worker,
@@ -461,20 +453,16 @@ impl TryFrom<CostRecordRow> for CostRecord {
             _ => AgentTier::Worker,
         };
 
-        let timestamp = chrono::DateTime::parse_from_rfc3339(&row.timestamp)
-            .map_err(|e| e.to_string())?
-            .with_timezone(&Utc);
-
         Ok(CostRecord {
-            id,
-            task_id,
-            agent_id,
+            id: row.id,
+            task_id: row.task_id.map(TaskId),
+            agent_id: AgentId(row.agent_id),
             agent_tier,
             model_id: row.model_id,
             input_tokens: row.input_tokens as u32,
             output_tokens: row.output_tokens as u32,
             cost_usd: row.cost_usd,
-            timestamp,
+            timestamp: row.timestamp,
         })
     }
 }
@@ -660,12 +648,7 @@ mod summary_tests {
 #[cfg(test)]
 mod db_tests {
     use super::*;
-    use tempfile::TempDir;
-
-    async fn setup_test_db() -> PgPool {
-        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
-        crate::db::init_db_with_url(&url).await.unwrap()
-    }
+    use crate::db::test_utils::TestDb;
 
     async fn insert_agent(pool: &PgPool, agent_id: &AgentId) {
         sqlx::query("INSERT INTO agents (id, tier, persona_name, model_id) VALUES ($1, 'Worker', 'test', 'test-model')")
@@ -685,19 +668,20 @@ mod db_tests {
 
     #[tokio::test]
     async fn cost_tracker_new_with_db() {
-        let pool = setup_test_db().await;
-        let tracker = CostTracker::new(pool);
+        let db = TestDb::new().await;
+        let tracker = CostTracker::new(db.pool.clone());
         assert!(tracker.db_pool.is_some());
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn record_call_persists_to_db() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
         let task_id = TaskId::new();
         let agent_id = AgentId::new();
-        insert_agent(&pool, &agent_id).await;
-        insert_task(&pool, &task_id).await;
-        let tracker = CostTracker::new(pool);
+        insert_agent(&db.pool, &agent_id).await;
+        insert_task(&db.pool, &task_id).await;
+        let tracker = CostTracker::new(db.pool.clone());
 
         let record = tracker
             .record_call(
@@ -725,14 +709,15 @@ mod db_tests {
         let task_cost = tracker.cost_for_task(&task_id).await;
         assert!(task_cost > 0.0);
         assert!((task_cost - record.cost_usd).abs() < f64::EPSILON);
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn get_historical_summary_without_since() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
         let agent_id = AgentId::new();
-        insert_agent(&pool, &agent_id).await;
-        let tracker = CostTracker::new(pool);
+        insert_agent(&db.pool, &agent_id).await;
+        let tracker = CostTracker::new(db.pool.clone());
 
         tracker
             .record_call(
@@ -751,14 +736,15 @@ mod db_tests {
         let summary = tracker.get_historical_summary(None).await.unwrap();
         assert!(summary.session_total > 0.0);
         assert!(summary.by_model.contains_key("claude-3-haiku-20240307"));
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn get_historical_summary_with_since() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
         let agent_id = AgentId::new();
-        insert_agent(&pool, &agent_id).await;
-        let tracker = CostTracker::new(pool);
+        insert_agent(&db.pool, &agent_id).await;
+        let tracker = CostTracker::new(db.pool.clone());
 
         let before = Utc::now();
 
@@ -784,13 +770,14 @@ mod db_tests {
         let future = Utc::now() + chrono::Duration::hours(1);
         let summary_empty = tracker.get_historical_summary(Some(future)).await.unwrap();
         assert_eq!(summary_empty.session_total, 0.0);
+        db.cleanup().await;
     }
 
     #[test]
     fn cost_record_row_try_from_various_tiers() {
         let id = Uuid::new_v4();
         let agent_id = Uuid::new_v4();
-        let now = Utc::now().to_rfc3339();
+        let now = Utc::now();
 
         for (tier_str, expected) in [
             ("Orchestrator", AgentTier::Orchestrator),
@@ -799,15 +786,15 @@ mod db_tests {
             ("UnknownTier", AgentTier::Worker), // fallback
         ] {
             let row = CostRecordRow {
-                id: id.to_string(),
+                id,
                 task_id: None,
-                agent_id: agent_id.to_string(),
+                agent_id,
                 agent_tier: tier_str.to_string(),
                 model_id: "claude-3-haiku".to_string(),
                 input_tokens: 100,
                 output_tokens: 50,
                 cost_usd: 0.001,
-                timestamp: now.clone(),
+                timestamp: now,
             };
 
             let record: CostRecord = row.try_into().unwrap();
@@ -818,15 +805,15 @@ mod db_tests {
     #[test]
     fn cost_record_row_try_from_with_task_id() {
         let row = CostRecordRow {
-            id: Uuid::new_v4().to_string(),
-            task_id: Some(Uuid::new_v4().to_string()),
-            agent_id: Uuid::new_v4().to_string(),
+            id: Uuid::new_v4(),
+            task_id: Some(Uuid::new_v4()),
+            agent_id: Uuid::new_v4(),
             agent_tier: "Worker".to_string(),
             model_id: "claude-3-haiku".to_string(),
             input_tokens: 100,
             output_tokens: 50,
             cost_usd: 0.001,
-            timestamp: Utc::now().to_rfc3339(),
+            timestamp: Utc::now(),
         };
 
         let record: CostRecord = row.try_into().unwrap();

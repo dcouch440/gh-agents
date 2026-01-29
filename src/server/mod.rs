@@ -192,22 +192,23 @@ mod tests {
         body::Body,
         http::{Request, StatusCode},
     };
+    use crate::db::test_utils::TestDb;
     use tempfile::TempDir;
     use tower::util::ServiceExt;
 
-    async fn setup_test_app() -> Router {
-        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
-        let db = crate::db::init_db_with_url(&url).await.unwrap();
-        let scheduler = Scheduler::new(db.clone()).await.unwrap();
+    async fn setup_test_app() -> (Router, TestDb) {
+        let db = TestDb::new().await;
+        let pool = db.pool.clone();
+        let scheduler = Scheduler::new(pool.clone()).await.unwrap();
         let scheduler = Arc::new(RwLock::new(scheduler));
         let config = AppConfig::default();
-        let state = AppState::new(db, scheduler, config);
-        create_router(state)
+        let state = AppState::new(pool, scheduler, config);
+        (create_router(state), db)
     }
 
     #[tokio::test]
     async fn health_endpoint_returns_json() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -220,11 +221,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn tasks_endpoint_returns_list() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -237,11 +239,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn agents_endpoint_returns_stats() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -254,11 +257,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn config_endpoint_returns_config() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -271,11 +275,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn unknown_task_returns_404() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -288,13 +293,14 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        _db.cleanup().await;
     }
 
     // Chat endpoint tests
 
     #[tokio::test]
     async fn chat_endpoint_accepts_message() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -309,11 +315,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::ACCEPTED);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn chat_endpoint_rejects_empty_message() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -328,11 +335,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn chat_history_returns_empty_list() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -345,11 +353,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn clear_chat_history_returns_no_content() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -363,11 +372,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        _db.cleanup().await;
     }
 
     // Static file serving tests (Ticket 10.6)
 
-    async fn setup_test_app_with_static_dir() -> (Router, TempDir) {
+    async fn setup_test_app_with_static_dir() -> (Router, TempDir, TestDb) {
         let temp_dir = TempDir::new().unwrap();
 
         // Create static directory structure
@@ -396,22 +406,22 @@ mod tests {
         )
         .unwrap();
 
-        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
-        let db = crate::db::init_db_with_url(&url).await.unwrap();
-        let scheduler = Scheduler::new(db.clone()).await.unwrap();
+        let db = TestDb::new().await;
+        let pool = db.pool.clone();
+        let scheduler = Scheduler::new(pool.clone()).await.unwrap();
         let scheduler = Arc::new(RwLock::new(scheduler));
         let config = AppConfig::default();
-        let state = AppState::new(db, scheduler, config);
+        let state = AppState::new(pool, scheduler, config);
 
         // Use the test-specific router function to avoid env var race conditions
         let router = create_router_with_static_dir(state, static_dir.to_str().unwrap());
 
-        (router, temp_dir)
+        (router, temp_dir, db)
     }
 
     #[tokio::test]
     async fn static_index_html_served_at_root() {
-        let (app, _temp_dir) = setup_test_app_with_static_dir().await;
+        let (app, _temp_dir, _db) = setup_test_app_with_static_dir().await;
 
         let response = app
             .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
@@ -427,11 +437,12 @@ mod tests {
             cache_control.unwrap(),
             "no-cache, no-store, must-revalidate"
         );
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn static_css_asset_served_with_long_cache() {
-        let (app, _temp_dir) = setup_test_app_with_static_dir().await;
+        let (app, _temp_dir, _db) = setup_test_app_with_static_dir().await;
 
         let response = app
             .oneshot(
@@ -452,11 +463,12 @@ mod tests {
             cache_control.unwrap(),
             "public, max-age=31536000, immutable"
         );
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn static_js_asset_served_with_long_cache() {
-        let (app, _temp_dir) = setup_test_app_with_static_dir().await;
+        let (app, _temp_dir, _db) = setup_test_app_with_static_dir().await;
 
         let response = app
             .oneshot(
@@ -477,11 +489,12 @@ mod tests {
             cache_control.unwrap(),
             "public, max-age=31536000, immutable"
         );
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn spa_route_falls_back_to_index_html() {
-        let (app, _temp_dir) = setup_test_app_with_static_dir().await;
+        let (app, _temp_dir, _db) = setup_test_app_with_static_dir().await;
 
         // Request a SPA route that doesn't exist as a file
         let response = app
@@ -497,11 +510,12 @@ mod tests {
             "Expected OK or NOT_FOUND, got: {:?}",
             status
         );
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn api_routes_not_affected_by_static_fallback() {
-        let (app, _temp_dir) = setup_test_app_with_static_dir().await;
+        let (app, _temp_dir, _db) = setup_test_app_with_static_dir().await;
 
         // API routes should still work
         let response = app
@@ -515,11 +529,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn nested_spa_route_falls_back_to_index_html() {
-        let (app, _temp_dir) = setup_test_app_with_static_dir().await;
+        let (app, _temp_dir, _db) = setup_test_app_with_static_dir().await;
 
         // Request a nested SPA route
         let response = app
@@ -540,5 +555,6 @@ mod tests {
             "Expected OK or NOT_FOUND, got: {:?}",
             status
         );
+        _db.cleanup().await;
     }
 }

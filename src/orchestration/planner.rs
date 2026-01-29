@@ -378,12 +378,12 @@ impl<P: LLMProvider> Planner<P> {
                 VALUES ($1, $2, $3, $4, $5, $6)
                 "#,
             )
-            .bind(slice.id.0.to_string())
-            .bind(slice.ticket_id.to_string())
+            .bind(slice.id.0)
+            .bind(slice.ticket_id)
             .bind(&slice.title)
             .bind(&slice.description)
             .bind("pending")
-            .bind(slice.created_at.to_rfc3339())
+            .bind(slice.created_at)
             .execute(&mut *tx)
             .await
             .map_err(|e| DecompositionError::DatabaseError(e.to_string()))?;
@@ -391,7 +391,7 @@ impl<P: LLMProvider> Planner<P> {
 
         // Insert tasks
         for task in &output.tasks {
-            let slice_id = task.slice_id.as_ref().map(|s| s.0.to_string());
+            let slice_id = task.slice_id.as_ref().map(|s| s.0);
 
             sqlx::query(
                 r#"
@@ -399,15 +399,15 @@ impl<P: LLMProvider> Planner<P> {
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 "#,
             )
-            .bind(task.id.0.to_string())
+            .bind(task.id.0)
             .bind(slice_id)
             .bind(&task.title)
             .bind(&task.description)
             .bind(format!("{:?}", task.assigned_tier))
             .bind("pending")
             .bind(format!("{:?}", task.priority))
-            .bind(task.created_at.to_rfc3339())
-            .bind(task.updated_at.to_rfc3339())
+            .bind(task.created_at)
+            .bind(task.updated_at)
             .execute(&mut *tx)
             .await
             .map_err(|e| DecompositionError::DatabaseError(e.to_string()))?;
@@ -1046,19 +1046,19 @@ mod tests {
         // Just verify with_db sets the pool
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
-            let pool = crate::db::init_db_with_url(&url).await.unwrap();
+            let db = crate::db::test_utils::TestDb::new().await;
 
             let provider = Arc::new(MockProvider::with_response(""));
-            let planner = Planner::with_db(provider, pool, PlannerConfig::default());
+            let planner = Planner::with_db(provider, db.pool.clone(), PlannerConfig::default());
             assert!(planner.pool.is_some());
+
+            db.cleanup().await;
         });
     }
 
     #[tokio::test]
     async fn test_decompose_and_save_with_db() {
-        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
-        let pool = crate::db::init_db_with_url(&url).await.unwrap();
+        let db = crate::db::test_utils::TestDb::new().await;
 
         let ticket = create_test_ticket();
 
@@ -1072,18 +1072,20 @@ mod tests {
         .bind(&ticket.description)
         .bind("new")
         .bind(ticket.created_at.to_rfc3339())
-        .execute(&pool)
+        .execute(&db.pool)
         .await
         .unwrap();
 
         let provider = Arc::new(MockProvider::with_response(valid_decomposition_json()));
-        let planner = Planner::with_db(provider, pool, PlannerConfig::default());
+        let planner = Planner::with_db(provider, db.pool.clone(), PlannerConfig::default());
 
         let result = planner.decompose_and_save(&ticket).await;
         if let Err(ref e) = result {
             panic!("decompose_and_save failed: {}", e);
         }
         assert!(result.is_ok());
+
+        db.cleanup().await;
     }
 
     #[test]

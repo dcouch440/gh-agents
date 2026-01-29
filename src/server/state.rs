@@ -167,13 +167,13 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
+    use crate::db::test_utils::TestDb;
 
-    async fn make_state() -> AppState {
-        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
-        let pool = crate::db::init_db_with_url(&url).await.unwrap();
+    async fn make_state() -> (AppState, TestDb) {
+        let db = TestDb::new().await;
+        let pool = db.pool.clone();
         let scheduler = Scheduler::new(pool.clone()).await.unwrap();
-        AppState::new(pool, Arc::new(RwLock::new(scheduler)), AppConfig::default())
+        (AppState::new(pool, Arc::new(RwLock::new(scheduler)), AppConfig::default()), db)
     }
 
     #[test]
@@ -204,31 +204,35 @@ mod tests {
 
     #[tokio::test]
     async fn app_state_new_creates_valid_state() {
-        let state = make_state().await;
+        let (state, _db) = make_state().await;
         assert_eq!(state.jwt_secret.len(), 32);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn subscribe_feed_returns_receiver() {
-        let state = make_state().await;
+        let (state, _db) = make_state().await;
         let _rx = state.subscribe_feed();
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn subscribe_tasks_returns_receiver() {
-        let state = make_state().await;
+        let (state, _db) = make_state().await;
         let _rx = state.subscribe_tasks();
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn subscribe_agents_returns_receiver() {
-        let state = make_state().await;
+        let (state, _db) = make_state().await;
         let _rx = state.subscribe_agents();
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn broadcast_feed_no_panic() {
-        let state = make_state().await;
+        let (state, _db) = make_state().await;
         state.broadcast_feed(FeedUpdate {
             id: Uuid::new_v4(),
             agent_id: "a".into(),
@@ -236,71 +240,79 @@ mod tests {
             item_type: "info".into(),
             timestamp: Utc::now(),
         });
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn broadcast_task_no_panic() {
-        let state = make_state().await;
+        let (state, _db) = make_state().await;
         state.broadcast_task(TaskUpdate {
             id: Uuid::new_v4(),
             status: "pending".into(),
             progress: None,
             assigned_agent: None,
         });
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn broadcast_agent_no_panic() {
-        let state = make_state().await;
+        let (state, _db) = make_state().await;
         state.broadcast_agent(AgentUpdate {
             id: "agent-1".into(),
             status: "idle".into(),
             current_task: None,
         });
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn get_response_stream_creates_new() {
-        let state = make_state().await;
+        let (state, _db) = make_state().await;
         let msg_id = Uuid::new_v4();
         let _rx = state.get_response_stream(msg_id).await;
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn get_response_stream_returns_existing() {
-        let state = make_state().await;
+        let (state, _db) = make_state().await;
         let msg_id = Uuid::new_v4();
         let _rx1 = state.get_response_stream(msg_id).await;
         let _rx2 = state.get_response_stream(msg_id).await;
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn send_stream_chunk_no_stream() {
-        let state = make_state().await;
+        let (state, _db) = make_state().await;
         let result = state
             .send_stream_chunk(Uuid::new_v4(), StreamChunk::Token("hi".into()))
             .await;
         assert!(!result);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn send_stream_chunk_with_stream() {
-        let state = make_state().await;
+        let (state, _db) = make_state().await;
         let msg_id = Uuid::new_v4();
         let _rx = state.get_response_stream(msg_id).await;
         let result = state
             .send_stream_chunk(msg_id, StreamChunk::Token("hi".into()))
             .await;
         assert!(result);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn remove_response_stream() {
-        let state = make_state().await;
+        let (state, _db) = make_state().await;
         let msg_id = Uuid::new_v4();
         let _rx = state.get_response_stream(msg_id).await;
         state.remove_response_stream(msg_id).await;
         let result = state.send_stream_chunk(msg_id, StreamChunk::Done).await;
         assert!(!result);
+        _db.cleanup().await;
     }
 }
