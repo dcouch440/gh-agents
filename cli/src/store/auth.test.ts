@@ -47,6 +47,17 @@ describe('auth store', () => {
       setToken('my-jwt-token', -1);
       expect(isTokenExpired()).toBe(true);
     });
+
+    it('returns true for a token with zero expiresIn', () => {
+      setToken('my-jwt-token', 0);
+      expect(isTokenExpired()).toBe(true);
+    });
+
+    it('clearToken makes isTokenExpired return true', () => {
+      setToken('my-jwt-token', 3600);
+      clearToken();
+      expect(isTokenExpired()).toBe(true);
+    });
   });
 
   describe('getServerUrl / setServerUrl', () => {

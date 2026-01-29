@@ -3,16 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render } from 'ink-testing-library';
 import { Login } from './Login.js';
 
-vi.mock('../api/client.js', () => ({
-  api: {
-    auth: {
-      login: vi.fn(),
-    },
-  },
-}));
-
-vi.mock('../store/auth.js', () => ({
-  setToken: vi.fn(),
+vi.mock('./loginHandler.js', () => ({
+  handleLogin: vi.fn(),
 }));
 
 beforeEach(() => {
