@@ -27,6 +27,10 @@ vi.mock('./components/Login.js', () => ({
   },
 }));
 
+vi.mock('./components/ChatView.js', () => ({
+  ChatView: () => React.createElement('ink-text', null, 'MockChatView'),
+}));
+
 import { api, setBaseUrl, setToken as setApiToken } from './api/client.js';
 import {
   getToken,
@@ -82,7 +86,7 @@ describe('App', () => {
     const { lastFrame } = render(<App />);
 
     await vi.waitFor(() => {
-      expect(lastFrame()).toContain('Authenticated');
+      expect(lastFrame()).toContain('MockChatView');
     });
     expect(setApiToken).toHaveBeenCalledWith('valid-token');
   });
@@ -154,6 +158,9 @@ describe('App', () => {
       setBaseUrl: vi.fn(),
       setToken: vi.fn(),
     }));
+    vi.doMock('./components/ChatView.js', () => ({
+      ChatView: () => React.createElement('ink-text', null, 'MockChatView'),
+    }));
 
     const { App: FreshApp } = await import('./App.js');
     const { setToken: freshSetApiToken } = await import('./api/client.js');
@@ -161,7 +168,7 @@ describe('App', () => {
     const { lastFrame } = render(React.createElement(FreshApp));
 
     await vi.waitFor(() => {
-      expect(lastFrame()).toContain('Authenticated');
+      expect(lastFrame()).toContain('MockChatView');
     });
     expect(freshSetApiToken).toHaveBeenCalledWith('new-token');
   });
