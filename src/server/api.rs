@@ -684,8 +684,9 @@ mod tests {
         let db = crate::db::init_db_at(db_path.to_str().unwrap())
             .await
             .unwrap();
-        let scheduler =
-            crate::orchestration::Scheduler::new(db.clone()).await.unwrap();
+        let scheduler = crate::orchestration::Scheduler::new(db.clone())
+            .await
+            .unwrap();
         let scheduler = Arc::new(RwLock::new(scheduler));
         let config = crate::types::AppConfig::default();
         let state = AppState::new(db, scheduler, config);
@@ -844,9 +845,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/tasks")
                     .header("content-type", "application/json")
-                    .body(Body::from(
-                        r#"{"title":"Tier test","tier":"orchestrator"}"#,
-                    ))
+                    .body(Body::from(r#"{"title":"Tier test","tier":"orchestrator"}"#))
                     .unwrap(),
             )
             .await
@@ -944,9 +943,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/tasks")
                     .header("content-type", "application/json")
-                    .body(Body::from(
-                        r#"{"title":"Low prio","priority":"low"}"#,
-                    ))
+                    .body(Body::from(r#"{"title":"Low prio","priority":"low"}"#))
                     .unwrap(),
             )
             .await
@@ -970,9 +967,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/tasks")
                     .header("content-type", "application/json")
-                    .body(Body::from(
-                        r#"{"title":"Urgent","priority":"urgent"}"#,
-                    ))
+                    .body(Body::from(r#"{"title":"Urgent","priority":"urgent"}"#))
                     .unwrap(),
             )
             .await
@@ -1102,7 +1097,6 @@ mod tests {
         // Both are acceptable for a non-existent task.
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
-
 
     // === list_tasks with filters ===
 
@@ -1608,8 +1602,7 @@ mod tests {
 
     #[test]
     fn create_task_request_all_fields() {
-        let json =
-            r#"{"title":"T","description":"D","priority":"low","tier":"orchestrator"}"#;
+        let json = r#"{"title":"T","description":"D","priority":"low","tier":"orchestrator"}"#;
         let request: CreateTaskRequest = serde_json::from_str(json).unwrap();
         assert_eq!(request.title, "T");
         assert_eq!(request.description, Some("D".to_string()));

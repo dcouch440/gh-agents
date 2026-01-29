@@ -750,7 +750,10 @@ mod tests {
     fn role_category_display_names() {
         assert_eq!(RoleCategory::Analysis.display_name(), "Analysis");
         assert_eq!(RoleCategory::Planning.display_name(), "Planning");
-        assert_eq!(RoleCategory::Implementation.display_name(), "Implementation");
+        assert_eq!(
+            RoleCategory::Implementation.display_name(),
+            "Implementation"
+        );
         assert_eq!(RoleCategory::Communication.display_name(), "Communication");
     }
 
@@ -925,9 +928,15 @@ mod tests {
     #[tokio::test]
     async fn role_manager_default_role_for_tier() {
         let manager = RoleManager::new(PathBuf::from("."));
-        assert!(manager.default_role_for_tier(crate::types::AgentTier::Orchestrator).is_some());
-        assert!(manager.default_role_for_tier(crate::types::AgentTier::Worker).is_some());
-        assert!(manager.default_role_for_tier(crate::types::AgentTier::Utility).is_some());
+        assert!(manager
+            .default_role_for_tier(crate::types::AgentTier::Orchestrator)
+            .is_some());
+        assert!(manager
+            .default_role_for_tier(crate::types::AgentTier::Worker)
+            .is_some());
+        assert!(manager
+            .default_role_for_tier(crate::types::AgentTier::Utility)
+            .is_some());
     }
 
     #[tokio::test]
@@ -943,7 +952,9 @@ mod tests {
 
         let dir = tempdir().unwrap();
         let conv_path = dir.path().join("CONVENTIONS.md");
-        fs::write(&conv_path, "# Conventions\nTest content").await.unwrap();
+        fs::write(&conv_path, "# Conventions\nTest content")
+            .await
+            .unwrap();
 
         let manager = RoleManager::new(dir.path().to_path_buf());
         let role = Role {

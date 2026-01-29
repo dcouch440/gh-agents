@@ -1653,16 +1653,36 @@ their version
     fn setup_test_repo() -> (TempDir, PathBuf) {
         let temp_dir = TempDir::new().unwrap();
         let repo_path = temp_dir.path().to_path_buf();
-        Command::new("git").args(["init"]).current_dir(&repo_path).output().unwrap();
-        Command::new("git").args(["config", "user.email", "test@test.com"]).current_dir(&repo_path).output().unwrap();
-        Command::new("git").args(["config", "user.name", "Test"]).current_dir(&repo_path).output().unwrap();
+        Command::new("git")
+            .args(["init"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["config", "user.email", "test@test.com"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["config", "user.name", "Test"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
         (temp_dir, repo_path)
     }
 
     fn make_initial_commit(repo_path: &Path) {
         std::fs::write(repo_path.join("init.txt"), "init").unwrap();
-        Command::new("git").args(["add", "."]).current_dir(repo_path).output().unwrap();
-        Command::new("git").args(["commit", "-m", "initial"]).current_dir(repo_path).output().unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
     }
 
     #[test]
@@ -1786,14 +1806,22 @@ their version
         let git = GitOps::new(ExecutionContext::new(repo_path.clone()));
 
         // Get first commit hash
-        let first = git.run_git(&["rev-parse", "HEAD"]).unwrap().trim().to_string();
+        let first = git
+            .run_git(&["rev-parse", "HEAD"])
+            .unwrap()
+            .trim()
+            .to_string();
 
         // Make second commit
         std::fs::write(repo_path.join("new.txt"), "new").unwrap();
         git.add_all().unwrap();
         git.commit("add new file").unwrap();
 
-        let second = git.run_git(&["rev-parse", "HEAD"]).unwrap().trim().to_string();
+        let second = git
+            .run_git(&["rev-parse", "HEAD"])
+            .unwrap()
+            .trim()
+            .to_string();
 
         let files = git.diff_files(&first, &second).unwrap();
         assert!(files.contains(&"new.txt".to_string()));
@@ -1837,7 +1865,10 @@ their version
         let status = git.status().unwrap();
         // File should be staged after soft reset
         assert!(!status.staged.is_empty());
-        assert!(status.staged.iter().any(|f| f.path == PathBuf::from("second.txt")));
+        assert!(status
+            .staged
+            .iter()
+            .any(|f| f.path == PathBuf::from("second.txt")));
     }
 
     #[test]
@@ -1940,5 +1971,759 @@ their version
         assert!(git.validate_branch_name("has@{ref").is_err());
         assert!(git.validate_branch_name("has[bracket").is_err());
         assert!(git.validate_branch_name("ok-name").is_ok());
+    }
+
+    #[test]
+    fn status_with_staged_and_unstaged_changes() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        // Modify tracked file and stage it
+        std::fs::write(repo_path.join("init.txt"), "modified").unwrap();
+        Command::new("git")
+            .args(["add", "init.txt"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        // Modify it again so there are both staged and unstaged changes
+        std::fs::write(repo_path.join("init.txt"), "modified again").unwrap();
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let status = git.status().unwrap();
+
+        assert!(status.is_dirty);
+        assert!(!status.staged.is_empty());
+        assert!(!status.unstaged.is_empty());
+        assert_eq!(status.staged[0].change_type, ChangeType::Modified);
+        assert_eq!(status.unstaged[0].change_type, ChangeType::Modified);
+    }
+
+    #[test]
+    fn status_with_deleted_file() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        // Delete the tracked file and stage the deletion
+        std::fs::remove_file(repo_path.join("init.txt")).unwrap();
+        Command::new("git")
+            .args(["add", "init.txt"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let status = git.status().unwrap();
+
+        assert!(status.is_dirty);
+        assert_eq!(status.staged.len(), 1);
+        assert_eq!(status.staged[0].change_type, ChangeType::Deleted);
+    }
+
+    #[test]
+    fn status_branch_name_populated() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let status = git.status().unwrap();
+        assert!(status.branch.is_some());
+    }
+
+    #[test]
+    fn checkout_branch_switches() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        git.create_branch("other").unwrap();
+        git.checkout_branch("other").unwrap();
+
+        assert_eq!(git.current_branch().unwrap(), Some("other".to_string()));
+    }
+
+    #[test]
+    fn checkout_branch_invalid_name() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let result = git.checkout_branch("-bad");
+        assert!(matches!(result, Err(GitError::NotAllowed { .. })));
+    }
+
+    #[test]
+    fn create_branch_invalid_name() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let result = git.create_branch("has space");
+        assert!(matches!(result, Err(GitError::NotAllowed { .. })));
+    }
+
+    #[test]
+    fn create_and_checkout_branch_invalid_name() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let result = git.create_and_checkout_branch("has space");
+        assert!(matches!(result, Err(GitError::NotAllowed { .. })));
+    }
+
+    #[test]
+    fn diff_with_options_base_commit() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path.clone()));
+        let first = git
+            .run_git(&["rev-parse", "HEAD"])
+            .unwrap()
+            .trim()
+            .to_string();
+
+        std::fs::write(repo_path.join("new.txt"), "new").unwrap();
+        git.add_all().unwrap();
+        git.commit("second").unwrap();
+
+        let diff = git
+            .diff_with_options(DiffOptions {
+                base_commit: Some(first),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(diff.contains("new.txt"));
+    }
+
+    #[test]
+    fn diff_with_options_paths_filter() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        std::fs::write(repo_path.join("init.txt"), "changed").unwrap();
+        std::fs::write(repo_path.join("other.txt"), "other").unwrap();
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        git.add_all().unwrap();
+
+        let diff = git
+            .diff_with_options(DiffOptions {
+                staged: true,
+                paths: vec!["init.txt".to_string()],
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(diff.contains("init.txt"));
+    }
+
+    #[test]
+    fn diff_commit_shows_changes() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path.clone()));
+
+        std::fs::write(repo_path.join("another.txt"), "data").unwrap();
+        git.add_all().unwrap();
+        git.commit("add another").unwrap();
+
+        let hash = git
+            .run_git(&["rev-parse", "HEAD"])
+            .unwrap()
+            .trim()
+            .to_string();
+        let diff = git.diff_commit(&hash).unwrap();
+        assert!(diff.contains("another.txt"));
+    }
+
+    #[test]
+    fn commit_message_validation_accepts_valid() {
+        let (_tmp, repo_path) = setup_test_repo();
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+
+        assert!(git.validate_commit_message("feat: add feature").is_ok());
+    }
+
+    #[test]
+    fn commit_message_long_first_line_still_valid() {
+        let (_tmp, repo_path) = setup_test_repo();
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+
+        let long_msg = "a".repeat(120);
+        // Should still succeed (just a warning, not an error)
+        assert!(git.validate_commit_message(&long_msg).is_ok());
+    }
+
+    #[test]
+    fn not_a_repo_various_operations() {
+        let tmp = TempDir::new().unwrap();
+        let git = GitOps::new(ExecutionContext::new(tmp.path().to_path_buf()));
+
+        assert!(matches!(
+            git.current_branch(),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(
+            git.list_branches(),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(
+            git.create_branch("x"),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(
+            git.create_and_checkout_branch("x"),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(
+            git.checkout_branch("x"),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(
+            git.delete_branch("x"),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(
+            git.add_files(&["x"]),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(git.add_all(), Err(GitError::NotARepo { .. })));
+        assert!(matches!(git.commit("msg"), Err(GitError::NotARepo { .. })));
+        assert!(matches!(
+            git.amend_commit(None),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(git.diff(), Err(GitError::NotARepo { .. })));
+        assert!(matches!(git.diff_staged(), Err(GitError::NotARepo { .. })));
+        assert!(matches!(
+            git.diff_commit("HEAD"),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(
+            git.diff_files("a", "b"),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(git.diff_stat(), Err(GitError::NotARepo { .. })));
+        assert!(matches!(git.push(), Err(GitError::NotARepo { .. })));
+        assert!(matches!(git.pull(), Err(GitError::NotARepo { .. })));
+        assert!(matches!(
+            git.fetch("origin"),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(
+            git.fetch_remote("origin"),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(
+            git.fetch_refspec("origin", "main"),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(
+            git.fetch_pr("origin", 1),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(git.merge("main"), Err(GitError::NotARepo { .. })));
+        assert!(matches!(
+            git.get_conflicting_files(),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(git.is_merging(), Err(GitError::NotARepo { .. })));
+        assert!(matches!(
+            git.get_conflict_info(Path::new("x")),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(
+            git.resolve_conflict(Path::new("x"), ConflictResolution::Ours),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(
+            git.resolve_all_conflicts(ConflictResolution::Ours),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(
+            git.resolve_conflict_manual(Path::new("x"), "c"),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(
+            git.mark_resolved(Path::new("x")),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(
+            git.all_conflicts_resolved(),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(
+            git.complete_merge(),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(git.abort_merge(), Err(GitError::NotARepo { .. })));
+        assert!(matches!(
+            git.reset_hard("HEAD", true),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(
+            git.clean_working_tree(true),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(
+            git.reset_soft("HEAD"),
+            Err(GitError::NotARepo { .. })
+        ));
+        assert!(matches!(git.reset("HEAD"), Err(GitError::NotARepo { .. })));
+        assert!(matches!(
+            git.has_unpushed_commits(),
+            Err(GitError::NotARepo { .. })
+        ));
+    }
+
+    #[test]
+    fn merge_result_methods() {
+        let success = MergeResult::Success {
+            merge_commit: None,
+            fast_forward: true,
+        };
+        assert!(success.is_success());
+        assert!(!success.has_conflicts());
+
+        let conflict = MergeResult::Conflict {
+            conflicting_files: vec![],
+        };
+        assert!(!conflict.is_success());
+        assert!(conflict.has_conflicts());
+
+        let failed = MergeResult::Failed {
+            reason: "bad".to_string(),
+        };
+        assert!(!failed.is_success());
+        assert!(!failed.has_conflicts());
+    }
+
+    #[test]
+    fn is_merging_false_normally() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        assert!(!git.is_merging().unwrap());
+    }
+
+    #[test]
+    fn complete_merge_fails_when_not_merging() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let result = git.complete_merge();
+        assert!(matches!(result, Err(GitError::NotAllowed { .. })));
+    }
+
+    #[test]
+    fn abort_merge_fails_when_not_merging() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let result = git.abort_merge();
+        assert!(matches!(result, Err(GitError::NotAllowed { .. })));
+    }
+
+    #[test]
+    fn resolve_conflict_theirs() {
+        let tmp = TempDir::new().unwrap();
+        init_git_repo(&tmp);
+        create_conflicting_branches(&tmp);
+
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let git = GitOps::new(ctx);
+
+        let result = git.merge("feature").unwrap();
+        assert!(result.has_conflicts());
+
+        git.resolve_conflict(Path::new("file.txt"), ConflictResolution::Theirs)
+            .unwrap();
+        assert!(git.all_conflicts_resolved().unwrap());
+
+        let commit = git.complete_merge().unwrap();
+        assert!(!commit.hash.is_empty());
+
+        // Verify theirs content won
+        let content = std::fs::read_to_string(tmp.path().join("file.txt")).unwrap();
+        assert_eq!(content, "feature content");
+    }
+
+    #[test]
+    fn resolve_all_conflicts_returns_count() {
+        let tmp = TempDir::new().unwrap();
+        init_git_repo(&tmp);
+
+        // Create initial commit with two files
+        std::fs::write(tmp.path().join("a.txt"), "main a").unwrap();
+        std::fs::write(tmp.path().join("b.txt"), "main b").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "init"])
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+
+        let default_branch = get_default_branch(&tmp);
+
+        // Feature branch modifies both
+        Command::new("git")
+            .args(["checkout", "-b", "feat"])
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+        std::fs::write(tmp.path().join("a.txt"), "feat a").unwrap();
+        std::fs::write(tmp.path().join("b.txt"), "feat b").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "feat"])
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+
+        // Main branch modifies both differently
+        Command::new("git")
+            .args(["checkout", &default_branch])
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+        std::fs::write(tmp.path().join("a.txt"), "main a v2").unwrap();
+        std::fs::write(tmp.path().join("b.txt"), "main b v2").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "main v2"])
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+
+        let git = GitOps::new(ExecutionContext::new(tmp.path().to_path_buf()));
+        let result = git.merge("feat").unwrap();
+        assert!(result.has_conflicts());
+
+        let count = git.resolve_all_conflicts(ConflictResolution::Ours).unwrap();
+        assert_eq!(count, 2);
+        assert!(git.all_conflicts_resolved().unwrap());
+    }
+
+    #[test]
+    fn resolve_conflict_manual_with_custom_content() {
+        let tmp = TempDir::new().unwrap();
+        init_git_repo(&tmp);
+        create_conflicting_branches(&tmp);
+
+        let git = GitOps::new(ExecutionContext::new(tmp.path().to_path_buf()));
+        let result = git.merge("feature").unwrap();
+        assert!(result.has_conflicts());
+
+        git.resolve_conflict_manual(Path::new("file.txt"), "custom resolution")
+            .unwrap();
+        assert!(git.all_conflicts_resolved().unwrap());
+
+        let content = std::fs::read_to_string(tmp.path().join("file.txt")).unwrap();
+        assert_eq!(content, "custom resolution");
+    }
+
+    #[test]
+    fn get_conflict_info_parses_markers() {
+        let tmp = TempDir::new().unwrap();
+        init_git_repo(&tmp);
+        create_conflicting_branches(&tmp);
+
+        let git = GitOps::new(ExecutionContext::new(tmp.path().to_path_buf()));
+        let result = git.merge("feature").unwrap();
+        assert!(result.has_conflicts());
+
+        let info = git.get_conflict_info(Path::new("file.txt")).unwrap();
+        assert_eq!(info.path, PathBuf::from("file.txt"));
+        assert!(!info.regions.is_empty());
+        // The conflict should have ours and theirs content
+        assert!(!info.regions[0].ours.is_empty());
+        assert!(!info.regions[0].theirs.is_empty());
+    }
+
+    #[test]
+    fn parse_multiple_conflict_regions() {
+        let (_tmp, repo_path) = setup_test_repo();
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+
+        let content = "before\n<<<<<<< HEAD\nours1\n=======\ntheirs1\n>>>>>>> b\nmiddle\n<<<<<<< HEAD\nours2\n=======\ntheirs2\n>>>>>>> b\nafter";
+        let regions = git.parse_conflict_markers(content).unwrap();
+        assert_eq!(regions.len(), 2);
+        assert_eq!(regions[0].ours, "ours1");
+        assert_eq!(regions[0].theirs, "theirs1");
+        assert_eq!(regions[1].ours, "ours2");
+        assert_eq!(regions[1].theirs, "theirs2");
+    }
+
+    #[test]
+    fn parse_conflict_no_markers() {
+        let (_tmp, repo_path) = setup_test_repo();
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+
+        let regions = git
+            .parse_conflict_markers("just normal content\nno conflicts")
+            .unwrap();
+        assert!(regions.is_empty());
+    }
+
+    #[test]
+    fn clean_working_tree_requires_confirmation() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let result = git.clean_working_tree(false);
+        assert!(matches!(result, Err(GitError::NotAllowed { .. })));
+    }
+
+    #[test]
+    fn clean_working_tree_removes_changes() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        // Add untracked file and modify tracked file
+        std::fs::write(repo_path.join("untracked.txt"), "junk").unwrap();
+        std::fs::write(repo_path.join("init.txt"), "modified").unwrap();
+
+        let git = GitOps::new(ExecutionContext::new(repo_path.clone()));
+        git.clean_working_tree(true).unwrap();
+
+        let status = git.status().unwrap();
+        assert!(!status.is_dirty);
+        assert!(!repo_path.join("untracked.txt").exists());
+    }
+
+    #[test]
+    fn fetch_on_local_repo() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        // fetch with no remote configured should fail with CommandFailed
+        let result = git.fetch("origin");
+        assert!(matches!(result, Err(GitError::CommandFailed { .. })));
+    }
+
+    #[test]
+    fn fetch_remote_no_remote() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let result = git.fetch_remote("origin");
+        assert!(matches!(result, Err(GitError::CommandFailed { .. })));
+    }
+
+    #[test]
+    fn fetch_refspec_no_remote() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let result = git.fetch_refspec("origin", "main");
+        assert!(matches!(result, Err(GitError::CommandFailed { .. })));
+    }
+
+    #[test]
+    fn fetch_pr_no_remote() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let result = git.fetch_pr("origin", 42);
+        assert!(matches!(result, Err(GitError::CommandFailed { .. })));
+    }
+
+    #[test]
+    fn push_with_options_force_rejected() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let result = git.push_with_options(PushOptions {
+            force: true,
+            ..Default::default()
+        });
+        assert!(matches!(result, Err(GitError::NotAllowed { .. })));
+    }
+
+    #[test]
+    fn push_no_remote_fails() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let result = git.push();
+        // Should fail because no remote is configured
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn pull_no_remote_fails() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let result = git.pull();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn diff_options_default() {
+        let opts = DiffOptions::default();
+        assert!(opts.paths.is_empty());
+        assert!(!opts.staged);
+        assert!(opts.base_commit.is_none());
+        assert!(opts.context_lines.is_none());
+    }
+
+    #[test]
+    fn push_options_default() {
+        let opts = PushOptions::default();
+        assert_eq!(opts.remote, "origin");
+        assert!(opts.branch.is_none());
+        assert!(!opts.set_upstream);
+        assert!(!opts.force);
+    }
+
+    #[test]
+    fn get_conflicting_files_empty_when_no_conflicts() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let files = git.get_conflicting_files().unwrap();
+        assert!(files.is_empty());
+    }
+
+    #[test]
+    fn complete_merge_fails_with_unresolved_conflicts() {
+        let tmp = TempDir::new().unwrap();
+        init_git_repo(&tmp);
+        create_conflicting_branches(&tmp);
+
+        let git = GitOps::new(ExecutionContext::new(tmp.path().to_path_buf()));
+        git.merge("feature").unwrap();
+        assert!(git.is_merging().unwrap());
+
+        // Try to complete without resolving
+        let result = git.complete_merge();
+        assert!(matches!(result, Err(GitError::NotAllowed { .. })));
+    }
+
+    #[test]
+    fn validate_branch_name_backslash() {
+        let (_tmp, repo_path) = setup_test_repo();
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        assert!(git.validate_branch_name("has\\backslash").is_err());
+    }
+
+    #[test]
+    fn validate_branch_name_tab() {
+        let (_tmp, repo_path) = setup_test_repo();
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        assert!(git.validate_branch_name("has\ttab").is_err());
+    }
+
+    #[test]
+    fn validate_branch_name_newline() {
+        let (_tmp, repo_path) = setup_test_repo();
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        assert!(git.validate_branch_name("has\nnewline").is_err());
+    }
+
+    #[test]
+    fn validate_branch_name_question_mark() {
+        let (_tmp, repo_path) = setup_test_repo();
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        assert!(git.validate_branch_name("has?question").is_err());
+    }
+
+    #[test]
+    fn validate_branch_name_asterisk() {
+        let (_tmp, repo_path) = setup_test_repo();
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        assert!(git.validate_branch_name("has*star").is_err());
+    }
+
+    #[test]
+    fn mark_resolved_stages_file() {
+        let tmp = TempDir::new().unwrap();
+        init_git_repo(&tmp);
+        create_conflicting_branches(&tmp);
+
+        let git = GitOps::new(ExecutionContext::new(tmp.path().to_path_buf()));
+        git.merge("feature").unwrap();
+
+        // Write resolved content manually
+        std::fs::write(tmp.path().join("file.txt"), "resolved").unwrap();
+        git.mark_resolved(Path::new("file.txt")).unwrap();
+
+        assert!(git.all_conflicts_resolved().unwrap());
+    }
+
+    #[test]
+    fn push_with_set_upstream_option() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        // Will fail due to no remote, but exercises the set_upstream code path
+        let result = git.push_with_options(PushOptions {
+            set_upstream: true,
+            ..Default::default()
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn push_with_custom_branch() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let result = git.push_with_options(PushOptions {
+            branch: Some("custom-branch".to_string()),
+            ..Default::default()
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn conflict_region_line_numbers() {
+        let (_tmp, repo_path) = setup_test_repo();
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+
+        let content = "line1\nline2\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> b\nline8";
+        let regions = git.parse_conflict_markers(content).unwrap();
+        assert_eq!(regions.len(), 1);
+        assert_eq!(regions[0].start_line, 3);
+        assert_eq!(regions[0].end_line, 7);
+    }
+
+    #[test]
+    fn pull_from_no_remote_fails() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let result = git.pull_from("origin", "main");
+        assert!(result.is_err());
     }
 }

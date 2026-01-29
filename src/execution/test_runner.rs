@@ -1110,7 +1110,11 @@ thread 'tests::fail_b' panicked at 'assert b', src/lib.rs:2:1
     fn has_pytest_from_requirements_txt() {
         let tmp = TempDir::new().unwrap();
         std::fs::write(tmp.path().join("pyproject.toml"), "[build-system]").unwrap();
-        std::fs::write(tmp.path().join("requirements.txt"), "pytest==7.0\nrequests\n").unwrap();
+        std::fs::write(
+            tmp.path().join("requirements.txt"),
+            "pytest==7.0\nrequests\n",
+        )
+        .unwrap();
 
         let ctx = ExecutionContext::new(tmp.path().to_path_buf());
         let mut runner = TestRunner::new(ctx);

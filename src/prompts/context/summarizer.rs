@@ -440,4 +440,164 @@ class Helper {
 
         assert!((result.reduction_ratio() - 1.0).abs() < 0.001);
     }
+
+    #[test]
+    fn test_accessors() {
+        let s = FileSummarizer::new(100, 50);
+        assert_eq!(s.threshold_tokens(), 100);
+        assert_eq!(s.target_tokens(), 50);
+    }
+
+    #[test]
+    fn test_rust_keeps_mod_and_trait() {
+        let summarizer = FileSummarizer::new(10, 500);
+        let content = "mod foo;\npub trait Bar {\n    fn baz();\n}\n";
+        let result = summarizer.summarize_if_needed(content, "rs");
+        assert!(result.was_summarized);
+        assert!(result.content.contains("mod foo"));
+        assert!(result.content.contains("pub trait Bar"));
+    }
+
+    #[test]
+    fn test_rust_enum_and_use() {
+        let summarizer = FileSummarizer::new(10, 500);
+        let content = "use crate::types;\npub enum Color {\n    Red,\n    Blue,\n}\n";
+        let result = summarizer.summarize_if_needed(content, "rs");
+        assert!(result.content.contains("use crate::types"));
+        assert!(result.content.contains("pub enum Color"));
+    }
+
+    #[test]
+    fn test_rust_async_fn_in_impl() {
+        let summarizer = FileSummarizer::new(10, 500);
+        let content = "impl Server {\n    pub async fn start(&self) {\n        // body\n    }\n}\n";
+        let result = summarizer.summarize_if_needed(content, "rs");
+        assert!(result.content.contains("pub async fn start"));
+    }
+
+    #[test]
+    fn test_rust_private_struct_and_enum() {
+        let summarizer = FileSummarizer::new(10, 500);
+        let content = "struct Foo {\n    x: i32,\n}\nenum Bar {\n    A,\n}\n";
+        let result = summarizer.summarize_if_needed(content, "rs");
+        assert!(result.content.contains("struct Foo"));
+        assert!(result.content.contains("enum Bar"));
+    }
+
+    #[test]
+    fn test_python_decorators_and_async_def() {
+        let summarizer = FileSummarizer::new(10, 500);
+        let content = "@app.route('/')\nasync def handler():\n    pass\n";
+        let result = summarizer.summarize_if_needed(content, "py");
+        assert!(result.content.contains("@app.route"));
+        assert!(result.content.contains("async def handler"));
+    }
+
+    #[test]
+    fn test_javascript_require_and_class() {
+        let summarizer = FileSummarizer::new(10, 500);
+        let content = "const fs = require('fs');\nclass MyClass {\n    constructor() {}\n}\n";
+        let result = summarizer.summarize_if_needed(content, "js");
+        assert!(result.content.contains("const fs = require"));
+        assert!(result.content.contains("class MyClass"));
+    }
+
+    #[test]
+    fn test_javascript_async_function() {
+        let summarizer = FileSummarizer::new(10, 500);
+        let content = "async function fetchData() {\n    return null;\n}\n";
+        let result = summarizer.summarize_if_needed(content, "js");
+        assert!(result.content.contains("async function fetchData"));
+    }
+
+    #[test]
+    fn test_javascript_export_with_brace() {
+        let summarizer = FileSummarizer::new(10, 500);
+        let content = "export function foo() {\n    return 1;\n}\nexport const bar = 42;\n";
+        let result = summarizer.summarize_if_needed(content, "js");
+        assert!(result.content.contains("export function foo"));
+        assert!(result.content.contains("export const bar"));
+    }
+
+    #[test]
+    fn test_typescript_uses_js_summarizer() {
+        let summarizer = FileSummarizer::new(10, 500);
+        let content = "import { x } from 'y';\nexport class Z {}\n";
+        let result = summarizer.summarize_if_needed(content, "ts");
+        assert!(result.content.contains("import { x }"));
+        assert!(result.content.contains("export class Z"));
+    }
+
+    #[test]
+    fn test_generic_short_content_returned_as_is() {
+        let summarizer = FileSummarizer::new(10, 500);
+        // 30 lines < 50, so returned as-is
+        let content: String = (0..30)
+            .map(|i| format!("line {}", i))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let result = summarizer.summarize_if_needed(&content, "txt");
+        assert!(result.was_summarized);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_extract_fn_signature_with_semicolon() {
+        let summarizer = FileSummarizer::new(100, 50);
+        let sig = summarizer.extract_fn_signature("    fn foo();");
+        assert_eq!(sig, Some("    fn foo();".to_string()));
+    }
+
+    #[test]
+    fn test_extract_fn_signature_no_brace_no_semi() {
+        let summarizer = FileSummarizer::new(100, 50);
+        let sig = summarizer.extract_fn_signature("    fn foo()");
+        assert_eq!(sig, Some("    fn foo()".to_string()));
+    }
+
+    #[test]
+    fn test_extract_js_export_no_brace() {
+        let summarizer = FileSummarizer::new(100, 50);
+        let sig = summarizer.extract_js_export_signature("export const x = 5;");
+        assert_eq!(sig, None);
+    }
+
+    #[test]
+    fn test_truncate_with_notice_short_content() {
+        let summarizer = FileSummarizer::new(100, 50);
+        let result = summarizer.truncate_with_notice("short", 1000);
+        assert_eq!(result, "short");
+    }
+
+    #[test]
+    fn test_truncate_with_notice_long_content() {
+        let summarizer = FileSummarizer::new(100, 1);
+        let long = "a".repeat(100);
+        let result = summarizer.truncate_with_notice(&long, 1);
+        assert!(result.contains("truncated"));
+    }
+
+    #[test]
+    fn test_rust_summarize_triggers_truncation() {
+        // Very low target so the summary itself is too long
+        let summarizer = FileSummarizer::new(5, 1);
+        let content: String = (0..200)
+            .map(|i| format!("use crate::module{};\n", i))
+            .collect();
+        let result = summarizer.summarize_if_needed(&content, "rs");
+        assert!(result.was_summarized);
+        assert!(result.content.contains("truncated"));
+    }
+
+    #[test]
+    fn test_summary_result_fields() {
+        let r = SummaryResult {
+            content: "x".to_string(),
+            was_summarized: true,
+            original_tokens: 200,
+            summary_tokens: 50,
+        };
+        assert_eq!(r.reduction_ratio(), 0.25);
+        assert!(r.was_summarized);
+    }
 }

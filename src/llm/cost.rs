@@ -781,18 +781,12 @@ mod db_tests {
             .unwrap();
 
         // Query with since = before the record was created
-        let summary = tracker
-            .get_historical_summary(Some(before))
-            .await
-            .unwrap();
+        let summary = tracker.get_historical_summary(Some(before)).await.unwrap();
         assert!(summary.session_total > 0.0);
 
         // Query with since = future should return empty
         let future = Utc::now() + chrono::Duration::hours(1);
-        let summary_empty = tracker
-            .get_historical_summary(Some(future))
-            .await
-            .unwrap();
+        let summary_empty = tracker.get_historical_summary(Some(future)).await.unwrap();
         assert_eq!(summary_empty.session_total, 0.0);
     }
 

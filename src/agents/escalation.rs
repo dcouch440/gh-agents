@@ -612,7 +612,10 @@ mod tests {
     #[test]
     fn next_tier_each_level() {
         let policy = EscalationPolicy::default();
-        assert_eq!(policy.next_tier(AgentTier::Utility), Some(AgentTier::Worker));
+        assert_eq!(
+            policy.next_tier(AgentTier::Utility),
+            Some(AgentTier::Worker)
+        );
         assert_eq!(
             policy.next_tier(AgentTier::Worker),
             Some(AgentTier::Orchestrator)

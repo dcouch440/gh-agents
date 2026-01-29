@@ -428,6 +428,277 @@ mod tests {
         assert!(contents.contains("[RESULT] SUCCESS - all good"));
     }
 
+    #[test]
+    fn headless_runner_new_with_invalid_output_path() {
+        let args = Args {
+            headless: true,
+            port: 3000,
+            task: Some("test".into()),
+            input: None,
+            output: Some("/nonexistent/dir/that/does/not/exist/output.txt".into()),
+            config: None,
+            verbose: 0,
+            sync: None,
+        };
+        let result = HeadlessRunner::new(args);
+        match result {
+            Err(e) => assert!(e.to_string().contains("failed to create output file")),
+            Ok(_) => panic!("expected error for invalid output path"),
+        }
+    }
+
+    #[test]
+    fn parse_input_file_nonexistent() {
+        let path = PathBuf::from("/nonexistent/file.txt");
+        let result = HeadlessRunner::parse_input_file(&path);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("failed to read input file"));
+    }
+
+    #[test]
+    fn parse_input_file_with_whitespace_lines() {
+        let path = std::env::temp_dir().join("test_whitespace_input.txt");
+        std::fs::write(&path, "  Task 1  \n\n  \n  Task 2  \n").unwrap();
+        let tasks = HeadlessRunner::parse_input_file(&path).unwrap();
+        assert_eq!(tasks.len(), 2);
+        assert_eq!(tasks[0].description, "Task 1");
+        assert_eq!(tasks[1].description, "Task 2");
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn parse_input_file_json_with_github_issue() {
+        let content =
+            r#"{"description": "Fix bug", "github_issue": "https://github.com/org/repo/issues/1"}"#;
+        let path = std::env::temp_dir().join("test_github_issue.json");
+        std::fs::write(&path, content).unwrap();
+        let tasks = HeadlessRunner::parse_input_file(&path).unwrap();
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(
+            tasks[0].github_issue,
+            Some("https://github.com/org/repo/issues/1".to_string())
+        );
+        std::fs::remove_file(path).ok();
+    }
+
+    #[tokio::test]
+    async fn run_with_task_arg() {
+        let buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
+        let buf_clone = buf.clone();
+
+        struct SharedBuf(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+        impl Write for SharedBuf {
+            fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+                self.0.lock().unwrap().write(data)
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let args = Args {
+            headless: true,
+            port: 3000,
+            task: Some("do something".into()),
+            input: None,
+            output: None,
+            config: None,
+            verbose: 0,
+            sync: None,
+        };
+        let runner = HeadlessRunner {
+            args,
+            output: Box::new(SharedBuf(buf_clone)),
+        };
+
+        runner.run().await.unwrap();
+
+        let contents = String::from_utf8(buf.lock().unwrap().clone()).unwrap();
+        assert!(contents.contains("nexor headless mode starting..."));
+        assert!(contents.contains("Processing 1 task(s)..."));
+        assert!(contents.contains("[PROGRESS] Task: do something"));
+        assert!(contents.contains("[RESULT] SUCCESS"));
+        assert!(contents.contains("1/1 tasks completed successfully"));
+    }
+
+    #[tokio::test]
+    async fn run_with_sync_arg() {
+        let buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
+        let buf_clone = buf.clone();
+
+        struct SharedBuf(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+        impl Write for SharedBuf {
+            fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+                self.0.lock().unwrap().write(data)
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let args = Args {
+            headless: true,
+            port: 3000,
+            task: None,
+            input: None,
+            output: None,
+            config: None,
+            verbose: 0,
+            sync: Some("https://github.com/org/repo/issues/42".into()),
+        };
+        let runner = HeadlessRunner {
+            args,
+            output: Box::new(SharedBuf(buf_clone)),
+        };
+
+        runner.run().await.unwrap();
+
+        let contents = String::from_utf8(buf.lock().unwrap().clone()).unwrap();
+        assert!(contents.contains("Syncing from GitHub"));
+        assert!(contents.contains("https://github.com/org/repo/issues/42"));
+    }
+
+    #[tokio::test]
+    async fn run_with_no_task_fails() {
+        let args = Args {
+            headless: true,
+            port: 3000,
+            task: None,
+            input: None,
+            output: None,
+            config: None,
+            verbose: 0,
+            sync: None,
+        };
+        let runner = HeadlessRunner {
+            args,
+            output: Box::new(Vec::<u8>::new()),
+        };
+
+        let result = runner.run().await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("no task specified"));
+    }
+
+    #[tokio::test]
+    async fn run_with_input_file() {
+        let path = std::env::temp_dir().join("test_run_input.json");
+        std::fs::write(
+            &path,
+            r#"[{"description": "task A"}, {"description": "task B"}]"#,
+        )
+        .unwrap();
+
+        let buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
+        let buf_clone = buf.clone();
+
+        struct SharedBuf(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+        impl Write for SharedBuf {
+            fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+                self.0.lock().unwrap().write(data)
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let args = Args {
+            headless: true,
+            port: 3000,
+            task: None,
+            input: Some(path.clone()),
+            output: None,
+            config: None,
+            verbose: 0,
+            sync: None,
+        };
+        let runner = HeadlessRunner {
+            args,
+            output: Box::new(SharedBuf(buf_clone)),
+        };
+
+        runner.run().await.unwrap();
+
+        let contents = String::from_utf8(buf.lock().unwrap().clone()).unwrap();
+        assert!(contents.contains("Processing 2 task(s)..."));
+        assert!(contents.contains("Task 1/2"));
+        assert!(contents.contains("Task 2/2"));
+        assert!(contents.contains("2/2 tasks completed successfully"));
+        std::fs::remove_file(path).ok();
+    }
+
+    #[tokio::test]
+    async fn run_with_input_file_containing_github_issues() {
+        let path = std::env::temp_dir().join("test_run_github_input.json");
+        std::fs::write(
+            &path,
+            r#"[{"description": "fix issue", "github_issue": "https://github.com/org/repo/issues/1"}]"#,
+        )
+        .unwrap();
+
+        let buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
+        let buf_clone = buf.clone();
+
+        struct SharedBuf(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+        impl Write for SharedBuf {
+            fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+                self.0.lock().unwrap().write(data)
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let args = Args {
+            headless: true,
+            port: 3000,
+            task: None,
+            input: Some(path.clone()),
+            output: None,
+            config: None,
+            verbose: 0,
+            sync: None,
+        };
+        let runner = HeadlessRunner {
+            args,
+            output: Box::new(SharedBuf(buf_clone)),
+        };
+
+        runner.run().await.unwrap();
+
+        let contents = String::from_utf8(buf.lock().unwrap().clone()).unwrap();
+        assert!(contents.contains("[PROGRESS] GitHub issue: https://github.com/org/repo/issues/1"));
+        std::fs::remove_file(path).ok();
+    }
+
+    #[tokio::test]
+    async fn run_writes_to_output_file() {
+        let output_path = std::env::temp_dir().join("nexor_test_run_output.txt");
+        let args = Args {
+            headless: true,
+            port: 3000,
+            task: Some("file output test".into()),
+            input: None,
+            output: Some(output_path.clone()),
+            config: None,
+            verbose: 0,
+            sync: None,
+        };
+        let runner = HeadlessRunner::new(args).unwrap();
+        runner.run().await.unwrap();
+
+        let contents = std::fs::read_to_string(&output_path).unwrap();
+        assert!(contents.contains("nexor headless mode starting..."));
+        assert!(contents.contains("[RESULT] SUCCESS"));
+        std::fs::remove_file(output_path).ok();
+    }
+
     #[tokio::test]
     async fn process_task_returns_success() {
         let buf: Vec<u8> = Vec::new();

@@ -505,10 +505,7 @@ mod tests {
     fn test_prompt_builder_output_json_with_example() {
         let prompt = PromptBuilder::new()
             .task("Analyze")
-            .output_json_with_example(
-                r#"{"score": "number"}"#,
-                r#"{"score": 42}"#,
-            )
+            .output_json_with_example(r#"{"score": "number"}"#, r#"{"score": 42}"#)
             .build();
 
         assert!(prompt.text.contains("Respond with valid JSON"));

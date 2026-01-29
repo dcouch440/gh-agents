@@ -674,7 +674,10 @@ mod tests {
 
         let range_start = t1 - chrono::Duration::seconds(1);
         let range_end = t2 + chrono::Duration::seconds(1);
-        let calls = logger.get_calls_in_range(range_start, range_end).await.unwrap();
+        let calls = logger
+            .get_calls_in_range(range_start, range_end)
+            .await
+            .unwrap();
         assert_eq!(calls.len(), 2);
         assert_eq!(calls[0].model, "old");
         assert_eq!(calls[1].model, "mid");
@@ -710,7 +713,12 @@ mod tests {
         let tid1 = Uuid::new_v4();
         let tid2 = Uuid::new_v4();
         logger
-            .log_decision(&Decision::new(tid1, DecisionType::Decomposition, "r1", "o1"))
+            .log_decision(&Decision::new(
+                tid1,
+                DecisionType::Decomposition,
+                "r1",
+                "o1",
+            ))
             .await
             .unwrap();
         logger
@@ -748,7 +756,10 @@ mod tests {
 
         let range_start = t1 - chrono::Duration::seconds(1);
         let range_end = t1 + chrono::Duration::seconds(1);
-        let results = logger.get_decisions_in_range(range_start, range_end).await.unwrap();
+        let results = logger
+            .get_decisions_in_range(range_start, range_end)
+            .await
+            .unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].reasoning, "old");
     }
@@ -1072,8 +1083,10 @@ mod tests {
 
     #[test]
     fn llm_prompt_with_messages_replaces() {
-        let prompt = LlmPrompt::new("sys")
-            .with_messages(vec![PromptMessage::user("a"), PromptMessage::assistant("b")]);
+        let prompt = LlmPrompt::new("sys").with_messages(vec![
+            PromptMessage::user("a"),
+            PromptMessage::assistant("b"),
+        ]);
         assert_eq!(prompt.messages.len(), 2);
 
         // with_messages replaces, not appends

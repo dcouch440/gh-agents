@@ -770,7 +770,11 @@ mod tests {
         let model_config = ModelConfig::default();
 
         let orch_id = pool
-            .spawn_agent(AgentTier::Orchestrator, persona.clone(), model_config.clone())
+            .spawn_agent(
+                AgentTier::Orchestrator,
+                persona.clone(),
+                model_config.clone(),
+            )
             .unwrap();
         let worker_id = pool
             .spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone())
@@ -779,8 +783,14 @@ mod tests {
             .spawn_agent(AgentTier::Utility, persona, model_config)
             .unwrap();
 
-        assert_eq!(pool.get_agent(&orch_id).unwrap().tier(), AgentTier::Orchestrator);
-        assert_eq!(pool.get_agent(&worker_id).unwrap().tier(), AgentTier::Worker);
+        assert_eq!(
+            pool.get_agent(&orch_id).unwrap().tier(),
+            AgentTier::Orchestrator
+        );
+        assert_eq!(
+            pool.get_agent(&worker_id).unwrap().tier(),
+            AgentTier::Worker
+        );
         assert_eq!(pool.get_agent(&util_id).unwrap().tier(), AgentTier::Utility);
         assert_eq!(pool.total_count(), 3);
     }
@@ -829,7 +839,8 @@ mod tests {
         let persona = AgentPersona::default();
         let model_config = ModelConfig::default();
 
-        pool.spawn_agent(AgentTier::Worker, persona, model_config).unwrap();
+        pool.spawn_agent(AgentTier::Worker, persona, model_config)
+            .unwrap();
 
         let agent = pool.get_available_agent(AgentTier::Worker);
         assert!(agent.is_some());
@@ -848,8 +859,13 @@ mod tests {
         let persona = AgentPersona::default();
         let model_config = ModelConfig::default();
 
-        let id = pool.spawn_agent(AgentTier::Worker, persona, model_config).unwrap();
-        pool.get_agent_mut(&id).unwrap().start_task(uuid::Uuid::new_v4()).unwrap();
+        let id = pool
+            .spawn_agent(AgentTier::Worker, persona, model_config)
+            .unwrap();
+        pool.get_agent_mut(&id)
+            .unwrap()
+            .start_task(uuid::Uuid::new_v4())
+            .unwrap();
 
         assert!(pool.get_available_agent(AgentTier::Worker).is_none());
     }
@@ -861,8 +877,19 @@ mod tests {
         let model_config = ModelConfig::default();
 
         // Fill orchestrators (max=2)
-        let id1 = pool.spawn_agent(AgentTier::Orchestrator, persona.clone(), model_config.clone()).unwrap();
-        pool.spawn_agent(AgentTier::Orchestrator, persona.clone(), model_config.clone()).unwrap();
+        let id1 = pool
+            .spawn_agent(
+                AgentTier::Orchestrator,
+                persona.clone(),
+                model_config.clone(),
+            )
+            .unwrap();
+        pool.spawn_agent(
+            AgentTier::Orchestrator,
+            persona.clone(),
+            model_config.clone(),
+        )
+        .unwrap();
         assert!(!pool.can_spawn(AgentTier::Orchestrator));
 
         // Remove one
@@ -870,7 +897,8 @@ mod tests {
         assert!(pool.can_spawn(AgentTier::Orchestrator));
 
         // Can spawn again
-        pool.spawn_agent(AgentTier::Orchestrator, persona, model_config).unwrap();
+        pool.spawn_agent(AgentTier::Orchestrator, persona, model_config)
+            .unwrap();
         assert_eq!(pool.count(AgentTier::Orchestrator), 2);
     }
 
@@ -880,11 +908,17 @@ mod tests {
         let persona = AgentPersona::default();
         let model_config = ModelConfig::default();
 
-        let id = pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone()).unwrap();
-        pool.spawn_agent(AgentTier::Utility, persona, model_config).unwrap();
+        let id = pool
+            .spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone())
+            .unwrap();
+        pool.spawn_agent(AgentTier::Utility, persona, model_config)
+            .unwrap();
 
         // Make one busy
-        pool.get_agent_mut(&id).unwrap().start_task(uuid::Uuid::new_v4()).unwrap();
+        pool.get_agent_mut(&id)
+            .unwrap()
+            .start_task(uuid::Uuid::new_v4())
+            .unwrap();
 
         pool.shutdown_all();
         assert_eq!(pool.total_count(), 0);
@@ -906,13 +940,25 @@ mod tests {
         let persona = AgentPersona::default();
         let model_config = ModelConfig::default();
 
-        let id1 = pool.spawn_agent(AgentTier::Utility, persona.clone(), model_config.clone()).unwrap();
-        let _id2 = pool.spawn_agent(AgentTier::Utility, persona.clone(), model_config.clone()).unwrap();
-        let id3 = pool.spawn_agent(AgentTier::Utility, persona, model_config).unwrap();
+        let id1 = pool
+            .spawn_agent(AgentTier::Utility, persona.clone(), model_config.clone())
+            .unwrap();
+        let _id2 = pool
+            .spawn_agent(AgentTier::Utility, persona.clone(), model_config.clone())
+            .unwrap();
+        let id3 = pool
+            .spawn_agent(AgentTier::Utility, persona, model_config)
+            .unwrap();
 
         // Make two busy
-        pool.get_agent_mut(&id1).unwrap().start_task(uuid::Uuid::new_v4()).unwrap();
-        pool.get_agent_mut(&id3).unwrap().start_task(uuid::Uuid::new_v4()).unwrap();
+        pool.get_agent_mut(&id1)
+            .unwrap()
+            .start_task(uuid::Uuid::new_v4())
+            .unwrap();
+        pool.get_agent_mut(&id3)
+            .unwrap()
+            .start_task(uuid::Uuid::new_v4())
+            .unwrap();
 
         let stats = pool.stats();
         assert_eq!(stats.utilities.total, 3);

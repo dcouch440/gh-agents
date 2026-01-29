@@ -585,4 +585,250 @@ mod tests {
         assert!(ctx.session.is_some());
         assert!(ctx.production_mode.is_refactoring());
     }
+
+    #[tokio::test]
+    async fn get_context_without_session() {
+        let (agent, _temp_dir) = setup_agent().await;
+        let ctx = agent.get_context().await.unwrap();
+        assert!(ctx.session.is_none());
+    }
+
+    #[tokio::test]
+    async fn session_mut_returns_mutable_ref() {
+        let (mut agent, _temp_dir) = setup_agent().await;
+        assert!(agent.session_mut().is_none());
+
+        agent.start_session().await.unwrap();
+        let session = agent.session_mut().unwrap();
+        assert!(session.is_active());
+    }
+
+    #[tokio::test]
+    async fn analyze_intent_halt_pattern() {
+        let (agent, _temp_dir) = setup_agent().await;
+
+        let analysis = agent.analyze_intent_simple("halt everything");
+        assert_eq!(analysis.intent, RefactorIntent::HaltNow);
+        assert!(analysis.halt_reason.is_some());
+    }
+
+    #[tokio::test]
+    async fn analyze_intent_pause_everything() {
+        let (agent, _temp_dir) = setup_agent().await;
+
+        let analysis = agent.analyze_intent_simple("pause everything now");
+        assert_eq!(analysis.intent, RefactorIntent::HaltNow);
+        assert_eq!(analysis.confidence, Confidence::High);
+    }
+
+    #[tokio::test]
+    async fn analyze_intent_exit_with_resume() {
+        let (agent, _temp_dir) = setup_agent().await;
+
+        let analysis = agent.analyze_intent_simple("resume work please");
+        assert_eq!(analysis.intent, RefactorIntent::ExitRefactor);
+    }
+
+    #[tokio::test]
+    async fn analyze_intent_refactor_various_patterns() {
+        let (agent, _temp_dir) = setup_agent().await;
+
+        for msg in &[
+            "delete that file",
+            "add a new ticket",
+            "split this up",
+            "not working right",
+        ] {
+            let analysis = agent.analyze_intent_simple(msg);
+            assert_eq!(
+                analysis.intent,
+                RefactorIntent::RefactorNeeded,
+                "Failed for: {}",
+                msg
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn analyze_intent_clarifying_patterns() {
+        let (agent, _temp_dir) = setup_agent().await;
+
+        for msg in &[
+            "could we try something else",
+            "maybe a different approach",
+            "consider this",
+        ] {
+            let analysis = agent.analyze_intent_simple(msg);
+            assert_eq!(
+                analysis.intent,
+                RefactorIntent::Clarifying,
+                "Failed for: {}",
+                msg
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn apply_changes_no_session_errors() {
+        let (mut agent, temp_dir) = setup_agent().await;
+        let result = agent.apply_changes(temp_dir.path()).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("No active refactor session"));
+    }
+
+    #[tokio::test]
+    async fn apply_modify_change() {
+        let (mut agent, temp_dir) = setup_agent().await;
+        agent.start_session().await.unwrap();
+
+        // Create an existing file to modify
+        let file_path = temp_dir.path().join("existing.txt");
+        tokio::fs::write(&file_path, "old content").await.unwrap();
+
+        let change = RefactorChange::modify(
+            agent.session().unwrap().id.clone(),
+            "existing.txt".to_string(),
+            "old content".to_string(),
+            "new content".to_string(),
+            "Updating file".to_string(),
+        );
+        let change_id = change.id.clone();
+        agent.add_proposed_change(change).await.unwrap();
+        agent.approve_change(&change_id).await.unwrap();
+
+        let applied = agent.apply_changes(temp_dir.path()).await.unwrap();
+        assert_eq!(applied, vec!["existing.txt"]);
+
+        let content = tokio::fs::read_to_string(&file_path).await.unwrap();
+        assert_eq!(content, "new content");
+    }
+
+    #[tokio::test]
+    async fn apply_delete_change() {
+        let (mut agent, temp_dir) = setup_agent().await;
+        agent.start_session().await.unwrap();
+
+        let file_path = temp_dir.path().join("to_delete.txt");
+        tokio::fs::write(&file_path, "content").await.unwrap();
+
+        let change = RefactorChange::delete(
+            agent.session().unwrap().id.clone(),
+            "to_delete.txt".to_string(),
+            "content".to_string(),
+            "No longer needed".to_string(),
+        );
+        let change_id = change.id.clone();
+        agent.add_proposed_change(change).await.unwrap();
+        agent.approve_change(&change_id).await.unwrap();
+
+        agent.apply_changes(temp_dir.path()).await.unwrap();
+        assert!(!file_path.exists());
+    }
+
+    #[tokio::test]
+    async fn apply_delete_nonexistent_file_no_error() {
+        let (mut agent, temp_dir) = setup_agent().await;
+        agent.start_session().await.unwrap();
+
+        let change = RefactorChange::delete(
+            agent.session().unwrap().id.clone(),
+            "nonexistent.txt".to_string(),
+            "".to_string(),
+            "Already gone".to_string(),
+        );
+        let change_id = change.id.clone();
+        agent.add_proposed_change(change).await.unwrap();
+        agent.approve_change(&change_id).await.unwrap();
+
+        let applied = agent.apply_changes(temp_dir.path()).await.unwrap();
+        assert_eq!(applied, vec!["nonexistent.txt"]);
+    }
+
+    #[tokio::test]
+    async fn apply_create_in_subdirectory() {
+        let (mut agent, temp_dir) = setup_agent().await;
+        agent.start_session().await.unwrap();
+
+        let change = RefactorChange::create(
+            agent.session().unwrap().id.clone(),
+            "sub/dir/file.txt".to_string(),
+            "nested content".to_string(),
+            "Create nested file".to_string(),
+        );
+        let change_id = change.id.clone();
+        agent.add_proposed_change(change).await.unwrap();
+        agent.approve_change(&change_id).await.unwrap();
+
+        agent.apply_changes(temp_dir.path()).await.unwrap();
+
+        let content = tokio::fs::read_to_string(temp_dir.path().join("sub/dir/file.txt"))
+            .await
+            .unwrap();
+        assert_eq!(content, "nested content");
+    }
+
+    #[tokio::test]
+    async fn build_intent_prompt_with_empty_context() {
+        let (agent, _temp_dir) = setup_agent().await;
+        let ctx = RefactorContext::new(ProductionMode::Running);
+        let prompt = agent.build_intent_prompt("hello", &[], &ctx);
+        assert!(!prompt.is_empty());
+    }
+
+    #[tokio::test]
+    async fn build_intent_prompt_with_work_status() {
+        let (agent, _temp_dir) = setup_agent().await;
+        let mut ctx = RefactorContext::new(ProductionMode::Running);
+        ctx.in_progress_work = vec!["task-1".to_string(), "task-2".to_string()];
+        let prompt = agent.build_intent_prompt("change something", &[("user", "hi")], &ctx);
+        assert!(!prompt.is_empty());
+    }
+
+    #[tokio::test]
+    async fn end_session_without_active_session() {
+        let (mut agent, _temp_dir) = setup_agent().await;
+        // Should not error even without a session
+        let result = agent.end_session().await;
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn confidence_serialization() {
+        assert_eq!(serde_json::to_string(&Confidence::Low).unwrap(), "\"low\"");
+        assert_eq!(
+            serde_json::to_string(&Confidence::Medium).unwrap(),
+            "\"medium\""
+        );
+        assert_eq!(
+            serde_json::to_string(&Confidence::High).unwrap(),
+            "\"high\""
+        );
+    }
+
+    #[test]
+    fn impact_severity_serialization() {
+        assert_eq!(
+            serde_json::to_string(&ImpactSeverity::None).unwrap(),
+            "\"none\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ImpactSeverity::High).unwrap(),
+            "\"high\""
+        );
+    }
+
+    #[test]
+    fn impact_recommendation_serialization() {
+        assert_eq!(
+            serde_json::to_string(&ImpactRecommendation::Continue).unwrap(),
+            "\"continue\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ImpactRecommendation::HaltImmediately).unwrap(),
+            "\"halt_immediately\""
+        );
+    }
 }

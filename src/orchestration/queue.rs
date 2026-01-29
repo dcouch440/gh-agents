@@ -889,7 +889,9 @@ mod tests {
     fn prioritized_task_equality() {
         let task1 = make_task(Priority::Low);
         let task2 = make_task(Priority::High);
-        let pt1 = PrioritizedTask { task: task1.clone() };
+        let pt1 = PrioritizedTask {
+            task: task1.clone(),
+        };
         let pt2 = PrioritizedTask { task: task2 };
 
         // Different tasks are not equal
@@ -916,10 +918,7 @@ mod tests {
         assert!(low < urgent);
 
         // partial_cmp consistent with cmp
-        assert_eq!(
-            urgent.partial_cmp(&low),
-            Some(Ordering::Greater)
-        );
+        assert_eq!(urgent.partial_cmp(&low), Some(Ordering::Greater));
     }
 
     #[test]
@@ -1272,7 +1271,12 @@ mod persistent_queue_tests {
         let (pool, _temp_dir) = setup_test_db().await;
 
         // Insert multiple pending tasks
-        for p in [Priority::Low, Priority::Normal, Priority::High, Priority::Urgent] {
+        for p in [
+            Priority::Low,
+            Priority::Normal,
+            Priority::High,
+            Priority::Urgent,
+        ] {
             let task = make_task(p);
             crate::db::insert_task(&pool, &task).await.unwrap();
         }

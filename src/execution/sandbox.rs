@@ -792,7 +792,7 @@ mod tests {
         let result = sandbox.check_docker().await;
         // Just verify it returns Ok or a DockerNotAvailable error
         match result {
-            Ok(()) => {} // Docker is available, that's fine
+            Ok(()) => {}                                   // Docker is available, that's fine
             Err(SandboxError::DockerNotAvailable(_)) => {} // Expected without docker
             Err(e) => panic!("Unexpected error variant: {:?}", e),
         }
@@ -822,7 +822,7 @@ mod tests {
         let sandbox = Sandbox::with_defaults(ctx);
         let result = sandbox.exec_shell("echo test").await;
         match result {
-            Ok(_) => {} // Docker available
+            Ok(_) => {}                                    // Docker available
             Err(SandboxError::DockerNotAvailable(_)) => {} // No docker
             Err(e) => panic!("Unexpected error: {:?}", e),
         }

@@ -174,8 +174,7 @@ mod tests {
     #[test]
     fn env_filter_falls_back_to_info() {
         // When RUST_LOG is not set (or invalid), should fall back to "info"
-        let filter =
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+        let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
         let debug_str = format!("{}", filter);
         // The filter should contain "info" as default
         assert!(!debug_str.is_empty());

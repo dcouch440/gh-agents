@@ -369,8 +369,8 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let auth = GitHubAuth::with_client_id("test-id".to_string())
-            .with_api_base_url(mock_server.uri());
+        let auth =
+            GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
 
         let user = auth.verify_token("fake-token").await.unwrap();
         assert_eq!(user.login, "testuser");
@@ -392,8 +392,8 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let auth = GitHubAuth::with_client_id("test-id".to_string())
-            .with_api_base_url(mock_server.uri());
+        let auth =
+            GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
 
         let err = auth.verify_token("bad-token").await.unwrap_err();
         assert!(
@@ -415,8 +415,8 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let auth = GitHubAuth::with_client_id("test-id".to_string())
-            .with_api_base_url(mock_server.uri());
+        let auth =
+            GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
 
         let err = auth.verify_token("fake-token").await.unwrap_err();
         match err {
@@ -510,8 +510,8 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let auth = GitHubAuth::with_client_id("test-id".to_string())
-            .with_api_base_url(mock_server.uri());
+        let auth =
+            GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
 
         let user = auth.verify_token("token").await.unwrap();
         assert_eq!(user.login, "minimaluser");
@@ -533,8 +533,8 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let auth = GitHubAuth::with_client_id("test-id".to_string())
-            .with_api_base_url(mock_server.uri());
+        let auth =
+            GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
 
         let err = auth.verify_token("token").await;
         assert!(err.is_err());
@@ -560,8 +560,8 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let auth = GitHubAuth::with_client_id("test-id".to_string())
-            .with_api_base_url(mock_server.uri());
+        let auth =
+            GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
 
         let user = auth.verify_token("my-secret-token").await.unwrap();
         assert_eq!(user.login, "headeruser");
@@ -676,8 +676,8 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let auth = GitHubAuth::with_client_id("test-id".to_string())
-            .with_api_base_url(mock_server.uri());
+        let auth =
+            GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
 
         let err = auth.verify_token("token").await.unwrap_err();
         match err {
@@ -711,8 +711,8 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let auth = GitHubAuth::with_client_id("test-id".to_string())
-            .with_api_base_url(mock_server.uri());
+        let auth =
+            GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
 
         let user = auth.verify_token("tok").await.unwrap();
         assert_eq!(user.login, "uauser");
