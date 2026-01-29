@@ -491,6 +491,30 @@ M12 complete → M13 (Polish)
 
 ---
 
+## NEW: Milestone 22: Multi-Agent Docker Isolation
+
+**Goal**: Per-agent Docker containers with git worktree isolation, enabling multiple agents to work on different branches simultaneously on the same machine.
+
+**Checkpoint**: Orchestrator assigns 3 tasks on different branches. Each spawns a container with its own worktree. Agents edit files, run tests, commit — all in parallel with zero conflicts.
+
+| Ticket | Title | Slices |
+|--------|-------|--------|
+| 22.1 | Git Worktree Manager | 5 |
+| 22.2 | Agent Worker Dockerfile | 3 |
+| 22.3 | Container Lifecycle Management | 5 |
+| 22.4 | Agent Worker Mode | 5 |
+| 22.5 | Worker Client Protocol | 4 |
+| 22.6 | Container Pool Integration | 5 |
+| 22.7 | Cleanup, Monitoring & Health | 3 |
+
+**Key ideas**: Git worktrees (not full clones) for instant, disk-efficient branch isolation. Orchestrator stays on host. Workers connect back via WebSocket. Falls back to in-process if Docker unavailable.
+
+**Dependencies**: M7 (Execution Layer), M18 (Typed Subagent System) recommended but not required. Can start 22.1 + 22.2 immediately.
+
+See `decomp/M22/` for detailed ticket breakdowns.
+
+---
+
 ## Status
 
 - [x] Milestone 1: Foundation
@@ -509,6 +533,7 @@ M12 complete → M13 (Polish)
 - [ ] Milestone 14: Dynamic Agent Selection
 - [ ] Milestone 15: Repo Mgmt & Power User Workspace
 - [ ] Milestone 16: SaaS Foundation
+- [ ] Milestone 22: Multi-Agent Docker Isolation
 
 ---
 
