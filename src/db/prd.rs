@@ -78,10 +78,7 @@ pub async fn load_prd(pool: &SqlitePool, id: &PRDId) -> Result<Option<PRDDocumen
 }
 
 /// List PRDs by status
-pub async fn list_prds_by_status(
-    pool: &SqlitePool,
-    status: PRDStatus,
-) -> Result<Vec<PRDDocument>> {
+pub async fn list_prds_by_status(pool: &SqlitePool, status: PRDStatus) -> Result<Vec<PRDDocument>> {
     let status_str = status.to_string();
 
     let rows: Vec<PrdRow> = sqlx::query_as(

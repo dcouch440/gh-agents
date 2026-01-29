@@ -420,12 +420,7 @@ mod tests {
         let (app, _temp_dir) = setup_test_app_with_static_dir().await;
 
         let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
             .await
             .unwrap();
 
@@ -496,12 +491,7 @@ mod tests {
 
         // Request a SPA route that doesn't exist as a file
         let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/chat")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::builder().uri("/chat").body(Body::empty()).unwrap())
             .await
             .unwrap();
 

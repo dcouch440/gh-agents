@@ -537,4 +537,55 @@ mod tests {
         assert_eq!(call.model, parsed.model);
         assert_eq!(call.response, parsed.response);
     }
+
+    #[test]
+    fn llm_call_defaults() {
+        let prompt = LlmPrompt::new("sys");
+        let call = LlmCall::new("model", prompt, "resp");
+        assert_eq!(call.input_tokens, 0);
+        assert_eq!(call.output_tokens, 0);
+        assert_eq!(call.latency_ms, 0);
+        assert_eq!(call.cost_usd, 0.0);
+        assert!(call.task_id.is_none());
+        assert!(call.agent_id.is_none());
+    }
+
+    #[test]
+    fn llm_call_total_tokens() {
+        let prompt = LlmPrompt::new("sys");
+        let call = LlmCall::new("model", prompt, "resp").with_tokens(100, 200);
+        assert_eq!(call.total_tokens(), 300);
+    }
+
+    #[test]
+    fn llm_prompt_new_empty_messages() {
+        let prompt = LlmPrompt::new("system");
+        assert_eq!(prompt.system, "system");
+        assert!(prompt.messages.is_empty());
+    }
+
+    #[test]
+    fn decision_new_defaults() {
+        let task_id = Uuid::new_v4();
+        let d = Decision::new(task_id, DecisionType::Escalation, "reason", "outcome");
+        assert_eq!(d.task_id, task_id);
+        assert!(d.llm_call_id.is_none());
+        assert_eq!(d.cost_usd, 0.0);
+    }
+
+    #[test]
+    fn decision_type_serde_all_variants() {
+        let variants = [
+            DecisionType::Decomposition,
+            DecisionType::TierRouting,
+            DecisionType::ReviewOutcome,
+            DecisionType::Escalation,
+            DecisionType::Recovery,
+        ];
+        for v in &variants {
+            let json = serde_json::to_string(v).unwrap();
+            let parsed: DecisionType = serde_json::from_str(&json).unwrap();
+            assert_eq!(*v, parsed);
+        }
+    }
 }

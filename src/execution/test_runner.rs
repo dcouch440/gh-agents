@@ -768,4 +768,266 @@ test result: FAILED. 1 passed; 1 failed; 0 ignored
 
         assert!(result.has_failures());
     }
+
+    #[test]
+    fn default_commands_all_frameworks() {
+        assert_eq!(
+            TestFramework::Cargo.default_command(),
+            vec!["cargo", "test"]
+        );
+        assert_eq!(TestFramework::Npm.default_command(), vec!["npm", "test"]);
+        assert_eq!(TestFramework::Jest.default_command(), vec!["npx", "jest"]);
+        assert_eq!(
+            TestFramework::Pytest.default_command(),
+            vec!["pytest", "-v"]
+        );
+        assert_eq!(
+            TestFramework::PythonUnittest.default_command(),
+            vec!["python", "-m", "unittest", "discover"]
+        );
+        assert_eq!(
+            TestFramework::Go.default_command(),
+            vec!["go", "test", "./..."]
+        );
+        assert_eq!(
+            TestFramework::Generic.default_command(),
+            vec!["make", "test"]
+        );
+    }
+
+    #[test]
+    fn parse_jest_output_with_results() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx);
+        let stdout = "Tests: 5 passed, 2 failed, 1 skipped, 8 total";
+        let (passed, failed, skipped) = runner.parse_jest_output(stdout);
+        assert_eq!(passed, Some(5));
+        assert_eq!(failed, Some(2));
+        assert_eq!(skipped, Some(1));
+    }
+
+    #[test]
+    fn parse_jest_output_no_matches() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx);
+        let (p, f, s) = runner.parse_jest_output("no test output here");
+        assert!(p.is_none());
+        assert!(f.is_none());
+        assert!(s.is_none());
+    }
+
+    #[test]
+    fn parse_go_output_with_results() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx);
+        let stdout = "--- PASS: TestA (0.00s)\n--- PASS: TestB (0.01s)\n--- FAIL: TestC (0.00s)\n--- SKIP: TestD (0.00s)\n";
+        let (p, f, s) = runner.parse_go_output(stdout);
+        assert_eq!(p, Some(2));
+        assert_eq!(f, Some(1));
+        assert_eq!(s, Some(1));
+    }
+
+    #[test]
+    fn parse_go_output_no_results() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx);
+        let (p, f, s) = runner.parse_go_output("ok  \tpackage\t0.001s");
+        assert!(p.is_none());
+        assert!(f.is_none());
+        assert!(s.is_none());
+    }
+
+    #[test]
+    fn parse_cargo_output_no_result_line() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx);
+        let (p, f, i) = runner.parse_cargo_output("running 0 tests", "");
+        assert!(p.is_none());
+        assert!(f.is_none());
+        assert!(i.is_none());
+    }
+
+    #[test]
+    fn has_failures_with_zero_failed() {
+        let result = TestResult {
+            framework: TestFramework::Cargo,
+            success: true,
+            exit_code: 0,
+            stdout: String::new(),
+            stderr: String::new(),
+            passed: Some(5),
+            failed: Some(0),
+            skipped: None,
+            duration_ms: 100,
+        };
+        assert!(!result.has_failures());
+    }
+
+    #[test]
+    fn has_failures_with_none_failed_not_success() {
+        let result = TestResult {
+            framework: TestFramework::Generic,
+            success: false,
+            exit_code: 1,
+            stdout: String::new(),
+            stderr: String::new(),
+            passed: None,
+            failed: None,
+            skipped: None,
+            duration_ms: 100,
+        };
+        assert!(result.has_failures());
+    }
+
+    #[test]
+    fn summary_passed_failed_only() {
+        let result = TestResult {
+            framework: TestFramework::Cargo,
+            success: true,
+            exit_code: 0,
+            stdout: String::new(),
+            stderr: String::new(),
+            passed: Some(10),
+            failed: Some(0),
+            skipped: None,
+            duration_ms: 500,
+        };
+        assert_eq!(result.summary(), "PASSED: 10 passed, 0 failed (500 ms)");
+    }
+
+    #[test]
+    fn summary_no_counts() {
+        let result = TestResult {
+            framework: TestFramework::Generic,
+            success: false,
+            exit_code: 1,
+            stdout: String::new(),
+            stderr: String::new(),
+            passed: None,
+            failed: None,
+            skipped: None,
+            duration_ms: 200,
+        };
+        assert_eq!(result.summary(), "FAILED (200 ms)");
+    }
+
+    #[test]
+    fn parse_cargo_failures_multiple() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx);
+        let stdout = r#"
+---- tests::fail_a stdout ----
+thread 'tests::fail_a' panicked at 'assert a', src/lib.rs:1:1
+----
+---- tests::fail_b stdout ----
+thread 'tests::fail_b' panicked at 'assert b', src/lib.rs:2:1
+----
+"#;
+        let failures = runner.parse_cargo_failures(stdout);
+        assert_eq!(failures.len(), 2);
+        assert_eq!(failures[0].test_name, "tests::fail_a");
+        assert_eq!(failures[1].test_name, "tests::fail_b");
+    }
+
+    #[test]
+    fn parse_cargo_failures_empty() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx);
+        let failures = runner.parse_cargo_failures("");
+        assert!(failures.is_empty());
+    }
+
+    #[test]
+    fn extract_failures_non_cargo() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx);
+        let result = TestResult {
+            framework: TestFramework::Jest,
+            success: false,
+            exit_code: 1,
+            stdout: "stuff".into(),
+            stderr: String::new(),
+            passed: None,
+            failed: None,
+            skipped: None,
+            duration_ms: 100,
+        };
+        assert!(runner.extract_failures(&result).is_empty());
+    }
+
+    #[test]
+    fn detects_jest_config_ts() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("package.json"), "{}").unwrap();
+        std::fs::write(tmp.path().join("jest.config.ts"), "").unwrap();
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let mut runner = TestRunner::new(ctx);
+        assert_eq!(runner.detect_framework(), Some(TestFramework::Jest));
+    }
+
+    #[test]
+    fn detects_pytest_from_pyproject() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(
+            tmp.path().join("pyproject.toml"),
+            "[tool.pytest]\nminversion = \"6.0\"",
+        )
+        .unwrap();
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let mut runner = TestRunner::new(ctx);
+        assert_eq!(runner.detect_framework(), Some(TestFramework::Pytest));
+    }
+
+    #[test]
+    fn detects_makefile_with_test() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("Makefile"), "test:\n\t./run_tests.sh\n").unwrap();
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let mut runner = TestRunner::new(ctx);
+        assert_eq!(runner.detect_framework(), Some(TestFramework::Generic));
+    }
+
+    #[test]
+    fn no_framework_for_makefile_without_test() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("Makefile"), "build:\n\tcc main.c\n").unwrap();
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let mut runner = TestRunner::new(ctx);
+        assert_eq!(runner.detect_framework(), None);
+    }
+
+    #[test]
+    fn detects_setup_py_unittest() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(
+            tmp.path().join("setup.py"),
+            "from setuptools import setup\nsetup()",
+        )
+        .unwrap();
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let mut runner = TestRunner::new(ctx);
+        assert_eq!(
+            runner.detect_framework(),
+            Some(TestFramework::PythonUnittest)
+        );
+    }
+
+    #[test]
+    fn with_framework_override() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx).with_framework(TestFramework::Go);
+        assert_eq!(runner.framework, Some(TestFramework::Go));
+    }
+
+    #[test]
+    fn test_error_display() {
+        assert_eq!(
+            TestError::NoFrameworkDetected.to_string(),
+            "no test framework detected"
+        );
+        assert!(TestError::CommandFailed("x".into())
+            .to_string()
+            .contains("x"));
+        assert!(TestError::ParseError("y".into()).to_string().contains("y"));
+    }
 }

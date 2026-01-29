@@ -805,4 +805,194 @@ mod tests {
 
         assert_eq!(client.base_url(), "https://github.example.com/api/v3");
     }
+
+    #[tokio::test]
+    async fn get_repository_success() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/repos/owner/repo"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": 1,
+                "name": "repo",
+                "full_name": "owner/repo",
+                "private": false,
+                "owner": { "login": "owner", "id": 1 },
+                "html_url": "https://github.com/owner/repo",
+                "description": "A test repo",
+                "default_branch": "main",
+                "clone_url": "https://github.com/owner/repo.git"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = GitHubClient::with_token("test-token")
+            .unwrap()
+            .with_base_url(mock_server.uri());
+
+        let repo = client.get_repository("owner", "repo").await.unwrap();
+        assert_eq!(repo.name, "repo");
+        assert_eq!(repo.default_branch, "main");
+    }
+
+    #[tokio::test]
+    async fn get_repository_not_found() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/repos/owner/nonexistent"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "message": "Not Found"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = GitHubClient::with_token("test-token")
+            .unwrap()
+            .with_base_url(mock_server.uri());
+
+        let result = client.get_repository("owner", "nonexistent").await;
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), GitHubError::NotFound(_)));
+    }
+
+    #[tokio::test]
+    async fn list_pull_requests_success() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/repos/owner/repo/pulls"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {
+                    "id": 1,
+                    "number": 42,
+                    "title": "Fix bug",
+                    "state": "open",
+                    "user": { "login": "dev", "id": 2 },
+                    "html_url": "https://github.com/owner/repo/pull/42",
+                    "body": "Fixes #1",
+                    "head": { "ref": "fix-bug", "sha": "abc123" },
+                    "base": { "ref": "main", "sha": "def456" },
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "updated_at": "2024-01-01T00:00:00Z"
+                }
+            ])))
+            .mount(&mock_server)
+            .await;
+
+        let client = GitHubClient::with_token("test-token")
+            .unwrap()
+            .with_base_url(mock_server.uri());
+
+        let prs = client
+            .list_pull_requests("owner", "repo", None)
+            .await
+            .unwrap();
+        assert_eq!(prs.len(), 1);
+        assert_eq!(prs[0].number, 42);
+        assert_eq!(prs[0].title, "Fix bug");
+    }
+
+    #[tokio::test]
+    async fn create_issue_comment_success() {
+        use crate::github::types::CreateIssueComment;
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/repos/owner/repo/issues/1/comments"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(serde_json::json!({
+                "id": 100,
+                "body": "Nice work!",
+                "user": { "login": "bot", "id": 3 },
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z",
+                "html_url": "https://github.com/owner/repo/issues/1#comment-100"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = GitHubClient::with_token("test-token")
+            .unwrap()
+            .with_base_url(mock_server.uri());
+
+        let comment = client
+            .create_issue_comment(
+                "owner",
+                "repo",
+                1,
+                &CreateIssueComment {
+                    body: "Nice work!".into(),
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(comment.body, "Nice work!");
+    }
+
+    #[tokio::test]
+    async fn get_pull_request_success() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/repos/owner/repo/pulls/10"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": 10,
+                "number": 10,
+                "title": "Add feature",
+                "state": "open",
+                "user": { "login": "dev", "id": 1 },
+                "html_url": "https://github.com/owner/repo/pull/10",
+                "body": "New feature",
+                "head": { "ref": "feature", "sha": "aaa" },
+                "base": { "ref": "main", "sha": "bbb" },
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = GitHubClient::with_token("test-token")
+            .unwrap()
+            .with_base_url(mock_server.uri());
+
+        let pr = client.get_pull_request("owner", "repo", 10).await.unwrap();
+        assert_eq!(pr.title, "Add feature");
+        assert_eq!(pr.number, 10);
+    }
+
+    #[tokio::test]
+    async fn unauthorized_returns_error() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/repos/owner/repo"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&mock_server)
+            .await;
+
+        let client = GitHubClient::with_token("bad-token")
+            .unwrap()
+            .with_base_url(mock_server.uri());
+
+        let result = client.get_repository("owner", "repo").await;
+        assert!(matches!(result.unwrap_err(), GitHubError::Unauthorized));
+    }
 }

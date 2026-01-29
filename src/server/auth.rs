@@ -37,7 +37,10 @@ pub fn verify_password(password: &str, hash: &str) -> bool {
         .is_ok()
 }
 
-pub fn create_token(secret: &[u8], duration_hours: u64) -> Result<String, jsonwebtoken::errors::Error> {
+pub fn create_token(
+    secret: &[u8],
+    duration_hours: u64,
+) -> Result<String, jsonwebtoken::errors::Error> {
     let now = chrono::Utc::now();
     let exp = (now + chrono::Duration::hours(duration_hours as i64)).timestamp() as usize;
 
@@ -47,7 +50,11 @@ pub fn create_token(secret: &[u8], duration_hours: u64) -> Result<String, jsonwe
         iat: now.timestamp() as usize,
     };
 
-    encode(&Header::default(), &claims, &EncodingKey::from_secret(secret))
+    encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(secret),
+    )
 }
 
 pub fn verify_token(token: &str, secret: &[u8]) -> Result<Claims, jsonwebtoken::errors::Error> {
@@ -85,8 +92,8 @@ impl FromRequestParts<AppState> for AuthUser {
             .strip_prefix("Bearer ")
             .ok_or(StatusCode::UNAUTHORIZED)?;
 
-        let claims = verify_token(token, &state.jwt_secret)
-            .map_err(|_| StatusCode::UNAUTHORIZED)?;
+        let claims =
+            verify_token(token, &state.jwt_secret).map_err(|_| StatusCode::UNAUTHORIZED)?;
 
         Ok(AuthUser { claims })
     }

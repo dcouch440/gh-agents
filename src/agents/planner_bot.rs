@@ -182,7 +182,8 @@ Personality traits:
 When you have enough information to update the PRD, include a JSON block in your response using ```json fences with the relevant fields."#;
 
         let phase_guidance = match phase {
-            PlanningPhase::Discovery => r#"
+            PlanningPhase::Discovery => {
+                r#"
 CURRENT PHASE: Discovery
 Goal: Understand the problem, users, and vision.
 Ask about:
@@ -195,8 +196,10 @@ When you have a clear understanding, summarize and say "moving to scoping" to ad
 Include a JSON block to capture vision, problem_statement, and target_users when ready:
 ```json
 {"vision": "...", "problem_statement": "...", "target_users": "..."}
-```"#,
-            PlanningPhase::Scoping => r#"
+```"#
+            }
+            PlanningPhase::Scoping => {
+                r#"
 CURRENT PHASE: Scoping
 Goal: Define boundaries and success criteria.
 Ask about:
@@ -208,8 +211,10 @@ Push back on scope creep. When scoped, say "moving to technical" to advance.
 Include a JSON block for success_criteria when ready:
 ```json
 {"success_criteria": ["criterion 1", "criterion 2"]}
-```"#,
-            PlanningPhase::Technical => r#"
+```"#
+            }
+            PlanningPhase::Technical => {
+                r#"
 CURRENT PHASE: Technical
 Goal: Make technology and architecture decisions.
 Ask about:
@@ -226,8 +231,10 @@ Include JSON blocks for decisions and data models:
 ```
 ```json
 {"data_models": [{"name": "...", "fields": ["..."], "description": "..."}]}
-```"#,
-            PlanningPhase::Milestones => r#"
+```"#
+            }
+            PlanningPhase::Milestones => {
+                r#"
 CURRENT PHASE: Milestones
 Goal: Break the project into deliverable phases.
 Ask about:
@@ -241,14 +248,17 @@ Include a JSON block when milestones are defined:
 {"milestones": [{"title": "...", "description": "...", "deliverables": ["..."], "dependencies": ["..."]}]}
 ```
 
-When milestones are complete, say "moving to review" to advance."#,
-            PlanningPhase::Review => r#"
+When milestones are complete, say "moving to review" to advance."#
+            }
+            PlanningPhase::Review => {
+                r#"
 CURRENT PHASE: Review
 Goal: Final review of the complete PRD.
 - Summarize the entire PRD
 - Ask if anything needs changes
 - Confirm the user is satisfied
-- When approved, say "PRD approved" to finalize"#,
+- When approved, say "PRD approved" to finalize"#
+            }
         };
 
         format!(
@@ -347,7 +357,10 @@ Goal: Final review of the complete PRD.
             md.push_str("| Area | Decision | Rationale |\n");
             md.push_str("|------|----------|----------|\n");
             for td in &prd.technical_decisions {
-                md.push_str(&format!("| {} | {} | {} |\n", td.area, td.decision, td.rationale));
+                md.push_str(&format!(
+                    "| {} | {} | {} |\n",
+                    td.area, td.decision, td.rationale
+                ));
             }
             md.push('\n');
         }
@@ -542,10 +555,7 @@ Done."#;
 
         #[async_trait]
         impl LLMProvider for MockProvider {
-            async fn send_message(
-                &self,
-                _req: LLMRequest,
-            ) -> Result<LLMResponse, LLMError> {
+            async fn send_message(&self, _req: LLMRequest) -> Result<LLMResponse, LLMError> {
                 unimplemented!()
             }
             async fn send_message_stream(
@@ -581,10 +591,7 @@ Done."#;
 
         #[async_trait]
         impl LLMProvider for MockProvider {
-            async fn send_message(
-                &self,
-                _req: LLMRequest,
-            ) -> Result<LLMResponse, LLMError> {
+            async fn send_message(&self, _req: LLMRequest) -> Result<LLMResponse, LLMError> {
                 unimplemented!()
             }
             async fn send_message_stream(
@@ -617,6 +624,100 @@ Done."#;
     }
 
     #[test]
+    fn planning_phase_display_all() {
+        assert_eq!(PlanningPhase::Discovery.to_string(), "Discovery");
+        assert_eq!(PlanningPhase::Scoping.to_string(), "Scoping");
+        assert_eq!(PlanningPhase::Technical.to_string(), "Technical");
+        assert_eq!(PlanningPhase::Milestones.to_string(), "Milestones");
+        assert_eq!(PlanningPhase::Review.to_string(), "Review");
+    }
+
+    #[test]
+    fn planning_phase_serde_roundtrip() {
+        let variants = [
+            PlanningPhase::Discovery,
+            PlanningPhase::Scoping,
+            PlanningPhase::Technical,
+            PlanningPhase::Milestones,
+            PlanningPhase::Review,
+        ];
+        for v in &variants {
+            let json = serde_json::to_string(v).unwrap();
+            let parsed: PlanningPhase = serde_json::from_str(&json).unwrap();
+            assert_eq!(*v, parsed);
+        }
+    }
+
+    #[test]
+    fn planning_message_role_serde_roundtrip() {
+        let roles = [PlanningMessageRole::User, PlanningMessageRole::Planner];
+        for r in &roles {
+            let json = serde_json::to_string(r).unwrap();
+            let parsed: PlanningMessageRole = serde_json::from_str(&json).unwrap();
+            assert_eq!(*r, parsed);
+        }
+    }
+
+    #[test]
+    fn planner_bot_error_display() {
+        assert!(PlannerBotError::LlmError("timeout".into())
+            .to_string()
+            .contains("timeout"));
+        assert!(PlannerBotError::ParseError("bad json".into())
+            .to_string()
+            .contains("bad json"));
+        assert!(PlannerBotError::SessionError("expired".into())
+            .to_string()
+            .contains("expired"));
+    }
+
+    #[test]
+    fn planning_session_new_defaults() {
+        let session = PlanningSession::new("My Project");
+        assert_eq!(session.prd.title, "My Project");
+        assert_eq!(session.phase, PlanningPhase::Discovery);
+        assert!(session.history.is_empty());
+        assert!(session.created_at <= session.updated_at);
+    }
+
+    #[test]
+    fn extract_json_blocks_unclosed() {
+        let text = "```json\n{\"a\": 1}\nno closing fence";
+        let blocks = extract_json_blocks(text);
+        assert!(blocks.is_empty());
+    }
+
+    #[test]
+    fn apply_structured_update_problem_statement() {
+        let mut prd = PRDDocument::new("Test");
+        apply_structured_update(&mut prd, r#"{"problem_statement": "Users need X"}"#);
+        assert_eq!(prd.problem_statement, "Users need X");
+    }
+
+    #[test]
+    fn apply_structured_update_target_users() {
+        let mut prd = PRDDocument::new("Test");
+        apply_structured_update(&mut prd, r#"{"target_users": "Developers"}"#);
+        assert_eq!(prd.target_users, "Developers");
+    }
+
+    #[test]
+    fn apply_structured_update_success_criteria() {
+        let mut prd = PRDDocument::new("Test");
+        apply_structured_update(&mut prd, r#"{"success_criteria": ["fast", "reliable"]}"#);
+        assert_eq!(prd.success_criteria, vec!["fast", "reliable"]);
+    }
+
+    #[test]
+    fn apply_structured_update_data_models() {
+        let mut prd = PRDDocument::new("Test");
+        let json = r#"{"data_models": [{"name": "User", "fields": ["id", "name"], "description": "A user"}]}"#;
+        apply_structured_update(&mut prd, json);
+        assert_eq!(prd.data_models.len(), 1);
+        assert_eq!(prd.data_models[0].name, "User");
+    }
+
+    #[test]
     fn export_markdown_includes_sections() {
         use crate::llm::{LLMError, LLMRequest, LLMResponse, StreamChunk};
         use async_trait::async_trait;
@@ -627,10 +728,7 @@ Done."#;
 
         #[async_trait]
         impl LLMProvider for MockProvider {
-            async fn send_message(
-                &self,
-                _req: LLMRequest,
-            ) -> Result<LLMResponse, LLMError> {
+            async fn send_message(&self, _req: LLMRequest) -> Result<LLMResponse, LLMError> {
                 unimplemented!()
             }
             async fn send_message_stream(

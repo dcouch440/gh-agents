@@ -269,4 +269,72 @@ mod tests {
         assert!(task.priority.is_none());
         assert!(task.github_issue.is_none());
     }
+
+    #[test]
+    fn headless_runner_write_methods() {
+        let args = Args {
+            headless: true,
+            port: 3000,
+            task: Some("test".into()),
+            input: None,
+            output: None,
+            config: None,
+            verbose: 0,
+            sync: None,
+        };
+        let buf: Vec<u8> = Vec::new();
+        let mut runner = HeadlessRunner {
+            args,
+            output: Box::new(buf),
+        };
+
+        runner.write_line("hello").unwrap();
+        runner.write_progress("working").unwrap();
+        runner.write_error("oops").unwrap();
+        runner.write_result("OK", "done").unwrap();
+    }
+
+    #[test]
+    fn task_result_variants() {
+        let success = TaskResult::Success {
+            message: "ok".into(),
+        };
+        let failed = TaskResult::Failed {
+            error: "err".into(),
+        };
+        let skipped = TaskResult::Skipped {
+            reason: "skip".into(),
+        };
+
+        match success {
+            TaskResult::Success { message } => assert_eq!(message, "ok"),
+            _ => panic!("expected Success"),
+        }
+        match failed {
+            TaskResult::Failed { error } => assert_eq!(error, "err"),
+            _ => panic!("expected Failed"),
+        }
+        match skipped {
+            TaskResult::Skipped { reason } => assert_eq!(reason, "skip"),
+            _ => panic!("expected Skipped"),
+        }
+    }
+
+    #[test]
+    fn parse_input_file_empty() {
+        let path = std::env::temp_dir().join("test_empty_input.txt");
+        std::fs::write(&path, "").unwrap();
+        let tasks = HeadlessRunner::parse_input_file(&path).unwrap();
+        assert!(tasks.is_empty());
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn parse_input_file_only_comments() {
+        let path = std::env::temp_dir().join("test_comments_input.txt");
+        std::fs::write(&path, "# comment 1\n# comment 2\n\n").unwrap();
+        let tasks = HeadlessRunner::parse_input_file(&path).unwrap();
+        assert!(tasks.is_empty());
+        std::fs::remove_file(path).ok();
+    }
 }

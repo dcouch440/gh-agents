@@ -163,3 +163,148 @@ impl AppState {
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    async fn make_state() -> (AppState, TempDir) {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let pool = crate::db::init_db_at(db_path.to_str().unwrap())
+            .await
+            .unwrap();
+        let scheduler = Scheduler::new(pool.clone()).await.unwrap();
+        let state = AppState::new(pool, Arc::new(RwLock::new(scheduler)), AppConfig::default());
+        (state, temp_dir)
+    }
+
+    #[test]
+    fn stream_chunk_variants() {
+        let token = StreamChunk::Token("hello".into());
+        let done = StreamChunk::Done;
+        let err = StreamChunk::Error("oops".into());
+        match token {
+            StreamChunk::Token(s) => assert_eq!(s, "hello"),
+            _ => panic!(),
+        }
+        assert!(matches!(done, StreamChunk::Done));
+        match err {
+            StreamChunk::Error(s) => assert_eq!(s, "oops"),
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn orchestrator_message_construction() {
+        let msg = OrchestratorMessage {
+            id: Uuid::new_v4(),
+            content: "do stuff".into(),
+            timestamp: Utc::now(),
+        };
+        assert_eq!(msg.content, "do stuff");
+    }
+
+    #[tokio::test]
+    async fn app_state_new_creates_valid_state() {
+        let (state, _tmp) = make_state().await;
+        assert_eq!(state.jwt_secret.len(), 32);
+    }
+
+    #[tokio::test]
+    async fn subscribe_feed_returns_receiver() {
+        let (state, _tmp) = make_state().await;
+        let _rx = state.subscribe_feed();
+    }
+
+    #[tokio::test]
+    async fn subscribe_tasks_returns_receiver() {
+        let (state, _tmp) = make_state().await;
+        let _rx = state.subscribe_tasks();
+    }
+
+    #[tokio::test]
+    async fn subscribe_agents_returns_receiver() {
+        let (state, _tmp) = make_state().await;
+        let _rx = state.subscribe_agents();
+    }
+
+    #[tokio::test]
+    async fn broadcast_feed_no_panic() {
+        let (state, _tmp) = make_state().await;
+        state.broadcast_feed(FeedUpdate {
+            id: Uuid::new_v4(),
+            agent_id: "a".into(),
+            content: "c".into(),
+            item_type: "info".into(),
+            timestamp: Utc::now(),
+        });
+    }
+
+    #[tokio::test]
+    async fn broadcast_task_no_panic() {
+        let (state, _tmp) = make_state().await;
+        state.broadcast_task(TaskUpdate {
+            id: Uuid::new_v4(),
+            status: "pending".into(),
+            progress: None,
+            assigned_agent: None,
+        });
+    }
+
+    #[tokio::test]
+    async fn broadcast_agent_no_panic() {
+        let (state, _tmp) = make_state().await;
+        state.broadcast_agent(AgentUpdate {
+            id: "agent-1".into(),
+            status: "idle".into(),
+            current_task: None,
+        });
+    }
+
+    #[tokio::test]
+    async fn get_response_stream_creates_new() {
+        let (state, _tmp) = make_state().await;
+        let msg_id = Uuid::new_v4();
+        let _rx = state.get_response_stream(msg_id).await;
+    }
+
+    #[tokio::test]
+    async fn get_response_stream_returns_existing() {
+        let (state, _tmp) = make_state().await;
+        let msg_id = Uuid::new_v4();
+        let _rx1 = state.get_response_stream(msg_id).await;
+        let _rx2 = state.get_response_stream(msg_id).await;
+    }
+
+    #[tokio::test]
+    async fn send_stream_chunk_no_stream() {
+        let (state, _tmp) = make_state().await;
+        let result = state
+            .send_stream_chunk(Uuid::new_v4(), StreamChunk::Token("hi".into()))
+            .await;
+        assert!(!result);
+    }
+
+    #[tokio::test]
+    async fn send_stream_chunk_with_stream() {
+        let (state, _tmp) = make_state().await;
+        let msg_id = Uuid::new_v4();
+        let _rx = state.get_response_stream(msg_id).await;
+        let result = state
+            .send_stream_chunk(msg_id, StreamChunk::Token("hi".into()))
+            .await;
+        assert!(result);
+    }
+
+    #[tokio::test]
+    async fn remove_response_stream() {
+        let (state, _tmp) = make_state().await;
+        let msg_id = Uuid::new_v4();
+        let _rx = state.get_response_stream(msg_id).await;
+        state.remove_response_stream(msg_id).await;
+        let result = state.send_stream_chunk(msg_id, StreamChunk::Done).await;
+        assert!(!result);
+    }
+}

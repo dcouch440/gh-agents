@@ -126,4 +126,29 @@ mod tests {
         let _llm = llm_span("anthropic", "claude-sonnet");
         let _db = db_span("insert");
     }
+
+    #[test]
+    fn log_dir_constant() {
+        assert_eq!(LOG_DIR, ".nexor/logs");
+    }
+
+    #[test]
+    fn span_helpers_return_spans() {
+        // Spans may be disabled without a subscriber, just verify they construct
+        let _agent = agent_span("agent-123", "orchestrator");
+        let _task = task_span("task-456", "Build feature");
+        let _llm = llm_span("openai", "gpt-4");
+        let _db = db_span("select_tasks");
+    }
+
+    #[test]
+    fn macros_compile_and_dont_panic() {
+        // These macros just call tracing macros, verify they compile
+        log_agent_report!("agent-1", "Task completed successfully");
+        log_milestone!("Milestone 1 complete");
+        log_error!(
+            std::io::Error::new(std::io::ErrorKind::Other, "test"),
+            "Something failed"
+        );
+    }
 }
