@@ -66,7 +66,6 @@ M1-M5, M7-M11: Complete. M6: Deprecated (TUI). M12: In progress. M13-M16: Planne
 
 ## Working with this repo
 
-- Read `CONVENTIONS.md` for full Rust + React code style
 - Read `PROGRESS.md` before starting work to check dependencies
 - Ticket specs live in `decomp/M{n}/` directories
 - Verify with `cargo check` and `cargo test` before committing
