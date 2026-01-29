@@ -1,8 +1,8 @@
 -- Junction table for task dependencies
 CREATE TABLE IF NOT EXISTS task_dependencies (
-    task_id TEXT NOT NULL,
-    depends_on_id TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    task_id UUID NOT NULL,
+    depends_on_id UUID NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (task_id, depends_on_id),
     FOREIGN KEY (task_id) REFERENCES tasks(id),
     FOREIGN KEY (depends_on_id) REFERENCES tasks(id)

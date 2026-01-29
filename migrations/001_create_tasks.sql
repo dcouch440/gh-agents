@@ -1,16 +1,16 @@
 -- Tasks table
 CREATE TABLE IF NOT EXISTS tasks (
-    id TEXT PRIMARY KEY NOT NULL,
-    slice_id TEXT,
+    id UUID PRIMARY KEY NOT NULL,
+    slice_id UUID,
     title TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     assigned_tier TEXT NOT NULL DEFAULT 'worker',
-    assigned_agent TEXT,
+    assigned_agent UUID,
     status TEXT NOT NULL DEFAULT 'pending',
     priority TEXT NOT NULL DEFAULT 'normal',
-    context_files TEXT NOT NULL DEFAULT '[]',
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    context_files JSONB NOT NULL DEFAULT '[]',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Index for common queries
