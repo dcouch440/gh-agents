@@ -238,14 +238,14 @@
 
 | Ticket                    | Status  | Progress | Notes                                                       |
 | ------------------------- | ------- | -------- | ----------------------------------------------------------- |
-| 12.1 CLI Scaffolding      | pending | 0/4      | Package setup, tsconfig, Ink app entry, directory structure |
+| 12.1 CLI Scaffolding      | done    | 4/4      | Package setup, tsconfig, Ink app entry, directory structure |
 | 12.2 API Client           | pending | 0/4      | HTTP fetch wrapper, types, API methods                      |
 | 12.3 Auth Flow            | pending | 0/3      | Login prompt, token persistence, auth gate                  |
 | 12.4 Chat UI Components   | pending | 0/5      | Message, MessageList, Input, useChat, ChatView              |
 | 12.5 Streaming & SSE      | pending | 0/3      | SSE client, streaming message, wire into chat               |
 | 12.6 Polish & Integration | pending | 0/3      | Markdown rendering, error handling, Makefile                |
 
-**Milestone Status:** Not Started (0/6 tickets done)
+**Milestone Status:** In Progress (1/6 tickets done)
 
 **Note:** Previous M12 (React Features) web UI work remains in `ui/` — chat and feed views are functional. This milestone adds a terminal-native CLI as the primary interface.
 
