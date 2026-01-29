@@ -1,4 +1,5 @@
 import type {
+  AgentsListResponse,
   AuthMeResponse,
   ChatMessage,
   ChatSendResponse,
@@ -80,6 +81,10 @@ export const api = {
         body: JSON.stringify({ password }),
       }),
     me: () => fetchApi<AuthMeResponse>('/auth/me'),
+  },
+
+  agents: {
+    list: () => fetchApi<AgentsListResponse>('/api/agents'),
   },
 
   chat: {
