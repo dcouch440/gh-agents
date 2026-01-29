@@ -5,7 +5,7 @@
 ## Current Focus
 
 **Active:** M12 React Features
-**Next:** 12.2 Feed View
+**Next:** 12.3 Tasks View
 **Planned:** M14 Dynamic Agent Selection (can run in parallel with M10-M13)
 **Blocked:** None
 
@@ -235,13 +235,13 @@
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
 | 12.1 Chat View | done | 5/5 | ChatPage, ChatInput, Message, MarkdownContent, CodeBlock components |
-| 12.2 Feed View | pending | 0/4 | |
+| 12.2 Feed View | done | 4/4 | FeedPage, FeedItem, useFeed with WS, auto-scroll + new events indicator |
 | 12.3 Tasks View | pending | 0/5 | |
 | 12.4 Agents View | pending | 0/4 | |
 | 12.5 File Browser & Editor | pending | 0/5 | |
 | 12.6 Diff Viewer | pending | 0/3 | |
 
-**Milestone Status:** In Progress (1/6 tickets done)
+**Milestone Status:** In Progress (2/6 tickets done)
 
 ---
 

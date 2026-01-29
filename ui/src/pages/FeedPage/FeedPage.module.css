@@ -1,0 +1,78 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.count {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.contentWrapper {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+}
+
+.emptyState {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 3rem 0;
+}
+
+.emptyTitle {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.emptySubtitle {
+  font-size: 0.875rem;
+}
+
+.feedList {
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.newEventsButton {
+  position: absolute;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 9999px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.newEventsButton:hover {
+  background-color: var(--accent-hover);
+  box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+}
