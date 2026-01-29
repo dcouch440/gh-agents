@@ -261,6 +261,25 @@
 
 ---
 
+## Milestone 15: Repo Management & Power User Workspace - NOT STARTED
+
+**Goal**: Standalone workspace with multi-repo management, prompt library, full code editor, report review/submission, and pivotal points.
+
+| Ticket | Status | Progress | Notes |
+|--------|--------|----------|-------|
+| 15.1 Multi-Repo Backend | pending | 0/6 | DB schema, CRUD API, active repo switching, git clone/pull |
+| 15.2 Prompt Library Backend | pending | 0/5 | DB schema, CRUD, tagging, versioning, quick-launch |
+| 15.3 Multi-Repo Frontend | pending | 0/5 | Repo list, switcher, status indicators |
+| 15.4 Prompt Library Frontend | pending | 0/5 | Browse, search, edit, version history, launch |
+| 15.5 Full Code Editor | pending | 0/7 | Monaco, tabs, splits, command palette, git gutter |
+| 15.6 Report Management Backend | pending | 0/5 | DB schema, review lifecycle, agent hook |
+| 15.7 Report Viewer & Submission UI | pending | 0/6 | Markdown render, approve/reject, inline edit, submit |
+| 15.8 Pivotal Points | pending | 0/5 | Timeline, bookmarks, cross-repo tracking |
+
+**Milestone Status:** Not Started (0/8 tickets done)
+
+---
+
 ## Summary
 
 | Milestone | Tickets | Status |
@@ -275,10 +294,11 @@
 | M8: GitHub Integration | 8 | Complete |
 | M9: Polish & Production | 12 | Complete |
 | M10: Server Layer | 6 | Complete |
-| M11: React Foundation | 4 | Not Started |
+| M11: React Foundation | 4 | In Progress |
 | M12: React Features | 6 | Not Started |
 | M13: React Polish | 5 | Not Started |
-| **Total Active** | **79** | |
+| M15: Repo Mgmt & Workspace | 8 | Not Started |
+| **Total Active** | **87** | |
 
 ---
 

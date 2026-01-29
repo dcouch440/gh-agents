@@ -60,6 +60,7 @@ Build a **Rust backend + React frontend** web application that orchestrates AI a
 | M12: React Features | **NEW** | Chat, feed, tasks, files |
 | M13: React Polish | **NEW** | Analytics, settings, mobile |
 | M14: Dynamic Agent Selection | **NEW** | Difficulty-based model routing, prompt fixes |
+| M15: Repo Mgmt & Workspace | **NEW** | Multi-repo, prompt library, Monaco editor, reports, pivots |
 
 ---
 
@@ -393,6 +394,36 @@ Update all docs for new architecture.
 
 ---
 
+## NEW: Milestone 15: Repo Management & Power User Workspace
+
+**Goal**: Transform nexor into a standalone daily-driver workspace with multi-repo management, prompt library, full code editor, report review/submission, and pivotal points tracking.
+
+**Checkpoint**: Can manage multiple repos, save/launch prompts, edit code in Monaco with VS Code shortcuts, review/submit agent reports, and track key decisions on a timeline.
+
+| Ticket | Title | Slices | Priority |
+|--------|-------|--------|----------|
+| 15.1 | Multi-Repo Backend | 6 | P0 |
+| 15.2 | Prompt Library Backend | 5 | P0 |
+| 15.3 | Multi-Repo Frontend | 5 | P0 |
+| 15.4 | Prompt Library Frontend | 5 | P1 |
+| 15.5 | Full Code Editor (Monaco) | 7 | P0 |
+| 15.6 | Report Management Backend | 5 | P1 |
+| 15.7 | Report Viewer & Submission UI | 6 | P1 |
+| 15.8 | Pivotal Points Dashboard | 5 | P2 |
+
+**Key Features**:
+- **Multi-Repo**: Add/clone repos, switch active repo from header, per-repo config, git status indicators
+- **Prompt Library**: CRUD with tagging, versioning, categories, `{{variable}}` templates, one-click launch to chat
+- **Code Editor**: Monaco with VS Code keybindings (Ctrl+P, Ctrl+Shift+P, Ctrl+D, etc.), tabs, split panes, file tree, minimap, git gutter, global search
+- **Reports**: Agent-generated reports with review lifecycle (draft → pending → approved → submitted), inline editing, comment threads
+- **Pivotal Points**: Bookmark decisions/milestones/branch points, timeline view, cross-repo, linked to commits/PRs/reports
+
+**Dependencies**: M10 complete (for backend tickets), M11.4 complete (for frontend tickets). Backend tickets (15.1, 15.2, 15.6) can start immediately.
+
+See `decomp/M15/` for detailed ticket breakdowns.
+
+---
+
 ## Parallelization Notes
 
 ### Can be parallelized:
@@ -439,6 +470,7 @@ M12 complete → M13 (Polish)
 - [ ] Milestone 12: React Features
 - [ ] Milestone 13: React Polish
 - [ ] Milestone 14: Dynamic Agent Selection
+- [ ] Milestone 15: Repo Mgmt & Power User Workspace
 
 ---
 
