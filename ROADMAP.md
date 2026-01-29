@@ -61,6 +61,7 @@ Build a **Rust backend + React frontend** web application that orchestrates AI a
 | M13: React Polish | **NEW** | Analytics, settings, mobile |
 | M14: Dynamic Agent Selection | **NEW** | Difficulty-based model routing, prompt fixes |
 | M15: Repo Mgmt & Workspace | **NEW** | Multi-repo, prompt library, Monaco editor, reports, pivots |
+| M16: SaaS Foundation | **NEW** | Postgres, users/orgs, GitHub OAuth, cloud repos, collab chat, presence |
 
 ---
 
@@ -425,6 +426,41 @@ See `decomp/M15/` for detailed ticket breakdowns.
 
 ---
 
+## NEW: Milestone 16: SaaS Foundation
+
+**Goal**: Refactor nexor from a local single-user app to a cloud-hosted multi-tenant SaaS platform at nexor.io. Real user accounts, GitHub OAuth, Postgres, cloud repos, collaborative chat with AI, and an onboarding wizard.
+
+**Checkpoint**: User visits nexor.io, signs in with GitHub, imports repos, invites teammates, chats in shared rooms where AI participates, edits code with presence awareness.
+
+| Ticket | Title | Slices | Priority |
+|--------|-------|--------|----------|
+| 16.1 | Postgres Migration | 6 | P0 |
+| 16.2 | User Accounts & Org Model | 7 | P0 |
+| 16.3 | GitHub OAuth & Account Connect | 6 | P0 |
+| 16.4 | Cloud Repo Management | 7 | P0 |
+| 16.5 | Multi-Tenant Data Isolation | 5 | P0 |
+| 16.6 | Encrypted Secrets Storage | 4 | P0 |
+| 16.7 | Collaborative Chat Rooms | 8 | P1 |
+| 16.8 | Presence & User Awareness | 5 | P1 |
+| 16.9 | Onboarding Wizard | 6 | P1 |
+
+**Key Features**:
+- **Postgres**: Replace SQLite for multi-tenant concurrent access, sqlx with compile-time query checking
+- **Users & Orgs**: Real identities, organizations, roles (owner/admin/member/viewer), invitations via email or link
+- **GitHub OAuth**: Sign in with GitHub, connect account, browse and import repos
+- **Cloud Repos**: Server-side clones per org, sandboxed storage, disk quotas, GitHub sync
+- **Tenant Isolation**: org_id on every table, middleware-enforced, integration-tested
+- **Encrypted Secrets**: AES-256-GCM encrypted API keys per org, master key on server
+- **Collaborative Chat**: Shared rooms where team + AI participate. AI listens, responds to @mentions, posts agent updates, contributes relevant observations
+- **Presence**: Who's online, what they're viewing, typing indicators, collaborative cursors in editor
+- **Onboarding**: Sign up → GitHub connect → import repos → invite team → start working in under 2 minutes
+
+**Dependencies**: M10 complete. M15 features layer on top of M16 tenant model. Strict internal ordering: 16.1 → 16.2 → 16.3/16.5/16.6 → 16.4 → 16.7/16.8 → 16.9.
+
+See `decomp/M16/` for detailed ticket breakdowns.
+
+---
+
 ## Parallelization Notes
 
 ### Can be parallelized:
@@ -472,6 +508,7 @@ M12 complete → M13 (Polish)
 - [ ] Milestone 13: React Polish
 - [ ] Milestone 14: Dynamic Agent Selection
 - [ ] Milestone 15: Repo Mgmt & Power User Workspace
+- [ ] Milestone 16: SaaS Foundation
 
 ---
 
