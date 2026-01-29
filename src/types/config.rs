@@ -341,4 +341,149 @@ mod tests {
         let merged = AppConfig::merge(global, None);
         assert_eq!(merged.database_url, DEFAULT_DATABASE_URL);
     }
+
+    #[test]
+    fn config_merge_database_url_with_project_config() {
+        std::env::remove_var("DATABASE_URL");
+        let global = GlobalConfig::default();
+        let project = ProjectConfig {
+            autonomy: AutonomyLevel::FullAuto,
+            ..Default::default()
+        };
+        let merged = AppConfig::merge(global, Some(project));
+        assert_eq!(merged.database_url, DEFAULT_DATABASE_URL);
+    }
+
+    #[test]
+    fn config_merge_database_url_env_overrides_with_project() {
+        std::env::set_var("DATABASE_URL", "postgres://custom:pw@host:5433/mydb");
+        let global = GlobalConfig::default();
+        let project = ProjectConfig::default();
+        let merged = AppConfig::merge(global, Some(project));
+        assert_eq!(merged.database_url, "postgres://custom:pw@host:5433/mydb");
+        std::env::remove_var("DATABASE_URL");
+    }
+
+    #[test]
+    fn default_database_url_is_valid_postgres_url() {
+        assert!(DEFAULT_DATABASE_URL.starts_with("postgres://"));
+        assert!(DEFAULT_DATABASE_URL.contains("nexor"));
+        assert!(DEFAULT_DATABASE_URL.contains("5432"));
+    }
+
+    #[test]
+    fn config_merge_preserves_global_verbosity() {
+        let global = GlobalConfig {
+            verbosity: VerbosityLevel::Debug,
+            ..Default::default()
+        };
+        let project = ProjectConfig::default();
+        let merged = AppConfig::merge(global, Some(project));
+        assert_eq!(merged.verbosity, VerbosityLevel::Debug);
+    }
+
+    #[test]
+    fn config_merge_project_pool_overrides_global() {
+        let global = GlobalConfig::default();
+        let project = ProjectConfig {
+            pool: Some(AgentPoolConfig {
+                max_orchestrators: 1,
+                max_workers: 2,
+                max_utilities: 3,
+            }),
+            ..Default::default()
+        };
+        let merged = AppConfig::merge(global, Some(project));
+        assert_eq!(merged.pool.max_orchestrators, 1);
+        assert_eq!(merged.pool.max_workers, 2);
+        assert_eq!(merged.pool.max_utilities, 3);
+    }
+
+    #[test]
+    fn config_merge_no_project_pool_uses_global() {
+        let global = GlobalConfig {
+            pool: AgentPoolConfig {
+                max_orchestrators: 5,
+                max_workers: 10,
+                max_utilities: 8,
+            },
+            ..Default::default()
+        };
+        let merged = AppConfig::merge(global, None);
+        assert_eq!(merged.pool.max_orchestrators, 5);
+        assert_eq!(merged.pool.max_workers, 10);
+        assert_eq!(merged.pool.max_utilities, 8);
+    }
+
+    #[test]
+    fn config_merge_project_models_override_global() {
+        let global = GlobalConfig::default();
+        let custom_models = TierModels {
+            orchestrator: ModelConfig {
+                model_id: "custom-model".to_string(),
+                max_tokens: 1000,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let project = ProjectConfig {
+            models: Some(custom_models.clone()),
+            ..Default::default()
+        };
+        let merged = AppConfig::merge(global, Some(project));
+        assert_eq!(merged.models.orchestrator.model_id, "custom-model");
+        assert_eq!(merged.models.orchestrator.max_tokens, 1000);
+    }
+
+    #[test]
+    fn config_merge_no_project_models_uses_global() {
+        let global = GlobalConfig {
+            default_models: TierModels {
+                orchestrator: ModelConfig {
+                    model_id: "global-model".to_string(),
+                    max_tokens: 9999,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let project = ProjectConfig {
+            models: None,
+            ..Default::default()
+        };
+        let merged = AppConfig::merge(global, Some(project));
+        assert_eq!(merged.models.orchestrator.model_id, "global-model");
+    }
+
+    #[test]
+    fn git_strategy_default_is_branch_per_slice() {
+        assert_eq!(GitStrategy::default(), GitStrategy::BranchPerSlice);
+    }
+
+    #[test]
+    fn approval_gates_default_values() {
+        let gates = ApprovalGates::default();
+        assert!(!gates.before_commit);
+        assert!(gates.before_pr);
+        assert!(gates.before_merge);
+    }
+
+    #[test]
+    fn tier_models_default_values() {
+        let models = TierModels::default();
+        assert!(models.orchestrator.model_id.contains("opus"));
+        assert!(models.worker.model_id.contains("sonnet"));
+        assert!(models.utility.model_id.contains("sonnet"));
+        assert!(models.orchestrator.max_tokens > models.worker.max_tokens);
+        assert!(models.worker.max_tokens > models.utility.max_tokens);
+    }
+
+    #[test]
+    fn agent_pool_config_default_values() {
+        let pool = AgentPoolConfig::default();
+        assert_eq!(pool.max_orchestrators, 2);
+        assert_eq!(pool.max_workers, 6);
+        assert_eq!(pool.max_utilities, 4);
+    }
 }
