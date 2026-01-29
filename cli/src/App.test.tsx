@@ -121,4 +121,48 @@ describe('App', () => {
       expect(setBaseUrl).toHaveBeenCalledWith('http://localhost:3000');
     });
   });
+
+  it('transitions to authenticated when Login onSuccess fires', async () => {
+    // First render: no token → login state
+    mockedGetToken.mockReturnValue(null);
+    mockedIsTokenExpired.mockReturnValue(true);
+
+    // Re-mock Login to call onSuccess immediately
+    const { Login: _orig, ...rest } = await import('./components/Login.js');
+    vi.mocked(await import('./components/Login.js')).Login;
+    // We need to override the mock to trigger onSuccess
+    vi.doMock('./components/Login.js', () => ({
+      Login: ({ onSuccess }: { onSuccess: () => void }) => {
+        // Simulate calling onSuccess on mount
+        React.useEffect(() => { onSuccess(); }, []);
+        return React.createElement('ink-text', null, 'MockLogin');
+      },
+    }));
+
+    // Re-import App with new mock
+    vi.resetModules();
+    // Re-setup auth mock
+    vi.doMock('./store/auth.js', () => ({
+      getToken: vi.fn().mockReturnValueOnce(null).mockReturnValue('new-token'),
+      isTokenExpired: vi.fn().mockReturnValue(true),
+      clearToken: vi.fn(),
+      getServerUrl: vi.fn().mockReturnValue('http://localhost:3000'),
+      setServerUrl: vi.fn(),
+    }));
+    vi.doMock('./api/client.js', () => ({
+      api: { auth: { me: vi.fn() } },
+      setBaseUrl: vi.fn(),
+      setToken: vi.fn(),
+    }));
+
+    const { App: FreshApp } = await import('./App.js');
+    const { setToken: freshSetApiToken } = await import('./api/client.js');
+
+    const { lastFrame } = render(React.createElement(FreshApp));
+
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain('Authenticated');
+    });
+    expect(freshSetApiToken).toHaveBeenCalledWith('new-token');
+  });
 });
