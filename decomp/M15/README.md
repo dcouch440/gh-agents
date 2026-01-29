@@ -55,7 +55,7 @@ All features build on the existing Axum server (M10) + React frontend (M11-M13).
 | Ticket | Title | Slices | Priority |
 |--------|-------|--------|----------|
 | 15.1 | Multi-Repo Backend | 6 | P0 |
-| 15.2 | Prompt Library Backend | 5 | P0 |
+| 15.2 | Prompt Library Backend | 6 | P0 |
 | 15.3 | Multi-Repo Frontend | 5 | P0 |
 | 15.4 | Prompt Library Frontend | 5 | P1 |
 | 15.5 | Full Code Editor | 7 | P0 |
