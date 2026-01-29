@@ -232,7 +232,7 @@
 
 ---
 
-## Milestone 12: Terminal CLI (Ink) - NOT STARTED
+## Milestone 12: Terminal CLI (Ink) - COMPLETE
 
 **Goal**: Claude Code-style terminal CLI using TypeScript + Ink. Chat-only scope.
 
@@ -243,9 +243,9 @@
 | 12.3 Auth Flow            | done    | 3/3      | Login prompt, token persistence, auth gate                  |
 | 12.4 Chat UI Components   | done    | 5/5      | Message, MessageList, Input, useChat, ChatView, 13 tests    |
 | 12.5 Streaming & SSE      | done    | 3/3      | SSE client, StreamingMessage component, wired into useChat, 21 tests |
-| 12.6 Polish & Integration | pending | 0/3      | Markdown rendering, error handling, Makefile                |
+| 12.6 Polish & Integration | done    | 3/3      | Markdown rendering, error handling, Makefile, 161 tests     |
 
-**Milestone Status:** In Progress (5/6 tickets done)
+**Milestone Status:** Complete (6/6 tickets done)
 
 **Note:** Previous M12 (React Features) web UI work remains in `ui/` — chat and feed views are functional. This milestone adds a terminal-native CLI as the primary interface.
 
@@ -340,7 +340,7 @@
 | M9: Polish & Production    | 12      | Complete          |
 | M10: Server Layer          | 6       | Complete          |
 | M11: React Foundation      | 4       | Complete          |
-| M12: Terminal CLI (Ink)     | 6       | Not Started       |
+| M12: Terminal CLI (Ink)     | 6       | Complete          |
 | M13: Agent View             | 6       | Not Started       |
 | M15: Repo Mgmt & Workspace | -       | **DEPRECATED**    |
 | M16: SaaS Foundation       | -       | **DEPRECATED**    |
