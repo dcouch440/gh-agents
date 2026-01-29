@@ -1020,6 +1020,266 @@ thread 'tests::fail_b' panicked at 'assert b', src/lib.rs:2:1
     }
 
     #[test]
+    fn detect_framework_caches_result() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("Cargo.toml"), "[package]").unwrap();
+
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let mut runner = TestRunner::new(ctx);
+
+        assert_eq!(runner.detect_framework(), Some(TestFramework::Cargo));
+        // Remove the file; cached value should still be returned
+        std::fs::remove_file(tmp.path().join("Cargo.toml")).unwrap();
+        assert_eq!(runner.detect_framework(), Some(TestFramework::Cargo));
+    }
+
+    #[test]
+    fn parse_results_generic_returns_none() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx).with_framework(TestFramework::Generic);
+        let (p, f, s) = runner.parse_results(TestFramework::Generic, "anything", "anything");
+        assert!(p.is_none());
+        assert!(f.is_none());
+        assert!(s.is_none());
+    }
+
+    #[test]
+    fn parse_results_npm_returns_none() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx).with_framework(TestFramework::Npm);
+        let (p, f, s) = runner.parse_results(TestFramework::Npm, "output", "");
+        assert!(p.is_none());
+        assert!(f.is_none());
+        assert!(s.is_none());
+    }
+
+    #[test]
+    fn parse_results_python_unittest_returns_none() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx).with_framework(TestFramework::PythonUnittest);
+        let (p, f, s) = runner.parse_results(TestFramework::PythonUnittest, "output", "");
+        assert!(p.is_none());
+        assert!(f.is_none());
+        assert!(s.is_none());
+    }
+
+    #[test]
+    fn parse_results_dispatches_to_cargo() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx);
+        let stdout = "test result: ok. 3 passed; 0 failed; 1 ignored";
+        let (p, f, s) = runner.parse_results(TestFramework::Cargo, stdout, "");
+        assert_eq!(p, Some(3));
+        assert_eq!(f, Some(0));
+        assert_eq!(s, Some(1));
+    }
+
+    #[test]
+    fn parse_results_dispatches_to_jest() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx);
+        let stdout = "Tests: 3 passed, 0 failed, 3 total";
+        let (p, f, _s) = runner.parse_results(TestFramework::Jest, stdout, "");
+        assert_eq!(p, Some(3));
+        assert_eq!(f, Some(0));
+    }
+
+    #[test]
+    fn parse_results_dispatches_to_pytest() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx);
+        let stdout = "===== 5 passed in 1.0s =====";
+        let (p, f, s) = runner.parse_results(TestFramework::Pytest, stdout, "");
+        assert_eq!(p, Some(5));
+        assert_eq!(f, None);
+        assert_eq!(s, None);
+    }
+
+    #[test]
+    fn parse_results_dispatches_to_go() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx);
+        let stdout = "--- PASS: TestX (0.00s)\n";
+        let (p, f, s) = runner.parse_results(TestFramework::Go, stdout, "");
+        assert_eq!(p, Some(1));
+        assert_eq!(f, Some(0));
+        assert_eq!(s, Some(0));
+    }
+
+    #[test]
+    fn has_pytest_from_requirements_txt() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("pyproject.toml"), "[build-system]").unwrap();
+        std::fs::write(tmp.path().join("requirements.txt"), "pytest==7.0\nrequests\n").unwrap();
+
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let mut runner = TestRunner::new(ctx);
+        assert_eq!(runner.detect_framework(), Some(TestFramework::Pytest));
+    }
+
+    #[test]
+    fn has_pytest_pyproject_with_pytest_keyword() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(
+            tmp.path().join("pyproject.toml"),
+            "[project]\ndependencies = [\"pytest\"]\n",
+        )
+        .unwrap();
+
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let mut runner = TestRunner::new(ctx);
+        assert_eq!(runner.detect_framework(), Some(TestFramework::Pytest));
+    }
+
+    #[test]
+    fn has_pytest_returns_false_no_pytest_indicators() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(
+            tmp.path().join("pyproject.toml"),
+            "[build-system]\nrequires = [\"setuptools\"]\n",
+        )
+        .unwrap();
+
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let mut runner = TestRunner::new(ctx);
+        assert_eq!(
+            runner.detect_framework(),
+            Some(TestFramework::PythonUnittest)
+        );
+    }
+
+    #[test]
+    fn detects_jest_config_js() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("package.json"), "{}").unwrap();
+        std::fs::write(tmp.path().join("jest.config.js"), "module.exports = {}").unwrap();
+
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let mut runner = TestRunner::new(ctx);
+        assert_eq!(runner.detect_framework(), Some(TestFramework::Jest));
+    }
+
+    #[test]
+    fn extract_failures_cargo() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx);
+        let result = TestResult {
+            framework: TestFramework::Cargo,
+            success: false,
+            exit_code: 1,
+            stdout: "---- my_test stdout ----\nthread panicked at 'oops'\n----\n".into(),
+            stderr: String::new(),
+            passed: Some(0),
+            failed: Some(1),
+            skipped: None,
+            duration_ms: 100,
+        };
+        let failures = runner.extract_failures(&result);
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].test_name, "my_test");
+    }
+
+    #[test]
+    fn has_failures_none_failed_success_true() {
+        let result = TestResult {
+            framework: TestFramework::Generic,
+            success: true,
+            exit_code: 0,
+            stdout: String::new(),
+            stderr: String::new(),
+            passed: None,
+            failed: None,
+            skipped: None,
+            duration_ms: 50,
+        };
+        assert!(!result.has_failures());
+    }
+
+    #[tokio::test]
+    async fn run_with_command_empty() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx);
+        let err = runner.run_with_command(&[]).await.unwrap_err();
+        assert!(matches!(err, TestError::CommandFailed(_)));
+    }
+
+    #[tokio::test]
+    async fn run_tests_no_framework() {
+        let tmp = TempDir::new().unwrap();
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let mut runner = TestRunner::new(ctx);
+        let err = runner.run_tests().await.unwrap_err();
+        assert!(matches!(err, TestError::NoFrameworkDetected));
+    }
+
+    #[tokio::test]
+    async fn run_specific_no_framework() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx);
+        let err = runner.run_specific("test_name").await.unwrap_err();
+        assert!(matches!(err, TestError::NoFrameworkDetected));
+    }
+
+    #[tokio::test]
+    async fn run_specific_unsupported_framework() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx).with_framework(TestFramework::PythonUnittest);
+        let err = runner.run_specific("test_name").await.unwrap_err();
+        assert!(matches!(err, TestError::CommandFailed(_)));
+    }
+
+    #[tokio::test]
+    async fn run_specific_generic_unsupported() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx).with_framework(TestFramework::Generic);
+        let err = runner.run_specific("test_name").await.unwrap_err();
+        assert!(matches!(err, TestError::CommandFailed(_)));
+    }
+
+    #[tokio::test]
+    async fn run_with_command_nonexistent_binary() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx);
+        let err = runner
+            .run_with_command(&["__nonexistent_binary_xyz__"])
+            .await
+            .unwrap_err();
+        assert!(matches!(err, TestError::ExecutionError(_)));
+    }
+
+    #[test]
+    fn parse_pytest_only_passed() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx);
+        let stdout = "===== 8 passed in 2.0s =====";
+        let (p, f, s) = runner.parse_pytest_output(stdout);
+        assert_eq!(p, Some(8));
+        assert_eq!(f, None);
+        assert_eq!(s, None);
+    }
+
+    #[test]
+    fn parse_pytest_no_match() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx);
+        let (p, f, s) = runner.parse_pytest_output("no relevant output");
+        assert!(p.is_none());
+        assert!(f.is_none());
+        assert!(s.is_none());
+    }
+
+    #[test]
+    fn parse_cargo_failures_no_panic_line() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let runner = TestRunner::new(ctx);
+        let stdout = "---- my_test stdout ----\nsome other output\n----\n";
+        let failures = runner.parse_cargo_failures(stdout);
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].test_name, "my_test");
+        assert!(failures[0].message.is_empty());
+    }
+
+    #[test]
     fn test_error_display() {
         assert_eq!(
             TestError::NoFrameworkDetected.to_string(),

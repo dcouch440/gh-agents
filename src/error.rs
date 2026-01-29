@@ -506,4 +506,262 @@ mod tests {
         let result = handle.await.unwrap();
         assert!(matches!(result, Err(NexorError::Database { .. })));
     }
+
+    // --- Additional coverage tests ---
+
+    #[test]
+    fn display_all_variants() {
+        let db = NexorError::Database {
+            message: "fail".into(),
+            suggestion: None,
+        };
+        assert_eq!(format!("{}", db), "database error: fail");
+
+        let llm = NexorError::LlmApi {
+            message: "bad".into(),
+            suggestion: None,
+        };
+        assert_eq!(format!("{}", llm), "LLM API error: bad");
+
+        let gh = NexorError::GitHubApi {
+            message: "nope".into(),
+            suggestion: None,
+        };
+        assert_eq!(format!("{}", gh), "GitHub API error: nope");
+
+        let agent = NexorError::Agent {
+            agent_id: "a1".into(),
+            message: "boom".into(),
+            suggestion: None,
+        };
+        assert_eq!(format!("{}", agent), "agent error: a1 - boom");
+
+        let task = NexorError::TaskFailed {
+            task_id: "t1".into(),
+            message: "oops".into(),
+            recoverable: false,
+        };
+        assert_eq!(format!("{}", task), "task failed: t1 - oops");
+
+        let internal = NexorError::Internal {
+            message: "bug".into(),
+        };
+        assert_eq!(format!("{}", internal), "internal error: bug");
+    }
+
+    #[test]
+    fn suggestion_all_variants() {
+        let db = NexorError::Database {
+            message: "x".into(),
+            suggestion: Some("retry".into()),
+        };
+        assert_eq!(db.suggestion(), Some("retry"));
+
+        let llm = NexorError::LlmApi {
+            message: "x".into(),
+            suggestion: Some("wait".into()),
+        };
+        assert_eq!(llm.suggestion(), Some("wait"));
+
+        let gh = NexorError::GitHubApi {
+            message: "x".into(),
+            suggestion: Some("check token".into()),
+        };
+        assert_eq!(gh.suggestion(), Some("check token"));
+
+        let agent = NexorError::Agent {
+            agent_id: "a".into(),
+            message: "x".into(),
+            suggestion: Some("split task".into()),
+        };
+        assert_eq!(agent.suggestion(), Some("split task"));
+
+        // TaskFailed returns None
+        let task = NexorError::TaskFailed {
+            task_id: "t".into(),
+            message: "x".into(),
+            recoverable: true,
+        };
+        assert_eq!(task.suggestion(), None);
+    }
+
+    #[test]
+    fn is_recoverable_github_api() {
+        let err = NexorError::GitHubApi {
+            message: "timeout".into(),
+            suggestion: None,
+        };
+        assert!(err.is_recoverable());
+    }
+
+    #[test]
+    fn is_recoverable_database_not_recoverable() {
+        let err = NexorError::Database {
+            message: "corrupt".into(),
+            suggestion: None,
+        };
+        assert!(!err.is_recoverable());
+    }
+
+    #[test]
+    fn is_recoverable_agent_not_recoverable() {
+        let err = NexorError::Agent {
+            agent_id: "a".into(),
+            message: "crash".into(),
+            suggestion: None,
+        };
+        assert!(!err.is_recoverable());
+    }
+
+    #[test]
+    fn is_recoverable_internal_not_recoverable() {
+        let err = NexorError::Internal {
+            message: "bug".into(),
+        };
+        assert!(!err.is_recoverable());
+    }
+
+    #[test]
+    fn api_key_missing_unknown_provider() {
+        let err = NexorError::api_key_missing("openai");
+        assert!(err.suggestion().unwrap().contains("API_KEY"));
+    }
+
+    #[test]
+    fn rate_limited_simple_has_suggestion() {
+        let err = NexorError::rate_limited_simple();
+        assert!(err.to_string().contains("rate limit"));
+        assert!(err.suggestion().unwrap().contains("Wait"));
+    }
+
+    #[test]
+    fn database_query_no_suggestion() {
+        let err = NexorError::database_query("syntax error");
+        assert!(err.to_string().contains("syntax error"));
+        assert_eq!(err.suggestion(), None);
+    }
+
+    #[test]
+    fn github_rate_limited_with_time() {
+        let time = Utc::now();
+        let err = NexorError::github_rate_limited(Some(time));
+        assert!(err.suggestion().unwrap().contains("Try again after"));
+    }
+
+    #[test]
+    fn github_rate_limited_without_time() {
+        let err = NexorError::github_rate_limited(None);
+        assert!(err.suggestion().unwrap().contains("Wait a moment"));
+    }
+
+    #[test]
+    fn agent_failed_no_suggestion() {
+        let err = NexorError::agent_failed("a1", "out of memory");
+        assert!(err.to_string().contains("a1"));
+        assert!(err.to_string().contains("out of memory"));
+        assert_eq!(err.suggestion(), None);
+    }
+
+    #[test]
+    fn task_failed_constructor() {
+        let err = NexorError::task_failed("t1", "compile error", false);
+        assert!(err.to_string().contains("t1"));
+        assert!(!err.is_recoverable());
+
+        let err = NexorError::task_failed("t2", "flaky test", true);
+        assert!(err.is_recoverable());
+    }
+
+    #[test]
+    fn internal_constructor() {
+        let err = NexorError::internal("unexpected state");
+        assert_eq!(format!("{}", err), "internal error: unexpected state");
+    }
+
+    #[test]
+    fn config_missing_key_constructor() {
+        let err = NexorError::config_missing_key("db_url");
+        assert!(err.to_string().contains("db_url"));
+        assert!(err.suggestion().unwrap().contains("db_url"));
+    }
+
+    #[test]
+    fn config_invalid_value_constructor() {
+        let err = NexorError::config_invalid_value("port", "abc", "a number");
+        assert!(err.to_string().contains("abc"));
+        assert!(err.suggestion().unwrap().contains("a number"));
+    }
+
+    #[test]
+    fn enrich_error_api_key() {
+        let err = anyhow::anyhow!("api key is invalid");
+        let nexor_err = enrich_error(err);
+        assert!(matches!(nexor_err, NexorError::Config { .. }));
+    }
+
+    #[test]
+    fn enrich_error_unauthorized() {
+        let err = anyhow::anyhow!("401 unauthorized");
+        let nexor_err = enrich_error(err);
+        assert!(matches!(nexor_err, NexorError::Config { .. }));
+    }
+
+    #[test]
+    fn enrich_error_dns() {
+        let err = anyhow::anyhow!("dns resolution failed");
+        let nexor_err = enrich_error(err);
+        assert!(matches!(nexor_err, NexorError::LlmApi { .. }));
+        assert!(nexor_err.suggestion().unwrap().contains("internet"));
+    }
+
+    #[test]
+    fn enrich_error_sqlite() {
+        let err = anyhow::anyhow!("sqlite constraint violation");
+        let nexor_err = enrich_error(err);
+        assert!(matches!(nexor_err, NexorError::Database { .. }));
+    }
+
+    #[test]
+    fn enrich_error_sqlx() {
+        let err = anyhow::anyhow!("sqlx pool timed out");
+        let nexor_err = enrich_error(err);
+        assert!(matches!(nexor_err, NexorError::Database { .. }));
+    }
+
+    #[test]
+    fn enrich_error_github_forbidden() {
+        let err = anyhow::anyhow!("github 403 forbidden");
+        let nexor_err = enrich_error(err);
+        assert!(matches!(nexor_err, NexorError::GitHubApi { .. }));
+        assert!(nexor_err.suggestion().unwrap().contains("permissions"));
+    }
+
+    #[test]
+    fn enrich_error_github_generic() {
+        let err = anyhow::anyhow!("github server error 500");
+        let nexor_err = enrich_error(err);
+        assert!(matches!(nexor_err, NexorError::GitHubApi { .. }));
+        assert_eq!(nexor_err.suggestion(), None);
+    }
+
+    #[test]
+    fn enrich_error_429_only() {
+        let err = anyhow::anyhow!("got 429 too many requests");
+        let nexor_err = enrich_error(err);
+        assert!(matches!(nexor_err, NexorError::LlmApi { .. }));
+    }
+
+    #[test]
+    fn error_is_clone() {
+        let err = NexorError::internal("test");
+        let cloned = err.clone();
+        assert_eq!(format!("{}", err), format!("{}", cloned));
+    }
+
+    #[test]
+    fn error_is_debug() {
+        let err = NexorError::internal("test");
+        let debug = format!("{:?}", err);
+        assert!(debug.contains("Internal"));
+    }
 }

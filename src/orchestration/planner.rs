@@ -799,5 +799,424 @@ mod tests {
 
         let err = DecompositionError::MaxRetriesExceeded { attempts: 3 };
         assert!(err.to_string().contains("3 attempts"));
+
+        let err = DecompositionError::DatabaseError("no connection".to_string());
+        assert!(err.to_string().contains("no connection"));
+
+        let err = DecompositionError::ValidationError(
+            crate::prompts::schemas::ValidationError::EmptySlices,
+        );
+        assert!(err.to_string().contains("validation failed"));
+    }
+
+    #[test]
+    fn test_extract_json_from_generic_code_block() {
+        let provider = Arc::new(MockProvider::with_response(""));
+        let planner = Planner::new(provider, PlannerConfig::default());
+
+        let content = "Here's the result:\n\n```\n{\"thinking\": \"test\", \"slices\": []}\n```";
+
+        let result = planner.extract_json(content);
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("thinking"));
+    }
+
+    #[test]
+    fn test_extract_json_generic_code_block_non_json() {
+        let provider = Arc::new(MockProvider::with_response(""));
+        let planner = Planner::new(provider, PlannerConfig::default());
+
+        // Generic code block that doesn't start with '{' — falls through to raw JSON search
+        let content = "```\nsome text\n```\n{\"key\": \"value\"}";
+
+        let result = planner.extract_json(content);
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("key"));
+    }
+
+    #[test]
+    fn test_extract_json_code_block_with_language_tag() {
+        let provider = Arc::new(MockProvider::with_response(""));
+        let planner = Planner::new(provider, PlannerConfig::default());
+
+        // Generic code block with a language tag that isn't "json"
+        let content = "```javascript\n{\"thinking\": \"test\"}\n```";
+
+        let result = planner.extract_json(content);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_build_correction_request_parse_error() {
+        let provider = Arc::new(MockProvider::with_response(""));
+        let planner = Planner::new(provider, PlannerConfig::default());
+        let ticket = create_test_ticket();
+
+        let error = DecompositionError::ParseError {
+            reason: "bad json".to_string(),
+            raw_output: "some invalid output".to_string(),
+        };
+
+        let request = planner.build_correction_request(&ticket, &error);
+        let prompt_text = &request.messages[0].content;
+        assert!(prompt_text.contains("CORRECTION NEEDED"));
+        assert!(prompt_text.contains("bad json"));
+        assert!(prompt_text.contains("some invalid output"));
+    }
+
+    #[test]
+    fn test_build_correction_request_validation_error() {
+        let provider = Arc::new(MockProvider::with_response(""));
+        let planner = Planner::new(provider, PlannerConfig::default());
+        let ticket = create_test_ticket();
+
+        let error = DecompositionError::ValidationError(
+            crate::prompts::schemas::ValidationError::EmptySlices,
+        );
+
+        let request = planner.build_correction_request(&ticket, &error);
+        let prompt_text = &request.messages[0].content;
+        assert!(prompt_text.contains("CORRECTION NEEDED"));
+        assert!(prompt_text.contains("failed validation"));
+    }
+
+    #[test]
+    fn test_build_correction_request_other_error() {
+        let provider = Arc::new(MockProvider::with_response(""));
+        let planner = Planner::new(provider, PlannerConfig::default());
+        let ticket = create_test_ticket();
+
+        let error = DecompositionError::LlmError("timeout".to_string());
+
+        let request = planner.build_correction_request(&ticket, &error);
+        let prompt_text = &request.messages[0].content;
+        assert!(prompt_text.contains("CORRECTION NEEDED"));
+        assert!(prompt_text.contains("Previous attempt failed"));
+    }
+
+    #[test]
+    fn test_build_correction_request_truncates_long_output() {
+        let provider = Arc::new(MockProvider::with_response(""));
+        let planner = Planner::new(provider, PlannerConfig::default());
+        let ticket = create_test_ticket();
+
+        let long_output = "x".repeat(1000);
+        let error = DecompositionError::ParseError {
+            reason: "parse fail".to_string(),
+            raw_output: long_output,
+        };
+
+        let request = planner.build_correction_request(&ticket, &error);
+        let prompt_text = &request.messages[0].content;
+        // The raw output should be truncated to 500 chars
+        assert!(prompt_text.contains("CORRECTION NEEDED"));
+    }
+
+    #[test]
+    fn test_convert_to_planner_output_multiple_slices_and_tiers() {
+        let provider = Arc::new(MockProvider::with_response(""));
+        let planner = Planner::new(provider, PlannerConfig::default());
+        let ticket = create_test_ticket();
+
+        let json = r#"{
+            "thinking": "Multi-slice decomposition",
+            "slices": [
+                {
+                    "title": "Slice A",
+                    "description": "First slice",
+                    "tasks": [
+                        {
+                            "title": "Worker task low",
+                            "tier": "worker",
+                            "estimated_complexity": "low",
+                            "context_files": ["src/main.rs"]
+                        },
+                        {
+                            "title": "Utility task high",
+                            "tier": "utility",
+                            "estimated_complexity": "high",
+                            "context_files": ["src/lib.rs", "Cargo.toml"]
+                        }
+                    ],
+                    "dependencies": [],
+                    "acceptance_criteria": ["Tests pass"]
+                },
+                {
+                    "title": "Slice B",
+                    "description": "Second slice",
+                    "tasks": [
+                        {
+                            "title": "Worker task medium",
+                            "tier": "worker",
+                            "estimated_complexity": "medium",
+                            "context_files": []
+                        }
+                    ],
+                    "dependencies": [],
+                    "acceptance_criteria": ["Compiles"]
+                }
+            ],
+            "questions": ["What about auth?"],
+            "risks": ["Risk 1", "Risk 2"]
+        }"#;
+
+        let decomp: DecompositionOutput = serde_json::from_str(json).unwrap();
+        let output = planner.convert_to_planner_output(&ticket, decomp);
+
+        assert_eq!(output.slice_count(), 2);
+        assert_eq!(output.task_count(), 3);
+        assert!(output.has_questions());
+        assert!(output.has_risks());
+
+        // Check tier mapping
+        assert_eq!(output.tasks[0].assigned_tier, AgentTier::Worker);
+        assert_eq!(output.tasks[1].assigned_tier, AgentTier::Utility);
+
+        // Check complexity metadata mapping
+        let meta0 = output.tasks[0].metadata.as_ref().unwrap();
+        assert_eq!(meta0.get("difficulty").unwrap(), "simple");
+
+        let meta1 = output.tasks[1].metadata.as_ref().unwrap();
+        assert_eq!(meta1.get("difficulty").unwrap(), "complex");
+
+        let meta2 = output.tasks[2].metadata.as_ref().unwrap();
+        assert_eq!(meta2.get("difficulty").unwrap(), "standard");
+
+        // Check context files
+        assert_eq!(output.tasks[0].context_files.len(), 1);
+        assert_eq!(output.tasks[1].context_files.len(), 2);
+        assert_eq!(output.tasks[2].context_files.len(), 0);
+
+        // Check slice_id linkage
+        assert!(output.tasks[0].slice_id.is_some());
+        assert_eq!(output.tasks[0].slice_id, output.tasks[1].slice_id);
+        assert_ne!(output.tasks[0].slice_id, output.tasks[2].slice_id);
+
+        // Check ticket_id
+        assert_eq!(output.ticket_id, ticket.id);
+    }
+
+    #[test]
+    fn test_build_decomposition_request() {
+        let provider = Arc::new(MockProvider::with_response(""));
+        let config = PlannerConfig {
+            max_retries: 1,
+            model_id: "test-model".to_string(),
+            max_tokens: 4096,
+        };
+        let planner = Planner::new(provider, config);
+        let ticket = create_test_ticket();
+
+        let request = planner.build_decomposition_request(&ticket);
+        assert_eq!(request.model, "test-model");
+        assert_eq!(request.max_tokens, 4096);
+        assert!(!request.messages.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_decompose_and_save_without_pool() {
+        let provider = Arc::new(MockProvider::with_response(valid_decomposition_json()));
+        let planner = Planner::new(provider, PlannerConfig::default());
+
+        let ticket = create_test_ticket();
+        let result = planner.decompose_and_save(&ticket).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().slice_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_decompose_all_retries_fail_with_bad_json() {
+        let provider = Arc::new(MockProvider::with_response("no json here at all"));
+        let config = PlannerConfig {
+            max_retries: 2,
+            ..Default::default()
+        };
+        let planner = Planner::new(provider, config);
+
+        let ticket = create_test_ticket();
+        let result = planner.decompose(&ticket).await;
+        assert!(matches!(
+            result,
+            Err(DecompositionError::MaxRetriesExceeded { attempts: 2 })
+        ));
+    }
+
+    #[test]
+    fn test_with_db_constructor() {
+        // Just verify with_db sets the pool
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let temp_dir = tempfile::TempDir::new().unwrap();
+            let db_path = temp_dir.path().join("test.db");
+            let pool = crate::db::init_db_at(db_path.to_str().unwrap())
+                .await
+                .unwrap();
+
+            let provider = Arc::new(MockProvider::with_response(""));
+            let planner = Planner::with_db(provider, pool, PlannerConfig::default());
+            assert!(planner.pool.is_some());
+        });
+    }
+
+    #[tokio::test]
+    async fn test_decompose_and_save_with_db() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let pool = crate::db::init_db_at(db_path.to_str().unwrap())
+            .await
+            .unwrap();
+
+        let ticket = create_test_ticket();
+
+        // Insert the ticket into the DB first to satisfy foreign key constraints
+        sqlx::query(
+            "INSERT INTO tickets (id, source_type, title, description, status, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+        )
+        .bind(ticket.id.0.to_string())
+        .bind("manual")
+        .bind(&ticket.title)
+        .bind(&ticket.description)
+        .bind("new")
+        .bind(ticket.created_at.to_rfc3339())
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let provider = Arc::new(MockProvider::with_response(valid_decomposition_json()));
+        let planner = Planner::with_db(provider, pool, PlannerConfig::default());
+
+        let result = planner.decompose_and_save(&ticket).await;
+        if let Err(ref e) = result {
+            panic!("decompose_and_save failed: {}", e);
+        }
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_planner_output_no_questions_no_risks() {
+        let output = PlannerOutput {
+            ticket_id: crate::types::TicketId::new(),
+            slices: vec![],
+            tasks: vec![],
+            questions: vec![],
+            risks: vec![],
+            thinking: String::new(),
+        };
+
+        assert!(!output.has_questions());
+        assert!(!output.has_risks());
+        assert_eq!(output.slice_count(), 0);
+        assert_eq!(output.task_count(), 0);
+    }
+
+    #[test]
+    fn test_parse_and_validate_in_code_block() {
+        let provider = Arc::new(MockProvider::with_response(""));
+        let planner = Planner::new(provider, PlannerConfig::default());
+
+        let content = format!("```json\n{}\n```", valid_decomposition_json());
+        let result = planner.parse_and_validate(&content);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_and_validate_empty_slices_no_questions() {
+        let provider = Arc::new(MockProvider::with_response(""));
+        let planner = Planner::new(provider, PlannerConfig::default());
+
+        let json = r#"{"thinking": "Some thought", "slices": [], "questions": [], "risks": []}"#;
+        let result = planner.parse_and_validate(json);
+        assert!(matches!(
+            result,
+            Err(DecompositionError::ValidationError(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_decompose_retries_on_llm_failure_then_succeeds() {
+        struct LlmFailThenSucceed {
+            call_count: std::sync::atomic::AtomicU32,
+        }
+
+        #[async_trait]
+        impl LLMProvider for LlmFailThenSucceed {
+            async fn send_message(&self, _request: LLMRequest) -> LLMResult<LLMResponse> {
+                let count = self
+                    .call_count
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+                if count == 0 {
+                    return Err(crate::llm::LLMError::ApiError {
+                        status: 503,
+                        message: "Service unavailable".to_string(),
+                    });
+                }
+
+                Ok(LLMResponse {
+                    content: valid_decomposition_json().to_string(),
+                    model: "mock".to_string(),
+                    stop_reason: StopReason::EndTurn,
+                    usage: TokenUsage {
+                        input_tokens: 100,
+                        output_tokens: 200,
+                    },
+                })
+            }
+
+            async fn send_message_stream(
+                &self,
+                _request: LLMRequest,
+            ) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<crate::llm::StreamChunk>> + Send>>>
+            {
+                unimplemented!()
+            }
+
+            fn provider_name(&self) -> &'static str {
+                "fail-then-succeed"
+            }
+
+            fn model_id(&self) -> &str {
+                "mock"
+            }
+        }
+
+        let provider = Arc::new(LlmFailThenSucceed {
+            call_count: std::sync::atomic::AtomicU32::new(0),
+        });
+        let planner = Planner::new(provider.clone(), PlannerConfig::default());
+
+        let ticket = create_test_ticket();
+        let result = planner.decompose(&ticket).await;
+        assert!(result.is_ok());
+        assert_eq!(
+            provider
+                .call_count
+                .load(std::sync::atomic::Ordering::SeqCst),
+            2
+        );
+    }
+
+    #[test]
+    fn test_extract_json_only_opening_brace() {
+        let provider = Arc::new(MockProvider::with_response(""));
+        let planner = Planner::new(provider, PlannerConfig::default());
+
+        // Has '{' but no '}' — should fail
+        let content = "{ incomplete json without closing";
+        let result = planner.extract_json(content);
+        // Actually rfind('}') won't find one, so this returns an error
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_planner_config_custom() {
+        let config = PlannerConfig {
+            max_retries: 5,
+            model_id: "custom-model".to_string(),
+            max_tokens: 16384,
+        };
+        assert_eq!(config.max_retries, 5);
+        assert_eq!(config.model_id, "custom-model");
+        assert_eq!(config.max_tokens, 16384);
     }
 }

@@ -514,3 +514,582 @@ impl Agent {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agents::agent::Agent;
+    use crate::agents::channels::*;
+    use crate::agents::roles::{CommunicationStyle, OutputFormat, RoleId};
+    use crate::llm::{LLMProvider, LLMRequest, LLMResponse, StopReason, StreamChunk, TokenUsage};
+    use crate::types::{AgentPersona, AgentStatus, AgentTier, ModelConfig, TaskStatus};
+    use async_trait::async_trait;
+    use futures::Stream;
+    use std::pin::Pin;
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tokio::sync::mpsc;
+    use uuid::Uuid;
+
+    struct MockLLMProvider;
+
+    #[async_trait]
+    impl LLMProvider for MockLLMProvider {
+        async fn send_message(
+            &self,
+            _request: LLMRequest,
+        ) -> Result<LLMResponse, crate::llm::LLMError> {
+            Ok(LLMResponse {
+                content: "test response".to_string(),
+                model: "test-model".to_string(),
+                stop_reason: StopReason::EndTurn,
+                usage: TokenUsage {
+                    input_tokens: 10,
+                    output_tokens: 20,
+                },
+            })
+        }
+
+        async fn send_message_stream(
+            &self,
+            _request: LLMRequest,
+        ) -> Result<
+            Pin<Box<dyn Stream<Item = Result<StreamChunk, crate::llm::LLMError>> + Send>>,
+            crate::llm::LLMError,
+        > {
+            unimplemented!()
+        }
+
+        fn provider_name(&self) -> &'static str {
+            "mock"
+        }
+
+        fn model_id(&self) -> &str {
+            "test-model"
+        }
+    }
+
+    /// Mock that always errors
+    struct FailingLLMProvider;
+
+    #[async_trait]
+    impl LLMProvider for FailingLLMProvider {
+        async fn send_message(
+            &self,
+            _request: LLMRequest,
+        ) -> Result<LLMResponse, crate::llm::LLMError> {
+            Err(crate::llm::LLMError::ApiError {
+                status: 500,
+                message: "mock error".to_string(),
+            })
+        }
+
+        async fn send_message_stream(
+            &self,
+            _request: LLMRequest,
+        ) -> Result<
+            Pin<Box<dyn Stream<Item = Result<StreamChunk, crate::llm::LLMError>> + Send>>,
+            crate::llm::LLMError,
+        > {
+            unimplemented!()
+        }
+
+        fn provider_name(&self) -> &'static str {
+            "mock-fail"
+        }
+
+        fn model_id(&self) -> &str {
+            "test-model"
+        }
+    }
+
+    /// Slow mock for timeout testing
+    struct SlowLLMProvider;
+
+    #[async_trait]
+    impl LLMProvider for SlowLLMProvider {
+        async fn send_message(
+            &self,
+            _request: LLMRequest,
+        ) -> Result<LLMResponse, crate::llm::LLMError> {
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            Ok(LLMResponse {
+                content: "too slow".to_string(),
+                model: "test-model".to_string(),
+                stop_reason: StopReason::EndTurn,
+                usage: TokenUsage {
+                    input_tokens: 1,
+                    output_tokens: 1,
+                },
+            })
+        }
+
+        async fn send_message_stream(
+            &self,
+            _request: LLMRequest,
+        ) -> Result<
+            Pin<Box<dyn Stream<Item = Result<StreamChunk, crate::llm::LLMError>> + Send>>,
+            crate::llm::LLMError,
+        > {
+            unimplemented!()
+        }
+
+        fn provider_name(&self) -> &'static str {
+            "mock-slow"
+        }
+
+        fn model_id(&self) -> &str {
+            "test-model"
+        }
+    }
+
+    fn create_test_agent_with_channels(
+        provider: Arc<dyn LLMProvider + Send + Sync>,
+    ) -> (
+        Agent,
+        mpsc::Sender<AgentCommand>,
+        mpsc::Receiver<AgentResponse>,
+    ) {
+        let (command_tx, command_rx) = mpsc::channel(32);
+        let (response_tx, response_rx) = mpsc::channel(32);
+        let agent = Agent::new(
+            AgentTier::Worker,
+            AgentPersona::default(),
+            ModelConfig::default(),
+            provider,
+            command_rx,
+            response_tx,
+        );
+        (agent, command_tx, response_rx)
+    }
+
+    fn create_test_agent() -> Agent {
+        let (agent, _tx, _rx) = create_test_agent_with_channels(Arc::new(MockLLMProvider));
+        agent
+    }
+
+    fn make_role_context() -> super::RoleContext {
+        super::RoleContext {
+            system_prompt: "You are a test agent.".to_string(),
+            style: CommunicationStyle::Technical,
+            output_format: OutputFormat::CodeAndReport,
+        }
+    }
+
+    fn make_assignment() -> TaskAssignment {
+        TaskAssignment {
+            task_id: Uuid::new_v4(),
+            title: "Test task".to_string(),
+            description: "Do the thing".to_string(),
+            context: TaskContext {
+                required_reading: vec![],
+                files: vec![],
+                history: vec![],
+                conventions: String::new(),
+                role_context: make_role_context(),
+            },
+            constraints: TaskConstraints::default(),
+            timeout: Duration::from_secs(30),
+            role_id: RoleId::new("worker"),
+        }
+    }
+
+    // === Pure function tests ===
+
+    #[test]
+    fn temperature_for_style_values() {
+        let agent = create_test_agent();
+        assert_eq!(agent.temperature_for_style(&CommunicationStyle::Technical), 0.3);
+        assert_eq!(agent.temperature_for_style(&CommunicationStyle::Casual), 0.7);
+        assert_eq!(agent.temperature_for_style(&CommunicationStyle::Formal), 0.4);
+        assert_eq!(agent.temperature_for_style(&CommunicationStyle::Friendly), 0.6);
+    }
+
+    #[test]
+    fn output_format_instructions_all_variants() {
+        let agent = create_test_agent();
+
+        let code = agent.output_format_instructions(&OutputFormat::CodeAndReport);
+        assert!(code.contains("code"));
+
+        let plan = agent.output_format_instructions(&OutputFormat::Plan);
+        assert!(plan.contains("plan"));
+
+        let summary = agent.output_format_instructions(&OutputFormat::Summary);
+        assert!(summary.contains("summary"));
+
+        let result = agent.output_format_instructions(&OutputFormat::Result);
+        assert!(result.contains("result"));
+
+        let custom = agent.output_format_instructions(&OutputFormat::Custom("Use YAML".to_string()));
+        assert!(custom.contains("Use YAML"));
+    }
+
+    #[test]
+    fn extract_file_modifications_finds_files() {
+        let agent = create_test_agent();
+
+        let content = "Some text\n// File: src/main.rs\ncode here\n# File: README.md\nmore";
+        let files = agent.extract_file_modifications(content);
+        assert_eq!(files, vec!["src/main.rs", "README.md"]);
+    }
+
+    #[test]
+    fn extract_file_modifications_empty_when_no_markers() {
+        let agent = create_test_agent();
+        let files = agent.extract_file_modifications("just some plain text\nno markers here");
+        assert!(files.is_empty());
+    }
+
+    #[test]
+    fn parse_llm_response_code_and_report() {
+        let agent = create_test_agent();
+        let task_id = Uuid::new_v4();
+        let response = LLMResponse {
+            content: "// File: src/lib.rs\nfn main() {}".to_string(),
+            model: "test".to_string(),
+            stop_reason: StopReason::EndTurn,
+            usage: TokenUsage { input_tokens: 5, output_tokens: 10 },
+        };
+
+        let result = agent
+            .parse_llm_response(task_id, response, &OutputFormat::CodeAndReport)
+            .unwrap();
+        assert_eq!(result.task_id, task_id);
+        assert_eq!(result.status, TaskStatus::Completed);
+        assert_eq!(result.files_modified, vec!["src/lib.rs"]);
+        assert!(result.errors.is_empty());
+    }
+
+    #[test]
+    fn parse_llm_response_non_code_format_no_files() {
+        let agent = create_test_agent();
+        let task_id = Uuid::new_v4();
+        let response = LLMResponse {
+            content: "// File: src/lib.rs\nsome output".to_string(),
+            model: "test".to_string(),
+            stop_reason: StopReason::EndTurn,
+            usage: TokenUsage { input_tokens: 5, output_tokens: 10 },
+        };
+
+        // Plan format should not extract files
+        let result = agent.parse_llm_response(task_id, response, &OutputFormat::Plan).unwrap();
+        assert!(result.files_modified.is_empty());
+    }
+
+    #[test]
+    fn build_role_aware_prompt_minimal() {
+        let agent = create_test_agent();
+        let assignment = make_assignment();
+        let role_context = make_role_context();
+
+        let prompt = agent.build_role_aware_prompt(&assignment, &role_context);
+        assert!(prompt.contains("You are a test agent."));
+        assert!(prompt.contains("Output Format"));
+        // No conventions or files, so those sections should be absent
+        assert!(!prompt.contains("## Project Conventions"));
+        assert!(!prompt.contains("## Required Reading"));
+        assert!(!prompt.contains("## Task-Specific Files"));
+    }
+
+    #[test]
+    fn build_role_aware_prompt_with_conventions() {
+        let agent = create_test_agent();
+        let mut assignment = make_assignment();
+        assignment.context.conventions = "Use snake_case everywhere".to_string();
+        let role_context = make_role_context();
+
+        let prompt = agent.build_role_aware_prompt(&assignment, &role_context);
+        assert!(prompt.contains("## Project Conventions"));
+        assert!(prompt.contains("Use snake_case everywhere"));
+    }
+
+    #[test]
+    fn build_role_aware_prompt_with_required_reading() {
+        let agent = create_test_agent();
+        let mut assignment = make_assignment();
+        assignment.context.required_reading = vec![FileContent {
+            path: "CONVENTIONS.md".to_string(),
+            content: "Be consistent".to_string(),
+        }];
+        let role_context = make_role_context();
+
+        let prompt = agent.build_role_aware_prompt(&assignment, &role_context);
+        assert!(prompt.contains("## Required Reading"));
+        assert!(prompt.contains("CONVENTIONS.md"));
+        assert!(prompt.contains("Be consistent"));
+    }
+
+    #[test]
+    fn build_role_aware_prompt_with_task_files() {
+        let agent = create_test_agent();
+        let mut assignment = make_assignment();
+        assignment.context.files = vec![FileContent {
+            path: "src/main.rs".to_string(),
+            content: "fn main() {}".to_string(),
+        }];
+        let role_context = make_role_context();
+
+        let prompt = agent.build_role_aware_prompt(&assignment, &role_context);
+        assert!(prompt.contains("## Task-Specific Files"));
+        assert!(prompt.contains("src/main.rs"));
+    }
+
+    // === Async handler tests ===
+
+    #[tokio::test]
+    async fn handle_shutdown_idle_sends_shutdown_complete() {
+        let (mut agent, _cmd_tx, mut resp_rx) =
+            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+
+        agent.handle_shutdown().await.unwrap();
+        assert!(agent.is_shutdown());
+
+        let resp = resp_rx.recv().await.unwrap();
+        match resp {
+            AgentResponse::ShutdownComplete { .. } => {}
+            other => panic!("expected ShutdownComplete, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn handle_shutdown_working_fails_task_then_shuts_down() {
+        let (mut agent, _cmd_tx, mut resp_rx) =
+            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+
+        let task_id = Uuid::new_v4();
+        agent.start_task(task_id).unwrap();
+
+        agent.handle_shutdown().await.unwrap();
+        assert!(agent.is_shutdown());
+
+        // Should get TaskFailed then ShutdownComplete
+        let resp1 = resp_rx.recv().await.unwrap();
+        match resp1 {
+            AgentResponse::TaskFailed { result, .. } => {
+                assert_eq!(result.task_id, task_id);
+                assert_eq!(result.status, TaskStatus::Failed);
+            }
+            other => panic!("expected TaskFailed, got {:?}", other),
+        }
+
+        let resp2 = resp_rx.recv().await.unwrap();
+        match resp2 {
+            AgentResponse::ShutdownComplete { .. } => {}
+            other => panic!("expected ShutdownComplete, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn handle_task_assignment_success() {
+        let (mut agent, _cmd_tx, mut resp_rx) =
+            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+
+        let assignment = make_assignment();
+        let task_id = assignment.task_id;
+
+        agent.handle_task_assignment(assignment).await.unwrap();
+        assert_eq!(agent.status(), AgentStatus::Idle); // completed
+
+        // TaskStarted
+        let resp1 = resp_rx.recv().await.unwrap();
+        match resp1 {
+            AgentResponse::TaskStarted { task_id: tid, .. } => assert_eq!(tid, task_id),
+            other => panic!("expected TaskStarted, got {:?}", other),
+        }
+
+        // Progress updates (multiple), then TaskCompleted
+        let mut got_completed = false;
+        while let Ok(resp) = resp_rx.try_recv() {
+            if let AgentResponse::TaskCompleted { result, .. } = resp {
+                assert_eq!(result.task_id, task_id);
+                assert_eq!(result.status, TaskStatus::Completed);
+                got_completed = true;
+            }
+        }
+        assert!(got_completed);
+    }
+
+    #[tokio::test]
+    async fn handle_task_assignment_llm_failure() {
+        let (mut agent, _cmd_tx, mut resp_rx) =
+            create_test_agent_with_channels(Arc::new(FailingLLMProvider));
+
+        let assignment = make_assignment();
+        let task_id = assignment.task_id;
+
+        agent.handle_task_assignment(assignment).await.unwrap();
+        assert_eq!(agent.status(), AgentStatus::Idle); // failed back to idle
+
+        // TaskStarted
+        let resp1 = resp_rx.recv().await.unwrap();
+        assert!(matches!(resp1, AgentResponse::TaskStarted { .. }));
+
+        // Drain progress, find TaskFailed
+        let mut got_failed = false;
+        while let Ok(resp) = resp_rx.try_recv() {
+            if let AgentResponse::TaskFailed { result, .. } = resp {
+                assert_eq!(result.task_id, task_id);
+                assert!(!result.errors.is_empty());
+                got_failed = true;
+            }
+        }
+        assert!(got_failed);
+    }
+
+    #[tokio::test]
+    async fn handle_task_assignment_timeout() {
+        let (mut agent, _cmd_tx, mut resp_rx) =
+            create_test_agent_with_channels(Arc::new(SlowLLMProvider));
+
+        let mut assignment = make_assignment();
+        assignment.timeout = Duration::from_millis(50); // very short timeout
+        let task_id = assignment.task_id;
+
+        agent.handle_task_assignment(assignment).await.unwrap();
+
+        // Drain to find TaskFailed with timeout error
+        let mut got_failed = false;
+        while let Some(resp) = resp_rx.recv().await {
+            if let AgentResponse::TaskFailed { result, .. } = resp {
+                assert_eq!(result.task_id, task_id);
+                assert!(result.errors.iter().any(|e| e.contains("timed out")));
+                got_failed = true;
+                break;
+            }
+        }
+        assert!(got_failed);
+    }
+
+    #[tokio::test]
+    async fn handle_context_received_not_waiting_is_noop() {
+        let (mut agent, _cmd_tx, _resp_rx) =
+            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+
+        // Agent is Idle, not WaitingForContext
+        let context = ContextResponse {
+            task_id: Uuid::new_v4(),
+            files: vec![],
+            answers: vec![],
+        };
+        agent.handle_context_received(context).await.unwrap();
+        assert_eq!(agent.status(), AgentStatus::Idle);
+    }
+
+    #[tokio::test]
+    async fn handle_context_received_resumes() {
+        let (mut agent, _cmd_tx, mut _resp_rx) =
+            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+
+        let task_id = Uuid::new_v4();
+        agent.start_task(task_id).unwrap();
+        agent.wait_for_context().unwrap();
+        assert_eq!(agent.status(), AgentStatus::WaitingForContext);
+
+        let context = ContextResponse {
+            task_id,
+            files: vec![],
+            answers: vec![],
+        };
+        agent.handle_context_received(context).await.unwrap();
+        assert_eq!(agent.status(), AgentStatus::Working);
+    }
+
+    #[tokio::test]
+    async fn handle_approval_granted_not_waiting_is_noop() {
+        let (mut agent, _cmd_tx, _resp_rx) =
+            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+
+        agent.handle_approval_granted().await.unwrap();
+        assert_eq!(agent.status(), AgentStatus::Idle);
+    }
+
+    #[tokio::test]
+    async fn handle_approval_granted_resumes() {
+        let (mut agent, _cmd_tx, _resp_rx) =
+            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+
+        let task_id = Uuid::new_v4();
+        agent.start_task(task_id).unwrap();
+        agent.wait_for_approval().unwrap();
+
+        agent.handle_approval_granted().await.unwrap();
+        assert_eq!(agent.status(), AgentStatus::Working);
+    }
+
+    #[tokio::test]
+    async fn handle_approval_denied_not_waiting_is_noop() {
+        let (mut agent, _cmd_tx, _resp_rx) =
+            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+
+        agent.handle_approval_denied("nope").await.unwrap();
+        assert_eq!(agent.status(), AgentStatus::Idle);
+    }
+
+    #[tokio::test]
+    async fn handle_approval_denied_fails_task() {
+        let (mut agent, _cmd_tx, mut resp_rx) =
+            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+
+        let task_id = Uuid::new_v4();
+        agent.start_task(task_id).unwrap();
+        agent.wait_for_approval().unwrap();
+
+        agent.handle_approval_denied("not approved").await.unwrap();
+        assert_eq!(agent.status(), AgentStatus::Idle);
+
+        let resp = resp_rx.recv().await.unwrap();
+        match resp {
+            AgentResponse::TaskFailed { result, .. } => {
+                assert_eq!(result.task_id, task_id);
+                assert!(result.errors[0].contains("not approved"));
+            }
+            other => panic!("expected TaskFailed, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn run_loop_shutdown_command() {
+        let (agent, cmd_tx, mut resp_rx) =
+            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+
+        let handle = tokio::spawn(agent.run());
+
+        cmd_tx.send(AgentCommand::Shutdown).await.unwrap();
+
+        handle.await.unwrap().unwrap();
+
+        let resp = resp_rx.recv().await.unwrap();
+        assert!(matches!(resp, AgentResponse::ShutdownComplete { .. }));
+    }
+
+    #[tokio::test]
+    async fn run_loop_channel_closed() {
+        let (agent, cmd_tx, _resp_rx) =
+            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+
+        drop(cmd_tx); // close command channel
+
+        let result = agent.run().await;
+        assert!(result.is_ok()); // graceful exit
+    }
+
+    #[tokio::test]
+    async fn emit_progress_sends_update() {
+        let (mut agent, _cmd_tx, mut resp_rx) =
+            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+
+        let task_id = Uuid::new_v4();
+        agent.emit_progress(task_id, "working...", Some(50)).await.unwrap();
+
+        let resp = resp_rx.recv().await.unwrap();
+        match resp {
+            AgentResponse::ProgressUpdate { update, .. } => {
+                assert_eq!(update.task_id, task_id);
+                assert_eq!(update.message, "working...");
+                assert_eq!(update.progress_percent, Some(50));
+            }
+            other => panic!("expected ProgressUpdate, got {:?}", other),
+        }
+    }
+}

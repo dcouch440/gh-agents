@@ -268,43 +268,42 @@
 
 ---
 
-## Milestone 15: Repo Management & Power User Workspace - NOT STARTED
+## Milestone 15: Repo Management & Power User Workspace - DEPRECATED
 
-**Goal**: Standalone workspace with multi-repo management, prompt library, full code editor, report review/submission, and pivotal points.
+> **Status**: DEPRECATED — Scope was premature. Features may be revisited individually in future milestones.
 
-| Ticket                             | Status  | Progress | Notes                                                         |
-| ---------------------------------- | ------- | -------- | ------------------------------------------------------------- |
-| 15.1 Multi-Repo Backend            | pending | 0/6      | DB schema, CRUD API, active repo switching, git clone/pull    |
-| 15.2 Prompt Library Backend        | pending | 0/6      | DB schema, CRUD, tagging, versioning, variable engine, launch |
-| 15.3 Multi-Repo Frontend           | pending | 0/5      | Repo list, switcher, status indicators                        |
-| 15.4 Prompt Library Frontend       | pending | 0/5      | Browse, search, edit, version history, launch                 |
-| 15.5 Full Code Editor              | pending | 0/7      | Monaco, tabs, splits, command palette, git gutter             |
-| 15.6 Report Management Backend     | pending | 0/5      | DB schema, review lifecycle, agent hook                       |
-| 15.7 Report Viewer & Submission UI | pending | 0/6      | Markdown render, approve/reject, inline edit, submit          |
-| 15.8 Pivotal Points                | pending | 0/5      | Timeline, bookmarks, cross-repo tracking                      |
-| 15.9 System Prompt Admin           | pending | 0/6      | Seed on boot, DB-backed prompts, super-admin editor           |
-
-**Milestone Status:** Not Started (0/9 tickets done)
+| Ticket    | Status     | Notes              |
+| --------- | ---------- | ------------------ |
+| 15.1-15.9 | deprecated | No work started    |
 
 ---
 
-## Milestone 16: SaaS Foundation - NOT STARTED
+## Milestone 16: SaaS Foundation - DEPRECATED
 
-**Goal**: Refactor nexor into a cloud-hosted multi-tenant SaaS platform with real users, GitHub OAuth, Postgres, collaborative chat with AI, and onboarding.
+> **Status**: DEPRECATED — Multi-tenant SaaS pivot shelved. Postgres migration extracted to M17 as a standalone effort.
 
-| Ticket                         | Status  | Progress | Notes                                               |
-| ------------------------------ | ------- | -------- | --------------------------------------------------- |
-| 16.1 Postgres Migration        | pending | 0/6      | SQLite → Postgres, sqlx, connection pooling         |
-| 16.2 User Accounts & Org Model | pending | 0/7      | Users, orgs, roles, invitations, org switcher       |
-| 16.3 GitHub OAuth & Connect    | pending | 0/6      | OAuth login, account linking, repo browser          |
-| 16.4 Cloud Repo Management     | pending | 0/7      | Server-side clones, sync, quotas, sandboxed storage |
-| 16.5 Multi-Tenant Isolation    | pending | 0/5      | org_id everywhere, middleware, isolation tests      |
-| 16.6 Encrypted Secrets         | pending | 0/4      | AES-256-GCM, per-org API keys, master key           |
-| 16.7 Collaborative Chat Rooms  | pending | 0/8      | Multi-user rooms, AI participant, proactive updates |
-| 16.8 Presence & Awareness      | pending | 0/5      | Online status, view tracking, typing, cursors       |
-| 16.9 Onboarding Wizard         | pending | 0/6      | Sign up → GitHub → repos → invite → workspace       |
+| Ticket    | Status     | Notes                                    |
+| --------- | ---------- | ---------------------------------------- |
+| 16.1-16.9 | deprecated | 16.1 (Postgres) superseded by M17       |
 
-**Milestone Status:** Not Started (0/9 tickets done)
+---
+
+## Milestone 17: SQLite to PostgreSQL Migration - NOT STARTED
+
+**Goal**: Pure database swap — replace SQLite with PostgreSQL. Same schema, no new features. Hard cut, no dual-driver.
+
+| Ticket | Title | Status | Progress | Notes |
+|--------|-------|--------|----------|-------|
+| 17.1 | Infrastructure & Dependencies | pending | 0/4 | Docker Compose, Cargo.toml, config |
+| 17.2 | Migration Files Rewrite | pending | 0/4 | 14 SQLite migrations → Postgres DDL |
+| 17.3 | Connection Pool & Init | pending | 0/3 | SqlitePool → PgPool, sqlx::migrate! |
+| 17.4 | Query Rewrites: Tasks/Chat/Auth | pending | 0/5 | Largest query file |
+| 17.5 | Query Rewrites: Refactor/PRD | pending | 0/4 | Parallel with 17.4 |
+| 17.6 | Consumer File Updates | pending | 0/4 | 10 files that import SqlitePool |
+| 17.7 | Test Infrastructure | pending | 0/4 | Per-test Postgres databases |
+| 17.8 | Cleanup & Documentation | pending | 0/4 | Remove SQLite, data migration tool |
+
+**Milestone Status:** Not Started (0/8 tickets done)
 
 ---
 
@@ -325,9 +324,10 @@
 | M11: React Foundation      | 4       | Complete          |
 | M12: Terminal CLI (Ink)     | 6       | Not Started       |
 | M13: Agent View             | 6       | Not Started       |
-| M15: Repo Mgmt & Workspace | 9       | Not Started       |
-| M16: SaaS Foundation       | 9       | Not Started       |
-| **Total Active**           | **97**  |                   |
+| M15: Repo Mgmt & Workspace | -       | **DEPRECATED**    |
+| M16: SaaS Foundation       | -       | **DEPRECATED**    |
+| M17: SQLite → PostgreSQL   | 8       | Not Started       |
+| **Total Active**           | **87**  |                   |
 
 ---
 

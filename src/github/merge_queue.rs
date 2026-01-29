@@ -1323,4 +1323,1510 @@ mod tests {
         assert_eq!(entry.pr_number, 123);
         assert_eq!(entry.status, QueueStatus::Pending);
     }
+
+    // =====================================================================
+    // Database integration tests
+    // =====================================================================
+
+    use sqlx::SqlitePool;
+    use tempfile::TempDir;
+
+    async fn setup_test_db() -> (SqlitePool, TempDir) {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let pool = crate::db::init_db_at(db_path.to_str().unwrap())
+            .await
+            .unwrap();
+        (pool, temp_dir)
+    }
+
+    #[tokio::test]
+    async fn add_to_queue_returns_entry() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        let entry = mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        assert_eq!(entry.repo_owner, "owner");
+        assert_eq!(entry.repo_name, "repo");
+        assert_eq!(entry.pr_number, 1);
+        assert_eq!(entry.queue_position, 1);
+        assert_eq!(entry.status, QueueStatus::Pending);
+        assert!(entry.conflict_info.is_none());
+        assert!(entry.error_message.is_none());
+    }
+
+    #[tokio::test]
+    async fn get_next_position_empty_then_after_add() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        // First PR gets position 1
+        let e1 = mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        assert_eq!(e1.queue_position, 1);
+
+        // Second PR gets position 2
+        let e2 = mq.add_to_queue("owner", "repo", 2).await.unwrap();
+        assert_eq!(e2.queue_position, 2);
+    }
+
+    #[tokio::test]
+    async fn remove_from_queue_works() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        let removed = mq.remove_from_queue("owner", "repo", 1).await.unwrap();
+        assert!(removed);
+
+        let entry = mq.get_entry("owner", "repo", 1).await.unwrap();
+        assert!(entry.is_none());
+
+        // Removing non-existent returns false
+        let removed2 = mq.remove_from_queue("owner", "repo", 999).await.unwrap();
+        assert!(!removed2);
+    }
+
+    #[tokio::test]
+    async fn get_queue_returns_ordered() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 10).await.unwrap();
+        mq.add_to_queue("owner", "repo", 20).await.unwrap();
+        mq.add_to_queue("owner", "repo", 30).await.unwrap();
+
+        let queue = mq.get_queue("owner", "repo").await.unwrap();
+        assert_eq!(queue.len(), 3);
+        assert_eq!(queue[0].pr_number, 10);
+        assert_eq!(queue[1].pr_number, 20);
+        assert_eq!(queue[2].pr_number, 30);
+        assert_eq!(queue[0].queue_position, 1);
+        assert_eq!(queue[1].queue_position, 2);
+        assert_eq!(queue[2].queue_position, 3);
+    }
+
+    #[tokio::test]
+    async fn get_queue_empty_repo() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        let queue = mq.get_queue("owner", "repo").await.unwrap();
+        assert!(queue.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_entry_found_and_not_found() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 42).await.unwrap();
+
+        let found = mq.get_entry("owner", "repo", 42).await.unwrap();
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().pr_number, 42);
+
+        let not_found = mq.get_entry("owner", "repo", 999).await.unwrap();
+        assert!(not_found.is_none());
+    }
+
+    #[tokio::test]
+    async fn update_status_works() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+
+        let updated = mq
+            .update_status("owner", "repo", 1, QueueStatus::InProgress, None)
+            .await
+            .unwrap();
+        assert!(updated);
+
+        let entry = mq.get_entry("owner", "repo", 1).await.unwrap().unwrap();
+        assert_eq!(entry.status, QueueStatus::InProgress);
+    }
+
+    #[tokio::test]
+    async fn update_status_with_error_message() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        mq.update_status(
+            "owner",
+            "repo",
+            1,
+            QueueStatus::Failed,
+            Some("something broke"),
+        )
+        .await
+        .unwrap();
+
+        let entry = mq.get_entry("owner", "repo", 1).await.unwrap().unwrap();
+        assert_eq!(entry.status, QueueStatus::Failed);
+        assert_eq!(entry.error_message.as_deref(), Some("something broke"));
+    }
+
+    #[tokio::test]
+    async fn update_status_nonexistent_returns_false() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        let updated = mq
+            .update_status("owner", "repo", 999, QueueStatus::Merged, None)
+            .await
+            .unwrap();
+        assert!(!updated);
+    }
+
+    #[tokio::test]
+    async fn set_conflict_info_works() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+
+        let info = ConflictInfoJson {
+            files: vec!["src/main.rs".to_string(), "Cargo.toml".to_string()],
+            detected_at: Utc::now(),
+            needs_human_review: true,
+        };
+
+        let updated = mq
+            .set_conflict_info("owner", "repo", 1, info)
+            .await
+            .unwrap();
+        assert!(updated);
+
+        let entry = mq.get_entry("owner", "repo", 1).await.unwrap().unwrap();
+        assert_eq!(entry.status, QueueStatus::Conflict);
+        let ci = entry.conflict_info.unwrap();
+        assert_eq!(ci.files.len(), 2);
+        assert!(ci.needs_human_review);
+    }
+
+    #[tokio::test]
+    async fn set_conflict_info_nonexistent_returns_false() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        let info = ConflictInfoJson {
+            files: vec![],
+            detected_at: Utc::now(),
+            needs_human_review: false,
+        };
+        let updated = mq
+            .set_conflict_info("owner", "repo", 999, info)
+            .await
+            .unwrap();
+        assert!(!updated);
+    }
+
+    #[tokio::test]
+    async fn get_next_to_merge_returns_first_pending() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        mq.add_to_queue("owner", "repo", 2).await.unwrap();
+        mq.add_to_queue("owner", "repo", 3).await.unwrap();
+
+        // Mark first as merged
+        mq.update_status("owner", "repo", 1, QueueStatus::Merged, None)
+            .await
+            .unwrap();
+
+        let next = mq.get_next_to_merge("owner", "repo").await.unwrap();
+        assert_eq!(next.unwrap().pr_number, 2);
+    }
+
+    #[tokio::test]
+    async fn get_next_to_merge_empty_queue() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        let next = mq.get_next_to_merge("owner", "repo").await.unwrap();
+        assert!(next.is_none());
+    }
+
+    #[tokio::test]
+    async fn get_next_to_merge_all_non_pending() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        mq.update_status("owner", "repo", 1, QueueStatus::Merged, None)
+            .await
+            .unwrap();
+
+        let next = mq.get_next_to_merge("owner", "repo").await.unwrap();
+        assert!(next.is_none());
+    }
+
+    #[tokio::test]
+    async fn can_merge_first_pending() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        mq.add_to_queue("owner", "repo", 2).await.unwrap();
+
+        assert!(mq.can_merge("owner", "repo", 1).await.unwrap());
+        assert!(!mq.can_merge("owner", "repo", 2).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn can_merge_no_pending() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        assert!(!mq.can_merge("owner", "repo", 1).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn get_position_pending_entries() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        mq.add_to_queue("owner", "repo", 2).await.unwrap();
+        mq.add_to_queue("owner", "repo", 3).await.unwrap();
+
+        assert_eq!(mq.get_position("owner", "repo", 1).await.unwrap(), Some(1));
+        assert_eq!(mq.get_position("owner", "repo", 2).await.unwrap(), Some(2));
+        assert_eq!(mq.get_position("owner", "repo", 3).await.unwrap(), Some(3));
+    }
+
+    #[tokio::test]
+    async fn get_position_non_pending_returns_none() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        mq.update_status("owner", "repo", 1, QueueStatus::Merged, None)
+            .await
+            .unwrap();
+
+        assert_eq!(mq.get_position("owner", "repo", 1).await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn get_position_not_in_queue() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        assert_eq!(mq.get_position("owner", "repo", 999).await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn prs_ahead_counts_correctly() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        mq.add_to_queue("owner", "repo", 2).await.unwrap();
+        mq.add_to_queue("owner", "repo", 3).await.unwrap();
+
+        assert_eq!(mq.prs_ahead("owner", "repo", 1).await.unwrap(), 0);
+        assert_eq!(mq.prs_ahead("owner", "repo", 2).await.unwrap(), 1);
+        assert_eq!(mq.prs_ahead("owner", "repo", 3).await.unwrap(), 2);
+    }
+
+    #[tokio::test]
+    async fn prs_ahead_not_in_queue() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        assert_eq!(mq.prs_ahead("owner", "repo", 999).await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn compact_queue_renumbers_after_removal() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        mq.add_to_queue("owner", "repo", 2).await.unwrap();
+        mq.add_to_queue("owner", "repo", 3).await.unwrap();
+
+        // Remove the middle one
+        mq.remove_from_queue("owner", "repo", 2).await.unwrap();
+
+        // Before compact, positions are 1 and 3
+        let queue = mq.get_queue("owner", "repo").await.unwrap();
+        assert_eq!(queue[0].queue_position, 1);
+        assert_eq!(queue[1].queue_position, 3);
+
+        // Compact
+        mq.compact_queue("owner", "repo").await.unwrap();
+
+        // After compact, positions are 1 and 2
+        let queue = mq.get_queue("owner", "repo").await.unwrap();
+        assert_eq!(queue.len(), 2);
+        assert_eq!(queue[0].pr_number, 1);
+        assert_eq!(queue[0].queue_position, 1);
+        assert_eq!(queue[1].pr_number, 3);
+        assert_eq!(queue[1].queue_position, 2);
+    }
+
+    #[tokio::test]
+    async fn compact_queue_skips_non_pending() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        mq.add_to_queue("owner", "repo", 2).await.unwrap();
+
+        // Mark first as merged - compact should only renumber pending
+        mq.update_status("owner", "repo", 1, QueueStatus::Merged, None)
+            .await
+            .unwrap();
+
+        mq.compact_queue("owner", "repo").await.unwrap();
+
+        // PR 2 should now be position 1 (renumbered among pending)
+        let entry = mq.get_entry("owner", "repo", 2).await.unwrap().unwrap();
+        assert_eq!(entry.queue_position, 1);
+    }
+
+    #[tokio::test]
+    async fn get_queue_stats_counts_all_statuses() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap(); // pending
+        mq.add_to_queue("owner", "repo", 2).await.unwrap();
+        mq.update_status("owner", "repo", 2, QueueStatus::InProgress, None)
+            .await
+            .unwrap();
+        mq.add_to_queue("owner", "repo", 3).await.unwrap();
+        mq.update_status("owner", "repo", 3, QueueStatus::Merged, None)
+            .await
+            .unwrap();
+        mq.add_to_queue("owner", "repo", 4).await.unwrap();
+        mq.update_status("owner", "repo", 4, QueueStatus::Failed, Some("err"))
+            .await
+            .unwrap();
+        mq.add_to_queue("owner", "repo", 5).await.unwrap();
+        mq.set_conflict_info(
+            "owner",
+            "repo",
+            5,
+            ConflictInfoJson {
+                files: vec!["f.rs".into()],
+                detected_at: Utc::now(),
+                needs_human_review: false,
+            },
+        )
+        .await
+        .unwrap();
+        mq.add_to_queue("owner", "repo", 6).await.unwrap();
+        mq.update_status("owner", "repo", 6, QueueStatus::Skipped, None)
+            .await
+            .unwrap();
+
+        let stats = mq.get_queue_stats("owner", "repo").await.unwrap();
+        assert_eq!(stats.total, 6);
+        assert_eq!(stats.pending, 1);
+        assert_eq!(stats.in_progress, 1);
+        assert_eq!(stats.merged, 1);
+        assert_eq!(stats.failed, 1);
+        assert_eq!(stats.with_conflicts, 1);
+        assert_eq!(stats.skipped, 1);
+    }
+
+    #[tokio::test]
+    async fn get_queue_stats_empty() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        let stats = mq.get_queue_stats("owner", "repo").await.unwrap();
+        assert_eq!(stats.total, 0);
+    }
+
+    #[tokio::test]
+    async fn resume_processing_resets_in_progress() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        mq.add_to_queue("owner", "repo", 2).await.unwrap();
+
+        // Simulate interrupted state
+        mq.update_status("owner", "repo", 1, QueueStatus::InProgress, None)
+            .await
+            .unwrap();
+
+        let pending = mq.resume_processing("owner", "repo").await.unwrap();
+
+        // Both should now be pending
+        assert_eq!(pending.len(), 2);
+        assert!(pending.iter().all(|e| e.status == QueueStatus::Pending));
+    }
+
+    #[tokio::test]
+    async fn resume_processing_empty_queue() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        let pending = mq.resume_processing("owner", "repo").await.unwrap();
+        assert!(pending.is_empty());
+    }
+
+    #[tokio::test]
+    async fn resume_processing_no_interrupted() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+
+        let pending = mq.resume_processing("owner", "repo").await.unwrap();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].pr_number, 1);
+    }
+
+    #[tokio::test]
+    async fn get_needs_attention_conflict_and_failed() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap(); // pending - not attention
+        mq.add_to_queue("owner", "repo", 2).await.unwrap();
+        mq.set_conflict_info(
+            "owner",
+            "repo",
+            2,
+            ConflictInfoJson {
+                files: vec!["a.rs".into()],
+                detected_at: Utc::now(),
+                needs_human_review: true,
+            },
+        )
+        .await
+        .unwrap();
+        mq.add_to_queue("owner", "repo", 3).await.unwrap();
+        mq.update_status("owner", "repo", 3, QueueStatus::Failed, Some("oops"))
+            .await
+            .unwrap();
+
+        let attention = mq.get_needs_attention("owner", "repo").await.unwrap();
+        assert_eq!(attention.len(), 2);
+        let prs: Vec<u32> = attention.iter().map(|e| e.pr_number).collect();
+        assert!(prs.contains(&2));
+        assert!(prs.contains(&3));
+    }
+
+    #[tokio::test]
+    async fn get_needs_attention_none() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+
+        let attention = mq.get_needs_attention("owner", "repo").await.unwrap();
+        assert!(attention.is_empty());
+    }
+
+    #[tokio::test]
+    async fn has_pending_work_empty() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        assert!(!mq.has_pending_work("owner", "repo").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn has_pending_work_with_pending() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        assert!(mq.has_pending_work("owner", "repo").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn has_pending_work_with_in_progress() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        mq.update_status("owner", "repo", 1, QueueStatus::InProgress, None)
+            .await
+            .unwrap();
+
+        assert!(mq.has_pending_work("owner", "repo").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn has_pending_work_only_completed() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        mq.update_status("owner", "repo", 1, QueueStatus::Merged, None)
+            .await
+            .unwrap();
+
+        assert!(!mq.has_pending_work("owner", "repo").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn cleanup_old_entries_removes_old_merged() {
+        let (pool, _dir) = setup_test_db().await;
+        let pool2 = pool.clone();
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        mq.update_status("owner", "repo", 1, QueueStatus::Merged, None)
+            .await
+            .unwrap();
+
+        // Manually backdate the updated_at
+        sqlx::query(
+            "UPDATE pr_merge_queue SET updated_at = '2020-01-01T00:00:00+00:00' WHERE pr_number = 1",
+        )
+        .execute(&pool2)
+        .await
+        .unwrap();
+
+        // Also add a pending entry that should NOT be removed
+        mq.add_to_queue("owner", "repo", 2).await.unwrap();
+
+        let deleted = mq
+            .cleanup_old_entries("owner", "repo", std::time::Duration::from_secs(60))
+            .await
+            .unwrap();
+        assert_eq!(deleted, 1);
+
+        // Pending entry still there
+        let queue = mq.get_queue("owner", "repo").await.unwrap();
+        assert_eq!(queue.len(), 1);
+        assert_eq!(queue[0].pr_number, 2);
+    }
+
+    #[tokio::test]
+    async fn cleanup_old_entries_keeps_recent() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        mq.update_status("owner", "repo", 1, QueueStatus::Merged, None)
+            .await
+            .unwrap();
+
+        // Don't backdate - entry is fresh
+        let deleted = mq
+            .cleanup_old_entries("owner", "repo", std::time::Duration::from_secs(3600))
+            .await
+            .unwrap();
+        assert_eq!(deleted, 0);
+    }
+
+    #[tokio::test]
+    async fn cleanup_old_entries_removes_skipped_too() {
+        let (pool, _dir) = setup_test_db().await;
+        let pool2 = pool.clone();
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        mq.update_status("owner", "repo", 1, QueueStatus::Skipped, None)
+            .await
+            .unwrap();
+
+        sqlx::query(
+            "UPDATE pr_merge_queue SET updated_at = '2020-01-01T00:00:00+00:00' WHERE pr_number = 1",
+        )
+        .execute(&pool2)
+        .await
+        .unwrap();
+
+        let deleted = mq
+            .cleanup_old_entries("owner", "repo", std::time::Duration::from_secs(60))
+            .await
+            .unwrap();
+        assert_eq!(deleted, 1);
+    }
+
+    #[tokio::test]
+    async fn cleanup_does_not_remove_failed() {
+        let (pool, _dir) = setup_test_db().await;
+        let pool2 = pool.clone();
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        mq.update_status("owner", "repo", 1, QueueStatus::Failed, Some("err"))
+            .await
+            .unwrap();
+
+        sqlx::query(
+            "UPDATE pr_merge_queue SET updated_at = '2020-01-01T00:00:00+00:00' WHERE pr_number = 1",
+        )
+        .execute(&pool2)
+        .await
+        .unwrap();
+
+        let deleted = mq
+            .cleanup_old_entries("owner", "repo", std::time::Duration::from_secs(60))
+            .await
+            .unwrap();
+        assert_eq!(deleted, 0);
+    }
+
+    #[tokio::test]
+    async fn add_duplicate_pr_updates_timestamp() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        let _e1 = mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        // Adding same PR again should hit ON CONFLICT and update
+        let _e2 = mq.add_to_queue("owner", "repo", 1).await.unwrap();
+
+        // Should still be only one entry
+        let queue = mq.get_queue("owner", "repo").await.unwrap();
+        assert_eq!(queue.len(), 1);
+        assert_eq!(queue[0].pr_number, 1);
+    }
+
+    #[tokio::test]
+    async fn queues_are_isolated_by_repo() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo1", 1).await.unwrap();
+        mq.add_to_queue("owner", "repo2", 1).await.unwrap();
+
+        let q1 = mq.get_queue("owner", "repo1").await.unwrap();
+        let q2 = mq.get_queue("owner", "repo2").await.unwrap();
+        assert_eq!(q1.len(), 1);
+        assert_eq!(q2.len(), 1);
+
+        // Positions are independent
+        assert_eq!(q1[0].queue_position, 1);
+        assert_eq!(q2[0].queue_position, 1);
+    }
+
+    #[tokio::test]
+    async fn compact_queue_empty_is_noop() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        // Should not error
+        mq.compact_queue("owner", "repo").await.unwrap();
+    }
+
+    // =====================================================================
+    // Additional coverage tests
+    // =====================================================================
+
+    #[test]
+    fn queue_status_serde_json_roundtrip() {
+        // Tests the serde rename_all = "snake_case" attribute
+        for (status, expected_json) in [
+            (QueueStatus::Pending, "\"pending\""),
+            (QueueStatus::InProgress, "\"in_progress\""),
+            (QueueStatus::Merged, "\"merged\""),
+            (QueueStatus::Failed, "\"failed\""),
+            (QueueStatus::Conflict, "\"conflict\""),
+            (QueueStatus::Skipped, "\"skipped\""),
+        ] {
+            let json = serde_json::to_string(&status).unwrap();
+            assert_eq!(json, expected_json);
+            let parsed: QueueStatus = serde_json::from_str(&json).unwrap();
+            assert_eq!(parsed, status);
+        }
+    }
+
+    #[test]
+    fn queue_status_clone_copy_eq() {
+        let s = QueueStatus::Pending;
+        let s2 = s; // Copy
+        let s3 = s.clone(); // Clone
+        assert_eq!(s, s2);
+        assert_eq!(s, s3);
+    }
+
+    #[test]
+    fn queue_error_display_messages() {
+        let err = QueueError::InvalidStatus("bogus".to_string());
+        assert_eq!(err.to_string(), "invalid queue status: bogus");
+
+        let err = QueueError::NotInQueue {
+            owner: "alice".to_string(),
+            repo: "myrepo".to_string(),
+            pr_number: 42,
+        };
+        assert_eq!(err.to_string(), "PR #42 not in queue for alice/myrepo");
+
+        let err = QueueError::OutOfOrder {
+            pr_number: 5,
+            next_in_queue: 3,
+        };
+        assert_eq!(
+            err.to_string(),
+            "cannot merge PR #5 out of order, PR #3 is next"
+        );
+
+        let err = QueueError::Other("something went wrong".to_string());
+        assert_eq!(err.to_string(), "something went wrong");
+    }
+
+    #[test]
+    fn queue_error_from_github_error() {
+        let gh_err = crate::github::GitHubError::ConfigError("bad config".to_string());
+        let q_err: QueueError = gh_err.into();
+        assert!(q_err.to_string().contains("bad config"));
+    }
+
+    #[test]
+    fn queue_error_debug_format() {
+        let err = QueueError::InvalidStatus("xyz".to_string());
+        let debug = format!("{:?}", err);
+        assert!(debug.contains("InvalidStatus"));
+        assert!(debug.contains("xyz"));
+    }
+
+    #[test]
+    fn process_result_debug_variants() {
+        let r = ProcessResult::Merged {
+            sha: "abc123".to_string(),
+        };
+        let d = format!("{:?}", r);
+        assert!(d.contains("Merged"));
+        assert!(d.contains("abc123"));
+
+        let r = ProcessResult::MergedAfterResolution {
+            sha: "def456".to_string(),
+            conflicts_resolved: 3,
+        };
+        let d = format!("{:?}", r);
+        assert!(d.contains("MergedAfterResolution"));
+        assert!(d.contains("def456"));
+        assert!(d.contains("3"));
+
+        let r = ProcessResult::NeedsHumanReview {
+            files: vec!["a.rs".into(), "b.rs".into()],
+        };
+        let d = format!("{:?}", r);
+        assert!(d.contains("NeedsHumanReview"));
+        assert!(d.contains("a.rs"));
+
+        let r = ProcessResult::Skipped {
+            reason: "closed".to_string(),
+        };
+        let d = format!("{:?}", r);
+        assert!(d.contains("Skipped"));
+        assert!(d.contains("closed"));
+
+        let r = ProcessResult::Failed {
+            error: "timeout".to_string(),
+        };
+        let d = format!("{:?}", r);
+        assert!(d.contains("Failed"));
+        assert!(d.contains("timeout"));
+    }
+
+    #[test]
+    fn notification_options_clone() {
+        let opts = NotificationOptions {
+            on_queued: false,
+            on_merge_start: true,
+            on_merged: false,
+            on_conflicts: false,
+            on_failed: false,
+            on_position_change: true,
+        };
+        let cloned = opts.clone();
+        assert_eq!(cloned.on_queued, false);
+        assert_eq!(cloned.on_merge_start, true);
+        assert_eq!(cloned.on_merged, false);
+        assert_eq!(cloned.on_conflicts, false);
+        assert_eq!(cloned.on_failed, false);
+        assert_eq!(cloned.on_position_change, true);
+    }
+
+    #[test]
+    fn notification_options_debug() {
+        let opts = NotificationOptions::default();
+        let d = format!("{:?}", opts);
+        assert!(d.contains("NotificationOptions"));
+        assert!(d.contains("on_queued"));
+    }
+
+    #[test]
+    fn conflict_info_json_empty_files() {
+        let info = ConflictInfoJson {
+            files: vec![],
+            detected_at: Utc::now(),
+            needs_human_review: false,
+        };
+        let json = serde_json::to_string(&info).unwrap();
+        let parsed: ConflictInfoJson = serde_json::from_str(&json).unwrap();
+        assert!(parsed.files.is_empty());
+        assert!(!parsed.needs_human_review);
+    }
+
+    #[test]
+    fn conflict_info_json_clone_and_debug() {
+        let info = ConflictInfoJson {
+            files: vec!["file.rs".into()],
+            detected_at: Utc::now(),
+            needs_human_review: true,
+        };
+        let cloned = info.clone();
+        assert_eq!(cloned.files, info.files);
+        assert_eq!(cloned.needs_human_review, info.needs_human_review);
+
+        let d = format!("{:?}", info);
+        assert!(d.contains("ConflictInfoJson"));
+        assert!(d.contains("file.rs"));
+    }
+
+    #[test]
+    fn pr_queue_entry_clone_and_debug() {
+        let entry = PrQueueEntry {
+            id: Uuid::new_v4(),
+            repo_owner: "owner".to_string(),
+            repo_name: "repo".to_string(),
+            pr_number: 7,
+            queue_position: 2,
+            status: QueueStatus::Conflict,
+            conflict_info: Some(ConflictInfoJson {
+                files: vec!["x.rs".into()],
+                detected_at: Utc::now(),
+                needs_human_review: true,
+            }),
+            error_message: Some("conflict detected".into()),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        let cloned = entry.clone();
+        assert_eq!(cloned.pr_number, 7);
+        assert_eq!(cloned.status, QueueStatus::Conflict);
+        assert!(cloned.conflict_info.is_some());
+        assert_eq!(cloned.error_message.as_deref(), Some("conflict detected"));
+
+        let d = format!("{:?}", entry);
+        assert!(d.contains("PrQueueEntry"));
+        assert!(d.contains("owner"));
+    }
+
+    #[test]
+    fn queue_stats_debug_and_clone() {
+        let stats = QueueStats {
+            total: 10,
+            pending: 3,
+            in_progress: 2,
+            merged: 4,
+            failed: 1,
+            with_conflicts: 0,
+            skipped: 0,
+        };
+        let cloned = stats.clone();
+        assert_eq!(cloned.total, 10);
+        assert_eq!(cloned.pending, 3);
+        assert_eq!(cloned.in_progress, 2);
+        assert_eq!(cloned.merged, 4);
+        assert_eq!(cloned.failed, 1);
+        assert_eq!(cloned.with_conflicts, 0);
+        assert_eq!(cloned.skipped, 0);
+
+        let d = format!("{:?}", stats);
+        assert!(d.contains("QueueStats"));
+    }
+
+    #[test]
+    fn invalid_status_parse_various() {
+        for bad in ["", "PENDING", "Pending", "in-progress", "123", "conflict "] {
+            let result: Result<QueueStatus, _> = bad.parse();
+            assert!(result.is_err(), "Expected error for {:?}", bad);
+            let err = result.unwrap_err();
+            assert!(err.to_string().contains(bad));
+        }
+    }
+
+    #[test]
+    fn merge_strategy_all_conversions() {
+        // Exhaustive coverage of the From impl
+        let pairs = [
+            (MergeStrategy::Merge, MergeMethod::Merge),
+            (MergeStrategy::Squash, MergeMethod::Squash),
+            (MergeStrategy::Rebase, MergeMethod::Rebase),
+        ];
+        for (strategy, expected) in pairs {
+            let method: MergeMethod = strategy.into();
+            assert_eq!(method, expected);
+        }
+    }
+
+    // =====================================================================
+    // Additional DB integration tests for coverage
+    // =====================================================================
+
+    #[tokio::test]
+    async fn add_three_then_remove_first_and_compact() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("o", "r", 1).await.unwrap();
+        mq.add_to_queue("o", "r", 2).await.unwrap();
+        mq.add_to_queue("o", "r", 3).await.unwrap();
+
+        mq.remove_from_queue("o", "r", 1).await.unwrap();
+        mq.compact_queue("o", "r").await.unwrap();
+
+        let queue = mq.get_queue("o", "r").await.unwrap();
+        assert_eq!(queue.len(), 2);
+        assert_eq!(queue[0].pr_number, 2);
+        assert_eq!(queue[0].queue_position, 1);
+        assert_eq!(queue[1].pr_number, 3);
+        assert_eq!(queue[1].queue_position, 2);
+    }
+
+    #[tokio::test]
+    async fn compact_queue_already_correct_positions() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("o", "r", 1).await.unwrap();
+        mq.add_to_queue("o", "r", 2).await.unwrap();
+
+        // Positions are already 1,2 - compact should be a no-op
+        mq.compact_queue("o", "r").await.unwrap();
+
+        let queue = mq.get_queue("o", "r").await.unwrap();
+        assert_eq!(queue[0].queue_position, 1);
+        assert_eq!(queue[1].queue_position, 2);
+    }
+
+    #[tokio::test]
+    async fn get_position_skips_non_pending_in_counting() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("o", "r", 1).await.unwrap();
+        mq.add_to_queue("o", "r", 2).await.unwrap();
+        mq.add_to_queue("o", "r", 3).await.unwrap();
+
+        // Mark PR 1 as merged - it shouldn't count in position
+        mq.update_status("o", "r", 1, QueueStatus::Merged, None)
+            .await
+            .unwrap();
+
+        // PR 2 should be position 1 among pending
+        assert_eq!(mq.get_position("o", "r", 2).await.unwrap(), Some(1));
+        assert_eq!(mq.get_position("o", "r", 3).await.unwrap(), Some(2));
+        // PR 1 is merged, not pending
+        assert_eq!(mq.get_position("o", "r", 1).await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn prs_ahead_after_front_merged() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("o", "r", 1).await.unwrap();
+        mq.add_to_queue("o", "r", 2).await.unwrap();
+        mq.add_to_queue("o", "r", 3).await.unwrap();
+
+        mq.update_status("o", "r", 1, QueueStatus::Merged, None)
+            .await
+            .unwrap();
+
+        // PR 2 is now first pending, 0 ahead
+        assert_eq!(mq.prs_ahead("o", "r", 2).await.unwrap(), 0);
+        // PR 3 has 1 ahead
+        assert_eq!(mq.prs_ahead("o", "r", 3).await.unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn can_merge_after_front_completed() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("o", "r", 1).await.unwrap();
+        mq.add_to_queue("o", "r", 2).await.unwrap();
+        mq.add_to_queue("o", "r", 3).await.unwrap();
+
+        // Complete PR 1
+        mq.update_status("o", "r", 1, QueueStatus::Merged, None)
+            .await
+            .unwrap();
+
+        // Now PR 2 can merge
+        assert!(mq.can_merge("o", "r", 2).await.unwrap());
+        // PR 3 still can't
+        assert!(!mq.can_merge("o", "r", 3).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn get_needs_attention_empty_queue() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        let attention = mq.get_needs_attention("o", "r").await.unwrap();
+        assert!(attention.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_needs_attention_only_pending_and_merged() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("o", "r", 1).await.unwrap(); // pending
+        mq.add_to_queue("o", "r", 2).await.unwrap();
+        mq.update_status("o", "r", 2, QueueStatus::Merged, None)
+            .await
+            .unwrap();
+        mq.add_to_queue("o", "r", 3).await.unwrap();
+        mq.update_status("o", "r", 3, QueueStatus::InProgress, None)
+            .await
+            .unwrap();
+        mq.add_to_queue("o", "r", 4).await.unwrap();
+        mq.update_status("o", "r", 4, QueueStatus::Skipped, None)
+            .await
+            .unwrap();
+
+        // None of those need attention
+        let attention = mq.get_needs_attention("o", "r").await.unwrap();
+        assert!(attention.is_empty());
+    }
+
+    #[tokio::test]
+    async fn has_pending_work_with_conflict_and_failed() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("o", "r", 1).await.unwrap();
+        mq.set_conflict_info(
+            "o",
+            "r",
+            1,
+            ConflictInfoJson {
+                files: vec![],
+                detected_at: Utc::now(),
+                needs_human_review: false,
+            },
+        )
+        .await
+        .unwrap();
+
+        mq.add_to_queue("o", "r", 2).await.unwrap();
+        mq.update_status("o", "r", 2, QueueStatus::Failed, Some("err"))
+            .await
+            .unwrap();
+
+        // Neither conflict nor failed count as pending work
+        assert!(!mq.has_pending_work("o", "r").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn has_pending_work_with_skipped() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("o", "r", 1).await.unwrap();
+        mq.update_status("o", "r", 1, QueueStatus::Skipped, None)
+            .await
+            .unwrap();
+
+        assert!(!mq.has_pending_work("o", "r").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn cleanup_old_entries_empty_queue() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        let deleted = mq
+            .cleanup_old_entries("o", "r", std::time::Duration::from_secs(60))
+            .await
+            .unwrap();
+        assert_eq!(deleted, 0);
+    }
+
+    #[tokio::test]
+    async fn cleanup_does_not_remove_conflict_or_in_progress() {
+        let (pool, _dir) = setup_test_db().await;
+        let pool2 = pool.clone();
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("o", "r", 1).await.unwrap();
+        mq.set_conflict_info(
+            "o",
+            "r",
+            1,
+            ConflictInfoJson {
+                files: vec!["a.rs".into()],
+                detected_at: Utc::now(),
+                needs_human_review: true,
+            },
+        )
+        .await
+        .unwrap();
+
+        mq.add_to_queue("o", "r", 2).await.unwrap();
+        mq.update_status("o", "r", 2, QueueStatus::InProgress, None)
+            .await
+            .unwrap();
+
+        // Backdate both
+        sqlx::query("UPDATE pr_merge_queue SET updated_at = '2020-01-01T00:00:00+00:00'")
+            .execute(&pool2)
+            .await
+            .unwrap();
+
+        let deleted = mq
+            .cleanup_old_entries("o", "r", std::time::Duration::from_secs(60))
+            .await
+            .unwrap();
+        assert_eq!(deleted, 0);
+    }
+
+    #[tokio::test]
+    async fn cleanup_multiple_old_entries() {
+        let (pool, _dir) = setup_test_db().await;
+        let pool2 = pool.clone();
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("o", "r", 1).await.unwrap();
+        mq.update_status("o", "r", 1, QueueStatus::Merged, None)
+            .await
+            .unwrap();
+        mq.add_to_queue("o", "r", 2).await.unwrap();
+        mq.update_status("o", "r", 2, QueueStatus::Skipped, None)
+            .await
+            .unwrap();
+        mq.add_to_queue("o", "r", 3).await.unwrap();
+        mq.update_status("o", "r", 3, QueueStatus::Merged, None)
+            .await
+            .unwrap();
+
+        // Backdate all
+        sqlx::query("UPDATE pr_merge_queue SET updated_at = '2020-01-01T00:00:00+00:00'")
+            .execute(&pool2)
+            .await
+            .unwrap();
+
+        let deleted = mq
+            .cleanup_old_entries("o", "r", std::time::Duration::from_secs(60))
+            .await
+            .unwrap();
+        assert_eq!(deleted, 3);
+    }
+
+    #[tokio::test]
+    async fn queues_isolated_by_owner() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("alice", "repo", 1).await.unwrap();
+        mq.add_to_queue("bob", "repo", 1).await.unwrap();
+
+        let q1 = mq.get_queue("alice", "repo").await.unwrap();
+        let q2 = mq.get_queue("bob", "repo").await.unwrap();
+        assert_eq!(q1.len(), 1);
+        assert_eq!(q2.len(), 1);
+
+        // Operations on one don't affect the other
+        mq.update_status("alice", "repo", 1, QueueStatus::Merged, None)
+            .await
+            .unwrap();
+        assert!(mq.can_merge("bob", "repo", 1).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn update_status_all_statuses() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        // Test cycling through all statuses
+        mq.add_to_queue("o", "r", 1).await.unwrap();
+
+        for status in [
+            QueueStatus::InProgress,
+            QueueStatus::Conflict,
+            QueueStatus::Failed,
+            QueueStatus::Skipped,
+            QueueStatus::Merged,
+            QueueStatus::Pending, // back to pending
+        ] {
+            let updated = mq.update_status("o", "r", 1, status, None).await.unwrap();
+            assert!(updated);
+            let entry = mq.get_entry("o", "r", 1).await.unwrap().unwrap();
+            assert_eq!(entry.status, status);
+        }
+    }
+
+    #[tokio::test]
+    async fn set_conflict_info_overwrites_previous() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("o", "r", 1).await.unwrap();
+
+        let info1 = ConflictInfoJson {
+            files: vec!["a.rs".into()],
+            detected_at: Utc::now(),
+            needs_human_review: false,
+        };
+        mq.set_conflict_info("o", "r", 1, info1).await.unwrap();
+
+        let info2 = ConflictInfoJson {
+            files: vec!["b.rs".into(), "c.rs".into()],
+            detected_at: Utc::now(),
+            needs_human_review: true,
+        };
+        mq.set_conflict_info("o", "r", 1, info2).await.unwrap();
+
+        let entry = mq.get_entry("o", "r", 1).await.unwrap().unwrap();
+        let ci = entry.conflict_info.unwrap();
+        assert_eq!(ci.files.len(), 2);
+        assert!(ci.needs_human_review);
+    }
+
+    #[tokio::test]
+    async fn compact_queue_with_mixed_statuses() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("o", "r", 1).await.unwrap(); // pos 1
+        mq.add_to_queue("o", "r", 2).await.unwrap(); // pos 2
+        mq.add_to_queue("o", "r", 3).await.unwrap(); // pos 3
+        mq.add_to_queue("o", "r", 4).await.unwrap(); // pos 4
+        mq.add_to_queue("o", "r", 5).await.unwrap(); // pos 5
+
+        // Set various non-pending statuses
+        mq.update_status("o", "r", 1, QueueStatus::Merged, None)
+            .await
+            .unwrap();
+        mq.update_status("o", "r", 3, QueueStatus::Failed, Some("err"))
+            .await
+            .unwrap();
+        mq.update_status("o", "r", 5, QueueStatus::Skipped, None)
+            .await
+            .unwrap();
+
+        // Remove merged entry to create gap
+        mq.remove_from_queue("o", "r", 1).await.unwrap();
+
+        // Compact should only renumber pending entries (2 and 4)
+        mq.compact_queue("o", "r").await.unwrap();
+
+        let e2 = mq.get_entry("o", "r", 2).await.unwrap().unwrap();
+        let e4 = mq.get_entry("o", "r", 4).await.unwrap().unwrap();
+        assert_eq!(e2.queue_position, 1);
+        assert_eq!(e4.queue_position, 2);
+    }
+
+    #[tokio::test]
+    async fn resume_processing_only_returns_pending_not_other_statuses() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("o", "r", 1).await.unwrap();
+        mq.add_to_queue("o", "r", 2).await.unwrap();
+        mq.add_to_queue("o", "r", 3).await.unwrap();
+        mq.add_to_queue("o", "r", 4).await.unwrap();
+
+        mq.update_status("o", "r", 1, QueueStatus::Merged, None)
+            .await
+            .unwrap();
+        mq.update_status("o", "r", 2, QueueStatus::Failed, Some("x"))
+            .await
+            .unwrap();
+        mq.set_conflict_info(
+            "o",
+            "r",
+            3,
+            ConflictInfoJson {
+                files: vec![],
+                detected_at: Utc::now(),
+                needs_human_review: false,
+            },
+        )
+        .await
+        .unwrap();
+        // PR 4 remains pending
+
+        let pending = mq.resume_processing("o", "r").await.unwrap();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].pr_number, 4);
+    }
+
+    #[tokio::test]
+    async fn get_queue_different_repos_independent() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("o", "repo-a", 1).await.unwrap();
+        mq.add_to_queue("o", "repo-a", 2).await.unwrap();
+        mq.add_to_queue("o", "repo-b", 10).await.unwrap();
+
+        let qa = mq.get_queue("o", "repo-a").await.unwrap();
+        let qb = mq.get_queue("o", "repo-b").await.unwrap();
+        assert_eq!(qa.len(), 2);
+        assert_eq!(qb.len(), 1);
+        assert_eq!(qb[0].pr_number, 10);
+        assert_eq!(qb[0].queue_position, 1);
+    }
+
+    #[tokio::test]
+    async fn remove_from_queue_different_repo_no_effect() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("o", "repo-a", 1).await.unwrap();
+
+        // Remove from different repo - should not affect repo-a
+        let removed = mq.remove_from_queue("o", "repo-b", 1).await.unwrap();
+        assert!(!removed);
+
+        let queue = mq.get_queue("o", "repo-a").await.unwrap();
+        assert_eq!(queue.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn get_next_to_merge_skips_conflict_and_failed() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("o", "r", 1).await.unwrap();
+        mq.add_to_queue("o", "r", 2).await.unwrap();
+        mq.add_to_queue("o", "r", 3).await.unwrap();
+
+        mq.set_conflict_info(
+            "o",
+            "r",
+            1,
+            ConflictInfoJson {
+                files: vec!["x.rs".into()],
+                detected_at: Utc::now(),
+                needs_human_review: true,
+            },
+        )
+        .await
+        .unwrap();
+        mq.update_status("o", "r", 2, QueueStatus::Failed, Some("e"))
+            .await
+            .unwrap();
+
+        // PR 3 is the first pending
+        let next = mq.get_next_to_merge("o", "r").await.unwrap();
+        assert_eq!(next.unwrap().pr_number, 3);
+    }
+
+    #[tokio::test]
+    async fn can_merge_wrong_pr_returns_false() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("o", "r", 1).await.unwrap();
+        mq.add_to_queue("o", "r", 2).await.unwrap();
+
+        // PR 2 can't merge because PR 1 is first
+        assert!(!mq.can_merge("o", "r", 2).await.unwrap());
+        // Non-existent PR
+        assert!(!mq.can_merge("o", "r", 999).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn cleanup_with_zero_duration() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("o", "r", 1).await.unwrap();
+        mq.update_status("o", "r", 1, QueueStatus::Merged, None)
+            .await
+            .unwrap();
+
+        // Zero duration - should remove anything older than "now"
+        // The entry was just created so it might or might not be cleaned
+        // depending on timing, but it should not error
+        let _deleted = mq
+            .cleanup_old_entries("o", "r", std::time::Duration::from_secs(0))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn get_queue_stats_all_pending() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("o", "r", 1).await.unwrap();
+        mq.add_to_queue("o", "r", 2).await.unwrap();
+        mq.add_to_queue("o", "r", 3).await.unwrap();
+
+        let stats = mq.get_queue_stats("o", "r").await.unwrap();
+        assert_eq!(stats.total, 3);
+        assert_eq!(stats.pending, 3);
+        assert_eq!(stats.in_progress, 0);
+        assert_eq!(stats.merged, 0);
+        assert_eq!(stats.failed, 0);
+        assert_eq!(stats.with_conflicts, 0);
+        assert_eq!(stats.skipped, 0);
+    }
+
+    #[tokio::test]
+    async fn entry_has_correct_timestamps() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        let before = Utc::now();
+        mq.add_to_queue("o", "r", 1).await.unwrap();
+        let after = Utc::now();
+
+        let entry = mq.get_entry("o", "r", 1).await.unwrap().unwrap();
+        assert!(entry.created_at >= before && entry.created_at <= after);
+        assert!(entry.updated_at >= before && entry.updated_at <= after);
+    }
+
+    #[tokio::test]
+    async fn update_status_changes_updated_at() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("o", "r", 1).await.unwrap();
+        let entry1 = mq.get_entry("o", "r", 1).await.unwrap().unwrap();
+
+        // Small delay to ensure different timestamp
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+
+        mq.update_status("o", "r", 1, QueueStatus::InProgress, None)
+            .await
+            .unwrap();
+        let entry2 = mq.get_entry("o", "r", 1).await.unwrap().unwrap();
+
+        assert!(entry2.updated_at >= entry1.updated_at);
+    }
+
+    #[tokio::test]
+    async fn reset_interrupted_via_resume_multiple() {
+        let (pool, _dir) = setup_test_db().await;
+        let mq = MergeQueue::new(pool);
+
+        mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        mq.add_to_queue("owner", "repo", 2).await.unwrap();
+        mq.add_to_queue("owner", "repo", 3).await.unwrap();
+
+        // Mark two as in_progress
+        mq.update_status("owner", "repo", 1, QueueStatus::InProgress, None)
+            .await
+            .unwrap();
+        mq.update_status("owner", "repo", 2, QueueStatus::InProgress, None)
+            .await
+            .unwrap();
+        // Mark one as failed (should NOT be reset)
+        mq.update_status("owner", "repo", 3, QueueStatus::Failed, Some("bad"))
+            .await
+            .unwrap();
+
+        let pending = mq.resume_processing("owner", "repo").await.unwrap();
+        // Only the two previously in_progress + none failed
+        assert_eq!(pending.len(), 2);
+
+        // Verify the failed one is still failed
+        let entry = mq.get_entry("owner", "repo", 3).await.unwrap().unwrap();
+        assert_eq!(entry.status, QueueStatus::Failed);
+    }
 }

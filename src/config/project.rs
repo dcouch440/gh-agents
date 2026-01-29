@@ -82,4 +82,42 @@ mod tests {
         let result: Result<ProjectConfig, _> = toml::from_str(content);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn project_config_path_is_correct() {
+        let path = project_config_path();
+        assert_eq!(path, PathBuf::from(".nexor/config.toml"));
+    }
+
+    #[test]
+    fn load_project_config_returns_none_when_missing() {
+        // In the test environment, .nexor/config.toml typically doesn't exist
+        // at the working directory. If it does exist, this test just verifies
+        // the function succeeds.
+        let result = load_project_config();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn parses_minimal_project_config() {
+        // Test with all defaults
+        let content = "";
+        let config: ProjectConfig = toml::from_str(content).unwrap();
+        assert_eq!(config.autonomy, crate::types::AutonomyLevel::ApprovalGates);
+        assert_eq!(config.git_strategy, crate::types::GitStrategy::default());
+        assert_eq!(config.sandbox_mode, crate::types::SandboxMode::default());
+        assert!(config.models.is_none());
+        assert!(config.pool.is_none());
+    }
+
+    #[test]
+    fn parses_project_config_with_all_autonomy_levels() {
+        let content = r#"autonomy = "full_auto""#;
+        let config: ProjectConfig = toml::from_str(content).unwrap();
+        assert_eq!(config.autonomy, crate::types::AutonomyLevel::FullAuto);
+
+        let content = r#"autonomy = "supervised""#;
+        let config: ProjectConfig = toml::from_str(content).unwrap();
+        assert_eq!(config.autonomy, crate::types::AutonomyLevel::Supervised);
+    }
 }

@@ -767,6 +767,200 @@ mod tests {
         let policy = RequeuePolicy::SetPriority(Priority::Urgent);
         assert!(format!("{:?}", policy).contains("Urgent"));
     }
+
+    #[test]
+    fn default_creates_empty_queue() {
+        let queue = TaskQueue::default();
+        assert!(queue.is_empty());
+        assert_eq!(queue.len(), 0);
+    }
+
+    #[test]
+    fn peek_on_empty_queue_returns_none() {
+        let queue = TaskQueue::new();
+        assert!(queue.peek().is_none());
+    }
+
+    #[test]
+    fn dequeue_on_empty_queue_returns_none() {
+        let mut queue = TaskQueue::new();
+        assert!(queue.dequeue().is_none());
+    }
+
+    #[test]
+    fn all_tasks_empty_queue() {
+        let queue = TaskQueue::new();
+        let tasks = queue.all_tasks();
+        assert!(tasks.is_empty());
+    }
+
+    #[test]
+    fn count_by_priority_empty_queue() {
+        let queue = TaskQueue::new();
+        let counts = queue.count_by_priority();
+        assert!(counts.is_empty());
+    }
+
+    #[test]
+    fn count_by_priority_all_levels() {
+        let mut queue = TaskQueue::new();
+        queue.enqueue(make_task(Priority::Low));
+        queue.enqueue(make_task(Priority::Normal));
+        queue.enqueue(make_task(Priority::High));
+        queue.enqueue(make_task(Priority::Urgent));
+
+        let counts = queue.count_by_priority();
+        assert_eq!(counts.get(&Priority::Low), Some(&1));
+        assert_eq!(counts.get(&Priority::Normal), Some(&1));
+        assert_eq!(counts.get(&Priority::High), Some(&1));
+        assert_eq!(counts.get(&Priority::Urgent), Some(&1));
+    }
+
+    #[test]
+    fn all_tasks_fifo_within_same_priority() {
+        let mut queue = TaskQueue::new();
+        let older = make_task_with_time(Priority::High, 100);
+        let newer = make_task_with_time(Priority::High, 10);
+        let older_id = older.id.clone();
+        let newer_id = newer.id.clone();
+
+        queue.enqueue(newer);
+        queue.enqueue(older);
+
+        let tasks = queue.all_tasks();
+        assert_eq!(tasks[0].id, older_id);
+        assert_eq!(tasks[1].id, newer_id);
+    }
+
+    #[test]
+    fn contains_on_empty_queue() {
+        let queue = TaskQueue::new();
+        assert!(!queue.contains(&TaskId::new()));
+    }
+
+    #[test]
+    fn remove_from_empty_queue() {
+        let mut queue = TaskQueue::new();
+        assert!(queue.remove(&TaskId::new()).is_none());
+    }
+
+    #[test]
+    fn remove_preserves_remaining_order() {
+        let mut queue = TaskQueue::new();
+        let low = make_task(Priority::Low);
+        let normal = make_task(Priority::Normal);
+        let high = make_task(Priority::High);
+        let normal_id = normal.id.clone();
+
+        queue.enqueue(low);
+        queue.enqueue(normal);
+        queue.enqueue(high);
+
+        // Remove the Normal task
+        queue.remove(&normal_id);
+        assert_eq!(queue.len(), 2);
+
+        // Should still dequeue in order
+        assert_eq!(queue.dequeue().unwrap().priority, Priority::High);
+        assert_eq!(queue.dequeue().unwrap().priority, Priority::Low);
+    }
+
+    #[test]
+    fn enqueue_multiple_same_priority() {
+        let mut queue = TaskQueue::new();
+        for _ in 0..5 {
+            queue.enqueue(make_task(Priority::Normal));
+        }
+        assert_eq!(queue.len(), 5);
+
+        let counts = queue.count_by_priority();
+        assert_eq!(counts.get(&Priority::Normal), Some(&5));
+    }
+
+    #[test]
+    fn priority_value_standalone_fn() {
+        assert_eq!(priority_value(Priority::Low), 1);
+        assert_eq!(priority_value(Priority::Normal), 2);
+        assert_eq!(priority_value(Priority::High), 3);
+        assert_eq!(priority_value(Priority::Urgent), 4);
+    }
+
+    #[test]
+    fn prioritized_task_equality() {
+        let task1 = make_task(Priority::Low);
+        let task2 = make_task(Priority::High);
+        let pt1 = PrioritizedTask { task: task1.clone() };
+        let pt2 = PrioritizedTask { task: task2 };
+
+        // Different tasks are not equal
+        assert_ne!(pt1, pt2);
+
+        // Same task id means equal regardless of priority
+        let mut task1_copy = task1.clone();
+        task1_copy.priority = Priority::Urgent;
+        let pt1_copy = PrioritizedTask { task: task1_copy };
+        assert_eq!(pt1, pt1_copy);
+    }
+
+    #[test]
+    fn prioritized_task_ordering() {
+        let urgent = PrioritizedTask {
+            task: make_task(Priority::Urgent),
+        };
+        let low = PrioritizedTask {
+            task: make_task(Priority::Low),
+        };
+
+        // Urgent > Low in ordering
+        assert!(urgent > low);
+        assert!(low < urgent);
+
+        // partial_cmp consistent with cmp
+        assert_eq!(
+            urgent.partial_cmp(&low),
+            Some(Ordering::Greater)
+        );
+    }
+
+    #[test]
+    fn prioritized_task_same_priority_older_first() {
+        let older = PrioritizedTask {
+            task: make_task_with_time(Priority::Normal, 100),
+        };
+        let newer = PrioritizedTask {
+            task: make_task_with_time(Priority::Normal, 10),
+        };
+
+        // Older task should be "greater" (dequeued first from max-heap)
+        assert!(older > newer);
+    }
+
+    #[test]
+    fn queue_stats_fields() {
+        let stats = QueueStats {
+            blocked: 3,
+            unblocked: 7,
+            total: 10,
+        };
+        assert_eq!(stats.blocked, 3);
+        assert_eq!(stats.unblocked, 7);
+        assert_eq!(stats.total, 10);
+
+        // Debug is derived
+        let debug = format!("{:?}", stats);
+        assert!(debug.contains("blocked"));
+    }
+
+    #[test]
+    fn queue_stats_clone() {
+        let stats = QueueStats {
+            blocked: 1,
+            unblocked: 2,
+            total: 3,
+        };
+        let cloned = stats.clone();
+        assert_eq!(cloned.total, 3);
+    }
 }
 
 #[cfg(test)]
@@ -929,6 +1123,182 @@ mod persistent_queue_tests {
         .unwrap();
 
         assert_eq!(event_count.0, 1);
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn persistent_queue_dequeue_empty_returns_none() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        let mut queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        let result = queue.dequeue().await.unwrap();
+        assert!(result.is_none());
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn persistent_queue_enqueue_and_persist() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        let task = make_task(Priority::High);
+        let task_id = task.id.clone();
+        crate::db::insert_task(&pool, &task).await.unwrap();
+
+        let mut queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        // Dequeue to clear the loaded task
+        queue.dequeue().await.unwrap();
+
+        // Now enqueue_and_persist a new task
+        let task2 = make_task(Priority::Low);
+        let task2_id = task2.id.clone();
+        crate::db::insert_task(&pool, &task2).await.unwrap();
+        queue.enqueue_and_persist(task2).await.unwrap();
+
+        assert_eq!(queue.len(), 1);
+        assert!(queue.contains(&task2_id));
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn persistent_queue_peek() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        let mut queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+
+        // Peek on empty
+        assert!(queue.peek().is_none());
+
+        let task = make_task(Priority::Urgent);
+        crate::db::insert_task(&pool, &task).await.unwrap();
+        queue.enqueue(task);
+
+        assert!(queue.peek().is_some());
+        assert_eq!(queue.peek().unwrap().priority, Priority::Urgent);
+        // Peek doesn't remove
+        assert_eq!(queue.len(), 1);
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn persistent_queue_contains() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        let task = make_task(Priority::Normal);
+        let task_id = task.id.clone();
+        crate::db::insert_task(&pool, &task).await.unwrap();
+
+        let queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        assert!(queue.contains(&task_id));
+        assert!(!queue.contains(&TaskId::new()));
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn persistent_queue_all_tasks() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        let t1 = make_task(Priority::Low);
+        let t2 = make_task(Priority::High);
+        crate::db::insert_task(&pool, &t1).await.unwrap();
+        crate::db::insert_task(&pool, &t2).await.unwrap();
+
+        let queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        let tasks = queue.all_tasks();
+        assert_eq!(tasks.len(), 2);
+        // Should be sorted: High first
+        assert_eq!(tasks[0].priority, Priority::High);
+        assert_eq!(tasks[1].priority, Priority::Low);
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn persistent_queue_count_by_priority() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        let t1 = make_task(Priority::Normal);
+        let t2 = make_task(Priority::Normal);
+        let t3 = make_task(Priority::Urgent);
+        crate::db::insert_task(&pool, &t1).await.unwrap();
+        crate::db::insert_task(&pool, &t2).await.unwrap();
+        crate::db::insert_task(&pool, &t3).await.unwrap();
+
+        let queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        let counts = queue.count_by_priority();
+        assert_eq!(counts.get(&Priority::Normal), Some(&2));
+        assert_eq!(counts.get(&Priority::Urgent), Some(&1));
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn persistent_queue_is_empty_and_len() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        let queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        assert!(queue.is_empty());
+        assert_eq!(queue.len(), 0);
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn requeue_with_same_priority() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        let task = make_task(Priority::High);
+        crate::db::insert_task(&pool, &task).await.unwrap();
+
+        let mut queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        let task = queue.dequeue().await.unwrap().unwrap();
+
+        queue
+            .requeue(task, RequeuePolicy::SamePriority)
+            .await
+            .unwrap();
+
+        assert_eq!(queue.peek().unwrap().priority, Priority::High);
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn persistent_queue_loads_multiple_pending() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        // Insert multiple pending tasks
+        for p in [Priority::Low, Priority::Normal, Priority::High, Priority::Urgent] {
+            let task = make_task(p);
+            crate::db::insert_task(&pool, &task).await.unwrap();
+        }
+
+        let queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        assert_eq!(queue.len(), 4);
+
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    async fn persistent_queue_dequeue_priority_order() {
+        let (pool, _temp_dir) = setup_test_db().await;
+
+        let low = make_task(Priority::Low);
+        let urgent = make_task(Priority::Urgent);
+        crate::db::insert_task(&pool, &low).await.unwrap();
+        crate::db::insert_task(&pool, &urgent).await.unwrap();
+
+        let mut queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+
+        let first = queue.dequeue().await.unwrap().unwrap();
+        assert_eq!(first.priority, Priority::Urgent);
+
+        let second = queue.dequeue().await.unwrap().unwrap();
+        assert_eq!(second.priority, Priority::Low);
 
         pool.close().await;
     }

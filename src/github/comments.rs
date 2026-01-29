@@ -430,4 +430,231 @@ mod tests {
         assert_eq!(progress.status, TaskStatus::InProgress);
         assert_eq!(progress.task_count, 2);
     }
+
+    #[test]
+    fn progress_summary_empty_slices() {
+        let summary = ProgressSummary::new("Empty ticket");
+        let md = summary.generate_markdown();
+
+        assert!(md.contains("## nexor Progress Update"));
+        // Should NOT contain progress bar or slice count when no slices
+        assert!(!md.contains("slices complete"));
+        assert!(!md.contains("### Slices"));
+        assert!(md.contains("---"));
+        assert!(md.contains("*Updated by"));
+    }
+
+    #[test]
+    fn progress_summary_with_slices_method() {
+        let slices = vec![
+            SliceProgress {
+                title: "Alpha".to_string(),
+                status: TaskStatus::Completed,
+                task_count: 2,
+                tasks_completed: 2,
+            },
+            SliceProgress {
+                title: "Beta".to_string(),
+                status: TaskStatus::Pending,
+                task_count: 0,
+                tasks_completed: 0,
+            },
+        ];
+
+        let summary = ProgressSummary::new("Test").with_slices(slices);
+
+        assert_eq!(summary.slices.len(), 2);
+        assert_eq!(summary.slices[0].title, "Alpha");
+        assert_eq!(summary.slices[1].title, "Beta");
+
+        let md = summary.generate_markdown();
+        // Alpha has task_count > 0, should show (2/2)
+        assert!(md.contains("✅ **Alpha** (2/2)"));
+        // Beta has task_count == 0, should NOT show counts
+        assert!(md.contains("⏳ **Beta**"));
+        assert!(!md.contains("⏳ **Beta** ("));
+    }
+
+    #[test]
+    fn progress_summary_all_completed() {
+        let summary = ProgressSummary::new("Done")
+            .add_slice("S1", TaskStatus::Completed, 1, 1)
+            .add_slice("S2", TaskStatus::Completed, 1, 1);
+
+        let md = summary.generate_markdown();
+        assert!(md.contains("2 of 2 slices complete"));
+        assert!(md.contains("100%"));
+        // All 10 bars should be filled
+        assert!(md.contains("██████████"));
+    }
+
+    #[test]
+    fn progress_summary_multiple_errors() {
+        let summary = ProgressSummary::new("Broken")
+            .with_error("Error one")
+            .with_error("Error two")
+            .with_error("Error three");
+
+        assert_eq!(summary.errors.len(), 3);
+
+        let md = summary.generate_markdown();
+        assert!(md.contains("### Issues"));
+        assert!(md.contains("⚠️ Error one"));
+        assert!(md.contains("⚠️ Error two"));
+        assert!(md.contains("⚠️ Error three"));
+    }
+
+    #[test]
+    fn progress_summary_no_activity_no_section() {
+        let summary = ProgressSummary::new("No activity");
+        let md = summary.generate_markdown();
+        assert!(!md.contains("**Currently:**"));
+    }
+
+    #[test]
+    fn progress_summary_no_errors_no_section() {
+        let summary = ProgressSummary::new("No errors");
+        let md = summary.generate_markdown();
+        assert!(!md.contains("### Issues"));
+    }
+
+    #[test]
+    fn progress_summary_footer_always_present() {
+        let summary = ProgressSummary::new("Footer check");
+        let md = summary.generate_markdown();
+        assert!(md.contains("---\n*Updated by [nexor](https://github.com/nexor)*"));
+    }
+
+    #[test]
+    fn comment_error_manual_ticket_display() {
+        let err = CommentError::ManualTicket;
+        assert_eq!(
+            err.to_string(),
+            "cannot comment on manually created ticket - no GitHub issue associated"
+        );
+    }
+
+    #[test]
+    fn comment_error_github_error_display() {
+        let gh_err = GitHubError::NotFound("resource".into());
+        let err = CommentError::from(gh_err);
+        let display = err.to_string();
+        assert!(display.contains("github API error"));
+    }
+
+    fn make_github_ticket() -> Ticket {
+        Ticket {
+            id: TicketId(Uuid::new_v4()),
+            source: TicketSource::GitHub {
+                owner: "test-owner".to_string(),
+                repo: "test-repo".to_string(),
+                issue_number: 42,
+            },
+            title: "Test ticket".to_string(),
+            description: "A test".to_string(),
+            labels: vec![],
+            slices: vec![],
+            status: crate::types::TicketStatus::default(),
+            created_at: Utc::now(),
+        }
+    }
+
+    fn make_manual_ticket() -> Ticket {
+        Ticket {
+            id: TicketId(Uuid::new_v4()),
+            source: TicketSource::Manual,
+            title: "Manual ticket".to_string(),
+            description: "Manual".to_string(),
+            labels: vec![],
+            slices: vec![],
+            status: crate::types::TicketStatus::default(),
+            created_at: Utc::now(),
+        }
+    }
+
+    #[test]
+    fn get_issue_ref_github_ticket() {
+        let client = GitHubClient::with_token("fake-token").unwrap();
+        let service = CommentService::new(client);
+        let ticket = make_github_ticket();
+
+        let result = service.get_issue_ref(&ticket);
+        assert!(result.is_ok());
+        let (owner, repo, number) = result.unwrap();
+        assert_eq!(owner, "test-owner");
+        assert_eq!(repo, "test-repo");
+        assert_eq!(number, 42);
+    }
+
+    #[test]
+    fn get_issue_ref_manual_ticket_errors() {
+        let client = GitHubClient::with_token("fake-token").unwrap();
+        let service = CommentService::new(client);
+        let ticket = make_manual_ticket();
+
+        let result = service.get_issue_ref(&ticket);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            CommentError::ManualTicket => {} // expected
+            other => panic!("Expected ManualTicket, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn comment_service_new_has_empty_progress_comments() {
+        let client = GitHubClient::with_token("fake-token").unwrap();
+        let service = CommentService::new(client);
+        assert!(service.progress_comments.is_empty());
+    }
+
+    #[test]
+    fn from_slice_sets_tasks_completed_to_zero() {
+        let slice = VerticalSlice {
+            id: crate::types::SliceId::new(),
+            ticket_id: uuid::Uuid::new_v4(),
+            title: "Slice".to_string(),
+            description: "Desc".to_string(),
+            tasks: vec![crate::types::TaskId::new()],
+            status: TaskStatus::Completed,
+            created_at: Utc::now(),
+        };
+
+        let progress = ProgressSummary::from_slice(&slice);
+        assert_eq!(progress.tasks_completed, 0);
+        assert_eq!(progress.task_count, 1);
+        assert_eq!(progress.status, TaskStatus::Completed);
+    }
+
+    #[test]
+    fn progress_bar_partial_fill() {
+        // 3/10 = 30%, 3 filled bars
+        let mut summary = ProgressSummary::new("Partial");
+        for i in 0..10 {
+            let status = if i < 3 {
+                TaskStatus::Completed
+            } else {
+                TaskStatus::Pending
+            };
+            summary = summary.add_slice(&format!("S{}", i), status, 1, 0);
+        }
+
+        let md = summary.generate_markdown();
+        assert!(md.contains("3 of 10"));
+        assert!(md.contains("30%"));
+        assert!(md.contains("███░░░░░░░"));
+    }
+
+    #[test]
+    fn generate_markdown_combined_activity_and_errors() {
+        let summary = ProgressSummary::new("Combined")
+            .add_slice("S1", TaskStatus::InProgress, 5, 2)
+            .with_activity("Running tests")
+            .with_error("Flaky test");
+
+        let md = summary.generate_markdown();
+        assert!(md.contains("**Currently:** Running tests"));
+        assert!(md.contains("### Issues"));
+        assert!(md.contains("⚠️ Flaky test"));
+        assert!(md.contains("🔄 **S1** (2/5)"));
+    }
 }

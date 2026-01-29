@@ -88,4 +88,40 @@ mod tests {
 
         assert!(result.is_err());
     }
+
+    #[test]
+    fn global_config_path_is_under_home() {
+        let path = global_config_path();
+        // Should end with .config/nexor/config.toml
+        assert!(path.ends_with(".config/nexor/config.toml"));
+    }
+
+    #[test]
+    fn parses_minimal_global_config() {
+        let content = "";
+        let config: GlobalConfig = toml::from_str(content).unwrap();
+        assert_eq!(config.verbosity, VerbosityLevel::default());
+    }
+
+    #[test]
+    fn parses_global_config_with_all_verbosity_levels() {
+        let content = r#"verbosity = "quiet""#;
+        let config: GlobalConfig = toml::from_str(content).unwrap();
+        assert_eq!(config.verbosity, VerbosityLevel::Quiet);
+
+        let content = r#"verbosity = "normal""#;
+        let config: GlobalConfig = toml::from_str(content).unwrap();
+        assert_eq!(config.verbosity, VerbosityLevel::Normal);
+
+        let content = r#"verbosity = "verbose""#;
+        let config: GlobalConfig = toml::from_str(content).unwrap();
+        assert_eq!(config.verbosity, VerbosityLevel::Verbose);
+    }
+
+    #[test]
+    fn global_config_default_has_expected_pool_values() {
+        let config = GlobalConfig::default();
+        assert!(config.pool.max_workers > 0);
+        assert!(config.pool.max_orchestrators > 0);
+    }
 }

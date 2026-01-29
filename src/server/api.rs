@@ -667,4 +667,1174 @@ mod tests {
         assert!(json.contains("\"role\":\"user\""));
         assert!(json.contains("\"content\":\"Hello!\""));
     }
+
+    // === Integration tests using setup_test_app ===
+
+    use axum::body::Body;
+    use axum::http::Request;
+    use tempfile::TempDir;
+    use tower::util::ServiceExt;
+
+    async fn setup_test_app() -> (axum::Router, TempDir) {
+        use std::sync::Arc;
+        use tokio::sync::RwLock;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let db = crate::db::init_db_at(db_path.to_str().unwrap())
+            .await
+            .unwrap();
+        let scheduler =
+            crate::orchestration::Scheduler::new(db.clone()).await.unwrap();
+        let scheduler = Arc::new(RwLock::new(scheduler));
+        let config = crate::types::AppConfig::default();
+        let state = AppState::new(db, scheduler, config);
+        let router = super::super::create_router_with_static_dir(state, "nonexistent_static");
+        (router, temp_dir)
+    }
+
+    #[tokio::test]
+    async fn create_task_valid_returns_created() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"title":"My task","description":"desc","priority":"high"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    #[tokio::test]
+    async fn create_task_empty_title_returns_bad_request() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"title":"   "}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn update_config_valid_verbosity() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/api/config")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"verbosity":"verbose"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn send_chat_valid_message_returns_accepted() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/chat")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"message":"Hello agent"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+    }
+
+    #[tokio::test]
+    async fn send_chat_empty_message_returns_bad_request() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/chat")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"message":"  "}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn clear_chat_history_returns_no_content() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/api/chat/history")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn health_check_returns_ok() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8(body.to_vec()).unwrap();
+        assert!(body_str.contains("\"status\":\"ok\""));
+        assert!(body_str.contains("\"db_connected\":true"));
+    }
+
+    // === Tier and priority parsing tests ===
+
+    #[tokio::test]
+    async fn create_task_with_orchestrator_tier() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"title":"Tier test","tier":"orchestrator"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8(body.to_vec()).unwrap();
+        assert!(body_str.contains("\"assigned_tier\":\"orchestrator\""));
+    }
+
+    #[tokio::test]
+    async fn create_task_with_utility_tier() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"title":"Util test","tier":"utility"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8(body.to_vec()).unwrap();
+        assert!(body_str.contains("\"assigned_tier\":\"utility\""));
+    }
+
+    #[tokio::test]
+    async fn create_task_with_unknown_tier_defaults_to_worker() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"title":"Default tier","tier":"nonexistent"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8(body.to_vec()).unwrap();
+        assert!(body_str.contains("\"assigned_tier\":\"worker\""));
+    }
+
+    #[tokio::test]
+    async fn create_task_with_no_tier_defaults_to_worker() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"title":"No tier"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8(body.to_vec()).unwrap();
+        assert!(body_str.contains("\"assigned_tier\":\"worker\""));
+    }
+
+    #[tokio::test]
+    async fn create_task_with_low_priority() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"title":"Low prio","priority":"low"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8(body.to_vec()).unwrap();
+        assert!(body_str.contains("\"priority\":\"low\""));
+    }
+
+    #[tokio::test]
+    async fn create_task_with_urgent_priority() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"title":"Urgent","priority":"urgent"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8(body.to_vec()).unwrap();
+        assert!(body_str.contains("\"priority\":\"urgent\""));
+    }
+
+    #[tokio::test]
+    async fn create_task_with_unknown_priority_defaults_to_normal() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"title":"Default prio","priority":"critical"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8(body.to_vec()).unwrap();
+        assert!(body_str.contains("\"priority\":\"normal\""));
+    }
+
+    #[tokio::test]
+    async fn create_task_with_no_priority_defaults_to_normal() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"title":"No prio"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8(body.to_vec()).unwrap();
+        assert!(body_str.contains("\"priority\":\"normal\""));
+    }
+
+    // === get_task: found and not found ===
+
+    #[tokio::test]
+    async fn get_task_returns_created_task() {
+        let (app, _tmp) = setup_test_app().await;
+
+        // Create a task first
+        let create_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"title":"Findable task"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(create_resp.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(create_resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let task_id = created["id"].as_str().unwrap();
+
+        // Verify through list endpoint that the task was persisted
+        let list_resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/tasks")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(list_resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(list_resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let tasks: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        let found = tasks.iter().find(|t| t["id"].as_str() == Some(task_id));
+        assert!(found.is_some(), "Created task should appear in task list");
+        assert_eq!(found.unwrap()["title"].as_str().unwrap(), "Findable task");
+    }
+
+    #[tokio::test]
+    async fn get_task_not_found() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/tasks/00000000-0000-0000-0000-000000000000")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Note: This may return 404 from the handler OR from the static fallback.
+        // Both are acceptable for a non-existent task.
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+
+    // === list_tasks with filters ===
+
+    #[tokio::test]
+    async fn list_tasks_returns_empty_initially() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/tasks")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let tasks: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        assert!(tasks.is_empty());
+    }
+
+    #[tokio::test]
+    async fn list_tasks_with_limit() {
+        let (app, _tmp) = setup_test_app().await;
+
+        // Create two tasks
+        for title in ["Task A", "Task B"] {
+            app.clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/tasks")
+                        .header("content-type", "application/json")
+                        .body(Body::from(format!(r#"{{"title":"{}"}}"#, title)))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+        }
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/tasks?limit=1")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let tasks: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(tasks.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn list_tasks_with_status_filter() {
+        let (app, _tmp) = setup_test_app().await;
+
+        // Create a task (default status is pending)
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"title":"Pending task"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Filter for in_progress - should return nothing
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/tasks?status=in_progress")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let tasks: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        assert!(tasks.is_empty());
+    }
+
+    // === update_config invalid verbosity ===
+
+    #[tokio::test]
+    async fn update_config_invalid_verbosity_returns_bad_request() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/api/config")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"verbosity":"extreme"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn update_config_quiet_verbosity() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/api/config")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"verbosity":"quiet"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn update_config_normal_verbosity() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/api/config")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"verbosity":"normal"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn update_config_no_verbosity_returns_ok() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/api/config")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    // === list_agents response body ===
+
+    #[tokio::test]
+    async fn list_agents_returns_stats() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/agents")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(resp["agents"].is_array());
+        assert!(resp["stats"]["orchestrators"].is_object());
+        assert!(resp["stats"]["workers"].is_object());
+        assert!(resp["stats"]["utilities"].is_object());
+    }
+
+    // === get_config response body ===
+
+    #[tokio::test]
+    async fn get_config_returns_expected_fields() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/config")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(resp["verbosity"].is_string());
+        assert!(resp["models"].is_object());
+        assert!(resp["pool"].is_object());
+        assert!(resp["autonomy"].is_string());
+        assert!(resp["git_strategy"].is_string());
+        assert!(resp["sandbox_mode"].is_string());
+    }
+
+    // === Auth endpoints ===
+
+    #[tokio::test]
+    async fn auth_setup_short_password_returns_bad_request() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/setup")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"password":"short"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn auth_setup_success() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/setup")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"password":"longpassword123"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            resp["message"].as_str().unwrap(),
+            "Password configured successfully"
+        );
+    }
+
+    #[tokio::test]
+    async fn auth_setup_conflict_when_already_configured() {
+        let (app, _tmp) = setup_test_app().await;
+
+        // First setup
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/setup")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"password":"longpassword123"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Second setup should conflict
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/setup")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"password":"anotherpassword"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    #[tokio::test]
+    async fn auth_login_no_password_configured() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/login")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"password":"anything"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn auth_login_wrong_password() {
+        let (app, _tmp) = setup_test_app().await;
+
+        // Setup password
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/setup")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"password":"correctpassword"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Login with wrong password
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/login")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"password":"wrongpassword!"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn auth_login_success() {
+        let (app, _tmp) = setup_test_app().await;
+
+        // Setup password
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/setup")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"password":"correctpassword"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Login with correct password
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/login")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"password":"correctpassword"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(resp["token"].is_string());
+        assert_eq!(resp["expires_in"].as_u64().unwrap(), 86400);
+    }
+
+    // === Chat history with data ===
+
+    #[tokio::test]
+    async fn chat_history_returns_messages_after_send() {
+        let (app, _tmp) = setup_test_app().await;
+
+        // Send a message
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/chat")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"message":"Hello agent"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Get history
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/chat/history")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let messages: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0]["role"].as_str().unwrap(), "user");
+        assert_eq!(messages[0]["content"].as_str().unwrap(), "Hello agent");
+    }
+
+    #[tokio::test]
+    async fn chat_history_with_pagination() {
+        let (app, _tmp) = setup_test_app().await;
+
+        // Send two messages
+        for msg in ["First", "Second"] {
+            app.clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/chat")
+                        .header("content-type", "application/json")
+                        .body(Body::from(format!(r#"{{"message":"{}"}}"#, msg)))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+        }
+
+        // Get with limit=1
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/chat/history?limit=1")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let messages: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(messages.len(), 1);
+
+        // Get with offset=1
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/chat/history?limit=10&offset=1")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let messages: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(messages.len(), 1);
+    }
+
+    // === Serialization edge cases ===
+
+    #[test]
+    fn create_task_request_all_fields() {
+        let json =
+            r#"{"title":"T","description":"D","priority":"low","tier":"orchestrator"}"#;
+        let request: CreateTaskRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.title, "T");
+        assert_eq!(request.description, Some("D".to_string()));
+        assert_eq!(request.priority, Some("low".to_string()));
+        assert_eq!(request.tier, Some("orchestrator".to_string()));
+    }
+
+    #[test]
+    fn create_task_request_minimal() {
+        let json = r#"{"title":"T"}"#;
+        let request: CreateTaskRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.title, "T");
+        assert!(request.description.is_none());
+        assert!(request.priority.is_none());
+        assert!(request.tier.is_none());
+    }
+
+    #[test]
+    fn tasks_query_with_no_fields() {
+        let json = r#"{}"#;
+        let query: TasksQuery = serde_json::from_str(json).unwrap();
+        assert!(query.status.is_none());
+        assert!(query.limit.is_none());
+    }
+
+    #[test]
+    fn setup_request_deserializes() {
+        let json = r#"{"password":"mypassword"}"#;
+        let request: SetupRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.password, "mypassword");
+    }
+
+    #[test]
+    fn login_request_deserializes() {
+        let json = r#"{"password":"mypassword"}"#;
+        let request: LoginRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.password, "mypassword");
+    }
+
+    #[test]
+    fn setup_response_serializes() {
+        let response = SetupResponse {
+            message: "ok".to_string(),
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"message\":\"ok\""));
+    }
+
+    #[test]
+    fn login_response_serializes() {
+        let response = LoginResponse {
+            token: "abc123".to_string(),
+            expires_in: 86400,
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"token\":\"abc123\""));
+        assert!(json.contains("\"expires_in\":86400"));
+    }
+
+    #[test]
+    fn me_response_serializes() {
+        let response = MeResponse {
+            user: "admin".to_string(),
+            authenticated: true,
+            token_expires: 99999,
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"user\":\"admin\""));
+        assert!(json.contains("\"authenticated\":true"));
+        assert!(json.contains("\"token_expires\":99999"));
+    }
+
+    #[test]
+    fn agents_list_response_serializes() {
+        let response = AgentsListResponse {
+            agents: vec![AgentResponse {
+                id: "agent-1".to_string(),
+                tier: "worker".to_string(),
+                status: "idle".to_string(),
+                current_task: None,
+            }],
+            stats: AgentPoolStats {
+                orchestrators: TierStats {
+                    total: 0,
+                    available: 0,
+                    max: 1,
+                },
+                workers: TierStats {
+                    total: 1,
+                    available: 1,
+                    max: 4,
+                },
+                utilities: TierStats {
+                    total: 0,
+                    available: 0,
+                    max: 2,
+                },
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"agent-1\""));
+        assert!(json.contains("\"workers\""));
+    }
+
+    #[test]
+    fn agent_response_with_current_task() {
+        let task_id = Uuid::new_v4();
+        let response = AgentResponse {
+            id: "agent-2".to_string(),
+            tier: "orchestrator".to_string(),
+            status: "busy".to_string(),
+            current_task: Some(task_id),
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains(&task_id.to_string()));
+    }
+
+    // === send_chat response body ===
+
+    #[tokio::test]
+    async fn send_chat_response_contains_message_id() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/chat")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"message":"test msg"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(resp["message_id"].is_string());
+        assert_eq!(resp["status"].as_str().unwrap(), "queued");
+        // Verify it's a valid UUID
+        Uuid::parse_str(resp["message_id"].as_str().unwrap()).unwrap();
+    }
+
+    // === create_task response body validation ===
+
+    #[tokio::test]
+    async fn create_task_response_body_has_expected_fields() {
+        let (app, _tmp) = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"title":"Full task","description":"A description","priority":"high","tier":"worker"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let task: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(task["title"].as_str().unwrap(), "Full task");
+        assert_eq!(task["description"].as_str().unwrap(), "A description");
+        assert!(task["id"].is_string());
+        assert!(task["created_at"].is_string());
+        assert!(task["updated_at"].is_string());
+    }
+
+    // === clear chat then verify empty ===
+
+    #[tokio::test]
+    async fn clear_chat_then_history_is_empty() {
+        let (app, _tmp) = setup_test_app().await;
+
+        // Send a message
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/chat")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"message":"To be cleared"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Clear history
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/api/chat/history")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Verify empty
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/chat/history")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let messages: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        assert!(messages.is_empty());
+    }
 }

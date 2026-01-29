@@ -656,3 +656,190 @@ mod summary_tests {
         assert_eq!(CostTracker::format_cost(1.50), "$1.50");
     }
 }
+
+#[cfg(test)]
+mod db_tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    async fn setup_test_db() -> (SqlitePool, TempDir) {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let pool = crate::db::init_db_at(db_path.to_str().unwrap())
+            .await
+            .unwrap();
+        (pool, temp_dir)
+    }
+
+    async fn insert_agent(pool: &SqlitePool, agent_id: &AgentId) {
+        sqlx::query("INSERT INTO agents (id, tier, persona_name, model_id) VALUES (?, 'Worker', 'test', 'test-model')")
+            .bind(agent_id.0.to_string())
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+
+    async fn insert_task(pool: &SqlitePool, task_id: &TaskId) {
+        sqlx::query("INSERT INTO tasks (id, title) VALUES (?, 'test task')")
+            .bind(task_id.0.to_string())
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn cost_tracker_new_with_db() {
+        let (pool, _dir) = setup_test_db().await;
+        let tracker = CostTracker::new(pool);
+        assert!(tracker.db_pool.is_some());
+    }
+
+    #[tokio::test]
+    async fn record_call_persists_to_db() {
+        let (pool, _dir) = setup_test_db().await;
+        let task_id = TaskId::new();
+        let agent_id = AgentId::new();
+        insert_agent(&pool, &agent_id).await;
+        insert_task(&pool, &task_id).await;
+        let tracker = CostTracker::new(pool);
+
+        let record = tracker
+            .record_call(
+                agent_id,
+                AgentTier::Worker,
+                Some(task_id.clone()),
+                "claude-3-haiku-20240307",
+                TokenUsage {
+                    input_tokens: 1000,
+                    output_tokens: 500,
+                },
+            )
+            .await
+            .unwrap();
+
+        assert!(record.cost_usd > 0.0);
+        assert_eq!(record.task_id.as_ref(), Some(&task_id));
+
+        // Verify via session_records
+        let records = tracker.session_records().await;
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].id, record.id);
+
+        // Verify via cost_for_task
+        let task_cost = tracker.cost_for_task(&task_id).await;
+        assert!(task_cost > 0.0);
+        assert!((task_cost - record.cost_usd).abs() < f64::EPSILON);
+    }
+
+    #[tokio::test]
+    async fn get_historical_summary_without_since() {
+        let (pool, _dir) = setup_test_db().await;
+        let agent_id = AgentId::new();
+        insert_agent(&pool, &agent_id).await;
+        let tracker = CostTracker::new(pool);
+
+        tracker
+            .record_call(
+                agent_id,
+                AgentTier::Worker,
+                None,
+                "claude-3-haiku-20240307",
+                TokenUsage {
+                    input_tokens: 1000,
+                    output_tokens: 500,
+                },
+            )
+            .await
+            .unwrap();
+
+        let summary = tracker.get_historical_summary(None).await.unwrap();
+        assert!(summary.session_total > 0.0);
+        assert!(summary.by_model.contains_key("claude-3-haiku-20240307"));
+    }
+
+    #[tokio::test]
+    async fn get_historical_summary_with_since() {
+        let (pool, _dir) = setup_test_db().await;
+        let agent_id = AgentId::new();
+        insert_agent(&pool, &agent_id).await;
+        let tracker = CostTracker::new(pool);
+
+        let before = Utc::now();
+
+        tracker
+            .record_call(
+                agent_id,
+                AgentTier::Orchestrator,
+                None,
+                "claude-3-opus-20240229",
+                TokenUsage {
+                    input_tokens: 500,
+                    output_tokens: 200,
+                },
+            )
+            .await
+            .unwrap();
+
+        // Query with since = before the record was created
+        let summary = tracker
+            .get_historical_summary(Some(before))
+            .await
+            .unwrap();
+        assert!(summary.session_total > 0.0);
+
+        // Query with since = future should return empty
+        let future = Utc::now() + chrono::Duration::hours(1);
+        let summary_empty = tracker
+            .get_historical_summary(Some(future))
+            .await
+            .unwrap();
+        assert_eq!(summary_empty.session_total, 0.0);
+    }
+
+    #[test]
+    fn cost_record_row_try_from_various_tiers() {
+        let id = Uuid::new_v4();
+        let agent_id = Uuid::new_v4();
+        let now = Utc::now().to_rfc3339();
+
+        for (tier_str, expected) in [
+            ("Orchestrator", AgentTier::Orchestrator),
+            ("Worker", AgentTier::Worker),
+            ("Utility", AgentTier::Utility),
+            ("UnknownTier", AgentTier::Worker), // fallback
+        ] {
+            let row = CostRecordRow {
+                id: id.to_string(),
+                task_id: None,
+                agent_id: agent_id.to_string(),
+                agent_tier: tier_str.to_string(),
+                model_id: "claude-3-haiku".to_string(),
+                input_tokens: 100,
+                output_tokens: 50,
+                cost_usd: 0.001,
+                timestamp: now.clone(),
+            };
+
+            let record: CostRecord = row.try_into().unwrap();
+            assert_eq!(record.agent_tier, expected, "Failed for tier {}", tier_str);
+        }
+    }
+
+    #[test]
+    fn cost_record_row_try_from_with_task_id() {
+        let row = CostRecordRow {
+            id: Uuid::new_v4().to_string(),
+            task_id: Some(Uuid::new_v4().to_string()),
+            agent_id: Uuid::new_v4().to_string(),
+            agent_tier: "Worker".to_string(),
+            model_id: "claude-3-haiku".to_string(),
+            input_tokens: 100,
+            output_tokens: 50,
+            cost_usd: 0.001,
+            timestamp: Utc::now().to_rfc3339(),
+        };
+
+        let record: CostRecord = row.try_into().unwrap();
+        assert!(record.task_id.is_some());
+    }
+}
