@@ -1,4 +1,5 @@
-import { FeedItem as FeedItemType } from '../../hooks/useFeed';
+import { useState } from 'react';
+import type { FeedItem as FeedItemType } from '../../hooks/useFeed';
 import { StatusDot } from '../StatusDot';
 import styles from './FeedItem.module.css';
 
@@ -7,6 +8,8 @@ interface FeedItemProps {
 }
 
 export function FeedItem({ item }: FeedItemProps) {
+  const [expanded, setExpanded] = useState(false);
+
   const getAgentStyle = (agent: string): string => {
     if (agent.toLowerCase().includes('orchestrator')) return styles.agentOrchestrator;
     if (agent.toLowerCase().includes('worker')) return styles.agentWorker;
@@ -32,8 +35,16 @@ export function FeedItem({ item }: FeedItemProps) {
     return 'active';
   };
 
+  const isLong = item.content.length > 120;
+  const displayContent = isLong && !expanded
+    ? item.content.slice(0, 120) + '...'
+    : item.content;
+
   return (
-    <div className={`${styles.item} ${getTypeStyle(item.type)}`}>
+    <div
+      className={`${styles.item} ${getTypeStyle(item.type)}`}
+      onClick={isLong ? () => setExpanded(!expanded) : undefined}
+    >
       <span className={styles.timestamp}>
         {new Date(item.timestamp).toLocaleTimeString()}
       </span>
@@ -44,8 +55,8 @@ export function FeedItem({ item }: FeedItemProps) {
         {item.agent}
       </span>
 
-      <span className={styles.content}>
-        {item.content}
+      <span className={`${styles.content} ${isLong ? styles.contentClickable : ''}`}>
+        {displayContent}
       </span>
     </div>
   );

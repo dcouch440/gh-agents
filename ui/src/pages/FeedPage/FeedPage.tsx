@@ -35,42 +35,40 @@ export function FeedPage() {
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <h2 className={styles.title}>Agent Activity</h2>
-        <span className={styles.count}>
-          {items.length} events
-        </span>
-      </div>
-
-      <div className={styles.contentWrapper}>
-        {items.length === 0 ? (
-          <div className={styles.emptyState}>
-            <p className={styles.emptyTitle}>No agent activity yet</p>
-            <p className={styles.emptySubtitle}>Start a task to see agents working</p>
+      {items.length === 0 ? (
+        <div className={styles.emptyState}>
+          <p className={styles.emptyTitle}>No activity yet</p>
+          <p className={styles.emptySubtitle}>Agent events will appear here</p>
+        </div>
+      ) : (
+        <>
+          <div className={styles.countBar}>
+            <span className={styles.count}>{items.length} events</span>
           </div>
-        ) : (
-          <div
-            ref={containerRef}
-            onScroll={handleScroll}
-            className={styles.feedList}
-          >
-            {items.map((item) => (
-              <FeedItem key={item.id} item={item} />
-            ))}
-            <div ref={bottomRef} />
-          </div>
-        )}
+          <div className={styles.contentWrapper}>
+            <div
+              ref={containerRef}
+              onScroll={handleScroll}
+              className={styles.feedList}
+            >
+              {items.map((item) => (
+                <FeedItem key={item.id} item={item} />
+              ))}
+              <div ref={bottomRef} />
+            </div>
 
-        {!autoScroll && newCount > 0 && (
-          <button
-            onClick={scrollToBottom}
-            className={styles.newEventsButton}
-          >
-            <ArrowDown size={16} />
-            {newCount} new {newCount === 1 ? 'event' : 'events'}
-          </button>
-        )}
-      </div>
+            {!autoScroll && newCount > 0 && (
+              <button
+                onClick={scrollToBottom}
+                className={styles.newEventsButton}
+              >
+                <ArrowDown size={16} />
+                {newCount} new {newCount === 1 ? 'event' : 'events'}
+              </button>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

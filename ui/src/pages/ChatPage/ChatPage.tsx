@@ -27,8 +27,8 @@ export function ChatPage() {
       <div className={styles.messageList}>
         {messages.length === 0 ? (
           <div className={styles.emptyState}>
-            <p className={styles.emptyTitle}>Welcome to nexor</p>
-            <p className={styles.emptySubtitle}>Start a conversation with your AI orchestrator</p>
+            <p className={styles.emptyBrand}>nexor</p>
+            <p className={styles.emptyTagline}>AI agent orchestration for GitHub workflows</p>
           </div>
         ) : (
           messages.map((message) => (
