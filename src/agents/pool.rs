@@ -7,7 +7,7 @@ use thiserror::Error;
 use tracing::{info, warn};
 
 use crate::llm::LLMProvider;
-use crate::types::{AgentPersona, AgentPoolConfig, AgentTier, ModelConfig};
+use crate::types::{AgentPersona, AgentPoolConfig, AgentTier, ModelConfig, Task};
 
 use super::agent::{Agent, AgentError, AgentId};
 use super::channels::{create_agent_channel, AgentHandle};
@@ -92,10 +92,8 @@ impl AgentPool {
     /// - `difficulty=standard` → Worker tier → Sonnet
     /// - `difficulty=simple` → Utility tier → Sonnet
     ///
-    /// # Future: Model Override
-    /// TODO: Support per-task model override via task.metadata["model_override"].
-    /// This would require architectural changes to allow agents to switch models
-    /// per task, rather than being bound to a model at spawn time.
+    /// Use [`resolve_model_for_task`] to apply per-task model overrides before
+    /// passing `model_config` to this method.
     pub fn spawn_agent(
         &mut self,
         tier: AgentTier,
@@ -333,6 +331,21 @@ pub struct PoolStats {
     pub orchestrators: PoolTierStats,
     pub workers: PoolTierStats,
     pub utilities: PoolTierStats,
+}
+
+/// Resolve the model config for a task, applying any `model_override` from task metadata.
+///
+/// If the task's metadata contains a `model_override` key, that model ID is used
+/// instead of the tier default. Otherwise, `tier_model` is returned unchanged.
+pub fn resolve_model_for_task(tier_model: ModelConfig, task: &Task) -> ModelConfig {
+    if let Some(override_id) = task.metadata.as_ref().and_then(|m| m.get("model_override")) {
+        ModelConfig {
+            model_id: override_id.clone(),
+            ..tier_model
+        }
+    } else {
+        tier_model
+    }
 }
 
 #[cfg(test)]
@@ -992,5 +1005,70 @@ mod tests {
         assert_eq!(stats.workers.max, 3);
         assert_eq!(stats.utilities.total, 1);
         assert_eq!(stats.utilities.max, 4);
+    }
+
+    // === resolve_model_for_task tests ===
+
+    fn make_task_for_model(metadata: Option<std::collections::HashMap<String, String>>) -> Task {
+        use crate::types::{Priority, TaskId, TaskStatus};
+        Task {
+            id: TaskId::new(),
+            slice_id: None,
+            title: "test".to_string(),
+            description: String::new(),
+            assigned_tier: AgentTier::Worker,
+            assigned_agent: None,
+            status: TaskStatus::Pending,
+            priority: Priority::Normal,
+            context_files: vec![],
+            metadata,
+            depends_on: vec![],
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        }
+    }
+
+    #[test]
+    fn resolve_model_no_override_returns_tier_default() {
+        let tier_model = ModelConfig {
+            model_id: "claude-sonnet-4-20250514".to_string(),
+            ..Default::default()
+        };
+        let task = make_task_for_model(None);
+
+        let resolved = resolve_model_for_task(tier_model.clone(), &task);
+        assert_eq!(resolved.model_id, "claude-sonnet-4-20250514");
+    }
+
+    #[test]
+    fn resolve_model_with_override_uses_override() {
+        let tier_model = ModelConfig {
+            model_id: "claude-sonnet-4-20250514".to_string(),
+            max_tokens: 4096,
+            ..Default::default()
+        };
+        let mut metadata = std::collections::HashMap::new();
+        metadata.insert(
+            "model_override".to_string(),
+            "claude-opus-4-5-20251101".to_string(),
+        );
+        let task = make_task_for_model(Some(metadata));
+
+        let resolved = resolve_model_for_task(tier_model, &task);
+        assert_eq!(resolved.model_id, "claude-opus-4-5-20251101");
+        // Other config preserved
+        assert_eq!(resolved.max_tokens, 4096);
+    }
+
+    #[test]
+    fn resolve_model_empty_metadata_returns_tier_default() {
+        let tier_model = ModelConfig {
+            model_id: "claude-sonnet-4-20250514".to_string(),
+            ..Default::default()
+        };
+        let task = make_task_for_model(Some(std::collections::HashMap::new()));
+
+        let resolved = resolve_model_for_task(tier_model, &task);
+        assert_eq!(resolved.model_id, "claude-sonnet-4-20250514");
     }
 }
