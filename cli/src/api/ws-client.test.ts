@@ -295,5 +295,285 @@ describe('WsClient', () => {
         channels: ['agents'],
       });
     });
+
+    it('uses exponential backoff delays (1s, 2s, 4s)', async () => {
+      const { client, socket } = createClientAndSocket();
+      const p = client.connect();
+      socket.emit('open');
+      await p;
+
+      // First close → 1s delay
+      const socket2 = new FakeSocket();
+      lastFakeSocket = socket2;
+      socket.emit('close');
+
+      vi.advanceTimersByTime(999);
+      expect(constructorSpy).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(1);
+      expect(constructorSpy).toHaveBeenCalledTimes(2);
+
+      // Second close → 2s delay
+      const socket3 = new FakeSocket();
+      lastFakeSocket = socket3;
+      socket2.emit('close');
+
+      vi.advanceTimersByTime(1999);
+      expect(constructorSpy).toHaveBeenCalledTimes(2);
+      vi.advanceTimersByTime(1);
+      expect(constructorSpy).toHaveBeenCalledTimes(3);
+
+      // Third close → 4s delay
+      const socket4 = new FakeSocket();
+      lastFakeSocket = socket4;
+      socket3.emit('close');
+
+      vi.advanceTimersByTime(3999);
+      expect(constructorSpy).toHaveBeenCalledTimes(3);
+      vi.advanceTimersByTime(1);
+      expect(constructorSpy).toHaveBeenCalledTimes(4);
+
+      socket4.emit('open');
+    });
+
+    it('stops reconnecting after max attempts (10)', async () => {
+      const { client, socket } = createClientAndSocket();
+      const p = client.connect();
+      socket.emit('open');
+      await p;
+
+      // Exhaust all 10 reconnect attempts
+      let currentSocket = socket;
+      for (let i = 0; i < 10; i++) {
+        const next = new FakeSocket();
+        lastFakeSocket = next;
+        currentSocket.emit('close');
+        const delay = 1000 * Math.pow(2, i);
+        vi.advanceTimersByTime(delay);
+        currentSocket = next;
+      }
+      expect(constructorSpy).toHaveBeenCalledTimes(11); // 1 initial + 10 reconnects
+
+      // 11th close should not trigger another reconnect
+      const extra = new FakeSocket();
+      lastFakeSocket = extra;
+      currentSocket.emit('close');
+      vi.advanceTimersByTime(600000);
+      expect(constructorSpy).toHaveBeenCalledTimes(11);
+    });
+
+    it('resets reconnect counter after successful reconnect', async () => {
+      const { client, socket } = createClientAndSocket();
+      const p = client.connect();
+      socket.emit('open');
+      await p;
+
+      // First disconnect + reconnect
+      const socket2 = new FakeSocket();
+      lastFakeSocket = socket2;
+      socket.emit('close');
+      vi.advanceTimersByTime(1000);
+      socket2.emit('open'); // resets counter
+
+      // Second disconnect should use 1s delay again (not 2s)
+      const socket3 = new FakeSocket();
+      lastFakeSocket = socket3;
+      socket2.emit('close');
+
+      vi.advanceTimersByTime(999);
+      expect(constructorSpy).toHaveBeenCalledTimes(2);
+      vi.advanceTimersByTime(1);
+      expect(constructorSpy).toHaveBeenCalledTimes(3);
+
+      socket3.emit('open');
+    });
+
+    it('resubscribes only to remaining channels after unsubscribe', async () => {
+      const { client, socket } = createClientAndSocket();
+      const p = client.connect();
+      socket.emit('open');
+      await p;
+
+      client.subscribe(['agents', 'tasks']);
+      client.unsubscribe(['agents']);
+      socket.sent.length = 0;
+
+      const socket2 = new FakeSocket();
+      lastFakeSocket = socket2;
+      socket.emit('close');
+      vi.advanceTimersByTime(1000);
+      socket2.emit('open');
+
+      expect(socket2.sent).toHaveLength(1);
+      expect(JSON.parse(socket2.sent[0])).toEqual({
+        type: 'subscribe',
+        channels: ['tasks'],
+      });
+    });
+
+    it('does not resubscribe when no channels are subscribed', async () => {
+      const { client, socket } = createClientAndSocket();
+      const p = client.connect();
+      socket.emit('open');
+      await p;
+
+      const socket2 = new FakeSocket();
+      lastFakeSocket = socket2;
+      socket.emit('close');
+      vi.advanceTimersByTime(1000);
+      socket2.emit('open');
+
+      expect(socket2.sent).toHaveLength(0);
+    });
+  });
+
+  describe('multiple handlers', () => {
+    it('dispatches to multiple handlers for the same type', async () => {
+      const { client, socket } = createClientAndSocket();
+      const p = client.connect();
+      socket.emit('open');
+      await p;
+
+      const handler1 = vi.fn();
+      const handler2 = vi.fn();
+      client.on('agent_update', handler1);
+      client.on('agent_update', handler2);
+
+      const msg = {
+        type: 'agent_update',
+        data: { id: 'a1', status: 'idle', current_task: null },
+      };
+      socket.emit('message', JSON.stringify(msg));
+
+      expect(handler1).toHaveBeenCalledWith(msg.data);
+      expect(handler2).toHaveBeenCalledWith(msg.data);
+    });
+
+    it('only removes the specific handler passed to off', async () => {
+      const { client, socket } = createClientAndSocket();
+      const p = client.connect();
+      socket.emit('open');
+      await p;
+
+      const handler1 = vi.fn();
+      const handler2 = vi.fn();
+      client.on('task_update', handler1);
+      client.on('task_update', handler2);
+      client.off('task_update', handler1);
+
+      const msg = {
+        type: 'task_update',
+        data: { id: 't1', status: 'pending', progress: 0, assigned_agent: null },
+      };
+      socket.emit('message', JSON.stringify(msg));
+
+      expect(handler1).not.toHaveBeenCalled();
+      expect(handler2).toHaveBeenCalledWith(msg.data);
+    });
+
+    it('off on nonexistent type does not throw', () => {
+      const { client } = createClientAndSocket();
+      expect(() => client.off('nonexistent', vi.fn())).not.toThrow();
+    });
+  });
+
+  describe('subscribe deduplication', () => {
+    it('does not duplicate channels on repeated subscribe', async () => {
+      const { client, socket } = createClientAndSocket();
+      const p = client.connect();
+      socket.emit('open');
+      await p;
+
+      client.subscribe(['agents']);
+      client.subscribe(['agents']);
+      socket.sent.length = 0;
+
+      // Reconnect and check resubscription only has one 'agents'
+      const socket2 = new FakeSocket();
+      lastFakeSocket = socket2;
+      socket.emit('close');
+      vi.advanceTimersByTime(1000);
+      socket2.emit('open');
+
+      expect(socket2.sent).toHaveLength(1);
+      const parsed = JSON.parse(socket2.sent[0]);
+      expect(parsed.channels).toEqual(['agents']);
+    });
+  });
+
+  describe('error message dispatch', () => {
+    it('dispatches error messages to error handler', async () => {
+      const { client, socket } = createClientAndSocket();
+      const p = client.connect();
+      socket.emit('open');
+      await p;
+
+      const handler = vi.fn();
+      client.on('error', handler);
+
+      const msg = { type: 'error', message: 'something went wrong' };
+      socket.emit('message', JSON.stringify(msg));
+
+      // error has no 'data' field, so handler receives the full message
+      expect(handler).toHaveBeenCalledWith(msg);
+    });
+  });
+
+  describe('send when not connected', () => {
+    it('does not throw when subscribing on a closed socket', async () => {
+      const { client, socket } = createClientAndSocket();
+      const p = client.connect();
+      socket.emit('open');
+      await p;
+
+      socket.readyState = 3; // CLOSED
+      expect(() => client.subscribe(['agents'])).not.toThrow();
+      // No message sent since socket is closed
+      expect(socket.sent).toHaveLength(0);
+    });
+
+    it('does not throw when unsubscribing on a closed socket', async () => {
+      const { client, socket } = createClientAndSocket();
+      const p = client.connect();
+      socket.emit('open');
+      await p;
+
+      client.subscribe(['agents']);
+      socket.readyState = 3;
+      expect(() => client.unsubscribe(['agents'])).not.toThrow();
+    });
+  });
+
+  describe('message with no matching handler', () => {
+    it('does not throw when no handler is registered for a message type', async () => {
+      const { client, socket } = createClientAndSocket();
+      const p = client.connect();
+      socket.emit('open');
+      await p;
+
+      // No handlers registered, should not throw
+      const msg = {
+        type: 'agent_update',
+        data: { id: 'a1', status: 'busy', current_task: null },
+      };
+      expect(() => socket.emit('message', JSON.stringify(msg))).not.toThrow();
+    });
+  });
+
+  describe('disconnect idempotency', () => {
+    it('can be called multiple times without error', async () => {
+      const { client, socket } = createClientAndSocket();
+      const p = client.connect();
+      socket.emit('open');
+      await p;
+
+      client.disconnect();
+      expect(() => client.disconnect()).not.toThrow();
+      expect(client.connected).toBe(false);
+    });
+
+    it('connected is false before connect is called', () => {
+      const { client } = createClientAndSocket();
+      expect(client.connected).toBe(false);
+    });
   });
 });
