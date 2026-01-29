@@ -410,6 +410,7 @@ Update all docs for new architecture.
 | 15.6 | Report Management Backend | 5 | P1 |
 | 15.7 | Report Viewer & Submission UI | 6 | P1 |
 | 15.8 | Pivotal Points Dashboard | 5 | P2 |
+| 15.9 | System Prompt Admin | 6 | P1 |
 
 **Key Features**:
 - **Multi-Repo**: Add/clone repos, switch active repo from header, per-repo config, git status indicators

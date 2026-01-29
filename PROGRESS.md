@@ -275,8 +275,9 @@
 | 15.6 Report Management Backend | pending | 0/5 | DB schema, review lifecycle, agent hook |
 | 15.7 Report Viewer & Submission UI | pending | 0/6 | Markdown render, approve/reject, inline edit, submit |
 | 15.8 Pivotal Points | pending | 0/5 | Timeline, bookmarks, cross-repo tracking |
+| 15.9 System Prompt Admin | pending | 0/6 | Seed on boot, DB-backed prompts, super-admin editor |
 
-**Milestone Status:** Not Started (0/8 tickets done)
+**Milestone Status:** Not Started (0/9 tickets done)
 
 ---
 
@@ -297,8 +298,8 @@
 | M11: React Foundation | 4 | In Progress |
 | M12: React Features | 6 | Not Started |
 | M13: React Polish | 5 | Not Started |
-| M15: Repo Mgmt & Workspace | 8 | Not Started |
-| **Total Active** | **87** | |
+| M15: Repo Mgmt & Workspace | 9 | Not Started |
+| **Total Active** | **88** | |
 
 ---
 
