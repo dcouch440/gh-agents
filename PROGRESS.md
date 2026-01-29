@@ -4,8 +4,8 @@
 
 ## Current Focus
 
-**Active:** M11 React Foundation
-**Next:** 11.4 Layout Components
+**Active:** M12 React Features
+**Next:** 12.1 Chat View
 **Planned:** M14 Dynamic Agent Selection (can run in parallel with M10-M13)
 **Blocked:** None
 
@@ -213,7 +213,7 @@
 
 ---
 
-## Milestone 11: React Foundation - IN PROGRESS
+## Milestone 11: React Foundation - COMPLETE
 
 **Goal**: React app scaffold with auth, routing, and layout.
 
@@ -222,9 +222,9 @@
 | 11.1 Project Setup | done | 5/5 | Vite + React + TypeScript, TailwindCSS v4, React Router, Zustand, proxy configured |
 | 11.2 API Client | done | 4/4 | Typed HTTP client, auth token expiry, WebSocket with reconnection, React hooks (useChat, useFeed, useTasks) |
 | 11.3 Authentication UI | done | 5/5 | Input, Button components, LoginPage, SetupPage, auth flow routing, ProtectedRoute |
-| 11.4 Layout Components | pending | 0/4 | |
+| 11.4 Layout Components | done | 4/4 | Layout, Sidebar, Header, StatusDot, responsive mobile overlay, placeholder pages, nested routes |
 
-**Milestone Status:** In Progress (3/4 tickets done)
+**Milestone Status:** Complete (4/4 tickets done)
 
 ---
 
@@ -315,7 +315,7 @@
 | M8: GitHub Integration | 8 | Complete |
 | M9: Polish & Production | 12 | Complete |
 | M10: Server Layer | 6 | Complete |
-| M11: React Foundation | 4 | In Progress |
+| M11: React Foundation | 4 | Complete |
 | M12: React Features | 6 | Not Started |
 | M13: React Polish | 5 | Not Started |
 | M15: Repo Mgmt & Workspace | 9 | Not Started |

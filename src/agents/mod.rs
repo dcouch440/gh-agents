@@ -5,6 +5,7 @@ mod channels;
 mod dispatcher;
 mod escalation;
 mod executor;
+pub mod planner_bot;
 mod pool;
 pub mod protocol;
 mod roles;
