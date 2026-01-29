@@ -374,6 +374,345 @@ mod tests {
         assert!(display.contains("https://github.com"));
     }
 
+    #[test]
+    fn pr_body_generator_full_builder_chain_from_new() {
+        let body = PrBodyGenerator::new("Implement login endpoint")
+            .with_tasks(vec![
+                "Add login route".to_string(),
+                "Add JWT middleware".to_string(),
+            ])
+            .with_files(vec![
+                "src/routes/login.rs".to_string(),
+                "src/middleware/auth.rs".to_string(),
+            ])
+            .with_issue("myorg", "myrepo", 99)
+            .generate();
+
+        assert!(body.contains("## Summary"));
+        assert!(body.contains("Implement login endpoint"));
+        assert!(body.contains("## Changes"));
+        assert!(body.contains("- Add login route"));
+        assert!(body.contains("- Add JWT middleware"));
+        assert!(body.contains("## Files Modified"));
+        assert!(body.contains("`src/routes/login.rs`"));
+        assert!(body.contains("`src/middleware/auth.rs`"));
+        assert!(body.contains("Fixes myorg/myrepo#99"));
+        assert!(body.contains("nexor"));
+    }
+
+    #[test]
+    fn pr_body_generator_full_builder_chain_from_slice() {
+        let slice = mock_slice();
+        let body = PrBodyGenerator::from_slice(&slice)
+            .with_tasks(vec!["Implement auth".to_string()])
+            .with_files(vec!["src/auth.rs".to_string()])
+            .with_issue("owner", "repo", 10)
+            .generate();
+
+        assert!(body.contains("Implements basic auth flow with JWT tokens"));
+        assert!(body.contains("## Changes"));
+        assert!(body.contains("- Implement auth"));
+        assert!(body.contains("## Files Modified"));
+        assert!(body.contains("`src/auth.rs`"));
+        assert!(body.contains("Fixes owner/repo#10"));
+    }
+
+    #[test]
+    fn pr_body_generator_from_ticket_source_manual_no_issue() {
+        let slice = mock_slice();
+        let ticket = mock_ticket_manual();
+        let body = PrBodyGenerator::from_ticket_source(&slice, &ticket.source).generate();
+
+        assert!(body.contains("## Summary"));
+        assert!(body.contains("Implements basic auth flow"));
+        assert!(!body.contains("Fixes"));
+    }
+
+    #[test]
+    fn pr_body_generator_combined_tasks_files_issue() {
+        let slice = mock_slice();
+        let ticket = mock_ticket_github();
+        let body = PrBodyGenerator::from_ticket_source(&slice, &ticket.source)
+            .with_tasks(vec![
+                "Task A".to_string(),
+                "Task B".to_string(),
+                "Task C".to_string(),
+            ])
+            .with_files(vec![
+                "file1.rs".to_string(),
+                "file2.rs".to_string(),
+            ])
+            .generate();
+
+        // Verify all sections present and ordered
+        let summary_pos = body.find("## Summary").unwrap();
+        let changes_pos = body.find("## Changes").unwrap();
+        let files_pos = body.find("## Files Modified").unwrap();
+        let fixes_pos = body.find("Fixes owner/repo#42").unwrap();
+
+        assert!(summary_pos < changes_pos);
+        assert!(changes_pos < files_pos);
+        assert!(files_pos < fixes_pos);
+
+        assert!(body.contains("- Task A"));
+        assert!(body.contains("- Task B"));
+        assert!(body.contains("- Task C"));
+        assert!(body.contains("`file1.rs`"));
+        assert!(body.contains("`file2.rs`"));
+    }
+
+    #[test]
+    fn pr_error_display_manual_ticket() {
+        let err = PrError::ManualTicket;
+        assert_eq!(
+            err.to_string(),
+            "cannot create PR for manually created ticket - no GitHub repository associated"
+        );
+    }
+
+    #[test]
+    fn pr_error_display_creation_failed() {
+        let err = PrError::CreationFailed("branch not found".to_string());
+        assert_eq!(err.to_string(), "PR creation failed: branch not found");
+    }
+
+    #[test]
+    fn pr_error_from_github_error() {
+        let gh_err = GitHubError::Unauthorized;
+        let pr_err: PrError = gh_err.into();
+        assert!(matches!(pr_err, PrError::GitHubError(_)));
+        assert!(pr_err.to_string().contains("github API error"));
+    }
+
+    #[test]
+    fn pr_service_with_fallback_base() {
+        let client = GitHubClient::with_token("test").unwrap();
+        let svc = PrService::new(client).with_fallback_base("develop");
+        assert_eq!(svc.fallback_base, "develop");
+    }
+
+    #[test]
+    fn pr_service_default_fallback_base() {
+        let client = GitHubClient::with_token("test").unwrap();
+        let svc = PrService::new(client);
+        assert_eq!(svc.fallback_base, "main");
+    }
+
+    #[test]
+    fn pr_body_generator_empty_no_tasks_no_files_no_issue() {
+        let body = PrBodyGenerator::new("Just a summary").generate();
+        assert!(body.contains("## Summary"));
+        assert!(body.contains("Just a summary"));
+        assert!(!body.contains("## Changes"));
+        assert!(!body.contains("## Files Modified"));
+        assert!(!body.contains("Fixes"));
+        assert!(body.contains("nexor"));
+    }
+
+    #[tokio::test]
+    async fn create_pr_for_slice_manual_ticket_returns_error() {
+        let client = GitHubClient::with_token("test").unwrap();
+        let svc = PrService::new(client);
+        let slice = mock_slice();
+        let ticket = mock_ticket_manual();
+        let branch = mock_branch_info();
+
+        let result = svc
+            .create_pr_for_slice(&slice, &ticket, &branch, vec![])
+            .await;
+        assert!(matches!(result.unwrap_err(), PrError::ManualTicket));
+    }
+
+    #[tokio::test]
+    async fn create_pr_for_slice_success() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/repos/owner/repo/pulls"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(serde_json::json!({
+                "id": 1,
+                "number": 55,
+                "title": "Add user authentication",
+                "state": "open",
+                "user": { "login": "bot", "id": 1 },
+                "html_url": "https://github.com/owner/repo/pull/55",
+                "body": "pr body",
+                "head": { "ref": "feature/auth", "sha": "aaa" },
+                "base": { "ref": "main", "sha": "bbb" },
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z"
+            })))
+            .mount(&server)
+            .await;
+
+        let client = GitHubClient::with_token("test")
+            .unwrap()
+            .with_base_url(server.uri());
+        let svc = PrService::new(client);
+        let slice = mock_slice();
+        let ticket = mock_ticket_github();
+        let branch = mock_branch_info();
+
+        let result = svc
+            .create_pr_for_slice(
+                &slice,
+                &ticket,
+                &branch,
+                vec!["src/auth.rs".to_string()],
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.number, 55);
+        assert_eq!(result.url, "https://github.com/owner/repo/pull/55");
+        assert_eq!(result.title, "Add user authentication");
+    }
+
+    #[tokio::test]
+    async fn create_pr_for_slice_uses_fallback_when_no_parent_branch() {
+        use wiremock::matchers::{body_string_contains, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/repos/owner/repo/pulls"))
+            .and(body_string_contains("\"base\":\"develop\""))
+            .respond_with(ResponseTemplate::new(201).set_body_json(serde_json::json!({
+                "id": 1,
+                "number": 60,
+                "title": "Add user authentication",
+                "state": "open",
+                "user": { "login": "bot", "id": 1 },
+                "html_url": "https://github.com/owner/repo/pull/60",
+                "body": "body",
+                "head": { "ref": "feature/auth", "sha": "aaa" },
+                "base": { "ref": "develop", "sha": "bbb" },
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z"
+            })))
+            .mount(&server)
+            .await;
+
+        let client = GitHubClient::with_token("test")
+            .unwrap()
+            .with_base_url(server.uri());
+        let svc = PrService::new(client).with_fallback_base("develop");
+        let slice = mock_slice();
+        let ticket = mock_ticket_github();
+        let branch = BranchInfo {
+            name: "feature/auth".to_string(),
+            parent_branch: None,
+            base_commit: "abc123".to_string(),
+        };
+
+        let result = svc
+            .create_pr_for_slice(&slice, &ticket, &branch, vec![])
+            .await
+            .unwrap();
+        assert_eq!(result.number, 60);
+    }
+
+    #[tokio::test]
+    async fn create_pr_for_slice_api_error() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/repos/owner/repo/pulls"))
+            .respond_with(ResponseTemplate::new(422).set_body_string("Validation Failed"))
+            .mount(&server)
+            .await;
+
+        let client = GitHubClient::with_token("test")
+            .unwrap()
+            .with_base_url(server.uri());
+        let svc = PrService::new(client);
+        let slice = mock_slice();
+        let ticket = mock_ticket_github();
+        let branch = mock_branch_info();
+
+        let result = svc
+            .create_pr_for_slice(&slice, &ticket, &branch, vec![])
+            .await;
+        assert!(matches!(result.unwrap_err(), PrError::GitHubError(_)));
+    }
+
+    #[tokio::test]
+    async fn create_simple_pr_success() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/repos/org/project/pulls"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(serde_json::json!({
+                "id": 1,
+                "number": 77,
+                "title": "Quick fix",
+                "state": "open",
+                "user": { "login": "dev", "id": 1 },
+                "html_url": "https://github.com/org/project/pull/77",
+                "body": "fix stuff",
+                "head": { "ref": "hotfix", "sha": "aaa" },
+                "base": { "ref": "main", "sha": "bbb" },
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z"
+            })))
+            .mount(&server)
+            .await;
+
+        let client = GitHubClient::with_token("test")
+            .unwrap()
+            .with_base_url(server.uri());
+        let svc = PrService::new(client);
+
+        let result = svc
+            .create_simple_pr("org", "project", "Quick fix", "fix stuff", "hotfix", "main")
+            .await
+            .unwrap();
+
+        assert_eq!(result.number, 77);
+        assert_eq!(result.title, "Quick fix");
+        assert_eq!(result.url, "https://github.com/org/project/pull/77");
+    }
+
+    #[tokio::test]
+    async fn create_simple_pr_api_error() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/repos/org/project/pulls"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&server)
+            .await;
+
+        let client = GitHubClient::with_token("test")
+            .unwrap()
+            .with_base_url(server.uri());
+        let svc = PrService::new(client);
+
+        let result = svc
+            .create_simple_pr("org", "project", "title", "body", "head", "base")
+            .await;
+        assert!(matches!(result.unwrap_err(), PrError::GitHubError(_)));
+    }
+
+    #[test]
+    fn pr_result_debug() {
+        let result = PrResult {
+            number: 1,
+            url: "url".to_string(),
+            title: "t".to_string(),
+        };
+        let debug = format!("{:?}", result);
+        assert!(debug.contains("PrResult"));
+    }
+
     // Note: Integration tests with actual API calls would go in tests/ directory
     // These unit tests verify the local logic only
 }

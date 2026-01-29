@@ -747,6 +747,253 @@ mod tests {
     }
 
     #[test]
+    fn role_category_display_names() {
+        assert_eq!(RoleCategory::Analysis.display_name(), "Analysis");
+        assert_eq!(RoleCategory::Planning.display_name(), "Planning");
+        assert_eq!(RoleCategory::Implementation.display_name(), "Implementation");
+        assert_eq!(RoleCategory::Communication.display_name(), "Communication");
+    }
+
+    #[test]
+    fn role_category_icons() {
+        // Just verify all branches return something
+        assert!(!RoleCategory::Analysis.icon().is_empty());
+        assert!(!RoleCategory::Planning.icon().is_empty());
+        assert!(!RoleCategory::Implementation.icon().is_empty());
+        assert!(!RoleCategory::Communication.icon().is_empty());
+    }
+
+    #[test]
+    fn role_id_new_custom_slugifies() {
+        let id = RoleId::new_custom("My Custom Role");
+        assert_eq!(id.0, "custom-my-custom-role");
+    }
+
+    #[test]
+    fn output_format_default_is_result() {
+        let fmt = OutputFormat::default();
+        assert!(matches!(fmt, OutputFormat::Result));
+    }
+
+    #[test]
+    fn role_cannot_delegate_when_depth_zero() {
+        let role = Role {
+            id: RoleId::new("leaf"),
+            name: "Leaf".to_string(),
+            category: RoleCategory::Implementation,
+            description: "No delegation".to_string(),
+            system_prompt: "prompt".to_string(),
+            style: CommunicationStyle::Technical,
+            required_reading: vec![],
+            can_delegate_to: vec![RoleId::new("worker")],
+            output_format: OutputFormat::Result,
+            max_delegation_depth: 0,
+            template: None,
+            is_custom: false,
+        };
+        // Even though "worker" is in the list, depth=0 prevents delegation
+        assert!(!role.can_delegate(&RoleId::new("worker")));
+    }
+
+    #[test]
+    fn resolve_required_reading_multiple_vars() {
+        let role = Role {
+            id: RoleId::new("test"),
+            name: "Test".to_string(),
+            category: RoleCategory::Implementation,
+            description: "Test".to_string(),
+            system_prompt: "Test".to_string(),
+            style: CommunicationStyle::Technical,
+            required_reading: vec![
+                "decomp/{milestone}/{ticket}.md".to_string(),
+                "{domain}/README.md".to_string(),
+            ],
+            can_delegate_to: vec![],
+            output_format: OutputFormat::Result,
+            max_delegation_depth: 0,
+            template: None,
+            is_custom: false,
+        };
+
+        let mut vars = HashMap::new();
+        vars.insert("milestone".to_string(), "M3".to_string());
+        vars.insert("ticket".to_string(), "3.4".to_string());
+        vars.insert("domain".to_string(), "auth".to_string());
+
+        let paths = role.resolve_required_reading(&vars);
+        assert_eq!(paths[0], PathBuf::from("decomp/M3/3.4.md"));
+        assert_eq!(paths[1], PathBuf::from("auth/README.md"));
+    }
+
+    #[test]
+    fn resolve_required_reading_no_vars() {
+        let role = Role {
+            id: RoleId::new("test"),
+            name: "Test".to_string(),
+            category: RoleCategory::Implementation,
+            description: "Test".to_string(),
+            system_prompt: "Test".to_string(),
+            style: CommunicationStyle::Technical,
+            required_reading: vec!["CONVENTIONS.md".to_string()],
+            can_delegate_to: vec![],
+            output_format: OutputFormat::Result,
+            max_delegation_depth: 0,
+            template: None,
+            is_custom: false,
+        };
+
+        let paths = role.resolve_required_reading(&HashMap::new());
+        assert_eq!(paths[0], PathBuf::from("CONVENTIONS.md"));
+    }
+
+    #[test]
+    fn library_default_impl() {
+        let library = RoleLibrary::default();
+        assert!(library.get(&RoleId::new("orchestrator")).is_some());
+    }
+
+    #[test]
+    fn library_list_all_returns_all_default_roles() {
+        let library = RoleLibrary::new();
+        let all = library.list_all();
+        // Should have all 8 default roles
+        assert!(all.len() >= 8);
+    }
+
+    #[test]
+    fn library_get_nonexistent_returns_none() {
+        let library = RoleLibrary::new();
+        assert!(library.get(&RoleId::new("nonexistent")).is_none());
+    }
+
+    #[test]
+    fn library_list_by_category_all_categories() {
+        let library = RoleLibrary::new();
+        let analysis = library.list_by_category(RoleCategory::Analysis);
+        assert!(analysis.len() >= 2); // complaint-finder, risk-assessor
+        let comm = library.list_by_category(RoleCategory::Communication);
+        assert!(comm.len() >= 2); // utility, summarizer
+    }
+
+    #[test]
+    fn library_remove_custom_role_succeeds() {
+        let mut library = RoleLibrary::new();
+        let id = RoleId::new_custom("removable");
+        library.add_custom_role(Role {
+            id: id.clone(),
+            name: "Removable".to_string(),
+            category: RoleCategory::Analysis,
+            description: "To remove".to_string(),
+            system_prompt: "prompt".to_string(),
+            style: CommunicationStyle::Casual,
+            required_reading: vec![],
+            can_delegate_to: vec![],
+            output_format: OutputFormat::Result,
+            max_delegation_depth: 0,
+            template: None,
+            is_custom: false,
+        });
+        assert!(library.get(&id).is_some());
+
+        let removed = library.remove_custom_role(&id);
+        assert!(removed.is_some());
+        assert!(removed.unwrap().is_custom);
+        assert!(library.get(&id).is_none());
+    }
+
+    #[test]
+    fn library_remove_nonexistent_role_returns_none() {
+        let mut library = RoleLibrary::new();
+        let result = library.remove_custom_role(&RoleId::new("does-not-exist"));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn library_list_custom_empty_initially() {
+        let library = RoleLibrary::new();
+        assert!(library.list_custom().is_empty());
+    }
+
+    #[test]
+    fn library_grouped_has_all_default_roles() {
+        let library = RoleLibrary::new();
+        let grouped = library.grouped_by_category();
+        let total: usize = grouped.iter().map(|(_, roles)| roles.len()).sum();
+        assert!(total >= 8);
+    }
+
+    #[tokio::test]
+    async fn role_manager_default_role_for_tier() {
+        let manager = RoleManager::new(PathBuf::from("."));
+        assert!(manager.default_role_for_tier(crate::types::AgentTier::Orchestrator).is_some());
+        assert!(manager.default_role_for_tier(crate::types::AgentTier::Worker).is_some());
+        assert!(manager.default_role_for_tier(crate::types::AgentTier::Utility).is_some());
+    }
+
+    #[tokio::test]
+    async fn role_manager_library_accessor() {
+        let manager = RoleManager::new(PathBuf::from("."));
+        let lib = manager.library();
+        assert!(lib.list_all().len() >= 8);
+    }
+
+    #[tokio::test]
+    async fn role_manager_build_context() {
+        use tempfile::tempdir;
+
+        let dir = tempdir().unwrap();
+        let conv_path = dir.path().join("CONVENTIONS.md");
+        fs::write(&conv_path, "# Conventions\nTest content").await.unwrap();
+
+        let manager = RoleManager::new(dir.path().to_path_buf());
+        let role = Role {
+            id: RoleId::new("test"),
+            name: "Test".to_string(),
+            category: RoleCategory::Implementation,
+            description: "Test".to_string(),
+            system_prompt: "You are a test agent.".to_string(),
+            style: CommunicationStyle::Technical,
+            required_reading: vec!["CONVENTIONS.md".to_string()],
+            can_delegate_to: vec![],
+            output_format: OutputFormat::Result,
+            max_delegation_depth: 0,
+            template: None,
+            is_custom: false,
+        };
+
+        let ctx = manager.build_context_for_role(&role, &HashMap::new()).await;
+        assert_eq!(ctx.loaded_files.len(), 1);
+        assert!(ctx.loaded_files[0].content.contains("Test content"));
+    }
+
+    #[test]
+    fn role_context_builds_prompt_no_files() {
+        let role = Role {
+            id: RoleId::new("test"),
+            name: "Test".to_string(),
+            category: RoleCategory::Implementation,
+            description: "Test".to_string(),
+            system_prompt: "Base prompt.".to_string(),
+            style: CommunicationStyle::Technical,
+            required_reading: vec![],
+            can_delegate_to: vec![],
+            output_format: OutputFormat::Result,
+            max_delegation_depth: 0,
+            template: None,
+            is_custom: false,
+        };
+
+        let context = RoleContext {
+            role,
+            loaded_files: vec![],
+        };
+
+        let prompt = context.build_system_prompt();
+        assert_eq!(prompt, "Base prompt.");
+        assert!(!prompt.contains("## Required Reading"));
+    }
+
+    #[test]
     fn role_context_builds_prompt() {
         let role = Role {
             id: RoleId::new("test"),

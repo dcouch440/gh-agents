@@ -580,4 +580,382 @@ mod tests {
             ProductionMode::Running
         );
     }
+
+    #[tokio::test]
+    async fn enter_refactor_mode_noop_when_not_running() {
+        let (scheduler, _temp_dir) = setup_scheduler().await;
+
+        // First pause, then try to enter refactor mode - should be a no-op
+        scheduler.pause_for_refactor().await.unwrap();
+        assert_eq!(
+            scheduler.get_production_mode().await,
+            ProductionMode::Paused
+        );
+
+        scheduler.enter_refactor_mode().await.unwrap();
+        // Should still be Paused, not RefactorMode
+        assert_eq!(
+            scheduler.get_production_mode().await,
+            ProductionMode::Paused
+        );
+    }
+
+    #[tokio::test]
+    async fn begin_resume_works_from_paused() {
+        let (scheduler, _temp_dir) = setup_scheduler().await;
+
+        scheduler.pause_for_refactor().await.unwrap();
+        assert!(scheduler.is_paused().await);
+
+        // Paused.is_refactoring() is true, so begin_resume should work
+        scheduler.begin_resume().await.unwrap();
+        assert_eq!(
+            scheduler.get_production_mode().await,
+            ProductionMode::Resuming
+        );
+    }
+
+    #[tokio::test]
+    async fn begin_resume_noop_from_resuming() {
+        let (scheduler, _temp_dir) = setup_scheduler().await;
+
+        scheduler.enter_refactor_mode().await.unwrap();
+        scheduler.begin_resume().await.unwrap();
+        assert_eq!(
+            scheduler.get_production_mode().await,
+            ProductionMode::Resuming
+        );
+
+        // Resuming.is_refactoring() is false, so begin_resume should be a no-op
+        scheduler.begin_resume().await.unwrap();
+        assert_eq!(
+            scheduler.get_production_mode().await,
+            ProductionMode::Resuming
+        );
+    }
+
+    #[tokio::test]
+    async fn refresh_mode_syncs_from_db() {
+        let (scheduler, _temp_dir) = setup_scheduler().await;
+
+        // Change mode in DB directly
+        set_production_mode(&scheduler.pool, ProductionMode::Paused)
+            .await
+            .unwrap();
+
+        // Cache still says Running
+        assert_eq!(
+            scheduler.get_production_mode().await,
+            ProductionMode::Running
+        );
+
+        // After refresh, cache matches DB
+        scheduler.refresh_mode().await.unwrap();
+        assert_eq!(
+            scheduler.get_production_mode().await,
+            ProductionMode::Paused
+        );
+    }
+
+    #[tokio::test]
+    async fn should_assign_false_when_paused() {
+        let (scheduler, _temp_dir) = setup_scheduler().await;
+
+        scheduler.pause_for_refactor().await.unwrap();
+        assert!(!scheduler.should_assign().await);
+    }
+
+    #[tokio::test]
+    async fn should_assign_false_when_resuming() {
+        let (scheduler, _temp_dir) = setup_scheduler().await;
+
+        scheduler.enter_refactor_mode().await.unwrap();
+        scheduler.begin_resume().await.unwrap();
+        assert!(!scheduler.should_assign().await);
+    }
+
+    #[tokio::test]
+    async fn is_paused_false_when_resuming() {
+        let (scheduler, _temp_dir) = setup_scheduler().await;
+
+        scheduler.enter_refactor_mode().await.unwrap();
+        scheduler.begin_resume().await.unwrap();
+        // Resuming is not considered "refactoring/paused"
+        assert!(!scheduler.is_paused().await);
+    }
+
+    #[tokio::test]
+    async fn resume_from_any_state() {
+        let (scheduler, _temp_dir) = setup_scheduler().await;
+
+        // Resume from Running (no-op effectively, just sets Running again)
+        scheduler.resume().await.unwrap();
+        assert_eq!(
+            scheduler.get_production_mode().await,
+            ProductionMode::Running
+        );
+
+        // Resume from Paused directly
+        scheduler.pause_for_refactor().await.unwrap();
+        scheduler.resume().await.unwrap();
+        assert_eq!(
+            scheduler.get_production_mode().await,
+            ProductionMode::Running
+        );
+    }
+}
+
+#[cfg(test)]
+mod task_scheduler_integration_tests {
+    use super::*;
+    use crate::agents::AgentPool;
+    use crate::llm::{LLMError, LLMRequest, LLMResponse, StopReason, StreamChunk, TokenUsage};
+    use crate::orchestration::queue::DependencyAwareQueue;
+    use crate::orchestration::router::{Router, RouterConfig};
+    use crate::types::{AgentPoolConfig, AgentPersona, AgentTier, ModelConfig, Priority, Task, TaskId, TaskStatus};
+    use async_trait::async_trait;
+    use chrono::Utc;
+    use futures::Stream;
+    use std::pin::Pin;
+    use tempfile::TempDir;
+
+    struct MockLLMProvider;
+
+    #[async_trait]
+    impl crate::llm::LLMProvider for MockLLMProvider {
+        async fn send_message(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            Ok(LLMResponse {
+                content: "ok".to_string(),
+                model: "test".to_string(),
+                stop_reason: StopReason::EndTurn,
+                usage: TokenUsage {
+                    input_tokens: 1,
+                    output_tokens: 1,
+                },
+            })
+        }
+        async fn send_message_stream(
+            &self,
+            _request: LLMRequest,
+        ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError>
+        {
+            unimplemented!()
+        }
+        fn provider_name(&self) -> &'static str {
+            "mock"
+        }
+        fn model_id(&self) -> &str {
+            "test"
+        }
+    }
+
+    fn make_task(priority: Priority) -> Task {
+        Task {
+            id: TaskId::new(),
+            slice_id: None,
+            title: format!("{:?} task", priority),
+            description: String::new(),
+            assigned_tier: AgentTier::Worker,
+            assigned_agent: None,
+            status: TaskStatus::Pending,
+            priority,
+            context_files: vec![],
+            metadata: None,
+            depends_on: vec![],
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+
+    async fn setup_full(
+    ) -> (Arc<TaskScheduler>, Arc<RwLock<DependencyAwareQueue>>, Arc<RwLock<AgentPool>>, TempDir)
+    {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let pool = crate::db::init_db_at(db_path.to_str().unwrap())
+            .await
+            .unwrap();
+
+        let queue = Arc::new(RwLock::new(
+            DependencyAwareQueue::new(pool.clone()).await.unwrap(),
+        ));
+        let router = Router::new(RouterConfig::default());
+        let agent_pool_config = AgentPoolConfig {
+            max_orchestrators: 2,
+            max_workers: 3,
+            max_utilities: 4,
+        };
+        let llm = Arc::new(MockLLMProvider);
+        let agent_pool = Arc::new(RwLock::new(AgentPool::new(agent_pool_config, llm)));
+        let refactor_scheduler = Arc::new(Scheduler::new(pool.clone()).await.unwrap());
+        let config = SchedulerConfig {
+            poll_interval_ms: 10,
+            batch_size: 5,
+            agent_wait_timeout_ms: 10,
+        };
+
+        let scheduler = Arc::new(TaskScheduler::new(
+            queue.clone(),
+            router,
+            agent_pool.clone(),
+            refactor_scheduler,
+            config,
+        ));
+
+        (scheduler, queue, agent_pool, temp_dir)
+    }
+
+    #[tokio::test]
+    async fn task_scheduler_starts_not_running() {
+        let (scheduler, _, _, _tmp) = setup_full().await;
+        assert!(!scheduler.is_running().await);
+    }
+
+    #[tokio::test]
+    async fn task_scheduler_stop() {
+        let (scheduler, _, _, _tmp) = setup_full().await;
+        // Start and then stop
+        let s = scheduler.clone();
+        let handle = tokio::spawn(async move {
+            s.run().await
+        });
+
+        // Give it a moment to start
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        assert!(scheduler.is_running().await);
+
+        scheduler.stop().await;
+        let result = handle.await.unwrap();
+        assert!(result.is_ok());
+        assert!(!scheduler.is_running().await);
+    }
+
+    #[tokio::test]
+    async fn agent_available_notifier_returns_notify() {
+        let (scheduler, _, _, _tmp) = setup_full().await;
+        let notifier = scheduler.agent_available_notifier();
+        // Just verify it returns an Arc<Notify> that can be used
+        notifier.notify_waiters();
+    }
+
+    #[tokio::test]
+    async fn on_agent_available_notifies() {
+        let (scheduler, _, _, _tmp) = setup_full().await;
+        let agent_id = AgentId(uuid::Uuid::new_v4());
+        // Should not panic
+        scheduler.on_agent_available(&agent_id).await;
+    }
+
+    #[tokio::test]
+    async fn on_task_completed_returns_empty_when_no_deps() {
+        let (scheduler, _, _, _tmp) = setup_full().await;
+        let task_id = TaskId::new();
+        let unblocked = scheduler.on_task_completed(&task_id).await.unwrap();
+        assert!(unblocked.is_empty());
+    }
+
+    #[tokio::test]
+    async fn check_preemption_returns_none_when_no_urgent() {
+        let (scheduler, _, _, _tmp) = setup_full().await;
+        let result = scheduler.check_preemption().await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn check_preemption_returns_none_when_urgent_but_agents_free() {
+        let (scheduler, queue, agent_pool, _tmp) = setup_full().await;
+
+        // Add an urgent task
+        let task = make_task(Priority::Urgent);
+        {
+            let mut q = queue.write().await;
+            q.enqueue_in_memory(task);
+        }
+
+        // Spawn a free agent
+        {
+            let mut pool = agent_pool.write().await;
+            pool.spawn_agent(
+                AgentTier::Worker,
+                AgentPersona::default(),
+                ModelConfig::default(),
+            )
+            .unwrap();
+        }
+
+        let result = scheduler.check_preemption().await.unwrap();
+        assert!(result.is_none()); // Free agent exists, no preemption needed
+    }
+
+    #[tokio::test]
+    async fn check_preemption_returns_none_all_busy_not_implemented() {
+        let (scheduler, queue, _, _tmp) = setup_full().await;
+
+        // Add an urgent task but no agents at all (stats all zero)
+        let task = make_task(Priority::Urgent);
+        {
+            let mut q = queue.write().await;
+            q.enqueue_in_memory(task);
+        }
+
+        // No agents spawned, so available = 0, but also total = 0
+        let result = scheduler.check_preemption().await.unwrap();
+        // Preemption not implemented, returns None
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn scheduler_run_paused_skips_assignment() {
+        let (scheduler, queue, _, _tmp) = setup_full().await;
+
+        // Pause the refactor scheduler
+        scheduler.refactor_scheduler.pause_for_refactor().await.unwrap();
+
+        // Add a task
+        {
+            let mut q = queue.write().await;
+            q.enqueue_in_memory(make_task(Priority::Normal));
+        }
+
+        // Run briefly
+        let s = scheduler.clone();
+        let handle = tokio::spawn(async move {
+            s.run().await
+        });
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        scheduler.stop().await;
+        handle.await.unwrap().unwrap();
+
+        // Task should still be in queue (not assigned because paused)
+        let q = queue.read().await;
+        assert!(!q.is_empty());
+    }
+
+    #[tokio::test]
+    async fn scheduler_error_from_queue_error() {
+        let qe = QueueError::Empty;
+        let se: SchedulerError = qe.into();
+        assert!(se.to_string().contains("queue"));
+    }
+
+    #[tokio::test]
+    async fn scheduler_config_clone_and_debug() {
+        let config = SchedulerConfig::default();
+        let cloned = config.clone();
+        assert_eq!(cloned.poll_interval_ms, config.poll_interval_ms);
+        assert_eq!(cloned.batch_size, config.batch_size);
+        let debug = format!("{:?}", config);
+        assert!(debug.contains("SchedulerConfig"));
+    }
+
+    #[tokio::test]
+    async fn preemption_action_debug() {
+        let action = PreemptionAction {
+            agent_id: AgentId(uuid::Uuid::new_v4()),
+            task_to_pause: make_task(Priority::Normal),
+        };
+        let debug = format!("{:?}", action);
+        assert!(debug.contains("PreemptionAction"));
+    }
 }

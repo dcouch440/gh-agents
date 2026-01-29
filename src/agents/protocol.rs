@@ -1400,4 +1400,425 @@ mod tests {
 
         assert_eq!(update.progress_percent, Some(100));
     }
+
+    // =========================================================================
+    // Builder coverage tests
+    // =========================================================================
+
+    #[test]
+    fn task_assignment_with_context() {
+        let ctx = TaskContext {
+            files: vec![FileContent::new("a.rs", "code")],
+            history: vec![],
+            conventions: "use fmt".into(),
+            metadata: HashMap::new(),
+        };
+        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker)
+            .with_context(ctx);
+        assert_eq!(a.context.files.len(), 1);
+        assert_eq!(a.context.conventions, "use fmt");
+    }
+
+    #[test]
+    fn task_assignment_with_constraints() {
+        let c = TaskConstraints {
+            max_files_modified: Some(5),
+            allowed_paths: vec!["src/**".into()],
+            require_tests: true,
+            require_review: false,
+            extra: HashMap::new(),
+        };
+        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker)
+            .with_constraints(c);
+        assert_eq!(a.constraints.max_files_modified, Some(5));
+        assert!(a.constraints.require_tests);
+        assert!(!a.constraints.require_review);
+    }
+
+    #[test]
+    fn task_assignment_with_timeout() {
+        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker)
+            .with_timeout(Duration::from_secs(600));
+        assert_eq!(a.timeout_secs, 600);
+        assert_eq!(a.timeout(), Duration::from_secs(600));
+    }
+
+    #[test]
+    fn task_assignment_with_role() {
+        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker)
+            .with_role(RoleId::new("reviewer"));
+        assert_eq!(a.role_id, RoleId::new("reviewer"));
+    }
+
+    #[test]
+    fn task_assignment_with_delegation() {
+        let agent = AgentId::new();
+        let role = RoleId::new("lead");
+        let parent = DelegationContext::from_user();
+        let del = DelegationContext::delegated_from(agent.clone(), role, &parent);
+
+        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker)
+            .with_delegation(del);
+        assert_eq!(a.delegation.depth, 1);
+        assert_eq!(a.delegation.parent_agent, Some(agent));
+    }
+
+    #[test]
+    fn task_result_with_file_modified() {
+        let r = TaskResult::success(Uuid::new_v4(), "done")
+            .with_file_modified(FileModification::created("new.rs"))
+            .with_file_modified(FileModification::deleted("old.rs"));
+        assert_eq!(r.files_modified.len(), 2);
+        assert_eq!(r.files_modified[0].modification_type, ModificationType::Created);
+        assert_eq!(r.files_modified[1].modification_type, ModificationType::Deleted);
+    }
+
+    #[test]
+    fn task_result_with_error() {
+        let r = TaskResult::success(Uuid::new_v4(), "partial")
+            .with_error(TaskError::new("warn", "something"));
+        assert_eq!(r.errors.len(), 1);
+        assert_eq!(r.errors[0].code, "warn");
+        assert!(r.errors[0].recoverable);
+    }
+
+    #[test]
+    fn task_result_with_token_usage() {
+        let r = TaskResult::success(Uuid::new_v4(), "done")
+            .with_token_usage(TokenUsage::new("gpt-4", 200, 100));
+        let usage = r.token_usage.unwrap();
+        assert_eq!(usage.model_id, "gpt-4");
+        assert_eq!(usage.input_tokens, 200);
+        assert_eq!(usage.output_tokens, 100);
+        assert_eq!(usage.total(), 300);
+    }
+
+    #[test]
+    fn task_result_with_duration_ms() {
+        let r = TaskResult::success(Uuid::new_v4(), "done").with_duration_ms(4200);
+        assert_eq!(r.duration_ms, 4200);
+    }
+
+    #[test]
+    fn task_result_with_structured_output() {
+        let val = serde_json::json!({"key": "value"});
+        let r = TaskResult::success(Uuid::new_v4(), "done")
+            .with_structured_output(val.clone());
+        assert_eq!(r.structured_output.unwrap(), val);
+    }
+
+    #[test]
+    fn file_modification_created() {
+        let f = FileModification::created("foo.rs");
+        assert_eq!(f.path, "foo.rs");
+        assert_eq!(f.modification_type, ModificationType::Created);
+        assert_eq!(f.lines_added, 0);
+        assert_eq!(f.lines_removed, 0);
+    }
+
+    #[test]
+    fn file_modification_modified() {
+        let f = FileModification::modified("bar.rs", 15, 3);
+        assert_eq!(f.path, "bar.rs");
+        assert_eq!(f.modification_type, ModificationType::Modified);
+        assert_eq!(f.lines_added, 15);
+        assert_eq!(f.lines_removed, 3);
+    }
+
+    #[test]
+    fn file_modification_deleted() {
+        let f = FileModification::deleted("old.rs");
+        assert_eq!(f.path, "old.rs");
+        assert_eq!(f.modification_type, ModificationType::Deleted);
+    }
+
+    #[test]
+    fn context_request_builders() {
+        let tid = Uuid::new_v4();
+        let req = ContextRequest::new(tid)
+            .with_file("a.rs")
+            .with_file_range("b.rs", 10, 20)
+            .with_question("why?")
+            .with_priority(RequestPriority::Urgent);
+        assert_eq!(req.task_id, tid);
+        assert_eq!(req.files_needed.len(), 2);
+        assert_eq!(req.files_needed[1].line_range, Some((10, 20)));
+        assert_eq!(req.questions.len(), 1);
+        assert_eq!(req.priority, RequestPriority::Urgent);
+    }
+
+    #[test]
+    fn file_request_with_reason() {
+        let fr = FileRequest::full("src/lib.rs").with_reason("need imports");
+        assert_eq!(fr.reason.unwrap(), "need imports");
+        assert!(fr.line_range.is_none());
+    }
+
+    #[test]
+    fn question_new_and_optional() {
+        let q1 = Question::new("required?");
+        assert!(q1.required);
+        assert_eq!(q1.category, QuestionCategory::Clarification);
+
+        let q2 = Question::optional("optional?");
+        assert!(!q2.required);
+    }
+
+    #[test]
+    fn question_with_category() {
+        let q = Question::new("arch?").with_category(QuestionCategory::Architecture);
+        assert_eq!(q.category, QuestionCategory::Architecture);
+    }
+
+    #[test]
+    fn answer_from_user() {
+        let a = Answer::from_user("q", "a");
+        assert_eq!(a.source, AnswerSource::User);
+        assert_eq!(a.question, "q");
+        assert_eq!(a.answer, "a");
+    }
+
+    #[test]
+    fn answer_from_orchestrator() {
+        let a = Answer::from_orchestrator("q", "a");
+        assert_eq!(a.source, AnswerSource::Orchestrator);
+    }
+
+    #[test]
+    fn answer_from_system() {
+        let a = Answer::from_system("q", "a");
+        assert_eq!(a.source, AnswerSource::System);
+    }
+
+    #[test]
+    fn unavailable_file_not_found() {
+        let u = UnavailableFile::not_found("missing.rs");
+        assert_eq!(u.path, "missing.rs");
+        assert_eq!(u.reason, "File not found");
+    }
+
+    #[test]
+    fn unavailable_file_permission_denied() {
+        let u = UnavailableFile::permission_denied("secret.rs");
+        assert_eq!(u.reason, "Permission denied");
+    }
+
+    #[test]
+    fn unavailable_file_too_large() {
+        let u = UnavailableFile::too_large("huge.bin");
+        assert_eq!(u.reason, "File too large");
+    }
+
+    #[test]
+    fn progress_update_thinking() {
+        let u = ProgressUpdate::thinking(Uuid::new_v4(), "analyzing");
+        assert_eq!(u.activity, ActivityType::Thinking);
+        assert_eq!(u.verbosity, VerbosityLevel::Normal);
+    }
+
+    #[test]
+    fn progress_update_coding() {
+        let u = ProgressUpdate::coding(Uuid::new_v4(), "writing");
+        assert_eq!(u.activity, ActivityType::Coding);
+    }
+
+    #[test]
+    fn progress_update_reviewing() {
+        let u = ProgressUpdate::reviewing(Uuid::new_v4(), "checking");
+        assert_eq!(u.activity, ActivityType::Reviewing);
+    }
+
+    #[test]
+    fn progress_update_testing() {
+        let u = ProgressUpdate::testing(Uuid::new_v4(), "running");
+        assert_eq!(u.activity, ActivityType::Testing);
+    }
+
+    #[test]
+    fn progress_update_milestone() {
+        let u = ProgressUpdate::milestone(Uuid::new_v4(), "done");
+        assert_eq!(u.activity, ActivityType::Milestone);
+        assert_eq!(u.verbosity, VerbosityLevel::Quiet);
+    }
+
+    #[test]
+    fn progress_update_error() {
+        let u = ProgressUpdate::error(Uuid::new_v4(), "failed");
+        assert_eq!(u.activity, ActivityType::Error);
+        assert_eq!(u.verbosity, VerbosityLevel::Quiet);
+    }
+
+    #[test]
+    fn progress_update_with_details() {
+        let u = ProgressUpdate::new(Uuid::new_v4(), "working")
+            .with_details("extra info");
+        assert_eq!(u.details.unwrap(), "extra info");
+    }
+
+    #[test]
+    fn progress_update_with_verbosity() {
+        let u = ProgressUpdate::new(Uuid::new_v4(), "working")
+            .with_verbosity(VerbosityLevel::Verbose);
+        assert_eq!(u.verbosity, VerbosityLevel::Verbose);
+    }
+
+    #[test]
+    fn file_content_with_range() {
+        let fc = FileContent::new("a.rs", "code").with_range(5, 10);
+        assert_eq!(fc.line_range, Some((5, 10)));
+    }
+
+    #[test]
+    fn history_entry_new() {
+        let tid = Uuid::new_v4();
+        let h = HistoryEntry::new(tid, "did stuff");
+        assert_eq!(h.task_id, tid);
+        assert_eq!(h.summary, "did stuff");
+    }
+
+    #[test]
+    fn task_error_unrecoverable() {
+        let e = TaskError::unrecoverable("fatal", "boom");
+        assert!(!e.recoverable);
+        assert_eq!(e.code, "fatal");
+    }
+
+    #[test]
+    fn task_error_with_details() {
+        let e = TaskError::new("err", "msg").with_details("stack trace");
+        assert_eq!(e.details.unwrap(), "stack trace");
+    }
+
+    #[test]
+    fn validation_error_constructors() {
+        let r = ValidationError::required("name");
+        assert_eq!(r.field, "name");
+        assert_eq!(r.code, "required");
+
+        let i = ValidationError::invalid("age", "must be positive");
+        assert_eq!(i.code, "invalid");
+
+        let v = ValidationError::version_mismatch("1.0", "2.0");
+        assert_eq!(v.code, "version_mismatch");
+        assert!(v.message.contains("1.0"));
+    }
+
+    #[test]
+    fn validation_error_display() {
+        let e = ValidationError::required("title");
+        let s = format!("{}", e);
+        assert!(s.contains("title"));
+        assert!(s.contains("required"));
+    }
+
+    #[test]
+    fn context_response_builders() {
+        let rid = Uuid::new_v4();
+        let tid = Uuid::new_v4();
+        let resp = ContextResponse::new(rid, tid)
+            .with_file(FileContent::new("a.rs", "code"))
+            .with_answer(Answer::from_user("q", "a"))
+            .with_unavailable_file(UnavailableFile::not_found("b.rs"));
+        assert_eq!(resp.files.len(), 1);
+        assert_eq!(resp.answers.len(), 1);
+        assert_eq!(resp.unavailable_files.len(), 1);
+    }
+
+    #[test]
+    fn activity_type_names() {
+        assert_eq!(ActivityType::Working.name(), "Working");
+        assert_eq!(ActivityType::Thinking.name(), "Thinking");
+        assert_eq!(ActivityType::Coding.name(), "Coding");
+        assert_eq!(ActivityType::Reviewing.name(), "Reviewing");
+        assert_eq!(ActivityType::Testing.name(), "Testing");
+        assert_eq!(ActivityType::Waiting.name(), "Waiting");
+        assert_eq!(ActivityType::Milestone.name(), "Milestone");
+        assert_eq!(ActivityType::Error.name(), "Error");
+    }
+
+    #[test]
+    fn activity_type_all_icons() {
+        assert_eq!(ActivityType::Working.icon(), "●");
+        assert_eq!(ActivityType::Thinking.icon(), "◐");
+        assert_eq!(ActivityType::Reviewing.icon(), "◇");
+        assert_eq!(ActivityType::Testing.icon(), "▶");
+        assert_eq!(ActivityType::Waiting.icon(), "○");
+    }
+
+    #[test]
+    fn validate_message_fn() {
+        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker);
+        assert!(validate_message(&a).is_ok());
+    }
+
+    #[test]
+    fn task_assignment_excessive_timeout_fails() {
+        let mut a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker);
+        a.timeout_secs = 3600 * 24 + 1;
+        let errs = a.validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.field == "timeout_secs"));
+    }
+
+    #[test]
+    fn task_assignment_empty_file_path_fails() {
+        let ctx = TaskContext {
+            files: vec![FileContent::new("", "code")],
+            history: vec![],
+            conventions: String::new(),
+            metadata: HashMap::new(),
+        };
+        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker)
+            .with_context(ctx);
+        let errs = a.validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.field.contains("context.files")));
+    }
+
+    #[test]
+    fn context_request_empty_file_path_fails() {
+        let mut req = ContextRequest::new(Uuid::new_v4());
+        req.files_needed.push(FileRequest::full(""));
+        let errs = req.validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.field.contains("files_needed")));
+    }
+
+    #[test]
+    fn context_request_empty_question_fails() {
+        let mut req = ContextRequest::new(Uuid::new_v4());
+        req.questions.push(Question::new(""));
+        let errs = req.validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.field.contains("questions")));
+    }
+
+    #[test]
+    fn context_response_empty_file_path_fails() {
+        let resp = ContextResponse::new(Uuid::new_v4(), Uuid::new_v4())
+            .with_file(FileContent::new("", "x"));
+        let errs = resp.validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.field.contains("files")));
+    }
+
+    #[test]
+    fn context_response_bad_version_fails() {
+        let mut resp = ContextResponse::new(Uuid::new_v4(), Uuid::new_v4());
+        resp.version = "99.0".into();
+        let errs = resp.validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.code == "version_mismatch"));
+    }
+
+    #[test]
+    fn task_result_empty_file_path_fails() {
+        let r = TaskResult::success(Uuid::new_v4(), "ok")
+            .with_file_modified(FileModification::created(""));
+        let errs = r.validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.field.contains("files_modified")));
+    }
+
+    #[test]
+    fn default_task_constraints() {
+        let c = TaskConstraints::default();
+        assert!(c.max_files_modified.is_none());
+        assert_eq!(c.allowed_paths, vec!["**/*".to_string()]);
+        assert!(!c.require_tests);
+        assert!(c.require_review);
+    }
 }

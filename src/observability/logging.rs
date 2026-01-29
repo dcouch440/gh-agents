@@ -588,4 +588,596 @@ mod tests {
             assert_eq!(*v, parsed);
         }
     }
+
+    // --- Async DB tests ---
+
+    use tempfile::TempDir;
+
+    async fn setup_test_db() -> (SqlitePool, TempDir) {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let pool = crate::db::init_db_at(db_path.to_str().unwrap())
+            .await
+            .unwrap();
+        (pool, temp_dir)
+    }
+
+    fn make_call(model: &str, task_id: Option<Uuid>) -> LlmCall {
+        let prompt = LlmPrompt::new("system").with_messages(vec![PromptMessage::user("hi")]);
+        let mut call = LlmCall::new(model, prompt, "response")
+            .with_tokens(10, 20)
+            .with_latency(100)
+            .with_cost(0.001);
+        if let Some(tid) = task_id {
+            call = call.with_task_id(tid);
+        }
+        call
+    }
+
+    #[tokio::test]
+    async fn log_call_and_retrieve() {
+        let (pool, _dir) = setup_test_db().await;
+        let logger = LlmCallLogger::new(pool);
+
+        let task_id = Uuid::new_v4();
+        let call = make_call("test-model", Some(task_id)).with_agent_id("agent-1");
+        logger.log_call(&call).await.unwrap();
+
+        let calls = logger.get_calls_for_task(task_id).await.unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].id, call.id);
+        assert_eq!(calls[0].model, "test-model");
+        assert_eq!(calls[0].agent_id, Some("agent-1".to_string()));
+        assert_eq!(calls[0].input_tokens, 10);
+        assert_eq!(calls[0].output_tokens, 20);
+        assert_eq!(calls[0].latency_ms, 100);
+        assert!((calls[0].cost_usd - 0.001).abs() < f64::EPSILON);
+    }
+
+    #[tokio::test]
+    async fn get_calls_for_task_filters_correctly() {
+        let (pool, _dir) = setup_test_db().await;
+        let logger = LlmCallLogger::new(pool);
+
+        let tid1 = Uuid::new_v4();
+        let tid2 = Uuid::new_v4();
+        logger.log_call(&make_call("m1", Some(tid1))).await.unwrap();
+        logger.log_call(&make_call("m2", Some(tid1))).await.unwrap();
+        logger.log_call(&make_call("m3", Some(tid2))).await.unwrap();
+
+        let calls = logger.get_calls_for_task(tid1).await.unwrap();
+        assert_eq!(calls.len(), 2);
+        let calls2 = logger.get_calls_for_task(tid2).await.unwrap();
+        assert_eq!(calls2.len(), 1);
+        assert_eq!(calls2[0].model, "m3");
+    }
+
+    #[tokio::test]
+    async fn get_calls_in_range_filters_correctly() {
+        let (pool, _dir) = setup_test_db().await;
+        let logger = LlmCallLogger::new(pool);
+
+        let t1 = Utc::now() - chrono::Duration::hours(2);
+        let t2 = Utc::now() - chrono::Duration::hours(1);
+        let t3 = Utc::now();
+
+        let mut c1 = make_call("old", None);
+        c1.timestamp = t1;
+        let mut c2 = make_call("mid", None);
+        c2.timestamp = t2;
+        let mut c3 = make_call("new", None);
+        c3.timestamp = t3;
+
+        logger.log_call(&c1).await.unwrap();
+        logger.log_call(&c2).await.unwrap();
+        logger.log_call(&c3).await.unwrap();
+
+        let range_start = t1 - chrono::Duration::seconds(1);
+        let range_end = t2 + chrono::Duration::seconds(1);
+        let calls = logger.get_calls_in_range(range_start, range_end).await.unwrap();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[0].model, "old");
+        assert_eq!(calls[1].model, "mid");
+    }
+
+    #[tokio::test]
+    async fn log_decision_and_retrieve() {
+        let (pool, _dir) = setup_test_db().await;
+        let logger = LlmCallLogger::new(pool);
+
+        let task_id = Uuid::new_v4();
+        let call_id = Uuid::new_v4();
+        let decision = Decision::new(task_id, DecisionType::TierRouting, "reason", "outcome")
+            .with_llm_call(call_id)
+            .with_cost(0.05);
+        logger.log_decision(&decision).await.unwrap();
+
+        let decisions = logger.get_decisions_for_task(task_id).await.unwrap();
+        assert_eq!(decisions.len(), 1);
+        assert_eq!(decisions[0].id, decision.id);
+        assert_eq!(decisions[0].decision_type, DecisionType::TierRouting);
+        assert_eq!(decisions[0].reasoning, "reason");
+        assert_eq!(decisions[0].outcome, "outcome");
+        assert_eq!(decisions[0].llm_call_id, Some(call_id));
+        assert!((decisions[0].cost_usd - 0.05).abs() < f64::EPSILON);
+    }
+
+    #[tokio::test]
+    async fn get_decisions_for_task_filters_correctly() {
+        let (pool, _dir) = setup_test_db().await;
+        let logger = LlmCallLogger::new(pool);
+
+        let tid1 = Uuid::new_v4();
+        let tid2 = Uuid::new_v4();
+        logger
+            .log_decision(&Decision::new(tid1, DecisionType::Decomposition, "r1", "o1"))
+            .await
+            .unwrap();
+        logger
+            .log_decision(&Decision::new(tid1, DecisionType::Escalation, "r2", "o2"))
+            .await
+            .unwrap();
+        logger
+            .log_decision(&Decision::new(tid2, DecisionType::Recovery, "r3", "o3"))
+            .await
+            .unwrap();
+
+        let d1 = logger.get_decisions_for_task(tid1).await.unwrap();
+        assert_eq!(d1.len(), 2);
+        let d2 = logger.get_decisions_for_task(tid2).await.unwrap();
+        assert_eq!(d2.len(), 1);
+        assert_eq!(d2[0].decision_type, DecisionType::Recovery);
+    }
+
+    #[tokio::test]
+    async fn get_decisions_in_range_filters_correctly() {
+        let (pool, _dir) = setup_test_db().await;
+        let logger = LlmCallLogger::new(pool);
+
+        let tid = Uuid::new_v4();
+        let t1 = Utc::now() - chrono::Duration::hours(3);
+        let t2 = Utc::now();
+
+        let mut d1 = Decision::new(tid, DecisionType::Decomposition, "old", "o1");
+        d1.timestamp = t1;
+        let mut d2 = Decision::new(tid, DecisionType::Escalation, "new", "o2");
+        d2.timestamp = t2;
+
+        logger.log_decision(&d1).await.unwrap();
+        logger.log_decision(&d2).await.unwrap();
+
+        let range_start = t1 - chrono::Duration::seconds(1);
+        let range_end = t1 + chrono::Duration::seconds(1);
+        let results = logger.get_decisions_in_range(range_start, range_end).await.unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].reasoning, "old");
+    }
+
+    #[test]
+    fn llm_call_row_try_from_valid() {
+        let id = Uuid::new_v4();
+        let task_id = Uuid::new_v4();
+        let prompt = LlmPrompt::new("sys");
+        let prompt_json = serde_json::to_string(&prompt).unwrap();
+        let ts = Utc::now().to_rfc3339();
+
+        let row = LlmCallRow {
+            id: id.to_string(),
+            task_id: Some(task_id.to_string()),
+            agent_id: Some("a1".to_string()),
+            model: "m".to_string(),
+            prompt: prompt_json,
+            response: "r".to_string(),
+            input_tokens: 5,
+            output_tokens: 10,
+            latency_ms: 50,
+            timestamp: ts,
+            cost_usd: 0.01,
+        };
+
+        let call: LlmCall = row.try_into().unwrap();
+        assert_eq!(call.id, id);
+        assert_eq!(call.task_id, Some(task_id));
+        assert_eq!(call.input_tokens, 5);
+    }
+
+    #[test]
+    fn llm_call_row_try_from_invalid_uuid() {
+        let row = LlmCallRow {
+            id: "not-a-uuid".to_string(),
+            task_id: None,
+            agent_id: None,
+            model: "m".to_string(),
+            prompt: r#"{"system":"s","messages":[]}"#.to_string(),
+            response: "r".to_string(),
+            input_tokens: 0,
+            output_tokens: 0,
+            latency_ms: 0,
+            timestamp: Utc::now().to_rfc3339(),
+            cost_usd: 0.0,
+        };
+        let result: Result<LlmCall> = row.try_into();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn decision_row_try_from_valid() {
+        let id = Uuid::new_v4();
+        let task_id = Uuid::new_v4();
+        let call_id = Uuid::new_v4();
+        let ts = Utc::now().to_rfc3339();
+        let dt_json = serde_json::to_string(&DecisionType::ReviewOutcome).unwrap();
+
+        let row = DecisionRow {
+            id: id.to_string(),
+            task_id: task_id.to_string(),
+            decision_type: dt_json,
+            reasoning: "r".to_string(),
+            outcome: "o".to_string(),
+            llm_call_id: Some(call_id.to_string()),
+            cost_usd: 0.02,
+            timestamp: ts,
+        };
+
+        let d: Decision = row.try_into().unwrap();
+        assert_eq!(d.id, id);
+        assert_eq!(d.decision_type, DecisionType::ReviewOutcome);
+        assert_eq!(d.llm_call_id, Some(call_id));
+    }
+
+    #[test]
+    fn decision_row_try_from_invalid_uuid() {
+        let row = DecisionRow {
+            id: "bad".to_string(),
+            task_id: Uuid::new_v4().to_string(),
+            decision_type: r#""Decomposition""#.to_string(),
+            reasoning: "r".to_string(),
+            outcome: "o".to_string(),
+            llm_call_id: None,
+            cost_usd: 0.0,
+            timestamp: Utc::now().to_rfc3339(),
+        };
+        let result: Result<Decision> = row.try_into();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn llm_call_row_try_from_invalid_prompt_json() {
+        let row = LlmCallRow {
+            id: Uuid::new_v4().to_string(),
+            task_id: None,
+            agent_id: None,
+            model: "m".to_string(),
+            prompt: "not json".to_string(),
+            response: "r".to_string(),
+            input_tokens: 0,
+            output_tokens: 0,
+            latency_ms: 0,
+            timestamp: Utc::now().to_rfc3339(),
+            cost_usd: 0.0,
+        };
+        let result: Result<LlmCall> = row.try_into();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn llm_call_row_try_from_invalid_timestamp() {
+        let prompt = LlmPrompt::new("sys");
+        let prompt_json = serde_json::to_string(&prompt).unwrap();
+        let row = LlmCallRow {
+            id: Uuid::new_v4().to_string(),
+            task_id: None,
+            agent_id: None,
+            model: "m".to_string(),
+            prompt: prompt_json,
+            response: "r".to_string(),
+            input_tokens: 0,
+            output_tokens: 0,
+            latency_ms: 0,
+            timestamp: "not-a-timestamp".to_string(),
+            cost_usd: 0.0,
+        };
+        let result: Result<LlmCall> = row.try_into();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn llm_call_row_try_from_invalid_task_id_uuid() {
+        let prompt = LlmPrompt::new("sys");
+        let prompt_json = serde_json::to_string(&prompt).unwrap();
+        let row = LlmCallRow {
+            id: Uuid::new_v4().to_string(),
+            task_id: Some("not-a-uuid".to_string()),
+            agent_id: None,
+            model: "m".to_string(),
+            prompt: prompt_json,
+            response: "r".to_string(),
+            input_tokens: 0,
+            output_tokens: 0,
+            latency_ms: 0,
+            timestamp: Utc::now().to_rfc3339(),
+            cost_usd: 0.0,
+        };
+        let result: Result<LlmCall> = row.try_into();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn llm_call_row_try_from_no_task_id() {
+        let prompt = LlmPrompt::new("sys");
+        let prompt_json = serde_json::to_string(&prompt).unwrap();
+        let row = LlmCallRow {
+            id: Uuid::new_v4().to_string(),
+            task_id: None,
+            agent_id: None,
+            model: "m".to_string(),
+            prompt: prompt_json,
+            response: "r".to_string(),
+            input_tokens: 0,
+            output_tokens: 0,
+            latency_ms: 0,
+            timestamp: Utc::now().to_rfc3339(),
+            cost_usd: 0.0,
+        };
+        let call: LlmCall = row.try_into().unwrap();
+        assert!(call.task_id.is_none());
+        assert!(call.agent_id.is_none());
+    }
+
+    #[test]
+    fn decision_row_try_from_invalid_task_id() {
+        let row = DecisionRow {
+            id: Uuid::new_v4().to_string(),
+            task_id: "bad-uuid".to_string(),
+            decision_type: r#""Decomposition""#.to_string(),
+            reasoning: "r".to_string(),
+            outcome: "o".to_string(),
+            llm_call_id: None,
+            cost_usd: 0.0,
+            timestamp: Utc::now().to_rfc3339(),
+        };
+        let result: Result<Decision> = row.try_into();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn decision_row_try_from_invalid_decision_type() {
+        let row = DecisionRow {
+            id: Uuid::new_v4().to_string(),
+            task_id: Uuid::new_v4().to_string(),
+            decision_type: "not valid json".to_string(),
+            reasoning: "r".to_string(),
+            outcome: "o".to_string(),
+            llm_call_id: None,
+            cost_usd: 0.0,
+            timestamp: Utc::now().to_rfc3339(),
+        };
+        let result: Result<Decision> = row.try_into();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn decision_row_try_from_invalid_timestamp() {
+        let row = DecisionRow {
+            id: Uuid::new_v4().to_string(),
+            task_id: Uuid::new_v4().to_string(),
+            decision_type: r#""Escalation""#.to_string(),
+            reasoning: "r".to_string(),
+            outcome: "o".to_string(),
+            llm_call_id: None,
+            cost_usd: 0.0,
+            timestamp: "bad-ts".to_string(),
+        };
+        let result: Result<Decision> = row.try_into();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn decision_row_try_from_invalid_llm_call_id() {
+        let row = DecisionRow {
+            id: Uuid::new_v4().to_string(),
+            task_id: Uuid::new_v4().to_string(),
+            decision_type: r#""Recovery""#.to_string(),
+            reasoning: "r".to_string(),
+            outcome: "o".to_string(),
+            llm_call_id: Some("not-a-uuid".to_string()),
+            cost_usd: 0.0,
+            timestamp: Utc::now().to_rfc3339(),
+        };
+        let result: Result<Decision> = row.try_into();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn decision_row_try_from_no_llm_call_id() {
+        let row = DecisionRow {
+            id: Uuid::new_v4().to_string(),
+            task_id: Uuid::new_v4().to_string(),
+            decision_type: r#""TierRouting""#.to_string(),
+            reasoning: "r".to_string(),
+            outcome: "o".to_string(),
+            llm_call_id: None,
+            cost_usd: 0.0,
+            timestamp: Utc::now().to_rfc3339(),
+        };
+        let d: Decision = row.try_into().unwrap();
+        assert!(d.llm_call_id.is_none());
+    }
+
+    #[test]
+    fn decision_serialization_roundtrip() {
+        let task_id = Uuid::new_v4();
+        let call_id = Uuid::new_v4();
+        let decision = Decision::new(task_id, DecisionType::Recovery, "reason", "outcome")
+            .with_llm_call(call_id)
+            .with_cost(1.23);
+
+        let json = serde_json::to_string(&decision).unwrap();
+        let parsed: Decision = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.task_id, task_id);
+        assert_eq!(parsed.decision_type, DecisionType::Recovery);
+        assert_eq!(parsed.llm_call_id, Some(call_id));
+        assert_eq!(parsed.reasoning, "reason");
+        assert_eq!(parsed.outcome, "outcome");
+    }
+
+    #[test]
+    fn llm_prompt_serialization_roundtrip() {
+        let mut prompt = LlmPrompt::new("system msg");
+        prompt.add_message("user", "hello");
+        prompt.add_message("assistant", "hi");
+
+        let json = serde_json::to_string(&prompt).unwrap();
+        let parsed: LlmPrompt = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.system, "system msg");
+        assert_eq!(parsed.messages.len(), 2);
+        assert_eq!(parsed.messages[0].role, "user");
+        assert_eq!(parsed.messages[0].content, "hello");
+        assert_eq!(parsed.messages[1].role, "assistant");
+        assert_eq!(parsed.messages[1].content, "hi");
+    }
+
+    #[test]
+    fn prompt_message_serialization_roundtrip() {
+        let msg = PromptMessage::user("test content");
+        let json = serde_json::to_string(&msg).unwrap();
+        let parsed: PromptMessage = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.role, "user");
+        assert_eq!(parsed.content, "test content");
+    }
+
+    #[test]
+    fn llm_call_with_empty_strings() {
+        let prompt = LlmPrompt::new("");
+        let call = LlmCall::new("", prompt, "");
+        assert_eq!(call.model, "");
+        assert_eq!(call.response, "");
+        assert_eq!(call.prompt.system, "");
+    }
+
+    #[test]
+    fn decision_with_empty_strings() {
+        let task_id = Uuid::new_v4();
+        let d = Decision::new(task_id, DecisionType::Decomposition, "", "");
+        assert_eq!(d.reasoning, "");
+        assert_eq!(d.outcome, "");
+    }
+
+    #[test]
+    fn llm_call_total_tokens_zero() {
+        let prompt = LlmPrompt::new("sys");
+        let call = LlmCall::new("m", prompt, "r");
+        assert_eq!(call.total_tokens(), 0);
+    }
+
+    #[test]
+    fn llm_prompt_with_messages_replaces() {
+        let prompt = LlmPrompt::new("sys")
+            .with_messages(vec![PromptMessage::user("a"), PromptMessage::assistant("b")]);
+        assert_eq!(prompt.messages.len(), 2);
+
+        // with_messages replaces, not appends
+        let prompt2 = prompt.with_messages(vec![PromptMessage::user("c")]);
+        assert_eq!(prompt2.messages.len(), 1);
+        assert_eq!(prompt2.messages[0].content, "c");
+    }
+
+    #[test]
+    fn decision_type_equality() {
+        assert_eq!(DecisionType::Decomposition, DecisionType::Decomposition);
+        assert_ne!(DecisionType::Decomposition, DecisionType::Escalation);
+    }
+
+    #[test]
+    fn llm_call_clone() {
+        let prompt = LlmPrompt::new("sys");
+        let call = LlmCall::new("model", prompt, "resp")
+            .with_task_id(Uuid::new_v4())
+            .with_agent_id("a")
+            .with_tokens(1, 2)
+            .with_latency(3)
+            .with_cost(0.5);
+        let cloned = call.clone();
+        assert_eq!(call.id, cloned.id);
+        assert_eq!(call.model, cloned.model);
+        assert_eq!(call.task_id, cloned.task_id);
+        assert_eq!(call.agent_id, cloned.agent_id);
+    }
+
+    #[test]
+    fn decision_clone() {
+        let d = Decision::new(Uuid::new_v4(), DecisionType::Escalation, "r", "o")
+            .with_llm_call(Uuid::new_v4())
+            .with_cost(0.1);
+        let cloned = d.clone();
+        assert_eq!(d.id, cloned.id);
+        assert_eq!(d.decision_type, cloned.decision_type);
+    }
+
+    #[tokio::test]
+    async fn log_decision_without_llm_call() {
+        let (pool, _dir) = setup_test_db().await;
+        let logger = LlmCallLogger::new(pool);
+
+        let task_id = Uuid::new_v4();
+        let decision = Decision::new(task_id, DecisionType::Decomposition, "r", "o");
+        logger.log_decision(&decision).await.unwrap();
+
+        let decisions = logger.get_decisions_for_task(task_id).await.unwrap();
+        assert_eq!(decisions.len(), 1);
+        assert!(decisions[0].llm_call_id.is_none());
+    }
+
+    #[tokio::test]
+    async fn get_calls_for_nonexistent_task() {
+        let (pool, _dir) = setup_test_db().await;
+        let logger = LlmCallLogger::new(pool);
+
+        let calls = logger.get_calls_for_task(Uuid::new_v4()).await.unwrap();
+        assert!(calls.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_decisions_for_nonexistent_task() {
+        let (pool, _dir) = setup_test_db().await;
+        let logger = LlmCallLogger::new(pool);
+
+        let decisions = logger.get_decisions_for_task(Uuid::new_v4()).await.unwrap();
+        assert!(decisions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_calls_in_range_empty() {
+        let (pool, _dir) = setup_test_db().await;
+        let logger = LlmCallLogger::new(pool);
+
+        let start = Utc::now() - chrono::Duration::hours(10);
+        let end = Utc::now() - chrono::Duration::hours(9);
+        let calls = logger.get_calls_in_range(start, end).await.unwrap();
+        assert!(calls.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_decisions_in_range_empty() {
+        let (pool, _dir) = setup_test_db().await;
+        let logger = LlmCallLogger::new(pool);
+
+        let start = Utc::now() - chrono::Duration::hours(10);
+        let end = Utc::now() - chrono::Duration::hours(9);
+        let decisions = logger.get_decisions_in_range(start, end).await.unwrap();
+        assert!(decisions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn log_call_without_task_id() {
+        let (pool, _dir) = setup_test_db().await;
+        let logger = LlmCallLogger::new(pool);
+
+        let call = make_call("model", None);
+        logger.log_call(&call).await.unwrap();
+
+        // Should not appear when filtering by a random task_id
+        let calls = logger.get_calls_for_task(Uuid::new_v4()).await.unwrap();
+        assert!(calls.is_empty());
+    }
 }

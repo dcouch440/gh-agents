@@ -748,6 +748,179 @@ mod tests {
     }
 
     #[test]
+    fn pool_error_display_messages() {
+        let e1 = PoolError::PoolLimitReached {
+            tier: AgentTier::Worker,
+            max: 3,
+        };
+        assert!(e1.to_string().contains("pool limit reached"));
+        assert!(e1.to_string().contains("Worker"));
+
+        let e2 = PoolError::AgentNotFound(AgentId::new());
+        assert!(e2.to_string().contains("agent not found"));
+
+        let e3 = PoolError::NoAvailableAgent(AgentTier::Utility);
+        assert!(e3.to_string().contains("no available agent"));
+    }
+
+    #[test]
+    fn spawn_all_tiers() {
+        let mut pool = create_test_pool();
+        let persona = AgentPersona::default();
+        let model_config = ModelConfig::default();
+
+        let orch_id = pool
+            .spawn_agent(AgentTier::Orchestrator, persona.clone(), model_config.clone())
+            .unwrap();
+        let worker_id = pool
+            .spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone())
+            .unwrap();
+        let util_id = pool
+            .spawn_agent(AgentTier::Utility, persona, model_config)
+            .unwrap();
+
+        assert_eq!(pool.get_agent(&orch_id).unwrap().tier(), AgentTier::Orchestrator);
+        assert_eq!(pool.get_agent(&worker_id).unwrap().tier(), AgentTier::Worker);
+        assert_eq!(pool.get_agent(&util_id).unwrap().tier(), AgentTier::Utility);
+        assert_eq!(pool.total_count(), 3);
+    }
+
+    #[test]
+    fn spawn_worker_limit_reached() {
+        let mut pool = create_test_pool();
+        let persona = AgentPersona::default();
+        let model_config = ModelConfig::default();
+
+        // max_workers = 3
+        for _ in 0..3 {
+            pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone())
+                .unwrap();
+        }
+        assert!(!pool.can_spawn(AgentTier::Worker));
+        let result = pool.spawn_agent(AgentTier::Worker, persona, model_config);
+        match result {
+            Err(PoolError::PoolLimitReached { tier, max }) => {
+                assert_eq!(tier, AgentTier::Worker);
+                assert_eq!(max, 3);
+            }
+            _ => panic!("Expected PoolLimitReached"),
+        }
+    }
+
+    #[test]
+    fn spawn_utility_limit_reached() {
+        let mut pool = create_test_pool();
+        let persona = AgentPersona::default();
+        let model_config = ModelConfig::default();
+
+        // max_utilities = 4
+        for _ in 0..4 {
+            pool.spawn_agent(AgentTier::Utility, persona.clone(), model_config.clone())
+                .unwrap();
+        }
+        assert!(!pool.can_spawn(AgentTier::Utility));
+        let result = pool.spawn_agent(AgentTier::Utility, persona, model_config);
+        assert!(matches!(result, Err(PoolError::PoolLimitReached { .. })));
+    }
+
+    #[test]
+    fn get_available_agent_mut_returns_agent() {
+        let mut pool = create_test_pool();
+        let persona = AgentPersona::default();
+        let model_config = ModelConfig::default();
+
+        pool.spawn_agent(AgentTier::Worker, persona, model_config).unwrap();
+
+        let agent = pool.get_available_agent(AgentTier::Worker);
+        assert!(agent.is_some());
+        assert!(agent.unwrap().is_available());
+    }
+
+    #[test]
+    fn get_available_agent_mut_returns_none_when_empty() {
+        let mut pool = create_test_pool();
+        assert!(pool.get_available_agent(AgentTier::Orchestrator).is_none());
+    }
+
+    #[test]
+    fn get_available_agent_mut_returns_none_when_all_busy() {
+        let mut pool = create_test_pool();
+        let persona = AgentPersona::default();
+        let model_config = ModelConfig::default();
+
+        let id = pool.spawn_agent(AgentTier::Worker, persona, model_config).unwrap();
+        pool.get_agent_mut(&id).unwrap().start_task(uuid::Uuid::new_v4()).unwrap();
+
+        assert!(pool.get_available_agent(AgentTier::Worker).is_none());
+    }
+
+    #[test]
+    fn remove_agent_then_can_spawn_again() {
+        let mut pool = create_test_pool();
+        let persona = AgentPersona::default();
+        let model_config = ModelConfig::default();
+
+        // Fill orchestrators (max=2)
+        let id1 = pool.spawn_agent(AgentTier::Orchestrator, persona.clone(), model_config.clone()).unwrap();
+        pool.spawn_agent(AgentTier::Orchestrator, persona.clone(), model_config.clone()).unwrap();
+        assert!(!pool.can_spawn(AgentTier::Orchestrator));
+
+        // Remove one
+        pool.remove_agent(&id1).unwrap();
+        assert!(pool.can_spawn(AgentTier::Orchestrator));
+
+        // Can spawn again
+        pool.spawn_agent(AgentTier::Orchestrator, persona, model_config).unwrap();
+        assert_eq!(pool.count(AgentTier::Orchestrator), 2);
+    }
+
+    #[test]
+    fn shutdown_all_with_busy_agents() {
+        let mut pool = create_test_pool();
+        let persona = AgentPersona::default();
+        let model_config = ModelConfig::default();
+
+        let id = pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone()).unwrap();
+        pool.spawn_agent(AgentTier::Utility, persona, model_config).unwrap();
+
+        // Make one busy
+        pool.get_agent_mut(&id).unwrap().start_task(uuid::Uuid::new_v4()).unwrap();
+
+        pool.shutdown_all();
+        assert_eq!(pool.total_count(), 0);
+    }
+
+    #[test]
+    fn count_available_empty_tier() {
+        let pool = create_test_pool();
+        // count_available is private but tested through stats
+        let stats = pool.stats();
+        assert_eq!(stats.orchestrators.available, 0);
+        assert_eq!(stats.workers.available, 0);
+        assert_eq!(stats.utilities.available, 0);
+    }
+
+    #[test]
+    fn stats_with_mixed_busy_idle() {
+        let mut pool = create_test_pool();
+        let persona = AgentPersona::default();
+        let model_config = ModelConfig::default();
+
+        let id1 = pool.spawn_agent(AgentTier::Utility, persona.clone(), model_config.clone()).unwrap();
+        let _id2 = pool.spawn_agent(AgentTier::Utility, persona.clone(), model_config.clone()).unwrap();
+        let id3 = pool.spawn_agent(AgentTier::Utility, persona, model_config).unwrap();
+
+        // Make two busy
+        pool.get_agent_mut(&id1).unwrap().start_task(uuid::Uuid::new_v4()).unwrap();
+        pool.get_agent_mut(&id3).unwrap().start_task(uuid::Uuid::new_v4()).unwrap();
+
+        let stats = pool.stats();
+        assert_eq!(stats.utilities.total, 3);
+        assert_eq!(stats.utilities.available, 1);
+        assert_eq!(stats.utilities.max, 4);
+    }
+
+    #[test]
     fn stats_shows_all_tiers() {
         let mut pool = create_test_pool();
         let persona = AgentPersona::default();

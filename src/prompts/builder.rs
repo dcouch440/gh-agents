@@ -467,6 +467,198 @@ mod tests {
     }
 
     #[test]
+    fn test_prompt_builder_with_conventions() {
+        let prompt = PromptBuilder::new()
+            .task("Do work")
+            .conventions("Use snake_case everywhere")
+            .build();
+
+        assert!(prompt.text.contains("### Project Conventions"));
+        assert!(prompt.text.contains("Use snake_case everywhere"));
+    }
+
+    #[test]
+    fn test_prompt_builder_with_task_context() {
+        let prompt = PromptBuilder::new()
+            .task("Implement feature")
+            .task_context("This is part of milestone M3")
+            .build();
+
+        assert!(prompt.text.contains("### Task Context"));
+        assert!(prompt.text.contains("milestone M3"));
+    }
+
+    #[test]
+    fn test_prompt_builder_with_history() {
+        let prompt = PromptBuilder::new()
+            .task("Continue work")
+            .history("user", "Please fix the bug")
+            .history("assistant", "I found the issue in line 42")
+            .build();
+
+        assert!(prompt.text.contains("### Conversation History"));
+        assert!(prompt.text.contains("**user**: Please fix the bug"));
+        assert!(prompt.text.contains("**assistant**: I found the issue"));
+    }
+
+    #[test]
+    fn test_prompt_builder_output_json_with_example() {
+        let prompt = PromptBuilder::new()
+            .task("Analyze")
+            .output_json_with_example(
+                r#"{"score": "number"}"#,
+                r#"{"score": 42}"#,
+            )
+            .build();
+
+        assert!(prompt.text.contains("Respond with valid JSON"));
+        assert!(prompt.text.contains(r#"{"score": "number"}"#));
+        assert!(prompt.text.contains("Example:"));
+        assert!(prompt.text.contains(r#"{"score": 42}"#));
+    }
+
+    #[test]
+    fn test_prompt_builder_output_text_with_guidelines() {
+        let prompt = PromptBuilder::new()
+            .task("Summarize")
+            .output_text(Some("Keep it under 100 words".to_string()))
+            .build();
+
+        assert!(prompt.text.contains("## Output Format"));
+        assert!(prompt.text.contains("Keep it under 100 words"));
+    }
+
+    #[test]
+    fn test_prompt_builder_output_text_no_guidelines() {
+        let prompt = PromptBuilder::new()
+            .task("Summarize")
+            .output_text(None)
+            .build();
+
+        assert!(prompt.text.contains("Respond in natural language."));
+    }
+
+    #[test]
+    fn test_prompt_builder_output_code() {
+        let prompt = PromptBuilder::new()
+            .task("Write code")
+            .output_code("rust", Some("Follow clippy lints".to_string()))
+            .build();
+
+        assert!(prompt.text.contains("Respond with rust code."));
+        assert!(prompt.text.contains("Follow clippy lints"));
+    }
+
+    #[test]
+    fn test_prompt_builder_output_code_no_guidelines() {
+        let prompt = PromptBuilder::new()
+            .task("Write code")
+            .output_code("python", None)
+            .build();
+
+        assert!(prompt.text.contains("Respond with python code."));
+        assert!(!prompt.text.contains("\n\n\n")); // no extra blank from missing guidelines
+    }
+
+    #[test]
+    fn test_prompt_builder_with_version() {
+        let version = PromptVersion::new("test", 1, 0, 0);
+        let prompt = PromptBuilder::new()
+            .task("Do something")
+            .version(version.clone())
+            .build();
+
+        assert!(prompt.version.is_some());
+        assert_eq!(prompt.version.unwrap().semver(), "1.0.0");
+    }
+
+    #[test]
+    fn test_prompt_builder_no_version() {
+        let prompt = PromptBuilder::new().task("Do something").build();
+        assert!(prompt.version.is_none());
+    }
+
+    #[test]
+    fn test_prompt_builder_full_kitchen_sink() {
+        let prompt = PromptBuilder::new()
+            .role("You are an expert Rust developer")
+            .conventions("Use thiserror for errors")
+            .task_context("Working on auth module")
+            .file_to_modify("src/auth.rs", "fn login() {}")
+            .reference_file("src/types.rs", "pub struct User {}")
+            .history("user", "Add OAuth support")
+            .task("Implement OAuth2 flow")
+            .constraint("Must support Google and GitHub")
+            .constraint("Use async/await")
+            .output_code("rust", Some("Include tests".to_string()))
+            .example("Simple OAuth", "fn oauth() -> Result<Token>")
+            .example_with_explanation(
+                "Error handling",
+                "fn handle() -> Result<(), AuthError>",
+                "Shows proper error types",
+            )
+            .version(PromptVersion::new("implementation", 2, 0, 0))
+            .build();
+
+        // All sections present
+        assert!(prompt.text.contains("## Your Role"));
+        assert!(prompt.text.contains("## Context"));
+        assert!(prompt.text.contains("## Task"));
+        assert!(prompt.text.contains("## Constraints"));
+        assert!(prompt.text.contains("## Output Format"));
+        assert!(prompt.text.contains("## Examples"));
+
+        // Sections separated by ---
+        assert!(prompt.text.contains("---"));
+
+        // Content checks
+        assert!(prompt.text.contains("expert Rust developer"));
+        assert!(prompt.text.contains("thiserror"));
+        assert!(prompt.text.contains("auth module"));
+        assert!(prompt.text.contains("src/auth.rs"));
+        assert!(prompt.text.contains("src/types.rs"));
+        assert!(prompt.text.contains("OAuth2 flow"));
+        assert!(prompt.text.contains("Google and GitHub"));
+        assert!(prompt.text.contains("async/await"));
+        assert!(prompt.text.contains("**Why:** Shows proper error types"));
+    }
+
+    #[test]
+    fn test_prompt_builder_empty_build() {
+        let prompt = PromptBuilder::new().build();
+        // Output format defaults to Text with no guidelines => "Respond in natural language."
+        assert!(prompt.text.contains("Respond in natural language."));
+        // No role, task, constraints, examples sections
+        assert!(!prompt.text.contains("## Your Role"));
+        assert!(!prompt.text.contains("## Task"));
+        assert!(!prompt.text.contains("## Constraints"));
+        assert!(!prompt.text.contains("## Examples"));
+    }
+
+    #[test]
+    fn test_built_prompt_template_preserved() {
+        let prompt = PromptBuilder::new()
+            .role("tester")
+            .task("test things")
+            .constraint("be thorough")
+            .build();
+
+        assert_eq!(prompt.template.role, "tester");
+        assert_eq!(prompt.template.task, "test things");
+        assert_eq!(prompt.template.constraints.len(), 1);
+    }
+
+    #[test]
+    fn test_prompt_context_default() {
+        let ctx = PromptContext::default();
+        assert!(ctx.files_to_modify.is_empty());
+        assert!(ctx.reference_files.is_empty());
+        assert!(ctx.task_context.is_none());
+        assert!(ctx.history.is_empty());
+        assert!(ctx.conventions.is_none());
+    }
+
+    #[test]
     fn test_prompt_builder_omits_empty_sections() {
         let prompt = PromptBuilder::new().task("Just a task").build();
 

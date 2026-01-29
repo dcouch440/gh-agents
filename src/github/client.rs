@@ -995,4 +995,513 @@ mod tests {
         let result = client.get_repository("owner", "repo").await;
         assert!(matches!(result.unwrap_err(), GitHubError::Unauthorized));
     }
+
+    // Helper to build a mock issue JSON
+    fn mock_issue_json(number: u32, title: &str) -> serde_json::Value {
+        serde_json::json!({
+            "number": number,
+            "title": title,
+            "body": "body",
+            "state": "open",
+            "labels": [],
+            "user": { "login": "dev", "id": 1 },
+            "assignees": [],
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+            "html_url": format!("https://github.com/owner/repo/issues/{}", number)
+        })
+    }
+
+    fn mock_comment_json(id: u64, body: &str) -> serde_json::Value {
+        serde_json::json!({
+            "id": id,
+            "body": body,
+            "user": { "login": "bot", "id": 3 },
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z"
+        })
+    }
+
+    fn mock_pr_json(number: u32, title: &str) -> serde_json::Value {
+        serde_json::json!({
+            "id": number,
+            "number": number,
+            "title": title,
+            "state": "open",
+            "user": { "login": "dev", "id": 1 },
+            "html_url": format!("https://github.com/owner/repo/pull/{}", number),
+            "body": "pr body",
+            "head": { "ref": "feature", "sha": "abc123" },
+            "base": { "ref": "main", "sha": "def456" },
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z"
+        })
+    }
+
+    fn mock_review_json(id: u64, state: &str) -> serde_json::Value {
+        serde_json::json!({
+            "id": id,
+            "user": { "login": "reviewer", "id": 5 },
+            "body": "Looks good",
+            "state": state,
+            "html_url": "https://github.com/owner/repo/pull/1#review-1",
+            "submitted_at": "2024-01-01T00:00:00Z"
+        })
+    }
+
+    async fn mock_client(server: &wiremock::MockServer) -> GitHubClient {
+        GitHubClient::with_token("test-token")
+            .unwrap()
+            .with_base_url(server.uri())
+    }
+
+    #[tokio::test]
+    async fn list_issues_no_filters() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/repos/owner/repo/issues"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                mock_issue_json(1, "Issue one"),
+                mock_issue_json(2, "Issue two"),
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = mock_client(&server).await;
+        let issues = client
+            .list_issues("owner", "repo", &IssueFilters::default())
+            .await
+            .unwrap();
+        assert_eq!(issues.len(), 2);
+        assert_eq!(issues[0].title, "Issue one");
+    }
+
+    #[tokio::test]
+    async fn list_issues_with_filters() {
+        use wiremock::matchers::{method, path, query_param};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        use crate::github::types::IssueState;
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/repos/owner/repo/issues"))
+            .and(query_param("state", "closed"))
+            .and(query_param("labels", "bug,urgent"))
+            .and(query_param("assignee", "alice"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!([mock_issue_json(3, "Bug fix")])),
+            )
+            .mount(&server)
+            .await;
+
+        let client = mock_client(&server).await;
+        let filters = IssueFilters::new()
+            .state(IssueState::Closed)
+            .labels(vec!["bug".into(), "urgent".into()])
+            .assignee("alice");
+        let issues = client.list_issues("owner", "repo", &filters).await.unwrap();
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].number, 3);
+    }
+
+    #[tokio::test]
+    async fn create_pull_request_success() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/repos/owner/repo/pulls"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(mock_pr_json(99, "New PR")))
+            .mount(&server)
+            .await;
+
+        let client = mock_client(&server).await;
+        let pr = client
+            .create_pull_request(
+                "owner",
+                "repo",
+                &CreatePullRequest {
+                    title: "New PR".into(),
+                    body: "Description".into(),
+                    head: "feature".into(),
+                    base: "main".into(),
+                    draft: None,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(pr.number, 99);
+        assert_eq!(pr.title, "New PR");
+    }
+
+    #[tokio::test]
+    async fn list_issue_comments_success() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/repos/owner/repo/issues/5/comments"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                mock_comment_json(10, "First comment"),
+                mock_comment_json(11, "Second comment"),
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = mock_client(&server).await;
+        let comments = client.list_issue_comments("owner", "repo", 5).await.unwrap();
+        assert_eq!(comments.len(), 2);
+        assert_eq!(comments[0].body, "First comment");
+        assert_eq!(comments[1].id, 11);
+    }
+
+    #[tokio::test]
+    async fn update_issue_comment_success() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("PATCH"))
+            .and(path("/repos/owner/repo/issues/comments/42"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(mock_comment_json(42, "Updated body")),
+            )
+            .mount(&server)
+            .await;
+
+        let client = mock_client(&server).await;
+        let comment = client
+            .update_issue_comment(
+                "owner",
+                "repo",
+                42,
+                &CreateIssueComment {
+                    body: "Updated body".into(),
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(comment.id, 42);
+        assert_eq!(comment.body, "Updated body");
+    }
+
+    #[tokio::test]
+    async fn get_pr_files_with_pagination() {
+        use wiremock::matchers::{method, path, query_param};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+
+        // Page 1: returns one file
+        Mock::given(method("GET"))
+            .and(path("/repos/owner/repo/pulls/7/files"))
+            .and(query_param("page", "1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([{
+                "filename": "src/main.rs",
+                "status": "modified",
+                "additions": 10,
+                "deletions": 2,
+                "changes": 12,
+                "patch": "@@ -1,5 +1,13 @@"
+            }])))
+            .mount(&server)
+            .await;
+
+        // Page 2: empty, stops pagination
+        Mock::given(method("GET"))
+            .and(path("/repos/owner/repo/pulls/7/files"))
+            .and(query_param("page", "2"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!([])),
+            )
+            .mount(&server)
+            .await;
+
+        let client = mock_client(&server).await;
+        let files = client.get_pr_files("owner", "repo", 7).await.unwrap();
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].filename, "src/main.rs");
+        assert_eq!(files[0].additions, 10);
+    }
+
+    #[tokio::test]
+    async fn list_pr_reviews_success() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/repos/owner/repo/pulls/3/reviews"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                mock_review_json(1, "APPROVED"),
+                mock_review_json(2, "CHANGES_REQUESTED"),
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = mock_client(&server).await;
+        let reviews = client.list_pr_reviews("owner", "repo", 3).await.unwrap();
+        assert_eq!(reviews.len(), 2);
+        assert_eq!(reviews[0].state, crate::github::types::ReviewState::Approved);
+        assert_eq!(
+            reviews[1].state,
+            crate::github::types::ReviewState::ChangesRequested
+        );
+    }
+
+    #[tokio::test]
+    async fn create_review_success() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        use crate::github::types::{CreateReviewRequest, ReviewEvent};
+
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/repos/owner/repo/pulls/4/reviews"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(mock_review_json(10, "APPROVED")),
+            )
+            .mount(&server)
+            .await;
+
+        let client = mock_client(&server).await;
+        let review = client
+            .create_review(
+                "owner",
+                "repo",
+                4,
+                &CreateReviewRequest {
+                    event: ReviewEvent::Approve,
+                    body: Some("LGTM".into()),
+                    comments: Vec::new(),
+                    commit_id: None,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(review.id, 10);
+    }
+
+    #[tokio::test]
+    async fn merge_pr_success() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        use crate::github::merge::{MergePrRequest, MergeMethod, MergePrResult};
+
+        let server = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path("/repos/owner/repo/pulls/1/merge"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "sha": "abc123",
+                "merged": true,
+                "message": "Pull Request successfully merged"
+            })))
+            .mount(&server)
+            .await;
+
+        let client = mock_client(&server).await;
+        let result = client
+            .merge_pr("owner", "repo", 1, &MergePrRequest::new(MergeMethod::Squash))
+            .await
+            .unwrap();
+        assert!(matches!(result, MergePrResult::Merged { sha, .. } if sha == "abc123"));
+    }
+
+    #[tokio::test]
+    async fn merge_pr_method_not_allowed_already_merged() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        use crate::github::merge::{MergePrRequest, MergeMethod, MergePrResult};
+
+        let server = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path("/repos/owner/repo/pulls/2/merge"))
+            .respond_with(
+                ResponseTemplate::new(405).set_body_string("Pull request already merged"),
+            )
+            .mount(&server)
+            .await;
+
+        let client = mock_client(&server).await;
+        let result = client
+            .merge_pr("owner", "repo", 2, &MergePrRequest::new(MergeMethod::Merge))
+            .await
+            .unwrap();
+        assert!(matches!(result, MergePrResult::AlreadyMerged));
+    }
+
+    #[tokio::test]
+    async fn merge_pr_method_not_allowed_not_mergeable() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        use crate::github::merge::{MergePrRequest, MergeMethod, MergePrResult};
+
+        let server = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path("/repos/owner/repo/pulls/2/merge"))
+            .respond_with(
+                ResponseTemplate::new(405).set_body_string("Required status check missing"),
+            )
+            .mount(&server)
+            .await;
+
+        let client = mock_client(&server).await;
+        let result = client
+            .merge_pr("owner", "repo", 2, &MergePrRequest::new(MergeMethod::Merge))
+            .await
+            .unwrap();
+        assert!(matches!(result, MergePrResult::NotMergeable { .. }));
+    }
+
+    #[tokio::test]
+    async fn merge_pr_conflict_head_mismatch() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        use crate::github::merge::{MergePrRequest, MergeMethod, MergePrResult};
+
+        let server = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path("/repos/owner/repo/pulls/3/merge"))
+            .respond_with(
+                ResponseTemplate::new(409).set_body_string("Head branch was modified"),
+            )
+            .mount(&server)
+            .await;
+
+        let client = mock_client(&server).await;
+        let req = MergePrRequest::new(MergeMethod::Merge).with_sha("expected_sha");
+        let result = client.merge_pr("owner", "repo", 3, &req).await.unwrap();
+        assert!(matches!(result, MergePrResult::HeadMismatch { .. }));
+    }
+
+    #[tokio::test]
+    async fn merge_pr_conflict_has_conflicts() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        use crate::github::merge::{MergePrRequest, MergeMethod, MergePrResult};
+
+        let server = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path("/repos/owner/repo/pulls/3/merge"))
+            .respond_with(
+                ResponseTemplate::new(409).set_body_string("Merge conflict"),
+            )
+            .mount(&server)
+            .await;
+
+        let client = mock_client(&server).await;
+        let result = client
+            .merge_pr("owner", "repo", 3, &MergePrRequest::new(MergeMethod::Merge))
+            .await
+            .unwrap();
+        assert!(matches!(result, MergePrResult::HasConflicts));
+    }
+
+    #[tokio::test]
+    async fn merge_pr_other_error() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        use crate::github::merge::{MergePrRequest, MergeMethod, MergePrResult};
+
+        let server = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path("/repos/owner/repo/pulls/4/merge"))
+            .respond_with(
+                ResponseTemplate::new(500).set_body_string("Internal server error"),
+            )
+            .mount(&server)
+            .await;
+
+        let client = mock_client(&server).await;
+        let result = client
+            .merge_pr("owner", "repo", 4, &MergePrRequest::new(MergeMethod::Merge))
+            .await
+            .unwrap();
+        assert!(
+            matches!(result, MergePrResult::Failed { status: 500, .. })
+        );
+    }
+
+    #[tokio::test]
+    async fn handle_response_403_rate_limited() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/repos/owner/repo"))
+            .respond_with(
+                ResponseTemplate::new(403)
+                    .insert_header("x-ratelimit-limit", "60")
+                    .insert_header("x-ratelimit-remaining", "0")
+                    .insert_header("x-ratelimit-reset", "1700000000")
+                    .set_body_string("rate limit exceeded"),
+            )
+            .mount(&server)
+            .await;
+
+        let client = mock_client(&server).await;
+        let result = client.get_repository("owner", "repo").await;
+        assert!(matches!(result.unwrap_err(), GitHubError::RateLimited { .. }));
+    }
+
+    #[tokio::test]
+    async fn handle_response_403_not_rate_limited() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/repos/owner/repo"))
+            .respond_with(
+                ResponseTemplate::new(403)
+                    .insert_header("x-ratelimit-limit", "60")
+                    .insert_header("x-ratelimit-remaining", "30")
+                    .insert_header("x-ratelimit-reset", "1700000000")
+                    .set_body_string("forbidden"),
+            )
+            .mount(&server)
+            .await;
+
+        let client = mock_client(&server).await;
+        let result = client.get_repository("owner", "repo").await;
+        match result.unwrap_err() {
+            GitHubError::ApiError { status, message } => {
+                assert_eq!(status, 403);
+                assert_eq!(message, "forbidden");
+            }
+            other => panic!("Expected ApiError, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn handle_response_generic_error() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/repos/owner/repo"))
+            .respond_with(
+                ResponseTemplate::new(422).set_body_string("Validation failed"),
+            )
+            .mount(&server)
+            .await;
+
+        let client = mock_client(&server).await;
+        let result = client.get_repository("owner", "repo").await;
+        match result.unwrap_err() {
+            GitHubError::ApiError { status, message } => {
+                assert_eq!(status, 422);
+                assert_eq!(message, "Validation failed");
+            }
+            other => panic!("Expected ApiError, got {:?}", other),
+        }
+    }
 }

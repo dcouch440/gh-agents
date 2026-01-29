@@ -337,4 +337,127 @@ mod tests {
         assert!(tasks.is_empty());
         std::fs::remove_file(path).ok();
     }
+
+    #[test]
+    fn headless_runner_new_with_output_file() {
+        let tmp = std::env::temp_dir().join("nexor_test_output.txt");
+        let args = Args {
+            headless: true,
+            port: 3000,
+            task: Some("test".into()),
+            input: None,
+            output: Some(tmp.clone()),
+            config: None,
+            verbose: 0,
+            sync: None,
+        };
+        let runner = HeadlessRunner::new(args).unwrap();
+        // File should have been created
+        assert!(tmp.exists());
+        drop(runner);
+        std::fs::remove_file(tmp).ok();
+    }
+
+    #[test]
+    fn write_methods_produce_expected_prefixes() {
+        let buf: Vec<u8> = Vec::new();
+        let cursor = std::io::Cursor::new(buf);
+        let args = Args {
+            headless: true,
+            port: 3000,
+            task: Some("test".into()),
+            input: None,
+            output: None,
+            config: None,
+            verbose: 0,
+            sync: None,
+        };
+        let mut runner = HeadlessRunner {
+            args,
+            output: Box::new(cursor),
+        };
+
+        runner.write_line("plain line").unwrap();
+        runner.write_progress("step 1").unwrap();
+        runner.write_error("something broke").unwrap();
+        runner.write_result("SUCCESS", "all good").unwrap();
+
+        // Downcast to read buffer contents
+        let output = runner.output.as_mut() as *mut dyn Write;
+        // We can't easily downcast, so instead re-create with a shared buffer
+        drop(runner);
+
+        // Use a shared buffer approach
+        let buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
+        let buf_clone = buf.clone();
+
+        struct SharedBuf(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+        impl Write for SharedBuf {
+            fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+                self.0.lock().unwrap().write(data)
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let args2 = Args {
+            headless: true,
+            port: 3000,
+            task: Some("test".into()),
+            input: None,
+            output: None,
+            config: None,
+            verbose: 0,
+            sync: None,
+        };
+        let mut runner2 = HeadlessRunner {
+            args: args2,
+            output: Box::new(SharedBuf(buf_clone)),
+        };
+
+        runner2.write_line("plain line").unwrap();
+        runner2.write_progress("step 1").unwrap();
+        runner2.write_error("something broke").unwrap();
+        runner2.write_result("SUCCESS", "all good").unwrap();
+
+        let contents = String::from_utf8(buf.lock().unwrap().clone()).unwrap();
+        assert!(contents.contains("plain line"));
+        assert!(contents.contains("[PROGRESS] step 1"));
+        assert!(contents.contains("[ERROR] something broke"));
+        assert!(contents.contains("[RESULT] SUCCESS - all good"));
+    }
+
+    #[tokio::test]
+    async fn process_task_returns_success() {
+        let buf: Vec<u8> = Vec::new();
+        let args = Args {
+            headless: true,
+            port: 3000,
+            task: Some("test".into()),
+            input: None,
+            output: None,
+            config: None,
+            verbose: 0,
+            sync: None,
+        };
+        let mut runner = HeadlessRunner {
+            args,
+            output: Box::new(buf),
+        };
+
+        let task = TaskInput {
+            description: "Do something".to_string(),
+            priority: None,
+            github_issue: None,
+        };
+
+        let result = runner.process_task(&task).await.unwrap();
+        match result {
+            TaskResult::Success { message } => {
+                assert!(message.contains("Do something"));
+            }
+            _ => panic!("expected Success"),
+        }
+    }
 }

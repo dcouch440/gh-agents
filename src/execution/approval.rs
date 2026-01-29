@@ -667,4 +667,327 @@ mod tests {
         assert!(gate.check(DangerousOperation::GitCommit).is_ok());
         assert!(gate.check(DangerousOperation::GitForcePush).is_err());
     }
+
+    #[test]
+    fn dangerous_operation_description_all_variants() {
+        use DangerousOperation::*;
+        let ops = [
+            (DeleteFile, "Permanently remove a file from the project"),
+            (ModifyFile, "Change the contents of an existing file"),
+            (CreateFile, "Create a new file in the project"),
+            (GitCommit, "Create a new commit with staged changes"),
+            (GitPush, "Push commits to the remote repository"),
+            (
+                GitForcePush,
+                "Force push, potentially overwriting remote history",
+            ),
+            (GitBranchDelete, "Delete a git branch"),
+            (GitMerge, "Merge one branch into another"),
+            (RunCommand, "Execute a shell command"),
+            (NetworkAccess, "Make a network request"),
+            (InstallPackage, "Install a package or dependency"),
+            (CreatePullRequest, "Create a new pull request on GitHub"),
+            (
+                MergePullRequest,
+                "Merge a pull request into the target branch",
+            ),
+            (CloseIssue, "Close a GitHub issue"),
+        ];
+        for (op, expected) in &ops {
+            assert_eq!(op.description(), *expected);
+        }
+    }
+
+    #[test]
+    fn list_gated_operations_full_auto() {
+        let gate = ApprovalGate::full_auto();
+        let gated = gate.list_gated_operations();
+        // FullAuto only gates Critical ops
+        assert_eq!(gated, vec![DangerousOperation::GitForcePush]);
+    }
+
+    #[test]
+    fn list_gated_operations_supervised() {
+        let gate = ApprovalGate::supervised();
+        let gated = gate.list_gated_operations();
+        // Supervised gates everything (14 operations)
+        assert_eq!(gated.len(), 14);
+    }
+
+    #[test]
+    fn list_gated_operations_with_config() {
+        let gate = ApprovalGate::new(
+            ApprovalGatesConfig {
+                before_commit: true,
+                before_push: Some(false),
+                before_pr: false,
+                before_merge: false,
+            },
+            AutonomyLevel::ApprovalGates,
+        );
+        let gated = gate.list_gated_operations();
+        // Should include: GitCommit (config), all High-level defaults, GitForcePush (Critical)
+        assert!(gated.contains(&DangerousOperation::GitCommit));
+        assert!(!gated.contains(&DangerousOperation::GitPush)); // explicitly false
+        assert!(!gated.contains(&DangerousOperation::CreatePullRequest)); // before_pr=false
+        assert!(gated.contains(&DangerousOperation::GitForcePush)); // Critical
+        assert!(gated.contains(&DangerousOperation::GitMerge)); // High default
+    }
+
+    #[test]
+    fn check_gate_before_push_defaults_to_true() {
+        let gate = ApprovalGate::new(
+            ApprovalGatesConfig {
+                before_commit: false,
+                before_push: None, // defaults to true
+                before_pr: false,
+                before_merge: false,
+            },
+            AutonomyLevel::ApprovalGates,
+        );
+        assert!(gate.requires_approval(DangerousOperation::GitPush));
+    }
+
+    #[test]
+    fn check_gate_non_config_ops_default_by_danger_level() {
+        let gate = ApprovalGate::new(
+            ApprovalGatesConfig::default(),
+            AutonomyLevel::ApprovalGates,
+        );
+        // Low risk ops: no approval
+        assert!(!gate.requires_approval(DangerousOperation::CreateFile));
+        assert!(!gate.requires_approval(DangerousOperation::ModifyFile));
+        // Medium risk ops (not in config): no approval (< High)
+        assert!(!gate.requires_approval(DangerousOperation::DeleteFile));
+        assert!(!gate.requires_approval(DangerousOperation::RunCommand));
+        // High risk ops (not in config): approval required
+        assert!(gate.requires_approval(DangerousOperation::GitBranchDelete));
+        assert!(gate.requires_approval(DangerousOperation::NetworkAccess));
+        assert!(gate.requires_approval(DangerousOperation::InstallPackage));
+        assert!(gate.requires_approval(DangerousOperation::CloseIssue));
+    }
+
+    #[test]
+    fn autonomy_level_default_is_approval_gates() {
+        assert_eq!(AutonomyLevel::default(), AutonomyLevel::ApprovalGates);
+    }
+
+    #[test]
+    fn approval_gates_config_default() {
+        let config = ApprovalGatesConfig::default();
+        assert!(!config.before_commit);
+        assert!(config.before_push.is_none());
+        assert!(!config.before_pr);
+        assert!(!config.before_merge);
+    }
+
+    #[test]
+    fn approval_channel_creates_pair() {
+        let (_tx, _rx) = approval_channel(10);
+        // Just verify it compiles and creates without panic
+    }
+
+    #[tokio::test]
+    async fn interactive_gate_auto_approves_when_not_required() {
+        let (tx, _rx) = approval_channel(10);
+        let gate = InteractiveApprovalGate::new(ApprovalGate::full_auto(), tx);
+
+        let req = ApprovalRequest::simple(DangerousOperation::GitCommit, "commit");
+        let result = gate.request_approval(req).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
+
+    #[tokio::test]
+    async fn interactive_gate_always_approve_remembered() {
+        let (tx, mut rx) = approval_channel(10);
+        let gate = InteractiveApprovalGate::new(ApprovalGate::supervised(), tx);
+
+        // Spawn responder that sends AlwaysApprove
+        tokio::spawn(async move {
+            if let Some((_, response_tx)) = rx.recv().await {
+                response_tx.send(ApprovalResponse::AlwaysApprove).unwrap();
+            }
+        });
+
+        let req = ApprovalRequest::simple(DangerousOperation::GitCommit, "commit");
+        let result = gate.request_approval(req).await;
+        assert!(result.is_ok());
+
+        // Second request should be auto-approved without going through channel
+        let req2 = ApprovalRequest::simple(DangerousOperation::GitCommit, "commit 2");
+        let result2 = gate.request_approval(req2).await;
+        assert!(result2.is_ok());
+        assert!(result2.unwrap());
+    }
+
+    #[tokio::test]
+    async fn interactive_gate_always_deny_remembered() {
+        let (tx, mut rx) = approval_channel(10);
+        let gate = InteractiveApprovalGate::new(ApprovalGate::supervised(), tx);
+
+        tokio::spawn(async move {
+            if let Some((_, response_tx)) = rx.recv().await {
+                response_tx.send(ApprovalResponse::AlwaysDeny).unwrap();
+            }
+        });
+
+        let req = ApprovalRequest::simple(DangerousOperation::GitPush, "push");
+        let result = gate.request_approval(req).await;
+        assert!(result.is_err());
+
+        // Second request should be auto-denied
+        let req2 = ApprovalRequest::simple(DangerousOperation::GitPush, "push 2");
+        let result2 = gate.request_approval(req2).await;
+        assert!(matches!(result2, Err(ApprovalError::Denied)));
+    }
+
+    #[tokio::test]
+    async fn interactive_gate_deny_returns_error() {
+        let (tx, mut rx) = approval_channel(10);
+        let gate = InteractiveApprovalGate::new(ApprovalGate::supervised(), tx);
+
+        tokio::spawn(async move {
+            if let Some((_, response_tx)) = rx.recv().await {
+                response_tx.send(ApprovalResponse::Deny).unwrap();
+            }
+        });
+
+        let req = ApprovalRequest::simple(DangerousOperation::GitCommit, "commit");
+        let result = gate.request_approval(req).await;
+        assert!(matches!(result, Err(ApprovalError::Denied)));
+    }
+
+    #[tokio::test]
+    async fn interactive_gate_channel_closed_error() {
+        let (tx, rx) = approval_channel(10);
+        let gate = InteractiveApprovalGate::new(ApprovalGate::supervised(), tx);
+
+        // Drop receiver so channel is closed
+        drop(rx);
+
+        let req = ApprovalRequest::simple(DangerousOperation::GitCommit, "commit");
+        let result = gate.request_approval(req).await;
+        assert!(matches!(result, Err(ApprovalError::ChannelClosed)));
+    }
+
+    #[test]
+    fn interactive_gate_would_require_approval_with_always_lists() {
+        let (tx, _rx) = approval_channel(10);
+        let gate = InteractiveApprovalGate::new(ApprovalGate::supervised(), tx);
+
+        // Before adding to always lists, should require approval
+        assert!(gate.would_require_approval(DangerousOperation::GitCommit));
+
+        // Add to always_approved
+        {
+            let mut approved = gate.always_approved.lock().unwrap();
+            approved.insert(DangerousOperation::GitCommit);
+        }
+        assert!(!gate.would_require_approval(DangerousOperation::GitCommit));
+
+        // Add to always_denied
+        {
+            let mut denied = gate.always_denied.lock().unwrap();
+            denied.insert(DangerousOperation::GitPush);
+        }
+        assert!(gate.would_require_approval(DangerousOperation::GitPush));
+    }
+
+    #[tokio::test]
+    async fn interactive_gate_approve_single_not_remembered() {
+        let (tx, mut rx) = approval_channel(10);
+        let gate = InteractiveApprovalGate::new(ApprovalGate::supervised(), tx);
+
+        // Respond with single Approve twice
+        tokio::spawn(async move {
+            for _ in 0..2 {
+                if let Some((_, response_tx)) = rx.recv().await {
+                    response_tx.send(ApprovalResponse::Approve).unwrap();
+                }
+            }
+        });
+
+        let req = ApprovalRequest::simple(DangerousOperation::GitCommit, "commit");
+        assert!(gate.request_approval(req).await.unwrap());
+
+        // Second request should still go through channel (not auto-approved)
+        let req2 = ApprovalRequest::simple(DangerousOperation::GitCommit, "commit 2");
+        assert!(gate.request_approval(req2).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn interactive_gate_response_rx_dropped_returns_channel_closed() {
+        let (tx, mut rx) = approval_channel(10);
+        let gate = InteractiveApprovalGate::new(ApprovalGate::supervised(), tx);
+
+        // Receive the request but drop the response sender
+        tokio::spawn(async move {
+            if let Some((_req, response_tx)) = rx.recv().await {
+                drop(response_tx);
+            }
+        });
+
+        let req = ApprovalRequest::simple(DangerousOperation::GitCommit, "commit");
+        let result = gate.request_approval(req).await;
+        assert!(matches!(result, Err(ApprovalError::ChannelClosed)));
+    }
+
+    #[test]
+    fn approval_request_format_with_details_no_files() {
+        let req = ApprovalRequest::new(
+            DangerousOperation::RunCommand,
+            "Run tests",
+            ApprovalContext {
+                task_id: Some(Uuid::new_v4()),
+                agent_id: None,
+                affected_files: vec![],
+                details: "cargo test".to_string(),
+            },
+        );
+        let display = req.format_for_display();
+        assert!(display.contains("Run shell command"));
+        assert!(display.contains("Run tests"));
+        assert!(display.contains("Details: cargo test"));
+        assert!(!display.contains("Affected files"));
+    }
+
+    #[test]
+    fn auto_approval_gate_approval_gates_mode_non_critical_passes() {
+        // ApprovalGates mode with config requiring approval for GitPush (High, not Critical)
+        let gate = AutoApprovalGate::new(ApprovalGate::new(
+            ApprovalGatesConfig {
+                before_commit: false,
+                before_push: Some(true),
+                before_pr: false,
+                before_merge: false,
+            },
+            AutonomyLevel::ApprovalGates,
+        ));
+        // GitPush requires approval but is High (not Critical), so auto-gate allows it
+        assert!(gate.check(DangerousOperation::GitPush).is_ok());
+    }
+
+    #[test]
+    fn check_gate_before_merge_false() {
+        let gate = ApprovalGate::new(
+            ApprovalGatesConfig {
+                before_commit: false,
+                before_push: Some(false),
+                before_pr: false,
+                before_merge: false,
+            },
+            AutonomyLevel::ApprovalGates,
+        );
+        assert!(!gate.requires_approval(DangerousOperation::MergePullRequest));
+    }
+
+    #[test]
+    fn approval_request_danger_level_matches_operation() {
+        let req = ApprovalRequest::simple(DangerousOperation::GitForcePush, "force push");
+        assert_eq!(req.danger_level, DangerLevel::Critical);
+
+        let req2 = ApprovalRequest::simple(DangerousOperation::CreateFile, "create");
+        assert_eq!(req2.danger_level, DangerLevel::Low);
+    }
 }

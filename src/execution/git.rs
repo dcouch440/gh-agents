@@ -1649,4 +1649,296 @@ their version
         let commit = git.complete_merge().unwrap();
         assert!(!commit.hash.is_empty());
     }
+
+    fn setup_test_repo() -> (TempDir, PathBuf) {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().to_path_buf();
+        Command::new("git").args(["init"]).current_dir(&repo_path).output().unwrap();
+        Command::new("git").args(["config", "user.email", "test@test.com"]).current_dir(&repo_path).output().unwrap();
+        Command::new("git").args(["config", "user.name", "Test"]).current_dir(&repo_path).output().unwrap();
+        (temp_dir, repo_path)
+    }
+
+    fn make_initial_commit(repo_path: &Path) {
+        std::fs::write(repo_path.join("init.txt"), "init").unwrap();
+        Command::new("git").args(["add", "."]).current_dir(repo_path).output().unwrap();
+        Command::new("git").args(["commit", "-m", "initial"]).current_dir(repo_path).output().unwrap();
+    }
+
+    #[test]
+    fn current_branch_returns_default() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let branch = git.current_branch().unwrap();
+        assert!(branch.is_some());
+        // Default branch is either "main" or "master"
+        let name = branch.unwrap();
+        assert!(name == "main" || name == "master");
+    }
+
+    #[test]
+    fn list_branches_includes_created() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        git.create_branch("branch-a").unwrap();
+        git.create_branch("branch-b").unwrap();
+
+        let branches = git.list_branches().unwrap();
+        assert!(branches.contains(&"branch-a".to_string()));
+        assert!(branches.contains(&"branch-b".to_string()));
+        assert!(branches.len() >= 3); // default + a + b
+    }
+
+    #[test]
+    fn delete_branch_removes_it() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        git.create_branch("to-delete").unwrap();
+
+        let branches_before = git.list_branches().unwrap();
+        assert!(branches_before.contains(&"to-delete".to_string()));
+
+        git.delete_branch("to-delete").unwrap();
+
+        let branches_after = git.list_branches().unwrap();
+        assert!(!branches_after.contains(&"to-delete".to_string()));
+    }
+
+    #[test]
+    fn delete_current_branch_fails() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let current = git.current_branch().unwrap().unwrap();
+        let result = git.delete_branch(&current);
+        assert!(matches!(result, Err(GitError::NotAllowed { .. })));
+    }
+
+    #[test]
+    fn add_files_stages_specific_files() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        std::fs::write(repo_path.join("a.txt"), "a").unwrap();
+        std::fs::write(repo_path.join("b.txt"), "b").unwrap();
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        git.add_files(&["a.txt"]).unwrap();
+
+        let status = git.status().unwrap();
+        assert_eq!(status.staged.len(), 1);
+        assert_eq!(status.staged[0].path, PathBuf::from("a.txt"));
+        // b.txt should still be untracked
+        assert!(status.untracked.contains(&PathBuf::from("b.txt")));
+    }
+
+    #[test]
+    fn add_files_empty_fails() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let result = git.add_files(&[]);
+        assert!(matches!(result, Err(GitError::NotAllowed { .. })));
+    }
+
+    #[test]
+    fn add_all_stages_everything() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        std::fs::write(repo_path.join("a.txt"), "a").unwrap();
+        std::fs::write(repo_path.join("b.txt"), "b").unwrap();
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        git.add_all().unwrap();
+
+        let status = git.status().unwrap();
+        assert_eq!(status.staged.len(), 2);
+        assert!(status.untracked.is_empty());
+    }
+
+    #[test]
+    fn diff_stat_shows_changes() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        // Modify tracked file
+        std::fs::write(repo_path.join("init.txt"), "modified").unwrap();
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let stat = git.diff_stat().unwrap();
+        assert!(stat.contains("init.txt"));
+    }
+
+    #[test]
+    fn diff_files_between_commits() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path.clone()));
+
+        // Get first commit hash
+        let first = git.run_git(&["rev-parse", "HEAD"]).unwrap().trim().to_string();
+
+        // Make second commit
+        std::fs::write(repo_path.join("new.txt"), "new").unwrap();
+        git.add_all().unwrap();
+        git.commit("add new file").unwrap();
+
+        let second = git.run_git(&["rev-parse", "HEAD"]).unwrap().trim().to_string();
+
+        let files = git.diff_files(&first, &second).unwrap();
+        assert!(files.contains(&"new.txt".to_string()));
+    }
+
+    #[test]
+    fn amend_commit_changes_message() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let amended = git.amend_commit(Some("amended message")).unwrap();
+        assert_eq!(amended.message, "amended message");
+    }
+
+    #[test]
+    fn amend_commit_no_edit() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let amended = git.amend_commit(None).unwrap();
+        assert_eq!(amended.message, "initial");
+    }
+
+    #[test]
+    fn reset_soft_keeps_changes_staged() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path.clone()));
+
+        // Make second commit
+        std::fs::write(repo_path.join("second.txt"), "second").unwrap();
+        git.add_all().unwrap();
+        git.commit("second commit").unwrap();
+
+        // Soft reset back one commit
+        git.reset_soft("HEAD~1").unwrap();
+
+        let status = git.status().unwrap();
+        // File should be staged after soft reset
+        assert!(!status.staged.is_empty());
+        assert!(status.staged.iter().any(|f| f.path == PathBuf::from("second.txt")));
+    }
+
+    #[test]
+    fn reset_mixed_unstages_changes() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path.clone()));
+
+        // Make second commit
+        std::fs::write(repo_path.join("second.txt"), "second").unwrap();
+        git.add_all().unwrap();
+        git.commit("second commit").unwrap();
+
+        // Mixed reset back one commit
+        git.reset("HEAD~1").unwrap();
+
+        let status = git.status().unwrap();
+        // File should be untracked (not staged) after mixed reset
+        assert!(status.staged.is_empty());
+        assert!(status.untracked.contains(&PathBuf::from("second.txt")));
+    }
+
+    #[test]
+    fn has_unpushed_commits_no_upstream() {
+        let (_tmp, repo_path) = setup_test_repo();
+        make_initial_commit(&repo_path);
+
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        // No upstream configured, should return false
+        let result = git.has_unpushed_commits().unwrap();
+        assert!(!result);
+    }
+
+    #[test]
+    fn parse_branch_line_with_tracking() {
+        let (_tmp, repo_path) = setup_test_repo();
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+
+        let result = git.parse_branch_line("## main...origin/main");
+        assert_eq!(result, Some("main".to_string()));
+    }
+
+    #[test]
+    fn parse_branch_line_no_tracking() {
+        let (_tmp, repo_path) = setup_test_repo();
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+
+        let result = git.parse_branch_line("## feature-branch");
+        assert_eq!(result, Some("feature-branch".to_string()));
+    }
+
+    #[test]
+    fn parse_branch_line_detached_head() {
+        let (_tmp, repo_path) = setup_test_repo();
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+
+        let result = git.parse_branch_line("## HEAD (no branch)");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn parse_change_type_all_variants() {
+        assert_eq!(GitOps::parse_change_type('A'), ChangeType::Added);
+        assert_eq!(GitOps::parse_change_type('M'), ChangeType::Modified);
+        assert_eq!(GitOps::parse_change_type('D'), ChangeType::Deleted);
+        assert_eq!(GitOps::parse_change_type('R'), ChangeType::Renamed);
+        assert_eq!(GitOps::parse_change_type('C'), ChangeType::Copied);
+        assert_eq!(GitOps::parse_change_type('X'), ChangeType::Unknown);
+    }
+
+    #[test]
+    fn not_a_repo_error() {
+        let tmp = TempDir::new().unwrap();
+        // Don't init git
+        let git = GitOps::new(ExecutionContext::new(tmp.path().to_path_buf()));
+        let result = git.status();
+        assert!(matches!(result, Err(GitError::NotARepo { .. })));
+    }
+
+    #[test]
+    fn validate_commit_message_empty_fails() {
+        let (_tmp, repo_path) = setup_test_repo();
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+        let result = git.validate_commit_message("   ");
+        assert!(matches!(result, Err(GitError::NotAllowed { .. })));
+    }
+
+    #[test]
+    fn validate_branch_name_edge_cases() {
+        let (_tmp, repo_path) = setup_test_repo();
+        let git = GitOps::new(ExecutionContext::new(repo_path));
+
+        assert!(git.validate_branch_name("").is_err());
+        assert!(git.validate_branch_name("has~tilde").is_err());
+        assert!(git.validate_branch_name("has^caret").is_err());
+        assert!(git.validate_branch_name("has:colon").is_err());
+        assert!(git.validate_branch_name("ends.").is_err());
+        assert!(git.validate_branch_name("ends/").is_err());
+        assert!(git.validate_branch_name("has@{ref").is_err());
+        assert!(git.validate_branch_name("has[bracket").is_err());
+        assert!(git.validate_branch_name("ok-name").is_ok());
+    }
 }

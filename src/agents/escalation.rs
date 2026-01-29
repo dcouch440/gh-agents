@@ -592,4 +592,307 @@ mod tests {
         assert_eq!(needing_human.len(), 1);
         assert!(needing_human.contains(&task1));
     }
+
+    #[test]
+    fn custom_policy_new() {
+        let policy = EscalationPolicy::new(5, 3, 2);
+        assert_eq!(policy.utility_retries, 5);
+        assert_eq!(policy.worker_retries, 3);
+        assert_eq!(policy.orchestrator_retries, 2);
+    }
+
+    #[test]
+    fn max_retries_for_each_tier() {
+        let policy = EscalationPolicy::new(4, 7, 2);
+        assert_eq!(policy.max_retries_for_tier(AgentTier::Utility), 4);
+        assert_eq!(policy.max_retries_for_tier(AgentTier::Worker), 7);
+        assert_eq!(policy.max_retries_for_tier(AgentTier::Orchestrator), 2);
+    }
+
+    #[test]
+    fn next_tier_each_level() {
+        let policy = EscalationPolicy::default();
+        assert_eq!(policy.next_tier(AgentTier::Utility), Some(AgentTier::Worker));
+        assert_eq!(
+            policy.next_tier(AgentTier::Worker),
+            Some(AgentTier::Orchestrator)
+        );
+        assert_eq!(policy.next_tier(AgentTier::Orchestrator), None);
+    }
+
+    #[test]
+    fn escalation_path_from_worker() {
+        let policy = EscalationPolicy::default();
+        let path = policy.escalation_path(AgentTier::Worker);
+        assert_eq!(path, vec![AgentTier::Worker, AgentTier::Orchestrator]);
+    }
+
+    #[test]
+    fn escalation_path_from_orchestrator() {
+        let policy = EscalationPolicy::default();
+        let path = policy.escalation_path(AgentTier::Orchestrator);
+        assert_eq!(path, vec![AgentTier::Orchestrator]);
+    }
+
+    #[test]
+    fn evaluate_worker_retry_then_escalate() {
+        let policy = EscalationPolicy::default(); // worker_retries = 2
+        assert_eq!(
+            policy.evaluate(AgentTier::Worker, 1),
+            EscalationDecision::Retry
+        );
+        assert_eq!(
+            policy.evaluate(AgentTier::Worker, 2),
+            EscalationDecision::Retry
+        );
+        assert_eq!(
+            policy.evaluate(AgentTier::Worker, 3),
+            EscalationDecision::Escalate(AgentTier::Orchestrator)
+        );
+    }
+
+    #[test]
+    fn evaluate_at_exact_retry_boundary() {
+        let policy = EscalationPolicy::new(1, 1, 1);
+        // failure_count == max_retries => Retry
+        assert_eq!(
+            policy.evaluate(AgentTier::Utility, 1),
+            EscalationDecision::Retry
+        );
+        // failure_count > max_retries => Escalate
+        assert_eq!(
+            policy.evaluate(AgentTier::Utility, 2),
+            EscalationDecision::Escalate(AgentTier::Worker)
+        );
+    }
+
+    #[test]
+    fn task_escalation_state_new() {
+        let id = Uuid::new_v4();
+        let state = TaskEscalationState::new(id, AgentTier::Worker);
+        assert_eq!(state.task_id, id);
+        assert_eq!(state.current_tier, AgentTier::Worker);
+        assert_eq!(state.failure_count_at_tier, 0);
+        assert_eq!(state.total_failure_count, 0);
+        assert!(state.tier_history.is_empty());
+    }
+
+    #[test]
+    fn record_failure_creates_and_updates_tier_history() {
+        let mut state = TaskEscalationState::new(Uuid::new_v4(), AgentTier::Utility);
+
+        // First failure creates a new TierAttempt
+        state.record_failure("first error");
+        assert_eq!(state.failure_count_at_tier, 1);
+        assert_eq!(state.total_failure_count, 1);
+        assert_eq!(state.tier_history.len(), 1);
+        assert_eq!(state.tier_history[0].attempts, 1);
+        assert_eq!(state.tier_history[0].final_error, "first error");
+
+        // Second failure at same tier updates existing TierAttempt
+        state.record_failure("second error");
+        assert_eq!(state.failure_count_at_tier, 2);
+        assert_eq!(state.total_failure_count, 2);
+        assert_eq!(state.tier_history.len(), 1); // still one entry
+        assert_eq!(state.tier_history[0].attempts, 2);
+        assert_eq!(state.tier_history[0].final_error, "second error");
+    }
+
+    #[test]
+    fn escalate_to_resets_failure_count() {
+        let mut state = TaskEscalationState::new(Uuid::new_v4(), AgentTier::Utility);
+        state.record_failure("err");
+        state.record_failure("err");
+        assert_eq!(state.failure_count_at_tier, 2);
+
+        state.escalate_to(AgentTier::Worker);
+        assert_eq!(state.current_tier, AgentTier::Worker);
+        assert_eq!(state.failure_count_at_tier, 0);
+        // total is preserved
+        assert_eq!(state.total_failure_count, 2);
+    }
+
+    #[test]
+    fn on_task_failed_auto_creates_state() {
+        let mut manager = EscalationManager::with_default_policy();
+        let task_id = Uuid::new_v4();
+        // Don't call track_task - on_task_failed should create state
+        let decision = manager.on_task_failed(task_id, AgentTier::Worker, "err");
+        assert_eq!(decision, EscalationDecision::Retry);
+        assert!(manager.get_state(&task_id).is_some());
+    }
+
+    #[test]
+    fn on_task_failed_tier_mismatch_resets() {
+        let mut manager = EscalationManager::with_default_policy();
+        let task_id = Uuid::new_v4();
+        manager.track_task(task_id, AgentTier::Utility);
+
+        // Call with a different tier than tracked
+        let decision = manager.on_task_failed(task_id, AgentTier::Worker, "err");
+        assert_eq!(decision, EscalationDecision::Retry);
+        let state = manager.get_state(&task_id).unwrap();
+        assert_eq!(state.current_tier, AgentTier::Worker);
+    }
+
+    #[test]
+    fn on_task_completed_removes_state() {
+        let mut manager = EscalationManager::with_default_policy();
+        let task_id = Uuid::new_v4();
+        manager.track_task(task_id, AgentTier::Utility);
+        assert!(manager.get_state(&task_id).is_some());
+
+        manager.on_task_completed(task_id);
+        assert!(manager.get_state(&task_id).is_none());
+    }
+
+    #[test]
+    fn on_task_completed_nonexistent_is_noop() {
+        let mut manager = EscalationManager::with_default_policy();
+        // Should not panic
+        manager.on_task_completed(Uuid::new_v4());
+    }
+
+    #[test]
+    fn clear_task_removes_state() {
+        let mut manager = EscalationManager::with_default_policy();
+        let task_id = Uuid::new_v4();
+        manager.track_task(task_id, AgentTier::Utility);
+        manager.clear_task(&task_id);
+        assert!(manager.get_state(&task_id).is_none());
+    }
+
+    #[test]
+    fn clear_task_nonexistent_is_noop() {
+        let mut manager = EscalationManager::with_default_policy();
+        manager.clear_task(&Uuid::new_v4());
+    }
+
+    #[test]
+    fn create_human_review_request_nonexistent_returns_none() {
+        let manager = EscalationManager::with_default_policy();
+        assert!(manager
+            .create_human_review_request(Uuid::new_v4(), "t", "d")
+            .is_none());
+    }
+
+    #[test]
+    fn create_human_review_request_no_history_uses_unknown() {
+        let mut manager = EscalationManager::with_default_policy();
+        let task_id = Uuid::new_v4();
+        manager.track_task(task_id, AgentTier::Utility);
+        // State exists but no failures recorded, so tier_history is empty
+        let req = manager
+            .create_human_review_request(task_id, "Title", "Desc")
+            .unwrap();
+        assert_eq!(req.reason, "Unknown failure");
+        assert_eq!(req.title, "Title");
+        assert_eq!(req.description, "Desc");
+        assert_eq!(req.total_attempts, 0);
+    }
+
+    #[test]
+    fn create_human_review_request_with_history() {
+        let mut manager = EscalationManager::new(EscalationPolicy::new(0, 0, 0));
+        let task_id = Uuid::new_v4();
+        manager.on_task_failed(task_id, AgentTier::Utility, "util err");
+        manager.on_task_failed(task_id, AgentTier::Worker, "work err");
+
+        let req = manager
+            .create_human_review_request(task_id, "T", "D")
+            .unwrap();
+        assert!(req.reason.contains("work err"));
+        assert_eq!(req.escalation_history.len(), 2);
+        assert_eq!(req.total_attempts, 2);
+    }
+
+    #[test]
+    fn human_action_mark_complete_removes_task() {
+        let mut manager = EscalationManager::with_default_policy();
+        let task_id = Uuid::new_v4();
+        manager.track_task(task_id, AgentTier::Utility);
+
+        manager
+            .apply_human_action(task_id, HumanAction::MarkComplete)
+            .unwrap();
+        assert!(manager.get_state(&task_id).is_none());
+    }
+
+    #[test]
+    fn human_action_retry_with_guidance() {
+        let mut manager = EscalationManager::with_default_policy();
+        let task_id = Uuid::new_v4();
+        manager.track_task(task_id, AgentTier::Orchestrator);
+        manager.on_task_failed(task_id, AgentTier::Orchestrator, "err");
+
+        manager
+            .apply_human_action(
+                task_id,
+                HumanAction::RetryWithGuidance {
+                    tier: AgentTier::Utility,
+                    guidance: "try a different approach".to_string(),
+                },
+            )
+            .unwrap();
+
+        let state = manager.get_state(&task_id).unwrap();
+        assert_eq!(state.current_tier, AgentTier::Utility);
+        assert_eq!(state.failure_count_at_tier, 0);
+    }
+
+    #[test]
+    fn apply_human_action_task_not_found() {
+        let mut manager = EscalationManager::with_default_policy();
+        let task_id = Uuid::new_v4();
+        let result = manager.apply_human_action(task_id, HumanAction::Cancel);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, EscalationError::TaskNotFound(_)));
+        assert!(err.to_string().contains("task not found"));
+    }
+
+    #[test]
+    fn human_review_summary_empty_when_no_tasks() {
+        let manager = EscalationManager::with_default_policy();
+        assert!(manager.human_review_summary().is_empty());
+    }
+
+    #[test]
+    fn human_review_summary_includes_correct_fields() {
+        let mut manager = EscalationManager::new(EscalationPolicy::new(0, 0, 0));
+        let task_id = Uuid::new_v4();
+
+        manager.on_task_failed(task_id, AgentTier::Utility, "u err");
+        manager.on_task_failed(task_id, AgentTier::Worker, "w err");
+        manager.on_task_failed(task_id, AgentTier::Orchestrator, "o err");
+
+        let summaries = manager.human_review_summary();
+        assert_eq!(summaries.len(), 1);
+        let s = &summaries[0];
+        assert_eq!(s.task_id, task_id);
+        assert_eq!(s.total_failures, 3);
+        assert_eq!(s.last_error, "o err");
+        assert_eq!(s.tiers_attempted.len(), 3);
+    }
+
+    #[test]
+    fn human_review_summary_excludes_non_human_tasks() {
+        let mut manager = EscalationManager::with_default_policy();
+        let task_id = Uuid::new_v4();
+        manager.track_task(task_id, AgentTier::Utility);
+        // No failures, so not needing human
+        assert!(manager.human_review_summary().is_empty());
+    }
+
+    #[test]
+    fn tasks_needing_human_empty() {
+        let manager = EscalationManager::with_default_policy();
+        assert!(manager.tasks_needing_human().is_empty());
+    }
+
+    #[test]
+    fn get_state_nonexistent_returns_none() {
+        let manager = EscalationManager::with_default_policy();
+        assert!(manager.get_state(&Uuid::new_v4()).is_none());
+    }
 }

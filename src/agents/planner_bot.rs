@@ -773,4 +773,256 @@ Done."#;
         assert!(md.contains("## Milestones"));
         assert!(md.contains("### M1: Foundation"));
     }
+
+    // Helper to create a PlannerBot with a mock provider
+    fn mock_bot() -> PlannerBot<impl LLMProvider> {
+        use crate::llm::{LLMError, LLMRequest, LLMResponse, StreamChunk};
+        use async_trait::async_trait;
+        use futures::Stream;
+        use std::pin::Pin;
+
+        struct MockProvider;
+
+        #[async_trait]
+        impl LLMProvider for MockProvider {
+            async fn send_message(&self, _req: LLMRequest) -> Result<LLMResponse, LLMError> {
+                unimplemented!()
+            }
+            async fn send_message_stream(
+                &self,
+                _req: LLMRequest,
+            ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError>
+            {
+                unimplemented!()
+            }
+            fn provider_name(&self) -> &'static str {
+                "mock"
+            }
+            fn model_id(&self) -> &str {
+                "mock"
+            }
+        }
+
+        PlannerBot::new(Arc::new(MockProvider), "mock")
+    }
+
+    #[test]
+    fn system_prompt_discovery_phase() {
+        let bot = mock_bot();
+        let session = bot.start_session("My App");
+        let prompt = bot.system_prompt(&session);
+        assert!(prompt.contains("CURRENT PHASE: Discovery"));
+        assert!(prompt.contains("target users"));
+        assert!(prompt.contains("vision"));
+        assert!(prompt.contains("problem_statement"));
+        assert!(prompt.contains("My App"));
+    }
+
+    #[test]
+    fn system_prompt_scoping_phase() {
+        let bot = mock_bot();
+        let mut session = bot.start_session("My App");
+        session.phase = PlanningPhase::Scoping;
+        let prompt = bot.system_prompt(&session);
+        assert!(prompt.contains("CURRENT PHASE: Scoping"));
+        assert!(prompt.contains("success_criteria"));
+        assert!(prompt.contains("scope"));
+    }
+
+    #[test]
+    fn system_prompt_technical_phase() {
+        let bot = mock_bot();
+        let mut session = bot.start_session("My App");
+        session.phase = PlanningPhase::Technical;
+        let prompt = bot.system_prompt(&session);
+        assert!(prompt.contains("CURRENT PHASE: Technical"));
+        assert!(prompt.contains("technical_decisions"));
+        assert!(prompt.contains("data_models"));
+    }
+
+    #[test]
+    fn system_prompt_milestones_phase() {
+        let bot = mock_bot();
+        let mut session = bot.start_session("My App");
+        session.phase = PlanningPhase::Milestones;
+        let prompt = bot.system_prompt(&session);
+        assert!(prompt.contains("CURRENT PHASE: Milestones"));
+        assert!(prompt.contains("milestones"));
+        assert!(prompt.contains("deliverables"));
+    }
+
+    #[test]
+    fn system_prompt_review_phase() {
+        let bot = mock_bot();
+        let mut session = bot.start_session("My App");
+        session.phase = PlanningPhase::Review;
+        let prompt = bot.system_prompt(&session);
+        assert!(prompt.contains("CURRENT PHASE: Review"));
+        assert!(prompt.contains("PRD approved"));
+    }
+
+    #[test]
+    fn process_response_discovery_to_scoping() {
+        let bot = mock_bot();
+        let mut session = bot.start_session("Test");
+        assert_eq!(session.phase, PlanningPhase::Discovery);
+        bot.process_response(&mut session, "Great! Moving to scoping now.");
+        assert_eq!(session.phase, PlanningPhase::Scoping);
+    }
+
+    #[test]
+    fn process_response_scoping_to_technical() {
+        let bot = mock_bot();
+        let mut session = bot.start_session("Test");
+        session.phase = PlanningPhase::Scoping;
+        bot.process_response(&mut session, "Scope defined. Moving to technical.");
+        assert_eq!(session.phase, PlanningPhase::Technical);
+    }
+
+    #[test]
+    fn process_response_technical_to_milestones() {
+        let bot = mock_bot();
+        let mut session = bot.start_session("Test");
+        session.phase = PlanningPhase::Technical;
+        bot.process_response(&mut session, "Decisions made. Moving to milestones.");
+        assert_eq!(session.phase, PlanningPhase::Milestones);
+    }
+
+    #[test]
+    fn process_response_milestones_to_review() {
+        let bot = mock_bot();
+        let mut session = bot.start_session("Test");
+        session.phase = PlanningPhase::Milestones;
+        bot.process_response(&mut session, "All set. Moving to review.");
+        assert_eq!(session.phase, PlanningPhase::Review);
+    }
+
+    #[test]
+    fn process_response_no_transition_on_wrong_phase() {
+        let bot = mock_bot();
+        let mut session = bot.start_session("Test");
+        // Discovery phase should not respond to "moving to technical"
+        bot.process_response(&mut session, "Moving to technical.");
+        assert_eq!(session.phase, PlanningPhase::Discovery);
+    }
+
+    #[test]
+    fn process_response_extracts_json_and_updates_prd() {
+        let bot = mock_bot();
+        let mut session = bot.start_session("Test");
+        let response = "Here is the vision:\n```json\n{\"vision\": \"Build X\", \"target_users\": \"Devs\"}\n```\nMoving to scoping.";
+        bot.process_response(&mut session, response);
+        assert_eq!(session.prd.vision, "Build X");
+        assert_eq!(session.prd.target_users, "Devs");
+        assert_eq!(session.phase, PlanningPhase::Scoping);
+    }
+
+    #[test]
+    fn build_messages_maps_roles_correctly() {
+        let bot = mock_bot();
+        let mut session = bot.start_session("Test");
+        session.history.push(PlanningMessage {
+            role: PlanningMessageRole::User,
+            content: "Hello".into(),
+            phase: PlanningPhase::Discovery,
+            timestamp: Utc::now(),
+        });
+        session.history.push(PlanningMessage {
+            role: PlanningMessageRole::Planner,
+            content: "Hi there".into(),
+            phase: PlanningPhase::Discovery,
+            timestamp: Utc::now(),
+        });
+        session.history.push(PlanningMessage {
+            role: PlanningMessageRole::User,
+            content: "More info".into(),
+            phase: PlanningPhase::Discovery,
+            timestamp: Utc::now(),
+        });
+
+        let messages = bot.build_messages(&session);
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[0].role, crate::llm::Role::User);
+        assert_eq!(messages[1].role, crate::llm::Role::Assistant);
+        assert_eq!(messages[2].role, crate::llm::Role::User);
+        assert_eq!(messages[0].content, "Hello");
+        assert_eq!(messages[1].content, "Hi there");
+    }
+
+    #[test]
+    fn build_messages_empty_history() {
+        let bot = mock_bot();
+        let session = bot.start_session("Test");
+        let messages = bot.build_messages(&session);
+        assert!(messages.is_empty());
+    }
+
+    #[test]
+    fn export_markdown_with_data_models() {
+        let bot = mock_bot();
+        let mut prd = PRDDocument::new("DataApp");
+        prd.data_models.push(DataModelSketch {
+            name: "Task".into(),
+            fields: vec!["id: UUID".into(), "title: String".into()],
+            description: "A work item".into(),
+        });
+
+        let md = bot.export_markdown(&prd);
+        assert!(md.contains("## Data Models"));
+        assert!(md.contains("### Task"));
+        assert!(md.contains("A work item"));
+        assert!(md.contains("- id: UUID"));
+        assert!(md.contains("- title: String"));
+    }
+
+    #[test]
+    fn export_markdown_with_target_users() {
+        let bot = mock_bot();
+        let mut prd = PRDDocument::new("UserApp");
+        prd.target_users = "Enterprise developers".into();
+
+        let md = bot.export_markdown(&prd);
+        assert!(md.contains("## Target Users"));
+        assert!(md.contains("Enterprise developers"));
+    }
+
+    #[test]
+    fn export_markdown_with_milestone_dependencies() {
+        let bot = mock_bot();
+        let mut prd = PRDDocument::new("DepApp");
+        prd.milestones.push(MilestoneSpec {
+            title: "M2".into(),
+            description: "Second phase".into(),
+            deliverables: vec!["API".into(), "Docs".into()],
+            dependencies: vec!["M1".into()],
+        });
+
+        let md = bot.export_markdown(&prd);
+        assert!(md.contains("**Dependencies:** M1"));
+        assert!(md.contains("- API"));
+        assert!(md.contains("- Docs"));
+    }
+
+    #[test]
+    fn export_markdown_empty_prd_has_title_and_status() {
+        let bot = mock_bot();
+        let prd = PRDDocument::new("EmptyProject");
+        let md = bot.export_markdown(&prd);
+        assert!(md.contains("# EmptyProject"));
+        assert!(md.contains("**Status:**"));
+        assert!(md.contains("**Scale:**"));
+        // Should not contain optional sections
+        assert!(!md.contains("## Vision"));
+        assert!(!md.contains("## Data Models"));
+    }
+
+    #[test]
+    fn system_prompt_contains_persona() {
+        let bot = mock_bot();
+        let session = bot.start_session("Test");
+        let prompt = bot.system_prompt(&session);
+        assert!(prompt.contains("Planner Bot"));
+        assert!(prompt.contains("Methodical"));
+        assert!(prompt.contains("Inquisitive"));
+    }
 }
