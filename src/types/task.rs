@@ -183,4 +183,147 @@ mod tests {
     fn priority_default_is_normal() {
         assert_eq!(Priority::default(), Priority::Normal);
     }
+
+    #[test]
+    fn task_id_display_formatting() {
+        let uuid = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        let id = TaskId(uuid);
+        assert_eq!(id.to_string(), "550e8400-e29b-41d4-a716-446655440000");
+    }
+
+    #[test]
+    fn task_id_default() {
+        let id = TaskId::default();
+        // Should produce a valid UUID
+        assert!(!id.0.is_nil());
+    }
+
+    #[test]
+    fn slice_id_new_uniqueness() {
+        let a = SliceId::new();
+        let b = SliceId::new();
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn slice_id_default() {
+        let id = SliceId::default();
+        assert!(!id.0.is_nil());
+    }
+
+    #[test]
+    fn task_new_defaults() {
+        let task = Task::new("Test task", super::super::agent::AgentTier::Worker);
+        assert_eq!(task.title, "Test task");
+        assert_eq!(task.description, "");
+        assert_eq!(task.status, TaskStatus::Pending);
+        assert_eq!(task.priority, Priority::Normal);
+        assert!(task.context_files.is_empty());
+        assert!(task.metadata.is_none());
+        assert!(task.depends_on.is_empty());
+        assert!(task.slice_id.is_none());
+        assert!(task.assigned_agent.is_none());
+    }
+
+    #[test]
+    fn task_with_dependency() {
+        let dep = TaskId::new();
+        let task =
+            Task::new("t", super::super::agent::AgentTier::Worker).with_dependency(dep.clone());
+        assert_eq!(task.depends_on.len(), 1);
+        assert_eq!(task.depends_on[0], dep);
+    }
+
+    #[test]
+    fn task_with_dependencies_replaces() {
+        let dep1 = TaskId::new();
+        let dep2 = TaskId::new();
+        let task = Task::new("t", super::super::agent::AgentTier::Worker)
+            .with_dependency(TaskId::new())
+            .with_dependencies(vec![dep1.clone(), dep2.clone()]);
+        assert_eq!(task.depends_on.len(), 2);
+        assert_eq!(task.depends_on[0], dep1);
+    }
+
+    #[test]
+    fn task_status_serde_roundtrip() {
+        let variants = [
+            TaskStatus::Pending,
+            TaskStatus::InProgress,
+            TaskStatus::Review,
+            TaskStatus::Completed,
+            TaskStatus::Failed,
+        ];
+        for v in &variants {
+            let json = serde_json::to_string(v).unwrap();
+            let parsed: TaskStatus = serde_json::from_str(&json).unwrap();
+            assert_eq!(*v, parsed);
+        }
+    }
+
+    #[test]
+    fn priority_serde_roundtrip() {
+        let variants = [
+            Priority::Low,
+            Priority::Normal,
+            Priority::High,
+            Priority::Urgent,
+        ];
+        for v in &variants {
+            let json = serde_json::to_string(v).unwrap();
+            let parsed: Priority = serde_json::from_str(&json).unwrap();
+            assert_eq!(*v, parsed);
+        }
+    }
+
+    #[test]
+    fn task_event_type_serde_roundtrip() {
+        let variants = [
+            TaskEventType::Created,
+            TaskEventType::Assigned,
+            TaskEventType::Started,
+            TaskEventType::ProgressUpdate,
+            TaskEventType::ContextRequested,
+            TaskEventType::SubmittedForReview,
+            TaskEventType::ReviewFeedback,
+            TaskEventType::Completed,
+            TaskEventType::Failed,
+            TaskEventType::Cancelled,
+            TaskEventType::Escalated,
+        ];
+        for v in &variants {
+            let json = serde_json::to_string(v).unwrap();
+            let parsed: TaskEventType = serde_json::from_str(&json).unwrap();
+            assert_eq!(*v, parsed);
+        }
+    }
+
+    #[test]
+    fn task_event_construction() {
+        let event = TaskEvent {
+            id: Uuid::new_v4(),
+            task_id: TaskId::new(),
+            event_type: TaskEventType::Created,
+            agent_id: None,
+            details: "created".to_string(),
+            timestamp: chrono::Utc::now(),
+        };
+        assert_eq!(event.event_type, TaskEventType::Created);
+        assert!(event.agent_id.is_none());
+    }
+
+    #[test]
+    fn vertical_slice_construction() {
+        let slice = VerticalSlice {
+            id: SliceId::new(),
+            ticket_id: Uuid::new_v4(),
+            title: "Slice 1".to_string(),
+            description: "desc".to_string(),
+            tasks: vec![TaskId::new()],
+            status: TaskStatus::Pending,
+            created_at: chrono::Utc::now(),
+        };
+        assert_eq!(slice.title, "Slice 1");
+        assert_eq!(slice.tasks.len(), 1);
+    }
 }

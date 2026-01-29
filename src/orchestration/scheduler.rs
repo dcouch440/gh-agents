@@ -442,6 +442,26 @@ mod task_scheduler_tests {
         assert_eq!(config.batch_size, 10);
         assert_eq!(config.agent_wait_timeout_ms, 1000);
     }
+
+    #[test]
+    fn scheduler_config_default_values() {
+        let config = SchedulerConfig::default();
+        assert_eq!(config.poll_interval_ms, 100);
+        assert_eq!(config.batch_size, 5);
+        assert_eq!(config.agent_wait_timeout_ms, 500);
+    }
+
+    #[test]
+    fn scheduler_error_display() {
+        let e = SchedulerError::Stopped;
+        assert_eq!(e.to_string(), "scheduler stopped");
+
+        let e2 = SchedulerError::AgentPoolError("no agents".into());
+        assert!(e2.to_string().contains("no agents"));
+
+        let e3 = SchedulerError::DatabaseError("db down".into());
+        assert!(e3.to_string().contains("db down"));
+    }
 }
 
 #[cfg(test)]

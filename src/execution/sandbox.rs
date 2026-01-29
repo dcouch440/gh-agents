@@ -435,4 +435,127 @@ mod tests {
         assert_eq!(high.memory_limit, "2g");
         assert_eq!(high.timeout_secs, 600);
     }
+
+    #[test]
+    fn default_config_values() {
+        let config = SandboxConfig::default();
+        assert_eq!(config.image, "alpine:latest");
+        assert_eq!(config.memory_limit, "512m");
+        assert_eq!(config.cpu_limit, "1.0");
+        assert_eq!(config.timeout_secs, 300);
+        assert!(!config.network_enabled);
+        assert!(config.env_vars.is_empty());
+    }
+
+    #[test]
+    fn read_only_config() {
+        let config = SandboxConfig::read_only();
+        assert!(!config.network_enabled);
+        assert_eq!(config.image, "alpine:latest");
+    }
+
+    #[test]
+    fn with_network_config() {
+        let config = SandboxConfig::with_network();
+        assert!(config.network_enabled);
+    }
+
+    #[test]
+    fn high_resources_values() {
+        let config = SandboxConfig::high_resources();
+        assert_eq!(config.cpu_limit, "2.0");
+        assert!(!config.network_enabled);
+    }
+
+    #[test]
+    fn builder_accumulates_env_vars() {
+        let config = SandboxConfig::builder()
+            .env("A", "1")
+            .env("B", "2")
+            .env("C", "3")
+            .build();
+        assert_eq!(config.env_vars.len(), 3);
+        assert_eq!(config.env_vars[0], ("A".to_string(), "1".to_string()));
+        assert_eq!(config.env_vars[2], ("C".to_string(), "3".to_string()));
+    }
+
+    #[test]
+    fn builder_all_methods_chained() {
+        let config = SandboxConfig::builder()
+            .image("node:18")
+            .memory("4g")
+            .cpus("4.0")
+            .timeout(900)
+            .network(true)
+            .env("NODE_ENV", "test")
+            .build();
+        assert_eq!(config.image, "node:18");
+        assert_eq!(config.memory_limit, "4g");
+        assert_eq!(config.cpu_limit, "4.0");
+        assert_eq!(config.timeout_secs, 900);
+        assert!(config.network_enabled);
+        assert_eq!(config.env_vars.len(), 1);
+    }
+
+    #[test]
+    fn mount_spec_paths() {
+        let rw = MountSpec::read_write("/home/user/project", "/workspace");
+        assert_eq!(rw.host_path, PathBuf::from("/home/user/project"));
+        assert_eq!(rw.container_path, "/workspace");
+        assert!(!rw.read_only);
+
+        let ro = MountSpec::read_only("/data", "/mnt/data");
+        assert_eq!(ro.host_path, PathBuf::from("/data"));
+        assert_eq!(ro.container_path, "/mnt/data");
+        assert!(ro.read_only);
+    }
+
+    #[test]
+    fn sandbox_error_display() {
+        let e1 = SandboxError::DockerNotAvailable("not found".into());
+        assert!(e1.to_string().contains("not found"));
+
+        let e2 = SandboxError::ImageNotFound {
+            image: "foo:bar".into(),
+        };
+        assert!(e2.to_string().contains("foo:bar"));
+
+        let e3 = SandboxError::CommandFailed {
+            exit_code: 1,
+            stderr: "oops".into(),
+        };
+        assert!(e3.to_string().contains("1"));
+        assert!(e3.to_string().contains("oops"));
+
+        let e4 = SandboxError::Timeout { timeout_secs: 60 };
+        assert!(e4.to_string().contains("60"));
+    }
+
+    #[test]
+    fn sandbox_result_construction() {
+        let result = SandboxResult {
+            success: true,
+            exit_code: 0,
+            stdout: "ok".into(),
+            stderr: String::new(),
+            duration_ms: 100,
+            container_id: "test-123".into(),
+        };
+        assert!(result.success);
+        assert_eq!(result.exit_code, 0);
+    }
+
+    #[test]
+    fn sandbox_construction() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let sandbox = Sandbox::new(ctx, SandboxConfig::default());
+        assert_eq!(sandbox.config.image, "alpine:latest");
+    }
+
+    #[test]
+    fn sandbox_with_defaults() {
+        let ctx = ExecutionContext::new("/tmp".into());
+        let sandbox = Sandbox::with_defaults(ctx);
+        assert_eq!(sandbox.config.timeout_secs, 300);
+    }
 }

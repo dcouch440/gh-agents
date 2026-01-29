@@ -579,4 +579,92 @@ mod tests {
         assert!(gate.check(DangerousOperation::GitPush).is_ok());
         assert!(gate.check(DangerousOperation::GitForcePush).is_err());
     }
+
+    #[test]
+    fn dangerous_operation_display_all() {
+        use DangerousOperation::*;
+        let ops = [
+            (DeleteFile, "Delete file"),
+            (ModifyFile, "Modify file"),
+            (CreateFile, "Create file"),
+            (GitCommit, "Create git commit"),
+            (GitPush, "Push to remote"),
+            (GitForcePush, "Force push to remote"),
+            (GitBranchDelete, "Delete git branch"),
+            (GitMerge, "Merge branch"),
+            (RunCommand, "Run shell command"),
+            (NetworkAccess, "Access network"),
+            (InstallPackage, "Install package"),
+            (CreatePullRequest, "Create pull request"),
+            (MergePullRequest, "Merge pull request"),
+            (CloseIssue, "Close issue"),
+        ];
+        for (op, expected) in &ops {
+            assert_eq!(op.to_string(), *expected);
+        }
+    }
+
+    #[test]
+    fn approval_error_display() {
+        assert_eq!(ApprovalError::Denied.to_string(), "approval denied by user");
+        assert_eq!(
+            ApprovalError::Timeout.to_string(),
+            "approval request timed out"
+        );
+        assert_eq!(
+            ApprovalError::ChannelClosed.to_string(),
+            "approval channel closed"
+        );
+        assert_eq!(
+            ApprovalError::NoHandler.to_string(),
+            "no approval handler configured"
+        );
+    }
+
+    #[test]
+    fn danger_level_classification() {
+        use DangerousOperation::*;
+        assert_eq!(CreateFile.danger_level(), DangerLevel::Low);
+        assert_eq!(ModifyFile.danger_level(), DangerLevel::Low);
+        assert_eq!(DeleteFile.danger_level(), DangerLevel::Medium);
+        assert_eq!(GitCommit.danger_level(), DangerLevel::Medium);
+        assert_eq!(RunCommand.danger_level(), DangerLevel::Medium);
+        assert_eq!(CreatePullRequest.danger_level(), DangerLevel::Medium);
+        assert_eq!(GitPush.danger_level(), DangerLevel::High);
+        assert_eq!(GitBranchDelete.danger_level(), DangerLevel::High);
+        assert_eq!(GitMerge.danger_level(), DangerLevel::High);
+        assert_eq!(NetworkAccess.danger_level(), DangerLevel::High);
+        assert_eq!(InstallPackage.danger_level(), DangerLevel::High);
+        assert_eq!(MergePullRequest.danger_level(), DangerLevel::High);
+        assert_eq!(CloseIssue.danger_level(), DangerLevel::High);
+        assert_eq!(GitForcePush.danger_level(), DangerLevel::Critical);
+    }
+
+    #[test]
+    fn approval_request_simple() {
+        let req = ApprovalRequest::simple(DangerousOperation::GitPush, "Push changes");
+        assert_eq!(req.operation, DangerousOperation::GitPush);
+        assert_eq!(req.description, "Push changes");
+        assert_eq!(req.danger_level, DangerLevel::High);
+        assert!(req.context.affected_files.is_empty());
+    }
+
+    #[test]
+    fn approval_request_format_no_files_no_details() {
+        let req = ApprovalRequest::simple(DangerousOperation::GitCommit, "Commit");
+        let display = req.format_for_display();
+        assert!(display.contains("Create git commit"));
+        assert!(display.contains("Commit"));
+        assert!(!display.contains("Affected files"));
+        assert!(!display.contains("Details"));
+    }
+
+    #[test]
+    fn auto_approval_gate_with_supervised_rejects_non_critical() {
+        let gate = AutoApprovalGate::new(ApprovalGate::supervised());
+        // Supervised requires approval for everything, but AutoApprovalGate
+        // only blocks Critical operations
+        assert!(gate.check(DangerousOperation::GitCommit).is_ok());
+        assert!(gate.check(DangerousOperation::GitForcePush).is_err());
+    }
 }

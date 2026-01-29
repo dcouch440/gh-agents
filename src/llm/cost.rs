@@ -132,6 +132,65 @@ mod tests {
         let pricing = get_pricing("claude-sonnet-4-20250514");
         assert!(pricing.input_cost_per_1k > 0.0);
     }
+
+    #[test]
+    fn calculate_cost_zero_tokens() {
+        let pricing = ModelPricing::new(0.003, 0.015);
+        assert_eq!(pricing.calculate_cost(0, 0), 0.0);
+    }
+
+    #[test]
+    fn calculate_cost_large_tokens() {
+        let pricing = ModelPricing::new(0.003, 0.015);
+        let cost = pricing.calculate_cost(1_000_000, 500_000);
+        // 1M input: 1000 * 0.003 = 3.0
+        // 500K output: 500 * 0.015 = 7.5
+        assert!((cost - 10.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn get_pricing_known_models() {
+        let models = [
+            "claude-sonnet-4-20250514",
+            "claude-3-5-sonnet-20241022",
+            "claude-3-5-haiku-20241022",
+            "claude-3-opus-20240229",
+            "claude-3-haiku-20240307",
+        ];
+        for model in &models {
+            let pricing = get_pricing(model);
+            assert!(pricing.input_cost_per_1k > 0.0, "Failed for {}", model);
+        }
+    }
+
+    #[test]
+    fn get_pricing_unknown_returns_default() {
+        let pricing = get_pricing("totally-unknown-model");
+        assert_eq!(pricing.input_cost_per_1k, DEFAULT_PRICING.input_cost_per_1k);
+        assert_eq!(
+            pricing.output_cost_per_1k,
+            DEFAULT_PRICING.output_cost_per_1k
+        );
+    }
+
+    #[test]
+    fn has_known_pricing_true_false() {
+        assert!(has_known_pricing("claude-3-opus-20240229"));
+        assert!(!has_known_pricing("nonexistent-model"));
+    }
+
+    #[test]
+    fn known_models_nonempty() {
+        let models = known_models();
+        assert!(!models.is_empty());
+        assert!(models.len() >= 5);
+    }
+
+    #[test]
+    fn cost_tracker_in_memory() {
+        let tracker = CostTracker::in_memory();
+        assert!(tracker.db_pool.is_none());
+    }
 }
 
 /// Tracks LLM API costs

@@ -498,10 +498,11 @@ pub async fn set_password(pool: &SqlitePool, password_hash: &str) -> Result<()> 
 
 /// Get the stored password hash
 pub async fn get_password(pool: &SqlitePool) -> Result<Option<String>> {
-    let row: Option<(String,)> = sqlx::query_as("SELECT password_hash FROM auth_config WHERE id = 1")
-        .fetch_optional(pool)
-        .await
-        .context("Failed to get password")?;
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT password_hash FROM auth_config WHERE id = 1")
+            .fetch_optional(pool)
+            .await
+            .context("Failed to get password")?;
 
     Ok(row.map(|r| r.0))
 }
