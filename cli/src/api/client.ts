@@ -17,6 +17,14 @@ export function setToken(t: string): void {
   token = t;
 }
 
+export function getBaseUrl(): string {
+  return baseUrl;
+}
+
+export function getToken(): string {
+  return token ?? '';
+}
+
 class ApiError extends Error {
   constructor(
     public status: number,

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { api, setBaseUrl, setToken } from './client.js';
+import { api, setBaseUrl, setToken, getBaseUrl, getToken } from './client.js';
 
 const TEST_BASE = 'http://localhost:9999';
 
@@ -150,6 +150,30 @@ describe('api.auth', () => {
     const result = await api.auth.me();
     expect(spy).toHaveBeenCalledWith(`${TEST_BASE}/auth/me`, expect.anything());
     expect(result).toEqual(body);
+  });
+});
+
+describe('getBaseUrl', () => {
+  it('returns the current base URL', () => {
+    setBaseUrl('http://example.com:4000');
+    expect(getBaseUrl()).toBe('http://example.com:4000');
+  });
+
+  it('reflects trailing slash stripping', () => {
+    setBaseUrl('http://example.com:4000///');
+    expect(getBaseUrl()).toBe('http://example.com:4000');
+  });
+});
+
+describe('getToken', () => {
+  it('returns empty string when no token is set', () => {
+    setToken('');
+    expect(getToken()).toBe('');
+  });
+
+  it('returns the current token', () => {
+    setToken('my-secret-token');
+    expect(getToken()).toBe('my-secret-token');
   });
 });
 
