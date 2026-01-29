@@ -666,27 +666,27 @@ mod tests {
 
     use axum::body::Body;
     use axum::http::Request;
-    use tempfile::TempDir;
+    use crate::db::test_utils::TestDb;
     use tower::util::ServiceExt;
 
-    async fn setup_test_app() -> axum::Router {
+    async fn setup_test_app() -> (axum::Router, TestDb) {
         use std::sync::Arc;
         use tokio::sync::RwLock;
 
-        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
-        let db = crate::db::init_db_with_url(&url).await.unwrap();
-        let scheduler = crate::orchestration::Scheduler::new(db.clone())
+        let db = TestDb::new().await;
+        let pool = db.pool.clone();
+        let scheduler = crate::orchestration::Scheduler::new(pool.clone())
             .await
             .unwrap();
         let scheduler = Arc::new(RwLock::new(scheduler));
         let config = crate::types::AppConfig::default();
-        let state = AppState::new(db, scheduler, config);
-        super::super::create_router_with_static_dir(state, "nonexistent_static")
+        let state = AppState::new(pool, scheduler, config);
+        (super::super::create_router_with_static_dir(state, "nonexistent_static"), db)
     }
 
     #[tokio::test]
     async fn create_task_valid_returns_created() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -703,11 +703,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn create_task_empty_title_returns_bad_request() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -722,11 +723,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn update_config_valid_verbosity() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -741,11 +743,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn send_chat_valid_message_returns_accepted() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -760,11 +763,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::ACCEPTED);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn send_chat_empty_message_returns_bad_request() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -779,11 +783,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn clear_chat_history_returns_no_content() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -797,11 +802,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn health_check_returns_ok() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -821,13 +827,14 @@ mod tests {
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"status\":\"ok\""));
         assert!(body_str.contains("\"db_connected\":true"));
+        _db.cleanup().await;
     }
 
     // === Tier and priority parsing tests ===
 
     #[tokio::test]
     async fn create_task_with_orchestrator_tier() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -847,11 +854,12 @@ mod tests {
             .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"assigned_tier\":\"orchestrator\""));
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn create_task_with_utility_tier() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -871,11 +879,12 @@ mod tests {
             .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"assigned_tier\":\"utility\""));
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn create_task_with_unknown_tier_defaults_to_worker() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -897,11 +906,12 @@ mod tests {
             .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"assigned_tier\":\"worker\""));
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn create_task_with_no_tier_defaults_to_worker() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -921,11 +931,12 @@ mod tests {
             .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"assigned_tier\":\"worker\""));
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn create_task_with_low_priority() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -945,11 +956,12 @@ mod tests {
             .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"priority\":\"low\""));
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn create_task_with_urgent_priority() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -969,11 +981,12 @@ mod tests {
             .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"priority\":\"urgent\""));
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn create_task_with_unknown_priority_defaults_to_normal() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -995,11 +1008,12 @@ mod tests {
             .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"priority\":\"normal\""));
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn create_task_with_no_priority_defaults_to_normal() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1019,13 +1033,14 @@ mod tests {
             .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"priority\":\"normal\""));
+        _db.cleanup().await;
     }
 
     // === get_task: found and not found ===
 
     #[tokio::test]
     async fn get_task_returns_created_task() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         // Create a task first
         let create_resp = app
@@ -1067,11 +1082,12 @@ mod tests {
         let found = tasks.iter().find(|t| t["id"].as_str() == Some(task_id));
         assert!(found.is_some(), "Created task should appear in task list");
         assert_eq!(found.unwrap()["title"].as_str().unwrap(), "Findable task");
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn get_task_not_found() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1086,13 +1102,14 @@ mod tests {
         // Note: This may return 404 from the handler OR from the static fallback.
         // Both are acceptable for a non-existent task.
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        _db.cleanup().await;
     }
 
     // === list_tasks with filters ===
 
     #[tokio::test]
     async fn list_tasks_returns_empty_initially() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1110,11 +1127,12 @@ mod tests {
             .unwrap();
         let tasks: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert!(tasks.is_empty());
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn list_tasks_with_limit() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         // Create two tasks
         for title in ["Task A", "Task B"] {
@@ -1147,11 +1165,12 @@ mod tests {
             .unwrap();
         let tasks: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert_eq!(tasks.len(), 1);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn list_tasks_with_status_filter() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         // Create a task (default status is pending)
         app.clone()
@@ -1183,13 +1202,14 @@ mod tests {
             .unwrap();
         let tasks: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert!(tasks.is_empty());
+        _db.cleanup().await;
     }
 
     // === update_config invalid verbosity ===
 
     #[tokio::test]
     async fn update_config_invalid_verbosity_returns_bad_request() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1204,11 +1224,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn update_config_quiet_verbosity() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1223,11 +1244,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn update_config_normal_verbosity() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1242,11 +1264,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn update_config_no_verbosity_returns_ok() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1261,13 +1284,14 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
+        _db.cleanup().await;
     }
 
     // === list_agents response body ===
 
     #[tokio::test]
     async fn list_agents_returns_stats() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1288,13 +1312,14 @@ mod tests {
         assert!(resp["stats"]["orchestrators"].is_object());
         assert!(resp["stats"]["workers"].is_object());
         assert!(resp["stats"]["utilities"].is_object());
+        _db.cleanup().await;
     }
 
     // === get_config response body ===
 
     #[tokio::test]
     async fn get_config_returns_expected_fields() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1317,13 +1342,14 @@ mod tests {
         assert!(resp["autonomy"].is_string());
         assert!(resp["git_strategy"].is_string());
         assert!(resp["sandbox_mode"].is_string());
+        _db.cleanup().await;
     }
 
     // === Auth endpoints ===
 
     #[tokio::test]
     async fn auth_setup_short_password_returns_bad_request() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1338,11 +1364,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn auth_setup_success() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1365,11 +1392,12 @@ mod tests {
             resp["message"].as_str().unwrap(),
             "Password configured successfully"
         );
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn auth_setup_conflict_when_already_configured() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         // First setup
         app.clone()
@@ -1398,11 +1426,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::CONFLICT);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn auth_login_no_password_configured() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1417,11 +1446,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn auth_login_wrong_password() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         // Setup password
         app.clone()
@@ -1450,11 +1480,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn auth_login_success() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         // Setup password
         app.clone()
@@ -1489,13 +1520,14 @@ mod tests {
         let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(resp["token"].is_string());
         assert_eq!(resp["expires_in"].as_u64().unwrap(), 86400);
+        _db.cleanup().await;
     }
 
     // === Chat history with data ===
 
     #[tokio::test]
     async fn chat_history_returns_messages_after_send() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         // Send a message
         app.clone()
@@ -1529,11 +1561,12 @@ mod tests {
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0]["role"].as_str().unwrap(), "user");
         assert_eq!(messages[0]["content"].as_str().unwrap(), "Hello agent");
+        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn chat_history_with_pagination() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         // Send two messages
         for msg in ["First", "Second"] {
@@ -1586,6 +1619,7 @@ mod tests {
             .unwrap();
         let messages: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert_eq!(messages.len(), 1);
+        _db.cleanup().await;
     }
 
     // === Serialization edge cases ===
@@ -1714,7 +1748,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_chat_response_contains_message_id() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1737,13 +1771,14 @@ mod tests {
         assert_eq!(resp["status"].as_str().unwrap(), "queued");
         // Verify it's a valid UUID
         Uuid::parse_str(resp["message_id"].as_str().unwrap()).unwrap();
+        _db.cleanup().await;
     }
 
     // === create_task response body validation ===
 
     #[tokio::test]
     async fn create_task_response_body_has_expected_fields() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1769,13 +1804,14 @@ mod tests {
         assert!(task["id"].is_string());
         assert!(task["created_at"].is_string());
         assert!(task["updated_at"].is_string());
+        _db.cleanup().await;
     }
 
     // === clear chat then verify empty ===
 
     #[tokio::test]
     async fn clear_chat_then_history_is_empty() {
-        let app = setup_test_app().await;
+        let (app, _db) = setup_test_app().await;
 
         // Send a message
         app.clone()
@@ -1819,5 +1855,6 @@ mod tests {
             .unwrap();
         let messages: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert!(messages.is_empty());
+        _db.cleanup().await;
     }
 }

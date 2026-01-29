@@ -965,13 +965,9 @@ mod tests {
 #[cfg(test)]
 mod persistent_queue_tests {
     use super::*;
+    use crate::db::test_utils::TestDb;
     use crate::types::AgentTier;
-    use tempfile::TempDir;
 
-    async fn setup_test_db() -> PgPool {
-        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
-        crate::db::init_db_with_url(&url).await.unwrap()
-    }
 
     fn make_task(priority: Priority) -> Task {
         Task {
@@ -993,64 +989,64 @@ mod persistent_queue_tests {
 
     #[tokio::test]
     async fn persistent_queue_loads_pending_tasks() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         // Insert a pending task
         let task = make_task(Priority::Normal);
-        crate::db::insert_task(&pool, &task).await.unwrap();
+        crate::db::insert_task(&db.pool, &task).await.unwrap();
 
         // Create queue - should load the task
-        let queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        let queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
         assert_eq!(queue.len(), 1);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn persistent_queue_ignores_non_pending() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         // Insert a completed task
         let mut task = make_task(Priority::Normal);
         task.status = TaskStatus::Completed;
-        crate::db::insert_task(&pool, &task).await.unwrap();
+        crate::db::insert_task(&db.pool, &task).await.unwrap();
 
         // Create queue - should not load completed task
-        let queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        let queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
         assert!(queue.is_empty());
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn dequeue_updates_status_to_in_progress() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         let task = make_task(Priority::Normal);
         let task_id = task.id.clone();
-        crate::db::insert_task(&pool, &task).await.unwrap();
+        crate::db::insert_task(&db.pool, &task).await.unwrap();
 
-        let mut queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        let mut queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
         let dequeued = queue.dequeue().await.unwrap();
 
         assert!(dequeued.is_some());
 
         // Check database was updated
-        let db_task = crate::db::get_task(&pool, &task_id).await.unwrap().unwrap();
+        let db_task = crate::db::get_task(&db.pool, &task_id).await.unwrap().unwrap();
         assert_eq!(db_task.status, TaskStatus::InProgress);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn requeue_updates_priority_and_status() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         let task = make_task(Priority::Normal);
         let task_id = task.id.clone();
-        crate::db::insert_task(&pool, &task).await.unwrap();
+        crate::db::insert_task(&db.pool, &task).await.unwrap();
 
-        let mut queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        let mut queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
 
         // Dequeue the task
         let task = queue.dequeue().await.unwrap().unwrap();
@@ -1066,21 +1062,21 @@ mod persistent_queue_tests {
         assert_eq!(queue.peek().unwrap().priority, Priority::High);
 
         // Check database
-        let db_task = crate::db::get_task(&pool, &task_id).await.unwrap().unwrap();
+        let db_task = crate::db::get_task(&db.pool, &task_id).await.unwrap().unwrap();
         assert_eq!(db_task.status, TaskStatus::Pending);
         assert_eq!(db_task.priority, Priority::High);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn requeue_with_set_priority() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         let task = make_task(Priority::Low);
-        crate::db::insert_task(&pool, &task).await.unwrap();
+        crate::db::insert_task(&db.pool, &task).await.unwrap();
 
-        let mut queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        let mut queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
         let task = queue.dequeue().await.unwrap().unwrap();
 
         queue
@@ -1090,18 +1086,18 @@ mod persistent_queue_tests {
 
         assert_eq!(queue.peek().unwrap().priority, Priority::Urgent);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn requeue_creates_event() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         let task = make_task(Priority::Normal);
         let task_id = task.id.clone();
-        crate::db::insert_task(&pool, &task).await.unwrap();
+        crate::db::insert_task(&db.pool, &task).await.unwrap();
 
-        let mut queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        let mut queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
         let task = queue.dequeue().await.unwrap().unwrap();
         queue
             .requeue(task, RequeuePolicy::SamePriority)
@@ -1113,61 +1109,61 @@ mod persistent_queue_tests {
             "SELECT COUNT(*) FROM task_events WHERE task_id = $1 AND event_type = 'requeued'",
         )
         .bind(task_id.0.to_string())
-        .fetch_one(&pool)
+        .fetch_one(&db.pool)
         .await
         .unwrap();
 
         assert_eq!(event_count.0, 1);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn persistent_queue_dequeue_empty_returns_none() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
-        let mut queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        let mut queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
         let result = queue.dequeue().await.unwrap();
         assert!(result.is_none());
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn persistent_queue_enqueue_and_persist() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         let task = make_task(Priority::High);
         let task_id = task.id.clone();
-        crate::db::insert_task(&pool, &task).await.unwrap();
+        crate::db::insert_task(&db.pool, &task).await.unwrap();
 
-        let mut queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        let mut queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
         // Dequeue to clear the loaded task
         queue.dequeue().await.unwrap();
 
         // Now enqueue_and_persist a new task
         let task2 = make_task(Priority::Low);
         let task2_id = task2.id.clone();
-        crate::db::insert_task(&pool, &task2).await.unwrap();
+        crate::db::insert_task(&db.pool, &task2).await.unwrap();
         queue.enqueue_and_persist(task2).await.unwrap();
 
         assert_eq!(queue.len(), 1);
         assert!(queue.contains(&task2_id));
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn persistent_queue_peek() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
-        let mut queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        let mut queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
 
         // Peek on empty
         assert!(queue.peek().is_none());
 
         let task = make_task(Priority::Urgent);
-        crate::db::insert_task(&pool, &task).await.unwrap();
+        crate::db::insert_task(&db.pool, &task).await.unwrap();
         queue.enqueue(task);
 
         assert!(queue.peek().is_some());
@@ -1175,81 +1171,81 @@ mod persistent_queue_tests {
         // Peek doesn't remove
         assert_eq!(queue.len(), 1);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn persistent_queue_contains() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         let task = make_task(Priority::Normal);
         let task_id = task.id.clone();
-        crate::db::insert_task(&pool, &task).await.unwrap();
+        crate::db::insert_task(&db.pool, &task).await.unwrap();
 
-        let queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        let queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
         assert!(queue.contains(&task_id));
         assert!(!queue.contains(&TaskId::new()));
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn persistent_queue_all_tasks() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         let t1 = make_task(Priority::Low);
         let t2 = make_task(Priority::High);
-        crate::db::insert_task(&pool, &t1).await.unwrap();
-        crate::db::insert_task(&pool, &t2).await.unwrap();
+        crate::db::insert_task(&db.pool, &t1).await.unwrap();
+        crate::db::insert_task(&db.pool, &t2).await.unwrap();
 
-        let queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        let queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
         let tasks = queue.all_tasks();
         assert_eq!(tasks.len(), 2);
         // Should be sorted: High first
         assert_eq!(tasks[0].priority, Priority::High);
         assert_eq!(tasks[1].priority, Priority::Low);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn persistent_queue_count_by_priority() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         let t1 = make_task(Priority::Normal);
         let t2 = make_task(Priority::Normal);
         let t3 = make_task(Priority::Urgent);
-        crate::db::insert_task(&pool, &t1).await.unwrap();
-        crate::db::insert_task(&pool, &t2).await.unwrap();
-        crate::db::insert_task(&pool, &t3).await.unwrap();
+        crate::db::insert_task(&db.pool, &t1).await.unwrap();
+        crate::db::insert_task(&db.pool, &t2).await.unwrap();
+        crate::db::insert_task(&db.pool, &t3).await.unwrap();
 
-        let queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        let queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
         let counts = queue.count_by_priority();
         assert_eq!(counts.get(&Priority::Normal), Some(&2));
         assert_eq!(counts.get(&Priority::Urgent), Some(&1));
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn persistent_queue_is_empty_and_len() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
-        let queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        let queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
         assert!(queue.is_empty());
         assert_eq!(queue.len(), 0);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn requeue_with_same_priority() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         let task = make_task(Priority::High);
-        crate::db::insert_task(&pool, &task).await.unwrap();
+        crate::db::insert_task(&db.pool, &task).await.unwrap();
 
-        let mut queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        let mut queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
         let task = queue.dequeue().await.unwrap().unwrap();
 
         queue
@@ -1259,12 +1255,12 @@ mod persistent_queue_tests {
 
         assert_eq!(queue.peek().unwrap().priority, Priority::High);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn persistent_queue_loads_multiple_pending() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         // Insert multiple pending tasks
         for p in [
@@ -1274,25 +1270,25 @@ mod persistent_queue_tests {
             Priority::Urgent,
         ] {
             let task = make_task(p);
-            crate::db::insert_task(&pool, &task).await.unwrap();
+            crate::db::insert_task(&db.pool, &task).await.unwrap();
         }
 
-        let queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        let queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
         assert_eq!(queue.len(), 4);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn persistent_queue_dequeue_priority_order() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
 
         let low = make_task(Priority::Low);
         let urgent = make_task(Priority::Urgent);
-        crate::db::insert_task(&pool, &low).await.unwrap();
-        crate::db::insert_task(&pool, &urgent).await.unwrap();
+        crate::db::insert_task(&db.pool, &low).await.unwrap();
+        crate::db::insert_task(&db.pool, &urgent).await.unwrap();
 
-        let mut queue = PersistentTaskQueue::new(pool.clone()).await.unwrap();
+        let mut queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
 
         let first = queue.dequeue().await.unwrap().unwrap();
         assert_eq!(first.priority, Priority::Urgent);
@@ -1300,6 +1296,6 @@ mod persistent_queue_tests {
         let second = queue.dequeue().await.unwrap().unwrap();
         assert_eq!(second.priority, Priority::Low);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 }
