@@ -100,6 +100,12 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
         include_str!("../../migrations/013_create_auth_tables.sql"),
     )
     .await?;
+    run_migration(
+        pool,
+        "014_add_prds",
+        include_str!("../../migrations/014_add_prds.sql"),
+    )
+    .await?;
 
     tracing::info!("All migrations complete");
     Ok(())

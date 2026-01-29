@@ -1,6 +1,7 @@
 //! Database initialization and connection management
 
 mod migrations;
+pub mod prd;
 mod queries;
 mod refactor;
 
