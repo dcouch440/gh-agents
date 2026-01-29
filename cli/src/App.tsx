@@ -10,6 +10,7 @@ import {
   setServerUrl,
 } from './store/auth.js';
 import { Login } from './components/Login.js';
+import { ChatView } from './components/ChatView.js';
 
 type AuthState = 'checking' | 'login' | 'authenticated';
 
@@ -77,8 +78,8 @@ export function App({ serverUrl }: AppProps) {
     <Box flexDirection="column" padding={1}>
       <Text bold color="cyan">nexor</Text>
       <Text dimColor>AI agent orchestration for GitHub workflows</Text>
-      <Box marginTop={1}>
-        <Text color="green">✓ Authenticated</Text>
+      <Box marginTop={1} flexDirection="column">
+        <ChatView />
       </Box>
     </Box>
   );
