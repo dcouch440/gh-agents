@@ -337,6 +337,7 @@ pub struct PoolStats {
 ///
 /// If the task's metadata contains a `model_override` key, that model ID is used
 /// instead of the tier default. Otherwise, `tier_model` is returned unchanged.
+#[allow(dead_code)]
 pub fn resolve_model_for_task(tier_model: ModelConfig, task: &Task) -> ModelConfig {
     if let Some(override_id) = task.metadata.as_ref().and_then(|m| m.get("model_override")) {
         ModelConfig {

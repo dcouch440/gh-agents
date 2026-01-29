@@ -324,7 +324,7 @@ impl PersistentTaskQueue {
         policy: &RequeuePolicy,
     ) -> Result<(), QueueError> {
         let priority_str = format!("{:?}", task.priority).to_lowercase();
-        let now = Utc::now().to_rfc3339();
+        let now = Utc::now();
 
         sqlx::query(
             r#"
@@ -336,8 +336,8 @@ impl PersistentTaskQueue {
             "#,
         )
         .bind(&priority_str)
-        .bind(&now)
-        .bind(task.id.0.to_string())
+        .bind(now)
+        .bind(task.id.0)
         .execute(&self.pool)
         .await
         .map_err(|e| QueueError::DatabaseError(e.to_string()))?;
@@ -349,10 +349,10 @@ impl PersistentTaskQueue {
             VALUES ($1, $2, 'requeued', $3, $4)
             "#,
         )
-        .bind(Uuid::new_v4().to_string())
-        .bind(task.id.0.to_string())
+        .bind(Uuid::new_v4())
+        .bind(task.id.0)
         .bind(format!("Requeued with policy {:?}", policy))
-        .bind(&now)
+        .bind(now)
         .execute(&self.pool)
         .await
         .map_err(|e| QueueError::DatabaseError(e.to_string()))?;
@@ -1134,7 +1134,7 @@ mod persistent_queue_tests {
         let db = TestDb::new().await;
 
         let task = make_task(Priority::High);
-        let task_id = task.id.clone();
+        let _task_id = task.id.clone();
         crate::db::insert_task(&db.pool, &task).await.unwrap();
 
         let mut queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();

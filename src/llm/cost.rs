@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use once_cell::sync::Lazy;
 use sqlx::PgPool;
 use tokio::sync::RwLock;
@@ -271,7 +271,7 @@ impl CostTracker {
         pool: &PgPool,
         record: &CostRecord,
     ) -> Result<(), CostTrackerError> {
-        let task_id_str = record.task_id.as_ref().map(|id| id.0.to_string());
+        let task_id = record.task_id.as_ref().map(|id| id.0);
         let tier_str = format!("{:?}", record.agent_tier);
 
         sqlx::query(
@@ -282,15 +282,15 @@ impl CostTracker {
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             "#,
         )
-        .bind(record.id.to_string())
-        .bind(task_id_str)
-        .bind(record.agent_id.0.to_string())
+        .bind(record.id)
+        .bind(task_id)
+        .bind(record.agent_id.0)
         .bind(tier_str)
         .bind(&record.model_id)
-        .bind(record.input_tokens as i64)
-        .bind(record.output_tokens as i64)
+        .bind(record.input_tokens as i32)
+        .bind(record.output_tokens as i32)
         .bind(record.cost_usd)
-        .bind(record.timestamp.to_rfc3339())
+        .bind(record.timestamp)
         .execute(pool)
         .await
         .map_err(|e| CostTrackerError::DatabaseError(e.to_string()))?;
@@ -334,7 +334,7 @@ impl CostTracker {
                 ORDER BY timestamp DESC
                 "#,
             )
-            .bind(since_time.to_rfc3339())
+            .bind(since_time)
             .fetch_all(pool)
             .await
             .map_err(|e| CostTrackerError::DatabaseError(e.to_string()))?
@@ -431,29 +431,21 @@ pub enum CostTrackerError {
 /// Database row for cost records
 #[derive(Debug, sqlx::FromRow)]
 struct CostRecordRow {
-    id: String,
-    task_id: Option<String>,
-    agent_id: String,
+    id: Uuid,
+    task_id: Option<Uuid>,
+    agent_id: Uuid,
     agent_tier: String,
     model_id: String,
-    input_tokens: i64,
-    output_tokens: i64,
+    input_tokens: i32,
+    output_tokens: i32,
     cost_usd: f64,
-    timestamp: String,
+    timestamp: DateTime<Utc>,
 }
 
 impl TryFrom<CostRecordRow> for CostRecord {
     type Error = String;
 
     fn try_from(row: CostRecordRow) -> Result<Self, Self::Error> {
-        let id = Uuid::parse_str(&row.id).map_err(|e| e.to_string())?;
-        let agent_id = AgentId(Uuid::parse_str(&row.agent_id).map_err(|e| e.to_string())?);
-        let task_id = row
-            .task_id
-            .map(|s| Uuid::parse_str(&s).map(TaskId))
-            .transpose()
-            .map_err(|e: uuid::Error| e.to_string())?;
-
         let agent_tier = match row.agent_tier.as_str() {
             "Orchestrator" => AgentTier::Orchestrator,
             "Worker" => AgentTier::Worker,
@@ -461,20 +453,16 @@ impl TryFrom<CostRecordRow> for CostRecord {
             _ => AgentTier::Worker,
         };
 
-        let timestamp = chrono::DateTime::parse_from_rfc3339(&row.timestamp)
-            .map_err(|e| e.to_string())?
-            .with_timezone(&Utc);
-
         Ok(CostRecord {
-            id,
-            task_id,
-            agent_id,
+            id: row.id,
+            task_id: row.task_id.map(TaskId),
+            agent_id: AgentId(row.agent_id),
             agent_tier,
             model_id: row.model_id,
             input_tokens: row.input_tokens as u32,
             output_tokens: row.output_tokens as u32,
             cost_usd: row.cost_usd,
-            timestamp,
+            timestamp: row.timestamp,
         })
     }
 }
@@ -789,7 +777,7 @@ mod db_tests {
     fn cost_record_row_try_from_various_tiers() {
         let id = Uuid::new_v4();
         let agent_id = Uuid::new_v4();
-        let now = Utc::now().to_rfc3339();
+        let now = Utc::now();
 
         for (tier_str, expected) in [
             ("Orchestrator", AgentTier::Orchestrator),
@@ -798,15 +786,15 @@ mod db_tests {
             ("UnknownTier", AgentTier::Worker), // fallback
         ] {
             let row = CostRecordRow {
-                id: id.to_string(),
+                id,
                 task_id: None,
-                agent_id: agent_id.to_string(),
+                agent_id,
                 agent_tier: tier_str.to_string(),
                 model_id: "claude-3-haiku".to_string(),
                 input_tokens: 100,
                 output_tokens: 50,
                 cost_usd: 0.001,
-                timestamp: now.clone(),
+                timestamp: now,
             };
 
             let record: CostRecord = row.try_into().unwrap();
@@ -817,15 +805,15 @@ mod db_tests {
     #[test]
     fn cost_record_row_try_from_with_task_id() {
         let row = CostRecordRow {
-            id: Uuid::new_v4().to_string(),
-            task_id: Some(Uuid::new_v4().to_string()),
-            agent_id: Uuid::new_v4().to_string(),
+            id: Uuid::new_v4(),
+            task_id: Some(Uuid::new_v4()),
+            agent_id: Uuid::new_v4(),
             agent_tier: "Worker".to_string(),
             model_id: "claude-3-haiku".to_string(),
             input_tokens: 100,
             output_tokens: 50,
             cost_usd: 0.001,
-            timestamp: Utc::now().to_rfc3339(),
+            timestamp: Utc::now(),
         };
 
         let record: CostRecord = row.try_into().unwrap();
