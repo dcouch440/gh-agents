@@ -93,4 +93,41 @@ describe('streamResponse', () => {
     listeners['error']?.({});
     expect(callbacks.onError).toHaveBeenCalledWith('Stream error');
   });
+
+  it('works with different baseUrl and messageId values', () => {
+    streamResponse('http://myhost:8080', 'abc-123', 'tok', callbacks);
+    listeners['token']?.({ data: 'works' });
+    expect(callbacks.onToken).toHaveBeenCalledWith('works');
+  });
+
+  it('handles empty string token data', () => {
+    streamResponse('http://localhost:3000', 'msg-1', 'tok', callbacks);
+    listeners['token']?.({ data: '' });
+    expect(callbacks.onToken).toHaveBeenCalledWith('');
+  });
+
+  it('does not call onDone or onError for token events', () => {
+    streamResponse('http://localhost:3000', 'msg-1', 'tok', callbacks);
+    listeners['token']?.({ data: 'text' });
+    expect(callbacks.onDone).not.toHaveBeenCalled();
+    expect(callbacks.onError).not.toHaveBeenCalled();
+  });
+
+  it('does not call onToken after done event', () => {
+    streamResponse('http://localhost:3000', 'msg-1', 'tok', callbacks);
+    listeners['done']?.({});
+    expect(callbacks.onToken).not.toHaveBeenCalled();
+  });
+
+  it('registers all three event listeners', () => {
+    streamResponse('http://localhost:3000', 'msg-1', 'tok', callbacks);
+    expect(listeners['token']).toBeDefined();
+    expect(listeners['done']).toBeDefined();
+    expect(listeners['error']).toBeDefined();
+  });
+
+  it('sets onerror handler', () => {
+    streamResponse('http://localhost:3000', 'msg-1', 'tok', callbacks);
+    expect(onerrorHandler).toBeDefined();
+  });
 });

@@ -120,4 +120,63 @@ describe('ChatView', () => {
     const { lastFrame } = render(<ChatView />);
     expect(lastFrame()!).toContain('Waiting for response');
   });
+
+  it('does not show streaming message when not streaming', () => {
+    mockChat({
+      isStreaming: false,
+      streamingContent: '',
+    });
+
+    const { lastFrame } = render(<ChatView />);
+    // Should not contain the streaming cursor
+    expect(lastFrame()!).not.toContain('█');
+  });
+
+  it('shows both error and messages', () => {
+    mockChat({
+      error: 'Temporary failure',
+      messages: [
+        {
+          id: '1',
+          role: 'user',
+          content: 'My question',
+          timestamp: '2026-01-29T12:00:00Z',
+        },
+      ],
+    });
+
+    const { lastFrame } = render(<ChatView />);
+    const frame = lastFrame()!;
+    expect(frame).toContain('Error: Temporary failure');
+    expect(frame).toContain('My question');
+  });
+
+  it('shows empty state with just input when no messages', () => {
+    mockChat({ messages: [] });
+
+    const { lastFrame } = render(<ChatView />);
+    const frame = lastFrame()!;
+    expect(frame).toContain('>');
+    expect(frame).not.toContain('Error:');
+  });
+
+  it('shows streaming content alongside existing messages', () => {
+    mockChat({
+      messages: [
+        {
+          id: '1',
+          role: 'user',
+          content: 'Hello there',
+          timestamp: '2026-01-29T12:00:00Z',
+        },
+      ],
+      isStreaming: true,
+      streamingContent: 'I am responding...',
+    });
+
+    const { lastFrame } = render(<ChatView />);
+    const frame = lastFrame()!;
+    expect(frame).toContain('Hello there');
+    expect(frame).toContain('I am responding...');
+  });
 });
