@@ -4,8 +4,8 @@
 
 ## Current Focus
 
-**Active:** M12 React Features
-**Next:** 12.1 Tasks View
+**Active:** M12 Terminal CLI (Ink)
+**Next:** M13 Agent View
 **Planned:** M14 Dynamic Agent Selection (can run in parallel with M10-M13)
 **Blocked:** None
 
@@ -37,8 +37,8 @@
 
 - M10: Server Layer (Axum HTTP + WebSocket)
 - M11: React Foundation
-- M12: React Features
-- M13: React Polish
+- M12: Terminal CLI (Ink)
+- M13: Agent View (Factorio-Inspired Monitor)
 
 ---
 
@@ -251,19 +251,20 @@
 
 ---
 
-## Milestone 13: React Polish - NOT STARTED
+## Milestone 13: Agent View (Factorio-Inspired Monitor) - NOT STARTED
 
-**Goal**: Analytics, settings, mobile responsiveness, production readiness.
+**Goal**: Factorio-inspired agent monitoring screen in the CLI. Unicode station grid with real-time WebSocket updates, progress animations, and Claude Code aesthetic.
 
-| Ticket                     | Status  | Progress | Notes           |
-| -------------------------- | ------- | -------- | --------------- |
-| 13.1 Analytics Dashboard   | pending | 0/4      | Decomp complete |
-| 13.2 Settings Page         | pending | 0/3      | Decomp complete |
-| 13.3 Mobile Responsiveness | pending | 0/3      | Decomp complete |
-| 13.4 Production Build      | pending | 0/4      | Decomp complete |
-| 13.5 Documentation Update  | pending | 0/2      | Decomp complete |
+| Ticket | Status | Progress | Notes |
+|--------|--------|----------|-------|
+| 13.1 WebSocket Client | pending | 0/4 | ws package, typed messages, reconnect |
+| 13.2 Agent Types & State | pending | 0/3 | Types, REST fetch, useAgents hook |
+| 13.3 Agent Station Widget | pending | 0/4 | Unicode box, status icons, progress bar |
+| 13.4 Agent Grid Layout | pending | 0/3 | Tier sections, stats summary, responsive rows |
+| 13.5 Screen Navigation | pending | 0/3 | Tab to switch Chat/Agents, status bar |
+| 13.6 Polish & Animations | pending | 0/4 | Spinner, smooth progress, flash, loading states |
 
-**Milestone Status:** Not Started (0/5 tickets done)
+**Milestone Status:** Not Started (0/6 tickets done)
 
 ---
 
@@ -322,8 +323,8 @@
 | M9: Polish & Production    | 12      | Complete          |
 | M10: Server Layer          | 6       | Complete          |
 | M11: React Foundation      | 4       | Complete          |
-| M12: React Features        | 6       | In Progress (1/6) |
-| M13: React Polish          | 5       | Not Started       |
+| M12: Terminal CLI (Ink)     | 6       | Not Started       |
+| M13: Agent View             | 6       | Not Started       |
 | M15: Repo Mgmt & Workspace | 9       | Not Started       |
 | M16: SaaS Foundation       | 9       | Not Started       |
 | **Total Active**           | **97**  |                   |
