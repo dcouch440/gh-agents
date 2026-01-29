@@ -56,6 +56,20 @@ describe('error handling', () => {
     await expect(api.health()).rejects.toThrow('API error 401');
   });
 
+  it('exposes status and body properties on ApiError', async () => {
+    const errorBody = { error: 'forbidden' };
+    vi.stubGlobal('fetch', mockFetch(403, errorBody, false));
+    try {
+      await api.health();
+      expect.fail('should have thrown');
+    } catch (err: unknown) {
+      const e = err as { name: string; status: number; body: unknown };
+      expect(e.name).toBe('ApiError');
+      expect(e.status).toBe(403);
+      expect(e.body).toEqual(errorBody);
+    }
+  });
+
   it('falls back to text body when json parsing fails', async () => {
     vi.stubGlobal(
       'fetch',
@@ -66,7 +80,31 @@ describe('error handling', () => {
         text: () => Promise.resolve('Internal Server Error'),
       }),
     );
-    await expect(api.health()).rejects.toThrow('API error 500');
+    try {
+      await api.health();
+      expect.fail('should have thrown');
+    } catch (err: unknown) {
+      const e = err as { status: number; body: unknown };
+      expect(e.status).toBe(500);
+      expect(e.body).toBe('Internal Server Error');
+    }
+  });
+
+  it('propagates network errors when fetch rejects', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockRejectedValue(new TypeError('fetch failed')),
+    );
+    await expect(api.health()).rejects.toThrow('fetch failed');
+  });
+
+  it('always sets Content-Type to application/json', async () => {
+    const spy = mockFetch(200, {});
+    vi.stubGlobal('fetch', spy);
+    await api.health();
+    expect(spy.mock.calls[0][1].headers['Content-Type']).toBe(
+      'application/json',
+    );
   });
 });
 
