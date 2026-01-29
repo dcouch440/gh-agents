@@ -1,25 +1,25 @@
 -- Tickets table
 CREATE TABLE IF NOT EXISTS tickets (
-    id TEXT PRIMARY KEY NOT NULL,
+    id UUID PRIMARY KEY NOT NULL,
     source_type TEXT NOT NULL DEFAULT 'manual',
     source_owner TEXT,
     source_repo TEXT,
     source_issue_number INTEGER,
     title TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
-    labels TEXT NOT NULL DEFAULT '[]',
+    labels JSONB NOT NULL DEFAULT '[]',
     status TEXT NOT NULL DEFAULT 'new',
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Vertical slices table
 CREATE TABLE IF NOT EXISTS vertical_slices (
-    id TEXT PRIMARY KEY NOT NULL,
-    ticket_id TEXT NOT NULL,
+    id UUID PRIMARY KEY NOT NULL,
+    ticket_id UUID NOT NULL,
     title TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'pending',
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     FOREIGN KEY (ticket_id) REFERENCES tickets(id)
 );
