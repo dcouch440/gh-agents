@@ -591,12 +591,7 @@ mod tests {
 
     // --- Async DB tests ---
 
-    use tempfile::TempDir;
-
-    async fn setup_test_db() -> PgPool {
-        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
-        crate::db::init_db_with_url(&url).await.unwrap()
-    }
+    use crate::db::test_utils::TestDb;
 
     fn make_call(model: &str, task_id: Option<Uuid>) -> LlmCall {
         let prompt = LlmPrompt::new("system").with_messages(vec![PromptMessage::user("hi")]);
@@ -612,8 +607,8 @@ mod tests {
 
     #[tokio::test]
     async fn log_call_and_retrieve() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
 
         let task_id = Uuid::new_v4();
         let call = make_call("test-model", Some(task_id)).with_agent_id("agent-1");
@@ -628,12 +623,13 @@ mod tests {
         assert_eq!(calls[0].output_tokens, 20);
         assert_eq!(calls[0].latency_ms, 100);
         assert!((calls[0].cost_usd - 0.001).abs() < f64::EPSILON);
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn get_calls_for_task_filters_correctly() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
 
         let tid1 = Uuid::new_v4();
         let tid2 = Uuid::new_v4();
@@ -646,12 +642,13 @@ mod tests {
         let calls2 = logger.get_calls_for_task(tid2).await.unwrap();
         assert_eq!(calls2.len(), 1);
         assert_eq!(calls2[0].model, "m3");
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn get_calls_in_range_filters_correctly() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
 
         let t1 = Utc::now() - chrono::Duration::hours(2);
         let t2 = Utc::now() - chrono::Duration::hours(1);
@@ -677,12 +674,13 @@ mod tests {
         assert_eq!(calls.len(), 2);
         assert_eq!(calls[0].model, "old");
         assert_eq!(calls[1].model, "mid");
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn log_decision_and_retrieve() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
 
         let task_id = Uuid::new_v4();
         let call_id = Uuid::new_v4();
@@ -699,12 +697,13 @@ mod tests {
         assert_eq!(decisions[0].outcome, "outcome");
         assert_eq!(decisions[0].llm_call_id, Some(call_id));
         assert!((decisions[0].cost_usd - 0.05).abs() < f64::EPSILON);
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn get_decisions_for_task_filters_correctly() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
 
         let tid1 = Uuid::new_v4();
         let tid2 = Uuid::new_v4();
@@ -731,12 +730,13 @@ mod tests {
         let d2 = logger.get_decisions_for_task(tid2).await.unwrap();
         assert_eq!(d2.len(), 1);
         assert_eq!(d2[0].decision_type, DecisionType::Recovery);
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn get_decisions_in_range_filters_correctly() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
 
         let tid = Uuid::new_v4();
         let t1 = Utc::now() - chrono::Duration::hours(3);
@@ -758,6 +758,7 @@ mod tests {
             .unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].reasoning, "old");
+        db.cleanup().await;
     }
 
     #[test]
@@ -1125,8 +1126,8 @@ mod tests {
 
     #[tokio::test]
     async fn log_decision_without_llm_call() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
 
         let task_id = Uuid::new_v4();
         let decision = Decision::new(task_id, DecisionType::Decomposition, "r", "o");
@@ -1139,8 +1140,8 @@ mod tests {
 
     #[tokio::test]
     async fn get_calls_for_nonexistent_task() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
 
         let calls = logger.get_calls_for_task(Uuid::new_v4()).await.unwrap();
         assert!(calls.is_empty());
@@ -1148,8 +1149,8 @@ mod tests {
 
     #[tokio::test]
     async fn get_decisions_for_nonexistent_task() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
 
         let decisions = logger.get_decisions_for_task(Uuid::new_v4()).await.unwrap();
         assert!(decisions.is_empty());
@@ -1157,8 +1158,8 @@ mod tests {
 
     #[tokio::test]
     async fn get_calls_in_range_empty() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
 
         let start = Utc::now() - chrono::Duration::hours(10);
         let end = Utc::now() - chrono::Duration::hours(9);
@@ -1168,8 +1169,8 @@ mod tests {
 
     #[tokio::test]
     async fn get_decisions_in_range_empty() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
 
         let start = Utc::now() - chrono::Duration::hours(10);
         let end = Utc::now() - chrono::Duration::hours(9);
@@ -1179,8 +1180,8 @@ mod tests {
 
     #[tokio::test]
     async fn log_call_without_task_id() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
 
         let call = make_call("model", None);
         logger.log_call(&call).await.unwrap();

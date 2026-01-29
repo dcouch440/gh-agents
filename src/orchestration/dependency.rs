@@ -296,13 +296,9 @@ impl DependencyTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::test_utils::TestDb;
     use crate::types::{AgentTier, Priority};
     use chrono::Utc;
-
-    async fn setup_test_db() -> PgPool {
-        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
-        crate::db::init_db_with_url(&url).await.unwrap()
-    }
 
     fn make_task(title: &str) -> Task {
         Task {
@@ -324,23 +320,23 @@ mod tests {
 
     #[tokio::test]
     async fn task_without_dependencies_is_not_blocked() {
-        let pool = setup_test_db().await;
-        let tracker = DependencyTracker::new(pool.clone());
+        let db = TestDb::new().await;
+        let tracker = DependencyTracker::new(db.pool.clone());
 
         let task = make_task("Task A");
         assert!(!tracker.is_blocked(&task).await.unwrap());
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn task_with_incomplete_dependency_is_blocked() {
-        let pool = setup_test_db().await;
-        let tracker = DependencyTracker::new(pool.clone());
+        let db = TestDb::new().await;
+        let tracker = DependencyTracker::new(db.pool.clone());
 
         // Create dependency task
         let dep_task = make_task("Dependency");
-        crate::db::insert_task(&pool, &dep_task).await.unwrap();
+        crate::db::insert_task(&db.pool, &dep_task).await.unwrap();
 
         // Create task that depends on it
         let mut task = make_task("Dependent Task");
@@ -348,18 +344,18 @@ mod tests {
 
         assert!(tracker.is_blocked(&task).await.unwrap());
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn task_with_completed_dependency_is_not_blocked() {
-        let pool = setup_test_db().await;
-        let tracker = DependencyTracker::new(pool.clone());
+        let db = TestDb::new().await;
+        let tracker = DependencyTracker::new(db.pool.clone());
 
         // Create and complete dependency task
         let mut dep_task = make_task("Dependency");
         dep_task.status = TaskStatus::Completed;
-        crate::db::insert_task(&pool, &dep_task).await.unwrap();
+        crate::db::insert_task(&db.pool, &dep_task).await.unwrap();
 
         // Create task that depends on it
         let mut task = make_task("Dependent Task");
@@ -367,19 +363,19 @@ mod tests {
 
         assert!(!tracker.is_blocked(&task).await.unwrap());
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn save_and_load_dependencies() {
-        let pool = setup_test_db().await;
-        let tracker = DependencyTracker::new(pool.clone());
+        let db = TestDb::new().await;
+        let tracker = DependencyTracker::new(db.pool.clone());
 
         // Create two tasks
         let task_a = make_task("Task A");
         let task_b = make_task("Task B");
-        crate::db::insert_task(&pool, &task_a).await.unwrap();
-        crate::db::insert_task(&pool, &task_b).await.unwrap();
+        crate::db::insert_task(&db.pool, &task_a).await.unwrap();
+        crate::db::insert_task(&db.pool, &task_b).await.unwrap();
 
         // Make B depend on A
         let mut task_b_with_dep = task_b.clone();
@@ -391,19 +387,19 @@ mod tests {
         assert_eq!(deps.len(), 1);
         assert_eq!(deps[0], task_a.id);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn circular_dependency_detected() {
-        let pool = setup_test_db().await;
-        let tracker = DependencyTracker::new(pool.clone());
+        let db = TestDb::new().await;
+        let tracker = DependencyTracker::new(db.pool.clone());
 
         // Create tasks A -> B
         let task_a = make_task("Task A");
         let task_b = make_task("Task B");
-        crate::db::insert_task(&pool, &task_a).await.unwrap();
-        crate::db::insert_task(&pool, &task_b).await.unwrap();
+        crate::db::insert_task(&db.pool, &task_a).await.unwrap();
+        crate::db::insert_task(&db.pool, &task_b).await.unwrap();
 
         // Make B depend on A
         tracker
@@ -418,21 +414,21 @@ mod tests {
             Err(DependencyError::CircularDependency(_))
         ));
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn get_blocked_by_finds_dependents() {
-        let pool = setup_test_db().await;
-        let tracker = DependencyTracker::new(pool.clone());
+        let db = TestDb::new().await;
+        let tracker = DependencyTracker::new(db.pool.clone());
 
         // Create tasks
         let task_a = make_task("Task A");
         let task_b = make_task("Task B");
         let task_c = make_task("Task C");
-        crate::db::insert_task(&pool, &task_a).await.unwrap();
-        crate::db::insert_task(&pool, &task_b).await.unwrap();
-        crate::db::insert_task(&pool, &task_c).await.unwrap();
+        crate::db::insert_task(&db.pool, &task_a).await.unwrap();
+        crate::db::insert_task(&db.pool, &task_b).await.unwrap();
+        crate::db::insert_task(&db.pool, &task_c).await.unwrap();
 
         // B and C depend on A
         tracker
@@ -448,21 +444,21 @@ mod tests {
         let blocked = tracker.get_blocked_by(&task_a.id).await.unwrap();
         assert_eq!(blocked.len(), 2);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn dependency_chain_works() {
-        let pool = setup_test_db().await;
-        let tracker = DependencyTracker::new(pool.clone());
+        let db = TestDb::new().await;
+        let tracker = DependencyTracker::new(db.pool.clone());
 
         // Create chain: A -> B -> C
         let task_a = make_task("Task A");
         let task_b = make_task("Task B");
         let task_c = make_task("Task C");
-        crate::db::insert_task(&pool, &task_a).await.unwrap();
-        crate::db::insert_task(&pool, &task_b).await.unwrap();
-        crate::db::insert_task(&pool, &task_c).await.unwrap();
+        crate::db::insert_task(&db.pool, &task_a).await.unwrap();
+        crate::db::insert_task(&db.pool, &task_b).await.unwrap();
+        crate::db::insert_task(&db.pool, &task_c).await.unwrap();
 
         // B depends on A, C depends on B
         tracker
@@ -484,7 +480,7 @@ mod tests {
         assert!(tracker.is_blocked_by_id(&task_c.id).await.unwrap());
 
         // Complete A
-        crate::db::update_task_status(&pool, &task_a.id, TaskStatus::Completed)
+        crate::db::update_task_status(&db.pool, &task_a.id, TaskStatus::Completed)
             .await
             .unwrap();
 
@@ -495,28 +491,28 @@ mod tests {
         assert!(tracker.is_blocked_by_id(&task_c.id).await.unwrap());
 
         // Complete B
-        crate::db::update_task_status(&pool, &task_b.id, TaskStatus::Completed)
+        crate::db::update_task_status(&db.pool, &task_b.id, TaskStatus::Completed)
             .await
             .unwrap();
 
         // C is now not blocked
         assert!(!tracker.is_blocked_by_id(&task_c.id).await.unwrap());
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn get_ready_tasks_returns_unblocked() {
-        let pool = setup_test_db().await;
-        let tracker = DependencyTracker::new(pool.clone());
+        let db = TestDb::new().await;
+        let tracker = DependencyTracker::new(db.pool.clone());
 
         // Create chain: A -> B -> C
         let task_a = make_task("Task A");
         let task_b = make_task("Task B");
         let task_c = make_task("Task C");
-        crate::db::insert_task(&pool, &task_a).await.unwrap();
-        crate::db::insert_task(&pool, &task_b).await.unwrap();
-        crate::db::insert_task(&pool, &task_c).await.unwrap();
+        crate::db::insert_task(&db.pool, &task_a).await.unwrap();
+        crate::db::insert_task(&db.pool, &task_b).await.unwrap();
+        crate::db::insert_task(&db.pool, &task_c).await.unwrap();
 
         tracker
             .add_dependency(&task_b.id, &task_a.id)
@@ -532,18 +528,18 @@ mod tests {
         assert_eq!(ready.len(), 1);
         assert_eq!(ready[0], task_a.id);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn remove_dependency_works() {
-        let pool = setup_test_db().await;
-        let tracker = DependencyTracker::new(pool.clone());
+        let db = TestDb::new().await;
+        let tracker = DependencyTracker::new(db.pool.clone());
 
         let task_a = make_task("Task A");
         let task_b = make_task("Task B");
-        crate::db::insert_task(&pool, &task_a).await.unwrap();
-        crate::db::insert_task(&pool, &task_b).await.unwrap();
+        crate::db::insert_task(&db.pool, &task_a).await.unwrap();
+        crate::db::insert_task(&db.pool, &task_b).await.unwrap();
 
         // Add then remove dependency
         tracker
@@ -560,6 +556,6 @@ mod tests {
         let deps = tracker.get_task_dependencies(&task_b.id).await.unwrap();
         assert_eq!(deps.len(), 0);
 
-        pool.close().await;
+        db.cleanup().await;
     }
 }

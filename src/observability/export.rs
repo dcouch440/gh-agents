@@ -193,7 +193,7 @@ impl SessionExporter {
 mod tests {
     use super::*;
     use crate::observability::{DecisionType, LlmPrompt};
-    use sqlx::PgPool;
+    use crate::db::test_utils::TestDb;
     use tempfile::TempDir;
 
     fn mock_call(model: &str, cost: f64, tokens: u32) -> LlmCall {
@@ -205,11 +205,6 @@ mod tests {
 
     fn mock_decision(decision_type: DecisionType, cost: f64) -> Decision {
         Decision::new(Uuid::new_v4(), decision_type, "reasoning", "outcome").with_cost(cost)
-    }
-
-    async fn setup_test_db() -> PgPool {
-        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
-        crate::db::init_db_with_url(&url).await.unwrap()
     }
 
     #[test]
@@ -438,8 +433,8 @@ mod tests {
 
     #[tokio::test]
     async fn exporter_export_empty_range() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
         let exporter = SessionExporter::new(logger);
 
         let range = TimeRange::last_hours(1);
@@ -450,12 +445,13 @@ mod tests {
         assert!(export.llm_calls.is_empty());
         assert!(export.decisions.is_empty());
         assert!(!export.version.is_empty());
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn exporter_export_with_data() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
 
         let task_id = Uuid::new_v4();
         let call = LlmCall::new("test-model", LlmPrompt::new("sys"), "resp")
@@ -478,12 +474,13 @@ mod tests {
         assert_eq!(export.llm_calls.len(), 1);
         assert_eq!(export.decisions.len(), 1);
         assert_eq!(export.llm_calls[0].model, "test-model");
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn exporter_export_task_empty() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
         let exporter = SessionExporter::new(logger);
 
         let task_id = Uuid::new_v4();
@@ -494,12 +491,13 @@ mod tests {
         assert_eq!(export.summary.total_decisions, 0);
         let dur = export.time_range.duration_secs();
         assert!(dur >= 86400 - 10 && dur <= 86400 + 10);
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn exporter_export_task_with_calls_only() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
 
         let task_id = Uuid::new_v4();
         let call = LlmCall::new("m", LlmPrompt::new("s"), "r")
@@ -515,12 +513,13 @@ mod tests {
         assert_eq!(export.summary.total_decisions, 0);
         // Time range derived from the single call's timestamp
         assert!(export.time_range.duration_secs() >= 0);
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn exporter_export_task_with_decisions_only() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
 
         let task_id = Uuid::new_v4();
         let decision =
@@ -532,12 +531,13 @@ mod tests {
 
         assert_eq!(export.summary.total_llm_calls, 0);
         assert_eq!(export.summary.total_decisions, 1);
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn exporter_export_task_with_both() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
 
         let task_id = Uuid::new_v4();
 
@@ -560,12 +560,13 @@ mod tests {
         assert_eq!(export.decisions.len(), 1);
         // Time range should span from earliest to latest timestamp
         assert!(export.time_range.duration_secs() >= 0);
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn exporter_export_to_file() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
 
         let task_id = Uuid::new_v4();
         let call = LlmCall::new("file-model", LlmPrompt::new("s"), "r")
@@ -590,12 +591,13 @@ mod tests {
         // Verify it's valid JSON
         let parsed: serde_json::Value = serde_json::from_str(&contents).unwrap();
         assert_eq!(parsed["summary"]["total_llm_calls"], 1);
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn exporter_export_task_to_file() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
 
         let task_id = Uuid::new_v4();
         let decision = Decision::new(task_id, DecisionType::Recovery, "r", "o").with_cost(0.03);
@@ -614,12 +616,13 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&contents).unwrap();
         assert_eq!(parsed["summary"]["total_decisions"], 1);
         assert_eq!(parsed["summary"]["total_llm_calls"], 0);
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn exporter_export_to_file_empty() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
         let exporter = SessionExporter::new(logger);
 
         let out_dir = TempDir::new().unwrap();
@@ -634,12 +637,13 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&contents).unwrap();
         assert_eq!(parsed["summary"]["total_llm_calls"], 0);
         assert_eq!(parsed["llm_calls"].as_array().unwrap().len(), 0);
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn exporter_export_task_to_file_empty() {
-        let pool = setup_test_db().await;
-        let logger = LlmCallLogger::new(pool);
+        let db = TestDb::new().await;
+        let logger = LlmCallLogger::new(db.pool.clone());
         let exporter = SessionExporter::new(logger);
 
         let out_dir = TempDir::new().unwrap();
@@ -654,5 +658,6 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&contents).unwrap();
         assert_eq!(parsed["summary"]["total_llm_calls"], 0);
         assert_eq!(parsed["summary"]["total_decisions"], 0);
+        db.cleanup().await;
     }
 }

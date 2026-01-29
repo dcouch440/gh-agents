@@ -660,12 +660,7 @@ mod summary_tests {
 #[cfg(test)]
 mod db_tests {
     use super::*;
-    use tempfile::TempDir;
-
-    async fn setup_test_db() -> PgPool {
-        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
-        crate::db::init_db_with_url(&url).await.unwrap()
-    }
+    use crate::db::test_utils::TestDb;
 
     async fn insert_agent(pool: &PgPool, agent_id: &AgentId) {
         sqlx::query("INSERT INTO agents (id, tier, persona_name, model_id) VALUES ($1, 'Worker', 'test', 'test-model')")
@@ -685,19 +680,20 @@ mod db_tests {
 
     #[tokio::test]
     async fn cost_tracker_new_with_db() {
-        let pool = setup_test_db().await;
-        let tracker = CostTracker::new(pool);
+        let db = TestDb::new().await;
+        let tracker = CostTracker::new(db.pool.clone());
         assert!(tracker.db_pool.is_some());
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn record_call_persists_to_db() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
         let task_id = TaskId::new();
         let agent_id = AgentId::new();
-        insert_agent(&pool, &agent_id).await;
-        insert_task(&pool, &task_id).await;
-        let tracker = CostTracker::new(pool);
+        insert_agent(&db.pool, &agent_id).await;
+        insert_task(&db.pool, &task_id).await;
+        let tracker = CostTracker::new(db.pool.clone());
 
         let record = tracker
             .record_call(
@@ -725,14 +721,15 @@ mod db_tests {
         let task_cost = tracker.cost_for_task(&task_id).await;
         assert!(task_cost > 0.0);
         assert!((task_cost - record.cost_usd).abs() < f64::EPSILON);
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn get_historical_summary_without_since() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
         let agent_id = AgentId::new();
-        insert_agent(&pool, &agent_id).await;
-        let tracker = CostTracker::new(pool);
+        insert_agent(&db.pool, &agent_id).await;
+        let tracker = CostTracker::new(db.pool.clone());
 
         tracker
             .record_call(
@@ -751,14 +748,15 @@ mod db_tests {
         let summary = tracker.get_historical_summary(None).await.unwrap();
         assert!(summary.session_total > 0.0);
         assert!(summary.by_model.contains_key("claude-3-haiku-20240307"));
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn get_historical_summary_with_since() {
-        let pool = setup_test_db().await;
+        let db = TestDb::new().await;
         let agent_id = AgentId::new();
-        insert_agent(&pool, &agent_id).await;
-        let tracker = CostTracker::new(pool);
+        insert_agent(&db.pool, &agent_id).await;
+        let tracker = CostTracker::new(db.pool.clone());
 
         let before = Utc::now();
 
@@ -784,6 +782,7 @@ mod db_tests {
         let future = Utc::now() + chrono::Duration::hours(1);
         let summary_empty = tracker.get_historical_summary(Some(future)).await.unwrap();
         assert_eq!(summary_empty.session_total, 0.0);
+        db.cleanup().await;
     }
 
     #[test]
