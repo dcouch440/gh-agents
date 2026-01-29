@@ -4,7 +4,7 @@
 //! Used by the scheduler to ensure work is done in the correct order.
 
 use crate::types::{Task, TaskId, TaskStatus};
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use std::collections::HashSet;
 use std::str::FromStr;
 use thiserror::Error;
@@ -25,12 +25,12 @@ pub enum DependencyError {
 
 /// Tracks task dependencies and determines blocked status
 pub struct DependencyTracker {
-    pool: SqlitePool,
+    pool: PgPool,
 }
 
 impl DependencyTracker {
     /// Create a new DependencyTracker
-    pub fn new(pool: SqlitePool) -> Self {
+    pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 
@@ -102,7 +102,7 @@ impl DependencyTracker {
 
     /// Get the current status of a task by ID
     async fn get_task_status(&self, id: &TaskId) -> Result<Option<TaskStatus>, DependencyError> {
-        let row: Option<(String,)> = sqlx::query_as("SELECT status FROM tasks WHERE id = ?")
+        let row: Option<(String,)> = sqlx::query_as("SELECT status FROM tasks WHERE id = $1")
             .bind(id.0.to_string())
             .fetch_optional(&self.pool)
             .await
@@ -121,7 +121,7 @@ impl DependencyTracker {
     /// Get all tasks that depend on the given task
     pub async fn get_blocked_by(&self, task_id: &TaskId) -> Result<Vec<TaskId>, DependencyError> {
         let rows: Vec<(String,)> =
-            sqlx::query_as("SELECT task_id FROM task_dependencies WHERE depends_on_id = ?")
+            sqlx::query_as("SELECT task_id FROM task_dependencies WHERE depends_on_id = $1")
                 .bind(task_id.0.to_string())
                 .fetch_all(&self.pool)
                 .await
@@ -140,7 +140,7 @@ impl DependencyTracker {
         task_id: &TaskId,
     ) -> Result<Vec<TaskId>, DependencyError> {
         let rows: Vec<(String,)> =
-            sqlx::query_as("SELECT depends_on_id FROM task_dependencies WHERE task_id = ?")
+            sqlx::query_as("SELECT depends_on_id FROM task_dependencies WHERE task_id = $1")
                 .bind(task_id.0.to_string())
                 .fetch_all(&self.pool)
                 .await
@@ -198,16 +198,17 @@ impl DependencyTracker {
                 )));
             }
 
-            let now = chrono::Utc::now().to_rfc3339();
+            let now = chrono::Utc::now();
             sqlx::query(
                 r#"
-                INSERT OR IGNORE INTO task_dependencies (task_id, depends_on_id, created_at)
-                VALUES (?, ?, ?)
+                INSERT INTO task_dependencies (task_id, depends_on_id, created_at)
+                VALUES ($1, $2, $3)
+                ON CONFLICT DO NOTHING
                 "#,
             )
             .bind(task.id.0.to_string())
             .bind(dep_id.0.to_string())
-            .bind(&now)
+            .bind(now)
             .execute(&self.pool)
             .await
             .map_err(|e| DependencyError::DatabaseError(e.to_string()))?;
@@ -230,16 +231,17 @@ impl DependencyTracker {
             )));
         }
 
-        let now = chrono::Utc::now().to_rfc3339();
+        let now = chrono::Utc::now();
         sqlx::query(
             r#"
-            INSERT OR IGNORE INTO task_dependencies (task_id, depends_on_id, created_at)
-            VALUES (?, ?, ?)
+            INSERT INTO task_dependencies (task_id, depends_on_id, created_at)
+            VALUES ($1, $2, $3)
+            ON CONFLICT DO NOTHING
             "#,
         )
         .bind(task_id.0.to_string())
         .bind(depends_on.0.to_string())
-        .bind(&now)
+        .bind(now)
         .execute(&self.pool)
         .await
         .map_err(|e| DependencyError::DatabaseError(e.to_string()))?;
@@ -253,7 +255,7 @@ impl DependencyTracker {
         task_id: &TaskId,
         depends_on: &TaskId,
     ) -> Result<(), DependencyError> {
-        sqlx::query("DELETE FROM task_dependencies WHERE task_id = ? AND depends_on_id = ?")
+        sqlx::query("DELETE FROM task_dependencies WHERE task_id = $1 AND depends_on_id = $2")
             .bind(task_id.0.to_string())
             .bind(depends_on.0.to_string())
             .execute(&self.pool)
@@ -296,15 +298,10 @@ mod tests {
     use super::*;
     use crate::types::{AgentTier, Priority};
     use chrono::Utc;
-    use tempfile::TempDir;
 
-    async fn setup_test_db() -> (SqlitePool, TempDir) {
-        let temp_dir = TempDir::new().unwrap();
-        let db_path = temp_dir.path().join("test.db");
-        let pool = crate::db::init_db_at(db_path.to_str().unwrap())
-            .await
-            .unwrap();
-        (pool, temp_dir)
+    async fn setup_test_db() -> PgPool {
+        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+        crate::db::init_db_with_url(&url).await.unwrap()
     }
 
     fn make_task(title: &str) -> Task {
@@ -327,7 +324,7 @@ mod tests {
 
     #[tokio::test]
     async fn task_without_dependencies_is_not_blocked() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let tracker = DependencyTracker::new(pool.clone());
 
         let task = make_task("Task A");
@@ -338,7 +335,7 @@ mod tests {
 
     #[tokio::test]
     async fn task_with_incomplete_dependency_is_blocked() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let tracker = DependencyTracker::new(pool.clone());
 
         // Create dependency task
@@ -356,7 +353,7 @@ mod tests {
 
     #[tokio::test]
     async fn task_with_completed_dependency_is_not_blocked() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let tracker = DependencyTracker::new(pool.clone());
 
         // Create and complete dependency task
@@ -375,7 +372,7 @@ mod tests {
 
     #[tokio::test]
     async fn save_and_load_dependencies() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let tracker = DependencyTracker::new(pool.clone());
 
         // Create two tasks
@@ -399,7 +396,7 @@ mod tests {
 
     #[tokio::test]
     async fn circular_dependency_detected() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let tracker = DependencyTracker::new(pool.clone());
 
         // Create tasks A -> B
@@ -426,7 +423,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_blocked_by_finds_dependents() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let tracker = DependencyTracker::new(pool.clone());
 
         // Create tasks
@@ -456,7 +453,7 @@ mod tests {
 
     #[tokio::test]
     async fn dependency_chain_works() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let tracker = DependencyTracker::new(pool.clone());
 
         // Create chain: A -> B -> C
@@ -510,7 +507,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_ready_tasks_returns_unblocked() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let tracker = DependencyTracker::new(pool.clone());
 
         // Create chain: A -> B -> C
@@ -540,7 +537,7 @@ mod tests {
 
     #[tokio::test]
     async fn remove_dependency_works() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let tracker = DependencyTracker::new(pool.clone());
 
         let task_a = make_task("Task A");

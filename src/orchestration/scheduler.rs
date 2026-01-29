@@ -6,7 +6,7 @@
 //! - Resuming: Transitioning back to running
 
 use anyhow::Result;
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::{Notify, RwLock};
@@ -18,14 +18,14 @@ use crate::types::{AgentTier, Priority, ProductionMode, Task, TaskId};
 
 /// Task scheduler that respects production mode
 pub struct Scheduler {
-    pool: SqlitePool,
+    pool: PgPool,
     /// Cached production mode (updated on state changes)
     mode_cache: Arc<RwLock<ProductionMode>>,
 }
 
 impl Scheduler {
     /// Create a new scheduler
-    pub async fn new(pool: SqlitePool) -> Result<Self> {
+    pub async fn new(pool: PgPool) -> Result<Self> {
         let mode = get_production_mode(&pool).await?;
         Ok(Self {
             pool,
@@ -469,19 +469,15 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
-    async fn setup_scheduler() -> (Scheduler, TempDir) {
-        let temp_dir = TempDir::new().unwrap();
-        let db_path = temp_dir.path().join("test.db");
-        let pool = crate::db::init_db_at(db_path.to_str().unwrap())
-            .await
-            .unwrap();
-        let scheduler = Scheduler::new(pool).await.unwrap();
-        (scheduler, temp_dir)
+    async fn setup_scheduler() -> Scheduler {
+        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+        let pool = crate::db::init_db_with_url(&url).await.unwrap();
+        Scheduler::new(pool).await.unwrap()
     }
 
     #[tokio::test]
     async fn scheduler_starts_in_running_mode() {
-        let (scheduler, _temp_dir) = setup_scheduler().await;
+        let scheduler = setup_scheduler().await;
 
         assert_eq!(
             scheduler.get_production_mode().await,
@@ -493,7 +489,7 @@ mod tests {
 
     #[tokio::test]
     async fn enter_refactor_mode_stops_assignment() {
-        let (scheduler, _temp_dir) = setup_scheduler().await;
+        let scheduler = setup_scheduler().await;
 
         scheduler.enter_refactor_mode().await.unwrap();
 
@@ -507,7 +503,7 @@ mod tests {
 
     #[tokio::test]
     async fn pause_for_refactor() {
-        let (scheduler, _temp_dir) = setup_scheduler().await;
+        let scheduler = setup_scheduler().await;
 
         scheduler.pause_for_refactor().await.unwrap();
 
@@ -521,7 +517,7 @@ mod tests {
 
     #[tokio::test]
     async fn resume_after_refactor() {
-        let (scheduler, _temp_dir) = setup_scheduler().await;
+        let scheduler = setup_scheduler().await;
 
         scheduler.enter_refactor_mode().await.unwrap();
         scheduler.begin_resume().await.unwrap();
@@ -544,7 +540,7 @@ mod tests {
 
     #[tokio::test]
     async fn full_refactor_cycle() {
-        let (scheduler, _temp_dir) = setup_scheduler().await;
+        let scheduler = setup_scheduler().await;
 
         // 1. Start in running mode
         assert!(scheduler.should_assign().await);
@@ -571,7 +567,7 @@ mod tests {
 
     #[tokio::test]
     async fn begin_resume_only_works_in_refactor_states() {
-        let (scheduler, _temp_dir) = setup_scheduler().await;
+        let scheduler = setup_scheduler().await;
 
         // In running mode, begin_resume does nothing
         scheduler.begin_resume().await.unwrap();
@@ -583,7 +579,7 @@ mod tests {
 
     #[tokio::test]
     async fn enter_refactor_mode_noop_when_not_running() {
-        let (scheduler, _temp_dir) = setup_scheduler().await;
+        let scheduler = setup_scheduler().await;
 
         // First pause, then try to enter refactor mode - should be a no-op
         scheduler.pause_for_refactor().await.unwrap();
@@ -602,7 +598,7 @@ mod tests {
 
     #[tokio::test]
     async fn begin_resume_works_from_paused() {
-        let (scheduler, _temp_dir) = setup_scheduler().await;
+        let scheduler = setup_scheduler().await;
 
         scheduler.pause_for_refactor().await.unwrap();
         assert!(scheduler.is_paused().await);
@@ -617,7 +613,7 @@ mod tests {
 
     #[tokio::test]
     async fn begin_resume_noop_from_resuming() {
-        let (scheduler, _temp_dir) = setup_scheduler().await;
+        let scheduler = setup_scheduler().await;
 
         scheduler.enter_refactor_mode().await.unwrap();
         scheduler.begin_resume().await.unwrap();
@@ -636,7 +632,7 @@ mod tests {
 
     #[tokio::test]
     async fn refresh_mode_syncs_from_db() {
-        let (scheduler, _temp_dir) = setup_scheduler().await;
+        let scheduler = setup_scheduler().await;
 
         // Change mode in DB directly
         set_production_mode(&scheduler.pool, ProductionMode::Paused)
@@ -659,7 +655,7 @@ mod tests {
 
     #[tokio::test]
     async fn should_assign_false_when_paused() {
-        let (scheduler, _temp_dir) = setup_scheduler().await;
+        let scheduler = setup_scheduler().await;
 
         scheduler.pause_for_refactor().await.unwrap();
         assert!(!scheduler.should_assign().await);
@@ -667,7 +663,7 @@ mod tests {
 
     #[tokio::test]
     async fn should_assign_false_when_resuming() {
-        let (scheduler, _temp_dir) = setup_scheduler().await;
+        let scheduler = setup_scheduler().await;
 
         scheduler.enter_refactor_mode().await.unwrap();
         scheduler.begin_resume().await.unwrap();
@@ -676,7 +672,7 @@ mod tests {
 
     #[tokio::test]
     async fn is_paused_false_when_resuming() {
-        let (scheduler, _temp_dir) = setup_scheduler().await;
+        let scheduler = setup_scheduler().await;
 
         scheduler.enter_refactor_mode().await.unwrap();
         scheduler.begin_resume().await.unwrap();
@@ -686,7 +682,7 @@ mod tests {
 
     #[tokio::test]
     async fn resume_from_any_state() {
-        let (scheduler, _temp_dir) = setup_scheduler().await;
+        let scheduler = setup_scheduler().await;
 
         // Resume from Running (no-op effectively, just sets Running again)
         scheduler.resume().await.unwrap();
@@ -773,13 +769,9 @@ mod task_scheduler_integration_tests {
         Arc<TaskScheduler>,
         Arc<RwLock<DependencyAwareQueue>>,
         Arc<RwLock<AgentPool>>,
-        TempDir,
     ) {
-        let temp_dir = TempDir::new().unwrap();
-        let db_path = temp_dir.path().join("test.db");
-        let pool = crate::db::init_db_at(db_path.to_str().unwrap())
-            .await
-            .unwrap();
+        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+        let pool = crate::db::init_db_with_url(&url).await.unwrap();
 
         let queue = Arc::new(RwLock::new(
             DependencyAwareQueue::new(pool.clone()).await.unwrap(),
@@ -807,18 +799,18 @@ mod task_scheduler_integration_tests {
             config,
         ));
 
-        (scheduler, queue, agent_pool, temp_dir)
+        (scheduler, queue, agent_pool)
     }
 
     #[tokio::test]
     async fn task_scheduler_starts_not_running() {
-        let (scheduler, _, _, _tmp) = setup_full().await;
+        let (scheduler, _, _) = setup_full().await;
         assert!(!scheduler.is_running().await);
     }
 
     #[tokio::test]
     async fn task_scheduler_stop() {
-        let (scheduler, _, _, _tmp) = setup_full().await;
+        let (scheduler, _, _) = setup_full().await;
         // Start and then stop
         let s = scheduler.clone();
         let handle = tokio::spawn(async move { s.run().await });
@@ -835,7 +827,7 @@ mod task_scheduler_integration_tests {
 
     #[tokio::test]
     async fn agent_available_notifier_returns_notify() {
-        let (scheduler, _, _, _tmp) = setup_full().await;
+        let (scheduler, _, _) = setup_full().await;
         let notifier = scheduler.agent_available_notifier();
         // Just verify it returns an Arc<Notify> that can be used
         notifier.notify_waiters();
@@ -843,7 +835,7 @@ mod task_scheduler_integration_tests {
 
     #[tokio::test]
     async fn on_agent_available_notifies() {
-        let (scheduler, _, _, _tmp) = setup_full().await;
+        let (scheduler, _, _) = setup_full().await;
         let agent_id = AgentId(uuid::Uuid::new_v4());
         // Should not panic
         scheduler.on_agent_available(&agent_id).await;
@@ -851,7 +843,7 @@ mod task_scheduler_integration_tests {
 
     #[tokio::test]
     async fn on_task_completed_returns_empty_when_no_deps() {
-        let (scheduler, _, _, _tmp) = setup_full().await;
+        let (scheduler, _, _) = setup_full().await;
         let task_id = TaskId::new();
         let unblocked = scheduler.on_task_completed(&task_id).await.unwrap();
         assert!(unblocked.is_empty());
@@ -859,14 +851,14 @@ mod task_scheduler_integration_tests {
 
     #[tokio::test]
     async fn check_preemption_returns_none_when_no_urgent() {
-        let (scheduler, _, _, _tmp) = setup_full().await;
+        let (scheduler, _, _) = setup_full().await;
         let result = scheduler.check_preemption().await.unwrap();
         assert!(result.is_none());
     }
 
     #[tokio::test]
     async fn check_preemption_returns_none_when_urgent_but_agents_free() {
-        let (scheduler, queue, agent_pool, _tmp) = setup_full().await;
+        let (scheduler, queue, agent_pool) = setup_full().await;
 
         // Add an urgent task
         let task = make_task(Priority::Urgent);
@@ -892,7 +884,7 @@ mod task_scheduler_integration_tests {
 
     #[tokio::test]
     async fn check_preemption_returns_none_all_busy_not_implemented() {
-        let (scheduler, queue, _, _tmp) = setup_full().await;
+        let (scheduler, queue, _) = setup_full().await;
 
         // Add an urgent task but no agents at all (stats all zero)
         let task = make_task(Priority::Urgent);
@@ -909,7 +901,7 @@ mod task_scheduler_integration_tests {
 
     #[tokio::test]
     async fn scheduler_run_paused_skips_assignment() {
-        let (scheduler, queue, _, _tmp) = setup_full().await;
+        let (scheduler, queue, _) = setup_full().await;
 
         // Pause the refactor scheduler
         scheduler

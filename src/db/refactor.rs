@@ -6,9 +6,9 @@
 //! - Proposed changes
 
 use anyhow::{Context, Result};
-use chrono::Utc;
-use sqlx::SqlitePool;
-use std::str::FromStr;
+use chrono::{DateTime, Utc};
+use sqlx::PgPool;
+use uuid::Uuid;
 
 use crate::types::{
     ChangeId, ChangeStatus, ChangeType, ProductionMode, RefactorChange, RefactorId, RefactorSession,
@@ -19,7 +19,7 @@ use crate::types::{
 // =============================================================================
 
 /// Get the current production mode
-pub async fn get_production_mode(pool: &SqlitePool) -> Result<ProductionMode> {
+pub async fn get_production_mode(pool: &PgPool) -> Result<ProductionMode> {
     let row: Option<(String,)> =
         sqlx::query_as("SELECT value FROM system_state WHERE key = 'production_mode'")
             .fetch_optional(pool)
@@ -32,21 +32,20 @@ pub async fn get_production_mode(pool: &SqlitePool) -> Result<ProductionMode> {
 }
 
 /// Set the production mode
-pub async fn set_production_mode(pool: &SqlitePool, mode: ProductionMode) -> Result<()> {
+pub async fn set_production_mode(pool: &PgPool, mode: ProductionMode) -> Result<()> {
     let value = mode.as_str();
-    let updated_at = Utc::now().to_rfc3339();
 
     sqlx::query(
         r#"
         INSERT INTO system_state (key, value, updated_at)
-        VALUES ('production_mode', ?, ?)
+        VALUES ('production_mode', $1, $2)
         ON CONFLICT(key) DO UPDATE SET
             value = excluded.value,
             updated_at = excluded.updated_at
         "#,
     )
     .bind(value)
-    .bind(&updated_at)
+    .bind(Utc::now())
     .execute(pool)
     .await
     .context("Failed to set production mode")?;
@@ -59,7 +58,7 @@ pub async fn set_production_mode(pool: &SqlitePool, mode: ProductionMode) -> Res
 // =============================================================================
 
 /// Get the current milestone limit (None = no limit)
-pub async fn get_milestone_limit(pool: &SqlitePool) -> Result<Option<u8>> {
+pub async fn get_milestone_limit(pool: &PgPool) -> Result<Option<u8>> {
     let row: Option<(String,)> =
         sqlx::query_as("SELECT value FROM system_state WHERE key = 'milestone_limit'")
             .fetch_optional(pool)
@@ -70,9 +69,7 @@ pub async fn get_milestone_limit(pool: &SqlitePool) -> Result<Option<u8>> {
 }
 
 /// Set the milestone limit (None clears it)
-pub async fn set_milestone_limit(pool: &SqlitePool, milestone: Option<u8>) -> Result<()> {
-    let updated_at = Utc::now().to_rfc3339();
-
+pub async fn set_milestone_limit(pool: &PgPool, milestone: Option<u8>) -> Result<()> {
     match milestone {
         Some(m) => {
             // Validate milestone is in range 1-9
@@ -83,14 +80,14 @@ pub async fn set_milestone_limit(pool: &SqlitePool, milestone: Option<u8>) -> Re
             sqlx::query(
                 r#"
                 INSERT INTO system_state (key, value, updated_at)
-                VALUES ('milestone_limit', ?, ?)
+                VALUES ('milestone_limit', $1, $2)
                 ON CONFLICT(key) DO UPDATE SET
                     value = excluded.value,
                     updated_at = excluded.updated_at
                 "#,
             )
             .bind(&value)
-            .bind(&updated_at)
+            .bind(Utc::now())
             .execute(pool)
             .await
             .context("Failed to set milestone limit")?;
@@ -112,24 +109,18 @@ pub async fn set_milestone_limit(pool: &SqlitePool, milestone: Option<u8>) -> Re
 // =============================================================================
 
 /// Insert a new refactor session
-pub async fn insert_refactor_session(pool: &SqlitePool, session: &RefactorSession) -> Result<()> {
-    let id = session.id.0.to_string();
-    let started_at = session.started_at.to_rfc3339();
-    let ended_at = session.ended_at.map(|t| t.to_rfc3339());
-    let production_halted = session.production_halted as i32;
-    let changes_applied = session.changes_applied as i32;
-
+pub async fn insert_refactor_session(pool: &PgPool, session: &RefactorSession) -> Result<()> {
     sqlx::query(
         r#"
         INSERT INTO refactor_sessions (id, started_at, ended_at, production_halted, changes_applied)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5)
         "#,
     )
-    .bind(&id)
-    .bind(&started_at)
-    .bind(&ended_at)
-    .bind(production_halted)
-    .bind(changes_applied)
+    .bind(session.id.0)
+    .bind(session.started_at)
+    .bind(session.ended_at)
+    .bind(session.production_halted)
+    .bind(session.changes_applied as i32)
     .execute(pool)
     .await
     .context("Failed to insert refactor session")?;
@@ -139,24 +130,22 @@ pub async fn insert_refactor_session(pool: &SqlitePool, session: &RefactorSessio
 
 /// Get a refactor session by ID
 pub async fn get_refactor_session(
-    pool: &SqlitePool,
+    pool: &PgPool,
     id: &RefactorId,
 ) -> Result<Option<RefactorSession>> {
-    let id_str = id.0.to_string();
-
     let row: Option<RefactorSessionRow> = sqlx::query_as(
-        "SELECT id, started_at, ended_at, production_halted, changes_applied FROM refactor_sessions WHERE id = ?"
+        "SELECT id, started_at, ended_at, production_halted, changes_applied FROM refactor_sessions WHERE id = $1"
     )
-    .bind(&id_str)
+    .bind(id.0)
     .fetch_optional(pool)
     .await
     .context("Failed to fetch refactor session")?;
 
     match row {
         Some(row) => {
-            let mut session = row.into_session()?;
-            // Load associated changes
-            session.proposed_changes = list_changes_for_session(pool, id).await?;
+            let session_id = RefactorId(row.id);
+            let mut session = row.into_session();
+            session.proposed_changes = list_changes_for_session(pool, &session_id).await?;
             Ok(Some(session))
         }
         None => Ok(None),
@@ -164,7 +153,7 @@ pub async fn get_refactor_session(
 }
 
 /// Get the currently active refactor session (if any)
-pub async fn get_active_refactor_session(pool: &SqlitePool) -> Result<Option<RefactorSession>> {
+pub async fn get_active_refactor_session(pool: &PgPool) -> Result<Option<RefactorSession>> {
     let row: Option<RefactorSessionRow> = sqlx::query_as(
         "SELECT id, started_at, ended_at, production_halted, changes_applied FROM refactor_sessions WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1"
     )
@@ -174,8 +163,8 @@ pub async fn get_active_refactor_session(pool: &SqlitePool) -> Result<Option<Ref
 
     match row {
         Some(row) => {
-            let id = RefactorId(uuid::Uuid::from_str(&row.id)?);
-            let mut session = row.into_session()?;
+            let id = RefactorId(row.id);
+            let mut session = row.into_session();
             session.proposed_changes = list_changes_for_session(pool, &id).await?;
             Ok(Some(session))
         }
@@ -184,23 +173,18 @@ pub async fn get_active_refactor_session(pool: &SqlitePool) -> Result<Option<Ref
 }
 
 /// Update a refactor session
-pub async fn update_refactor_session(pool: &SqlitePool, session: &RefactorSession) -> Result<()> {
-    let id = session.id.0.to_string();
-    let ended_at = session.ended_at.map(|t| t.to_rfc3339());
-    let production_halted = session.production_halted as i32;
-    let changes_applied = session.changes_applied as i32;
-
+pub async fn update_refactor_session(pool: &PgPool, session: &RefactorSession) -> Result<()> {
     sqlx::query(
         r#"
         UPDATE refactor_sessions
-        SET ended_at = ?, production_halted = ?, changes_applied = ?
-        WHERE id = ?
+        SET ended_at = $1, production_halted = $2, changes_applied = $3
+        WHERE id = $4
         "#,
     )
-    .bind(&ended_at)
-    .bind(production_halted)
-    .bind(changes_applied)
-    .bind(&id)
+    .bind(session.ended_at)
+    .bind(session.production_halted)
+    .bind(session.changes_applied as i32)
+    .bind(session.id.0)
     .execute(pool)
     .await
     .context("Failed to update refactor session")?;
@@ -209,7 +193,7 @@ pub async fn update_refactor_session(pool: &SqlitePool, session: &RefactorSessio
 }
 
 /// List all refactor sessions (most recent first)
-pub async fn list_refactor_sessions(pool: &SqlitePool) -> Result<Vec<RefactorSession>> {
+pub async fn list_refactor_sessions(pool: &PgPool) -> Result<Vec<RefactorSession>> {
     let rows: Vec<RefactorSessionRow> = sqlx::query_as(
         "SELECT id, started_at, ended_at, production_halted, changes_applied FROM refactor_sessions ORDER BY started_at DESC"
     )
@@ -219,8 +203,8 @@ pub async fn list_refactor_sessions(pool: &SqlitePool) -> Result<Vec<RefactorSes
 
     let mut sessions = Vec::new();
     for row in rows {
-        let id = RefactorId(uuid::Uuid::from_str(&row.id)?);
-        let mut session = row.into_session()?;
+        let id = RefactorId(row.id);
+        let mut session = row.into_session();
         session.proposed_changes = list_changes_for_session(pool, &id).await?;
         sessions.push(session);
     }
@@ -232,9 +216,7 @@ pub async fn list_refactor_sessions(pool: &SqlitePool) -> Result<Vec<RefactorSes
 // =============================================================================
 
 /// Insert a refactor change
-pub async fn insert_refactor_change(pool: &SqlitePool, change: &RefactorChange) -> Result<()> {
-    let id = change.id.0.to_string();
-    let session_id = change.session_id.0.to_string();
+pub async fn insert_refactor_change(pool: &PgPool, change: &RefactorChange) -> Result<()> {
     let change_type = match change.change_type {
         ChangeType::Create => "create",
         ChangeType::Modify => "modify",
@@ -242,23 +224,22 @@ pub async fn insert_refactor_change(pool: &SqlitePool, change: &RefactorChange) 
         ChangeType::Rename => "rename",
     };
     let status = change.status.as_str();
-    let created_at = change.created_at.to_rfc3339();
 
     sqlx::query(
         r#"
         INSERT INTO refactor_changes (id, session_id, file_path, change_type, before_content, after_content, reason, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         "#,
     )
-    .bind(&id)
-    .bind(&session_id)
+    .bind(change.id.0)
+    .bind(change.session_id.0)
     .bind(&change.file_path)
     .bind(change_type)
     .bind(&change.before_content)
     .bind(&change.after_content)
     .bind(&change.reason)
     .bind(status)
-    .bind(&created_at)
+    .bind(change.created_at)
     .execute(pool)
     .await
     .context("Failed to insert refactor change")?;
@@ -267,56 +248,48 @@ pub async fn insert_refactor_change(pool: &SqlitePool, change: &RefactorChange) 
 }
 
 /// Get a refactor change by ID
-pub async fn get_refactor_change(
-    pool: &SqlitePool,
-    id: &ChangeId,
-) -> Result<Option<RefactorChange>> {
-    let id_str = id.0.to_string();
-
+pub async fn get_refactor_change(pool: &PgPool, id: &ChangeId) -> Result<Option<RefactorChange>> {
     let row: Option<RefactorChangeRow> = sqlx::query_as(
-        "SELECT id, session_id, file_path, change_type, before_content, after_content, reason, status, created_at FROM refactor_changes WHERE id = ?"
+        "SELECT id, session_id, file_path, change_type, before_content, after_content, reason, status, created_at FROM refactor_changes WHERE id = $1"
     )
-    .bind(&id_str)
+    .bind(id.0)
     .fetch_optional(pool)
     .await
     .context("Failed to fetch refactor change")?;
 
     match row {
-        Some(row) => Ok(Some(row.into_change()?)),
+        Some(row) => Ok(Some(row.into_change())),
         None => Ok(None),
     }
 }
 
 /// List changes for a session
 pub async fn list_changes_for_session(
-    pool: &SqlitePool,
+    pool: &PgPool,
     session_id: &RefactorId,
 ) -> Result<Vec<RefactorChange>> {
-    let session_id_str = session_id.0.to_string();
-
     let rows: Vec<RefactorChangeRow> = sqlx::query_as(
-        "SELECT id, session_id, file_path, change_type, before_content, after_content, reason, status, created_at FROM refactor_changes WHERE session_id = ? ORDER BY created_at ASC"
+        "SELECT id, session_id, file_path, change_type, before_content, after_content, reason, status, created_at FROM refactor_changes WHERE session_id = $1 ORDER BY created_at ASC"
     )
-    .bind(&session_id_str)
+    .bind(session_id.0)
     .fetch_all(pool)
     .await
     .context("Failed to list changes for session")?;
 
-    rows.into_iter().map(|r| r.into_change()).collect()
+    Ok(rows.into_iter().map(|r| r.into_change()).collect())
 }
 
 /// Update change status
 pub async fn update_change_status(
-    pool: &SqlitePool,
+    pool: &PgPool,
     id: &ChangeId,
     status: ChangeStatus,
 ) -> Result<()> {
-    let id_str = id.0.to_string();
     let status_str = status.as_str();
 
-    sqlx::query("UPDATE refactor_changes SET status = ? WHERE id = ?")
+    sqlx::query("UPDATE refactor_changes SET status = $1 WHERE id = $2")
         .bind(status_str)
-        .bind(&id_str)
+        .bind(id.0)
         .execute(pool)
         .await
         .context("Failed to update change status")?;
@@ -326,20 +299,20 @@ pub async fn update_change_status(
 
 /// List changes by status
 pub async fn list_changes_by_status(
-    pool: &SqlitePool,
+    pool: &PgPool,
     status: ChangeStatus,
 ) -> Result<Vec<RefactorChange>> {
     let status_str = status.as_str();
 
     let rows: Vec<RefactorChangeRow> = sqlx::query_as(
-        "SELECT id, session_id, file_path, change_type, before_content, after_content, reason, status, created_at FROM refactor_changes WHERE status = ? ORDER BY created_at ASC"
+        "SELECT id, session_id, file_path, change_type, before_content, after_content, reason, status, created_at FROM refactor_changes WHERE status = $1 ORDER BY created_at ASC"
     )
     .bind(status_str)
     .fetch_all(pool)
     .await
     .context("Failed to list changes by status")?;
 
-    rows.into_iter().map(|r| r.into_change()).collect()
+    Ok(rows.into_iter().map(|r| r.into_change()).collect())
 }
 
 // =============================================================================
@@ -348,53 +321,41 @@ pub async fn list_changes_by_status(
 
 #[derive(sqlx::FromRow)]
 struct RefactorSessionRow {
-    id: String,
-    started_at: String,
-    ended_at: Option<String>,
-    production_halted: i32,
+    id: Uuid,
+    started_at: DateTime<Utc>,
+    ended_at: Option<DateTime<Utc>>,
+    production_halted: bool,
     changes_applied: i32,
 }
 
 impl RefactorSessionRow {
-    fn into_session(self) -> Result<RefactorSession> {
-        let id = RefactorId(uuid::Uuid::from_str(&self.id)?);
-        let started_at =
-            chrono::DateTime::parse_from_rfc3339(&self.started_at)?.with_timezone(&chrono::Utc);
-        let ended_at = self
-            .ended_at
-            .map(|s| {
-                chrono::DateTime::parse_from_rfc3339(&s).map(|d| d.with_timezone(&chrono::Utc))
-            })
-            .transpose()?;
-
-        Ok(RefactorSession {
-            id,
-            started_at,
-            ended_at,
-            production_halted: self.production_halted != 0,
+    fn into_session(self) -> RefactorSession {
+        RefactorSession {
+            id: RefactorId(self.id),
+            started_at: self.started_at,
+            ended_at: self.ended_at,
+            production_halted: self.production_halted,
             changes_applied: self.changes_applied != 0,
             proposed_changes: Vec::new(), // Loaded separately
-        })
+        }
     }
 }
 
 #[derive(sqlx::FromRow)]
 struct RefactorChangeRow {
-    id: String,
-    session_id: String,
+    id: Uuid,
+    session_id: Uuid,
     file_path: String,
     change_type: String,
     before_content: Option<String>,
     after_content: Option<String>,
     reason: String,
     status: String,
-    created_at: String,
+    created_at: DateTime<Utc>,
 }
 
 impl RefactorChangeRow {
-    fn into_change(self) -> Result<RefactorChange> {
-        let id = ChangeId(uuid::Uuid::from_str(&self.id)?);
-        let session_id = RefactorId(uuid::Uuid::from_str(&self.session_id)?);
+    fn into_change(self) -> RefactorChange {
         let change_type = match self.change_type.as_str() {
             "create" => ChangeType::Create,
             "modify" => ChangeType::Modify,
@@ -403,40 +364,54 @@ impl RefactorChangeRow {
             _ => ChangeType::Modify,
         };
         let status = ChangeStatus::from_str(&self.status);
-        let created_at =
-            chrono::DateTime::parse_from_rfc3339(&self.created_at)?.with_timezone(&chrono::Utc);
 
-        Ok(RefactorChange {
-            id,
-            session_id,
+        RefactorChange {
+            id: ChangeId(self.id),
+            session_id: RefactorId(self.session_id),
             file_path: self.file_path,
             change_type,
             before_content: self.before_content,
             after_content: self.after_content,
             reason: self.reason,
             status,
-            created_at,
-        })
+            created_at: self.created_at,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
 
-    async fn setup_test_db() -> (SqlitePool, TempDir) {
-        let temp_dir = TempDir::new().unwrap();
-        let db_path = temp_dir.path().join("test.db");
-        let pool = crate::db::init_db_at(db_path.to_str().unwrap())
+    async fn setup_test_db() -> PgPool {
+        let database_url = std::env::var("DATABASE_URL")
+            .unwrap_or_else(|_| "postgres://nexor:nexor@localhost:5432/nexor_test".to_string());
+        let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
+        sqlx::migrate!().run(&pool).await.unwrap();
+        // Clean tables for test isolation
+        sqlx::query("DELETE FROM refactor_changes")
+            .execute(&pool)
             .await
             .unwrap();
-        (pool, temp_dir)
+        sqlx::query("DELETE FROM refactor_sessions")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM system_state WHERE key != 'production_mode'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        // Reset production mode to default
+        sqlx::query("UPDATE system_state SET value = 'running' WHERE key = 'production_mode'")
+            .execute(&pool)
+            .await
+            .ok();
+        pool
     }
 
     #[tokio::test]
     async fn production_mode_default_is_running() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let mode = get_production_mode(&pool).await.unwrap();
         assert_eq!(mode, ProductionMode::Running);
@@ -446,7 +421,7 @@ mod tests {
 
     #[tokio::test]
     async fn can_set_and_get_production_mode() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         set_production_mode(&pool, ProductionMode::RefactorMode)
             .await
@@ -465,7 +440,7 @@ mod tests {
 
     #[tokio::test]
     async fn can_insert_and_get_refactor_session() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let session = RefactorSession::new();
         insert_refactor_session(&pool, &session).await.unwrap();
@@ -481,7 +456,7 @@ mod tests {
 
     #[tokio::test]
     async fn can_get_active_refactor_session() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         // No active session initially
         let active = get_active_refactor_session(&pool).await.unwrap();
@@ -501,7 +476,7 @@ mod tests {
 
     #[tokio::test]
     async fn can_update_refactor_session() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let mut session = RefactorSession::new();
         insert_refactor_session(&pool, &session).await.unwrap();
@@ -522,7 +497,7 @@ mod tests {
 
     #[tokio::test]
     async fn can_insert_and_get_refactor_change() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let session = RefactorSession::new();
         insert_refactor_session(&pool, &session).await.unwrap();
@@ -547,7 +522,7 @@ mod tests {
 
     #[tokio::test]
     async fn can_list_changes_for_session() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let session = RefactorSession::new();
         insert_refactor_session(&pool, &session).await.unwrap();
@@ -577,7 +552,7 @@ mod tests {
 
     #[tokio::test]
     async fn can_update_change_status() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let session = RefactorSession::new();
         insert_refactor_session(&pool, &session).await.unwrap();
@@ -605,7 +580,7 @@ mod tests {
 
     #[tokio::test]
     async fn can_list_changes_by_status() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let session = RefactorSession::new();
         insert_refactor_session(&pool, &session).await.unwrap();
@@ -652,7 +627,7 @@ mod tests {
 
     #[tokio::test]
     async fn session_includes_changes_when_fetched() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let session = RefactorSession::new();
         insert_refactor_session(&pool, &session).await.unwrap();
@@ -678,7 +653,7 @@ mod tests {
 
     #[tokio::test]
     async fn milestone_limit_default_is_none() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         let limit = get_milestone_limit(&pool).await.unwrap();
         assert!(limit.is_none());
@@ -688,7 +663,7 @@ mod tests {
 
     #[tokio::test]
     async fn can_set_and_get_milestone_limit() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         set_milestone_limit(&pool, Some(3)).await.unwrap();
         let limit = get_milestone_limit(&pool).await.unwrap();
@@ -703,7 +678,7 @@ mod tests {
 
     #[tokio::test]
     async fn can_clear_milestone_limit() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         set_milestone_limit(&pool, Some(5)).await.unwrap();
         assert_eq!(get_milestone_limit(&pool).await.unwrap(), Some(5));
@@ -716,7 +691,7 @@ mod tests {
 
     #[tokio::test]
     async fn milestone_limit_validates_range() {
-        let (pool, _temp_dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
 
         // Valid range 1-9
         assert!(set_milestone_limit(&pool, Some(1)).await.is_ok());
