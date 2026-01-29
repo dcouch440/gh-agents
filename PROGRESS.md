@@ -242,10 +242,10 @@
 | 12.2 API Client           | done    | 4/4      | HTTP fetch wrapper, types, API methods, 16 tests            |
 | 12.3 Auth Flow            | done    | 3/3      | Login prompt, token persistence, auth gate                  |
 | 12.4 Chat UI Components   | done    | 5/5      | Message, MessageList, Input, useChat, ChatView, 13 tests    |
-| 12.5 Streaming & SSE      | pending | 0/3      | SSE client, streaming message, wire into chat               |
+| 12.5 Streaming & SSE      | done    | 3/3      | SSE client, StreamingMessage component, wired into useChat, 21 tests |
 | 12.6 Polish & Integration | pending | 0/3      | Markdown rendering, error handling, Makefile                |
 
-**Milestone Status:** In Progress (4/6 tickets done)
+**Milestone Status:** In Progress (5/6 tickets done)
 
 **Note:** Previous M12 (React Features) web UI work remains in `ui/` — chat and feed views are functional. This milestone adds a terminal-native CLI as the primary interface.
 
