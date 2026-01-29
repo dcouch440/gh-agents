@@ -268,7 +268,7 @@
 | Ticket | Status | Progress | Notes |
 |--------|--------|----------|-------|
 | 15.1 Multi-Repo Backend | pending | 0/6 | DB schema, CRUD API, active repo switching, git clone/pull |
-| 15.2 Prompt Library Backend | pending | 0/5 | DB schema, CRUD, tagging, versioning, quick-launch |
+| 15.2 Prompt Library Backend | pending | 0/6 | DB schema, CRUD, tagging, versioning, variable engine, launch |
 | 15.3 Multi-Repo Frontend | pending | 0/5 | Repo list, switcher, status indicators |
 | 15.4 Prompt Library Frontend | pending | 0/5 | Browse, search, edit, version history, launch |
 | 15.5 Full Code Editor | pending | 0/7 | Monaco, tabs, splits, command palette, git gutter |
