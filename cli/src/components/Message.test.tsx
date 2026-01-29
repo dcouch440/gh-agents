@@ -44,4 +44,32 @@ describe('Message', () => {
     const frame = lastFrame()!;
     expect(frame.length).toBeGreaterThan(0);
   });
+
+  it('does not show "nexor" label for user messages', () => {
+    const { lastFrame } = render(<Message message={userMsg} />);
+    expect(lastFrame()!).not.toContain('nexor');
+  });
+
+  it('does not show "you" label for assistant messages', () => {
+    const { lastFrame } = render(<Message message={assistantMsg} />);
+    expect(lastFrame()!).not.toContain('you');
+  });
+
+  it('renders multiline content', () => {
+    const msg: ChatMessage = {
+      id: '3',
+      role: 'user',
+      content: 'Line one\nLine two',
+      timestamp: '2026-01-29T12:36:00Z',
+    };
+    const { lastFrame } = render(<Message message={msg} />);
+    const frame = lastFrame()!;
+    expect(frame).toContain('Line one');
+    expect(frame).toContain('Line two');
+  });
+
+  it('renders separator with 40 dash characters', () => {
+    const { lastFrame } = render(<Message message={userMsg} />);
+    expect(lastFrame()!).toContain('─'.repeat(40));
+  });
 });

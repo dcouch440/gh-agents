@@ -30,4 +30,17 @@ describe('MessageList', () => {
     expect(frame).toContain('you');
     expect(frame).toContain('nexor');
   });
+
+  it('renders a single message', () => {
+    const single = [messages[0]];
+    const { lastFrame } = render(<MessageList messages={single} />);
+    expect(lastFrame()!).toContain('First message');
+  });
+
+  it('renders separators between messages', () => {
+    const { lastFrame } = render(<MessageList messages={messages} />);
+    const frame = lastFrame()!;
+    const separatorCount = (frame.match(/─{40}/g) || []).length;
+    expect(separatorCount).toBe(3);
+  });
 });
