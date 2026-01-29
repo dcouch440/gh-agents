@@ -140,21 +140,11 @@ mod tests {
     use super::*;
     use crate::types::MilestoneSpec;
 
-    async fn setup_db() -> PgPool {
-        let database_url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://nexor:nexor@localhost:5432/nexor_test".to_string());
-        let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
-        sqlx::migrate!().run(&pool).await.unwrap();
-        sqlx::query("DELETE FROM prds")
-            .execute(&pool)
-            .await
-            .unwrap();
-        pool
-    }
+    use crate::db::test_utils::TestDb;
 
     #[tokio::test]
     async fn save_and_load_prd() {
-        let pool = setup_db().await;
+        let db = TestDb::new().await;
 
         let mut prd = PRDDocument::new("Test PRD");
         prd.vision = "Build something great".into();
@@ -165,62 +155,62 @@ mod tests {
             dependencies: vec![],
         });
 
-        save_prd(&pool, &prd).await.unwrap();
-        let loaded = load_prd(&pool, &prd.id).await.unwrap().unwrap();
+        save_prd(&db.pool, &prd).await.unwrap();
+        let loaded = load_prd(&db.pool, &prd.id).await.unwrap().unwrap();
 
         assert_eq!(loaded.title, "Test PRD");
         assert_eq!(loaded.vision, "Build something great");
         assert_eq!(loaded.milestones.len(), 1);
         assert_eq!(loaded.milestones[0].title, "M1");
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn save_updates_existing() {
-        let pool = setup_db().await;
+        let db = TestDb::new().await;
 
         let mut prd = PRDDocument::new("Test PRD");
-        save_prd(&pool, &prd).await.unwrap();
+        save_prd(&db.pool, &prd).await.unwrap();
 
         prd.vision = "Updated vision".into();
-        save_prd(&pool, &prd).await.unwrap();
+        save_prd(&db.pool, &prd).await.unwrap();
 
-        let loaded = load_prd(&pool, &prd.id).await.unwrap().unwrap();
+        let loaded = load_prd(&db.pool, &prd.id).await.unwrap().unwrap();
         assert_eq!(loaded.vision, "Updated vision");
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn list_by_status() {
-        let pool = setup_db().await;
+        let db = TestDb::new().await;
 
         let prd1 = PRDDocument::new("Draft PRD");
-        save_prd(&pool, &prd1).await.unwrap();
+        save_prd(&db.pool, &prd1).await.unwrap();
 
         let mut prd2 = PRDDocument::new("Approved PRD");
         prd2.status = PRDStatus::Approved;
-        save_prd(&pool, &prd2).await.unwrap();
+        save_prd(&db.pool, &prd2).await.unwrap();
 
-        let drafts = list_prds_by_status(&pool, PRDStatus::Draft).await.unwrap();
+        let drafts = list_prds_by_status(&db.pool, PRDStatus::Draft).await.unwrap();
         assert_eq!(drafts.len(), 1);
         assert_eq!(drafts[0].title, "Draft PRD");
 
-        let approved = list_prds_by_status(&pool, PRDStatus::Approved)
+        let approved = list_prds_by_status(&db.pool, PRDStatus::Approved)
             .await
             .unwrap();
         assert_eq!(approved.len(), 1);
         assert_eq!(approved[0].title, "Approved PRD");
 
-        pool.close().await;
+        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn load_nonexistent_returns_none() {
-        let pool = setup_db().await;
-        let result = load_prd(&pool, &PRDId::new()).await.unwrap();
+        let db = TestDb::new().await;
+        let result = load_prd(&db.pool, &PRDId::new()).await.unwrap();
         assert!(result.is_none());
-        pool.close().await;
+        db.cleanup().await;
     }
 }

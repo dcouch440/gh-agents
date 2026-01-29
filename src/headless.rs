@@ -383,7 +383,7 @@ mod tests {
         runner.write_result("SUCCESS", "all good").unwrap();
 
         // Downcast to read buffer contents
-        let output = runner.output.as_mut() as *mut dyn Write;
+        let _output = runner.output.as_mut() as *mut dyn Write;
         // We can't easily downcast, so instead re-create with a shared buffer
         drop(runner);
 

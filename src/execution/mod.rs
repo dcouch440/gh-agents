@@ -24,7 +24,7 @@ pub use test_runner::{
     TestError, TestFailure, TestFramework, TestOutputEvent, TestResult, TestRunner,
 };
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use thiserror::Error;
 
 /// Context for all execution operations
@@ -73,7 +73,7 @@ impl ExecutionContext {
     fn validate_hypothetical_path(
         &self,
         path: &std::path::Path,
-        canonical_root: &std::path::Path,
+        _canonical_root: &std::path::Path,
     ) -> PathBuf {
         // Walk up until we find an existing ancestor
         let mut current = path.to_path_buf();

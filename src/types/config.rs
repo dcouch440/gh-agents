@@ -374,12 +374,12 @@ mod tests {
     #[test]
     fn config_merge_preserves_global_verbosity() {
         let global = GlobalConfig {
-            verbosity: VerbosityLevel::Debug,
+            verbosity: VerbosityLevel::Verbose,
             ..Default::default()
         };
         let project = ProjectConfig::default();
         let merged = AppConfig::merge(global, Some(project));
-        assert_eq!(merged.verbosity, VerbosityLevel::Debug);
+        assert_eq!(merged.verbosity, VerbosityLevel::Verbose);
     }
 
     #[test]

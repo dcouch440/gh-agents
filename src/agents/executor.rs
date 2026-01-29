@@ -1,6 +1,5 @@
 //! Agent task execution loop
 
-use std::time::Duration;
 use tokio::time::timeout;
 use tracing::{error, info, instrument, warn};
 use uuid::Uuid;
@@ -159,6 +158,7 @@ impl Agent {
     }
 
     /// Execute a task by calling the LLM with role-aware context
+    #[allow(dead_code)]
     async fn execute_task(&self, assignment: &TaskAssignment) -> Result<TaskResult, AgentError> {
         // Get role context from the assignment
         let role_context = &assignment.context.role_context;
@@ -517,7 +517,6 @@ impl Agent {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::agents::agent::Agent;
     use crate::agents::channels::*;
     use crate::agents::roles::{CommunicationStyle, OutputFormat, RoleId};
@@ -1096,7 +1095,7 @@ mod tests {
 
     #[tokio::test]
     async fn emit_progress_sends_update() {
-        let (mut agent, _cmd_tx, mut resp_rx) =
+        let (agent, _cmd_tx, mut resp_rx) =
             create_test_agent_with_channels(Arc::new(MockLLMProvider));
 
         let task_id = Uuid::new_v4();
