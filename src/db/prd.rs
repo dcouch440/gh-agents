@@ -2,29 +2,26 @@
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 
 use crate::types::{
     DataModelSketch, MilestoneSpec, PRDDocument, PRDId, PRDStatus, TechnicalDecision,
 };
 
 /// Save a PRD to the database (insert or update on conflict)
-pub async fn save_prd(pool: &SqlitePool, prd: &PRDDocument) -> Result<()> {
-    let id = prd.id.0.to_string();
+pub async fn save_prd(pool: &PgPool, prd: &PRDDocument) -> Result<()> {
     let status = prd.status.to_string();
-    let success_criteria = serde_json::to_string(&prd.success_criteria)?;
-    let technical_decisions = serde_json::to_string(&prd.technical_decisions)?;
-    let data_models = serde_json::to_string(&prd.data_models)?;
-    let milestones = serde_json::to_string(&prd.milestones)?;
-    let created_at = prd.created_at.to_rfc3339();
-    let updated_at = prd.updated_at.to_rfc3339();
+    let success_criteria = serde_json::to_value(&prd.success_criteria)?;
+    let technical_decisions = serde_json::to_value(&prd.technical_decisions)?;
+    let data_models = serde_json::to_value(&prd.data_models)?;
+    let milestones = serde_json::to_value(&prd.milestones)?;
 
     sqlx::query(
         r#"
         INSERT INTO prds (id, title, status, vision, problem_statement, target_users,
                           success_criteria, technical_decisions, data_models, milestones,
                           created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,
             status = excluded.status,
@@ -38,7 +35,7 @@ pub async fn save_prd(pool: &SqlitePool, prd: &PRDDocument) -> Result<()> {
             updated_at = excluded.updated_at
         "#,
     )
-    .bind(&id)
+    .bind(prd.id.0)
     .bind(&prd.title)
     .bind(&status)
     .bind(&prd.vision)
@@ -48,8 +45,8 @@ pub async fn save_prd(pool: &SqlitePool, prd: &PRDDocument) -> Result<()> {
     .bind(&technical_decisions)
     .bind(&data_models)
     .bind(&milestones)
-    .bind(&created_at)
-    .bind(&updated_at)
+    .bind(prd.created_at)
+    .bind(prd.updated_at)
     .execute(pool)
     .await
     .context("Failed to save PRD")?;
@@ -58,83 +55,71 @@ pub async fn save_prd(pool: &SqlitePool, prd: &PRDDocument) -> Result<()> {
 }
 
 /// Load a PRD by ID
-pub async fn load_prd(pool: &SqlitePool, id: &PRDId) -> Result<Option<PRDDocument>> {
-    let id_str = id.0.to_string();
-
+pub async fn load_prd(pool: &PgPool, id: &PRDId) -> Result<Option<PRDDocument>> {
     let row: Option<PrdRow> = sqlx::query_as(
         "SELECT id, title, status, vision, problem_statement, target_users, \
          success_criteria, technical_decisions, data_models, milestones, \
-         created_at, updated_at FROM prds WHERE id = ?",
+         created_at, updated_at FROM prds WHERE id = $1",
     )
-    .bind(&id_str)
+    .bind(id.0)
     .fetch_optional(pool)
     .await
     .context("Failed to load PRD")?;
 
     match row {
-        Some(row) => Ok(Some(row.into_prd()?)),
+        Some(row) => Ok(Some(row.into_prd())),
         None => Ok(None),
     }
 }
 
 /// List PRDs by status
-pub async fn list_prds_by_status(pool: &SqlitePool, status: PRDStatus) -> Result<Vec<PRDDocument>> {
+pub async fn list_prds_by_status(pool: &PgPool, status: PRDStatus) -> Result<Vec<PRDDocument>> {
     let status_str = status.to_string();
 
     let rows: Vec<PrdRow> = sqlx::query_as(
         "SELECT id, title, status, vision, problem_statement, target_users, \
          success_criteria, technical_decisions, data_models, milestones, \
-         created_at, updated_at FROM prds WHERE status = ? ORDER BY updated_at DESC",
+         created_at, updated_at FROM prds WHERE status = $1 ORDER BY updated_at DESC",
     )
     .bind(&status_str)
     .fetch_all(pool)
     .await
     .context("Failed to list PRDs")?;
 
-    rows.into_iter().map(|r| r.into_prd()).collect()
+    Ok(rows.into_iter().map(|r| r.into_prd()).collect())
 }
 
 #[derive(sqlx::FromRow)]
 struct PrdRow {
-    id: String,
+    id: uuid::Uuid,
     title: String,
     status: String,
     vision: String,
     problem_statement: String,
     target_users: String,
-    success_criteria: String,
-    technical_decisions: String,
-    data_models: String,
-    milestones: String,
-    created_at: String,
-    updated_at: String,
+    success_criteria: serde_json::Value,
+    technical_decisions: serde_json::Value,
+    data_models: serde_json::Value,
+    milestones: serde_json::Value,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
 }
 
 impl PrdRow {
-    fn into_prd(self) -> Result<PRDDocument> {
-        let id = uuid::Uuid::parse_str(&self.id).context("Invalid PRD ID")?;
-        let status: PRDStatus = self
-            .status
-            .parse()
-            .map_err(|e: String| anyhow::anyhow!(e))?;
-        let created_at: DateTime<Utc> = DateTime::parse_from_rfc3339(&self.created_at)
-            .context("Invalid created_at timestamp")?
-            .with_timezone(&Utc);
-        let updated_at: DateTime<Utc> = DateTime::parse_from_rfc3339(&self.updated_at)
-            .context("Invalid updated_at timestamp")?
-            .with_timezone(&Utc);
+    fn into_prd(self) -> PRDDocument {
+        let status: PRDStatus = self.status.parse().unwrap_or(PRDStatus::Draft);
 
         let success_criteria: Vec<String> =
-            serde_json::from_str(&self.success_criteria).unwrap_or_default();
+            serde_json::from_value(self.success_criteria).unwrap_or_default();
         let technical_decisions: Vec<TechnicalDecision> =
-            serde_json::from_str(&self.technical_decisions).unwrap_or_default();
+            serde_json::from_value(self.technical_decisions).unwrap_or_default();
         let data_models: Vec<DataModelSketch> =
-            serde_json::from_str(&self.data_models).unwrap_or_default();
+            serde_json::from_value(self.data_models).unwrap_or_default();
         let milestones: Vec<MilestoneSpec> =
-            serde_json::from_str(&self.milestones).unwrap_or_default();
+            serde_json::from_value(self.milestones).unwrap_or_default();
 
-        Ok(PRDDocument {
-            id: PRDId(id),
+        PRDDocument {
+            id: PRDId(self.id),
             title: self.title,
             status,
             vision: self.vision,
@@ -144,9 +129,9 @@ impl PrdRow {
             technical_decisions,
             data_models,
             milestones,
-            created_at,
-            updated_at,
-        })
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+        }
     }
 }
 
@@ -154,20 +139,22 @@ impl PrdRow {
 mod tests {
     use super::*;
     use crate::types::MilestoneSpec;
-    use tempfile::TempDir;
 
-    async fn setup_db() -> (SqlitePool, TempDir) {
-        let temp_dir = TempDir::new().unwrap();
-        let db_path = temp_dir.path().join("test.db");
-        let pool = crate::db::init_db_at(db_path.to_str().unwrap())
+    async fn setup_db() -> PgPool {
+        let database_url = std::env::var("DATABASE_URL")
+            .unwrap_or_else(|_| "postgres://nexor:nexor@localhost:5432/nexor_test".to_string());
+        let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
+        sqlx::migrate!().run(&pool).await.unwrap();
+        sqlx::query("DELETE FROM prds")
+            .execute(&pool)
             .await
             .unwrap();
-        (pool, temp_dir)
+        pool
     }
 
     #[tokio::test]
     async fn save_and_load_prd() {
-        let (pool, _dir) = setup_db().await;
+        let pool = setup_db().await;
 
         let mut prd = PRDDocument::new("Test PRD");
         prd.vision = "Build something great".into();
@@ -191,7 +178,7 @@ mod tests {
 
     #[tokio::test]
     async fn save_updates_existing() {
-        let (pool, _dir) = setup_db().await;
+        let pool = setup_db().await;
 
         let mut prd = PRDDocument::new("Test PRD");
         save_prd(&pool, &prd).await.unwrap();
@@ -207,7 +194,7 @@ mod tests {
 
     #[tokio::test]
     async fn list_by_status() {
-        let (pool, _dir) = setup_db().await;
+        let pool = setup_db().await;
 
         let prd1 = PRDDocument::new("Draft PRD");
         save_prd(&pool, &prd1).await.unwrap();
@@ -231,7 +218,7 @@ mod tests {
 
     #[tokio::test]
     async fn load_nonexistent_returns_none() {
-        let (pool, _dir) = setup_db().await;
+        let pool = setup_db().await;
         let result = load_prd(&pool, &PRDId::new()).await.unwrap();
         assert!(result.is_none());
         pool.close().await;

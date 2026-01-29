@@ -361,17 +361,11 @@ pub async fn get_chat_history(
 
     let messages: Vec<ChatMessage> = rows
         .into_iter()
-        .filter_map(|row| {
-            let id = Uuid::parse_str(&row.id).ok()?;
-            let timestamp = chrono::DateTime::parse_from_rfc3339(&row.timestamp)
-                .ok()?
-                .with_timezone(&Utc);
-            Some(ChatMessage {
-                id,
-                role: row.role,
-                content: row.content,
-                timestamp,
-            })
+        .map(|row| ChatMessage {
+            id: row.id,
+            role: row.role,
+            content: row.content,
+            timestamp: row.timestamp,
         })
         .collect();
 
@@ -675,28 +669,24 @@ mod tests {
     use tempfile::TempDir;
     use tower::util::ServiceExt;
 
-    async fn setup_test_app() -> (axum::Router, TempDir) {
+    async fn setup_test_app() -> axum::Router {
         use std::sync::Arc;
         use tokio::sync::RwLock;
 
-        let temp_dir = TempDir::new().unwrap();
-        let db_path = temp_dir.path().join("test.db");
-        let db = crate::db::init_db_at(db_path.to_str().unwrap())
-            .await
-            .unwrap();
+        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+        let db = crate::db::init_db_with_url(&url).await.unwrap();
         let scheduler = crate::orchestration::Scheduler::new(db.clone())
             .await
             .unwrap();
         let scheduler = Arc::new(RwLock::new(scheduler));
         let config = crate::types::AppConfig::default();
         let state = AppState::new(db, scheduler, config);
-        let router = super::super::create_router_with_static_dir(state, "nonexistent_static");
-        (router, temp_dir)
+        super::super::create_router_with_static_dir(state, "nonexistent_static")
     }
 
     #[tokio::test]
     async fn create_task_valid_returns_created() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -717,7 +707,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_empty_title_returns_bad_request() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -736,7 +726,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_config_valid_verbosity() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -755,7 +745,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_chat_valid_message_returns_accepted() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -774,7 +764,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_chat_empty_message_returns_bad_request() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -793,7 +783,7 @@ mod tests {
 
     #[tokio::test]
     async fn clear_chat_history_returns_no_content() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -811,7 +801,7 @@ mod tests {
 
     #[tokio::test]
     async fn health_check_returns_ok() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -837,7 +827,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_with_orchestrator_tier() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -861,7 +851,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_with_utility_tier() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -885,7 +875,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_with_unknown_tier_defaults_to_worker() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -911,7 +901,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_with_no_tier_defaults_to_worker() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -935,7 +925,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_with_low_priority() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -959,7 +949,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_with_urgent_priority() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -983,7 +973,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_with_unknown_priority_defaults_to_normal() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1009,7 +999,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_with_no_priority_defaults_to_normal() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1035,7 +1025,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_task_returns_created_task() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         // Create a task first
         let create_resp = app
@@ -1081,7 +1071,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_task_not_found() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1102,7 +1092,7 @@ mod tests {
 
     #[tokio::test]
     async fn list_tasks_returns_empty_initially() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1124,7 +1114,7 @@ mod tests {
 
     #[tokio::test]
     async fn list_tasks_with_limit() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         // Create two tasks
         for title in ["Task A", "Task B"] {
@@ -1161,7 +1151,7 @@ mod tests {
 
     #[tokio::test]
     async fn list_tasks_with_status_filter() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         // Create a task (default status is pending)
         app.clone()
@@ -1199,7 +1189,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_config_invalid_verbosity_returns_bad_request() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1218,7 +1208,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_config_quiet_verbosity() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1237,7 +1227,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_config_normal_verbosity() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1256,7 +1246,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_config_no_verbosity_returns_ok() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1277,7 +1267,7 @@ mod tests {
 
     #[tokio::test]
     async fn list_agents_returns_stats() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1304,7 +1294,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_config_returns_expected_fields() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1333,7 +1323,7 @@ mod tests {
 
     #[tokio::test]
     async fn auth_setup_short_password_returns_bad_request() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1352,7 +1342,7 @@ mod tests {
 
     #[tokio::test]
     async fn auth_setup_success() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1379,7 +1369,7 @@ mod tests {
 
     #[tokio::test]
     async fn auth_setup_conflict_when_already_configured() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         // First setup
         app.clone()
@@ -1412,7 +1402,7 @@ mod tests {
 
     #[tokio::test]
     async fn auth_login_no_password_configured() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1431,7 +1421,7 @@ mod tests {
 
     #[tokio::test]
     async fn auth_login_wrong_password() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         // Setup password
         app.clone()
@@ -1464,7 +1454,7 @@ mod tests {
 
     #[tokio::test]
     async fn auth_login_success() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         // Setup password
         app.clone()
@@ -1505,7 +1495,7 @@ mod tests {
 
     #[tokio::test]
     async fn chat_history_returns_messages_after_send() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         // Send a message
         app.clone()
@@ -1543,7 +1533,7 @@ mod tests {
 
     #[tokio::test]
     async fn chat_history_with_pagination() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         // Send two messages
         for msg in ["First", "Second"] {
@@ -1724,7 +1714,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_chat_response_contains_message_id() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1753,7 +1743,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_response_body_has_expected_fields() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -1785,7 +1775,7 @@ mod tests {
 
     #[tokio::test]
     async fn clear_chat_then_history_is_empty() {
-        let (app, _tmp) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         // Send a message
         app.clone()
