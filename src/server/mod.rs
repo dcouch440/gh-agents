@@ -22,7 +22,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use tokio::sync::RwLock;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
@@ -43,7 +43,7 @@ pub use state::AppState;
 /// - Request tracing middleware
 /// - Graceful shutdown handling
 pub async fn start_server(
-    db: SqlitePool,
+    db: PgPool,
     scheduler: Arc<RwLock<Scheduler>>,
     config: AppConfig,
     addr: SocketAddr,
@@ -195,23 +195,19 @@ mod tests {
     use tempfile::TempDir;
     use tower::util::ServiceExt;
 
-    async fn setup_test_app() -> (Router, TempDir) {
-        let temp_dir = TempDir::new().unwrap();
-        let db_path = temp_dir.path().join("test.db");
-        let db = crate::db::init_db_at(db_path.to_str().unwrap())
-            .await
-            .unwrap();
+    async fn setup_test_app() -> Router {
+        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+        let db = crate::db::init_db_with_url(&url).await.unwrap();
         let scheduler = Scheduler::new(db.clone()).await.unwrap();
         let scheduler = Arc::new(RwLock::new(scheduler));
         let config = AppConfig::default();
         let state = AppState::new(db, scheduler, config);
-        let router = create_router(state);
-        (router, temp_dir)
+        create_router(state)
     }
 
     #[tokio::test]
     async fn health_endpoint_returns_json() {
-        let (app, _temp_dir) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -228,7 +224,7 @@ mod tests {
 
     #[tokio::test]
     async fn tasks_endpoint_returns_list() {
-        let (app, _temp_dir) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -245,7 +241,7 @@ mod tests {
 
     #[tokio::test]
     async fn agents_endpoint_returns_stats() {
-        let (app, _temp_dir) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -262,7 +258,7 @@ mod tests {
 
     #[tokio::test]
     async fn config_endpoint_returns_config() {
-        let (app, _temp_dir) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -279,7 +275,7 @@ mod tests {
 
     #[tokio::test]
     async fn unknown_task_returns_404() {
-        let (app, _temp_dir) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -298,7 +294,7 @@ mod tests {
 
     #[tokio::test]
     async fn chat_endpoint_accepts_message() {
-        let (app, _temp_dir) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -317,7 +313,7 @@ mod tests {
 
     #[tokio::test]
     async fn chat_endpoint_rejects_empty_message() {
-        let (app, _temp_dir) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -336,7 +332,7 @@ mod tests {
 
     #[tokio::test]
     async fn chat_history_returns_empty_list() {
-        let (app, _temp_dir) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -353,7 +349,7 @@ mod tests {
 
     #[tokio::test]
     async fn clear_chat_history_returns_no_content() {
-        let (app, _temp_dir) = setup_test_app().await;
+        let app = setup_test_app().await;
 
         let response = app
             .oneshot(
@@ -400,10 +396,8 @@ mod tests {
         )
         .unwrap();
 
-        let db_path = temp_dir.path().join("test.db");
-        let db = crate::db::init_db_at(db_path.to_str().unwrap())
-            .await
-            .unwrap();
+        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+        let db = crate::db::init_db_with_url(&url).await.unwrap();
         let scheduler = Scheduler::new(db.clone()).await.unwrap();
         let scheduler = Arc::new(RwLock::new(scheduler));
         let config = AppConfig::default();

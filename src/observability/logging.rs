@@ -5,7 +5,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use uuid::Uuid;
 
 /// A logged LLM API call
@@ -209,12 +209,12 @@ impl std::fmt::Display for DecisionType {
 /// Logger for LLM calls and decisions
 #[derive(Clone)]
 pub struct LlmCallLogger {
-    pool: SqlitePool,
+    pool: PgPool,
 }
 
 impl LlmCallLogger {
     /// Create a new logger
-    pub fn new(pool: SqlitePool) -> Self {
+    pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 
@@ -234,7 +234,7 @@ impl LlmCallLogger {
                 id, task_id, agent_id, model, prompt, response,
                 input_tokens, output_tokens, latency_ms, timestamp, cost_usd
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             "#,
         )
         .bind(&id)
@@ -262,7 +262,7 @@ impl LlmCallLogger {
             SELECT id, task_id, agent_id, model, prompt, response,
                    input_tokens, output_tokens, latency_ms, timestamp, cost_usd
             FROM llm_calls
-            WHERE task_id = ?
+            WHERE task_id = $1
             ORDER BY timestamp ASC
             "#,
         )
@@ -286,7 +286,7 @@ impl LlmCallLogger {
             SELECT id, task_id, agent_id, model, prompt, response,
                    input_tokens, output_tokens, latency_ms, timestamp, cost_usd
             FROM llm_calls
-            WHERE timestamp >= ? AND timestamp <= ?
+            WHERE timestamp >= $1 AND timestamp <= $2
             ORDER BY timestamp ASC
             "#,
         )
@@ -311,7 +311,7 @@ impl LlmCallLogger {
             INSERT INTO decisions (
                 id, task_id, decision_type, reasoning, outcome, llm_call_id, cost_usd, timestamp
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             "#,
         )
         .bind(&id)
@@ -335,7 +335,7 @@ impl LlmCallLogger {
             r#"
             SELECT id, task_id, decision_type, reasoning, outcome, llm_call_id, cost_usd, timestamp
             FROM decisions
-            WHERE task_id = ?
+            WHERE task_id = $1
             ORDER BY timestamp ASC
             "#,
         )
@@ -358,7 +358,7 @@ impl LlmCallLogger {
             r#"
             SELECT id, task_id, decision_type, reasoning, outcome, llm_call_id, cost_usd, timestamp
             FROM decisions
-            WHERE timestamp >= ? AND timestamp <= ?
+            WHERE timestamp >= $1 AND timestamp <= $2
             ORDER BY timestamp ASC
             "#,
         )
@@ -593,13 +593,9 @@ mod tests {
 
     use tempfile::TempDir;
 
-    async fn setup_test_db() -> (SqlitePool, TempDir) {
-        let temp_dir = TempDir::new().unwrap();
-        let db_path = temp_dir.path().join("test.db");
-        let pool = crate::db::init_db_at(db_path.to_str().unwrap())
-            .await
-            .unwrap();
-        (pool, temp_dir)
+    async fn setup_test_db() -> PgPool {
+        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+        crate::db::init_db_with_url(&url).await.unwrap()
     }
 
     fn make_call(model: &str, task_id: Option<Uuid>) -> LlmCall {
@@ -616,7 +612,7 @@ mod tests {
 
     #[tokio::test]
     async fn log_call_and_retrieve() {
-        let (pool, _dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let logger = LlmCallLogger::new(pool);
 
         let task_id = Uuid::new_v4();
@@ -636,7 +632,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_calls_for_task_filters_correctly() {
-        let (pool, _dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let logger = LlmCallLogger::new(pool);
 
         let tid1 = Uuid::new_v4();
@@ -654,7 +650,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_calls_in_range_filters_correctly() {
-        let (pool, _dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let logger = LlmCallLogger::new(pool);
 
         let t1 = Utc::now() - chrono::Duration::hours(2);
@@ -685,7 +681,7 @@ mod tests {
 
     #[tokio::test]
     async fn log_decision_and_retrieve() {
-        let (pool, _dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let logger = LlmCallLogger::new(pool);
 
         let task_id = Uuid::new_v4();
@@ -707,7 +703,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_decisions_for_task_filters_correctly() {
-        let (pool, _dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let logger = LlmCallLogger::new(pool);
 
         let tid1 = Uuid::new_v4();
@@ -739,7 +735,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_decisions_in_range_filters_correctly() {
-        let (pool, _dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let logger = LlmCallLogger::new(pool);
 
         let tid = Uuid::new_v4();
@@ -1129,7 +1125,7 @@ mod tests {
 
     #[tokio::test]
     async fn log_decision_without_llm_call() {
-        let (pool, _dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let logger = LlmCallLogger::new(pool);
 
         let task_id = Uuid::new_v4();
@@ -1143,7 +1139,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_calls_for_nonexistent_task() {
-        let (pool, _dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let logger = LlmCallLogger::new(pool);
 
         let calls = logger.get_calls_for_task(Uuid::new_v4()).await.unwrap();
@@ -1152,7 +1148,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_decisions_for_nonexistent_task() {
-        let (pool, _dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let logger = LlmCallLogger::new(pool);
 
         let decisions = logger.get_decisions_for_task(Uuid::new_v4()).await.unwrap();
@@ -1161,7 +1157,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_calls_in_range_empty() {
-        let (pool, _dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let logger = LlmCallLogger::new(pool);
 
         let start = Utc::now() - chrono::Duration::hours(10);
@@ -1172,7 +1168,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_decisions_in_range_empty() {
-        let (pool, _dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let logger = LlmCallLogger::new(pool);
 
         let start = Utc::now() - chrono::Duration::hours(10);
@@ -1183,7 +1179,7 @@ mod tests {
 
     #[tokio::test]
     async fn log_call_without_task_id() {
-        let (pool, _dir) = setup_test_db().await;
+        let pool = setup_test_db().await;
         let logger = LlmCallLogger::new(pool);
 
         let call = make_call("model", None);
