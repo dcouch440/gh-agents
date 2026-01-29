@@ -68,5 +68,7 @@ M1-M5, M7-M11: Complete. M6: Deprecated (TUI). M12: In progress. M13-M16: Planne
 
 - Read `PROGRESS.md` before starting work to check dependencies
 - Ticket specs live in `decomp/M{n}/` directories
+- Always write tests when completing a ticket
 - Verify with `cargo check` and `cargo test` before committing
+- For CLI: run `cd cli && npm test` to verify TypeScript tests
 - Save notes to `doc/` when requested

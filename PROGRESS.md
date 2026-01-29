@@ -240,7 +240,7 @@
 | ------------------------- | ------- | -------- | ----------------------------------------------------------- |
 | 12.1 CLI Scaffolding      | done    | 4/4      | Package setup, tsconfig, Ink app entry, directory structure |
 | 12.2 API Client           | pending | 0/4      | HTTP fetch wrapper, types, API methods                      |
-| 12.3 Auth Flow            | pending | 0/3      | Login prompt, token persistence, auth gate                  |
+| 12.3 Auth Flow            | done    | 3/3      | Login prompt, token persistence, auth gate                  |
 | 12.4 Chat UI Components   | pending | 0/5      | Message, MessageList, Input, useChat, ChatView              |
 | 12.5 Streaming & SSE      | pending | 0/3      | SSE client, streaming message, wire into chat               |
 | 12.6 Polish & Integration | pending | 0/3      | Markdown rendering, error handling, Makefile                |
