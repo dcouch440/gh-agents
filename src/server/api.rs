@@ -796,7 +796,9 @@ mod tests {
     fn setup_test_app() -> axum::Router {
         let repo: Arc<dyn ServerRepo> = Arc::new(InMemoryServerRepo::new());
         let config = crate::types::AppConfig::default();
-        let state = AppState::with_repo(None, repo, None, config);
+        let (state, rx) = AppState::with_repo(None, repo, None, config);
+        // Keep the receiver alive so orchestrator_tx.send() doesn't fail
+        std::mem::forget(rx);
         super::super::create_router_with_static_dir(state, "nonexistent_static")
     }
 

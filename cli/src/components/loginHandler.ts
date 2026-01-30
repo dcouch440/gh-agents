@@ -14,7 +14,8 @@ export async function handleLogin(password: string): Promise<LoginResult> {
     const res = await api.auth.login(password);
     setToken(res.token, res.expires_in);
     return { success: true };
-  } catch {
-    return { success: false, error: 'Authentication failed. Please try again.' };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `Authentication failed: ${msg}` };
   }
 }
