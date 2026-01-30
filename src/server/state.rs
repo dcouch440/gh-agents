@@ -8,7 +8,7 @@ use sqlx::PgPool;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use uuid::Uuid;
 
-use crate::agents::{AgentPool, AgentResponse, ClusterManager, Dispatcher, RoleManager};
+use crate::agents::{AgentPool, AgentResponse, ClusterManager, Dispatcher, PipelineManager, RoleManager, ScheduleManager};
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::{ServerRepo, UserRepo};
 use crate::llm::AnthropicClient;
@@ -37,6 +37,14 @@ pub enum StreamChunk {
     Error(String),
 }
 
+/// A buffered broadcast stream that retains all chunks so late-connecting
+/// SSE clients can replay missed tokens.
+struct BufferedStream {
+    tx: broadcast::Sender<StreamChunk>,
+    buffer: Vec<StreamChunk>,
+    done: bool,
+}
+
 /// Application state shared across all HTTP handlers
 #[derive(Clone)]
 pub struct AppState {
@@ -54,8 +62,8 @@ pub struct AppState {
     pub jwt_secret: Vec<u8>,
     /// Channel to send messages to the orchestrator
     pub orchestrator_tx: mpsc::Sender<OrchestratorMessage>,
-    /// Map of message IDs to response broadcast senders
-    response_streams: Arc<RwLock<HashMap<Uuid, broadcast::Sender<StreamChunk>>>>,
+    /// Map of message IDs to buffered response streams
+    response_streams: Arc<RwLock<HashMap<Uuid, Arc<RwLock<BufferedStream>>>>>,
     /// Broadcast channel for feed updates
     pub feed_tx: broadcast::Sender<FeedUpdate>,
     /// Broadcast channel for task updates
@@ -72,6 +80,10 @@ pub struct AppState {
     pub role_manager: Option<Arc<RoleManager>>,
     /// Cluster manager for agent grouping
     pub cluster_manager: Arc<RwLock<ClusterManager>>,
+    /// Pipeline manager for chained agent workflows
+    pub pipeline_manager: Arc<RwLock<PipelineManager>>,
+    /// Schedule manager for cron-like and event-driven agent execution
+    pub schedule_manager: Arc<RwLock<ScheduleManager>>,
 }
 
 impl AppState {
@@ -136,6 +148,66 @@ impl AppState {
                     }
                 }
             }
+
+            // Reconstruct pipelines from DB
+            if let Ok(pipeline_rows) = state.repo.list_pipelines(legacy_user).await {
+                let mut mgr = state.pipeline_manager.write().await;
+                for row in pipeline_rows {
+                    let pid = crate::agents::PipelineId(row.id);
+                    mgr.create_pipeline_with_id(pid, row.name.clone());
+                    tracing::info!("Restored pipeline {} ({})", row.name, row.id);
+                    if let Ok(stages) = state.repo.list_pipeline_stages(row.id).await {
+                        for stage in stages {
+                            let _ = mgr.add_stage(
+                                pid,
+                                crate::agents::AgentId(stage.agent_id),
+                                stage.role,
+                                stage.approval_required,
+                            );
+                        }
+                    }
+                }
+            }
+
+            // Reconstruct schedules from DB
+            if let Ok(schedule_rows) = state.repo.list_schedules(legacy_user).await {
+                let mut mgr = state.schedule_manager.write().await;
+                for row in schedule_rows {
+                    let sid = crate::agents::ScheduleId(row.id);
+                    mgr.create_schedule_with_id(
+                        sid,
+                        row.name.clone(),
+                        crate::agents::AgentId(row.agent_id),
+                        row.interval_seconds as u64,
+                        row.task_title,
+                        row.task_description,
+                        row.role,
+                        row.enabled,
+                        row.last_run_at,
+                    );
+                    tracing::info!("Restored schedule {} ({})", row.name, row.id);
+                }
+            }
+
+            // Reconstruct triggers from DB
+            if let Ok(trigger_rows) = state.repo.list_triggers(legacy_user).await {
+                let mut mgr = state.schedule_manager.write().await;
+                for row in trigger_rows {
+                    if let Some(event_type) = crate::agents::TriggerEvent::from_str(&row.event_type) {
+                        let tid = crate::agents::TriggerId(row.id);
+                        mgr.create_trigger_with_id(
+                            tid,
+                            row.name.clone(),
+                            event_type,
+                            crate::agents::AgentId(row.agent_id),
+                            row.task_title,
+                            row.task_description,
+                            row.role,
+                        );
+                        tracing::info!("Restored trigger {} ({})", row.name, row.id);
+                    }
+                }
+            }
         }
 
         (state, rx)
@@ -176,6 +248,8 @@ impl AppState {
                 task_results: Arc::new(RwLock::new(HashMap::new())),
                 role_manager: None,
                 cluster_manager: Arc::new(RwLock::new(ClusterManager::new())),
+                pipeline_manager: Arc::new(RwLock::new(PipelineManager::new())),
+                schedule_manager: Arc::new(RwLock::new(ScheduleManager::new())),
             },
             orchestrator_rx,
         )
@@ -211,31 +285,58 @@ impl AppState {
         let _ = self.agent_tx.send(update);
     }
 
-    /// Get a receiver for streaming responses for a specific message
+    /// Ensure a response stream exists for this message (creates if missing).
     ///
-    /// Creates a new broadcast channel for this message if one doesn't exist.
-    pub async fn get_response_stream(&self, message_id: Uuid) -> broadcast::Receiver<StreamChunk> {
+    /// Call this before queuing work to the orchestrator so the broadcast
+    /// channel exists when tokens start arriving.
+    pub async fn ensure_response_stream(&self, message_id: Uuid) {
         let mut streams = self.response_streams.write().await;
+        streams.entry(message_id).or_insert_with(|| {
+            let (tx, _) = broadcast::channel(100);
+            Arc::new(RwLock::new(BufferedStream {
+                tx,
+                buffer: Vec::new(),
+                done: false,
+            }))
+        });
+    }
 
-        if let Some(tx) = streams.get(&message_id) {
-            tx.subscribe()
-        } else {
-            // Create a new broadcast channel with buffer for 100 chunks
-            let (tx, rx) = broadcast::channel(100);
-            streams.insert(message_id, tx);
-            rx
-        }
+    /// Get the buffered chunks, a live receiver, and whether the stream is done.
+    ///
+    /// The caller should replay the buffer first, then listen on the receiver.
+    /// Holding the inner read lock while snapshotting + subscribing guarantees
+    /// no chunks are missed or duplicated.
+    pub async fn get_response_stream(
+        &self,
+        message_id: Uuid,
+    ) -> (Vec<StreamChunk>, broadcast::Receiver<StreamChunk>, bool) {
+        let mut streams = self.response_streams.write().await;
+        let entry = streams.entry(message_id).or_insert_with(|| {
+            let (tx, _) = broadcast::channel(100);
+            Arc::new(RwLock::new(BufferedStream {
+                tx,
+                buffer: Vec::new(),
+                done: false,
+            }))
+        });
+        let inner = entry.read().await;
+        let rx = inner.tx.subscribe();
+        (inner.buffer.clone(), rx, inner.done)
     }
 
     /// Send a chunk to a message's response stream
     ///
-    /// Returns false if no stream exists for this message.
+    /// Appends to the buffer and broadcasts. Returns false if no stream exists.
     pub async fn send_stream_chunk(&self, message_id: Uuid, chunk: StreamChunk) -> bool {
         let streams = self.response_streams.read().await;
 
-        if let Some(tx) = streams.get(&message_id) {
-            // Send to all subscribers, ignore if no receivers
-            let _ = tx.send(chunk);
+        if let Some(entry) = streams.get(&message_id) {
+            let mut inner = entry.write().await;
+            if matches!(&chunk, StreamChunk::Done) {
+                inner.done = true;
+            }
+            inner.buffer.push(chunk.clone());
+            let _ = inner.tx.send(chunk);
             true
         } else {
             false
@@ -354,15 +455,17 @@ mod tests {
     async fn get_response_stream_creates_new() {
         let state = make_state();
         let msg_id = Uuid::new_v4();
-        let _rx = state.get_response_stream(msg_id).await;
+        let (buf, _rx, done) = state.get_response_stream(msg_id).await;
+        assert!(buf.is_empty());
+        assert!(!done);
     }
 
     #[tokio::test]
     async fn get_response_stream_returns_existing() {
         let state = make_state();
         let msg_id = Uuid::new_v4();
-        let _rx1 = state.get_response_stream(msg_id).await;
-        let _rx2 = state.get_response_stream(msg_id).await;
+        let (_buf1, _rx1, _) = state.get_response_stream(msg_id).await;
+        let (_buf2, _rx2, _) = state.get_response_stream(msg_id).await;
     }
 
     #[tokio::test]
@@ -378,7 +481,7 @@ mod tests {
     async fn send_stream_chunk_with_stream() {
         let state = make_state();
         let msg_id = Uuid::new_v4();
-        let _rx = state.get_response_stream(msg_id).await;
+        state.ensure_response_stream(msg_id).await;
         let result = state
             .send_stream_chunk(msg_id, StreamChunk::Token("hi".into()))
             .await;
@@ -386,10 +489,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn buffered_stream_replays_chunks() {
+        let state = make_state();
+        let msg_id = Uuid::new_v4();
+        state.ensure_response_stream(msg_id).await;
+
+        // Send chunks with no SSE client connected
+        state.send_stream_chunk(msg_id, StreamChunk::Token("hello ".into())).await;
+        state.send_stream_chunk(msg_id, StreamChunk::Token("world".into())).await;
+        state.send_stream_chunk(msg_id, StreamChunk::Done).await;
+
+        // Late subscriber gets the full buffer
+        let (buf, _rx, done) = state.get_response_stream(msg_id).await;
+        assert_eq!(buf.len(), 3);
+        assert!(done);
+        assert!(matches!(&buf[0], StreamChunk::Token(t) if t == "hello "));
+        assert!(matches!(&buf[1], StreamChunk::Token(t) if t == "world"));
+        assert!(matches!(&buf[2], StreamChunk::Done));
+    }
+
+    #[tokio::test]
     async fn remove_response_stream() {
         let state = make_state();
         let msg_id = Uuid::new_v4();
-        let _rx = state.get_response_stream(msg_id).await;
+        state.ensure_response_stream(msg_id).await;
         state.remove_response_stream(msg_id).await;
         let result = state.send_stream_chunk(msg_id, StreamChunk::Done).await;
         assert!(!result);

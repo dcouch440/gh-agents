@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use crate::db::{AgentRow, ChatMessageRow, ClusterRow};
+use crate::db::{AgentRow, ChatMessageRow, ClusterRow, PipelineRow, PipelineStageRow, ScheduleRow, TriggerRow};
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::observability::{Decision, LlmCall};
 use crate::orchestration::DependencyError;
@@ -340,6 +340,48 @@ pub trait ServerRepo: Send + Sync {
 
     /// Remove an agent from a cluster.
     async fn remove_cluster_member(&self, cluster_id: Uuid, agent_id: Uuid) -> Result<()>;
+
+    // --- Pipeline persistence ---
+
+    /// List all pipelines for a user.
+    async fn list_pipelines(&self, user_id: UserId) -> Result<Vec<PipelineRow>>;
+
+    /// Insert or update a pipeline.
+    async fn upsert_pipeline(&self, user_id: UserId, pipeline: PipelineRow) -> Result<()>;
+
+    /// Delete a pipeline by ID.
+    async fn delete_pipeline(&self, pipeline_id: Uuid) -> Result<()>;
+
+    /// List stages for a pipeline.
+    async fn list_pipeline_stages(&self, pipeline_id: Uuid) -> Result<Vec<PipelineStageRow>>;
+
+    /// Insert or update a pipeline stage.
+    async fn upsert_pipeline_stage(&self, stage: PipelineStageRow) -> Result<()>;
+
+    // --- Schedule persistence ---
+
+    /// List all schedules for a user.
+    async fn list_schedules(&self, user_id: UserId) -> Result<Vec<ScheduleRow>>;
+
+    /// Insert or update a schedule.
+    async fn upsert_schedule(&self, user_id: UserId, schedule: ScheduleRow) -> Result<()>;
+
+    /// Delete a schedule by ID.
+    async fn delete_schedule(&self, schedule_id: Uuid) -> Result<()>;
+
+    /// Update last_run_at for a schedule.
+    async fn update_schedule_last_run(&self, schedule_id: Uuid, last_run_at: DateTime<Utc>) -> Result<()>;
+
+    // --- Trigger persistence ---
+
+    /// List all triggers for a user.
+    async fn list_triggers(&self, user_id: UserId) -> Result<Vec<TriggerRow>>;
+
+    /// Insert or update a trigger.
+    async fn upsert_trigger(&self, user_id: UserId, trigger: TriggerRow) -> Result<()>;
+
+    /// Delete a trigger by ID.
+    async fn delete_trigger(&self, trigger_id: Uuid) -> Result<()>;
 }
 
 // ============================================================================

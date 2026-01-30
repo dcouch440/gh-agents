@@ -132,12 +132,12 @@ describe('api.auth', () => {
     const body = { token: 'jwt', expires_in: 3600 };
     const spy = mockFetch(200, body);
     vi.stubGlobal('fetch', spy);
-    const result = await api.auth.login('secret');
+    const result = await api.auth.login('test@test.com', 'secret');
     expect(spy).toHaveBeenCalledWith(
       `${TEST_BASE}/auth/login`,
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ password: 'secret' }),
+        body: JSON.stringify({ email: 'test@test.com', password: 'secret' }),
       }),
     );
     expect(result).toEqual(body);

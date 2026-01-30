@@ -312,6 +312,10 @@ pub async fn send_chat(
 
     let message_id = Uuid::new_v4();
 
+    // Pre-create the buffered stream so chunks are captured even before
+    // the SSE client connects
+    state.ensure_response_stream(message_id).await;
+
     // Store the user message in the database
     state
         .repo
@@ -395,15 +399,37 @@ pub async fn chat_stream(
     Path(message_id): Path<Uuid>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let stream = async_stream::stream! {
-        // Subscribe to response stream for this message
-        let mut rx = state.get_response_stream(message_id).await;
+        let (buffered, mut rx, already_done) = state.get_response_stream(message_id).await;
 
+        // Replay any buffered chunks that arrived before we connected
+        for chunk in buffered {
+            match chunk {
+                StreamChunk::Token(text) => {
+                    yield Ok(Event::default().event("token").data(text));
+                }
+                StreamChunk::Done => {
+                    yield Ok(Event::default().event("done").data(""));
+                    return;
+                }
+                StreamChunk::Error(e) => {
+                    yield Ok(Event::default().event("error").data(e));
+                    return;
+                }
+            }
+        }
+
+        if already_done {
+            yield Ok(Event::default().event("done").data(""));
+            return;
+        }
+
+        // Listen for new chunks from the orchestrator
         loop {
             match rx.recv().await {
                 Ok(chunk) => {
                     match chunk {
                         StreamChunk::Token(text) => {
-                            yield Ok(Event::default().data(text));
+                            yield Ok(Event::default().event("token").data(text));
                         }
                         StreamChunk::Done => {
                             yield Ok(Event::default().event("done").data(""));
@@ -416,11 +442,9 @@ pub async fn chat_stream(
                     }
                 }
                 Err(broadcast::error::RecvError::Closed) => {
-                    // Channel closed, end stream
                     break;
                 }
                 Err(broadcast::error::RecvError::Lagged(_)) => {
-                    // We lagged behind, continue receiving
                     continue;
                 }
             }
@@ -776,7 +800,7 @@ mod tests {
     use std::sync::Arc;
 
     use crate::db::traits::{MockUserRepo, ServerRepo};
-    use crate::db::ChatMessageRow;
+    use crate::db::{ChatMessageRow, PipelineRow, PipelineStageRow, ScheduleRow, TriggerRow};
     use crate::types::{User, UserId};
 
     /// In-memory implementation of ServerRepo for tests (no Postgres needed).
@@ -895,6 +919,18 @@ mod tests {
         async fn list_cluster_members(&self, _cluster_id: Uuid) -> anyhow::Result<Vec<Uuid>> { Ok(vec![]) }
         async fn add_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> { Ok(()) }
         async fn remove_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> { Ok(()) }
+        async fn list_pipelines(&self, _user_id: UserId) -> anyhow::Result<Vec<PipelineRow>> { Ok(vec![]) }
+        async fn upsert_pipeline(&self, _user_id: UserId, _pipeline: PipelineRow) -> anyhow::Result<()> { Ok(()) }
+        async fn delete_pipeline(&self, _pipeline_id: Uuid) -> anyhow::Result<()> { Ok(()) }
+        async fn list_pipeline_stages(&self, _pipeline_id: Uuid) -> anyhow::Result<Vec<PipelineStageRow>> { Ok(vec![]) }
+        async fn upsert_pipeline_stage(&self, _stage: PipelineStageRow) -> anyhow::Result<()> { Ok(()) }
+        async fn list_schedules(&self, _user_id: UserId) -> anyhow::Result<Vec<ScheduleRow>> { Ok(vec![]) }
+        async fn upsert_schedule(&self, _user_id: UserId, _schedule: ScheduleRow) -> anyhow::Result<()> { Ok(()) }
+        async fn delete_schedule(&self, _schedule_id: Uuid) -> anyhow::Result<()> { Ok(()) }
+        async fn update_schedule_last_run(&self, _schedule_id: Uuid, _last_run_at: DateTime<Utc>) -> anyhow::Result<()> { Ok(()) }
+        async fn list_triggers(&self, _user_id: UserId) -> anyhow::Result<Vec<TriggerRow>> { Ok(vec![]) }
+        async fn upsert_trigger(&self, _user_id: UserId, _trigger: TriggerRow) -> anyhow::Result<()> { Ok(()) }
+        async fn delete_trigger(&self, _trigger_id: Uuid) -> anyhow::Result<()> { Ok(()) }
     }
 
     fn create_test_token(jwt_secret: &[u8]) -> String {

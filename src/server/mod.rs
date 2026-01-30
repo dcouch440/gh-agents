@@ -59,6 +59,9 @@ pub async fn start_server(
     // Spawn the response consumer to collect agent results
     let _response_handle = orchestrator::spawn_response_consumer(state.clone());
 
+    // Spawn the schedule runner for periodic agent tasks
+    let _schedule_handle = orchestrator::spawn_schedule_runner(state.clone());
+
     let app = create_router(state);
 
     info!("Server listening on http://{}", addr);
@@ -224,13 +227,13 @@ async fn shutdown_signal() {
 mod tests {
     use super::*;
     use crate::db::traits::ServerRepo;
-    use crate::db::ChatMessageRow;
+    use crate::db::{ChatMessageRow, PipelineRow, PipelineStageRow, ScheduleRow, TriggerRow};
     use crate::types::UserId;
     use axum::{
         body::Body,
         http::{Request, StatusCode},
     };
-    use chrono::Utc;
+    use chrono::{DateTime, Utc};
     use tempfile::TempDir;
     use tower::util::ServiceExt;
     use uuid::Uuid;
@@ -344,6 +347,18 @@ mod tests {
         async fn list_cluster_members(&self, _cluster_id: Uuid) -> anyhow::Result<Vec<Uuid>> { Ok(vec![]) }
         async fn add_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> { Ok(()) }
         async fn remove_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> { Ok(()) }
+        async fn list_pipelines(&self, _user_id: UserId) -> anyhow::Result<Vec<PipelineRow>> { Ok(vec![]) }
+        async fn upsert_pipeline(&self, _user_id: UserId, _pipeline: PipelineRow) -> anyhow::Result<()> { Ok(()) }
+        async fn delete_pipeline(&self, _pipeline_id: Uuid) -> anyhow::Result<()> { Ok(()) }
+        async fn list_pipeline_stages(&self, _pipeline_id: Uuid) -> anyhow::Result<Vec<PipelineStageRow>> { Ok(vec![]) }
+        async fn upsert_pipeline_stage(&self, _stage: PipelineStageRow) -> anyhow::Result<()> { Ok(()) }
+        async fn list_schedules(&self, _user_id: UserId) -> anyhow::Result<Vec<ScheduleRow>> { Ok(vec![]) }
+        async fn upsert_schedule(&self, _user_id: UserId, _schedule: ScheduleRow) -> anyhow::Result<()> { Ok(()) }
+        async fn delete_schedule(&self, _schedule_id: Uuid) -> anyhow::Result<()> { Ok(()) }
+        async fn update_schedule_last_run(&self, _schedule_id: Uuid, _last_run_at: DateTime<Utc>) -> anyhow::Result<()> { Ok(()) }
+        async fn list_triggers(&self, _user_id: UserId) -> anyhow::Result<Vec<TriggerRow>> { Ok(vec![]) }
+        async fn upsert_trigger(&self, _user_id: UserId, _trigger: TriggerRow) -> anyhow::Result<()> { Ok(()) }
+        async fn delete_trigger(&self, _trigger_id: Uuid) -> anyhow::Result<()> { Ok(()) }
     }
 
     fn setup_mock_state() -> AppState {
