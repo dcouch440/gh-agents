@@ -10,7 +10,7 @@ use crate::db::traits::{
     CostRepo, DependencyRepo, MergeQueueRepo, ObservabilityRepo, PlannerRepo, RefactorRepo,
     SchedulerRepo, ServerRepo, TaskQueueRepo, UserRepo,
 };
-use crate::db::ChatMessageRow;
+use crate::db::{AgentRow, ChatMessageRow, ClusterRow};
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::observability::{Decision, LlmCall};
 use crate::orchestration::DependencyError;
@@ -922,11 +922,155 @@ impl ServerRepo for PgRepo {
     async fn get_password(&self) -> Result<Option<String>> {
         crate::db::get_password(&self.pool).await
     }
+
+    // --- Agent persistence ---
+
+    async fn list_persisted_agents(&self, user_id: UserId) -> Result<Vec<AgentRow>> {
+        let rows = sqlx::query_as::<_, PgAgentRow>(
+            "SELECT id, tier, persona_name, model_id, status FROM agents WHERE user_id = $1"
+        )
+        .bind(user_id.0)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(|r| AgentRow {
+            id: r.id,
+            tier: r.tier,
+            persona_name: r.persona_name,
+            model_id: r.model_id,
+            status: r.status,
+        }).collect())
+    }
+
+    async fn upsert_agent(&self, user_id: UserId, agent: AgentRow) -> Result<()> {
+        sqlx::query(r#"
+            INSERT INTO agents (id, user_id, tier, persona_name, model_id, status)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (id) DO UPDATE SET
+                tier = EXCLUDED.tier,
+                persona_name = EXCLUDED.persona_name,
+                model_id = EXCLUDED.model_id,
+                status = EXCLUDED.status
+        "#)
+        .bind(agent.id)
+        .bind(user_id.0)
+        .bind(&agent.tier)
+        .bind(&agent.persona_name)
+        .bind(&agent.model_id)
+        .bind(&agent.status)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn delete_persisted_agent(&self, agent_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM agents WHERE id = $1")
+            .bind(agent_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    // --- Cluster persistence ---
+
+    async fn list_persisted_clusters(&self, user_id: UserId) -> Result<Vec<ClusterRow>> {
+        let rows = sqlx::query_as::<_, PgClusterRow>(
+            "SELECT id, name, description, conventions, shared_files FROM clusters WHERE user_id = $1"
+        )
+        .bind(user_id.0)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(|r| ClusterRow {
+            id: r.id,
+            name: r.name,
+            description: r.description,
+            conventions: r.conventions,
+            shared_files: r.shared_files,
+        }).collect())
+    }
+
+    async fn upsert_cluster(&self, user_id: UserId, cluster: ClusterRow) -> Result<()> {
+        sqlx::query(r#"
+            INSERT INTO clusters (id, user_id, name, description, conventions, shared_files)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (id) DO UPDATE SET
+                name = EXCLUDED.name,
+                description = EXCLUDED.description,
+                conventions = EXCLUDED.conventions,
+                shared_files = EXCLUDED.shared_files
+        "#)
+        .bind(cluster.id)
+        .bind(user_id.0)
+        .bind(&cluster.name)
+        .bind(&cluster.description)
+        .bind(&cluster.conventions)
+        .bind(&cluster.shared_files)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn delete_cluster(&self, cluster_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM clusters WHERE id = $1")
+            .bind(cluster_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn list_cluster_members(&self, cluster_id: Uuid) -> Result<Vec<Uuid>> {
+        let rows: Vec<(Uuid,)> = sqlx::query_as(
+            "SELECT agent_id FROM cluster_members WHERE cluster_id = $1"
+        )
+        .bind(cluster_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows.into_iter().map(|r| r.0).collect())
+    }
+
+    async fn add_cluster_member(&self, cluster_id: Uuid, agent_id: Uuid) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO cluster_members (cluster_id, agent_id) VALUES ($1, $2) ON CONFLICT DO NOTHING"
+        )
+        .bind(cluster_id)
+        .bind(agent_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn remove_cluster_member(&self, cluster_id: Uuid, agent_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM cluster_members WHERE cluster_id = $1 AND agent_id = $2")
+            .bind(cluster_id)
+            .bind(agent_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
 }
 
 // ============================================================================
 // User Repository
 // ============================================================================
+
+#[derive(sqlx::FromRow)]
+struct PgAgentRow {
+    id: Uuid,
+    tier: String,
+    persona_name: String,
+    model_id: String,
+    status: String,
+}
+
+#[derive(sqlx::FromRow)]
+struct PgClusterRow {
+    id: Uuid,
+    name: String,
+    description: String,
+    conventions: String,
+    shared_files: serde_json::Value,
+}
 
 #[derive(sqlx::FromRow)]
 struct UserRow {

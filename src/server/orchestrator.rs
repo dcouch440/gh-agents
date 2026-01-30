@@ -317,7 +317,7 @@ async fn handle_message(
             for block in &response.content_blocks {
                 if let ContentBlock::ToolUse { id, name, input } = block {
                     debug!("Executing tool: {} (id: {})", name, id);
-                    let result = tools::execute_tool(name, input, state).await;
+                    let result = tools::execute_tool(name, input, state, user_id).await;
                     let result_str = serde_json::to_string_pretty(&result)
                         .unwrap_or_else(|_| result.to_string());
 
@@ -409,6 +409,15 @@ mod tests {
         async fn has_password(&self) -> anyhow::Result<bool> { Ok(false) }
         async fn set_password(&self, _: String) -> anyhow::Result<()> { Ok(()) }
         async fn get_password(&self) -> anyhow::Result<Option<String>> { Ok(None) }
+        async fn list_persisted_agents(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::AgentRow>> { Ok(vec![]) }
+        async fn upsert_agent(&self, _user_id: UserId, _agent: crate::db::AgentRow) -> anyhow::Result<()> { Ok(()) }
+        async fn delete_persisted_agent(&self, _agent_id: Uuid) -> anyhow::Result<()> { Ok(()) }
+        async fn list_persisted_clusters(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::ClusterRow>> { Ok(vec![]) }
+        async fn upsert_cluster(&self, _user_id: UserId, _cluster: crate::db::ClusterRow) -> anyhow::Result<()> { Ok(()) }
+        async fn delete_cluster(&self, _cluster_id: Uuid) -> anyhow::Result<()> { Ok(()) }
+        async fn list_cluster_members(&self, _cluster_id: Uuid) -> anyhow::Result<Vec<Uuid>> { Ok(vec![]) }
+        async fn add_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> { Ok(()) }
+        async fn remove_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> { Ok(()) }
     }
 
     #[tokio::test]

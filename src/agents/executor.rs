@@ -10,8 +10,12 @@ use super::channels::{
     AgentCommand, AgentResponse, ApprovalRequest, ContextRequest, ContextResponse, ProgressUpdate,
     RoleContext, TaskAssignment, TaskResult,
 };
+use super::execution_tools;
 use super::roles::{CommunicationStyle, OutputFormat};
-use crate::llm::{LLMRequest, LLMResponse, Message, StreamChunk as LLMStreamChunk};
+use crate::llm::{
+    ContentBlock, LLMRequest, LLMResponse, Message, StreamAccumulator, StopReason,
+    StreamChunk as LLMStreamChunk,
+};
 use crate::types::{AgentStatus, TaskStatus};
 
 impl Agent {
@@ -391,7 +395,10 @@ impl Agent {
         })
     }
 
-    /// Execute a standard code task with milestone progress updates.
+    /// Execute a standard code task with a multi-turn tool use loop.
+    ///
+    /// The agent streams LLM responses and can call execution tools (file ops,
+    /// git, tests, sandbox) autonomously, looping until the LLM returns EndTurn.
     async fn execute_task_standard(
         &self,
         assignment: &TaskAssignment,
@@ -405,44 +412,128 @@ impl Agent {
         )
         .await?;
 
-        self.emit_progress(task_id, "Analyzing task and building context...", Some(10))
-            .await?;
-
         let role_context = &assignment.context.role_context;
         let system_prompt = self.build_role_aware_prompt(assignment, role_context);
         let temperature = self.temperature_for_style(&role_context.style);
 
-        self.emit_progress(task_id, "Generating solution...", Some(30))
-            .await?;
-
-        let request = LLMRequest {
-            model: self.model_config.model_id.clone(),
-            system: Some(system_prompt),
-            messages: vec![Message::user(format!(
-                "Please complete this task:\n\n{}\n\n{}",
-                assignment.title, assignment.description
-            ))],
-            max_tokens: self.model_config.max_tokens,
-            temperature,
-            stream: false,
-            ..Default::default()
+        // Build tool definitions if we have an execution context
+        let tool_defs = if assignment.context.execution_context.is_some() {
+            execution_tools::execution_tools()
+        } else {
+            vec![]
         };
 
-        let response = self
-            .llm_provider()
-            .send_message(request)
-            .await
-            .map_err(|e| AgentError::LLMError(e.to_string()))?;
+        let allowed_tools = assignment.constraints.allowed_tools.as_deref();
 
-        self.emit_progress(task_id, "Processing results...", Some(80))
-            .await?;
+        let mut messages = vec![Message::user(format!(
+            "Please complete this task:\n\n{}\n\n{}",
+            assignment.title, assignment.description
+        ))];
 
-        let result = self.parse_llm_response(task_id, response, &role_context.output_format)?;
+        let mut accumulated_response = String::new();
+        let mut files_modified = Vec::new();
+        let max_tool_rounds = 15;
+
+        for round in 0..max_tool_rounds {
+            let progress = 10 + (round as u8 * 5).min(70);
+            self.emit_progress(task_id, &format!("Working... (round {})", round + 1), Some(progress))
+                .await?;
+
+            let request = LLMRequest {
+                model: self.model_config.model_id.clone(),
+                system: Some(system_prompt.clone()),
+                messages: messages.clone(),
+                max_tokens: self.model_config.max_tokens,
+                temperature,
+                stream: true,
+                tools: tool_defs.clone(),
+                ..Default::default()
+            };
+
+            let mut stream = self
+                .llm_provider()
+                .send_message_stream(request)
+                .await
+                .map_err(|e| AgentError::LLMError(e.to_string()))?;
+
+            let mut accumulator = StreamAccumulator::new();
+
+            while let Some(chunk_result) = stream.next().await {
+                match chunk_result {
+                    Ok(ref chunk @ LLMStreamChunk::ContentDelta { ref text, .. }) => {
+                        accumulated_response.push_str(text);
+                        self.emit_progress(task_id, text, None).await?;
+                        accumulator.apply(chunk);
+                    }
+                    Ok(ref chunk) => {
+                        accumulator.apply(chunk);
+                    }
+                    Err(e) => return Err(AgentError::LLMError(e.to_string())),
+                }
+            }
+
+            let response = match accumulator.build() {
+                Some(r) => r,
+                None => return Err(AgentError::LLMError("Incomplete LLM response".into())),
+            };
+
+            if response.stop_reason == StopReason::ToolUse {
+                if let Some(exec_ctx) = &assignment.context.execution_context {
+                    // Add assistant message with content blocks
+                    messages.push(Message::assistant_with_blocks(response.content_blocks.clone()));
+
+                    // Execute each tool call
+                    let mut tool_results = Vec::new();
+                    for block in &response.content_blocks {
+                        if let ContentBlock::ToolUse { id, name, input } = block {
+                            self.emit_progress(task_id, &format!("Executing tool: {}", name), None)
+                                .await?;
+
+                            let result = execution_tools::execute_execution_tool(
+                                name, input, exec_ctx, allowed_tools,
+                            )
+                            .await;
+
+                            // Track file modifications
+                            if name == "write_file" {
+                                if let Some(path) = input["path"].as_str() {
+                                    files_modified.push(path.to_string());
+                                }
+                            } else if name == "git_commit" {
+                                if let Some(path) = result["sha"].as_str() {
+                                    files_modified.push(format!("commit:{}", path));
+                                }
+                            }
+
+                            let result_str = serde_json::to_string_pretty(&result)
+                                .unwrap_or_else(|_| result.to_string());
+
+                            tool_results.push(ContentBlock::ToolResult {
+                                tool_use_id: id.clone(),
+                                content: result_str,
+                            });
+                        }
+                    }
+
+                    messages.push(Message::tool_results(tool_results));
+                    continue;
+                }
+            }
+
+            // EndTurn or MaxTokens — done
+            break;
+        }
 
         self.emit_progress(task_id, "Task complete", Some(100))
             .await?;
 
-        Ok(result)
+        Ok(TaskResult {
+            task_id,
+            status: TaskStatus::Completed,
+            output: accumulated_response,
+            files_modified,
+            errors: vec![],
+        })
     }
 
     /// Execute task with timeout
@@ -618,7 +709,22 @@ mod tests {
             Pin<Box<dyn Stream<Item = Result<StreamChunk, crate::llm::LLMError>> + Send>>,
             crate::llm::LLMError,
         > {
-            unimplemented!()
+            let chunks = vec![
+                Ok(StreamChunk::MessageStart {
+                    model: "test-model".to_string(),
+                    input_tokens: 10,
+                }),
+                Ok(StreamChunk::ContentDelta {
+                    text: "test response".to_string(),
+                    index: 0,
+                }),
+                Ok(StreamChunk::MessageDelta {
+                    stop_reason: Some(StopReason::EndTurn),
+                    output_tokens: Some(20),
+                }),
+                Ok(StreamChunk::MessageStop),
+            ];
+            Ok(Box::pin(futures::stream::iter(chunks)))
         }
 
         fn provider_name(&self) -> &'static str {
@@ -652,7 +758,10 @@ mod tests {
             Pin<Box<dyn Stream<Item = Result<StreamChunk, crate::llm::LLMError>> + Send>>,
             crate::llm::LLMError,
         > {
-            unimplemented!()
+            Err(crate::llm::LLMError::ApiError {
+                status: 500,
+                message: "mock error".to_string(),
+            })
         }
 
         fn provider_name(&self) -> &'static str {
@@ -693,7 +802,8 @@ mod tests {
             Pin<Box<dyn Stream<Item = Result<StreamChunk, crate::llm::LLMError>> + Send>>,
             crate::llm::LLMError,
         > {
-            unimplemented!()
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            unreachable!()
         }
 
         fn provider_name(&self) -> &'static str {
@@ -750,6 +860,7 @@ mod tests {
                 conventions: String::new(),
                 role_context: make_role_context(),
                 chat_messages: vec![],
+                execution_context: None,
             },
             constraints: TaskConstraints::default(),
             timeout: Duration::from_secs(30),

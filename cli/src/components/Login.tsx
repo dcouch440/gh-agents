@@ -9,20 +9,28 @@ interface LoginProps {
 }
 
 export function Login({ onSuccess }: LoginProps) {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [step, setStep] = useState<'email' | 'password'>('email');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleEmailSubmit = (value: string) => {
+    if (!value) return;
+    setStep('password');
+  };
 
   const handleSubmit = async (value: string) => {
     if (!value) return;
     setLoading(true);
     setError(null);
-    const result = await handleLogin(value);
+    const result = await handleLogin(email, value);
     if (result.success) {
       onSuccess();
     } else {
       setError(result.error ?? 'Unknown error');
       setPassword('');
+      setStep('email');
       setLoading(false);
     }
   };
@@ -39,15 +47,26 @@ export function Login({ onSuccess }: LoginProps) {
 
   return (
     <Box flexDirection="column">
-      <Box>
-        <Text>Password: </Text>
-        <TextInput
-          value={password}
-          onChange={setPassword}
-          onSubmit={handleSubmit}
-          mask="*"
-        />
-      </Box>
+      {step === 'email' ? (
+        <Box>
+          <Text>Email: </Text>
+          <TextInput
+            value={email}
+            onChange={setEmail}
+            onSubmit={handleEmailSubmit}
+          />
+        </Box>
+      ) : (
+        <Box>
+          <Text>Password: </Text>
+          <TextInput
+            value={password}
+            onChange={setPassword}
+            onSubmit={handleSubmit}
+            mask="*"
+          />
+        </Box>
+      )}
       {error && <Text color="red">{error}</Text>}
     </Box>
   );

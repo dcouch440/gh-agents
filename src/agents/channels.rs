@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use super::agent::AgentId;
 use super::roles::{CommunicationStyle, OutputFormat, RoleId};
+use crate::execution::ExecutionContext;
 use crate::types::{AgentTier, TaskStatus};
 
 /// Commands sent to agents
@@ -87,6 +88,8 @@ pub struct TaskContext {
     /// When non-empty, the executor uses these directly as LLM messages
     /// instead of wrapping in a "complete this task" prompt.
     pub chat_messages: Vec<crate::llm::Message>,
+    /// Execution context for file/git/test/sandbox operations.
+    pub execution_context: Option<ExecutionContext>,
 }
 
 /// Role-specific context for prompt building
@@ -121,6 +124,8 @@ pub struct TaskConstraints {
     pub allowed_paths: Vec<String>,
     pub require_tests: bool,
     pub require_review: bool,
+    /// If set, only these execution tools are available to the agent.
+    pub allowed_tools: Option<Vec<String>>,
 }
 
 impl Default for TaskConstraints {
@@ -130,6 +135,7 @@ impl Default for TaskConstraints {
             allowed_paths: Vec::new(),
             require_tests: false,
             require_review: true,
+            allowed_tools: None,
         }
     }
 }
