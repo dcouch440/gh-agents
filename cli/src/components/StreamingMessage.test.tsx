@@ -39,11 +39,11 @@ describe('StreamingMessage', () => {
     expect(lastFrame()!).toContain('─');
   });
 
-  it('renders empty content with cursor', () => {
+  it('shows thinking indicator when content is empty and not done', () => {
     const { lastFrame } = render(
       <StreamingMessage content="" done={false} />,
     );
-    expect(lastFrame()!).toContain('█');
+    expect(lastFrame()!).toContain('Thinking');
   });
 
   it('renders multiline content', () => {

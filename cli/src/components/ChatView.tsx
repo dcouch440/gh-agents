@@ -39,7 +39,7 @@ export function ChatView() {
         <StreamingMessage content={streamingContent} done={false} />
       )}
       <Box marginTop={1}>
-        <Input onSubmit={sendMessage} disabled={sending || isStreaming} />
+        <Input onSubmit={sendMessage} sending={sending} isStreaming={isStreaming} />
       </Box>
     </Box>
   );

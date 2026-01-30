@@ -13,6 +13,8 @@ interface UseChatResult {
   sendMessage: (content: string) => Promise<void>;
 }
 
+const FLUSH_INTERVAL_MS = 50;
+
 export function useChat(): UseChatResult {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,6 +23,8 @@ export function useChat(): UseChatResult {
   const [streamingContent, setStreamingContent] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const cleanupRef = useRef<(() => void) | null>(null);
+  const tokenBufferRef = useRef('');
+  const flushIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,6 +50,9 @@ export function useChat(): UseChatResult {
   useEffect(() => {
     return () => {
       cleanupRef.current?.();
+      if (flushIntervalRef.current) {
+        clearInterval(flushIntervalRef.current);
+      }
     };
   }, []);
 
@@ -67,15 +74,34 @@ export function useChat(): UseChatResult {
       setIsStreaming(true);
       setStreamingContent('');
 
+      // Start flush interval for batched token updates
+      flushIntervalRef.current = setInterval(() => {
+        if (tokenBufferRef.current) {
+          const buffered = tokenBufferRef.current;
+          tokenBufferRef.current = '';
+          setStreamingContent((prev: string) => prev + buffered);
+        }
+      }, FLUSH_INTERVAL_MS);
+
       const cleanup = streamResponse(
         getBaseUrl(),
         response.message_id,
         getToken(),
         {
           onToken: (text: string) => {
-            setStreamingContent((prev: string) => prev + text);
+            tokenBufferRef.current += text;
           },
           onDone: () => {
+            // Flush remaining tokens
+            if (tokenBufferRef.current) {
+              const remaining = tokenBufferRef.current;
+              tokenBufferRef.current = '';
+              setStreamingContent((prev: string) => prev + remaining);
+            }
+            if (flushIntervalRef.current) {
+              clearInterval(flushIntervalRef.current);
+              flushIntervalRef.current = null;
+            }
             setIsStreaming(false);
             cleanupRef.current = null;
             // Reload history to get the full message with real IDs
@@ -85,6 +111,11 @@ export function useChat(): UseChatResult {
               .catch(() => {});
           },
           onError: (errMsg: string) => {
+            tokenBufferRef.current = '';
+            if (flushIntervalRef.current) {
+              clearInterval(flushIntervalRef.current);
+              flushIntervalRef.current = null;
+            }
             setIsStreaming(false);
             setStreamingContent('');
             setError(errMsg);

@@ -25,7 +25,7 @@ export function Message({ message }: MessageProps) {
         </Text>
         <Text dimColor>{formatTime(message.timestamp)}</Text>
       </Box>
-      <Text dimColor={!isUser}>
+      <Text>
         {isUser ? message.content : renderMarkdown(message.content)}
       </Text>
     </Box>

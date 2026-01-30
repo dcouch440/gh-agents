@@ -9,19 +9,20 @@ describe('Input', () => {
     expect(lastFrame()!).toContain('>');
   });
 
-  it('shows waiting message when disabled', () => {
-    const { lastFrame } = render(<Input onSubmit={vi.fn()} disabled />);
-    expect(lastFrame()!).toContain('Waiting for response');
+  it('shows sending message when sending', () => {
+    const { lastFrame } = render(<Input onSubmit={vi.fn()} sending />);
+    expect(lastFrame()!).toContain('Sending');
   });
 
-  it('does not show prompt when disabled', () => {
-    const { lastFrame } = render(<Input onSubmit={vi.fn()} disabled />);
-    expect(lastFrame()!).toContain('Waiting');
+  it('shows typing message when streaming', () => {
+    const { lastFrame } = render(<Input onSubmit={vi.fn()} isStreaming />);
+    expect(lastFrame()!).toContain('nexor is typing');
   });
 
-  it('defaults to enabled when disabled prop is omitted', () => {
+  it('defaults to enabled when no state props provided', () => {
     const { lastFrame } = render(<Input onSubmit={vi.fn()} />);
-    expect(lastFrame()!).not.toContain('Waiting');
+    expect(lastFrame()!).not.toContain('Sending');
+    expect(lastFrame()!).not.toContain('typing');
     expect(lastFrame()!).toContain('>');
   });
 
@@ -31,9 +32,23 @@ describe('Input', () => {
     expect(lastFrame()!).toContain('hello');
   });
 
-  it('does not render input field when disabled', () => {
-    const { lastFrame } = render(<Input onSubmit={vi.fn()} disabled />);
+  it('does not render input field when sending', () => {
+    const { lastFrame } = render(<Input onSubmit={vi.fn()} sending />);
     const frame = lastFrame()!;
     expect(frame).not.toContain('>');
+  });
+
+  it('does not render input field when streaming', () => {
+    const { lastFrame } = render(<Input onSubmit={vi.fn()} isStreaming />);
+    const frame = lastFrame()!;
+    expect(frame).not.toContain('>');
+  });
+
+  it('sending takes priority over streaming', () => {
+    const { lastFrame } = render(
+      <Input onSubmit={vi.fn()} sending isStreaming />,
+    );
+    expect(lastFrame()!).toContain('Sending');
+    expect(lastFrame()!).not.toContain('typing');
   });
 });
