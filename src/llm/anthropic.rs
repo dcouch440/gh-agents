@@ -78,6 +78,7 @@ impl AnthropicConfig {
 }
 
 /// Anthropic Messages API client
+#[derive(Clone)]
 pub struct AnthropicClient {
     /// HTTP client
     client: Client,

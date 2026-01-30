@@ -8,6 +8,8 @@ use sqlx::PgPool;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use uuid::Uuid;
 
+use crate::db::pg_repo::PgRepo;
+use crate::db::traits::ServerRepo;
 use crate::orchestration::Scheduler;
 use crate::types::AppConfig;
 
@@ -35,18 +37,18 @@ pub enum StreamChunk {
 /// Application state shared across all HTTP handlers
 #[derive(Clone)]
 pub struct AppState {
-    /// Database connection pool
-    pub db: PgPool,
-    /// Task scheduler for orchestration
-    pub scheduler: Arc<RwLock<Scheduler>>,
+    /// Database connection pool (used by Scheduler; None in mock-based tests)
+    pub db: Option<PgPool>,
+    /// Repository trait object for DB operations used by API handlers
+    pub repo: Arc<dyn ServerRepo>,
+    /// Task scheduler for orchestration (None in mock-based tests)
+    pub scheduler: Option<Arc<RwLock<Scheduler>>>,
     /// Application configuration
     pub config: Arc<AppConfig>,
     /// JWT secret for token signing
     pub jwt_secret: Vec<u8>,
     /// Channel to send messages to the orchestrator
     pub orchestrator_tx: mpsc::Sender<OrchestratorMessage>,
-    /// Receiver for orchestrator messages (for the orchestrator to consume)
-    orchestrator_rx: Arc<RwLock<mpsc::Receiver<OrchestratorMessage>>>,
     /// Map of message IDs to response broadcast senders
     response_streams: Arc<RwLock<HashMap<Uuid, broadcast::Sender<StreamChunk>>>>,
     /// Broadcast channel for feed updates
@@ -58,8 +60,25 @@ pub struct AppState {
 }
 
 impl AppState {
-    /// Create new application state
-    pub fn new(db: PgPool, scheduler: Arc<RwLock<Scheduler>>, config: AppConfig) -> Self {
+    /// Create new application state, returning the orchestrator receiver separately
+    /// so it can be passed to the orchestrator consumer task.
+    pub fn new(
+        db: PgPool,
+        scheduler: Arc<RwLock<Scheduler>>,
+        config: AppConfig,
+    ) -> (Self, mpsc::Receiver<OrchestratorMessage>) {
+        let repo: Arc<dyn ServerRepo> = Arc::new(PgRepo::new(db.clone()));
+        Self::with_repo(Some(db), repo, Some(scheduler), config)
+    }
+
+    /// Create application state with a custom repo (for testing).
+    /// Returns the state and the orchestrator message receiver.
+    pub fn with_repo(
+        db: Option<PgPool>,
+        repo: Arc<dyn ServerRepo>,
+        scheduler: Option<Arc<RwLock<Scheduler>>>,
+        config: AppConfig,
+    ) -> (Self, mpsc::Receiver<OrchestratorMessage>) {
         let (orchestrator_tx, orchestrator_rx) = mpsc::channel(100);
         let (feed_tx, _) = broadcast::channel(100);
         let (task_tx, _) = broadcast::channel(100);
@@ -69,18 +88,21 @@ impl AppState {
         // In production, this should be persisted or configured via environment variable
         let jwt_secret = rand::random::<[u8; 32]>().to_vec();
 
-        Self {
-            db,
-            scheduler,
-            config: Arc::new(config),
-            jwt_secret,
-            orchestrator_tx,
-            orchestrator_rx: Arc::new(RwLock::new(orchestrator_rx)),
-            response_streams: Arc::new(RwLock::new(HashMap::new())),
-            feed_tx,
-            task_tx,
-            agent_tx,
-        }
+        (
+            Self {
+                db,
+                repo,
+                scheduler,
+                config: Arc::new(config),
+                jwt_secret,
+                orchestrator_tx,
+                response_streams: Arc::new(RwLock::new(HashMap::new())),
+                feed_tx,
+                task_tx,
+                agent_tx,
+            },
+            orchestrator_rx,
+        )
     }
 
     /// Subscribe to feed updates
@@ -150,30 +172,19 @@ impl AppState {
         streams.remove(&message_id);
     }
 
-    /// Get access to the orchestrator message receiver
-    ///
-    /// Note: In practice, the orchestrator would be initialized with the receiver directly.
-    /// This method is provided for potential future use cases.
-    #[allow(dead_code)]
-    pub async fn take_orchestrator_rx(&self) -> Option<mpsc::Receiver<OrchestratorMessage>> {
-        // This is a one-time operation - the orchestrator takes ownership
-        let _rx_guard = self.orchestrator_rx.write().await;
-        // We can't actually take it since it's behind RwLock, but this signals intent
-        // In practice, the orchestrator would be initialized with the receiver directly
-        None
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::test_utils::TestDb;
+    use crate::db::traits::MockServerRepo;
 
-    async fn make_state() -> (AppState, TestDb) {
-        let db = TestDb::new().await;
-        let pool = db.pool.clone();
-        let scheduler = Scheduler::new(pool.clone()).await.unwrap();
-        (AppState::new(pool, Arc::new(RwLock::new(scheduler)), AppConfig::default()), db)
+    fn make_state() -> AppState {
+        let mut mock = MockServerRepo::new();
+        mock.expect_health_check().returning(|| true);
+        let repo: Arc<dyn ServerRepo> = Arc::new(mock);
+        let (state, _rx) = AppState::with_repo(None, repo, None, AppConfig::default());
+        state
     }
 
     #[test]
@@ -202,37 +213,33 @@ mod tests {
         assert_eq!(msg.content, "do stuff");
     }
 
-    #[tokio::test]
-    async fn app_state_new_creates_valid_state() {
-        let (state, _db) = make_state().await;
+    #[test]
+    fn app_state_new_creates_valid_state() {
+        let state = make_state();
         assert_eq!(state.jwt_secret.len(), 32);
-        _db.cleanup().await;
     }
 
-    #[tokio::test]
-    async fn subscribe_feed_returns_receiver() {
-        let (state, _db) = make_state().await;
+    #[test]
+    fn subscribe_feed_returns_receiver() {
+        let state = make_state();
         let _rx = state.subscribe_feed();
-        _db.cleanup().await;
     }
 
-    #[tokio::test]
-    async fn subscribe_tasks_returns_receiver() {
-        let (state, _db) = make_state().await;
+    #[test]
+    fn subscribe_tasks_returns_receiver() {
+        let state = make_state();
         let _rx = state.subscribe_tasks();
-        _db.cleanup().await;
     }
 
-    #[tokio::test]
-    async fn subscribe_agents_returns_receiver() {
-        let (state, _db) = make_state().await;
+    #[test]
+    fn subscribe_agents_returns_receiver() {
+        let state = make_state();
         let _rx = state.subscribe_agents();
-        _db.cleanup().await;
     }
 
-    #[tokio::test]
-    async fn broadcast_feed_no_panic() {
-        let (state, _db) = make_state().await;
+    #[test]
+    fn broadcast_feed_no_panic() {
+        let state = make_state();
         state.broadcast_feed(FeedUpdate {
             id: Uuid::new_v4(),
             agent_id: "a".into(),
@@ -240,79 +247,71 @@ mod tests {
             item_type: "info".into(),
             timestamp: Utc::now(),
         });
-        _db.cleanup().await;
     }
 
-    #[tokio::test]
-    async fn broadcast_task_no_panic() {
-        let (state, _db) = make_state().await;
+    #[test]
+    fn broadcast_task_no_panic() {
+        let state = make_state();
         state.broadcast_task(TaskUpdate {
             id: Uuid::new_v4(),
             status: "pending".into(),
             progress: None,
             assigned_agent: None,
         });
-        _db.cleanup().await;
     }
 
-    #[tokio::test]
-    async fn broadcast_agent_no_panic() {
-        let (state, _db) = make_state().await;
+    #[test]
+    fn broadcast_agent_no_panic() {
+        let state = make_state();
         state.broadcast_agent(AgentUpdate {
             id: "agent-1".into(),
             status: "idle".into(),
             current_task: None,
         });
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn get_response_stream_creates_new() {
-        let (state, _db) = make_state().await;
+        let state = make_state();
         let msg_id = Uuid::new_v4();
         let _rx = state.get_response_stream(msg_id).await;
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn get_response_stream_returns_existing() {
-        let (state, _db) = make_state().await;
+        let state = make_state();
         let msg_id = Uuid::new_v4();
         let _rx1 = state.get_response_stream(msg_id).await;
         let _rx2 = state.get_response_stream(msg_id).await;
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn send_stream_chunk_no_stream() {
-        let (state, _db) = make_state().await;
+        let state = make_state();
         let result = state
             .send_stream_chunk(Uuid::new_v4(), StreamChunk::Token("hi".into()))
             .await;
         assert!(!result);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn send_stream_chunk_with_stream() {
-        let (state, _db) = make_state().await;
+        let state = make_state();
         let msg_id = Uuid::new_v4();
         let _rx = state.get_response_stream(msg_id).await;
         let result = state
             .send_stream_chunk(msg_id, StreamChunk::Token("hi".into()))
             .await;
         assert!(result);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn remove_response_stream() {
-        let (state, _db) = make_state().await;
+        let state = make_state();
         let msg_id = Uuid::new_v4();
         let _rx = state.get_response_stream(msg_id).await;
         state.remove_response_stream(msg_id).await;
         let result = state.send_stream_chunk(msg_id, StreamChunk::Done).await;
         assert!(!result);
-        _db.cleanup().await;
     }
 }

@@ -2,18 +2,19 @@
 //!
 //! Provides tools to replay and understand agent decisions.
 
+use crate::db::traits::ObservabilityRepo;
 use crate::observability::logging::{Decision, LlmCall, LlmCallLogger};
 use anyhow::Result;
 use uuid::Uuid;
 
 /// Decision replay tool
-pub struct DecisionReplay {
-    logger: LlmCallLogger,
+pub struct DecisionReplay<R: ObservabilityRepo = crate::db::pg_repo::PgRepo> {
+    logger: LlmCallLogger<R>,
 }
 
-impl DecisionReplay {
+impl<R: ObservabilityRepo> DecisionReplay<R> {
     /// Create a new replay tool
-    pub fn new(logger: LlmCallLogger) -> Self {
+    pub fn new(logger: LlmCallLogger<R>) -> Self {
         Self { logger }
     }
 

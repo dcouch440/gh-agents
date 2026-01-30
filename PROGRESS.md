@@ -300,10 +300,10 @@
 | 17.4 | Query Rewrites: Tasks/Chat/Auth | done | 5/5 | All queries use $N params, native Uuid/DateTime/JsonValue types, PgPool |
 | 17.5 | Query Rewrites: Refactor/PRD | done | 4/4 | refactor.rs and prd.rs converted to PgPool with native types |
 | 17.6 | Consumer File Updates | done | 4/4 | All 10+ consumer files updated: SqlitePool→PgPool, ?→$N, string parsing→native types |
-| 17.7 | Test Infrastructure | pending | 0/4 | Per-test Postgres databases |
+| 17.7 | Test Infrastructure | done | 4/4 | Per-test Postgres databases, TestDb with semaphore, pool size tuning |
 | 17.8 | Cleanup & Documentation | pending | 0/4 | Remove SQLite, data migration tool |
 
-**Milestone Status:** In Progress (6/8 tickets done)
+**Milestone Status:** In Progress (7/8 tickets done)
 
 ---
 
@@ -344,9 +344,10 @@
 | M13: Agent View             | 6       | Not Started       |
 | M15: Repo Mgmt & Workspace | -       | **DEPRECATED**    |
 | M16: SaaS Foundation       | -       | **DEPRECATED**    |
-| M17: SQLite → PostgreSQL   | 8       | In Progress       |
+| M17: SQLite → PostgreSQL   | 8 (7/8) | In Progress       |
 | M22: Docker Isolation      | 7       | Not Started       |
-| **Total Active**           | **94**  |                   |
+| M23: Human-in-the-Loop Gates | 11    | Not Started       |
+| **Total Active**           | **105** |                   |
 
 ---
 

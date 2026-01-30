@@ -16,7 +16,6 @@ use uuid::Uuid;
 
 use super::auth;
 use super::state::{AppState, OrchestratorMessage, StreamChunk};
-use crate::db;
 use crate::types::{AgentPoolConfig, AgentTier, Priority, Task, TierModels};
 
 // ============================================================================
@@ -35,8 +34,7 @@ pub struct HealthResponse {
 ///
 /// Returns JSON with status details including version and database connectivity.
 pub async fn health_check(State(state): State<AppState>) -> Json<HealthResponse> {
-    // Check database connectivity with a simple query
-    let db_connected = sqlx::query("SELECT 1").fetch_one(&state.db).await.is_ok();
+    let db_connected = state.repo.health_check().await;
 
     Json(HealthResponse {
         status: "ok".to_string(),
@@ -65,7 +63,9 @@ pub async fn list_tasks(
     State(state): State<AppState>,
     Query(query): Query<TasksQuery>,
 ) -> Result<Json<Vec<Task>>, StatusCode> {
-    let tasks = db::list_tasks(&state.db, query.status.as_deref(), query.limit)
+    let tasks = state
+        .repo
+        .list_tasks(query.status, query.limit)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -79,7 +79,9 @@ pub async fn get_task(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Task>, StatusCode> {
-    let task = db::get_task_by_uuid(&state.db, id)
+    let task = state
+        .repo
+        .get_task_by_uuid(id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
@@ -139,7 +141,9 @@ pub async fn create_task(
     task.updated_at = Utc::now();
 
     // Insert into database
-    db::insert_task(&state.db, &task)
+    state
+        .repo
+        .insert_task(task.clone())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -305,7 +309,9 @@ pub async fn send_chat(
     let message_id = Uuid::new_v4();
 
     // Store the user message in the database
-    db::insert_chat_message(&state.db, &message_id, "user", &request.message)
+    state
+        .repo
+        .insert_chat_message(message_id, "user".to_string(), request.message.clone())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -355,7 +361,9 @@ pub async fn get_chat_history(
     let limit = query.limit.unwrap_or(50);
     let offset = query.offset.unwrap_or(0);
 
-    let rows = db::get_chat_history(&state.db, limit, offset)
+    let rows = state
+        .repo
+        .get_chat_history(limit, offset)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -420,7 +428,7 @@ pub async fn chat_stream(
 ///
 /// Returns 204 No Content on success.
 pub async fn clear_chat_history(State(state): State<AppState>) -> StatusCode {
-    match db::clear_chat_history(&state.db).await {
+    match state.repo.clear_chat_history().await {
         Ok(_) => StatusCode::NO_CONTENT,
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
@@ -451,7 +459,9 @@ pub async fn auth_setup(
     Json(request): Json<SetupRequest>,
 ) -> Result<Json<SetupResponse>, (StatusCode, String)> {
     // Check if already setup
-    if db::has_password(&state.db)
+    if state
+        .repo
+        .has_password()
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     {
@@ -473,7 +483,9 @@ pub async fn auth_setup(
     let hash = auth::hash_password(&request.password)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    db::set_password(&state.db, &hash)
+    state
+        .repo
+        .set_password(hash)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -502,7 +514,9 @@ pub async fn auth_login(
     State(state): State<AppState>,
     Json(request): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, StatusCode> {
-    let stored_hash = db::get_password(&state.db)
+    let stored_hash = state
+        .repo
+        .get_password()
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?; // No password configured
@@ -662,31 +676,135 @@ mod tests {
         assert!(json.contains("\"content\":\"Hello!\""));
     }
 
-    // === Integration tests using setup_test_app ===
+    // === Integration tests using setup_test_app (mock-based, no Postgres) ===
 
     use axum::body::Body;
     use axum::http::Request;
-    use crate::db::test_utils::TestDb;
     use tower::util::ServiceExt;
 
-    async fn setup_test_app() -> (axum::Router, TestDb) {
-        use std::sync::Arc;
-        use tokio::sync::RwLock;
+    use std::sync::Arc;
 
-        let db = TestDb::new().await;
-        let pool = db.pool.clone();
-        let scheduler = crate::orchestration::Scheduler::new(pool.clone())
-            .await
-            .unwrap();
-        let scheduler = Arc::new(RwLock::new(scheduler));
+    use crate::db::traits::ServerRepo;
+    use crate::db::ChatMessageRow;
+
+    /// In-memory implementation of ServerRepo for tests (no Postgres needed).
+    struct InMemoryServerRepo {
+        tasks: std::sync::Mutex<Vec<Task>>,
+        chat_messages: std::sync::Mutex<Vec<ChatMessageRow>>,
+        password_hash: std::sync::Mutex<Option<String>>,
+    }
+
+    impl InMemoryServerRepo {
+        fn new() -> Self {
+            Self {
+                tasks: std::sync::Mutex::new(vec![]),
+                chat_messages: std::sync::Mutex::new(vec![]),
+                password_hash: std::sync::Mutex::new(None),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl ServerRepo for InMemoryServerRepo {
+        async fn health_check(&self) -> bool {
+            true
+        }
+
+        async fn list_tasks(
+            &self,
+            status: Option<String>,
+            limit: Option<u32>,
+        ) -> anyhow::Result<Vec<Task>> {
+            let tasks = self.tasks.lock().unwrap();
+            let limit = limit.unwrap_or(100).min(1000) as usize;
+            let filtered: Vec<Task> = tasks
+                .iter()
+                .filter(|t| {
+                    if let Some(ref s) = status {
+                        let ts = format!("{:?}", t.status).to_lowercase();
+                        &ts == s
+                    } else {
+                        true
+                    }
+                })
+                .rev()
+                .take(limit)
+                .cloned()
+                .collect();
+            Ok(filtered)
+        }
+
+        async fn get_task_by_uuid(&self, id: Uuid) -> anyhow::Result<Option<Task>> {
+            let tasks = self.tasks.lock().unwrap();
+            Ok(tasks.iter().find(|t| t.id.0 == id).cloned())
+        }
+
+        async fn insert_task(&self, task: Task) -> anyhow::Result<()> {
+            self.tasks.lock().unwrap().push(task);
+            Ok(())
+        }
+
+        async fn insert_chat_message(
+            &self,
+            id: Uuid,
+            role: String,
+            content: String,
+        ) -> anyhow::Result<()> {
+            self.chat_messages.lock().unwrap().push(ChatMessageRow {
+                id,
+                role,
+                content,
+                timestamp: Utc::now(),
+            });
+            Ok(())
+        }
+
+        async fn get_chat_history(
+            &self,
+            limit: u32,
+            offset: u32,
+        ) -> anyhow::Result<Vec<ChatMessageRow>> {
+            let msgs = self.chat_messages.lock().unwrap();
+            let result: Vec<ChatMessageRow> = msgs
+                .iter()
+                .skip(offset as usize)
+                .take(limit.min(1000) as usize)
+                .cloned()
+                .collect();
+            Ok(result)
+        }
+
+        async fn clear_chat_history(&self) -> anyhow::Result<()> {
+            self.chat_messages.lock().unwrap().clear();
+            Ok(())
+        }
+
+        async fn has_password(&self) -> anyhow::Result<bool> {
+            Ok(self.password_hash.lock().unwrap().is_some())
+        }
+
+        async fn set_password(&self, password_hash: String) -> anyhow::Result<()> {
+            *self.password_hash.lock().unwrap() = Some(password_hash);
+            Ok(())
+        }
+
+        async fn get_password(&self) -> anyhow::Result<Option<String>> {
+            Ok(self.password_hash.lock().unwrap().clone())
+        }
+    }
+
+    fn setup_test_app() -> axum::Router {
+        let repo: Arc<dyn ServerRepo> = Arc::new(InMemoryServerRepo::new());
         let config = crate::types::AppConfig::default();
-        let state = AppState::new(pool, scheduler, config);
-        (super::super::create_router_with_static_dir(state, "nonexistent_static"), db)
+        let (state, rx) = AppState::with_repo(None, repo, None, config);
+        // Keep the receiver alive so orchestrator_tx.send() doesn't fail
+        std::mem::forget(rx);
+        super::super::create_router_with_static_dir(state, "nonexistent_static")
     }
 
     #[tokio::test]
     async fn create_task_valid_returns_created() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -703,12 +821,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn create_task_empty_title_returns_bad_request() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -723,12 +840,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn update_config_valid_verbosity() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -743,12 +859,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn send_chat_valid_message_returns_accepted() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -763,12 +878,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::ACCEPTED);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn send_chat_empty_message_returns_bad_request() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -783,12 +897,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn clear_chat_history_returns_no_content() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -802,12 +915,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn health_check_returns_ok() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -827,14 +939,13 @@ mod tests {
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"status\":\"ok\""));
         assert!(body_str.contains("\"db_connected\":true"));
-        _db.cleanup().await;
     }
 
     // === Tier and priority parsing tests ===
 
     #[tokio::test]
     async fn create_task_with_orchestrator_tier() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -854,12 +965,11 @@ mod tests {
             .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"assigned_tier\":\"orchestrator\""));
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn create_task_with_utility_tier() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -879,12 +989,11 @@ mod tests {
             .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"assigned_tier\":\"utility\""));
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn create_task_with_unknown_tier_defaults_to_worker() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -906,12 +1015,11 @@ mod tests {
             .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"assigned_tier\":\"worker\""));
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn create_task_with_no_tier_defaults_to_worker() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -931,12 +1039,11 @@ mod tests {
             .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"assigned_tier\":\"worker\""));
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn create_task_with_low_priority() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -956,12 +1063,11 @@ mod tests {
             .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"priority\":\"low\""));
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn create_task_with_urgent_priority() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -981,12 +1087,11 @@ mod tests {
             .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"priority\":\"urgent\""));
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn create_task_with_unknown_priority_defaults_to_normal() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -1008,12 +1113,11 @@ mod tests {
             .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"priority\":\"normal\""));
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn create_task_with_no_priority_defaults_to_normal() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -1033,14 +1137,13 @@ mod tests {
             .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"priority\":\"normal\""));
-        _db.cleanup().await;
     }
 
     // === get_task: found and not found ===
 
     #[tokio::test]
     async fn get_task_returns_created_task() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         // Create a task first
         let create_resp = app
@@ -1082,12 +1185,11 @@ mod tests {
         let found = tasks.iter().find(|t| t["id"].as_str() == Some(task_id));
         assert!(found.is_some(), "Created task should appear in task list");
         assert_eq!(found.unwrap()["title"].as_str().unwrap(), "Findable task");
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn get_task_not_found() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -1102,14 +1204,13 @@ mod tests {
         // Note: This may return 404 from the handler OR from the static fallback.
         // Both are acceptable for a non-existent task.
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
-        _db.cleanup().await;
     }
 
     // === list_tasks with filters ===
 
     #[tokio::test]
     async fn list_tasks_returns_empty_initially() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -1127,12 +1228,11 @@ mod tests {
             .unwrap();
         let tasks: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert!(tasks.is_empty());
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn list_tasks_with_limit() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         // Create two tasks
         for title in ["Task A", "Task B"] {
@@ -1165,12 +1265,11 @@ mod tests {
             .unwrap();
         let tasks: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert_eq!(tasks.len(), 1);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn list_tasks_with_status_filter() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         // Create a task (default status is pending)
         app.clone()
@@ -1202,14 +1301,13 @@ mod tests {
             .unwrap();
         let tasks: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert!(tasks.is_empty());
-        _db.cleanup().await;
     }
 
     // === update_config invalid verbosity ===
 
     #[tokio::test]
     async fn update_config_invalid_verbosity_returns_bad_request() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -1224,12 +1322,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn update_config_quiet_verbosity() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -1244,12 +1341,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn update_config_normal_verbosity() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -1264,12 +1360,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn update_config_no_verbosity_returns_ok() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -1284,14 +1379,13 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        _db.cleanup().await;
     }
 
     // === list_agents response body ===
 
     #[tokio::test]
     async fn list_agents_returns_stats() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -1312,14 +1406,13 @@ mod tests {
         assert!(resp["stats"]["orchestrators"].is_object());
         assert!(resp["stats"]["workers"].is_object());
         assert!(resp["stats"]["utilities"].is_object());
-        _db.cleanup().await;
     }
 
     // === get_config response body ===
 
     #[tokio::test]
     async fn get_config_returns_expected_fields() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -1342,14 +1435,13 @@ mod tests {
         assert!(resp["autonomy"].is_string());
         assert!(resp["git_strategy"].is_string());
         assert!(resp["sandbox_mode"].is_string());
-        _db.cleanup().await;
     }
 
     // === Auth endpoints ===
 
     #[tokio::test]
     async fn auth_setup_short_password_returns_bad_request() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -1364,12 +1456,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn auth_setup_success() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -1392,12 +1483,11 @@ mod tests {
             resp["message"].as_str().unwrap(),
             "Password configured successfully"
         );
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn auth_setup_conflict_when_already_configured() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         // First setup
         app.clone()
@@ -1426,12 +1516,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::CONFLICT);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn auth_login_no_password_configured() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -1446,12 +1535,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn auth_login_wrong_password() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         // Setup password
         app.clone()
@@ -1480,12 +1568,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn auth_login_success() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         // Setup password
         app.clone()
@@ -1520,14 +1607,13 @@ mod tests {
         let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(resp["token"].is_string());
         assert_eq!(resp["expires_in"].as_u64().unwrap(), 86400);
-        _db.cleanup().await;
     }
 
     // === Chat history with data ===
 
     #[tokio::test]
     async fn chat_history_returns_messages_after_send() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         // Send a message
         app.clone()
@@ -1561,12 +1647,11 @@ mod tests {
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0]["role"].as_str().unwrap(), "user");
         assert_eq!(messages[0]["content"].as_str().unwrap(), "Hello agent");
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn chat_history_with_pagination() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         // Send two messages
         for msg in ["First", "Second"] {
@@ -1619,7 +1704,6 @@ mod tests {
             .unwrap();
         let messages: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert_eq!(messages.len(), 1);
-        _db.cleanup().await;
     }
 
     // === Serialization edge cases ===
@@ -1748,7 +1832,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_chat_response_contains_message_id() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -1771,14 +1855,13 @@ mod tests {
         assert_eq!(resp["status"].as_str().unwrap(), "queued");
         // Verify it's a valid UUID
         Uuid::parse_str(resp["message_id"].as_str().unwrap()).unwrap();
-        _db.cleanup().await;
     }
 
     // === create_task response body validation ===
 
     #[tokio::test]
     async fn create_task_response_body_has_expected_fields() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         let response = app
             .oneshot(
@@ -1804,14 +1887,13 @@ mod tests {
         assert!(task["id"].is_string());
         assert!(task["created_at"].is_string());
         assert!(task["updated_at"].is_string());
-        _db.cleanup().await;
     }
 
     // === clear chat then verify empty ===
 
     #[tokio::test]
     async fn clear_chat_then_history_is_empty() {
-        let (app, _db) = setup_test_app().await;
+        let app = setup_test_app();
 
         // Send a message
         app.clone()
@@ -1855,6 +1937,5 @@ mod tests {
             .unwrap();
         let messages: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert!(messages.is_empty());
-        _db.cleanup().await;
     }
 }
