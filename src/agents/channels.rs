@@ -83,6 +83,10 @@ pub struct TaskContext {
     pub conventions: String,
     /// Role-specific prompt additions
     pub role_context: RoleContext,
+    /// Chat conversation messages (for chat-mode tasks).
+    /// When non-empty, the executor uses these directly as LLM messages
+    /// instead of wrapping in a "complete this task" prompt.
+    pub chat_messages: Vec<crate::llm::Message>,
 }
 
 /// Role-specific context for prompt building

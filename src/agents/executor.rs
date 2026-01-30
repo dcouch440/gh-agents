@@ -1,5 +1,6 @@
 //! Agent task execution loop
 
+use futures::StreamExt;
 use tokio::time::timeout;
 use tracing::{error, info, instrument, warn};
 use uuid::Uuid;
@@ -10,7 +11,7 @@ use super::channels::{
     RoleContext, TaskAssignment, TaskResult,
 };
 use super::roles::{CommunicationStyle, OutputFormat};
-use crate::llm::{LLMRequest, LLMResponse, Message};
+use crate::llm::{LLMRequest, LLMResponse, Message, StreamChunk as LLMStreamChunk};
 use crate::types::{AgentStatus, TaskStatus};
 
 impl Agent {
@@ -178,7 +179,8 @@ impl Agent {
             ))],
             max_tokens: self.model_config.max_tokens,
             temperature,
-            stream: false, // Will enable streaming in next slice
+            stream: false,
+            ..Default::default()
         };
 
         // Call the LLM
@@ -323,14 +325,79 @@ impl Agent {
         .await
     }
 
-    /// Execute task with progress updates
+    /// Execute task with progress updates and streaming LLM responses.
+    ///
+    /// When `assignment.context.chat_messages` is non-empty, operates in chat mode:
+    /// uses the chat messages directly and streams every token via ProgressUpdate.
+    /// Otherwise, operates in standard task mode with milestone progress updates.
     async fn execute_task_with_progress(
+        &self,
+        assignment: &TaskAssignment,
+    ) -> Result<TaskResult, AgentError> {
+        let is_chat = !assignment.context.chat_messages.is_empty();
+
+        if is_chat {
+            self.execute_chat_streaming(assignment).await
+        } else {
+            self.execute_task_standard(assignment).await
+        }
+    }
+
+    /// Execute a chat-mode task: stream every token via ProgressUpdate.
+    async fn execute_chat_streaming(
+        &self,
+        assignment: &TaskAssignment,
+    ) -> Result<TaskResult, AgentError> {
+        let task_id = assignment.task_id;
+        let role_context = &assignment.context.role_context;
+
+        let request = LLMRequest {
+            model: self.model_config.model_id.clone(),
+            system: Some(role_context.system_prompt.clone()),
+            messages: assignment.context.chat_messages.clone(),
+            max_tokens: self.model_config.max_tokens,
+            temperature: self.temperature_for_style(&role_context.style),
+            stream: true,
+            ..Default::default()
+        };
+
+        let mut stream = self
+            .llm_provider()
+            .send_message_stream(request)
+            .await
+            .map_err(|e| AgentError::LLMError(e.to_string()))?;
+
+        let mut accumulated = String::new();
+
+        while let Some(chunk_result) = stream.next().await {
+            match chunk_result {
+                Ok(LLMStreamChunk::ContentDelta { text, .. }) => {
+                    accumulated.push_str(&text);
+                    // Emit each token as a progress update so it can be relayed to SSE
+                    self.emit_progress(task_id, &text, None).await?;
+                }
+                Ok(LLMStreamChunk::MessageStop) => break,
+                Ok(_) => {} // MessageStart, ContentBlockStart/Stop, MessageDelta, Ping
+                Err(e) => return Err(AgentError::LLMError(e.to_string())),
+            }
+        }
+
+        Ok(TaskResult {
+            task_id,
+            status: TaskStatus::Completed,
+            output: accumulated,
+            files_modified: vec![],
+            errors: vec![],
+        })
+    }
+
+    /// Execute a standard code task with milestone progress updates.
+    async fn execute_task_standard(
         &self,
         assignment: &TaskAssignment,
     ) -> Result<TaskResult, AgentError> {
         let task_id = assignment.task_id;
 
-        // Progress: Starting
         self.emit_progress(
             task_id,
             &format!("Starting work on: {}", assignment.title),
@@ -338,20 +405,16 @@ impl Agent {
         )
         .await?;
 
-        // Progress: Building prompt
         self.emit_progress(task_id, "Analyzing task and building context...", Some(10))
             .await?;
 
-        // Build prompt using role context
         let role_context = &assignment.context.role_context;
         let system_prompt = self.build_role_aware_prompt(assignment, role_context);
         let temperature = self.temperature_for_style(&role_context.style);
 
-        // Progress: Calling LLM
         self.emit_progress(task_id, "Generating solution...", Some(30))
             .await?;
 
-        // Build and send LLM request with role-based temperature
         let request = LLMRequest {
             model: self.model_config.model_id.clone(),
             system: Some(system_prompt),
@@ -362,6 +425,7 @@ impl Agent {
             max_tokens: self.model_config.max_tokens,
             temperature,
             stream: false,
+            ..Default::default()
         };
 
         let response = self
@@ -370,14 +434,11 @@ impl Agent {
             .await
             .map_err(|e| AgentError::LLMError(e.to_string()))?;
 
-        // Progress: Processing response
         self.emit_progress(task_id, "Processing results...", Some(80))
             .await?;
 
-        // Parse response
         let result = self.parse_llm_response(task_id, response, &role_context.output_format)?;
 
-        // Progress: Complete
         self.emit_progress(task_id, "Task complete", Some(100))
             .await?;
 
@@ -540,6 +601,7 @@ mod tests {
         ) -> Result<LLMResponse, crate::llm::LLMError> {
             Ok(LLMResponse {
                 content: "test response".to_string(),
+                content_blocks: vec![],
                 model: "test-model".to_string(),
                 stop_reason: StopReason::EndTurn,
                 usage: TokenUsage {
@@ -614,6 +676,7 @@ mod tests {
             tokio::time::sleep(Duration::from_secs(10)).await;
             Ok(LLMResponse {
                 content: "too slow".to_string(),
+                content_blocks: vec![],
                 model: "test-model".to_string(),
                 stop_reason: StopReason::EndTurn,
                 usage: TokenUsage {
@@ -686,6 +749,7 @@ mod tests {
                 history: vec![],
                 conventions: String::new(),
                 role_context: make_role_context(),
+                chat_messages: vec![],
             },
             constraints: TaskConstraints::default(),
             timeout: Duration::from_secs(30),
@@ -759,6 +823,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let response = LLMResponse {
             content: "// File: src/lib.rs\nfn main() {}".to_string(),
+            content_blocks: vec![],
             model: "test".to_string(),
             stop_reason: StopReason::EndTurn,
             usage: TokenUsage {
@@ -782,6 +847,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let response = LLMResponse {
             content: "// File: src/lib.rs\nsome output".to_string(),
+            content_blocks: vec![],
             model: "test".to_string(),
             stop_reason: StopReason::EndTurn,
             usage: TokenUsage {

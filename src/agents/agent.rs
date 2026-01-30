@@ -286,6 +286,7 @@ mod tests {
         ) -> Result<LLMResponse, crate::llm::LLMError> {
             Ok(LLMResponse {
                 content: "test response".to_string(),
+                content_blocks: vec![],
                 model: "test-model".to_string(),
                 stop_reason: StopReason::EndTurn,
                 usage: TokenUsage {

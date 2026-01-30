@@ -146,6 +146,7 @@ impl AnthropicClient {
             max_tokens: request.max_tokens,
             system: request.system.clone(),
             stream: request.stream,
+            tools: request.tools.clone(),
         }
     }
 
@@ -207,12 +208,32 @@ impl AnthropicClient {
                         model: message.model,
                         input_tokens: message.usage.input_tokens,
                     },
-                    SSEData::ContentBlockStart { index } => {
+                    SSEData::ContentBlockStart {
+                        index,
+                        content_block,
+                    } => {
+                        // Check if this is a tool_use content block
+                        if let Some(ref cb) = content_block {
+                            if cb.block_type == "tool_use" {
+                                if let (Some(id), Some(name)) = (&cb.id, &cb.name) {
+                                    return Some(Ok(StreamChunk::ToolUseStart {
+                                        index,
+                                        id: id.clone(),
+                                        name: name.clone(),
+                                    }));
+                                }
+                            }
+                        }
                         StreamChunk::ContentBlockStart { index }
                     }
                     SSEData::ContentBlockDelta { index, delta } => {
                         if let Some(text) = delta.text {
                             StreamChunk::ContentDelta { text, index }
+                        } else if let Some(partial_json) = delta.partial_json {
+                            StreamChunk::InputJsonDelta {
+                                index,
+                                partial_json,
+                            }
                         } else {
                             return None;
                         }
@@ -254,6 +275,8 @@ struct AnthropicRequest {
     system: Option<String>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     stream: bool,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    tools: Vec<super::types::Tool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -277,17 +300,21 @@ impl From<&Message> for AnthropicMessage {
 /// Anthropic API response format
 #[derive(Debug, Deserialize)]
 struct AnthropicResponse {
-    content: Vec<ContentBlock>,
+    content: Vec<ApiContentBlock>,
     model: String,
     stop_reason: String,
     usage: AnthropicUsage,
 }
 
 #[derive(Debug, Deserialize)]
-struct ContentBlock {
+struct ApiContentBlock {
     #[serde(rename = "type")]
     block_type: String,
     text: Option<String>,
+    // Tool use fields
+    id: Option<String>,
+    name: Option<String>,
+    input: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -322,7 +349,10 @@ enum SSEData {
     MessageStart { message: MessageStartData },
 
     #[serde(rename = "content_block_start")]
-    ContentBlockStart { index: usize },
+    ContentBlockStart {
+        index: usize,
+        content_block: Option<ContentBlockStartData>,
+    },
 
     #[serde(rename = "content_block_delta")]
     ContentBlockDelta { index: usize, delta: DeltaData },
@@ -353,11 +383,23 @@ struct MessageStartData {
 }
 
 #[derive(Debug, Deserialize)]
+struct ContentBlockStartData {
+    #[serde(rename = "type")]
+    block_type: String,
+    /// Tool use ID (only for tool_use blocks)
+    id: Option<String>,
+    /// Tool name (only for tool_use blocks)
+    name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 struct DeltaData {
     #[serde(rename = "type")]
     #[allow(dead_code)]
     delta_type: String,
     text: Option<String>,
+    /// Partial JSON for tool use input (only for input_json_delta)
+    partial_json: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -396,22 +438,38 @@ impl LLMProvider for AnthropicClient {
             .await
             .map_err(|e| LLMError::ParseError(e.to_string()))?;
 
-        // Extract text content from response
-        let content = api_response
-            .content
-            .iter()
-            .filter_map(|block| {
-                if block.block_type == "text" {
-                    block.text.clone()
-                } else {
-                    None
+        // Build content blocks and extract text
+        let mut text_parts = Vec::new();
+        let mut content_blocks = Vec::new();
+
+        for block in &api_response.content {
+            match block.block_type.as_str() {
+                "text" => {
+                    if let Some(text) = &block.text {
+                        text_parts.push(text.clone());
+                        content_blocks.push(super::types::ContentBlock::Text {
+                            text: text.clone(),
+                        });
+                    }
                 }
-            })
-            .collect::<Vec<_>>()
-            .join("");
+                "tool_use" => {
+                    if let (Some(id), Some(name), Some(input)) =
+                        (&block.id, &block.name, &block.input)
+                    {
+                        content_blocks.push(super::types::ContentBlock::ToolUse {
+                            id: id.clone(),
+                            name: name.clone(),
+                            input: input.clone(),
+                        });
+                    }
+                }
+                _ => {}
+            }
+        }
 
         Ok(LLMResponse {
-            content,
+            content: text_parts.join(""),
+            content_blocks,
             model: api_response.model,
             stop_reason: Self::parse_stop_reason(&api_response.stop_reason),
             usage: TokenUsage {

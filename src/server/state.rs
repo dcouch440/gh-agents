@@ -8,10 +8,12 @@ use sqlx::PgPool;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use uuid::Uuid;
 
+use crate::agents::{AgentPool, AgentResponse, Dispatcher};
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::{ServerRepo, UserRepo};
+use crate::llm::AnthropicClient;
 use crate::orchestration::Scheduler;
-use crate::types::{AppConfig, UserId};
+use crate::types::{AgentPoolConfig, AppConfig, UserId};
 
 use super::ws::{AgentUpdate, FeedUpdate, TaskUpdate};
 
@@ -60,6 +62,12 @@ pub struct AppState {
     pub task_tx: broadcast::Sender<TaskUpdate>,
     /// Broadcast channel for agent updates
     pub agent_tx: broadcast::Sender<AgentUpdate>,
+    /// Agent pool for managing agents (None in tests that don't need agents)
+    pub pool: Option<Arc<tokio::sync::Mutex<AgentPool>>>,
+    /// Dispatcher for routing commands to agents (None in tests)
+    pub dispatcher: Option<Arc<tokio::sync::Mutex<Dispatcher>>>,
+    /// Task results from agents, keyed by task_id
+    pub task_results: Arc<RwLock<HashMap<Uuid, AgentResponse>>>,
 }
 
 impl AppState {
@@ -74,6 +82,15 @@ impl AppState {
         let user_repo: Arc<dyn UserRepo> = Arc::new(PgRepo::new(db.clone()));
         let (mut state, rx) = Self::with_repo(Some(db), repo, Some(scheduler), config);
         state.user_repo = Some(user_repo);
+
+        // Initialize agent pool + dispatcher if API key is available
+        if let Ok(provider) = AnthropicClient::from_env() {
+            let pool = AgentPool::new(AgentPoolConfig::default(), Arc::new(provider));
+            let dispatcher = Dispatcher::new(64);
+            state.pool = Some(Arc::new(tokio::sync::Mutex::new(pool)));
+            state.dispatcher = Some(Arc::new(tokio::sync::Mutex::new(dispatcher)));
+        }
+
         (state, rx)
     }
 
@@ -107,6 +124,9 @@ impl AppState {
                 feed_tx,
                 task_tx,
                 agent_tx,
+                pool: None,
+                dispatcher: None,
+                task_results: Arc::new(RwLock::new(HashMap::new())),
             },
             orchestrator_rx,
         )

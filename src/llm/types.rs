@@ -85,6 +85,24 @@ pub struct LLMRequest {
     /// Whether to stream the response
     #[serde(default)]
     pub stream: bool,
+
+    /// Tool definitions available for the model to call
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tools: Vec<Tool>,
+}
+
+impl Default for LLMRequest {
+    fn default() -> Self {
+        Self {
+            model: String::new(),
+            messages: vec![],
+            system: None,
+            max_tokens: 4096,
+            temperature: default_temperature(),
+            stream: false,
+            tools: vec![],
+        }
+    }
 }
 
 fn default_temperature() -> f32 {
@@ -101,6 +119,7 @@ impl LLMRequest {
             max_tokens: 4096,
             temperature: default_temperature(),
             stream: false,
+            tools: vec![],
         }
     }
 
@@ -121,6 +140,42 @@ impl LLMRequest {
         self.stream = true;
         self
     }
+
+    /// Set tool definitions
+    pub fn with_tools(mut self, tools: Vec<Tool>) -> Self {
+        self.tools = tools;
+        self
+    }
+}
+
+/// A tool definition for the Anthropic API
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Tool {
+    /// Tool name (e.g. "create_agent")
+    pub name: String,
+    /// Human-readable description of what the tool does
+    pub description: String,
+    /// JSON Schema describing the tool's input parameters
+    pub input_schema: serde_json::Value,
+}
+
+/// A content block in an LLM response (text or tool use)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ContentBlock {
+    /// Text content
+    Text { text: String },
+    /// Tool use request from the model
+    ToolUse {
+        id: String,
+        name: String,
+        input: serde_json::Value,
+    },
+    /// Tool result sent back to the model
+    ToolResult {
+        tool_use_id: String,
+        content: String,
+    },
 }
 
 /// Reason the model stopped generating
@@ -153,8 +208,12 @@ impl TokenUsage {
 /// Complete response from an LLM
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LLMResponse {
-    /// The generated content
+    /// The generated text content (concatenation of all text blocks)
     pub content: String,
+
+    /// Structured content blocks (text and tool use)
+    #[serde(default)]
+    pub content_blocks: Vec<ContentBlock>,
 
     /// Model that generated the response
     pub model: String,
@@ -205,6 +264,24 @@ pub enum StreamChunk {
         output_tokens: Option<u32>,
     },
 
+    /// Tool use content block started (streaming)
+    ToolUseStart {
+        /// Index of the content block
+        index: usize,
+        /// Tool use ID
+        id: String,
+        /// Tool name
+        name: String,
+    },
+
+    /// Partial JSON input for a tool use (streaming)
+    InputJsonDelta {
+        /// Index of the content block
+        index: usize,
+        /// Partial JSON string
+        partial_json: String,
+    },
+
     /// Final message stop event
     MessageStop,
 
@@ -224,14 +301,25 @@ pub struct SSEEvent {
     pub data: serde_json::Value,
 }
 
+/// State for accumulating a single tool use block during streaming
+#[derive(Debug, Clone)]
+struct ToolUseAccumulator {
+    id: String,
+    name: String,
+    input_json: String,
+}
+
 /// Accumulated stream state for building final response
 #[derive(Debug, Default)]
 pub struct StreamAccumulator {
     pub content: String,
+    pub content_blocks: Vec<ContentBlock>,
     pub model: Option<String>,
     pub stop_reason: Option<StopReason>,
     pub input_tokens: Option<u32>,
     pub output_tokens: Option<u32>,
+    /// In-progress tool use block being assembled from streaming chunks
+    current_tool_use: Option<ToolUseAccumulator>,
 }
 
 impl StreamAccumulator {
@@ -263,14 +351,50 @@ impl StreamAccumulator {
                     self.output_tokens = Some(*tokens);
                 }
             }
+            StreamChunk::ToolUseStart { id, name, .. } => {
+                self.current_tool_use = Some(ToolUseAccumulator {
+                    id: id.clone(),
+                    name: name.clone(),
+                    input_json: String::new(),
+                });
+            }
+            StreamChunk::InputJsonDelta { partial_json, .. } => {
+                if let Some(ref mut tool) = self.current_tool_use {
+                    tool.input_json.push_str(partial_json);
+                }
+            }
+            StreamChunk::ContentBlockStop { .. } => {
+                // Finalize any in-progress tool use block
+                if let Some(tool) = self.current_tool_use.take() {
+                    let input = serde_json::from_str(&tool.input_json)
+                        .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+                    self.content_blocks.push(ContentBlock::ToolUse {
+                        id: tool.id,
+                        name: tool.name,
+                        input,
+                    });
+                }
+            }
             _ => {}
         }
     }
 
     /// Build the final response (returns None if incomplete)
     pub fn build(self) -> Option<LLMResponse> {
+        // Add any accumulated text as a content block
+        let mut blocks = self.content_blocks;
+        if !self.content.is_empty() {
+            blocks.insert(
+                0,
+                ContentBlock::Text {
+                    text: self.content.clone(),
+                },
+            );
+        }
+
         Some(LLMResponse {
             content: self.content,
+            content_blocks: blocks,
             model: self.model?,
             stop_reason: self.stop_reason?,
             usage: TokenUsage {

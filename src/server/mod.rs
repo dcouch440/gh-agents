@@ -9,6 +9,7 @@ pub mod api;
 pub mod auth;
 pub mod orchestrator;
 pub mod state;
+pub mod tools;
 pub mod ws;
 
 use std::net::SocketAddr;
@@ -54,6 +55,9 @@ pub async fn start_server(
 
     // Spawn the orchestrator consumer to process chat messages via LLM
     let _orchestrator_handle = orchestrator::spawn_orchestrator(state.clone(), orchestrator_rx);
+
+    // Spawn the response consumer to collect agent results
+    let _response_handle = orchestrator::spawn_response_consumer(state.clone());
 
     let app = create_router(state);
 
