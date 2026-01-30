@@ -53,6 +53,7 @@ mod tests {
         async fn send_message(&self, _request: LLMRequest) -> LLMResult<LLMResponse> {
             Ok(LLMResponse {
                 content: self.response_content.clone(),
+                content_blocks: vec![],
                 model: self.model.clone(),
                 stop_reason: super::super::types::StopReason::EndTurn,
                 usage: super::super::types::TokenUsage {

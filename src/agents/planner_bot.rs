@@ -1030,6 +1030,7 @@ Done."#;
             async fn send_message(&self, _req: LLMRequest) -> Result<LLMResponse, LLMError> {
                 Ok(LLMResponse {
                     content: "Great vision! ```json\n{\"vision\": \"Test vision\"}\n``` Moving to scoping.".to_string(),
+                    content_blocks: vec![],
                     usage: crate::llm::TokenUsage { input_tokens: 10, output_tokens: 20 },
                     model: "mock".to_string(),
                     stop_reason: crate::llm::StopReason::EndTurn,

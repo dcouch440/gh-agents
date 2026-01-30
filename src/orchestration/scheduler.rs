@@ -902,6 +902,7 @@ mod task_scheduler_integration_tests {
         async fn send_message(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
             Ok(LLMResponse {
                 content: "ok".to_string(),
+                content_blocks: vec![],
                 model: "test".to_string(),
                 stop_reason: StopReason::EndTurn,
                 usage: TokenUsage {

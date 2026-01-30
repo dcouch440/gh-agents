@@ -447,6 +447,7 @@ mod tests {
 
             Ok(LLMResponse {
                 content: self.response.clone(),
+                content_blocks: vec![],
                 model: "mock".to_string(),
                 stop_reason: StopReason::EndTurn,
                 usage: TokenUsage {
@@ -642,6 +643,7 @@ mod tests {
 
                 Ok(LLMResponse {
                     content,
+                    content_blocks: vec![],
                     model: "mock".to_string(),
                     stop_reason: StopReason::EndTurn,
                     usage: TokenUsage {
@@ -1063,6 +1065,7 @@ mod tests {
 
                 Ok(LLMResponse {
                     content: valid_decomposition_json().to_string(),
+                    content_blocks: vec![],
                     model: "mock".to_string(),
                     stop_reason: StopReason::EndTurn,
                     usage: TokenUsage {

@@ -1,29 +1,70 @@
-//! Orchestrator consumer that processes chat messages via LLM streaming
+//! Orchestrator consumer that processes chat messages via direct LLM calls
+//! with Anthropic native tool use.
 //!
-//! Reads messages from the orchestrator channel, builds conversation context
-//! from chat history, calls the LLM with streaming, and pipes tokens back
-//! to the SSE response stream.
+//! Reads messages from the orchestrator channel, calls the LLM with agent
+//! management tools, executes any tool calls, and streams text responses
+//! back through the AppState SSE streams.
+
+use std::sync::Arc;
 
 use futures::StreamExt;
 use tokio::sync::mpsc;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::llm::{
-    AnthropicClient, LLMProvider, LLMRequest, Message,
+    AnthropicClient, ContentBlock, LLMProvider, LLMRequest, Message, Role,
+    StreamAccumulator, StopReason,
     StreamChunk as LLMStreamChunk,
 };
 
+use crate::agents::AgentResponse;
+
 use super::state::{AppState, OrchestratorMessage, StreamChunk};
+use super::tools;
 
 const SYSTEM_PROMPT: &str = "You are nexor, an AI assistant for software engineering. \
     You help users plan, build, and manage software projects. \
+    You can create and manage AI agents to help with tasks. \
     Be concise and technical. Use markdown formatting when helpful.";
 
+/// Spawn a background task that drains agent responses from the dispatcher
+/// and stores them in `state.task_results` for retrieval by `get_task_result`.
+pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandle<()>> {
+    let dispatcher = state.dispatcher.clone()?;
+    Some(tokio::spawn(async move {
+        loop {
+            let response = {
+                let mut d = dispatcher.lock().await;
+                d.recv_response().await
+            };
+            match response {
+                Some(resp) => {
+                    let task_id = match &resp {
+                        AgentResponse::TaskStarted { task_id, .. } => Some(*task_id),
+                        AgentResponse::TaskCompleted { result, .. } => Some(result.task_id),
+                        AgentResponse::TaskFailed { result, .. } => Some(result.task_id),
+                        AgentResponse::ProgressUpdate { update, .. } => Some(update.task_id),
+                        AgentResponse::ContextRequest { request, .. } => Some(request.task_id),
+                        AgentResponse::ApprovalRequest { request, .. } => Some(request.task_id),
+                        AgentResponse::ShutdownComplete { .. } => None,
+                    };
+                    if let Some(id) = task_id {
+                        debug!("Response consumer received {:?} for task {}",
+                            std::mem::discriminant(&resp), id);
+                        state.task_results.write().await.insert(id, resp);
+                    }
+                }
+                None => {
+                    info!("Response consumer shutting down (channel closed)");
+                    break;
+                }
+            }
+        }
+    }))
+}
+
 /// Spawn the orchestrator consumer as a background task.
-///
-/// Consumes messages from `orchestrator_rx`, calls the LLM with streaming,
-/// and pipes token chunks back through the AppState response streams.
 pub fn spawn_orchestrator(
     state: AppState,
     orchestrator_rx: mpsc::Receiver<OrchestratorMessage>,
@@ -35,22 +76,23 @@ async fn run_orchestrator(
     state: AppState,
     mut orchestrator_rx: mpsc::Receiver<OrchestratorMessage>,
 ) {
-    let provider = match AnthropicClient::from_env() {
+    let provider: Arc<dyn LLMProvider + Send + Sync> = match AnthropicClient::from_env() {
         Ok(p) => {
             info!(
                 "Orchestrator started with model: {}",
                 p.model_id().to_string()
             );
-            p
+            Arc::new(p)
         }
         Err(e) => {
             error!("Failed to initialize LLM provider: {}. Chat will not work. Set ANTHROPIC_API_KEY.", e);
-            // Drain messages and send errors so clients don't hang
             while let Some(msg) = orchestrator_rx.recv().await {
                 state
                     .send_stream_chunk(
                         msg.id,
-                        StreamChunk::Error("LLM provider not configured. Set ANTHROPIC_API_KEY.".into()),
+                        StreamChunk::Error(
+                            "LLM provider not configured. Set ANTHROPIC_API_KEY.".into(),
+                        ),
                     )
                     .await;
                 state.remove_response_stream(msg.id).await;
@@ -61,10 +103,9 @@ async fn run_orchestrator(
 
     while let Some(msg) = orchestrator_rx.recv().await {
         let state = state.clone();
-        let provider = provider.clone();
-        // Process each message concurrently so one slow response doesn't block the queue
+        let provider = Arc::clone(&provider);
         tokio::spawn(async move {
-            if let Err(e) = handle_message(&state, &provider, msg).await {
+            if let Err(e) = handle_message(&state, provider, msg).await {
                 warn!("Orchestrator message handling failed: {}", e);
             }
         });
@@ -75,7 +116,7 @@ async fn run_orchestrator(
 
 async fn handle_message(
     state: &AppState,
-    provider: &AnthropicClient,
+    provider: Arc<dyn LLMProvider + Send + Sync>,
     msg: OrchestratorMessage,
 ) -> anyhow::Result<()> {
     let message_id = msg.id;
@@ -88,7 +129,7 @@ async fn handle_message(
         .await
         .unwrap_or_default();
 
-    // Build messages from history (excluding the current message which was already saved)
+    // Build LLM messages from chat history
     let mut messages: Vec<Message> = history
         .iter()
         .map(|row| match row.role.as_str() {
@@ -97,85 +138,150 @@ async fn handle_message(
         })
         .collect();
 
-    // If the current message isn't in history yet (race condition), ensure it's included
-    if !messages.iter().any(|m| {
-        m.role == crate::llm::Role::User && m.content == msg.content
-    }) {
+    // Ensure the current message is included
+    if !messages
+        .iter()
+        .any(|m| m.role == Role::User && m.content == msg.content)
+    {
         messages.push(Message::user(&msg.content));
     }
-
-    // Ensure we don't send an empty messages array
     if messages.is_empty() {
         messages.push(Message::user(&msg.content));
     }
 
-    let request = LLMRequest::new(provider.model_id(), messages)
-        .with_system(SYSTEM_PROMPT)
-        .with_streaming();
+    let model_id = provider.model_id().to_string();
+    let tool_defs = tools::agent_tools();
 
-    // Stream the LLM response
-    let mut accumulated = String::new();
+    // Multi-turn tool use loop
+    let mut accumulated_response = String::new();
+    let max_tool_rounds = 10;
 
-    match provider.send_message_stream(request).await {
-        Ok(mut stream) => {
-            while let Some(chunk_result) = stream.next().await {
-                match chunk_result {
-                    Ok(LLMStreamChunk::ContentDelta { text, .. }) => {
-                        accumulated.push_str(&text);
-                        state
-                            .send_stream_chunk(message_id, StreamChunk::Token(text))
-                            .await;
-                    }
-                    Ok(LLMStreamChunk::MessageStop) => {
-                        break;
-                    }
-                    Ok(_) => {
-                        // MessageStart, ContentBlockStart/Stop, MessageDelta, Ping — skip
-                    }
-                    Err(e) => {
-                        error!("LLM stream error for message {}: {}", message_id, e);
-                        state
-                            .send_stream_chunk(
-                                message_id,
-                                StreamChunk::Error(format!("LLM error: {}", e)),
-                            )
-                            .await;
-                        break;
-                    }
+    for round in 0..max_tool_rounds {
+        debug!("Tool use round {} for message {}", round, message_id);
+
+        let request = LLMRequest {
+            model: model_id.clone(),
+            system: Some(SYSTEM_PROMPT.to_string()),
+            messages: messages.clone(),
+            max_tokens: 4096,
+            stream: true,
+            tools: tool_defs.clone(),
+            ..Default::default()
+        };
+
+        // Stream the response
+        let mut stream = provider
+            .send_message_stream(request)
+            .await
+            .map_err(|e| anyhow::anyhow!("LLM stream error: {}", e))?;
+
+        let mut accumulator = StreamAccumulator::new();
+
+        while let Some(chunk_result) = stream.next().await {
+            match chunk_result {
+                Ok(ref chunk @ LLMStreamChunk::ContentDelta { ref text, .. }) => {
+                    accumulated_response.push_str(text);
+                    state
+                        .send_stream_chunk(message_id, StreamChunk::Token(text.clone()))
+                        .await;
+                    accumulator.apply(chunk);
                 }
-            }
-
-            // Send done signal
-            state
-                .send_stream_chunk(message_id, StreamChunk::Done)
-                .await;
-
-            // Save the assistant response to the database
-            if !accumulated.is_empty() {
-                let response_id = Uuid::new_v4();
-                if let Err(e) = state
-                    .repo
-                    .insert_chat_message(user_id, response_id, "assistant".into(), accumulated)
-                    .await
-                {
-                    error!("Failed to save assistant message: {}", e);
+                Ok(ref chunk) => {
+                    accumulator.apply(chunk);
+                }
+                Err(e) => {
+                    error!("Stream error for message {}: {}", message_id, e);
+                    state
+                        .send_stream_chunk(
+                            message_id,
+                            StreamChunk::Error(format!("Stream error: {}", e)),
+                        )
+                        .await;
+                    state.remove_response_stream(message_id).await;
+                    return Ok(());
                 }
             }
         }
-        Err(e) => {
-            error!("Failed to start LLM stream for message {}: {}", message_id, e);
-            state
-                .send_stream_chunk(
-                    message_id,
-                    StreamChunk::Error(format!("Failed to reach LLM: {}", e)),
-                )
-                .await;
+
+        let response = match accumulator.build() {
+            Some(r) => r,
+            None => {
+                error!("Incomplete LLM response for message {}", message_id);
+                state
+                    .send_stream_chunk(
+                        message_id,
+                        StreamChunk::Error("Incomplete response from LLM".into()),
+                    )
+                    .await;
+                state.remove_response_stream(message_id).await;
+                return Ok(());
+            }
+        };
+
+        // Check if we need to execute tools
+        if response.stop_reason == StopReason::ToolUse {
+            // Add assistant message with content blocks
+            let assistant_content = if response.content.is_empty() {
+                // Tool use only, no text
+                String::new()
+            } else {
+                response.content.clone()
+            };
+
+            // For the conversation, add the assistant's response
+            if !assistant_content.is_empty() {
+                messages.push(Message::assistant(&assistant_content));
+            }
+
+            // Execute each tool call and add results
+            for block in &response.content_blocks {
+                if let ContentBlock::ToolUse { id, name, input } = block {
+                    debug!("Executing tool: {} (id: {})", name, id);
+                    let result = tools::execute_tool(name, input, state).await;
+                    let result_str = serde_json::to_string_pretty(&result)
+                        .unwrap_or_else(|_| result.to_string());
+
+                    // Add tool result as user message (Anthropic format)
+                    messages.push(Message::user(&format!(
+                        "Tool result for {} (id: {}):\n{}",
+                        name, id, result_str
+                    )));
+
+                    // Stream tool execution info to user
+                    let tool_info = format!("\n\n*Executed tool `{}`*\n\n", name);
+                    accumulated_response.push_str(&tool_info);
+                    state
+                        .send_stream_chunk(message_id, StreamChunk::Token(tool_info))
+                        .await;
+                }
+            }
+
+            // Continue the loop for the next LLM call
+            continue;
+        }
+
+        // EndTurn or MaxTokens — we're done
+        break;
+    }
+
+    // Send done signal
+    state
+        .send_stream_chunk(message_id, StreamChunk::Done)
+        .await;
+
+    // Save the assistant response to the database
+    if !accumulated_response.is_empty() {
+        let response_id = Uuid::new_v4();
+        if let Err(e) = state
+            .repo
+            .insert_chat_message(user_id, response_id, "assistant".into(), accumulated_response)
+            .await
+        {
+            error!("Failed to save assistant message: {}", e);
         }
     }
 
-    // Cleanup the response stream
     state.remove_response_stream(message_id).await;
-
     Ok(())
 }
 
@@ -225,7 +331,6 @@ mod tests {
 
     #[tokio::test]
     async fn orchestrator_sends_error_when_no_api_key() {
-        // Ensure ANTHROPIC_API_KEY is not set for this test
         let saved = std::env::var("ANTHROPIC_API_KEY").ok();
         std::env::remove_var("ANTHROPIC_API_KEY");
 
@@ -233,11 +338,8 @@ mod tests {
         let (state, orchestrator_rx) = AppState::with_repo(None, repo, None, AppConfig::default());
 
         let msg_id = Uuid::new_v4();
-
-        // Subscribe to the response stream before spawning
         let mut rx = state.get_response_stream(msg_id).await;
 
-        // Send a message
         state
             .orchestrator_tx
             .send(OrchestratorMessage {
@@ -249,10 +351,8 @@ mod tests {
             .await
             .unwrap();
 
-        // Spawn orchestrator — without API key it will send errors and drain
         let _handle = spawn_orchestrator(state, orchestrator_rx);
 
-        // Should receive an error chunk
         let chunk = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
             .await
             .expect("timeout waiting for chunk")
@@ -260,7 +360,6 @@ mod tests {
 
         assert!(matches!(chunk, StreamChunk::Error(_)));
 
-        // Restore env var
         if let Some(key) = saved {
             std::env::set_var("ANTHROPIC_API_KEY", key);
         }
