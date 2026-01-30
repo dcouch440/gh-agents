@@ -101,7 +101,7 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
     let protected_routes = Router::new()
         .route("/auth/me", get(api::auth_me))
         .route("/tasks", get(api::list_tasks).post(api::create_task))
-        .route("/tasks/{id}", get(api::get_task))
+        .route("/tasks/:id", get(api::get_task))
         .route("/agents", get(api::list_agents))
         .route("/config", get(api::get_config).patch(api::update_config))
         // Chat endpoints (Ticket 10.3)
@@ -110,7 +110,7 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
             "/chat/history",
             get(api::get_chat_history).delete(api::clear_chat_history),
         )
-        .route("/chat/{message_id}/stream", get(api::chat_stream))
+        .route("/chat/:message_id/stream", get(api::chat_stream))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // Static file serving for production (Ticket 10.6)
