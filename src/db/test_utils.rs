@@ -27,7 +27,7 @@ async fn shared_admin_pool() -> &'static PgPool {
     ADMIN_POOL
         .get_or_init(|| async {
             PgPoolOptions::new()
-                .max_connections(5)
+                .max_connections(10)
                 .acquire_timeout(Duration::from_secs(60))
                 .idle_timeout(Duration::from_secs(120))
                 .connect(&admin_url())
@@ -98,7 +98,7 @@ impl TestDb {
         sqlx::query(&format!("DROP DATABASE IF EXISTS \"{}\"", self.db_name))
             .execute(admin_pool)
             .await
-            .unwrap();
+            .ok();
 
         // _permit is dropped here, releasing a slot for another test
     }

@@ -1,0 +1,925 @@
+//! PostgreSQL implementation of repository traits.
+
+use anyhow::Result;
+use async_trait::async_trait;
+use chrono::{DateTime, Utc};
+use sqlx::PgPool;
+use uuid::Uuid;
+
+use crate::db::traits::{
+    CostRepo, DependencyRepo, MergeQueueRepo, ObservabilityRepo, PlannerRepo, RefactorRepo,
+    SchedulerRepo, ServerRepo, TaskQueueRepo,
+};
+use crate::db::ChatMessageRow;
+use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
+use crate::observability::{Decision, LlmCall};
+use crate::orchestration::DependencyError;
+use crate::orchestration::QueueError as TaskQueueError;
+use crate::types::{
+    AgentId, AgentTier, ChangeId, ChangeStatus, CostRecord, ProductionMode, RefactorChange,
+    RefactorSession, Task, TaskId, TaskStatus,
+};
+
+/// Production repository backed by PostgreSQL.
+#[derive(Clone)]
+pub struct PgRepo {
+    pool: PgPool,
+}
+
+impl PgRepo {
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+
+    pub fn pool(&self) -> &PgPool {
+        &self.pool
+    }
+}
+
+// Internal row types for SQLx
+
+#[derive(sqlx::FromRow)]
+struct LlmCallRow {
+    id: Uuid,
+    task_id: Option<Uuid>,
+    agent_id: Option<Uuid>,
+    model: String,
+    prompt: String,
+    response: String,
+    input_tokens: i32,
+    output_tokens: i32,
+    latency_ms: i32,
+    timestamp: DateTime<Utc>,
+    cost_usd: f32,
+}
+
+impl TryFrom<LlmCallRow> for LlmCall {
+    type Error = anyhow::Error;
+
+    fn try_from(row: LlmCallRow) -> Result<Self> {
+        Ok(LlmCall {
+            id: row.id,
+            task_id: row.task_id,
+            agent_id: row.agent_id.map(|u| u.to_string()),
+            model: row.model,
+            prompt: serde_json::from_str(&row.prompt)?,
+            response: row.response,
+            input_tokens: row.input_tokens as u32,
+            output_tokens: row.output_tokens as u32,
+            latency_ms: row.latency_ms as u64,
+            timestamp: row.timestamp,
+            cost_usd: row.cost_usd as f64,
+        })
+    }
+}
+
+#[derive(sqlx::FromRow)]
+struct DecisionRow {
+    id: Uuid,
+    task_id: Uuid,
+    decision_type: String,
+    reasoning: String,
+    outcome: String,
+    llm_call_id: Option<Uuid>,
+    cost_usd: f32,
+    timestamp: DateTime<Utc>,
+}
+
+impl TryFrom<DecisionRow> for Decision {
+    type Error = anyhow::Error;
+
+    fn try_from(row: DecisionRow) -> Result<Self> {
+        Ok(Decision {
+            id: row.id,
+            task_id: row.task_id,
+            decision_type: serde_json::from_str(&row.decision_type)?,
+            reasoning: row.reasoning,
+            outcome: row.outcome,
+            llm_call_id: row.llm_call_id,
+            cost_usd: row.cost_usd as f64,
+            timestamp: row.timestamp,
+        })
+    }
+}
+
+#[async_trait]
+impl ObservabilityRepo for PgRepo {
+    async fn insert_llm_call(&self, call: LlmCall) -> Result<()> {
+        let prompt_json = serde_json::to_string(&call.prompt)?;
+        let input_tokens = call.input_tokens as i32;
+        let output_tokens = call.output_tokens as i32;
+        let latency_ms = call.latency_ms as i32;
+        let agent_id = call.agent_id.as_ref().and_then(|s| Uuid::parse_str(s).ok());
+
+        sqlx::query(
+            r#"
+            INSERT INTO llm_calls (
+                id, task_id, agent_id, model, prompt, response,
+                input_tokens, output_tokens, latency_ms, timestamp, cost_usd
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            "#,
+        )
+        .bind(call.id)
+        .bind(call.task_id)
+        .bind(agent_id)
+        .bind(&call.model)
+        .bind(&prompt_json)
+        .bind(&call.response)
+        .bind(input_tokens)
+        .bind(output_tokens)
+        .bind(latency_ms)
+        .bind(call.timestamp)
+        .bind(call.cost_usd as f32)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn get_calls_for_task(&self, task_id: Uuid) -> Result<Vec<LlmCall>> {
+        let rows: Vec<LlmCallRow> = sqlx::query_as(
+            r#"
+            SELECT id, task_id, agent_id, model, prompt, response,
+                   input_tokens, output_tokens, latency_ms, timestamp, cost_usd
+            FROM llm_calls
+            WHERE task_id = $1
+            ORDER BY timestamp ASC
+            "#,
+        )
+        .bind(task_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(|row| row.try_into()).collect()
+    }
+
+    async fn get_calls_in_range(
+        &self,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    ) -> Result<Vec<LlmCall>> {
+        let rows: Vec<LlmCallRow> = sqlx::query_as(
+            r#"
+            SELECT id, task_id, agent_id, model, prompt, response,
+                   input_tokens, output_tokens, latency_ms, timestamp, cost_usd
+            FROM llm_calls
+            WHERE timestamp >= $1 AND timestamp <= $2
+            ORDER BY timestamp ASC
+            "#,
+        )
+        .bind(start)
+        .bind(end)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(|row| row.try_into()).collect()
+    }
+
+    async fn insert_decision(&self, decision: Decision) -> Result<()> {
+        let decision_type = serde_json::to_string(&decision.decision_type)?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO decisions (
+                id, task_id, decision_type, reasoning, outcome, llm_call_id, cost_usd, timestamp
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            "#,
+        )
+        .bind(decision.id)
+        .bind(decision.task_id)
+        .bind(&decision_type)
+        .bind(&decision.reasoning)
+        .bind(&decision.outcome)
+        .bind(decision.llm_call_id)
+        .bind(decision.cost_usd as f32)
+        .bind(decision.timestamp)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn get_decisions_for_task(&self, task_id: Uuid) -> Result<Vec<Decision>> {
+        let rows: Vec<DecisionRow> = sqlx::query_as(
+            r#"
+            SELECT id, task_id, decision_type, reasoning, outcome, llm_call_id, cost_usd, timestamp
+            FROM decisions
+            WHERE task_id = $1
+            ORDER BY timestamp ASC
+            "#,
+        )
+        .bind(task_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(|row| row.try_into()).collect()
+    }
+
+    async fn get_decisions_in_range(
+        &self,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    ) -> Result<Vec<Decision>> {
+        let rows: Vec<DecisionRow> = sqlx::query_as(
+            r#"
+            SELECT id, task_id, decision_type, reasoning, outcome, llm_call_id, cost_usd, timestamp
+            FROM decisions
+            WHERE timestamp >= $1 AND timestamp <= $2
+            ORDER BY timestamp ASC
+            "#,
+        )
+        .bind(start)
+        .bind(end)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(|row| row.try_into()).collect()
+    }
+}
+
+#[async_trait]
+impl MergeQueueRepo for PgRepo {
+    async fn insert_queue_entry(
+        &self,
+        id: Uuid,
+        owner: String,
+        repo: String,
+        pr_number: u32,
+        position: u32,
+        now: DateTime<Utc>,
+    ) -> Result<(), MergeQueueError> {
+        sqlx::query(
+            r#"
+            INSERT INTO pr_merge_queue (
+                id, repo_owner, repo_name, pr_number,
+                queue_position, status, created_at, updated_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (repo_owner, repo_name, pr_number)
+            DO UPDATE SET updated_at = excluded.updated_at
+            "#,
+        )
+        .bind(id)
+        .bind(&owner)
+        .bind(&repo)
+        .bind(pr_number as i32)
+        .bind(position as i32)
+        .bind("pending")
+        .bind(now)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn get_next_position(&self, owner: String, repo: String) -> Result<u32, MergeQueueError> {
+        let row: Option<(i32,)> = sqlx::query_as(
+            r#"
+            SELECT COALESCE(MAX(queue_position), 0) + 1
+            FROM pr_merge_queue
+            WHERE repo_owner = $1 AND repo_name = $2
+            "#,
+        )
+        .bind(&owner)
+        .bind(&repo)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|(n,)| n as u32).unwrap_or(1))
+    }
+
+    async fn delete_queue_entry(
+        &self,
+        owner: String,
+        repo: String,
+        pr_number: u32,
+    ) -> Result<bool, MergeQueueError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM pr_merge_queue
+            WHERE repo_owner = $1 AND repo_name = $2 AND pr_number = $3
+            "#,
+        )
+        .bind(&owner)
+        .bind(&repo)
+        .bind(pr_number as i32)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    async fn get_queue_entries(
+        &self,
+        owner: String,
+        repo: String,
+    ) -> Result<Vec<PrQueueEntry>, MergeQueueError> {
+        let rows: Vec<(
+            Uuid,
+            String,
+            String,
+            i32,
+            i32,
+            String,
+            Option<String>,
+            Option<String>,
+            DateTime<Utc>,
+            DateTime<Utc>,
+        )> = sqlx::query_as(
+            r#"
+            SELECT
+                id, repo_owner, repo_name, pr_number,
+                queue_position, status, conflict_info,
+                error_message, created_at, updated_at
+            FROM pr_merge_queue
+            WHERE repo_owner = $1 AND repo_name = $2
+            ORDER BY queue_position ASC
+            "#,
+        )
+        .bind(&owner)
+        .bind(&repo)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let entries = rows
+            .into_iter()
+            .filter_map(|row| {
+                Some(PrQueueEntry {
+                    id: row.0,
+                    repo_owner: row.1,
+                    repo_name: row.2,
+                    pr_number: row.3 as u32,
+                    queue_position: row.4 as u32,
+                    status: row.5.parse().ok()?,
+                    conflict_info: row.6.and_then(|s| serde_json::from_str(&s).ok()),
+                    error_message: row.7,
+                    created_at: row.8,
+                    updated_at: row.9,
+                })
+            })
+            .collect();
+
+        Ok(entries)
+    }
+
+    async fn update_entry_status(
+        &self,
+        owner: String,
+        repo: String,
+        pr_number: u32,
+        status: String,
+        error_message: Option<String>,
+        now: DateTime<Utc>,
+    ) -> Result<bool, MergeQueueError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE pr_merge_queue
+            SET status = $1, error_message = $2, updated_at = $3
+            WHERE repo_owner = $4 AND repo_name = $5 AND pr_number = $6
+            "#,
+        )
+        .bind(&status)
+        .bind(error_message.as_deref())
+        .bind(now)
+        .bind(&owner)
+        .bind(&repo)
+        .bind(pr_number as i32)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    async fn set_entry_conflict(
+        &self,
+        owner: String,
+        repo: String,
+        pr_number: u32,
+        conflict_json: String,
+        now: DateTime<Utc>,
+    ) -> Result<bool, MergeQueueError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE pr_merge_queue
+            SET status = $1, conflict_info = $2, updated_at = $3
+            WHERE repo_owner = $4 AND repo_name = $5 AND pr_number = $6
+            "#,
+        )
+        .bind("conflict")
+        .bind(&conflict_json)
+        .bind(now)
+        .bind(&owner)
+        .bind(&repo)
+        .bind(pr_number as i32)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    async fn update_entry_position(
+        &self,
+        id: Uuid,
+        position: u32,
+        now: DateTime<Utc>,
+    ) -> Result<(), MergeQueueError> {
+        sqlx::query(
+            r#"
+            UPDATE pr_merge_queue
+            SET queue_position = $1, updated_at = $2
+            WHERE id = $3
+            "#,
+        )
+        .bind(position as i32)
+        .bind(now)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn reset_interrupted(
+        &self,
+        owner: String,
+        repo: String,
+        now: DateTime<Utc>,
+    ) -> Result<u32, MergeQueueError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE pr_merge_queue
+            SET status = 'pending', updated_at = $1
+            WHERE repo_owner = $2 AND repo_name = $3
+            AND status = 'in_progress'
+            "#,
+        )
+        .bind(now)
+        .bind(&owner)
+        .bind(&repo)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() as u32)
+    }
+
+    async fn cleanup_old(
+        &self,
+        owner: String,
+        repo: String,
+        cutoff: DateTime<Utc>,
+    ) -> Result<u32, MergeQueueError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM pr_merge_queue
+            WHERE repo_owner = $1 AND repo_name = $2
+            AND status IN ('merged', 'skipped')
+            AND updated_at < $3
+            "#,
+        )
+        .bind(&owner)
+        .bind(&repo)
+        .bind(cutoff)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() as u32)
+    }
+}
+
+#[async_trait]
+impl DependencyRepo for PgRepo {
+    async fn get_task_status(&self, id: TaskId) -> Result<Option<TaskStatus>, DependencyError> {
+        let row: Option<(String,)> = sqlx::query_as("SELECT status FROM tasks WHERE id = $1")
+            .bind(id.0)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| DependencyError::DatabaseError(e.to_string()))?;
+
+        Ok(row.map(|r| match r.0.as_str() {
+            "pending" => TaskStatus::Pending,
+            "inprogress" | "in_progress" => TaskStatus::InProgress,
+            "review" => TaskStatus::Review,
+            "completed" => TaskStatus::Completed,
+            "failed" => TaskStatus::Failed,
+            _ => TaskStatus::Pending,
+        }))
+    }
+
+    async fn get_blocked_by(&self, task_id: TaskId) -> Result<Vec<TaskId>, DependencyError> {
+        let rows: Vec<(Uuid,)> =
+            sqlx::query_as("SELECT task_id FROM task_dependencies WHERE depends_on_id = $1")
+                .bind(task_id.0)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(|e| DependencyError::DatabaseError(e.to_string()))?;
+
+        Ok(rows.into_iter().map(|r| TaskId(r.0)).collect())
+    }
+
+    async fn get_task_dependencies(&self, task_id: TaskId) -> Result<Vec<TaskId>, DependencyError> {
+        let rows: Vec<(Uuid,)> =
+            sqlx::query_as("SELECT depends_on_id FROM task_dependencies WHERE task_id = $1")
+                .bind(task_id.0)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(|e| DependencyError::DatabaseError(e.to_string()))?;
+
+        Ok(rows.into_iter().map(|r| TaskId(r.0)).collect())
+    }
+
+    async fn save_dependency(
+        &self,
+        task_id: TaskId,
+        depends_on: TaskId,
+        now: DateTime<Utc>,
+    ) -> Result<(), DependencyError> {
+        sqlx::query(
+            r#"
+            INSERT INTO task_dependencies (task_id, depends_on_id, created_at)
+            VALUES ($1, $2, $3)
+            ON CONFLICT DO NOTHING
+            "#,
+        )
+        .bind(task_id.0)
+        .bind(depends_on.0)
+        .bind(now)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| DependencyError::DatabaseError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    async fn remove_dependency(
+        &self,
+        task_id: TaskId,
+        depends_on: TaskId,
+    ) -> Result<(), DependencyError> {
+        sqlx::query("DELETE FROM task_dependencies WHERE task_id = $1 AND depends_on_id = $2")
+            .bind(task_id.0)
+            .bind(depends_on.0)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| DependencyError::DatabaseError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    async fn get_ready_task_ids(&self) -> Result<Vec<TaskId>, DependencyError> {
+        let rows: Vec<(Uuid,)> = sqlx::query_as(
+            r#"
+            SELECT t.id FROM tasks t
+            WHERE t.status = 'pending'
+            AND NOT EXISTS (
+                SELECT 1 FROM task_dependencies td
+                JOIN tasks dep ON td.depends_on_id = dep.id
+                WHERE td.task_id = t.id
+                AND dep.status != 'completed'
+            )
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| DependencyError::DatabaseError(e.to_string()))?;
+
+        Ok(rows.into_iter().map(|r| TaskId(r.0)).collect())
+    }
+}
+
+#[async_trait]
+impl PlannerRepo for PgRepo {
+    async fn save_planner_output(
+        &self,
+        output: crate::orchestration::PlannerOutput,
+    ) -> Result<(), String> {
+        let mut tx = self.pool.begin().await.map_err(|e| e.to_string())?;
+
+        // Insert slices
+        for slice in &output.slices {
+            sqlx::query(
+                r#"
+                INSERT INTO vertical_slices (id, ticket_id, title, description, status, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                "#,
+            )
+            .bind(slice.id.0)
+            .bind(slice.ticket_id)
+            .bind(&slice.title)
+            .bind(&slice.description)
+            .bind("pending")
+            .bind(slice.created_at)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+        }
+
+        // Insert tasks
+        for task in &output.tasks {
+            let slice_id = task.slice_id.as_ref().map(|s| s.0);
+
+            sqlx::query(
+                r#"
+                INSERT INTO tasks (id, slice_id, title, description, assigned_tier, status, priority, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                "#,
+            )
+            .bind(task.id.0)
+            .bind(slice_id)
+            .bind(&task.title)
+            .bind(&task.description)
+            .bind(format!("{:?}", task.assigned_tier))
+            .bind("pending")
+            .bind(format!("{:?}", task.priority))
+            .bind(task.created_at)
+            .bind(task.updated_at)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+        }
+
+        tx.commit().await.map_err(|e| e.to_string())?;
+
+        tracing::info!(
+            ticket_id = %output.ticket_id.0,
+            slices = output.slices.len(),
+            tasks = output.tasks.len(),
+            "Decomposition saved to database"
+        );
+
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl TaskQueueRepo for PgRepo {
+    async fn list_tasks_by_status(&self, status: TaskStatus) -> Result<Vec<Task>, TaskQueueError> {
+        crate::db::list_tasks_by_status(&self.pool, status)
+            .await
+            .map_err(|e| TaskQueueError::DatabaseError(e.to_string()))
+    }
+
+    async fn update_task_status(
+        &self,
+        id: TaskId,
+        status: TaskStatus,
+    ) -> Result<(), TaskQueueError> {
+        crate::db::update_task_status(&self.pool, &id, status)
+            .await
+            .map_err(|e| TaskQueueError::DatabaseError(e.to_string()))
+    }
+
+    async fn update_task_for_requeue(
+        &self,
+        task_id: TaskId,
+        priority_str: String,
+        policy_description: String,
+        now: DateTime<Utc>,
+    ) -> Result<(), TaskQueueError> {
+        sqlx::query(
+            r#"
+            UPDATE tasks
+            SET status = 'pending',
+                priority = $1,
+                updated_at = $2
+            WHERE id = $3
+            "#,
+        )
+        .bind(&priority_str)
+        .bind(now)
+        .bind(task_id.0)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| TaskQueueError::DatabaseError(e.to_string()))?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO task_events (id, task_id, event_type, details, timestamp)
+            VALUES ($1, $2, 'requeued', $3, $4)
+            "#,
+        )
+        .bind(Uuid::new_v4())
+        .bind(task_id.0)
+        .bind(policy_description)
+        .bind(now)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| TaskQueueError::DatabaseError(e.to_string()))?;
+
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl SchedulerRepo for PgRepo {
+    async fn get_production_mode(&self) -> Result<ProductionMode, anyhow::Error> {
+        let row: Option<(String,)> =
+            sqlx::query_as("SELECT value FROM system_state WHERE key = 'production_mode'")
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to fetch production mode: {}", e))?;
+
+        Ok(row
+            .map(|(v,)| ProductionMode::from_str(&v))
+            .unwrap_or_default())
+    }
+
+    async fn set_production_mode(&self, mode: ProductionMode) -> Result<(), anyhow::Error> {
+        let value = mode.as_str();
+
+        sqlx::query(
+            r#"
+            INSERT INTO system_state (key, value, updated_at)
+            VALUES ('production_mode', $1, $2)
+            ON CONFLICT(key) DO UPDATE SET
+                value = excluded.value,
+                updated_at = excluded.updated_at
+            "#,
+        )
+        .bind(value)
+        .bind(Utc::now())
+        .execute(&self.pool)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to set production mode: {}", e))?;
+
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl CostRepo for PgRepo {
+    async fn persist_cost_record(&self, record: CostRecord) -> Result<(), String> {
+        let task_id = record.task_id.as_ref().map(|id| id.0);
+        let tier_str = format!("{:?}", record.agent_tier);
+
+        sqlx::query(
+            r#"
+            INSERT INTO cost_records (
+                id, task_id, agent_id, agent_tier, model_id,
+                input_tokens, output_tokens, cost_usd, timestamp
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            "#,
+        )
+        .bind(record.id)
+        .bind(task_id)
+        .bind(record.agent_id.0)
+        .bind(tier_str)
+        .bind(&record.model_id)
+        .bind(record.input_tokens as i32)
+        .bind(record.output_tokens as i32)
+        .bind(record.cost_usd as f32)
+        .bind(record.timestamp)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    async fn get_cost_records(
+        &self,
+        since: Option<DateTime<Utc>>,
+    ) -> Result<Vec<CostRecord>, String> {
+        let rows: Vec<CostRecordPgRow> = if let Some(since_time) = since {
+            sqlx::query_as(
+                r#"
+                SELECT id, task_id, agent_id, agent_tier, model_id,
+                       input_tokens, output_tokens, cost_usd, timestamp
+                FROM cost_records
+                WHERE timestamp >= $1
+                ORDER BY timestamp DESC
+                "#,
+            )
+            .bind(since_time)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| e.to_string())?
+        } else {
+            sqlx::query_as(
+                r#"
+                SELECT id, task_id, agent_id, agent_tier, model_id,
+                       input_tokens, output_tokens, cost_usd, timestamp
+                FROM cost_records
+                ORDER BY timestamp DESC
+                "#,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| e.to_string())?
+        };
+
+        let cost_records: Vec<CostRecord> = rows
+            .into_iter()
+            .filter_map(|row| row.try_into().ok())
+            .collect();
+
+        Ok(cost_records)
+    }
+}
+
+#[async_trait]
+impl RefactorRepo for PgRepo {
+    async fn get_active_refactor_session(&self) -> Result<Option<RefactorSession>> {
+        crate::db::get_active_refactor_session(&self.pool).await
+    }
+
+    async fn insert_refactor_session(&self, session: RefactorSession) -> Result<()> {
+        crate::db::insert_refactor_session(&self.pool, &session).await
+    }
+
+    async fn update_refactor_session(&self, session: RefactorSession) -> Result<()> {
+        crate::db::update_refactor_session(&self.pool, &session).await
+    }
+
+    async fn insert_refactor_change(&self, change: RefactorChange) -> Result<()> {
+        crate::db::insert_refactor_change(&self.pool, &change).await
+    }
+
+    async fn update_change_status(&self, id: ChangeId, status: ChangeStatus) -> Result<()> {
+        crate::db::update_change_status(&self.pool, &id, status).await
+    }
+}
+
+/// Database row for cost records (used by CostRepo impl)
+#[derive(Debug, sqlx::FromRow)]
+struct CostRecordPgRow {
+    id: Uuid,
+    task_id: Option<Uuid>,
+    agent_id: Uuid,
+    agent_tier: String,
+    model_id: String,
+    input_tokens: i32,
+    output_tokens: i32,
+    cost_usd: f32,
+    timestamp: DateTime<Utc>,
+}
+
+impl TryFrom<CostRecordPgRow> for CostRecord {
+    type Error = String;
+
+    fn try_from(row: CostRecordPgRow) -> Result<Self, Self::Error> {
+        let agent_tier = match row.agent_tier.as_str() {
+            "Orchestrator" => AgentTier::Orchestrator,
+            "Worker" => AgentTier::Worker,
+            "Utility" => AgentTier::Utility,
+            _ => AgentTier::Worker,
+        };
+
+        Ok(CostRecord {
+            id: row.id,
+            task_id: row.task_id.map(TaskId),
+            agent_id: AgentId(row.agent_id),
+            agent_tier,
+            model_id: row.model_id,
+            input_tokens: row.input_tokens as u32,
+            output_tokens: row.output_tokens as u32,
+            cost_usd: row.cost_usd as f64,
+            timestamp: row.timestamp,
+        })
+    }
+}
+
+#[async_trait]
+impl ServerRepo for PgRepo {
+    async fn health_check(&self) -> bool {
+        sqlx::query("SELECT 1").fetch_one(&self.pool).await.is_ok()
+    }
+
+    async fn list_tasks(&self, status: Option<String>, limit: Option<u32>) -> Result<Vec<Task>> {
+        crate::db::list_tasks(&self.pool, status.as_deref(), limit).await
+    }
+
+    async fn get_task_by_uuid(&self, id: Uuid) -> Result<Option<Task>> {
+        crate::db::get_task_by_uuid(&self.pool, id).await
+    }
+
+    async fn insert_task(&self, task: Task) -> Result<()> {
+        crate::db::insert_task(&self.pool, &task).await
+    }
+
+    async fn insert_chat_message(&self, id: Uuid, role: String, content: String) -> Result<()> {
+        crate::db::insert_chat_message(&self.pool, &id, &role, &content).await
+    }
+
+    async fn get_chat_history(&self, limit: u32, offset: u32) -> Result<Vec<ChatMessageRow>> {
+        crate::db::get_chat_history(&self.pool, limit, offset).await
+    }
+
+    async fn clear_chat_history(&self) -> Result<()> {
+        crate::db::clear_chat_history(&self.pool).await
+    }
+
+    async fn has_password(&self) -> Result<bool> {
+        crate::db::has_password(&self.pool).await
+    }
+
+    async fn set_password(&self, password_hash: String) -> Result<()> {
+        crate::db::set_password(&self.pool, &password_hash).await
+    }
+
+    async fn get_password(&self) -> Result<Option<String>> {
+        crate::db::get_password(&self.pool).await
+    }
+}

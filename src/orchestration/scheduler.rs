@@ -6,29 +6,37 @@
 //! - Resuming: Transitioning back to running
 
 use anyhow::Result;
-use sqlx::PgPool;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::{Notify, RwLock};
 use tokio::time::{interval, Duration};
 
 use crate::agents::{AgentId, AgentPool};
-use crate::db::{get_production_mode, set_production_mode};
+use crate::db::pg_repo::PgRepo;
+use crate::db::traits::SchedulerRepo;
 use crate::types::{AgentTier, Priority, ProductionMode, Task, TaskId};
 
 /// Task scheduler that respects production mode
-pub struct Scheduler {
-    pool: PgPool,
+pub struct Scheduler<R: SchedulerRepo = PgRepo> {
+    repo: R,
     /// Cached production mode (updated on state changes)
     mode_cache: Arc<RwLock<ProductionMode>>,
 }
 
-impl Scheduler {
-    /// Create a new scheduler
-    pub async fn new(pool: PgPool) -> Result<Self> {
-        let mode = get_production_mode(&pool).await?;
+impl Scheduler<PgRepo> {
+    /// Create a new scheduler backed by PgRepo
+    pub async fn new(pool: sqlx::PgPool) -> Result<Self> {
+        let repo = PgRepo::new(pool);
+        Self::with_repo(repo).await
+    }
+}
+
+impl<R: SchedulerRepo> Scheduler<R> {
+    /// Create a new scheduler with the given repo
+    pub async fn with_repo(repo: R) -> Result<Self> {
+        let mode = repo.get_production_mode().await?;
         Ok(Self {
-            pool,
+            repo,
             mode_cache: Arc::new(RwLock::new(mode)),
         })
     }
@@ -45,7 +53,7 @@ impl Scheduler {
 
     /// Set the production mode
     async fn set_mode(&self, mode: ProductionMode) -> Result<()> {
-        set_production_mode(&self.pool, mode).await?;
+        self.repo.set_production_mode(mode).await?;
         *self.mode_cache.write().await = mode;
         tracing::info!(mode = ?mode, "Production mode changed");
         Ok(())
@@ -94,7 +102,7 @@ impl Scheduler {
     ///
     /// Call this if the mode might have been changed externally.
     pub async fn refresh_mode(&self) -> Result<()> {
-        let mode = get_production_mode(&self.pool).await?;
+        let mode = self.repo.get_production_mode().await?;
         *self.mode_cache.write().await = mode;
         Ok(())
     }
@@ -104,6 +112,7 @@ impl Scheduler {
 // Ticket 5.5: Task Scheduler
 // ============================================================================
 
+use crate::db::traits::{DependencyRepo, TaskQueueRepo};
 use crate::orchestration::queue::{DependencyAwareQueue, QueueError, RequeuePolicy};
 use crate::orchestration::router::Router;
 
@@ -171,24 +180,28 @@ pub struct PreemptionAction {
 /// - Router: Determines which agent tier handles each task
 /// - AgentPool: Provides available agents
 /// - Scheduler (refactor mode): Respects pause/resume state
-pub struct TaskScheduler {
-    queue: Arc<RwLock<DependencyAwareQueue>>,
+pub struct TaskScheduler<
+    TQ: TaskQueueRepo = PgRepo,
+    DR: DependencyRepo = PgRepo,
+    SR: SchedulerRepo = PgRepo,
+> {
+    queue: Arc<RwLock<DependencyAwareQueue<TQ, DR>>>,
     router: Router,
     agent_pool: Arc<RwLock<AgentPool>>,
-    refactor_scheduler: Arc<Scheduler>,
+    refactor_scheduler: Arc<Scheduler<SR>>,
     config: SchedulerConfig,
     running: Arc<RwLock<bool>>,
     /// Notified when an agent becomes available
     agent_available: Arc<Notify>,
 }
 
-impl TaskScheduler {
+impl<TQ: TaskQueueRepo, DR: DependencyRepo, SR: SchedulerRepo> TaskScheduler<TQ, DR, SR> {
     /// Create a new task scheduler
     pub fn new(
-        queue: Arc<RwLock<DependencyAwareQueue>>,
+        queue: Arc<RwLock<DependencyAwareQueue<TQ, DR>>>,
         router: Router,
         agent_pool: Arc<RwLock<AgentPool>>,
-        refactor_scheduler: Arc<Scheduler>,
+        refactor_scheduler: Arc<Scheduler<SR>>,
         config: SchedulerConfig,
     ) -> Self {
         Self {
@@ -414,7 +427,12 @@ impl TaskScheduler {
     }
 
     /// Spawn scheduler as background task
-    pub fn spawn(self: Arc<Self>) -> tokio::task::JoinHandle<Result<(), SchedulerError>> {
+    pub fn spawn(self: Arc<Self>) -> tokio::task::JoinHandle<Result<(), SchedulerError>>
+    where
+        TQ: 'static,
+        DR: 'static,
+        SR: 'static,
+    {
         tokio::spawn(async move { self.run().await })
     }
 }
@@ -467,19 +485,24 @@ mod task_scheduler_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::traits::MockSchedulerRepo;
 
+    fn make_mock_running() -> MockSchedulerRepo {
+        let mut mock = MockSchedulerRepo::new();
+        mock.expect_get_production_mode()
+            .times(1)
+            .returning(|| Ok(ProductionMode::Running));
+        mock
+    }
 
-    use crate::db::test_utils::TestDb;
-
-    async fn setup_scheduler() -> (Scheduler, TestDb) {
-        let db = TestDb::new().await;
-        let scheduler = Scheduler::new(db.pool.clone()).await.unwrap();
-        (scheduler, db)
+    async fn setup_scheduler() -> Scheduler<MockSchedulerRepo> {
+        let mock = make_mock_running();
+        Scheduler::with_repo(mock).await.unwrap()
     }
 
     #[tokio::test]
     async fn scheduler_starts_in_running_mode() {
-        let (scheduler, _db) = setup_scheduler().await;
+        let scheduler = setup_scheduler().await;
 
         assert_eq!(
             scheduler.get_production_mode().await,
@@ -491,8 +514,16 @@ mod tests {
 
     #[tokio::test]
     async fn enter_refactor_mode_stops_assignment() {
-        let (scheduler, _db) = setup_scheduler().await;
+        let mut mock = MockSchedulerRepo::new();
+        mock.expect_get_production_mode()
+            .times(1)
+            .returning(|| Ok(ProductionMode::Running));
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::RefactorMode)
+            .times(1)
+            .returning(|_| Ok(()));
 
+        let scheduler = Scheduler::with_repo(mock).await.unwrap();
         scheduler.enter_refactor_mode().await.unwrap();
 
         assert_eq!(
@@ -505,8 +536,16 @@ mod tests {
 
     #[tokio::test]
     async fn pause_for_refactor() {
-        let (scheduler, _db) = setup_scheduler().await;
+        let mut mock = MockSchedulerRepo::new();
+        mock.expect_get_production_mode()
+            .times(1)
+            .returning(|| Ok(ProductionMode::Running));
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::Paused)
+            .times(1)
+            .returning(|_| Ok(()));
 
+        let scheduler = Scheduler::with_repo(mock).await.unwrap();
         scheduler.pause_for_refactor().await.unwrap();
 
         assert_eq!(
@@ -519,7 +558,28 @@ mod tests {
 
     #[tokio::test]
     async fn resume_after_refactor() {
-        let (scheduler, _db) = setup_scheduler().await;
+        let mut mock = MockSchedulerRepo::new();
+        // Initial load
+        mock.expect_get_production_mode()
+            .times(1)
+            .returning(|| Ok(ProductionMode::Running));
+        // enter_refactor_mode sets RefactorMode
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::RefactorMode)
+            .times(1)
+            .returning(|_| Ok(()));
+        // begin_resume sets Resuming
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::Resuming)
+            .times(1)
+            .returning(|_| Ok(()));
+        // resume sets Running
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::Running)
+            .times(1)
+            .returning(|_| Ok(()));
+
+        let scheduler = Scheduler::with_repo(mock).await.unwrap();
 
         scheduler.enter_refactor_mode().await.unwrap();
         scheduler.begin_resume().await.unwrap();
@@ -528,7 +588,6 @@ mod tests {
             scheduler.get_production_mode().await,
             ProductionMode::Resuming
         );
-        // Resuming is not "active" - still need to call resume()
         assert!(!scheduler.should_assign().await);
 
         scheduler.resume().await.unwrap();
@@ -542,36 +601,57 @@ mod tests {
 
     #[tokio::test]
     async fn full_refactor_cycle() {
-        let (scheduler, _db) = setup_scheduler().await;
+        let mut mock = MockSchedulerRepo::new();
+        mock.expect_get_production_mode()
+            .times(1)
+            .returning(|| Ok(ProductionMode::Running));
+        // enter_refactor_mode
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::RefactorMode)
+            .times(1)
+            .returning(|_| Ok(()));
+        // pause_for_refactor
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::Paused)
+            .times(1)
+            .returning(|_| Ok(()));
+        // begin_resume
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::Resuming)
+            .times(1)
+            .returning(|_| Ok(()));
+        // resume
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::Running)
+            .times(1)
+            .returning(|_| Ok(()));
 
-        // 1. Start in running mode
+        let scheduler = Scheduler::with_repo(mock).await.unwrap();
+
         assert!(scheduler.should_assign().await);
 
-        // 2. Enter refactor mode
         scheduler.enter_refactor_mode().await.unwrap();
         assert!(!scheduler.should_assign().await);
 
-        // 3. Pause for more serious changes
         scheduler.pause_for_refactor().await.unwrap();
         assert!(scheduler.is_paused().await);
 
-        // 4. Begin resume
         scheduler.begin_resume().await.unwrap();
         assert_eq!(
             scheduler.get_production_mode().await,
             ProductionMode::Resuming
         );
 
-        // 5. Complete resume
         scheduler.resume().await.unwrap();
         assert!(scheduler.should_assign().await);
     }
 
     #[tokio::test]
     async fn begin_resume_only_works_in_refactor_states() {
-        let (scheduler, _db) = setup_scheduler().await;
+        let mock = make_mock_running();
+        let scheduler = Scheduler::with_repo(mock).await.unwrap();
 
-        // In running mode, begin_resume does nothing
+        // In running mode, begin_resume does nothing (no set_production_mode call expected)
         scheduler.begin_resume().await.unwrap();
         assert_eq!(
             scheduler.get_production_mode().await,
@@ -581,9 +661,19 @@ mod tests {
 
     #[tokio::test]
     async fn enter_refactor_mode_noop_when_not_running() {
-        let (scheduler, _db) = setup_scheduler().await;
+        let mut mock = MockSchedulerRepo::new();
+        mock.expect_get_production_mode()
+            .times(1)
+            .returning(|| Ok(ProductionMode::Running));
+        // pause_for_refactor sets Paused
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::Paused)
+            .times(1)
+            .returning(|_| Ok(()));
+        // enter_refactor_mode should NOT call set because current != Running
 
-        // First pause, then try to enter refactor mode - should be a no-op
+        let scheduler = Scheduler::with_repo(mock).await.unwrap();
+
         scheduler.pause_for_refactor().await.unwrap();
         assert_eq!(
             scheduler.get_production_mode().await,
@@ -600,12 +690,24 @@ mod tests {
 
     #[tokio::test]
     async fn begin_resume_works_from_paused() {
-        let (scheduler, _db) = setup_scheduler().await;
+        let mut mock = MockSchedulerRepo::new();
+        mock.expect_get_production_mode()
+            .times(1)
+            .returning(|| Ok(ProductionMode::Running));
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::Paused)
+            .times(1)
+            .returning(|_| Ok(()));
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::Resuming)
+            .times(1)
+            .returning(|_| Ok(()));
+
+        let scheduler = Scheduler::with_repo(mock).await.unwrap();
 
         scheduler.pause_for_refactor().await.unwrap();
         assert!(scheduler.is_paused().await);
 
-        // Paused.is_refactoring() is true, so begin_resume should work
         scheduler.begin_resume().await.unwrap();
         assert_eq!(
             scheduler.get_production_mode().await,
@@ -615,7 +717,20 @@ mod tests {
 
     #[tokio::test]
     async fn begin_resume_noop_from_resuming() {
-        let (scheduler, _db) = setup_scheduler().await;
+        let mut mock = MockSchedulerRepo::new();
+        mock.expect_get_production_mode()
+            .times(1)
+            .returning(|| Ok(ProductionMode::Running));
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::RefactorMode)
+            .times(1)
+            .returning(|_| Ok(()));
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::Resuming)
+            .times(1)
+            .returning(|_| Ok(()));
+
+        let scheduler = Scheduler::with_repo(mock).await.unwrap();
 
         scheduler.enter_refactor_mode().await.unwrap();
         scheduler.begin_resume().await.unwrap();
@@ -634,20 +749,25 @@ mod tests {
 
     #[tokio::test]
     async fn refresh_mode_syncs_from_db() {
-        let (scheduler, _db) = setup_scheduler().await;
+        let mut mock = MockSchedulerRepo::new();
+        // Initial load returns Running
+        mock.expect_get_production_mode()
+            .times(1)
+            .returning(|| Ok(ProductionMode::Running));
+        // refresh_mode returns Paused
+        mock.expect_get_production_mode()
+            .times(1)
+            .returning(|| Ok(ProductionMode::Paused));
 
-        // Change mode in DB directly
-        set_production_mode(&scheduler.pool, ProductionMode::Paused)
-            .await
-            .unwrap();
+        let scheduler = Scheduler::with_repo(mock).await.unwrap();
 
-        // Cache still says Running
+        // Cache says Running
         assert_eq!(
             scheduler.get_production_mode().await,
             ProductionMode::Running
         );
 
-        // After refresh, cache matches DB
+        // After refresh, cache matches "DB"
         scheduler.refresh_mode().await.unwrap();
         assert_eq!(
             scheduler.get_production_mode().await,
@@ -657,7 +777,16 @@ mod tests {
 
     #[tokio::test]
     async fn should_assign_false_when_paused() {
-        let (scheduler, _db) = setup_scheduler().await;
+        let mut mock = MockSchedulerRepo::new();
+        mock.expect_get_production_mode()
+            .times(1)
+            .returning(|| Ok(ProductionMode::Running));
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::Paused)
+            .times(1)
+            .returning(|_| Ok(()));
+
+        let scheduler = Scheduler::with_repo(mock).await.unwrap();
 
         scheduler.pause_for_refactor().await.unwrap();
         assert!(!scheduler.should_assign().await);
@@ -665,7 +794,20 @@ mod tests {
 
     #[tokio::test]
     async fn should_assign_false_when_resuming() {
-        let (scheduler, _db) = setup_scheduler().await;
+        let mut mock = MockSchedulerRepo::new();
+        mock.expect_get_production_mode()
+            .times(1)
+            .returning(|| Ok(ProductionMode::Running));
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::RefactorMode)
+            .times(1)
+            .returning(|_| Ok(()));
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::Resuming)
+            .times(1)
+            .returning(|_| Ok(()));
+
+        let scheduler = Scheduler::with_repo(mock).await.unwrap();
 
         scheduler.enter_refactor_mode().await.unwrap();
         scheduler.begin_resume().await.unwrap();
@@ -674,26 +816,56 @@ mod tests {
 
     #[tokio::test]
     async fn is_paused_false_when_resuming() {
-        let (scheduler, _db) = setup_scheduler().await;
+        let mut mock = MockSchedulerRepo::new();
+        mock.expect_get_production_mode()
+            .times(1)
+            .returning(|| Ok(ProductionMode::Running));
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::RefactorMode)
+            .times(1)
+            .returning(|_| Ok(()));
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::Resuming)
+            .times(1)
+            .returning(|_| Ok(()));
+
+        let scheduler = Scheduler::with_repo(mock).await.unwrap();
 
         scheduler.enter_refactor_mode().await.unwrap();
         scheduler.begin_resume().await.unwrap();
-        // Resuming is not considered "refactoring/paused"
         assert!(!scheduler.is_paused().await);
     }
 
     #[tokio::test]
     async fn resume_from_any_state() {
-        let (scheduler, _db) = setup_scheduler().await;
+        let mut mock = MockSchedulerRepo::new();
+        mock.expect_get_production_mode()
+            .times(1)
+            .returning(|| Ok(ProductionMode::Running));
+        // resume (Running -> Running)
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::Running)
+            .times(1)
+            .returning(|_| Ok(()));
+        // pause_for_refactor
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::Paused)
+            .times(1)
+            .returning(|_| Ok(()));
+        // resume from Paused
+        mock.expect_set_production_mode()
+            .withf(|m| *m == ProductionMode::Running)
+            .times(1)
+            .returning(|_| Ok(()));
 
-        // Resume from Running (no-op effectively, just sets Running again)
+        let scheduler = Scheduler::with_repo(mock).await.unwrap();
+
         scheduler.resume().await.unwrap();
         assert_eq!(
             scheduler.get_production_mode().await,
             ProductionMode::Running
         );
 
-        // Resume from Paused directly
         scheduler.pause_for_refactor().await.unwrap();
         scheduler.resume().await.unwrap();
         assert_eq!(
@@ -707,6 +879,7 @@ mod tests {
 mod task_scheduler_integration_tests {
     use super::*;
     use crate::agents::AgentPool;
+    use crate::db::traits::{MockDependencyRepo, MockSchedulerRepo, MockTaskQueueRepo};
     use crate::llm::{LLMError, LLMRequest, LLMResponse, StopReason, StreamChunk, TokenUsage};
     use crate::orchestration::queue::DependencyAwareQueue;
     use crate::orchestration::router::{Router, RouterConfig};
@@ -718,6 +891,9 @@ mod task_scheduler_integration_tests {
     use futures::Stream;
     use std::pin::Pin;
 
+    type TestQueue = DependencyAwareQueue<MockTaskQueueRepo, MockDependencyRepo>;
+    type TestTaskScheduler =
+        TaskScheduler<MockTaskQueueRepo, MockDependencyRepo, MockSchedulerRepo>;
 
     struct MockLLMProvider;
 
@@ -767,19 +943,12 @@ mod task_scheduler_integration_tests {
         }
     }
 
-    use crate::db::test_utils::TestDb;
-
     async fn setup_full() -> (
-        Arc<TaskScheduler>,
-        Arc<RwLock<DependencyAwareQueue>>,
+        Arc<TestTaskScheduler>,
+        Arc<RwLock<TestQueue>>,
         Arc<RwLock<AgentPool>>,
-        TestDb,
     ) {
-        let db = TestDb::new().await;
-
-        let queue = Arc::new(RwLock::new(
-            DependencyAwareQueue::new(db.pool.clone()).await.unwrap(),
-        ));
+        let queue = Arc::new(RwLock::new(DependencyAwareQueue::in_memory().await));
         let router = Router::new(RouterConfig::default());
         let agent_pool_config = AgentPoolConfig {
             max_orchestrators: 2,
@@ -788,7 +957,13 @@ mod task_scheduler_integration_tests {
         };
         let llm = Arc::new(MockLLMProvider);
         let agent_pool = Arc::new(RwLock::new(AgentPool::new(agent_pool_config, llm)));
-        let refactor_scheduler = Arc::new(Scheduler::new(db.pool.clone()).await.unwrap());
+
+        let mut mock = MockSchedulerRepo::new();
+        mock.expect_get_production_mode()
+            .returning(|| Ok(ProductionMode::Running));
+        mock.expect_set_production_mode().returning(|_| Ok(()));
+
+        let refactor_scheduler = Arc::new(Scheduler::with_repo(mock).await.unwrap());
         let config = SchedulerConfig {
             poll_interval_ms: 10,
             batch_size: 5,
@@ -803,18 +978,18 @@ mod task_scheduler_integration_tests {
             config,
         ));
 
-        (scheduler, queue, agent_pool, db)
+        (scheduler, queue, agent_pool)
     }
 
     #[tokio::test]
     async fn task_scheduler_starts_not_running() {
-        let (scheduler, _, _, _db) = setup_full().await;
+        let (scheduler, _, _) = setup_full().await;
         assert!(!scheduler.is_running().await);
     }
 
     #[tokio::test]
     async fn task_scheduler_stop() {
-        let (scheduler, _, _, _db) = setup_full().await;
+        let (scheduler, _, _) = setup_full().await;
         // Start and then stop
         let s = scheduler.clone();
         let handle = tokio::spawn(async move { s.run().await });
@@ -831,7 +1006,7 @@ mod task_scheduler_integration_tests {
 
     #[tokio::test]
     async fn agent_available_notifier_returns_notify() {
-        let (scheduler, _, _, _db) = setup_full().await;
+        let (scheduler, _, _) = setup_full().await;
         let notifier = scheduler.agent_available_notifier();
         // Just verify it returns an Arc<Notify> that can be used
         notifier.notify_waiters();
@@ -839,7 +1014,7 @@ mod task_scheduler_integration_tests {
 
     #[tokio::test]
     async fn on_agent_available_notifies() {
-        let (scheduler, _, _, _db) = setup_full().await;
+        let (scheduler, _, _) = setup_full().await;
         let agent_id = AgentId(uuid::Uuid::new_v4());
         // Should not panic
         scheduler.on_agent_available(&agent_id).await;
@@ -847,7 +1022,7 @@ mod task_scheduler_integration_tests {
 
     #[tokio::test]
     async fn on_task_completed_returns_empty_when_no_deps() {
-        let (scheduler, _, _, _db) = setup_full().await;
+        let (scheduler, _, _) = setup_full().await;
         let task_id = TaskId::new();
         let unblocked = scheduler.on_task_completed(&task_id).await.unwrap();
         assert!(unblocked.is_empty());
@@ -855,14 +1030,14 @@ mod task_scheduler_integration_tests {
 
     #[tokio::test]
     async fn check_preemption_returns_none_when_no_urgent() {
-        let (scheduler, _, _, _db) = setup_full().await;
+        let (scheduler, _, _) = setup_full().await;
         let result = scheduler.check_preemption().await.unwrap();
         assert!(result.is_none());
     }
 
     #[tokio::test]
     async fn check_preemption_returns_none_when_urgent_but_agents_free() {
-        let (scheduler, queue, agent_pool, _db) = setup_full().await;
+        let (scheduler, queue, agent_pool) = setup_full().await;
 
         // Add an urgent task
         let task = make_task(Priority::Urgent);
@@ -888,7 +1063,7 @@ mod task_scheduler_integration_tests {
 
     #[tokio::test]
     async fn check_preemption_returns_none_all_busy_not_implemented() {
-        let (scheduler, queue, _, _db) = setup_full().await;
+        let (scheduler, queue, _) = setup_full().await;
 
         // Add an urgent task but no agents at all (stats all zero)
         let task = make_task(Priority::Urgent);
@@ -905,14 +1080,37 @@ mod task_scheduler_integration_tests {
 
     #[tokio::test]
     async fn scheduler_run_paused_skips_assignment() {
-        let (scheduler, queue, _, _db) = setup_full().await;
+        // Create a scheduler where refactor mode starts paused
+        let queue: Arc<RwLock<TestQueue>> =
+            Arc::new(RwLock::new(DependencyAwareQueue::in_memory().await));
+        let router = Router::new(RouterConfig::default());
+        let agent_pool_config = AgentPoolConfig {
+            max_orchestrators: 2,
+            max_workers: 3,
+            max_utilities: 4,
+        };
+        let llm = Arc::new(MockLLMProvider);
+        let agent_pool = Arc::new(RwLock::new(AgentPool::new(agent_pool_config, llm)));
 
-        // Pause the refactor scheduler
-        scheduler
-            .refactor_scheduler
-            .pause_for_refactor()
-            .await
-            .unwrap();
+        let mut mock = MockSchedulerRepo::new();
+        mock.expect_get_production_mode()
+            .returning(|| Ok(ProductionMode::Paused));
+        mock.expect_set_production_mode().returning(|_| Ok(()));
+
+        let refactor_scheduler = Arc::new(Scheduler::with_repo(mock).await.unwrap());
+        let config = SchedulerConfig {
+            poll_interval_ms: 10,
+            batch_size: 5,
+            agent_wait_timeout_ms: 10,
+        };
+
+        let scheduler: Arc<TestTaskScheduler> = Arc::new(TaskScheduler::new(
+            queue.clone(),
+            router,
+            agent_pool,
+            refactor_scheduler,
+            config,
+        ));
 
         // Add a task
         {

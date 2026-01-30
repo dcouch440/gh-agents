@@ -520,7 +520,9 @@ mod tests {
         insert_refactor_change(&db.pool, &change1).await.unwrap();
         insert_refactor_change(&db.pool, &change2).await.unwrap();
 
-        let changes = list_changes_for_session(&db.pool, &session.id).await.unwrap();
+        let changes = list_changes_for_session(&db.pool, &session.id)
+            .await
+            .unwrap();
         assert_eq!(changes.len(), 2);
 
         db.cleanup().await;
