@@ -10,7 +10,7 @@ Rust backend + React frontend + Ink CLI that orchestrates AI agents for software
 Rust (Axum)        → REST API, WebSocket, LLM providers, agents, orchestration, execution
 React (Vite)       → Web UI in ui/
 Ink (TypeScript)   → Terminal CLI in cli/
-SQLite             → .nexor/state.db
+PostgreSQL         → nexor database
 ```
 
 ## Commands
@@ -34,7 +34,7 @@ src/
 ├── lib.rs             # Library root
 ├── types/             # Core types (Task, Agent, Message, etc.)
 ├── config/            # Config loading
-├── db/                # SQLite operations
+├── db/                # PostgreSQL operations
 ├── llm/               # LLM provider clients
 ├── agents/            # Agent runtime & execution
 ├── orchestration/     # Task planning, routing, scheduling
@@ -45,7 +45,7 @@ src/
 └── headless.rs        # Headless mode
 ui/                    # React frontend (Vite + TailwindCSS + Zustand)
 cli/                   # Ink terminal CLI
-migrations/            # SQLite migrations
+migrations/            # PostgreSQL migrations
 decomp/                # Ticket breakdowns by milestone
 ```
 

@@ -69,10 +69,10 @@ describe('ChatView', () => {
     expect(lastFrame()!).not.toContain('Error:');
   });
 
-  it('disables input while sending', () => {
+  it('shows sending state while sending', () => {
     mockChat({ sending: true });
     const { lastFrame } = render(<ChatView />);
-    expect(lastFrame()!).toContain('Waiting for response');
+    expect(lastFrame()!).toContain('Sending');
   });
 
   it('renders multiple messages in order', () => {
@@ -111,14 +111,14 @@ describe('ChatView', () => {
     expect(lastFrame()!).toContain('Partial response');
   });
 
-  it('disables input while streaming', () => {
+  it('shows typing state while streaming', () => {
     mockChat({
       isStreaming: true,
       streamingContent: 'Streaming...',
     });
 
     const { lastFrame } = render(<ChatView />);
-    expect(lastFrame()!).toContain('Waiting for response');
+    expect(lastFrame()!).toContain('nexor is typing');
   });
 
   it('does not show streaming message when not streaming', () => {

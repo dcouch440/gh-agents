@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
+import Spinner from 'ink-spinner';
 import { renderMarkdown } from '../utils/markdown.js';
 
 interface StreamingMessageProps {
@@ -19,6 +20,7 @@ export function StreamingMessage({ content, done }: StreamingMessageProps) {
   }, [done]);
 
   const time = new Date().toLocaleTimeString();
+  const isThinking = !content && !done;
 
   return (
     <Box flexDirection="column">
@@ -29,10 +31,16 @@ export function StreamingMessage({ content, done }: StreamingMessageProps) {
         </Text>
         <Text dimColor>{time}</Text>
       </Box>
-      <Text dimColor>
-        {content ? renderMarkdown(content) : ''}
-        {!done && cursorVisible ? '█' : ''}
-      </Text>
+      {isThinking ? (
+        <Text>
+          <Spinner type="dots" /> Thinking…
+        </Text>
+      ) : (
+        <Text>
+          {content ? renderMarkdown(content) : ''}
+          {!done && cursorVisible ? '█' : ''}
+        </Text>
+      )}
     </Box>
   );
 }

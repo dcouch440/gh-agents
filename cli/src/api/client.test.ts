@@ -25,7 +25,7 @@ describe('setBaseUrl', () => {
     vi.stubGlobal('fetch', spy);
     api.health();
     expect(spy).toHaveBeenCalledWith(
-      'http://example.com/health',
+      'http://example.com/api/health',
       expect.anything(),
     );
   });
@@ -122,7 +122,7 @@ describe('api.health', () => {
     const spy = mockFetch(200, body);
     vi.stubGlobal('fetch', spy);
     const result = await api.health();
-    expect(spy).toHaveBeenCalledWith(`${TEST_BASE}/health`, expect.anything());
+    expect(spy).toHaveBeenCalledWith(`${TEST_BASE}/api/health`, expect.anything());
     expect(result).toEqual(body);
   });
 });
@@ -134,7 +134,7 @@ describe('api.auth', () => {
     vi.stubGlobal('fetch', spy);
     const result = await api.auth.login('test@test.com', 'secret');
     expect(spy).toHaveBeenCalledWith(
-      `${TEST_BASE}/auth/login`,
+      `${TEST_BASE}/api/auth/login`,
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ email: 'test@test.com', password: 'secret' }),
@@ -148,7 +148,7 @@ describe('api.auth', () => {
     const spy = mockFetch(200, body);
     vi.stubGlobal('fetch', spy);
     const result = await api.auth.me();
-    expect(spy).toHaveBeenCalledWith(`${TEST_BASE}/auth/me`, expect.anything());
+    expect(spy).toHaveBeenCalledWith(`${TEST_BASE}/api/auth/me`, expect.anything());
     expect(result).toEqual(body);
   });
 });
@@ -184,7 +184,7 @@ describe('api.chat', () => {
     vi.stubGlobal('fetch', spy);
     const result = await api.chat.send('hello');
     expect(spy).toHaveBeenCalledWith(
-      `${TEST_BASE}/chat`,
+      `${TEST_BASE}/api/chat`,
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ message: 'hello' }),
@@ -198,7 +198,7 @@ describe('api.chat', () => {
     vi.stubGlobal('fetch', spy);
     await api.chat.history();
     expect(spy).toHaveBeenCalledWith(
-      `${TEST_BASE}/chat/history?limit=50&offset=0`,
+      `${TEST_BASE}/api/chat/history?limit=50&offset=0`,
       expect.anything(),
     );
   });
@@ -208,7 +208,7 @@ describe('api.chat', () => {
     vi.stubGlobal('fetch', spy);
     await api.chat.history(10, 5);
     expect(spy).toHaveBeenCalledWith(
-      `${TEST_BASE}/chat/history?limit=10&offset=5`,
+      `${TEST_BASE}/api/chat/history?limit=10&offset=5`,
       expect.anything(),
     );
   });
@@ -218,7 +218,7 @@ describe('api.chat', () => {
     vi.stubGlobal('fetch', spy);
     await api.chat.clear();
     expect(spy).toHaveBeenCalledWith(
-      `${TEST_BASE}/chat/history`,
+      `${TEST_BASE}/api/chat/history`,
       expect.objectContaining({ method: 'DELETE' }),
     );
   });

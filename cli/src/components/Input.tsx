@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { Box, Text } from 'ink';
+import Spinner from 'ink-spinner';
 import TextInput from 'ink-text-input';
 
 interface InputProps {
   onSubmit: (value: string) => void;
-  disabled?: boolean;
+  sending?: boolean;
+  isStreaming?: boolean;
 }
 
-export function Input({ onSubmit, disabled }: InputProps) {
+export function Input({ onSubmit, sending, isStreaming }: InputProps) {
   const [value, setValue] = useState('');
 
   const handleSubmit = (text: string) => {
@@ -17,10 +19,22 @@ export function Input({ onSubmit, disabled }: InputProps) {
     setValue('');
   };
 
-  if (disabled) {
+  if (sending) {
     return (
       <Box>
-        <Text dimColor>Waiting for response…</Text>
+        <Text>
+          <Spinner type="dots" /> Sending…
+        </Text>
+      </Box>
+    );
+  }
+
+  if (isStreaming) {
+    return (
+      <Box>
+        <Text>
+          <Spinner type="dots" /> nexor is typing…
+        </Text>
       </Box>
     );
   }
