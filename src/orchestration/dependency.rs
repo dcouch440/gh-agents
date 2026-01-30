@@ -3,11 +3,11 @@
 //! Tracks dependencies between tasks and determines which tasks are blocked.
 //! Used by the scheduler to ensure work is done in the correct order.
 
+use crate::db::pg_repo::PgRepo;
+use crate::db::traits::DependencyRepo;
 use crate::types::{Task, TaskId, TaskStatus};
-use sqlx::PgPool;
 use std::collections::HashSet;
 use thiserror::Error;
-use uuid::Uuid;
 
 /// Errors that can occur during dependency tracking
 #[derive(Error, Debug)]
@@ -23,14 +23,14 @@ pub enum DependencyError {
 }
 
 /// Tracks task dependencies and determines blocked status
-pub struct DependencyTracker {
-    pool: PgPool,
+pub struct DependencyTracker<R: DependencyRepo = PgRepo> {
+    repo: R,
 }
 
-impl DependencyTracker {
+impl<R: DependencyRepo> DependencyTracker<R> {
     /// Create a new DependencyTracker
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(repo: R) -> Self {
+        Self { repo }
     }
 
     /// Check if a task is blocked by incomplete dependencies
@@ -41,7 +41,7 @@ impl DependencyTracker {
 
         // Check status of all dependencies
         for dep_id in &task.depends_on {
-            let status = self.get_task_status(dep_id).await?;
+            let status = self.repo.get_task_status(dep_id.clone()).await?;
 
             match status {
                 Some(TaskStatus::Completed) => {
@@ -74,14 +74,14 @@ impl DependencyTracker {
 
     /// Check if a task is blocked, loading dependencies from database
     pub async fn is_blocked_by_id(&self, task_id: &TaskId) -> Result<bool, DependencyError> {
-        let deps = self.get_task_dependencies(task_id).await?;
+        let deps = self.repo.get_task_dependencies(task_id.clone()).await?;
 
         if deps.is_empty() {
             return Ok(false);
         }
 
         for dep_id in deps {
-            let status = self.get_task_status(&dep_id).await?;
+            let status = self.repo.get_task_status(dep_id.clone()).await?;
 
             match status {
                 Some(TaskStatus::Completed) => continue,
@@ -99,34 +99,9 @@ impl DependencyTracker {
         Ok(false)
     }
 
-    /// Get the current status of a task by ID
-    async fn get_task_status(&self, id: &TaskId) -> Result<Option<TaskStatus>, DependencyError> {
-        let row: Option<(String,)> = sqlx::query_as("SELECT status FROM tasks WHERE id = $1")
-            .bind(id.0)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(|e| DependencyError::DatabaseError(e.to_string()))?;
-
-        Ok(row.map(|r| match r.0.as_str() {
-            "pending" => TaskStatus::Pending,
-            "inprogress" | "in_progress" => TaskStatus::InProgress,
-            "review" => TaskStatus::Review,
-            "completed" => TaskStatus::Completed,
-            "failed" => TaskStatus::Failed,
-            _ => TaskStatus::Pending,
-        }))
-    }
-
     /// Get all tasks that depend on the given task
     pub async fn get_blocked_by(&self, task_id: &TaskId) -> Result<Vec<TaskId>, DependencyError> {
-        let rows: Vec<(Uuid,)> =
-            sqlx::query_as("SELECT task_id FROM task_dependencies WHERE depends_on_id = $1")
-                .bind(task_id.0)
-                .fetch_all(&self.pool)
-                .await
-                .map_err(|e| DependencyError::DatabaseError(e.to_string()))?;
-
-        Ok(rows.into_iter().map(|r| TaskId(r.0)).collect())
+        self.repo.get_blocked_by(task_id.clone()).await
     }
 
     /// Get the dependencies of a task from the database
@@ -134,19 +109,12 @@ impl DependencyTracker {
         &self,
         task_id: &TaskId,
     ) -> Result<Vec<TaskId>, DependencyError> {
-        let rows: Vec<(Uuid,)> =
-            sqlx::query_as("SELECT depends_on_id FROM task_dependencies WHERE task_id = $1")
-                .bind(task_id.0)
-                .fetch_all(&self.pool)
-                .await
-                .map_err(|e| DependencyError::DatabaseError(e.to_string()))?;
-
-        Ok(rows.into_iter().map(|r| TaskId(r.0)).collect())
+        self.repo.get_task_dependencies(task_id.clone()).await
     }
 
     /// Load dependencies for a task from the database into the task struct
     pub async fn load_dependencies(&self, task: &mut Task) -> Result<(), DependencyError> {
-        task.depends_on = self.get_task_dependencies(&task.id).await?;
+        task.depends_on = self.repo.get_task_dependencies(task.id.clone()).await?;
         Ok(())
     }
 
@@ -171,7 +139,7 @@ impl DependencyTracker {
             visited.insert(current.clone());
 
             // Get dependencies of current task
-            let deps = self.get_task_dependencies(&current).await?;
+            let deps = self.repo.get_task_dependencies(current).await?;
             stack.extend(deps);
         }
 
@@ -190,19 +158,9 @@ impl DependencyTracker {
             }
 
             let now = chrono::Utc::now();
-            sqlx::query(
-                r#"
-                INSERT INTO task_dependencies (task_id, depends_on_id, created_at)
-                VALUES ($1, $2, $3)
-                ON CONFLICT DO NOTHING
-                "#,
-            )
-            .bind(task.id.0)
-            .bind(dep_id.0)
-            .bind(now)
-            .execute(&self.pool)
-            .await
-            .map_err(|e| DependencyError::DatabaseError(e.to_string()))?;
+            self.repo
+                .save_dependency(task.id.clone(), dep_id.clone(), now)
+                .await?;
         }
 
         Ok(())
@@ -223,21 +181,9 @@ impl DependencyTracker {
         }
 
         let now = chrono::Utc::now();
-        sqlx::query(
-            r#"
-            INSERT INTO task_dependencies (task_id, depends_on_id, created_at)
-            VALUES ($1, $2, $3)
-            ON CONFLICT DO NOTHING
-            "#,
-        )
-        .bind(task_id.0)
-        .bind(depends_on.0)
-        .bind(now)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| DependencyError::DatabaseError(e.to_string()))?;
-
-        Ok(())
+        self.repo
+            .save_dependency(task_id.clone(), depends_on.clone(), now)
+            .await
     }
 
     /// Remove a dependency
@@ -246,44 +192,21 @@ impl DependencyTracker {
         task_id: &TaskId,
         depends_on: &TaskId,
     ) -> Result<(), DependencyError> {
-        sqlx::query("DELETE FROM task_dependencies WHERE task_id = $1 AND depends_on_id = $2")
-            .bind(task_id.0)
-            .bind(depends_on.0)
-            .execute(&self.pool)
+        self.repo
+            .remove_dependency(task_id.clone(), depends_on.clone())
             .await
-            .map_err(|e| DependencyError::DatabaseError(e.to_string()))?;
-
-        Ok(())
     }
 
     /// Get all tasks that are ready to execute (no blocking dependencies)
     pub async fn get_ready_tasks(&self) -> Result<Vec<TaskId>, DependencyError> {
-        // Get all pending tasks that either have no dependencies
-        // or all their dependencies are completed
-        let rows: Vec<(Uuid,)> = sqlx::query_as(
-            r#"
-            SELECT t.id FROM tasks t
-            WHERE t.status = 'pending'
-            AND NOT EXISTS (
-                SELECT 1 FROM task_dependencies td
-                JOIN tasks dep ON td.depends_on_id = dep.id
-                WHERE td.task_id = t.id
-                AND dep.status != 'completed'
-            )
-            "#,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| DependencyError::DatabaseError(e.to_string()))?;
-
-        Ok(rows.into_iter().map(|r| TaskId(r.0)).collect())
+        self.repo.get_ready_task_ids().await
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::test_utils::TestDb;
+    use crate::db::traits::MockDependencyRepo;
     use crate::types::{AgentTier, Priority};
     use chrono::Utc;
 
@@ -307,228 +230,279 @@ mod tests {
 
     #[tokio::test]
     async fn task_without_dependencies_is_not_blocked() {
-        let db = TestDb::new().await;
-        let tracker = DependencyTracker::new(db.pool.clone());
+        let mock = MockDependencyRepo::new();
+        let tracker = DependencyTracker::new(mock);
 
         let task = make_task("Task A");
         assert!(!tracker.is_blocked(&task).await.unwrap());
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn task_with_incomplete_dependency_is_blocked() {
-        let db = TestDb::new().await;
-        let tracker = DependencyTracker::new(db.pool.clone());
+        let mut mock = MockDependencyRepo::new();
 
-        // Create dependency task
         let dep_task = make_task("Dependency");
-        crate::db::insert_task(&db.pool, &dep_task).await.unwrap();
+        let dep_id = dep_task.id.clone();
 
-        // Create task that depends on it
+        mock.expect_get_task_status()
+            .withf(move |id| *id == dep_id)
+            .returning(|_| Ok(Some(TaskStatus::Pending)));
+
+        let tracker = DependencyTracker::new(mock);
+
         let mut task = make_task("Dependent Task");
         task.depends_on = vec![dep_task.id.clone()];
 
         assert!(tracker.is_blocked(&task).await.unwrap());
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn task_with_completed_dependency_is_not_blocked() {
-        let db = TestDb::new().await;
-        let tracker = DependencyTracker::new(db.pool.clone());
+        let mut mock = MockDependencyRepo::new();
 
-        // Create and complete dependency task
-        let mut dep_task = make_task("Dependency");
-        dep_task.status = TaskStatus::Completed;
-        crate::db::insert_task(&db.pool, &dep_task).await.unwrap();
+        let dep_task = make_task("Dependency");
+        let dep_id = dep_task.id.clone();
 
-        // Create task that depends on it
+        mock.expect_get_task_status()
+            .withf(move |id| *id == dep_id)
+            .returning(|_| Ok(Some(TaskStatus::Completed)));
+
+        let tracker = DependencyTracker::new(mock);
+
         let mut task = make_task("Dependent Task");
         task.depends_on = vec![dep_task.id.clone()];
 
         assert!(!tracker.is_blocked(&task).await.unwrap());
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn save_and_load_dependencies() {
-        let db = TestDb::new().await;
-        let tracker = DependencyTracker::new(db.pool.clone());
+        let mut mock = MockDependencyRepo::new();
 
-        // Create two tasks
         let task_a = make_task("Task A");
         let task_b = make_task("Task B");
-        crate::db::insert_task(&db.pool, &task_a).await.unwrap();
-        crate::db::insert_task(&db.pool, &task_b).await.unwrap();
+        let task_a_id = task_a.id.clone();
+        let task_b_id = task_b.id.clone();
+        let task_a_id_ret = task_a.id.clone();
+
+        // save_dependencies calls would_create_cycle which calls get_task_dependencies
+        // then calls save_dependency
+        mock.expect_get_task_dependencies().returning(move |id| {
+            if id == task_b_id {
+                Ok(vec![task_a_id_ret.clone()])
+            } else {
+                Ok(vec![])
+            }
+        });
+
+        mock.expect_save_dependency().returning(|_, _, _| Ok(()));
+
+        let tracker = DependencyTracker::new(mock);
 
         // Make B depend on A
         let mut task_b_with_dep = task_b.clone();
-        task_b_with_dep.depends_on = vec![task_a.id.clone()];
+        task_b_with_dep.depends_on = vec![task_a_id.clone()];
         tracker.save_dependencies(&task_b_with_dep).await.unwrap();
 
         // Load dependencies
         let deps = tracker.get_task_dependencies(&task_b.id).await.unwrap();
         assert_eq!(deps.len(), 1);
         assert_eq!(deps[0], task_a.id);
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn circular_dependency_detected() {
-        let db = TestDb::new().await;
-        let tracker = DependencyTracker::new(db.pool.clone());
+        let mut mock = MockDependencyRepo::new();
 
-        // Create tasks A -> B
         let task_a = make_task("Task A");
         let task_b = make_task("Task B");
-        crate::db::insert_task(&db.pool, &task_a).await.unwrap();
-        crate::db::insert_task(&db.pool, &task_b).await.unwrap();
+        let task_a_id = task_a.id.clone();
+        let task_b_id = task_b.id.clone();
 
-        // Make B depend on A
+        // First add_dependency(B, A): would_create_cycle checks A's deps -> empty, no cycle, saves
+        // Second add_dependency(A, B): would_create_cycle checks B's deps -> [A], then A's deps -> empty
+        //   but B reaches A which == task_id (A), so cycle detected
+        let a_id_for_closure = task_a_id.clone();
+        let b_id_for_closure = task_b_id.clone();
+        mock.expect_get_task_dependencies().returning(move |id| {
+            if id == b_id_for_closure {
+                Ok(vec![a_id_for_closure.clone()])
+            } else {
+                Ok(vec![])
+            }
+        });
+
+        mock.expect_save_dependency().returning(|_, _, _| Ok(()));
+
+        let tracker = DependencyTracker::new(mock);
+
+        // B depends on A - should succeed
         tracker
             .add_dependency(&task_b.id, &task_a.id)
             .await
             .unwrap();
 
-        // Try to make A depend on B - should detect cycle
+        // A depends on B - should detect cycle
         let result = tracker.add_dependency(&task_a.id, &task_b.id).await;
         assert!(matches!(
             result,
             Err(DependencyError::CircularDependency(_))
         ));
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn get_blocked_by_finds_dependents() {
-        let db = TestDb::new().await;
-        let tracker = DependencyTracker::new(db.pool.clone());
+        let mut mock = MockDependencyRepo::new();
 
-        // Create tasks
         let task_a = make_task("Task A");
         let task_b = make_task("Task B");
         let task_c = make_task("Task C");
-        crate::db::insert_task(&db.pool, &task_a).await.unwrap();
-        crate::db::insert_task(&db.pool, &task_b).await.unwrap();
-        crate::db::insert_task(&db.pool, &task_c).await.unwrap();
+        let b_id = task_b.id.clone();
+        let c_id = task_c.id.clone();
 
-        // B and C depend on A
-        tracker
-            .add_dependency(&task_b.id, &task_a.id)
-            .await
-            .unwrap();
-        tracker
-            .add_dependency(&task_c.id, &task_a.id)
-            .await
-            .unwrap();
+        mock.expect_get_blocked_by()
+            .returning(move |_| Ok(vec![b_id.clone(), c_id.clone()]));
 
-        // Get tasks blocked by A
+        let tracker = DependencyTracker::new(mock);
+
         let blocked = tracker.get_blocked_by(&task_a.id).await.unwrap();
         assert_eq!(blocked.len(), 2);
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn dependency_chain_works() {
-        let db = TestDb::new().await;
-        let tracker = DependencyTracker::new(db.pool.clone());
+        let mut mock = MockDependencyRepo::new();
 
-        // Create chain: A -> B -> C
         let task_a = make_task("Task A");
         let task_b = make_task("Task B");
         let task_c = make_task("Task C");
-        crate::db::insert_task(&db.pool, &task_a).await.unwrap();
-        crate::db::insert_task(&db.pool, &task_b).await.unwrap();
-        crate::db::insert_task(&db.pool, &task_c).await.unwrap();
+        let a_id = task_a.id.clone();
+        let b_id = task_b.id.clone();
+        let c_id = task_c.id.clone();
 
-        // B depends on A, C depends on B
-        tracker
-            .add_dependency(&task_b.id, &task_a.id)
-            .await
-            .unwrap();
-        tracker
-            .add_dependency(&task_c.id, &task_b.id)
-            .await
-            .unwrap();
+        // Track "completed" set via shared state
+        // For simplicity, we test just the is_blocked_by_id logic with specific expectations
+        let a_id2 = a_id.clone();
+        let b_id2 = b_id.clone();
+        let c_id2 = c_id.clone();
+        let a_id3 = a_id.clone();
+        let b_id3 = b_id.clone();
 
-        // A is not blocked
+        mock.expect_get_task_dependencies().returning(move |id| {
+            if id == b_id2 {
+                Ok(vec![a_id2.clone()])
+            } else if id == c_id2 {
+                Ok(vec![b_id3.clone()])
+            } else {
+                Ok(vec![])
+            }
+        });
+
+        // Use a counter to simulate status changes over multiple calls
+        use std::sync::atomic::{AtomicU32, Ordering};
+        use std::sync::Arc;
+        let call_count = Arc::new(AtomicU32::new(0));
+        let a_id4 = a_id3.clone();
+        let b_id4 = b_id.clone();
+
+        mock.expect_get_task_status().returning(move |id| {
+            let n = call_count.fetch_add(1, Ordering::SeqCst);
+            // Calls 0-2: A and B are Pending
+            // Calls 3: A is Completed (after "completing" A)
+            // Call 4: B is still Pending
+            // Call 5: B is Completed
+            if id == a_id4 {
+                if n >= 2 {
+                    Ok(Some(TaskStatus::Completed))
+                } else {
+                    Ok(Some(TaskStatus::Pending))
+                }
+            } else if id == b_id4 {
+                if n >= 4 {
+                    Ok(Some(TaskStatus::Completed))
+                } else {
+                    Ok(Some(TaskStatus::Pending))
+                }
+            } else {
+                Ok(None)
+            }
+        });
+
+        let tracker = DependencyTracker::new(mock);
+
+        // A has no deps -> not blocked (no get_task_status call)
         assert!(!tracker.is_blocked_by_id(&task_a.id).await.unwrap());
 
-        // B is blocked (A not complete)
+        // B depends on A (Pending) -> blocked (call 0)
         assert!(tracker.is_blocked_by_id(&task_b.id).await.unwrap());
 
-        // C is blocked (B not complete)
+        // C depends on B (Pending) -> blocked (call 1)
         assert!(tracker.is_blocked_by_id(&task_c.id).await.unwrap());
 
-        // Complete A
-        crate::db::update_task_status(&db.pool, &task_a.id, TaskStatus::Completed)
-            .await
-            .unwrap();
-
-        // B is now not blocked
+        // B depends on A (now Completed at call >= 2) -> not blocked (call 2)
         assert!(!tracker.is_blocked_by_id(&task_b.id).await.unwrap());
 
-        // C is still blocked (B not complete)
+        // C depends on B (still Pending) -> blocked (call 3)
         assert!(tracker.is_blocked_by_id(&task_c.id).await.unwrap());
 
-        // Complete B
-        crate::db::update_task_status(&db.pool, &task_b.id, TaskStatus::Completed)
-            .await
-            .unwrap();
-
-        // C is now not blocked
+        // C depends on B (now Completed at call >= 4) -> not blocked
         assert!(!tracker.is_blocked_by_id(&task_c.id).await.unwrap());
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn get_ready_tasks_returns_unblocked() {
-        let db = TestDb::new().await;
-        let tracker = DependencyTracker::new(db.pool.clone());
+        let mut mock = MockDependencyRepo::new();
 
-        // Create chain: A -> B -> C
         let task_a = make_task("Task A");
-        let task_b = make_task("Task B");
-        let task_c = make_task("Task C");
-        crate::db::insert_task(&db.pool, &task_a).await.unwrap();
-        crate::db::insert_task(&db.pool, &task_b).await.unwrap();
-        crate::db::insert_task(&db.pool, &task_c).await.unwrap();
+        let a_id = task_a.id.clone();
 
-        tracker
-            .add_dependency(&task_b.id, &task_a.id)
-            .await
-            .unwrap();
-        tracker
-            .add_dependency(&task_c.id, &task_b.id)
-            .await
-            .unwrap();
+        mock.expect_get_ready_task_ids()
+            .returning(move || Ok(vec![a_id.clone()]));
 
-        // Only A should be ready
+        let tracker = DependencyTracker::new(mock);
+
         let ready = tracker.get_ready_tasks().await.unwrap();
         assert_eq!(ready.len(), 1);
         assert_eq!(ready[0], task_a.id);
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn remove_dependency_works() {
-        let db = TestDb::new().await;
-        let tracker = DependencyTracker::new(db.pool.clone());
+        let mut mock = MockDependencyRepo::new();
 
         let task_a = make_task("Task A");
         let task_b = make_task("Task B");
-        crate::db::insert_task(&db.pool, &task_a).await.unwrap();
-        crate::db::insert_task(&db.pool, &task_b).await.unwrap();
+        let a_id = task_a.id.clone();
 
-        // Add then remove dependency
+        use std::sync::atomic::{AtomicU32, Ordering};
+        use std::sync::Arc;
+        let dep_call_count = Arc::new(AtomicU32::new(0));
+        let dep_call_count2 = dep_call_count.clone();
+
+        let a_id2 = a_id.clone();
+        mock.expect_get_task_dependencies().returning(move |id| {
+            let n = dep_call_count2.fetch_add(1, Ordering::SeqCst);
+            // Call 0: would_create_cycle checks deps of A -> empty
+            // Call 1: get_task_dependencies(B) after add -> [A]
+            // Call 2: get_task_dependencies(B) after remove -> empty
+            if n == 0 {
+                Ok(vec![])
+            } else if n == 1 {
+                Ok(vec![a_id2.clone()])
+            } else {
+                Ok(vec![])
+            }
+        });
+
+        // For add_dependency: would_create_cycle needs get_task_dependencies (already set up)
+        // and save_dependency
+        mock.expect_save_dependency().returning(|_, _, _| Ok(()));
+
+        mock.expect_remove_dependency().returning(|_, _| Ok(()));
+
+        let tracker = DependencyTracker::new(mock);
+
+        // Add dependency
         tracker
             .add_dependency(&task_b.id, &task_a.id)
             .await
@@ -536,13 +510,12 @@ mod tests {
         let deps = tracker.get_task_dependencies(&task_b.id).await.unwrap();
         assert_eq!(deps.len(), 1);
 
+        // Remove dependency
         tracker
             .remove_dependency(&task_b.id, &task_a.id)
             .await
             .unwrap();
         let deps = tracker.get_task_dependencies(&task_b.id).await.unwrap();
         assert_eq!(deps.len(), 0);
-
-        db.cleanup().await;
     }
 }

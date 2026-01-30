@@ -193,7 +193,9 @@ mod tests {
         prd2.status = PRDStatus::Approved;
         save_prd(&db.pool, &prd2).await.unwrap();
 
-        let drafts = list_prds_by_status(&db.pool, PRDStatus::Draft).await.unwrap();
+        let drafts = list_prds_by_status(&db.pool, PRDStatus::Draft)
+            .await
+            .unwrap();
         assert_eq!(drafts.len(), 1);
         assert_eq!(drafts[0].title, "Draft PRD");
 

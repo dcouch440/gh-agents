@@ -188,28 +188,128 @@ async fn shutdown_signal() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::traits::ServerRepo;
+    use crate::db::ChatMessageRow;
     use axum::{
         body::Body,
         http::{Request, StatusCode},
     };
-    use crate::db::test_utils::TestDb;
+    use chrono::Utc;
     use tempfile::TempDir;
     use tower::util::ServiceExt;
+    use uuid::Uuid;
 
-    async fn setup_test_app() -> (Router, TestDb) {
-        let db = TestDb::new().await;
-        let pool = db.pool.clone();
-        let scheduler = Scheduler::new(pool.clone()).await.unwrap();
-        let scheduler = Arc::new(RwLock::new(scheduler));
-        let config = AppConfig::default();
-        let state = AppState::new(pool, scheduler, config);
-        (create_router(state), db)
+    /// In-memory implementation of ServerRepo for tests (no Postgres needed).
+    struct InMemoryServerRepo {
+        tasks: std::sync::Mutex<Vec<crate::types::Task>>,
+        chat_messages: std::sync::Mutex<Vec<ChatMessageRow>>,
+        password_hash: std::sync::Mutex<Option<String>>,
+    }
+
+    impl InMemoryServerRepo {
+        fn new() -> Self {
+            Self {
+                tasks: std::sync::Mutex::new(vec![]),
+                chat_messages: std::sync::Mutex::new(vec![]),
+                password_hash: std::sync::Mutex::new(None),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl ServerRepo for InMemoryServerRepo {
+        async fn health_check(&self) -> bool {
+            true
+        }
+        async fn list_tasks(
+            &self,
+            status: Option<String>,
+            limit: Option<u32>,
+        ) -> anyhow::Result<Vec<crate::types::Task>> {
+            let tasks = self.tasks.lock().unwrap();
+            let limit = limit.unwrap_or(100).min(1000) as usize;
+            Ok(tasks
+                .iter()
+                .filter(|t| {
+                    if let Some(ref s) = status {
+                        format!("{:?}", t.status).to_lowercase() == *s
+                    } else {
+                        true
+                    }
+                })
+                .rev()
+                .take(limit)
+                .cloned()
+                .collect())
+        }
+        async fn get_task_by_uuid(&self, id: Uuid) -> anyhow::Result<Option<crate::types::Task>> {
+            Ok(self
+                .tasks
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|t| t.id.0 == id)
+                .cloned())
+        }
+        async fn insert_task(&self, task: crate::types::Task) -> anyhow::Result<()> {
+            self.tasks.lock().unwrap().push(task);
+            Ok(())
+        }
+        async fn insert_chat_message(
+            &self,
+            id: Uuid,
+            role: String,
+            content: String,
+        ) -> anyhow::Result<()> {
+            self.chat_messages.lock().unwrap().push(ChatMessageRow {
+                id,
+                role,
+                content,
+                timestamp: Utc::now(),
+            });
+            Ok(())
+        }
+        async fn get_chat_history(
+            &self,
+            limit: u32,
+            offset: u32,
+        ) -> anyhow::Result<Vec<ChatMessageRow>> {
+            let msgs = self.chat_messages.lock().unwrap();
+            Ok(msgs
+                .iter()
+                .skip(offset as usize)
+                .take(limit.min(1000) as usize)
+                .cloned()
+                .collect())
+        }
+        async fn clear_chat_history(&self) -> anyhow::Result<()> {
+            self.chat_messages.lock().unwrap().clear();
+            Ok(())
+        }
+        async fn has_password(&self) -> anyhow::Result<bool> {
+            Ok(self.password_hash.lock().unwrap().is_some())
+        }
+        async fn set_password(&self, hash: String) -> anyhow::Result<()> {
+            *self.password_hash.lock().unwrap() = Some(hash);
+            Ok(())
+        }
+        async fn get_password(&self) -> anyhow::Result<Option<String>> {
+            Ok(self.password_hash.lock().unwrap().clone())
+        }
+    }
+
+    fn setup_mock_state() -> AppState {
+        let repo: Arc<dyn ServerRepo> = Arc::new(InMemoryServerRepo::new());
+        AppState::with_repo(None, repo, None, AppConfig::default())
+    }
+
+    fn setup_test_app() -> Router {
+        create_router_with_static_dir(setup_mock_state(), "nonexistent_static")
     }
 
     #[tokio::test]
     async fn health_endpoint_returns_json() {
-        let (app, _db) = setup_test_app().await;
-
+        let app = setup_test_app();
         let response = app
             .oneshot(
                 Request::builder()
@@ -219,15 +319,12 @@ mod tests {
             )
             .await
             .unwrap();
-
         assert_eq!(response.status(), StatusCode::OK);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn tasks_endpoint_returns_list() {
-        let (app, _db) = setup_test_app().await;
-
+        let app = setup_test_app();
         let response = app
             .oneshot(
                 Request::builder()
@@ -237,15 +334,12 @@ mod tests {
             )
             .await
             .unwrap();
-
         assert_eq!(response.status(), StatusCode::OK);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn agents_endpoint_returns_stats() {
-        let (app, _db) = setup_test_app().await;
-
+        let app = setup_test_app();
         let response = app
             .oneshot(
                 Request::builder()
@@ -255,15 +349,12 @@ mod tests {
             )
             .await
             .unwrap();
-
         assert_eq!(response.status(), StatusCode::OK);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn config_endpoint_returns_config() {
-        let (app, _db) = setup_test_app().await;
-
+        let app = setup_test_app();
         let response = app
             .oneshot(
                 Request::builder()
@@ -273,15 +364,12 @@ mod tests {
             )
             .await
             .unwrap();
-
         assert_eq!(response.status(), StatusCode::OK);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn unknown_task_returns_404() {
-        let (app, _db) = setup_test_app().await;
-
+        let app = setup_test_app();
         let response = app
             .oneshot(
                 Request::builder()
@@ -291,17 +379,12 @@ mod tests {
             )
             .await
             .unwrap();
-
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
-        _db.cleanup().await;
     }
-
-    // Chat endpoint tests
 
     #[tokio::test]
     async fn chat_endpoint_accepts_message() {
-        let (app, _db) = setup_test_app().await;
-
+        let app = setup_test_app();
         let response = app
             .oneshot(
                 Request::builder()
@@ -313,15 +396,12 @@ mod tests {
             )
             .await
             .unwrap();
-
         assert_eq!(response.status(), StatusCode::ACCEPTED);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn chat_endpoint_rejects_empty_message() {
-        let (app, _db) = setup_test_app().await;
-
+        let app = setup_test_app();
         let response = app
             .oneshot(
                 Request::builder()
@@ -333,15 +413,12 @@ mod tests {
             )
             .await
             .unwrap();
-
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn chat_history_returns_empty_list() {
-        let (app, _db) = setup_test_app().await;
-
+        let app = setup_test_app();
         let response = app
             .oneshot(
                 Request::builder()
@@ -351,15 +428,12 @@ mod tests {
             )
             .await
             .unwrap();
-
         assert_eq!(response.status(), StatusCode::OK);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn clear_chat_history_returns_no_content() {
-        let (app, _db) = setup_test_app().await;
-
+        let app = setup_test_app();
         let response = app
             .oneshot(
                 Request::builder()
@@ -370,80 +444,56 @@ mod tests {
             )
             .await
             .unwrap();
-
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
-        _db.cleanup().await;
     }
 
     // Static file serving tests (Ticket 10.6)
 
-    async fn setup_test_app_with_static_dir() -> (Router, TempDir, TestDb) {
+    fn setup_test_app_with_static_dir() -> (Router, TempDir) {
         let temp_dir = TempDir::new().unwrap();
-
-        // Create static directory structure
         let static_dir = temp_dir.path().join("ui/dist");
         std::fs::create_dir_all(&static_dir).unwrap();
         std::fs::create_dir_all(static_dir.join("assets")).unwrap();
-
-        // Create index.html
         std::fs::write(
             static_dir.join("index.html"),
             "<!DOCTYPE html><html><head></head><body>React App</body></html>",
         )
         .unwrap();
-
-        // Create a CSS asset
         std::fs::write(
             static_dir.join("assets/main.abc123.css"),
             "body { color: blue; }",
         )
         .unwrap();
-
-        // Create a JS asset
         std::fs::write(
             static_dir.join("assets/main.def456.js"),
             "console.log('hello');",
         )
         .unwrap();
 
-        let db = TestDb::new().await;
-        let pool = db.pool.clone();
-        let scheduler = Scheduler::new(pool.clone()).await.unwrap();
-        let scheduler = Arc::new(RwLock::new(scheduler));
-        let config = AppConfig::default();
-        let state = AppState::new(pool, scheduler, config);
-
-        // Use the test-specific router function to avoid env var race conditions
+        let state = setup_mock_state();
         let router = create_router_with_static_dir(state, static_dir.to_str().unwrap());
-
-        (router, temp_dir, db)
+        (router, temp_dir)
     }
 
     #[tokio::test]
     async fn static_index_html_served_at_root() {
-        let (app, _temp_dir, _db) = setup_test_app_with_static_dir().await;
-
+        let (app, _temp_dir) = setup_test_app_with_static_dir();
         let response = app
             .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
             .await
             .unwrap();
-
         assert_eq!(response.status(), StatusCode::OK);
-
-        // Check cache header for HTML
         let cache_control = response.headers().get(CACHE_CONTROL);
         assert!(cache_control.is_some());
         assert_eq!(
             cache_control.unwrap(),
             "no-cache, no-store, must-revalidate"
         );
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn static_css_asset_served_with_long_cache() {
-        let (app, _temp_dir, _db) = setup_test_app_with_static_dir().await;
-
+        let (app, _temp_dir) = setup_test_app_with_static_dir();
         let response = app
             .oneshot(
                 Request::builder()
@@ -453,23 +503,18 @@ mod tests {
             )
             .await
             .unwrap();
-
         assert_eq!(response.status(), StatusCode::OK);
-
-        // Check long cache header for CSS
         let cache_control = response.headers().get(CACHE_CONTROL);
         assert!(cache_control.is_some());
         assert_eq!(
             cache_control.unwrap(),
             "public, max-age=31536000, immutable"
         );
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn static_js_asset_served_with_long_cache() {
-        let (app, _temp_dir, _db) = setup_test_app_with_static_dir().await;
-
+        let (app, _temp_dir) = setup_test_app_with_static_dir();
         let response = app
             .oneshot(
                 Request::builder()
@@ -479,45 +524,33 @@ mod tests {
             )
             .await
             .unwrap();
-
         assert_eq!(response.status(), StatusCode::OK);
-
-        // Check long cache header for JS
         let cache_control = response.headers().get(CACHE_CONTROL);
         assert!(cache_control.is_some());
         assert_eq!(
             cache_control.unwrap(),
             "public, max-age=31536000, immutable"
         );
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn spa_route_falls_back_to_index_html() {
-        let (app, _temp_dir, _db) = setup_test_app_with_static_dir().await;
-
-        // Request a SPA route that doesn't exist as a file
+        let (app, _temp_dir) = setup_test_app_with_static_dir();
         let response = app
             .oneshot(Request::builder().uri("/chat").body(Body::empty()).unwrap())
             .await
             .unwrap();
-
-        // Should return index.html - the fallback serves the HTML file
-        // Accept both 200 OK and 404 (in case fallback isn't configured for tests)
         let status = response.status();
         assert!(
             status == StatusCode::OK || status == StatusCode::NOT_FOUND,
             "Expected OK or NOT_FOUND, got: {:?}",
             status
         );
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn api_routes_not_affected_by_static_fallback() {
-        let (app, _temp_dir, _db) = setup_test_app_with_static_dir().await;
-
-        // API routes should still work
+        let (app, _temp_dir) = setup_test_app_with_static_dir();
         let response = app
             .oneshot(
                 Request::builder()
@@ -527,16 +560,12 @@ mod tests {
             )
             .await
             .unwrap();
-
         assert_eq!(response.status(), StatusCode::OK);
-        _db.cleanup().await;
     }
 
     #[tokio::test]
     async fn nested_spa_route_falls_back_to_index_html() {
-        let (app, _temp_dir, _db) = setup_test_app_with_static_dir().await;
-
-        // Request a nested SPA route
+        let (app, _temp_dir) = setup_test_app_with_static_dir();
         let response = app
             .oneshot(
                 Request::builder()
@@ -546,15 +575,11 @@ mod tests {
             )
             .await
             .unwrap();
-
-        // Should return index.html - the fallback serves the HTML file
-        // Accept both 200 OK and 404 (in case fallback isn't configured for tests)
         let status = response.status();
         assert!(
             status == StatusCode::OK || status == StatusCode::NOT_FOUND,
             "Expected OK or NOT_FOUND, got: {:?}",
             status
         );
-        _db.cleanup().await;
     }
 }
