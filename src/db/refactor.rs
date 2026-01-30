@@ -386,6 +386,7 @@ mod tests {
     use crate::db::test_utils::TestDb;
 
     #[tokio::test]
+    #[ignore = "requires running Postgres"]
     async fn production_mode_default_is_running() {
         let db = TestDb::new().await;
 
@@ -396,6 +397,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running Postgres"]
     async fn can_set_and_get_production_mode() {
         let db = TestDb::new().await;
 
@@ -415,6 +417,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running Postgres"]
     async fn can_insert_and_get_refactor_session() {
         let db = TestDb::new().await;
 
@@ -431,6 +434,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running Postgres"]
     async fn can_get_active_refactor_session() {
         let db = TestDb::new().await;
 
@@ -451,6 +455,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running Postgres"]
     async fn can_update_refactor_session() {
         let db = TestDb::new().await;
 
@@ -472,6 +477,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running Postgres"]
     async fn can_insert_and_get_refactor_change() {
         let db = TestDb::new().await;
 
@@ -497,6 +503,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running Postgres"]
     async fn can_list_changes_for_session() {
         let db = TestDb::new().await;
 
@@ -529,6 +536,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running Postgres"]
     async fn can_update_change_status() {
         let db = TestDb::new().await;
 
@@ -557,6 +565,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running Postgres"]
     async fn can_list_changes_by_status() {
         let db = TestDb::new().await;
 
@@ -604,6 +613,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running Postgres"]
     async fn session_includes_changes_when_fetched() {
         let db = TestDb::new().await;
 
@@ -630,6 +640,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running Postgres"]
     async fn milestone_limit_default_is_none() {
         let db = TestDb::new().await;
 
@@ -640,6 +651,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running Postgres"]
     async fn can_set_and_get_milestone_limit() {
         let db = TestDb::new().await;
 
@@ -655,6 +667,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running Postgres"]
     async fn can_clear_milestone_limit() {
         let db = TestDb::new().await;
 
@@ -668,6 +681,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running Postgres"]
     async fn milestone_limit_validates_range() {
         let db = TestDb::new().await;
 

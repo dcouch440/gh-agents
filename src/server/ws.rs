@@ -7,7 +7,7 @@ use std::time::Duration;
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        State,
+        Query, State,
     },
     response::Response,
 };
@@ -19,6 +19,7 @@ use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use super::state::AppState;
+use crate::types::UserId;
 
 /// Ping interval for keeping connection alive (30 seconds)
 const PING_INTERVAL: Duration = Duration::from_secs(30);
@@ -69,6 +70,8 @@ pub struct FeedUpdate {
     pub content: String,
     pub item_type: String,
     pub timestamp: chrono::DateTime<chrono::Utc>,
+    #[serde(default)]
+    pub user_id: Option<Uuid>,
 }
 
 /// Task update data broadcast to subscribers
@@ -78,6 +81,8 @@ pub struct TaskUpdate {
     pub status: String,
     pub progress: Option<f32>,
     pub assigned_agent: Option<String>,
+    #[serde(default)]
+    pub user_id: Option<Uuid>,
 }
 
 /// Agent update data broadcast to subscribers
@@ -86,20 +91,39 @@ pub struct AgentUpdate {
     pub id: String,
     pub status: String,
     pub current_task: Option<Uuid>,
+    #[serde(default)]
+    pub user_id: Option<Uuid>,
 }
 
 /// Shared subscriptions state for a client
 type Subscriptions = Arc<Mutex<HashSet<String>>>;
 
+/// Query parameters for WebSocket connection
+#[derive(Debug, Deserialize)]
+pub struct WsQuery {
+    pub token: Option<String>,
+}
+
 /// WebSocket upgrade handler
 ///
 /// Upgrades an HTTP connection to a WebSocket connection for real-time updates.
-pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> Response {
-    ws.on_upgrade(|socket| handle_socket(socket, state))
+/// Optionally authenticates via a JWT token in query params.
+pub async fn ws_handler(
+    ws: WebSocketUpgrade,
+    State(state): State<AppState>,
+    Query(query): Query<WsQuery>,
+) -> Response {
+    let user_id = query.token.and_then(|token| {
+        super::auth::verify_token(&token, &state.jwt_secret).ok()
+    }).and_then(|claims| {
+        uuid::Uuid::parse_str(&claims.sub).ok()
+    }).map(UserId);
+
+    ws.on_upgrade(move |socket| handle_socket(socket, state, user_id))
 }
 
 /// Handle a WebSocket connection
-async fn handle_socket(socket: WebSocket, state: AppState) {
+async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserId>) {
     let (mut sender, mut receiver) = socket.split();
     let subscriptions: Subscriptions = Arc::new(Mutex::new(HashSet::new()));
 
@@ -183,10 +207,14 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                 if let Ok(update) = feed {
                     let subs = subscriptions.lock().await;
                     if subs.contains(CHANNEL_FEED) {
-                        let msg = ServerMessage::Feed { data: update };
-                        let json = serde_json::to_string(&msg).unwrap();
-                        if sender.send(Message::Text(json.into())).await.is_err() {
-                            break;
+                        let should_send = update.user_id.is_none()
+                            || user_id.map(|u| Some(u.0) == update.user_id).unwrap_or(false);
+                        if should_send {
+                            let msg = ServerMessage::Feed { data: update };
+                            let json = serde_json::to_string(&msg).unwrap();
+                            if sender.send(Message::Text(json.into())).await.is_err() {
+                                break;
+                            }
                         }
                     }
                 }
@@ -197,10 +225,14 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                 if let Ok(update) = task {
                     let subs = subscriptions.lock().await;
                     if subs.contains(CHANNEL_TASKS) {
-                        let msg = ServerMessage::TaskUpdate { data: update };
-                        let json = serde_json::to_string(&msg).unwrap();
-                        if sender.send(Message::Text(json.into())).await.is_err() {
-                            break;
+                        let should_send = update.user_id.is_none()
+                            || user_id.map(|u| Some(u.0) == update.user_id).unwrap_or(false);
+                        if should_send {
+                            let msg = ServerMessage::TaskUpdate { data: update };
+                            let json = serde_json::to_string(&msg).unwrap();
+                            if sender.send(Message::Text(json.into())).await.is_err() {
+                                break;
+                            }
                         }
                     }
                 }
@@ -211,10 +243,14 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                 if let Ok(update) = agent {
                     let subs = subscriptions.lock().await;
                     if subs.contains(CHANNEL_AGENTS) {
-                        let msg = ServerMessage::AgentUpdate { data: update };
-                        let json = serde_json::to_string(&msg).unwrap();
-                        if sender.send(Message::Text(json.into())).await.is_err() {
-                            break;
+                        let should_send = update.user_id.is_none()
+                            || user_id.map(|u| Some(u.0) == update.user_id).unwrap_or(false);
+                        if should_send {
+                            let msg = ServerMessage::AgentUpdate { data: update };
+                            let json = serde_json::to_string(&msg).unwrap();
+                            if sender.send(Message::Text(json.into())).await.is_err() {
+                                break;
+                            }
                         }
                     }
                 }
@@ -330,6 +366,7 @@ mod tests {
                 content: "Test content".to_string(),
                 item_type: "agent_report".to_string(),
                 timestamp: chrono::Utc::now(),
+                user_id: None,
             },
         };
         let json = serde_json::to_string(&msg).unwrap();
@@ -345,6 +382,7 @@ mod tests {
                 status: "running".to_string(),
                 progress: Some(0.5),
                 assigned_agent: Some("agent-1".to_string()),
+                user_id: None,
             },
         };
         let json = serde_json::to_string(&msg).unwrap();
@@ -359,6 +397,7 @@ mod tests {
                 id: "agent-1".to_string(),
                 status: "busy".to_string(),
                 current_task: Some(Uuid::nil()),
+                user_id: None,
             },
         };
         let json = serde_json::to_string(&msg).unwrap();
@@ -495,6 +534,7 @@ mod tests {
             status: "pending".to_string(),
             progress: None,
             assigned_agent: None,
+            user_id: None,
         };
         let json = serde_json::to_string(&update).unwrap();
         assert!(json.contains("pending"));
@@ -512,6 +552,7 @@ mod tests {
             status: "done".to_string(),
             progress: Some(1.0),
             assigned_agent: Some("bot".to_string()),
+            user_id: None,
         };
         let json = serde_json::to_string(&update).unwrap();
         let roundtrip: TaskUpdate = serde_json::from_str(&json).unwrap();
@@ -525,6 +566,7 @@ mod tests {
             id: "a1".to_string(),
             status: "idle".to_string(),
             current_task: None,
+            user_id: None,
         };
         let json = serde_json::to_string(&update).unwrap();
         let roundtrip: AgentUpdate = serde_json::from_str(&json).unwrap();
@@ -539,6 +581,7 @@ mod tests {
             id: "agent-x".to_string(),
             status: "working".to_string(),
             current_task: Some(task_id),
+            user_id: None,
         };
         let json = serde_json::to_string(&update).unwrap();
         let roundtrip: AgentUpdate = serde_json::from_str(&json).unwrap();
@@ -556,6 +599,7 @@ mod tests {
             content: "did something".to_string(),
             item_type: "action".to_string(),
             timestamp: now,
+            user_id: None,
         };
         let json = serde_json::to_string(&update).unwrap();
         let roundtrip: FeedUpdate = serde_json::from_str(&json).unwrap();
@@ -722,6 +766,7 @@ mod tests {
                 content: "c".to_string(),
                 item_type: "t".to_string(),
                 timestamp: ts,
+                user_id: None,
             },
         };
         let json = serde_json::to_string(&msg).unwrap();
@@ -741,6 +786,7 @@ mod tests {
                 status: "queued".to_string(),
                 progress: Some(0.0),
                 assigned_agent: None,
+                user_id: None,
             },
         };
         let json = serde_json::to_string(&msg).unwrap();
@@ -759,6 +805,7 @@ mod tests {
                 id: "ag-1".to_string(),
                 status: "idle".to_string(),
                 current_task: Some(task_id),
+                user_id: None,
             },
         };
         let json = serde_json::to_string(&msg).unwrap();

@@ -8,6 +8,7 @@ mod prd;
 mod refactor;
 mod task;
 mod ticket;
+mod user;
 
 pub use agent::*;
 pub use config::*;
@@ -17,3 +18,4 @@ pub use prd::*;
 pub use refactor::*;
 pub use task::*;
 pub use ticket::*;
+pub use user::*;
