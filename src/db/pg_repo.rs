@@ -10,7 +10,7 @@ use crate::db::traits::{
     CostRepo, DependencyRepo, MergeQueueRepo, ObservabilityRepo, PlannerRepo, RefactorRepo,
     SchedulerRepo, ServerRepo, TaskQueueRepo, UserRepo,
 };
-use crate::db::{AgentRow, ChatMessageRow, ClusterRow};
+use crate::db::{AgentRow, ChatMessageRow, ClusterRow, PipelineRow, PipelineStageRow, ScheduleRow, TriggerRow};
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::observability::{Decision, LlmCall};
 use crate::orchestration::DependencyError;
@@ -1044,6 +1044,182 @@ impl ServerRepo for PgRepo {
         sqlx::query("DELETE FROM cluster_members WHERE cluster_id = $1 AND agent_id = $2")
             .bind(cluster_id)
             .bind(agent_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    // --- Pipeline persistence ---
+
+    async fn list_pipelines(&self, user_id: UserId) -> Result<Vec<PipelineRow>> {
+        let rows: Vec<(Uuid, String)> = sqlx::query_as(
+            "SELECT id, name FROM pipelines WHERE user_id = $1"
+        )
+        .bind(user_id.0)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(|(id, name)| PipelineRow { id, name }).collect())
+    }
+
+    async fn upsert_pipeline(&self, user_id: UserId, pipeline: PipelineRow) -> Result<()> {
+        sqlx::query(r#"
+            INSERT INTO pipelines (id, user_id, name)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
+        "#)
+        .bind(pipeline.id)
+        .bind(user_id.0)
+        .bind(&pipeline.name)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn delete_pipeline(&self, pipeline_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM pipelines WHERE id = $1")
+            .bind(pipeline_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn list_pipeline_stages(&self, pipeline_id: Uuid) -> Result<Vec<PipelineStageRow>> {
+        let rows: Vec<(Uuid, i32, Uuid, Option<String>, bool)> = sqlx::query_as(
+            "SELECT pipeline_id, stage_number, agent_id, role, approval_required FROM pipeline_stages WHERE pipeline_id = $1 ORDER BY stage_number"
+        )
+        .bind(pipeline_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(|(pipeline_id, stage_number, agent_id, role, approval_required)| {
+            PipelineStageRow { pipeline_id, stage_number, agent_id, role, approval_required }
+        }).collect())
+    }
+
+    async fn upsert_pipeline_stage(&self, stage: PipelineStageRow) -> Result<()> {
+        sqlx::query(r#"
+            INSERT INTO pipeline_stages (pipeline_id, stage_number, agent_id, role, approval_required)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (pipeline_id, stage_number) DO UPDATE SET
+                agent_id = EXCLUDED.agent_id,
+                role = EXCLUDED.role,
+                approval_required = EXCLUDED.approval_required
+        "#)
+        .bind(stage.pipeline_id)
+        .bind(stage.stage_number)
+        .bind(stage.agent_id)
+        .bind(&stage.role)
+        .bind(stage.approval_required)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    // --- Schedule persistence ---
+
+    async fn list_schedules(&self, user_id: UserId) -> Result<Vec<ScheduleRow>> {
+        let rows: Vec<(Uuid, String, Uuid, i32, String, String, Option<String>, bool, Option<DateTime<Utc>>)> = sqlx::query_as(
+            "SELECT id, name, agent_id, interval_seconds, task_title, task_description, role, enabled, last_run_at FROM schedules WHERE user_id = $1"
+        )
+        .bind(user_id.0)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(|(id, name, agent_id, interval_seconds, task_title, task_description, role, enabled, last_run_at)| {
+            ScheduleRow { id, name, agent_id, interval_seconds, task_title, task_description, role, enabled, last_run_at }
+        }).collect())
+    }
+
+    async fn upsert_schedule(&self, user_id: UserId, schedule: ScheduleRow) -> Result<()> {
+        sqlx::query(r#"
+            INSERT INTO schedules (id, user_id, name, agent_id, interval_seconds, task_title, task_description, role, enabled, last_run_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            ON CONFLICT (id) DO UPDATE SET
+                name = EXCLUDED.name,
+                agent_id = EXCLUDED.agent_id,
+                interval_seconds = EXCLUDED.interval_seconds,
+                task_title = EXCLUDED.task_title,
+                task_description = EXCLUDED.task_description,
+                role = EXCLUDED.role,
+                enabled = EXCLUDED.enabled,
+                last_run_at = EXCLUDED.last_run_at
+        "#)
+        .bind(schedule.id)
+        .bind(user_id.0)
+        .bind(&schedule.name)
+        .bind(schedule.agent_id)
+        .bind(schedule.interval_seconds)
+        .bind(&schedule.task_title)
+        .bind(&schedule.task_description)
+        .bind(&schedule.role)
+        .bind(schedule.enabled)
+        .bind(schedule.last_run_at)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn delete_schedule(&self, schedule_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM schedules WHERE id = $1")
+            .bind(schedule_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn update_schedule_last_run(&self, schedule_id: Uuid, last_run_at: DateTime<Utc>) -> Result<()> {
+        sqlx::query("UPDATE schedules SET last_run_at = $1 WHERE id = $2")
+            .bind(last_run_at)
+            .bind(schedule_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    // --- Trigger persistence ---
+
+    async fn list_triggers(&self, user_id: UserId) -> Result<Vec<TriggerRow>> {
+        let rows: Vec<(Uuid, String, String, Uuid, String, String, Option<String>)> = sqlx::query_as(
+            "SELECT id, name, event_type, agent_id, task_title, task_description, role FROM triggers WHERE user_id = $1"
+        )
+        .bind(user_id.0)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(|(id, name, event_type, agent_id, task_title, task_description, role)| {
+            TriggerRow { id, name, event_type, agent_id, task_title, task_description, role }
+        }).collect())
+    }
+
+    async fn upsert_trigger(&self, user_id: UserId, trigger: TriggerRow) -> Result<()> {
+        sqlx::query(r#"
+            INSERT INTO triggers (id, user_id, name, event_type, agent_id, task_title, task_description, role)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (id) DO UPDATE SET
+                name = EXCLUDED.name,
+                event_type = EXCLUDED.event_type,
+                agent_id = EXCLUDED.agent_id,
+                task_title = EXCLUDED.task_title,
+                task_description = EXCLUDED.task_description,
+                role = EXCLUDED.role
+        "#)
+        .bind(trigger.id)
+        .bind(user_id.0)
+        .bind(&trigger.name)
+        .bind(&trigger.event_type)
+        .bind(trigger.agent_id)
+        .bind(&trigger.task_title)
+        .bind(&trigger.task_description)
+        .bind(&trigger.role)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn delete_trigger(&self, trigger_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM triggers WHERE id = $1")
+            .bind(trigger_id)
             .execute(&self.pool)
             .await?;
         Ok(())

@@ -12,6 +12,7 @@ pub use queries::*;
 pub use refactor::*;
 
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -24,6 +25,49 @@ pub struct AgentRow {
     pub persona_name: String,
     pub model_id: String,
     pub status: String,
+}
+
+/// Row type for persisted pipeline definitions.
+#[derive(Debug, Clone)]
+pub struct PipelineRow {
+    pub id: Uuid,
+    pub name: String,
+}
+
+/// Row type for persisted pipeline stages.
+#[derive(Debug, Clone)]
+pub struct PipelineStageRow {
+    pub pipeline_id: Uuid,
+    pub stage_number: i32,
+    pub agent_id: Uuid,
+    pub role: Option<String>,
+    pub approval_required: bool,
+}
+
+/// Row type for persisted schedules.
+#[derive(Debug, Clone)]
+pub struct ScheduleRow {
+    pub id: Uuid,
+    pub name: String,
+    pub agent_id: Uuid,
+    pub interval_seconds: i32,
+    pub task_title: String,
+    pub task_description: String,
+    pub role: Option<String>,
+    pub enabled: bool,
+    pub last_run_at: Option<DateTime<Utc>>,
+}
+
+/// Row type for persisted triggers.
+#[derive(Debug, Clone)]
+pub struct TriggerRow {
+    pub id: Uuid,
+    pub name: String,
+    pub event_type: String,
+    pub agent_id: Uuid,
+    pub task_title: String,
+    pub task_description: String,
+    pub role: Option<String>,
 }
 
 /// Row type for persisted clusters.

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import Spinner from 'ink-spinner';
@@ -10,6 +10,7 @@ interface LoginProps {
 
 export function Login({ onSuccess }: LoginProps) {
   const [email, setEmail] = useState('');
+  const emailRef = useRef('');
   const [password, setPassword] = useState('');
   const [step, setStep] = useState<'email' | 'password'>('email');
   const [loading, setLoading] = useState(false);
@@ -17,6 +18,8 @@ export function Login({ onSuccess }: LoginProps) {
 
   const handleEmailSubmit = (value: string) => {
     if (!value) return;
+    emailRef.current = value;
+    setEmail(value);
     setStep('password');
   };
 
@@ -24,7 +27,7 @@ export function Login({ onSuccess }: LoginProps) {
     if (!value) return;
     setLoading(true);
     setError(null);
-    const result = await handleLogin(email, value);
+    const result = await handleLogin(emailRef.current, value);
     if (result.success) {
       onSuccess();
     } else {
