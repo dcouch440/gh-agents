@@ -143,6 +143,7 @@ mod tests {
     use crate::db::test_utils::TestDb;
 
     #[tokio::test]
+    #[ignore = "requires running Postgres"]
     async fn save_and_load_prd() {
         let db = TestDb::new().await;
 
@@ -167,6 +168,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running Postgres"]
     async fn save_updates_existing() {
         let db = TestDb::new().await;
 
@@ -183,6 +185,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running Postgres"]
     async fn list_by_status() {
         let db = TestDb::new().await;
 
@@ -209,6 +212,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running Postgres"]
     async fn load_nonexistent_returns_none() {
         let db = TestDb::new().await;
         let result = load_prd(&db.pool, &PRDId::new()).await.unwrap();

@@ -15,7 +15,7 @@ use crate::orchestration::DependencyError;
 use crate::orchestration::QueueError as TaskQueueError;
 use crate::types::{
     ChangeId, ChangeStatus, CostRecord, ProductionMode, RefactorChange, RefactorSession, Task,
-    TaskId, TaskStatus,
+    TaskId, TaskStatus, User, UserId,
 };
 
 // ============================================================================
@@ -284,22 +284,22 @@ pub trait ServerRepo: Send + Sync {
     async fn health_check(&self) -> bool;
 
     /// List tasks with optional status filter and limit.
-    async fn list_tasks(&self, status: Option<String>, limit: Option<u32>) -> Result<Vec<Task>>;
+    async fn list_tasks(&self, user_id: UserId, status: Option<String>, limit: Option<u32>) -> Result<Vec<Task>>;
 
     /// Get a single task by UUID.
-    async fn get_task_by_uuid(&self, id: Uuid) -> Result<Option<Task>>;
+    async fn get_task_by_uuid(&self, user_id: UserId, id: Uuid) -> Result<Option<Task>>;
 
     /// Insert a new task.
-    async fn insert_task(&self, task: Task) -> Result<()>;
+    async fn insert_task(&self, user_id: UserId, task: Task) -> Result<()>;
 
     /// Insert a chat message.
-    async fn insert_chat_message(&self, id: Uuid, role: String, content: String) -> Result<()>;
+    async fn insert_chat_message(&self, user_id: UserId, id: Uuid, role: String, content: String) -> Result<()>;
 
     /// Get chat history with pagination.
-    async fn get_chat_history(&self, limit: u32, offset: u32) -> Result<Vec<ChatMessageRow>>;
+    async fn get_chat_history(&self, user_id: UserId, limit: u32, offset: u32) -> Result<Vec<ChatMessageRow>>;
 
     /// Clear all chat history.
-    async fn clear_chat_history(&self) -> Result<()>;
+    async fn clear_chat_history(&self, user_id: UserId) -> Result<()>;
 
     /// Check if a password has been configured.
     async fn has_password(&self) -> Result<bool>;
@@ -309,4 +309,38 @@ pub trait ServerRepo: Send + Sync {
 
     /// Get the stored password hash.
     async fn get_password(&self) -> Result<Option<String>>;
+}
+
+// ============================================================================
+// User Repository
+// ============================================================================
+
+/// Database operations for user management.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait UserRepo: Send + Sync {
+    /// Create a new user with email and password.
+    async fn create_user(&self, email: &str, password_hash: &str) -> Result<User>;
+    /// Get a user by email.
+    async fn get_user_by_email(&self, email: &str) -> Result<Option<User>>;
+    /// Get a user by ID.
+    async fn get_user_by_id(&self, id: UserId) -> Result<Option<User>>;
+    /// Get a user by GitHub ID.
+    async fn get_user_by_github_id(&self, github_id: i64) -> Result<Option<User>>;
+    /// Link GitHub account to existing user.
+    async fn link_github(
+        &self,
+        user_id: UserId,
+        github_id: i64,
+        github_login: &str,
+        token_encrypted: &str,
+    ) -> Result<()>;
+    /// Create a new user from GitHub OAuth.
+    async fn create_github_user(
+        &self,
+        email: &str,
+        github_id: i64,
+        github_login: &str,
+        token_encrypted: &str,
+    ) -> Result<User>;
 }

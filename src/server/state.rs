@@ -9,9 +9,9 @@ use tokio::sync::{broadcast, mpsc, RwLock};
 use uuid::Uuid;
 
 use crate::db::pg_repo::PgRepo;
-use crate::db::traits::ServerRepo;
+use crate::db::traits::{ServerRepo, UserRepo};
 use crate::orchestration::Scheduler;
-use crate::types::AppConfig;
+use crate::types::{AppConfig, UserId};
 
 use super::ws::{AgentUpdate, FeedUpdate, TaskUpdate};
 
@@ -19,6 +19,7 @@ use super::ws::{AgentUpdate, FeedUpdate, TaskUpdate};
 #[derive(Debug, Clone)]
 pub struct OrchestratorMessage {
     pub id: Uuid,
+    pub user_id: UserId,
     pub content: String,
     pub timestamp: DateTime<Utc>,
 }
@@ -41,6 +42,8 @@ pub struct AppState {
     pub db: Option<PgPool>,
     /// Repository trait object for DB operations used by API handlers
     pub repo: Arc<dyn ServerRepo>,
+    /// User repository for authentication operations (None in legacy/test mode)
+    pub user_repo: Option<Arc<dyn UserRepo>>,
     /// Task scheduler for orchestration (None in mock-based tests)
     pub scheduler: Option<Arc<RwLock<Scheduler>>>,
     /// Application configuration
@@ -68,7 +71,10 @@ impl AppState {
         config: AppConfig,
     ) -> (Self, mpsc::Receiver<OrchestratorMessage>) {
         let repo: Arc<dyn ServerRepo> = Arc::new(PgRepo::new(db.clone()));
-        Self::with_repo(Some(db), repo, Some(scheduler), config)
+        let user_repo: Arc<dyn UserRepo> = Arc::new(PgRepo::new(db.clone()));
+        let (mut state, rx) = Self::with_repo(Some(db), repo, Some(scheduler), config);
+        state.user_repo = Some(user_repo);
+        (state, rx)
     }
 
     /// Create application state with a custom repo (for testing).
@@ -92,6 +98,7 @@ impl AppState {
             Self {
                 db,
                 repo,
+                user_repo: None,
                 scheduler,
                 config: Arc::new(config),
                 jwt_secret,
@@ -207,6 +214,7 @@ mod tests {
     fn orchestrator_message_construction() {
         let msg = OrchestratorMessage {
             id: Uuid::new_v4(),
+            user_id: UserId::new(),
             content: "do stuff".into(),
             timestamp: Utc::now(),
         };
@@ -246,6 +254,7 @@ mod tests {
             content: "c".into(),
             item_type: "info".into(),
             timestamp: Utc::now(),
+            user_id: None,
         });
     }
 
@@ -257,6 +266,7 @@ mod tests {
             status: "pending".into(),
             progress: None,
             assigned_agent: None,
+            user_id: None,
         });
     }
 
@@ -267,6 +277,7 @@ mod tests {
             id: "agent-1".into(),
             status: "idle".into(),
             current_task: None,
+            user_id: None,
         });
     }
 

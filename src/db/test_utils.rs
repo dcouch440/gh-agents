@@ -128,6 +128,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    #[ignore = "requires running Postgres"]
     async fn test_db_creates_and_cleans_up() {
         let db = TestDb::new().await;
         let row: (i32,) = sqlx::query_as("SELECT 1")
@@ -156,6 +157,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running Postgres"]
     async fn multiple_test_dbs_coexist() {
         let db1 = TestDb::new().await;
         let db2 = TestDb::new().await;

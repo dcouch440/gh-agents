@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::db::traits::{
     CostRepo, DependencyRepo, MergeQueueRepo, ObservabilityRepo, PlannerRepo, RefactorRepo,
-    SchedulerRepo, ServerRepo, TaskQueueRepo,
+    SchedulerRepo, ServerRepo, TaskQueueRepo, UserRepo,
 };
 use crate::db::ChatMessageRow;
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
@@ -17,7 +17,7 @@ use crate::orchestration::DependencyError;
 use crate::orchestration::QueueError as TaskQueueError;
 use crate::types::{
     AgentId, AgentTier, ChangeId, ChangeStatus, CostRecord, ProductionMode, RefactorChange,
-    RefactorSession, Task, TaskId, TaskStatus,
+    RefactorSession, Task, TaskId, TaskStatus, User, UserId,
 };
 
 /// Production repository backed by PostgreSQL.
@@ -887,28 +887,28 @@ impl ServerRepo for PgRepo {
         sqlx::query("SELECT 1").fetch_one(&self.pool).await.is_ok()
     }
 
-    async fn list_tasks(&self, status: Option<String>, limit: Option<u32>) -> Result<Vec<Task>> {
-        crate::db::list_tasks(&self.pool, status.as_deref(), limit).await
+    async fn list_tasks(&self, user_id: UserId, status: Option<String>, limit: Option<u32>) -> Result<Vec<Task>> {
+        crate::db::list_tasks(&self.pool, user_id, status.as_deref(), limit).await
     }
 
-    async fn get_task_by_uuid(&self, id: Uuid) -> Result<Option<Task>> {
-        crate::db::get_task_by_uuid(&self.pool, id).await
+    async fn get_task_by_uuid(&self, user_id: UserId, id: Uuid) -> Result<Option<Task>> {
+        crate::db::get_task_by_uuid(&self.pool, user_id, id).await
     }
 
-    async fn insert_task(&self, task: Task) -> Result<()> {
-        crate::db::insert_task(&self.pool, &task).await
+    async fn insert_task(&self, user_id: UserId, task: Task) -> Result<()> {
+        crate::db::insert_task(&self.pool, user_id, &task).await
     }
 
-    async fn insert_chat_message(&self, id: Uuid, role: String, content: String) -> Result<()> {
-        crate::db::insert_chat_message(&self.pool, &id, &role, &content).await
+    async fn insert_chat_message(&self, user_id: UserId, id: Uuid, role: String, content: String) -> Result<()> {
+        crate::db::insert_chat_message(&self.pool, user_id, &id, &role, &content).await
     }
 
-    async fn get_chat_history(&self, limit: u32, offset: u32) -> Result<Vec<ChatMessageRow>> {
-        crate::db::get_chat_history(&self.pool, limit, offset).await
+    async fn get_chat_history(&self, user_id: UserId, limit: u32, offset: u32) -> Result<Vec<ChatMessageRow>> {
+        crate::db::get_chat_history(&self.pool, user_id, limit, offset).await
     }
 
-    async fn clear_chat_history(&self) -> Result<()> {
-        crate::db::clear_chat_history(&self.pool).await
+    async fn clear_chat_history(&self, user_id: UserId) -> Result<()> {
+        crate::db::clear_chat_history(&self.pool, user_id).await
     }
 
     async fn has_password(&self) -> Result<bool> {
@@ -921,5 +921,136 @@ impl ServerRepo for PgRepo {
 
     async fn get_password(&self) -> Result<Option<String>> {
         crate::db::get_password(&self.pool).await
+    }
+}
+
+// ============================================================================
+// User Repository
+// ============================================================================
+
+#[derive(sqlx::FromRow)]
+struct UserRow {
+    id: Uuid,
+    email: String,
+    password_hash: Option<String>,
+    github_id: Option<i64>,
+    github_login: Option<String>,
+    github_token_encrypted: Option<String>,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+}
+
+impl From<UserRow> for User {
+    fn from(row: UserRow) -> Self {
+        User {
+            id: UserId(row.id),
+            email: row.email,
+            password_hash: row.password_hash,
+            github_id: row.github_id,
+            github_login: row.github_login,
+            github_token_encrypted: row.github_token_encrypted,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        }
+    }
+}
+
+#[async_trait]
+impl UserRepo for PgRepo {
+    async fn create_user(&self, email: &str, password_hash: &str) -> Result<User> {
+        let row: UserRow = sqlx::query_as(
+            r#"
+            INSERT INTO users (id, email, password_hash, created_at, updated_at)
+            VALUES (gen_random_uuid(), $1, $2, NOW(), NOW())
+            RETURNING id, email, password_hash, github_id, github_login, github_token_encrypted, created_at, updated_at
+            "#,
+        )
+        .bind(email)
+        .bind(password_hash)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(row.into())
+    }
+
+    async fn get_user_by_email(&self, email: &str) -> Result<Option<User>> {
+        let row: Option<UserRow> = sqlx::query_as(
+            "SELECT id, email, password_hash, github_id, github_login, github_token_encrypted, created_at, updated_at FROM users WHERE email = $1",
+        )
+        .bind(email)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| r.into()))
+    }
+
+    async fn get_user_by_id(&self, id: UserId) -> Result<Option<User>> {
+        let row: Option<UserRow> = sqlx::query_as(
+            "SELECT id, email, password_hash, github_id, github_login, github_token_encrypted, created_at, updated_at FROM users WHERE id = $1",
+        )
+        .bind(id.0)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| r.into()))
+    }
+
+    async fn get_user_by_github_id(&self, github_id: i64) -> Result<Option<User>> {
+        let row: Option<UserRow> = sqlx::query_as(
+            "SELECT id, email, password_hash, github_id, github_login, github_token_encrypted, created_at, updated_at FROM users WHERE github_id = $1",
+        )
+        .bind(github_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| r.into()))
+    }
+
+    async fn link_github(
+        &self,
+        user_id: UserId,
+        github_id: i64,
+        github_login: &str,
+        token_encrypted: &str,
+    ) -> Result<()> {
+        sqlx::query(
+            r#"
+            UPDATE users
+            SET github_id = $1, github_login = $2, github_token_encrypted = $3, updated_at = NOW()
+            WHERE id = $4
+            "#,
+        )
+        .bind(github_id)
+        .bind(github_login)
+        .bind(token_encrypted)
+        .bind(user_id.0)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn create_github_user(
+        &self,
+        email: &str,
+        github_id: i64,
+        github_login: &str,
+        token_encrypted: &str,
+    ) -> Result<User> {
+        let row: UserRow = sqlx::query_as(
+            r#"
+            INSERT INTO users (id, email, github_id, github_login, github_token_encrypted, created_at, updated_at)
+            VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW(), NOW())
+            RETURNING id, email, password_hash, github_id, github_login, github_token_encrypted, created_at, updated_at
+            "#,
+        )
+        .bind(email)
+        .bind(github_id)
+        .bind(github_login)
+        .bind(token_encrypted)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(row.into())
     }
 }

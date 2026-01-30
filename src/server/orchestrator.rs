@@ -79,11 +79,12 @@ async fn handle_message(
     msg: OrchestratorMessage,
 ) -> anyhow::Result<()> {
     let message_id = msg.id;
+    let user_id = msg.user_id;
 
     // Load chat history for conversation context
     let history = state
         .repo
-        .get_chat_history(50, 0)
+        .get_chat_history(user_id, 50, 0)
         .await
         .unwrap_or_default();
 
@@ -154,7 +155,7 @@ async fn handle_message(
                 let response_id = Uuid::new_v4();
                 if let Err(e) = state
                     .repo
-                    .insert_chat_message(response_id, "assistant".into(), accumulated)
+                    .insert_chat_message(user_id, response_id, "assistant".into(), accumulated)
                     .await
                 {
                     error!("Failed to save assistant message: {}", e);
@@ -183,7 +184,7 @@ mod tests {
     use super::*;
     use crate::db::traits::ServerRepo;
     use crate::db::ChatMessageRow;
-    use crate::types::AppConfig;
+    use crate::types::{AppConfig, UserId};
     use chrono::Utc;
     use std::sync::Arc;
 
@@ -203,20 +204,20 @@ mod tests {
     #[async_trait::async_trait]
     impl ServerRepo for TestRepo {
         async fn health_check(&self) -> bool { true }
-        async fn list_tasks(&self, _: Option<String>, _: Option<u32>) -> anyhow::Result<Vec<crate::types::Task>> { Ok(vec![]) }
-        async fn get_task_by_uuid(&self, _: Uuid) -> anyhow::Result<Option<crate::types::Task>> { Ok(None) }
-        async fn insert_task(&self, _: crate::types::Task) -> anyhow::Result<()> { Ok(()) }
-        async fn insert_chat_message(&self, id: Uuid, role: String, content: String) -> anyhow::Result<()> {
+        async fn list_tasks(&self, _user_id: UserId, _: Option<String>, _: Option<u32>) -> anyhow::Result<Vec<crate::types::Task>> { Ok(vec![]) }
+        async fn get_task_by_uuid(&self, _user_id: UserId, _: Uuid) -> anyhow::Result<Option<crate::types::Task>> { Ok(None) }
+        async fn insert_task(&self, _user_id: UserId, _: crate::types::Task) -> anyhow::Result<()> { Ok(()) }
+        async fn insert_chat_message(&self, _user_id: UserId, id: Uuid, role: String, content: String) -> anyhow::Result<()> {
             self.messages.lock().unwrap().push(ChatMessageRow {
                 id, role, content, timestamp: Utc::now(),
             });
             Ok(())
         }
-        async fn get_chat_history(&self, limit: u32, offset: u32) -> anyhow::Result<Vec<ChatMessageRow>> {
+        async fn get_chat_history(&self, _user_id: UserId, limit: u32, offset: u32) -> anyhow::Result<Vec<ChatMessageRow>> {
             let msgs = self.messages.lock().unwrap();
             Ok(msgs.iter().skip(offset as usize).take(limit as usize).cloned().collect())
         }
-        async fn clear_chat_history(&self) -> anyhow::Result<()> { Ok(()) }
+        async fn clear_chat_history(&self, _user_id: UserId) -> anyhow::Result<()> { Ok(()) }
         async fn has_password(&self) -> anyhow::Result<bool> { Ok(false) }
         async fn set_password(&self, _: String) -> anyhow::Result<()> { Ok(()) }
         async fn get_password(&self) -> anyhow::Result<Option<String>> { Ok(None) }
@@ -241,6 +242,7 @@ mod tests {
             .orchestrator_tx
             .send(OrchestratorMessage {
                 id: msg_id,
+                user_id: UserId::new(),
                 content: "Hello".into(),
                 timestamp: Utc::now(),
             })

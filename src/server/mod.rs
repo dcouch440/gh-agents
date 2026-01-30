@@ -17,7 +17,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use axum::{
     body::Body,
-    http::{header::CACHE_CONTROL, HeaderValue, Request},
+    extract::State,
+    http::{header::CACHE_CONTROL, HeaderValue, Request, StatusCode},
     middleware::{self, Next},
     response::Response,
     routing::{get, post},
@@ -86,7 +87,8 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
     let public_routes = Router::new()
         .route("/health", get(api::health_check))
         .route("/auth/setup", post(api::auth_setup))
-        .route("/auth/login", post(api::auth_login));
+        .route("/auth/login", post(api::auth_login))
+        .route("/auth/register", post(api::auth_register));
 
     // Protected routes (auth required)
     let protected_routes = Router::new()
@@ -101,7 +103,8 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
             "/chat/history",
             get(api::get_chat_history).delete(api::clear_chat_history),
         )
-        .route("/chat/{message_id}/stream", get(api::chat_stream));
+        .route("/chat/{message_id}/stream", get(api::chat_stream))
+        .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // Static file serving for production (Ticket 10.6)
     // ServeDir with fallback to index.html for SPA routing
@@ -116,6 +119,29 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+/// Middleware to require valid JWT on protected routes.
+/// Defense-in-depth: handlers also extract AuthUser, but this catches any handler that forgets.
+async fn require_auth(
+    State(state): State<AppState>,
+    request: axum::http::Request<Body>,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    let auth_header = request
+        .headers()
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    let token = auth_header
+        .strip_prefix("Bearer ")
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    auth::verify_token(token, &state.jwt_secret)
+        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+    Ok(next.run(request).await)
 }
 
 /// Middleware to set cache headers for static assets
@@ -195,6 +221,7 @@ mod tests {
     use super::*;
     use crate::db::traits::ServerRepo;
     use crate::db::ChatMessageRow;
+    use crate::types::UserId;
     use axum::{
         body::Body,
         http::{Request, StatusCode},
@@ -228,6 +255,7 @@ mod tests {
         }
         async fn list_tasks(
             &self,
+            _user_id: UserId,
             status: Option<String>,
             limit: Option<u32>,
         ) -> anyhow::Result<Vec<crate::types::Task>> {
@@ -247,7 +275,7 @@ mod tests {
                 .cloned()
                 .collect())
         }
-        async fn get_task_by_uuid(&self, id: Uuid) -> anyhow::Result<Option<crate::types::Task>> {
+        async fn get_task_by_uuid(&self, _user_id: UserId, id: Uuid) -> anyhow::Result<Option<crate::types::Task>> {
             Ok(self
                 .tasks
                 .lock()
@@ -256,12 +284,13 @@ mod tests {
                 .find(|t| t.id.0 == id)
                 .cloned())
         }
-        async fn insert_task(&self, task: crate::types::Task) -> anyhow::Result<()> {
+        async fn insert_task(&self, _user_id: UserId, task: crate::types::Task) -> anyhow::Result<()> {
             self.tasks.lock().unwrap().push(task);
             Ok(())
         }
         async fn insert_chat_message(
             &self,
+            _user_id: UserId,
             id: Uuid,
             role: String,
             content: String,
@@ -276,6 +305,7 @@ mod tests {
         }
         async fn get_chat_history(
             &self,
+            _user_id: UserId,
             limit: u32,
             offset: u32,
         ) -> anyhow::Result<Vec<ChatMessageRow>> {
@@ -287,7 +317,7 @@ mod tests {
                 .cloned()
                 .collect())
         }
-        async fn clear_chat_history(&self) -> anyhow::Result<()> {
+        async fn clear_chat_history(&self, _user_id: UserId) -> anyhow::Result<()> {
             self.chat_messages.lock().unwrap().clear();
             Ok(())
         }
@@ -311,13 +341,20 @@ mod tests {
         state
     }
 
-    fn setup_test_app() -> Router {
-        create_router_with_static_dir(setup_mock_state(), "nonexistent_static")
+    fn create_test_token(state: &AppState) -> String {
+        use crate::types::UserId;
+        auth::create_token(&state.jwt_secret, 24, UserId::new(), "test@test.com").unwrap()
+    }
+
+    fn setup_test_app() -> (Router, AppState) {
+        let state = setup_mock_state();
+        let router = create_router_with_static_dir(state.clone(), "nonexistent_static");
+        (router, state)
     }
 
     #[tokio::test]
     async fn health_endpoint_returns_json() {
-        let app = setup_test_app();
+        let (app, _state) = setup_test_app();
         let response = app
             .oneshot(
                 Request::builder()
@@ -332,11 +369,12 @@ mod tests {
 
     #[tokio::test]
     async fn tasks_endpoint_returns_list() {
-        let app = setup_test_app();
+        let (app, state) = setup_test_app();
         let response = app
             .oneshot(
                 Request::builder()
                     .uri("/api/tasks")
+                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -347,11 +385,12 @@ mod tests {
 
     #[tokio::test]
     async fn agents_endpoint_returns_stats() {
-        let app = setup_test_app();
+        let (app, state) = setup_test_app();
         let response = app
             .oneshot(
                 Request::builder()
                     .uri("/api/agents")
+                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -362,11 +401,12 @@ mod tests {
 
     #[tokio::test]
     async fn config_endpoint_returns_config() {
-        let app = setup_test_app();
+        let (app, state) = setup_test_app();
         let response = app
             .oneshot(
                 Request::builder()
                     .uri("/api/config")
+                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -377,11 +417,12 @@ mod tests {
 
     #[tokio::test]
     async fn unknown_task_returns_404() {
-        let app = setup_test_app();
+        let (app, state) = setup_test_app();
         let response = app
             .oneshot(
                 Request::builder()
                     .uri("/api/tasks/00000000-0000-0000-0000-000000000000")
+                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -392,13 +433,14 @@ mod tests {
 
     #[tokio::test]
     async fn chat_endpoint_accepts_message() {
-        let app = setup_test_app();
+        let (app, state) = setup_test_app();
         let response = app
             .oneshot(
                 Request::builder()
                     .method("POST")
                     .uri("/api/chat")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
                     .body(Body::from(r#"{"message": "Hello!"}"#))
                     .unwrap(),
             )
@@ -409,13 +451,14 @@ mod tests {
 
     #[tokio::test]
     async fn chat_endpoint_rejects_empty_message() {
-        let app = setup_test_app();
+        let (app, state) = setup_test_app();
         let response = app
             .oneshot(
                 Request::builder()
                     .method("POST")
                     .uri("/api/chat")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
                     .body(Body::from(r#"{"message": "   "}"#))
                     .unwrap(),
             )
@@ -426,11 +469,12 @@ mod tests {
 
     #[tokio::test]
     async fn chat_history_returns_empty_list() {
-        let app = setup_test_app();
+        let (app, state) = setup_test_app();
         let response = app
             .oneshot(
                 Request::builder()
                     .uri("/api/chat/history")
+                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -441,12 +485,13 @@ mod tests {
 
     #[tokio::test]
     async fn clear_chat_history_returns_no_content() {
-        let app = setup_test_app();
+        let (app, state) = setup_test_app();
         let response = app
             .oneshot(
                 Request::builder()
                     .method("DELETE")
                     .uri("/api/chat/history")
+                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
                     .body(Body::empty())
                     .unwrap(),
             )

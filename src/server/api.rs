@@ -61,11 +61,12 @@ pub struct TasksQuery {
 /// - `limit`: Maximum number of tasks to return (default 100, max 1000)
 pub async fn list_tasks(
     State(state): State<AppState>,
+    auth: auth::AuthUser,
     Query(query): Query<TasksQuery>,
 ) -> Result<Json<Vec<Task>>, StatusCode> {
     let tasks = state
         .repo
-        .list_tasks(query.status, query.limit)
+        .list_tasks(auth.user_id, query.status, query.limit)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -77,11 +78,12 @@ pub async fn list_tasks(
 /// Returns 404 if the task is not found.
 pub async fn get_task(
     State(state): State<AppState>,
+    auth: auth::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Task>, StatusCode> {
     let task = state
         .repo
-        .get_task_by_uuid(id)
+        .get_task_by_uuid(auth.user_id, id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
@@ -104,6 +106,7 @@ pub struct CreateTaskRequest {
 /// Returns 400 if the title is empty.
 pub async fn create_task(
     State(state): State<AppState>,
+    auth: auth::AuthUser,
     Json(request): Json<CreateTaskRequest>,
 ) -> Result<(StatusCode, Json<Task>), StatusCode> {
     if request.title.trim().is_empty() {
@@ -143,7 +146,7 @@ pub async fn create_task(
     // Insert into database
     state
         .repo
-        .insert_task(task.clone())
+        .insert_task(auth.user_id, task.clone())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -300,6 +303,7 @@ pub struct ChatResponse {
 /// The message is queued for processing by the orchestrator.
 pub async fn send_chat(
     State(state): State<AppState>,
+    auth: auth::AuthUser,
     Json(request): Json<ChatRequest>,
 ) -> Result<(StatusCode, Json<ChatResponse>), StatusCode> {
     if request.message.trim().is_empty() {
@@ -311,7 +315,7 @@ pub async fn send_chat(
     // Store the user message in the database
     state
         .repo
-        .insert_chat_message(message_id, "user".to_string(), request.message.clone())
+        .insert_chat_message(auth.user_id, message_id, "user".to_string(), request.message.clone())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -320,6 +324,7 @@ pub async fn send_chat(
         .orchestrator_tx
         .send(OrchestratorMessage {
             id: message_id,
+            user_id: auth.user_id,
             content: request.message,
             timestamp: Utc::now(),
         })
@@ -356,6 +361,7 @@ pub struct ChatMessage {
 /// Returns messages in chronological order.
 pub async fn get_chat_history(
     State(state): State<AppState>,
+    auth: auth::AuthUser,
     Query(query): Query<HistoryQuery>,
 ) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
     let limit = query.limit.unwrap_or(50);
@@ -363,7 +369,7 @@ pub async fn get_chat_history(
 
     let rows = state
         .repo
-        .get_chat_history(limit, offset)
+        .get_chat_history(auth.user_id, limit, offset)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -427,8 +433,11 @@ pub async fn chat_stream(
 /// Clear all chat history
 ///
 /// Returns 204 No Content on success.
-pub async fn clear_chat_history(State(state): State<AppState>) -> StatusCode {
-    match state.repo.clear_chat_history().await {
+pub async fn clear_chat_history(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+) -> StatusCode {
+    match state.repo.clear_chat_history(auth.user_id).await {
         Ok(_) => StatusCode::NO_CONTENT,
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
@@ -494,9 +503,89 @@ pub async fn auth_setup(
     }))
 }
 
+/// Request body for registration
+#[derive(Deserialize)]
+pub struct RegisterRequest {
+    pub email: String,
+    pub password: String,
+}
+
+/// Response for registration
+#[derive(Serialize)]
+pub struct AuthTokenResponse {
+    pub token: String,
+    pub expires_in: u64,
+    pub user: UserResponse,
+}
+
+/// User info in API responses
+#[derive(Serialize)]
+pub struct UserResponse {
+    pub id: String,
+    pub email: String,
+    pub github_login: Option<String>,
+}
+
+/// POST /api/auth/register - Register a new user
+pub async fn auth_register(
+    State(state): State<AppState>,
+    Json(request): Json<RegisterRequest>,
+) -> Result<(StatusCode, Json<AuthTokenResponse>), (StatusCode, String)> {
+    // Validate
+    if request.email.trim().is_empty() || !request.email.contains('@') {
+        return Err((StatusCode::BAD_REQUEST, "Invalid email".into()));
+    }
+    if request.password.len() < 8 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Password must be at least 8 characters".into(),
+        ));
+    }
+
+    let user_repo = state
+        .user_repo
+        .as_ref()
+        .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "User service unavailable".into()))?;
+
+    // Check if email already exists
+    if user_repo
+        .get_user_by_email(&request.email)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .is_some()
+    {
+        return Err((StatusCode::CONFLICT, "Email already registered".into()));
+    }
+
+    let hash = auth::hash_password(&request.password)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let user = user_repo
+        .create_user(&request.email, &hash)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let token = auth::create_token(&state.jwt_secret, 24, user.id, &user.email)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(AuthTokenResponse {
+            token,
+            expires_in: 86400,
+            user: UserResponse {
+                id: user.id.to_string(),
+                email: user.email,
+                github_login: user.github_login,
+            },
+        }),
+    ))
+}
+
 /// Request body for login
 #[derive(Deserialize)]
 pub struct LoginRequest {
+    pub email: String,
     pub password: String,
 }
 
@@ -514,23 +603,25 @@ pub async fn auth_login(
     State(state): State<AppState>,
     Json(request): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, StatusCode> {
-    let stored_hash = state
-        .repo
-        .get_password()
+    let user_repo = state.user_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let user = user_repo
+        .get_user_by_email(&request.email)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?; // No password configured
+        .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    if !auth::verify_password(&request.password, &stored_hash) {
+    let password_hash = user.password_hash.as_ref().ok_or(StatusCode::UNAUTHORIZED)?;
+    if !auth::verify_password(&request.password, password_hash) {
         return Err(StatusCode::UNAUTHORIZED);
     }
 
-    let token = auth::create_token(&state.jwt_secret, 24) // 24 hour expiry
+    let token = auth::create_token(&state.jwt_secret, 24, user.id, &user.email)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(LoginResponse {
         token,
-        expires_in: 86400, // seconds
+        expires_in: 86400,
     }))
 }
 
@@ -547,7 +638,7 @@ pub struct MeResponse {
 /// Requires a valid JWT token in Authorization header.
 pub async fn auth_me(auth: auth::AuthUser) -> Json<MeResponse> {
     Json(MeResponse {
-        user: auth.claims.sub,
+        user: auth.user_id.to_string(),
         authenticated: true,
         token_expires: auth.claims.exp,
     })
@@ -684,8 +775,9 @@ mod tests {
 
     use std::sync::Arc;
 
-    use crate::db::traits::ServerRepo;
+    use crate::db::traits::{MockUserRepo, ServerRepo};
     use crate::db::ChatMessageRow;
+    use crate::types::{User, UserId};
 
     /// In-memory implementation of ServerRepo for tests (no Postgres needed).
     struct InMemoryServerRepo {
@@ -712,6 +804,7 @@ mod tests {
 
         async fn list_tasks(
             &self,
+            _user_id: UserId,
             status: Option<String>,
             limit: Option<u32>,
         ) -> anyhow::Result<Vec<Task>> {
@@ -734,18 +827,19 @@ mod tests {
             Ok(filtered)
         }
 
-        async fn get_task_by_uuid(&self, id: Uuid) -> anyhow::Result<Option<Task>> {
+        async fn get_task_by_uuid(&self, _user_id: UserId, id: Uuid) -> anyhow::Result<Option<Task>> {
             let tasks = self.tasks.lock().unwrap();
             Ok(tasks.iter().find(|t| t.id.0 == id).cloned())
         }
 
-        async fn insert_task(&self, task: Task) -> anyhow::Result<()> {
+        async fn insert_task(&self, _user_id: UserId, task: Task) -> anyhow::Result<()> {
             self.tasks.lock().unwrap().push(task);
             Ok(())
         }
 
         async fn insert_chat_message(
             &self,
+            _user_id: UserId,
             id: Uuid,
             role: String,
             content: String,
@@ -761,6 +855,7 @@ mod tests {
 
         async fn get_chat_history(
             &self,
+            _user_id: UserId,
             limit: u32,
             offset: u32,
         ) -> anyhow::Result<Vec<ChatMessageRow>> {
@@ -774,7 +869,7 @@ mod tests {
             Ok(result)
         }
 
-        async fn clear_chat_history(&self) -> anyhow::Result<()> {
+        async fn clear_chat_history(&self, _user_id: UserId) -> anyhow::Result<()> {
             self.chat_messages.lock().unwrap().clear();
             Ok(())
         }
@@ -793,18 +888,34 @@ mod tests {
         }
     }
 
-    fn setup_test_app() -> axum::Router {
+    fn create_test_token(jwt_secret: &[u8]) -> String {
+        super::super::auth::create_token(jwt_secret, 24, UserId::new(), "test@test.com").unwrap()
+    }
+
+    fn setup_test_app() -> (axum::Router, Vec<u8>) {
+        setup_test_app_with_user_repo(None)
+    }
+
+    fn setup_test_app_with_user_repo(
+        user_repo: Option<Arc<dyn crate::db::traits::UserRepo>>,
+    ) -> (axum::Router, Vec<u8>) {
         let repo: Arc<dyn ServerRepo> = Arc::new(InMemoryServerRepo::new());
         let config = crate::types::AppConfig::default();
-        let (state, rx) = AppState::with_repo(None, repo, None, config);
+        let (mut state, rx) = AppState::with_repo(None, repo, None, config);
         // Keep the receiver alive so orchestrator_tx.send() doesn't fail
         std::mem::forget(rx);
-        super::super::create_router_with_static_dir(state, "nonexistent_static")
+        if let Some(ur) = user_repo {
+            state.user_repo = Some(ur);
+        }
+        let jwt_secret = state.jwt_secret.clone();
+        let router = super::super::create_router_with_static_dir(state, "nonexistent_static");
+        (router, jwt_secret)
     }
 
     #[tokio::test]
     async fn create_task_valid_returns_created() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
@@ -812,6 +923,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/tasks")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(
                         r#"{"title":"My task","description":"desc","priority":"high"}"#,
                     ))
@@ -825,7 +937,8 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_empty_title_returns_bad_request() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
@@ -833,6 +946,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/tasks")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(r#"{"title":"   "}"#))
                     .unwrap(),
             )
@@ -844,7 +958,8 @@ mod tests {
 
     #[tokio::test]
     async fn update_config_valid_verbosity() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
@@ -852,6 +967,7 @@ mod tests {
                     .method("PATCH")
                     .uri("/api/config")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(r#"{"verbosity":"verbose"}"#))
                     .unwrap(),
             )
@@ -863,7 +979,8 @@ mod tests {
 
     #[tokio::test]
     async fn send_chat_valid_message_returns_accepted() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
@@ -871,6 +988,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/chat")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(r#"{"message":"Hello agent"}"#))
                     .unwrap(),
             )
@@ -882,7 +1000,8 @@ mod tests {
 
     #[tokio::test]
     async fn send_chat_empty_message_returns_bad_request() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
@@ -890,6 +1009,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/chat")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(r#"{"message":"  "}"#))
                     .unwrap(),
             )
@@ -901,13 +1021,15 @@ mod tests {
 
     #[tokio::test]
     async fn clear_chat_history_returns_no_content() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
                 Request::builder()
                     .method("DELETE")
                     .uri("/api/chat/history")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -919,7 +1041,7 @@ mod tests {
 
     #[tokio::test]
     async fn health_check_returns_ok() {
-        let app = setup_test_app();
+        let (app, _jwt_secret) = setup_test_app();
 
         let response = app
             .oneshot(
@@ -945,7 +1067,8 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_with_orchestrator_tier() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
@@ -953,6 +1076,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/tasks")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(r#"{"title":"Tier test","tier":"orchestrator"}"#))
                     .unwrap(),
             )
@@ -969,7 +1093,8 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_with_utility_tier() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
@@ -977,6 +1102,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/tasks")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(r#"{"title":"Util test","tier":"utility"}"#))
                     .unwrap(),
             )
@@ -993,7 +1119,8 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_with_unknown_tier_defaults_to_worker() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
@@ -1001,6 +1128,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/tasks")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(
                         r#"{"title":"Default tier","tier":"nonexistent"}"#,
                     ))
@@ -1019,7 +1147,8 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_with_no_tier_defaults_to_worker() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
@@ -1027,6 +1156,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/tasks")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(r#"{"title":"No tier"}"#))
                     .unwrap(),
             )
@@ -1043,7 +1173,8 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_with_low_priority() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
@@ -1051,6 +1182,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/tasks")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(r#"{"title":"Low prio","priority":"low"}"#))
                     .unwrap(),
             )
@@ -1067,7 +1199,8 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_with_urgent_priority() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
@@ -1075,6 +1208,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/tasks")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(r#"{"title":"Urgent","priority":"urgent"}"#))
                     .unwrap(),
             )
@@ -1091,7 +1225,8 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_with_unknown_priority_defaults_to_normal() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
@@ -1099,6 +1234,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/tasks")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(
                         r#"{"title":"Default prio","priority":"critical"}"#,
                     ))
@@ -1117,7 +1253,8 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_with_no_priority_defaults_to_normal() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
@@ -1125,6 +1262,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/tasks")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(r#"{"title":"No prio"}"#))
                     .unwrap(),
             )
@@ -1143,7 +1281,8 @@ mod tests {
 
     #[tokio::test]
     async fn get_task_returns_created_task() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         // Create a task first
         let create_resp = app
@@ -1153,6 +1292,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/tasks")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(r#"{"title":"Findable task"}"#))
                     .unwrap(),
             )
@@ -1171,6 +1311,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/tasks")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1189,12 +1330,14 @@ mod tests {
 
     #[tokio::test]
     async fn get_task_not_found() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
                 Request::builder()
                     .uri("/api/tasks/00000000-0000-0000-0000-000000000000")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1210,12 +1353,14 @@ mod tests {
 
     #[tokio::test]
     async fn list_tasks_returns_empty_initially() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
                 Request::builder()
                     .uri("/api/tasks")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1232,7 +1377,8 @@ mod tests {
 
     #[tokio::test]
     async fn list_tasks_with_limit() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         // Create two tasks
         for title in ["Task A", "Task B"] {
@@ -1242,6 +1388,7 @@ mod tests {
                         .method("POST")
                         .uri("/api/tasks")
                         .header("content-type", "application/json")
+                        .header("authorization", format!("Bearer {}", token))
                         .body(Body::from(format!(r#"{{"title":"{}"}}"#, title)))
                         .unwrap(),
                 )
@@ -1253,6 +1400,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/tasks?limit=1")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1269,7 +1417,8 @@ mod tests {
 
     #[tokio::test]
     async fn list_tasks_with_status_filter() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         // Create a task (default status is pending)
         app.clone()
@@ -1278,6 +1427,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/tasks")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(r#"{"title":"Pending task"}"#))
                     .unwrap(),
             )
@@ -1289,6 +1439,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/tasks?status=in_progress")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1307,7 +1458,8 @@ mod tests {
 
     #[tokio::test]
     async fn update_config_invalid_verbosity_returns_bad_request() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
@@ -1315,6 +1467,7 @@ mod tests {
                     .method("PATCH")
                     .uri("/api/config")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(r#"{"verbosity":"extreme"}"#))
                     .unwrap(),
             )
@@ -1326,7 +1479,8 @@ mod tests {
 
     #[tokio::test]
     async fn update_config_quiet_verbosity() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
@@ -1334,6 +1488,7 @@ mod tests {
                     .method("PATCH")
                     .uri("/api/config")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(r#"{"verbosity":"quiet"}"#))
                     .unwrap(),
             )
@@ -1345,7 +1500,8 @@ mod tests {
 
     #[tokio::test]
     async fn update_config_normal_verbosity() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
@@ -1353,6 +1509,7 @@ mod tests {
                     .method("PATCH")
                     .uri("/api/config")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(r#"{"verbosity":"normal"}"#))
                     .unwrap(),
             )
@@ -1364,7 +1521,8 @@ mod tests {
 
     #[tokio::test]
     async fn update_config_no_verbosity_returns_ok() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
@@ -1372,6 +1530,7 @@ mod tests {
                     .method("PATCH")
                     .uri("/api/config")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(r#"{}"#))
                     .unwrap(),
             )
@@ -1385,12 +1544,14 @@ mod tests {
 
     #[tokio::test]
     async fn list_agents_returns_stats() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
                 Request::builder()
                     .uri("/api/agents")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1412,12 +1573,14 @@ mod tests {
 
     #[tokio::test]
     async fn get_config_returns_expected_fields() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
                 Request::builder()
                     .uri("/api/config")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1441,7 +1604,7 @@ mod tests {
 
     #[tokio::test]
     async fn auth_setup_short_password_returns_bad_request() {
-        let app = setup_test_app();
+        let (app, _jwt_secret) = setup_test_app();
 
         let response = app
             .oneshot(
@@ -1460,7 +1623,7 @@ mod tests {
 
     #[tokio::test]
     async fn auth_setup_success() {
-        let app = setup_test_app();
+        let (app, _jwt_secret) = setup_test_app();
 
         let response = app
             .oneshot(
@@ -1487,7 +1650,7 @@ mod tests {
 
     #[tokio::test]
     async fn auth_setup_conflict_when_already_configured() {
-        let app = setup_test_app();
+        let (app, _jwt_secret) = setup_test_app();
 
         // First setup
         app.clone()
@@ -1518,9 +1681,35 @@ mod tests {
         assert_eq!(response.status(), StatusCode::CONFLICT);
     }
 
+    fn setup_login_test_app(password: &str) -> (axum::Router, Vec<u8>) {
+        let password_hash = super::super::auth::hash_password(password).unwrap();
+        let test_user = User {
+            id: UserId::new(),
+            email: "test@test.com".to_string(),
+            password_hash: Some(password_hash),
+            github_id: None,
+            github_login: None,
+            github_token_encrypted: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        let mut mock = MockUserRepo::new();
+        let user_clone = test_user.clone();
+        mock.expect_get_user_by_email()
+            .returning(move |email| {
+                if email == "test@test.com" {
+                    Ok(Some(user_clone.clone()))
+                } else {
+                    Ok(None)
+                }
+            });
+        setup_test_app_with_user_repo(Some(Arc::new(mock)))
+    }
+
     #[tokio::test]
     async fn auth_login_no_password_configured() {
-        let app = setup_test_app();
+        // No user_repo means login returns 500 (user service unavailable)
+        let (app, _jwt_secret) = setup_test_app();
 
         let response = app
             .oneshot(
@@ -1528,31 +1717,19 @@ mod tests {
                     .method("POST")
                     .uri("/api/auth/login")
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"password":"anything"}"#))
+                    .body(Body::from(r#"{"email":"test@test.com","password":"anything"}"#))
                     .unwrap(),
             )
             .await
             .unwrap();
 
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        // No user_repo configured, so we get 500
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     #[tokio::test]
     async fn auth_login_wrong_password() {
-        let app = setup_test_app();
-
-        // Setup password
-        app.clone()
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/api/auth/setup")
-                    .header("content-type", "application/json")
-                    .body(Body::from(r#"{"password":"correctpassword"}"#))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let (app, _jwt_secret) = setup_login_test_app("correctpassword");
 
         // Login with wrong password
         let response = app
@@ -1561,7 +1738,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/auth/login")
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"password":"wrongpassword!"}"#))
+                    .body(Body::from(r#"{"email":"test@test.com","password":"wrongpassword!"}"#))
                     .unwrap(),
             )
             .await
@@ -1572,20 +1749,7 @@ mod tests {
 
     #[tokio::test]
     async fn auth_login_success() {
-        let app = setup_test_app();
-
-        // Setup password
-        app.clone()
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/api/auth/setup")
-                    .header("content-type", "application/json")
-                    .body(Body::from(r#"{"password":"correctpassword"}"#))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let (app, _jwt_secret) = setup_login_test_app("correctpassword");
 
         // Login with correct password
         let response = app
@@ -1594,7 +1758,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/auth/login")
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"password":"correctpassword"}"#))
+                    .body(Body::from(r#"{"email":"test@test.com","password":"correctpassword"}"#))
                     .unwrap(),
             )
             .await
@@ -1613,7 +1777,8 @@ mod tests {
 
     #[tokio::test]
     async fn chat_history_returns_messages_after_send() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         // Send a message
         app.clone()
@@ -1622,6 +1787,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/chat")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(r#"{"message":"Hello agent"}"#))
                     .unwrap(),
             )
@@ -1633,6 +1799,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/chat/history")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1651,7 +1818,8 @@ mod tests {
 
     #[tokio::test]
     async fn chat_history_with_pagination() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         // Send two messages
         for msg in ["First", "Second"] {
@@ -1661,6 +1829,7 @@ mod tests {
                         .method("POST")
                         .uri("/api/chat")
                         .header("content-type", "application/json")
+                        .header("authorization", format!("Bearer {}", token))
                         .body(Body::from(format!(r#"{{"message":"{}"}}"#, msg)))
                         .unwrap(),
                 )
@@ -1674,6 +1843,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/chat/history?limit=1")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1692,6 +1862,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/chat/history?limit=10&offset=1")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1745,8 +1916,9 @@ mod tests {
 
     #[test]
     fn login_request_deserializes() {
-        let json = r#"{"password":"mypassword"}"#;
+        let json = r#"{"email":"test@test.com","password":"mypassword"}"#;
         let request: LoginRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.email, "test@test.com");
         assert_eq!(request.password, "mypassword");
     }
 
@@ -1832,7 +2004,8 @@ mod tests {
 
     #[tokio::test]
     async fn send_chat_response_contains_message_id() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
@@ -1840,6 +2013,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/chat")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(r#"{"message":"test msg"}"#))
                     .unwrap(),
             )
@@ -1861,7 +2035,8 @@ mod tests {
 
     #[tokio::test]
     async fn create_task_response_body_has_expected_fields() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         let response = app
             .oneshot(
@@ -1869,6 +2044,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/tasks")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(
                         r#"{"title":"Full task","description":"A description","priority":"high","tier":"worker"}"#,
                     ))
@@ -1893,7 +2069,8 @@ mod tests {
 
     #[tokio::test]
     async fn clear_chat_then_history_is_empty() {
-        let app = setup_test_app();
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
 
         // Send a message
         app.clone()
@@ -1902,6 +2079,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/chat")
                     .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(r#"{"message":"To be cleared"}"#))
                     .unwrap(),
             )
@@ -1914,6 +2092,7 @@ mod tests {
                 Request::builder()
                     .method("DELETE")
                     .uri("/api/chat/history")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1925,6 +2104,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/chat/history")
+                    .header("authorization", format!("Bearer {}", token))
                     .body(Body::empty())
                     .unwrap(),
             )

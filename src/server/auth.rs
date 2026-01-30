@@ -10,12 +10,15 @@ use axum::{
 };
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use super::state::AppState;
+use crate::types::UserId;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String,
+    pub email: String,
     pub exp: usize,
     pub iat: usize,
 }
@@ -40,12 +43,15 @@ pub fn verify_password(password: &str, hash: &str) -> bool {
 pub fn create_token(
     secret: &[u8],
     duration_hours: u64,
+    user_id: UserId,
+    email: &str,
 ) -> Result<String, jsonwebtoken::errors::Error> {
     let now = chrono::Utc::now();
     let exp = (now + chrono::Duration::hours(duration_hours as i64)).timestamp() as usize;
 
     let claims = Claims {
-        sub: "local".to_string(),
+        sub: user_id.0.to_string(),
+        email: email.to_string(),
         exp,
         iat: now.timestamp() as usize,
     };
@@ -71,6 +77,7 @@ pub fn verify_token(token: &str, secret: &[u8]) -> Result<Claims, jsonwebtoken::
 /// Extracts and validates JWT token from Authorization header.
 /// Returns 401 Unauthorized if token is missing or invalid.
 pub struct AuthUser {
+    pub user_id: UserId,
     pub claims: Claims,
 }
 
@@ -95,7 +102,13 @@ impl FromRequestParts<AppState> for AuthUser {
         let claims =
             verify_token(token, &state.jwt_secret).map_err(|_| StatusCode::UNAUTHORIZED)?;
 
-        Ok(AuthUser { claims })
+        let user_id = claims
+            .sub
+            .parse::<Uuid>()
+            .map(UserId)
+            .map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+        Ok(AuthUser { user_id, claims })
     }
 }
 
@@ -115,10 +128,13 @@ mod tests {
     #[test]
     fn test_create_and_verify_token() {
         let secret = b"test_secret_key_123";
-        let token = create_token(secret, 24).expect("Failed to create token");
+        let user_id = UserId::new();
+        let token = create_token(secret, 24, user_id, "test@example.com")
+            .expect("Failed to create token");
 
         let claims = verify_token(&token, secret).expect("Failed to verify token");
-        assert_eq!(claims.sub, "local");
+        assert!(uuid::Uuid::parse_str(&claims.sub).is_ok());
+        assert_eq!(claims.email, "test@example.com");
         assert!(claims.exp > claims.iat);
     }
 
@@ -126,7 +142,9 @@ mod tests {
     fn test_verify_token_wrong_secret() {
         let secret = b"test_secret_key_123";
         let wrong_secret = b"wrong_secret_key";
-        let token = create_token(secret, 24).expect("Failed to create token");
+        let user_id = UserId::new();
+        let token = create_token(secret, 24, user_id, "test@example.com")
+            .expect("Failed to create token");
 
         assert!(verify_token(&token, wrong_secret).is_err());
     }
