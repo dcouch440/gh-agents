@@ -14,6 +14,27 @@ pub use refactor::*;
 use anyhow::{Context, Result};
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
+use uuid::Uuid;
+
+/// Row type for persisted agent definitions.
+#[derive(Debug, Clone)]
+pub struct AgentRow {
+    pub id: Uuid,
+    pub tier: String,
+    pub persona_name: String,
+    pub model_id: String,
+    pub status: String,
+}
+
+/// Row type for persisted clusters.
+#[derive(Debug, Clone)]
+pub struct ClusterRow {
+    pub id: Uuid,
+    pub name: String,
+    pub description: String,
+    pub conventions: String,
+    pub shared_files: serde_json::Value,
+}
 
 /// Type alias for the database pool
 pub type DbPool = PgPool;

@@ -9,11 +9,12 @@ use std::time::Duration;
 use serde_json::{json, Value};
 
 use crate::agents::{
-    AgentCommand, AgentResponse, CommunicationStyle, OutputFormat, RoleContext, RoleId,
+    AgentCommand, AgentResponse, ClusterId, CommunicationStyle, OutputFormat, RoleContext, RoleId,
     TaskAssignment, TaskConstraints, TaskContext,
 };
+use crate::db::{AgentRow, ClusterRow};
 use crate::llm::Tool;
-use crate::types::{AgentPersona, AgentTier, ModelConfig};
+use crate::types::{AgentPersona, AgentTier, ModelConfig, UserId};
 
 use super::state::AppState;
 
@@ -80,6 +81,11 @@ pub fn agent_tools() -> Vec<Tool> {
                         "type": "string",
                         "enum": ["orchestrator", "worker", "utility", "reviewer", "summarizer", "complaint-finder", "risk-assessor", "scope-definer"],
                         "description": "Optional role for the agent. Defaults to 'worker'. Each role has specialized prompts and context."
+                    },
+                    "allowed_tools": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Optional list of execution tool names this agent can use. If omitted, all tools are available. Options: read_file, write_file, list_files, git_status, git_diff, git_add, git_commit, git_branch, run_tests, run_command"
                     }
                 },
                 "required": ["agent_id", "title", "description"]
@@ -149,22 +155,89 @@ pub fn agent_tools() -> Vec<Tool> {
                 "required": ["agent_id"]
             }),
         },
+        Tool {
+            name: "create_cluster".to_string(),
+            description: "Create a named cluster for grouping agents that share context.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Name for the cluster (e.g. 'frontend', 'backend-api')"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Optional description of the cluster's purpose"
+                    }
+                },
+                "required": ["name"]
+            }),
+        },
+        Tool {
+            name: "add_to_cluster".to_string(),
+            description: "Add an agent to a cluster. The agent will receive the cluster's shared context with every task.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "cluster_id": {
+                        "type": "string",
+                        "description": "The UUID of the cluster"
+                    },
+                    "agent_id": {
+                        "type": "string",
+                        "description": "The UUID of the agent to add"
+                    }
+                },
+                "required": ["cluster_id", "agent_id"]
+            }),
+        },
+        Tool {
+            name: "remove_from_cluster".to_string(),
+            description: "Remove an agent from a cluster.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "cluster_id": {
+                        "type": "string",
+                        "description": "The UUID of the cluster"
+                    },
+                    "agent_id": {
+                        "type": "string",
+                        "description": "The UUID of the agent to remove"
+                    }
+                },
+                "required": ["cluster_id", "agent_id"]
+            }),
+        },
+        Tool {
+            name: "list_clusters".to_string(),
+            description: "List all clusters with their members.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {},
+                "required": []
+            }),
+        },
     ]
 }
 
 /// Execute a tool by name with the given JSON input.
 ///
 /// Returns a JSON value describing the result.
-pub async fn execute_tool(name: &str, input: &Value, state: &AppState) -> Value {
+pub async fn execute_tool(name: &str, input: &Value, state: &AppState, user_id: UserId) -> Value {
     match name {
         "list_agents" => execute_list_agents(state).await,
         "list_roles" => execute_list_roles(state).await,
-        "create_agent" => execute_create_agent(input, state).await,
+        "create_agent" => execute_create_agent(input, state, user_id).await,
         "assign_task" => execute_assign_task(input, state).await,
         "get_task_result" => execute_get_task_result(input, state).await,
         "list_pending_approvals" => execute_list_pending_approvals(state).await,
         "respond_to_approval" => execute_respond_to_approval(input, state).await,
         "remove_agent" => execute_remove_agent(input, state).await,
+        "create_cluster" => execute_create_cluster(input, state, user_id).await,
+        "add_to_cluster" => execute_add_to_cluster(input, state).await,
+        "remove_from_cluster" => execute_remove_from_cluster(input, state).await,
+        "list_clusters" => execute_list_clusters(state).await,
         _ => json!({ "error": format!("Unknown tool: {}", name) }),
     }
 }
@@ -225,7 +298,7 @@ async fn execute_list_roles(state: &AppState) -> Value {
     })
 }
 
-async fn execute_create_agent(input: &Value, state: &AppState) -> Value {
+async fn execute_create_agent(input: &Value, state: &AppState, user_id: UserId) -> Value {
     let Some(pool) = &state.pool else {
         return json!({ "error": "Agent pool not initialized" });
     };
@@ -251,16 +324,30 @@ async fn execute_create_agent(input: &Value, state: &AppState) -> Value {
         ..Default::default()
     };
 
+    let model_config = ModelConfig::default();
     let mut pool = pool.lock().await;
     let mut dispatcher = dispatcher.lock().await;
 
-    match pool.spawn_agent_with_dispatcher(tier, persona, ModelConfig::default(), &mut dispatcher) {
-        Ok(agent_id) => json!({
-            "agent_id": agent_id.0.to_string(),
-            "tier": tier_str,
-            "name": name,
-            "status": "created"
-        }),
+    match pool.spawn_agent_with_dispatcher(tier, persona, model_config.clone(), &mut dispatcher) {
+        Ok(agent_id) => {
+            // Persist to DB
+            if let Err(e) = state.repo.upsert_agent(user_id, AgentRow {
+                id: agent_id.0,
+                tier: tier_str.to_string(),
+                persona_name: name.clone(),
+                model_id: model_config.model_id.clone(),
+                status: "idle".to_string(),
+            }).await {
+                tracing::error!("Failed to persist agent: {}", e);
+            }
+
+            json!({
+                "agent_id": agent_id.0.to_string(),
+                "tier": tier_str,
+                "name": name,
+                "status": "created"
+            })
+        }
         Err(e) => json!({ "error": e.to_string() }),
     }
 }
@@ -325,23 +412,49 @@ async fn execute_assign_task(input: &Value, state: &AppState) -> Value {
 
     let agent_id = crate::agents::AgentId(uuid);
 
+    // Look up cluster context for this agent
+    let cluster_mgr = state.cluster_manager.read().await;
+    let (cluster_conventions, cluster_files) =
+        if let Some(cluster) = cluster_mgr.get_agent_cluster(&agent_id) {
+            (
+                cluster.shared_context.conventions.clone(),
+                cluster.shared_context.shared_files.clone(),
+            )
+        } else {
+            (String::new(), vec![])
+        };
+    drop(cluster_mgr);
+
+    // Build execution context from project root
+    let project_root = std::env::current_dir().unwrap_or_default();
+    let execution_context = Some(crate::execution::ExecutionContext::new(project_root));
+
+    // Parse allowed_tools if provided
+    let allowed_tools = input["allowed_tools"]
+        .as_array()
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
+
+    let mut constraints = TaskConstraints::default();
+    constraints.allowed_tools = allowed_tools;
+
     let assignment = TaskAssignment {
         task_id: uuid::Uuid::new_v4(),
         title: title.to_string(),
         description: description.to_string(),
         context: TaskContext {
             required_reading,
-            files: vec![],
+            files: cluster_files,
             history: vec![],
-            conventions: String::new(),
+            conventions: cluster_conventions,
             role_context: RoleContext {
                 system_prompt,
                 style,
                 output_format,
             },
             chat_messages: vec![],
+            execution_context,
         },
-        constraints: TaskConstraints::default(),
+        constraints,
         timeout: Duration::from_secs(300),
         role_id,
     };
@@ -465,6 +578,117 @@ async fn execute_respond_to_approval(input: &Value, state: &AppState) -> Value {
     }
 }
 
+async fn execute_create_cluster(input: &Value, state: &AppState, user_id: UserId) -> Value {
+    let Some(name) = input["name"].as_str() else {
+        return json!({ "error": "name is required" });
+    };
+    let description = input["description"].as_str().unwrap_or("").to_string();
+
+    let mut mgr = state.cluster_manager.write().await;
+    let id = mgr.create_cluster(name.to_string(), description.clone());
+
+    // Persist to DB
+    if let Err(e) = state.repo.upsert_cluster(user_id, ClusterRow {
+        id: id.0,
+        name: name.to_string(),
+        description,
+        conventions: String::new(),
+        shared_files: serde_json::json!([]),
+    }).await {
+        tracing::error!("Failed to persist cluster: {}", e);
+    }
+
+    json!({
+        "status": "created",
+        "cluster_id": id.0.to_string(),
+        "name": name
+    })
+}
+
+async fn execute_add_to_cluster(input: &Value, state: &AppState) -> Value {
+    let Some(cluster_str) = input["cluster_id"].as_str() else {
+        return json!({ "error": "cluster_id is required" });
+    };
+    let Some(agent_str) = input["agent_id"].as_str() else {
+        return json!({ "error": "agent_id is required" });
+    };
+
+    let Ok(cluster_uuid) = uuid::Uuid::parse_str(cluster_str) else {
+        return json!({ "error": format!("Invalid cluster UUID: {}", cluster_str) });
+    };
+    let Ok(agent_uuid) = uuid::Uuid::parse_str(agent_str) else {
+        return json!({ "error": format!("Invalid agent UUID: {}", agent_str) });
+    };
+
+    let mut mgr = state.cluster_manager.write().await;
+    match mgr.add_agent(ClusterId(cluster_uuid), crate::agents::AgentId(agent_uuid)) {
+        Ok(()) => {
+            if let Err(e) = state.repo.add_cluster_member(cluster_uuid, agent_uuid).await {
+                tracing::error!("Failed to persist cluster member: {}", e);
+            }
+            json!({
+                "status": "added",
+                "cluster_id": cluster_str,
+                "agent_id": agent_str
+            })
+        }
+        Err(e) => json!({ "error": e.to_string() }),
+    }
+}
+
+async fn execute_remove_from_cluster(input: &Value, state: &AppState) -> Value {
+    let Some(cluster_str) = input["cluster_id"].as_str() else {
+        return json!({ "error": "cluster_id is required" });
+    };
+    let Some(agent_str) = input["agent_id"].as_str() else {
+        return json!({ "error": "agent_id is required" });
+    };
+
+    let Ok(cluster_uuid) = uuid::Uuid::parse_str(cluster_str) else {
+        return json!({ "error": format!("Invalid cluster UUID: {}", cluster_str) });
+    };
+    let Ok(agent_uuid) = uuid::Uuid::parse_str(agent_str) else {
+        return json!({ "error": format!("Invalid agent UUID: {}", agent_str) });
+    };
+
+    let mut mgr = state.cluster_manager.write().await;
+    match mgr.remove_agent(ClusterId(cluster_uuid), crate::agents::AgentId(agent_uuid)) {
+        Ok(()) => {
+            if let Err(e) = state.repo.remove_cluster_member(cluster_uuid, agent_uuid).await {
+                tracing::error!("Failed to persist cluster member removal: {}", e);
+            }
+            json!({
+                "status": "removed",
+                "cluster_id": cluster_str,
+                "agent_id": agent_str
+            })
+        }
+        Err(e) => json!({ "error": e.to_string() }),
+    }
+}
+
+async fn execute_list_clusters(state: &AppState) -> Value {
+    let mgr = state.cluster_manager.read().await;
+    let clusters: Vec<Value> = mgr
+        .list_clusters()
+        .iter()
+        .map(|c| {
+            json!({
+                "id": c.id.0.to_string(),
+                "name": c.name,
+                "description": c.description,
+                "member_count": c.members.len(),
+                "members": c.members.iter().map(|a| a.0.to_string()).collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+
+    json!({
+        "clusters": clusters,
+        "count": clusters.len()
+    })
+}
+
 async fn execute_remove_agent(input: &Value, state: &AppState) -> Value {
     let Some(pool) = &state.pool else {
         return json!({ "error": "Agent pool not initialized" });
@@ -482,7 +706,12 @@ async fn execute_remove_agent(input: &Value, state: &AppState) -> Value {
 
     let mut pool = pool.lock().await;
     match pool.remove_agent(&agent_id) {
-        Ok(()) => json!({ "status": "removed", "agent_id": id_str }),
+        Ok(()) => {
+            if let Err(e) = state.repo.delete_persisted_agent(uuid).await {
+                tracing::error!("Failed to delete persisted agent: {}", e);
+            }
+            json!({ "status": "removed", "agent_id": id_str })
+        }
         Err(e) => json!({ "error": e.to_string() }),
     }
 }
@@ -492,9 +721,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn agent_tools_returns_eight_tools() {
+    fn agent_tools_returns_twelve_tools() {
         let tools = agent_tools();
-        assert_eq!(tools.len(), 8);
+        assert_eq!(tools.len(), 12);
         assert_eq!(tools[0].name, "list_agents");
         assert_eq!(tools[1].name, "list_roles");
         assert_eq!(tools[2].name, "create_agent");
@@ -503,6 +732,10 @@ mod tests {
         assert_eq!(tools[5].name, "list_pending_approvals");
         assert_eq!(tools[6].name, "respond_to_approval");
         assert_eq!(tools[7].name, "remove_agent");
+        assert_eq!(tools[8].name, "create_cluster");
+        assert_eq!(tools[9].name, "add_to_cluster");
+        assert_eq!(tools[10].name, "remove_from_cluster");
+        assert_eq!(tools[11].name, "list_clusters");
     }
 
     #[test]

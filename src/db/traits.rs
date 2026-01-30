@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use crate::db::ChatMessageRow;
+use crate::db::{AgentRow, ChatMessageRow, ClusterRow};
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::observability::{Decision, LlmCall};
 use crate::orchestration::DependencyError;
@@ -309,6 +309,37 @@ pub trait ServerRepo: Send + Sync {
 
     /// Get the stored password hash.
     async fn get_password(&self) -> Result<Option<String>>;
+
+    // --- Agent persistence ---
+
+    /// List all agents for a user.
+    async fn list_persisted_agents(&self, user_id: UserId) -> Result<Vec<AgentRow>>;
+
+    /// Insert or update an agent definition.
+    async fn upsert_agent(&self, user_id: UserId, agent: AgentRow) -> Result<()>;
+
+    /// Delete an agent by ID.
+    async fn delete_persisted_agent(&self, agent_id: Uuid) -> Result<()>;
+
+    // --- Cluster persistence ---
+
+    /// List all clusters for a user.
+    async fn list_persisted_clusters(&self, user_id: UserId) -> Result<Vec<ClusterRow>>;
+
+    /// Insert or update a cluster.
+    async fn upsert_cluster(&self, user_id: UserId, cluster: ClusterRow) -> Result<()>;
+
+    /// Delete a cluster by ID.
+    async fn delete_cluster(&self, cluster_id: Uuid) -> Result<()>;
+
+    /// List agent IDs in a cluster.
+    async fn list_cluster_members(&self, cluster_id: Uuid) -> Result<Vec<Uuid>>;
+
+    /// Add an agent to a cluster.
+    async fn add_cluster_member(&self, cluster_id: Uuid, agent_id: Uuid) -> Result<()>;
+
+    /// Remove an agent from a cluster.
+    async fn remove_cluster_member(&self, cluster_id: Uuid, agent_id: Uuid) -> Result<()>;
 }
 
 // ============================================================================

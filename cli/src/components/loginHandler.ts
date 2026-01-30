@@ -6,12 +6,12 @@ export interface LoginResult {
   error?: string;
 }
 
-export async function handleLogin(password: string): Promise<LoginResult> {
-  if (!password) {
-    return { success: false, error: 'Password is required.' };
+export async function handleLogin(email: string, password: string): Promise<LoginResult> {
+  if (!email || !password) {
+    return { success: false, error: 'Email and password are required.' };
   }
   try {
-    const res = await api.auth.login(password);
+    const res = await api.auth.login(email, password);
     setToken(res.token, res.expires_in);
     return { success: true };
   } catch (err) {

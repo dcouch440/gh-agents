@@ -56,10 +56,11 @@ async function fetchApi<T>(
 
   if (!res.ok) {
     let body: unknown;
+    const text = await res.text();
     try {
-      body = await res.json();
+      body = JSON.parse(text);
     } catch {
-      body = await res.text();
+      body = text;
     }
     throw new ApiError(res.status, body);
   }
@@ -75,10 +76,10 @@ export const api = {
   health: () => fetchApi<HealthResponse>('/api/health'),
 
   auth: {
-    login: (password: string) =>
+    login: (email: string, password: string) =>
       fetchApi<LoginResponse>('/api/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ email, password }),
       }),
     me: () => fetchApi<AuthMeResponse>('/api/auth/me'),
   },

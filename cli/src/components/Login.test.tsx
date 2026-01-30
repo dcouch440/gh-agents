@@ -26,16 +26,25 @@ beforeEach(() => {
 });
 
 describe('Login component', () => {
-  it('renders password prompt', () => {
+  it('renders email prompt first', () => {
     const { lastFrame } = render(<Login onSuccess={vi.fn()} />);
-    expect(lastFrame()).toContain('Password:');
+    expect(lastFrame()).toContain('Email:');
   });
 
-  it('does not submit when value is empty', () => {
+  it('does not advance when email is empty', () => {
     render(<Login onSuccess={vi.fn()} />);
-    // Submit empty string should not call handleLogin
     capturedOnSubmit?.('');
+    // Should still be on email step
     expect(mockedHandleLogin).not.toHaveBeenCalled();
+  });
+
+  it('advances to password after email submitted', async () => {
+    const { lastFrame } = render(<Login onSuccess={vi.fn()} />);
+    capturedOnSubmit?.('nexor@nexor.com');
+
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain('Password:');
+    });
   });
 
   it('shows loading spinner during authentication', async () => {
@@ -45,6 +54,12 @@ describe('Login component', () => {
     );
 
     const { lastFrame } = render(<Login onSuccess={vi.fn()} />);
+    // Submit email
+    capturedOnSubmit?.('nexor@nexor.com');
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain('Password:');
+    });
+    // Submit password
     capturedOnSubmit?.('secret');
 
     await vi.waitFor(() => {
@@ -59,6 +74,10 @@ describe('Login component', () => {
     const onSuccess = vi.fn();
 
     render(<Login onSuccess={onSuccess} />);
+    capturedOnSubmit?.('nexor@nexor.com');
+    await vi.waitFor(() => {
+      expect(capturedOnSubmit).toBeDefined();
+    });
     capturedOnSubmit?.('secret');
 
     await vi.waitFor(() => {
@@ -66,19 +85,22 @@ describe('Login component', () => {
     });
   });
 
-  it('shows error and clears password on login failure', async () => {
+  it('shows error and resets to email on login failure', async () => {
     mockedHandleLogin.mockResolvedValue({ success: false, error: 'Invalid password' });
     const onSuccess = vi.fn();
 
     const { lastFrame } = render(<Login onSuccess={onSuccess} />);
+    capturedOnSubmit?.('nexor@nexor.com');
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain('Password:');
+    });
     capturedOnSubmit?.('wrong');
 
     await vi.waitFor(() => {
       expect(lastFrame()).toContain('Invalid password');
     });
     expect(onSuccess).not.toHaveBeenCalled();
-    // Should be back to password prompt (not loading)
-    expect(lastFrame()).toContain('Password:');
+    expect(lastFrame()).toContain('Email:');
   });
 
   it('shows default error when no error message provided', async () => {
@@ -86,6 +108,10 @@ describe('Login component', () => {
     const onSuccess = vi.fn();
 
     const { lastFrame } = render(<Login onSuccess={onSuccess} />);
+    capturedOnSubmit?.('nexor@nexor.com');
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain('Password:');
+    });
     capturedOnSubmit?.('wrong');
 
     await vi.waitFor(() => {

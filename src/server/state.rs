@@ -8,7 +8,7 @@ use sqlx::PgPool;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use uuid::Uuid;
 
-use crate::agents::{AgentPool, AgentResponse, Dispatcher, RoleManager};
+use crate::agents::{AgentPool, AgentResponse, ClusterManager, Dispatcher, RoleManager};
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::{ServerRepo, UserRepo};
 use crate::llm::AnthropicClient;
@@ -70,12 +70,16 @@ pub struct AppState {
     pub task_results: Arc<RwLock<HashMap<Uuid, AgentResponse>>>,
     /// Role manager for building role-aware agent context
     pub role_manager: Option<Arc<RoleManager>>,
+    /// Cluster manager for agent grouping
+    pub cluster_manager: Arc<RwLock<ClusterManager>>,
 }
 
 impl AppState {
     /// Create new application state, returning the orchestrator receiver separately
     /// so it can be passed to the orchestrator consumer task.
-    pub fn new(
+    ///
+    /// Loads persisted agents and clusters from the database on startup.
+    pub async fn new(
         db: PgPool,
         scheduler: Arc<RwLock<Scheduler>>,
         config: AppConfig,
@@ -91,10 +95,47 @@ impl AppState {
 
         // Initialize agent pool + dispatcher if API key is available
         if let Ok(provider) = AnthropicClient::from_env() {
-            let pool = AgentPool::new(AgentPoolConfig::default(), Arc::new(provider));
-            let dispatcher = Dispatcher::new(64);
+            let provider = Arc::new(provider);
+            let mut pool = AgentPool::new(AgentPoolConfig::default(), provider);
+            let mut dispatcher = Dispatcher::new(64);
+
+            // Reconstruct agents from DB
+            let legacy_user = UserId(uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap());
+            if let Ok(agent_rows) = state.repo.list_persisted_agents(legacy_user).await {
+                for row in agent_rows {
+                    let tier = match row.tier.as_str() {
+                        "orchestrator" => crate::types::AgentTier::Orchestrator,
+                        "utility" => crate::types::AgentTier::Utility,
+                        _ => crate::types::AgentTier::Worker,
+                    };
+                    let persona = crate::types::AgentPersona {
+                        name: row.persona_name.clone(),
+                        ..Default::default()
+                    };
+                    match pool.spawn_agent_with_dispatcher(tier, persona, crate::types::ModelConfig::default(), &mut dispatcher) {
+                        Ok(id) => tracing::info!("Restored agent {} ({})", row.persona_name, id.0),
+                        Err(e) => tracing::warn!("Failed to restore agent {}: {}", row.persona_name, e),
+                    }
+                }
+            }
+
             state.pool = Some(Arc::new(tokio::sync::Mutex::new(pool)));
             state.dispatcher = Some(Arc::new(tokio::sync::Mutex::new(dispatcher)));
+
+            // Reconstruct clusters from DB
+            if let Ok(cluster_rows) = state.repo.list_persisted_clusters(legacy_user).await {
+                let mut mgr = state.cluster_manager.write().await;
+                for row in cluster_rows {
+                    let cid = crate::agents::ClusterId(row.id);
+                    mgr.create_cluster_with_id(cid, row.name.clone(), row.description.clone());
+                    tracing::info!("Restored cluster {} ({})", row.name, row.id);
+                    if let Ok(members) = state.repo.list_cluster_members(row.id).await {
+                        for agent_uuid in members {
+                            let _ = mgr.add_agent(cid, crate::agents::AgentId(agent_uuid));
+                        }
+                    }
+                }
+            }
         }
 
         (state, rx)
@@ -134,6 +175,7 @@ impl AppState {
                 dispatcher: None,
                 task_results: Arc::new(RwLock::new(HashMap::new())),
                 role_manager: None,
+                cluster_manager: Arc::new(RwLock::new(ClusterManager::new())),
             },
             orchestrator_rx,
         )
