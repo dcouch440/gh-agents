@@ -945,8 +945,8 @@ Done."#;
         assert_eq!(messages[0].role, crate::llm::Role::User);
         assert_eq!(messages[1].role, crate::llm::Role::Assistant);
         assert_eq!(messages[2].role, crate::llm::Role::User);
-        assert_eq!(messages[0].content, "Hello");
-        assert_eq!(messages[1].content, "Hi there");
+        assert_eq!(messages[0].text(), "Hello");
+        assert_eq!(messages[1].text(), "Hi there");
     }
 
     #[test]

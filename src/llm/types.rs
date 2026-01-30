@@ -39,26 +39,98 @@ pub enum Role {
     Assistant,
 }
 
+/// Message content: either plain text or structured content blocks.
+///
+/// Serializes as a plain string for text, or as an array for content blocks.
+/// This matches the Anthropic API format where `content` can be either.
+#[derive(Debug, Clone, PartialEq)]
+pub enum MessageContent {
+    Text(String),
+    Blocks(Vec<ContentBlock>),
+}
+
+impl Serialize for MessageContent {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            MessageContent::Text(s) => serializer.serialize_str(s),
+            MessageContent::Blocks(blocks) => blocks.serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for MessageContent {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        match value {
+            serde_json::Value::String(s) => Ok(MessageContent::Text(s)),
+            serde_json::Value::Array(_) => {
+                let blocks: Vec<ContentBlock> =
+                    serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                Ok(MessageContent::Blocks(blocks))
+            }
+            _ => Err(serde::de::Error::custom("expected string or array")),
+        }
+    }
+}
+
+impl MessageContent {
+    /// Get the text content, concatenating text blocks if structured.
+    pub fn as_text(&self) -> String {
+        match self {
+            MessageContent::Text(s) => s.clone(),
+            MessageContent::Blocks(blocks) => blocks
+                .iter()
+                .filter_map(|b| match b {
+                    ContentBlock::Text { text } => Some(text.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join(""),
+        }
+    }
+}
+
 /// A single message in a conversation
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Message {
     pub role: Role,
-    pub content: String,
+    pub content: MessageContent,
 }
 
 impl Message {
     pub fn user(content: impl Into<String>) -> Self {
         Self {
             role: Role::User,
-            content: content.into(),
+            content: MessageContent::Text(content.into()),
         }
     }
 
     pub fn assistant(content: impl Into<String>) -> Self {
         Self {
             role: Role::Assistant,
-            content: content.into(),
+            content: MessageContent::Text(content.into()),
         }
+    }
+
+    /// Create an assistant message with structured content blocks (text + tool use).
+    pub fn assistant_with_blocks(blocks: Vec<ContentBlock>) -> Self {
+        Self {
+            role: Role::Assistant,
+            content: MessageContent::Blocks(blocks),
+        }
+    }
+
+    /// Create a user message containing tool results.
+    pub fn tool_results(results: Vec<ContentBlock>) -> Self {
+        Self {
+            role: Role::User,
+            content: MessageContent::Blocks(results),
+        }
+    }
+
+    /// Get the text content of this message.
+    pub fn text(&self) -> String {
+        self.content.as_text()
     }
 }
 
@@ -413,14 +485,14 @@ mod tests {
     fn message_user_creates_user_role() {
         let msg = Message::user("Hello");
         assert_eq!(msg.role, Role::User);
-        assert_eq!(msg.content, "Hello");
+        assert_eq!(msg.text(), "Hello");
     }
 
     #[test]
     fn message_assistant_creates_assistant_role() {
         let msg = Message::assistant("Hi there!");
         assert_eq!(msg.role, Role::Assistant);
-        assert_eq!(msg.content, "Hi there!");
+        assert_eq!(msg.text(), "Hi there!");
     }
 
     #[test]

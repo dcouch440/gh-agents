@@ -8,7 +8,7 @@ use sqlx::PgPool;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use uuid::Uuid;
 
-use crate::agents::{AgentPool, AgentResponse, Dispatcher};
+use crate::agents::{AgentPool, AgentResponse, Dispatcher, RoleManager};
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::{ServerRepo, UserRepo};
 use crate::llm::AnthropicClient;
@@ -68,6 +68,8 @@ pub struct AppState {
     pub dispatcher: Option<Arc<tokio::sync::Mutex<Dispatcher>>>,
     /// Task results from agents, keyed by task_id
     pub task_results: Arc<RwLock<HashMap<Uuid, AgentResponse>>>,
+    /// Role manager for building role-aware agent context
+    pub role_manager: Option<Arc<RoleManager>>,
 }
 
 impl AppState {
@@ -82,6 +84,10 @@ impl AppState {
         let user_repo: Arc<dyn UserRepo> = Arc::new(PgRepo::new(db.clone()));
         let (mut state, rx) = Self::with_repo(Some(db), repo, Some(scheduler), config);
         state.user_repo = Some(user_repo);
+
+        // Initialize role manager with current working directory as project root
+        let project_root = std::env::current_dir().unwrap_or_default();
+        state.role_manager = Some(Arc::new(RoleManager::new(project_root)));
 
         // Initialize agent pool + dispatcher if API key is available
         if let Ok(provider) = AnthropicClient::from_env() {
@@ -127,6 +133,7 @@ impl AppState {
                 pool: None,
                 dispatcher: None,
                 task_results: Arc::new(RwLock::new(HashMap::new())),
+                role_manager: None,
             },
             orchestrator_rx,
         )

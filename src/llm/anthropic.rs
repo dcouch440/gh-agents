@@ -282,17 +282,23 @@ struct AnthropicRequest {
 #[derive(Debug, Serialize)]
 struct AnthropicMessage {
     role: String,
-    content: String,
+    content: serde_json::Value,
 }
 
 impl From<&Message> for AnthropicMessage {
     fn from(msg: &Message) -> Self {
+        let content = match &msg.content {
+            super::types::MessageContent::Text(s) => serde_json::Value::String(s.clone()),
+            super::types::MessageContent::Blocks(blocks) => {
+                serde_json::to_value(blocks).unwrap_or(serde_json::Value::Array(vec![]))
+            }
+        };
         Self {
             role: match msg.role {
                 Role::User => "user".to_string(),
                 Role::Assistant => "assistant".to_string(),
             },
-            content: msg.content.clone(),
+            content,
         }
     }
 }
