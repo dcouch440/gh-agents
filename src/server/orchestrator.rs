@@ -22,6 +22,7 @@ use crate::agents::AgentResponse;
 
 use super::state::{AppState, OrchestratorMessage, StreamChunk};
 use super::tools;
+use super::ws::{AgentUpdate, FeedUpdate, TaskUpdate};
 
 const SYSTEM_PROMPT: &str = "You are nexor, an AI assistant for software engineering. \
     You help users plan, build, and manage software projects. \
@@ -49,6 +50,94 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                         AgentResponse::ApprovalRequest { request, .. } => Some(request.task_id),
                         AgentResponse::ShutdownComplete { .. } => None,
                     };
+                    // Broadcast to UI channels
+                    match &resp {
+                        AgentResponse::TaskStarted { agent_id, task_id } => {
+                            state.broadcast_task(TaskUpdate {
+                                id: *task_id,
+                                status: "in_progress".into(),
+                                progress: None,
+                                assigned_agent: Some(agent_id.0.to_string()),
+                                user_id: None,
+                            });
+                            state.broadcast_agent(AgentUpdate {
+                                id: agent_id.0.to_string(),
+                                status: "working".into(),
+                                current_task: Some(*task_id),
+                                user_id: None,
+                            });
+                        }
+                        AgentResponse::TaskCompleted { agent_id, result } => {
+                            state.broadcast_task(TaskUpdate {
+                                id: result.task_id,
+                                status: "completed".into(),
+                                progress: Some(1.0),
+                                assigned_agent: Some(agent_id.0.to_string()),
+                                user_id: None,
+                            });
+                            state.broadcast_agent(AgentUpdate {
+                                id: agent_id.0.to_string(),
+                                status: "idle".into(),
+                                current_task: None,
+                                user_id: None,
+                            });
+                        }
+                        AgentResponse::TaskFailed { agent_id, result } => {
+                            state.broadcast_task(TaskUpdate {
+                                id: result.task_id,
+                                status: "failed".into(),
+                                progress: None,
+                                assigned_agent: Some(agent_id.0.to_string()),
+                                user_id: None,
+                            });
+                            state.broadcast_agent(AgentUpdate {
+                                id: agent_id.0.to_string(),
+                                status: "idle".into(),
+                                current_task: None,
+                                user_id: None,
+                            });
+                        }
+                        AgentResponse::ProgressUpdate { agent_id, update } => {
+                            state.broadcast_feed(FeedUpdate {
+                                id: update.task_id,
+                                agent_id: agent_id.0.to_string(),
+                                content: update.message.clone(),
+                                item_type: "progress".into(),
+                                timestamp: chrono::Utc::now(),
+                                user_id: None,
+                            });
+                            if let Some(pct) = update.progress_percent {
+                                state.broadcast_task(TaskUpdate {
+                                    id: update.task_id,
+                                    status: "in_progress".into(),
+                                    progress: Some(pct as f32 / 100.0),
+                                    assigned_agent: Some(agent_id.0.to_string()),
+                                    user_id: None,
+                                });
+                            }
+                        }
+                        AgentResponse::ApprovalRequest { agent_id, request } => {
+                            state.broadcast_feed(FeedUpdate {
+                                id: request.task_id,
+                                agent_id: agent_id.0.to_string(),
+                                content: format!(
+                                    "Approval needed: {} — {}",
+                                    request.action, request.details
+                                ),
+                                item_type: "approval_request".into(),
+                                timestamp: chrono::Utc::now(),
+                                user_id: None,
+                            });
+                            state.broadcast_agent(AgentUpdate {
+                                id: agent_id.0.to_string(),
+                                status: "waiting_for_approval".into(),
+                                current_task: Some(request.task_id),
+                                user_id: None,
+                            });
+                        }
+                        _ => {}
+                    }
+
                     if let Some(id) = task_id {
                         debug!("Response consumer received {:?} for task {}",
                             std::mem::discriminant(&resp), id);
@@ -141,7 +230,7 @@ async fn handle_message(
     // Ensure the current message is included
     if !messages
         .iter()
-        .any(|m| m.role == Role::User && m.content == msg.content)
+        .any(|m| m.role == Role::User && m.text() == msg.content)
     {
         messages.push(Message::user(&msg.content));
     }
@@ -220,20 +309,11 @@ async fn handle_message(
 
         // Check if we need to execute tools
         if response.stop_reason == StopReason::ToolUse {
-            // Add assistant message with content blocks
-            let assistant_content = if response.content.is_empty() {
-                // Tool use only, no text
-                String::new()
-            } else {
-                response.content.clone()
-            };
+            // Add assistant message with all content blocks (text + tool_use)
+            messages.push(Message::assistant_with_blocks(response.content_blocks.clone()));
 
-            // For the conversation, add the assistant's response
-            if !assistant_content.is_empty() {
-                messages.push(Message::assistant(&assistant_content));
-            }
-
-            // Execute each tool call and add results
+            // Execute each tool call and collect results
+            let mut tool_results = Vec::new();
             for block in &response.content_blocks {
                 if let ContentBlock::ToolUse { id, name, input } = block {
                     debug!("Executing tool: {} (id: {})", name, id);
@@ -241,11 +321,10 @@ async fn handle_message(
                     let result_str = serde_json::to_string_pretty(&result)
                         .unwrap_or_else(|_| result.to_string());
 
-                    // Add tool result as user message (Anthropic format)
-                    messages.push(Message::user(&format!(
-                        "Tool result for {} (id: {}):\n{}",
-                        name, id, result_str
-                    )));
+                    tool_results.push(ContentBlock::ToolResult {
+                        tool_use_id: id.clone(),
+                        content: result_str,
+                    });
 
                     // Stream tool execution info to user
                     let tool_info = format!("\n\n*Executed tool `{}`*\n\n", name);
@@ -255,6 +334,9 @@ async fn handle_message(
                         .await;
                 }
             }
+
+            // Add tool results as a single user message with content blocks
+            messages.push(Message::tool_results(tool_results));
 
             // Continue the loop for the next LLM call
             continue;

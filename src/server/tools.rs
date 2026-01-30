@@ -3,6 +3,7 @@
 //! Defines tool schemas (for the Anthropic tool use API) and execution
 //! handlers that let the orchestrator LLM create, list, and assign agents.
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use serde_json::{json, Value};
@@ -22,6 +23,15 @@ pub fn agent_tools() -> Vec<Tool> {
         Tool {
             name: "list_agents".to_string(),
             description: "List all agents in the pool with their status and tier.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {},
+                "required": []
+            }),
+        },
+        Tool {
+            name: "list_roles".to_string(),
+            description: "List all available roles with their descriptions, categories, and communication styles. Use this to choose a role when assigning tasks.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {},
@@ -65,6 +75,11 @@ pub fn agent_tools() -> Vec<Tool> {
                     "description": {
                         "type": "string",
                         "description": "Detailed description of what the agent should do"
+                    },
+                    "role": {
+                        "type": "string",
+                        "enum": ["orchestrator", "worker", "utility", "reviewer", "summarizer", "complaint-finder", "risk-assessor", "scope-definer"],
+                        "description": "Optional role for the agent. Defaults to 'worker'. Each role has specialized prompts and context."
                     }
                 },
                 "required": ["agent_id", "title", "description"]
@@ -84,6 +99,40 @@ pub fn agent_tools() -> Vec<Tool> {
                     }
                 },
                 "required": ["task_id"]
+            }),
+        },
+        Tool {
+            name: "list_pending_approvals".to_string(),
+            description: "List all pending approval requests from agents that need a decision."
+                .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {},
+                "required": []
+            }),
+        },
+        Tool {
+            name: "respond_to_approval".to_string(),
+            description:
+                "Approve or deny a pending approval request from an agent."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "agent_id": {
+                        "type": "string",
+                        "description": "The UUID of the agent that requested approval"
+                    },
+                    "approved": {
+                        "type": "boolean",
+                        "description": "True to approve, false to deny"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Reason for denial (required when denying)"
+                    }
+                },
+                "required": ["agent_id", "approved"]
             }),
         },
         Tool {
@@ -109,9 +158,12 @@ pub fn agent_tools() -> Vec<Tool> {
 pub async fn execute_tool(name: &str, input: &Value, state: &AppState) -> Value {
     match name {
         "list_agents" => execute_list_agents(state).await,
+        "list_roles" => execute_list_roles(state).await,
         "create_agent" => execute_create_agent(input, state).await,
         "assign_task" => execute_assign_task(input, state).await,
         "get_task_result" => execute_get_task_result(input, state).await,
+        "list_pending_approvals" => execute_list_pending_approvals(state).await,
+        "respond_to_approval" => execute_respond_to_approval(input, state).await,
         "remove_agent" => execute_remove_agent(input, state).await,
         _ => json!({ "error": format!("Unknown tool: {}", name) }),
     }
@@ -141,6 +193,35 @@ async fn execute_list_agents(state: &AppState) -> Value {
             "available": stats.utilities.available,
             "max": stats.utilities.max
         }
+    })
+}
+
+async fn execute_list_roles(state: &AppState) -> Value {
+    let Some(rm) = &state.role_manager else {
+        return json!({ "error": "Role manager not initialized" });
+    };
+
+    let roles: Vec<Value> = rm
+        .library()
+        .list_all()
+        .iter()
+        .map(|role| {
+            json!({
+                "id": role.id.0.as_str(),
+                "name": role.name,
+                "category": format!("{:?}", role.category),
+                "description": role.description,
+                "style": format!("{:?}", role.style),
+                "output_format": format!("{:?}", role.output_format),
+                "can_delegate_to": role.can_delegate_to.iter().map(|r| r.0.as_str()).collect::<Vec<_>>(),
+                "is_custom": role.is_custom,
+            })
+        })
+        .collect();
+
+    json!({
+        "roles": roles,
+        "count": roles.len()
     })
 }
 
@@ -203,6 +284,45 @@ async fn execute_assign_task(input: &Value, state: &AppState) -> Value {
         return json!({ "error": format!("Invalid UUID: {}", id_str) });
     };
 
+    let role_str = input["role"].as_str().unwrap_or("worker");
+    let role_id = RoleId::new(role_str);
+
+    // Build role-aware context if RoleManager is available
+    let (system_prompt, style, output_format, required_reading) =
+        if let Some(rm) = &state.role_manager {
+            if let Some(role) = rm.get_role(&role_id) {
+                let vars = HashMap::new();
+                let ctx = rm.build_context_for_role(role, &vars).await;
+                let prompt = ctx.build_system_prompt();
+                let s = role.style;
+                let fmt = role.output_format.clone();
+                let files = ctx
+                    .loaded_files
+                    .into_iter()
+                    .map(|f| crate::agents::FileContent {
+                        path: f.path,
+                        content: f.content,
+                    })
+                    .collect();
+                (prompt, s, fmt, files)
+            } else {
+                // Unknown role, fall back to defaults
+                (
+                    format!("You are a {} working on: {}", role_str, title),
+                    CommunicationStyle::Technical,
+                    OutputFormat::CodeAndReport,
+                    vec![],
+                )
+            }
+        } else {
+            (
+                format!("You are a {} working on: {}", role_str, title),
+                CommunicationStyle::Technical,
+                OutputFormat::CodeAndReport,
+                vec![],
+            )
+        };
+
     let agent_id = crate::agents::AgentId(uuid);
 
     let assignment = TaskAssignment {
@@ -210,20 +330,20 @@ async fn execute_assign_task(input: &Value, state: &AppState) -> Value {
         title: title.to_string(),
         description: description.to_string(),
         context: TaskContext {
-            required_reading: vec![],
+            required_reading,
             files: vec![],
             history: vec![],
             conventions: String::new(),
             role_context: RoleContext {
-                system_prompt: format!("You are working on: {}", title),
-                style: CommunicationStyle::Technical,
-                output_format: OutputFormat::CodeAndReport,
+                system_prompt,
+                style,
+                output_format,
             },
             chat_messages: vec![],
         },
         constraints: TaskConstraints::default(),
         timeout: Duration::from_secs(300),
-        role_id: RoleId::new("worker"),
+        role_id,
     };
 
     let task_id = assignment.task_id;
@@ -236,7 +356,8 @@ async fn execute_assign_task(input: &Value, state: &AppState) -> Value {
             "status": "assigned",
             "task_id": task_id.to_string(),
             "agent_id": id_str,
-            "title": title
+            "title": title,
+            "role": role_str
         }),
         Err(e) => json!({ "error": e.to_string() }),
     }
@@ -284,6 +405,66 @@ async fn execute_get_task_result(input: &Value, state: &AppState) -> Value {
     }
 }
 
+async fn execute_list_pending_approvals(state: &AppState) -> Value {
+    let results = state.task_results.read().await;
+    let pending: Vec<Value> = results
+        .values()
+        .filter_map(|resp| {
+            if let AgentResponse::ApprovalRequest { agent_id, request } = resp {
+                Some(json!({
+                    "agent_id": agent_id.0.to_string(),
+                    "task_id": request.task_id.to_string(),
+                    "action": request.action,
+                    "details": request.details,
+                }))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    json!({
+        "pending_approvals": pending,
+        "count": pending.len()
+    })
+}
+
+async fn execute_respond_to_approval(input: &Value, state: &AppState) -> Value {
+    let Some(dispatcher) = &state.dispatcher else {
+        return json!({ "error": "Dispatcher not initialized" });
+    };
+
+    let Some(id_str) = input["agent_id"].as_str() else {
+        return json!({ "error": "agent_id is required" });
+    };
+    let approved = input["approved"].as_bool().unwrap_or(false);
+
+    let Ok(uuid) = uuid::Uuid::parse_str(id_str) else {
+        return json!({ "error": format!("Invalid UUID: {}", id_str) });
+    };
+
+    let agent_id = crate::agents::AgentId(uuid);
+
+    let command = if approved {
+        AgentCommand::GrantApproval
+    } else {
+        let reason = input["reason"]
+            .as_str()
+            .unwrap_or("Denied by orchestrator")
+            .to_string();
+        AgentCommand::DenyApproval { reason }
+    };
+
+    let dispatcher = dispatcher.lock().await;
+    match dispatcher.send_to_agent(&agent_id, command).await {
+        Ok(()) => json!({
+            "status": if approved { "approved" } else { "denied" },
+            "agent_id": id_str
+        }),
+        Err(e) => json!({ "error": e.to_string() }),
+    }
+}
+
 async fn execute_remove_agent(input: &Value, state: &AppState) -> Value {
     let Some(pool) = &state.pool else {
         return json!({ "error": "Agent pool not initialized" });
@@ -311,14 +492,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn agent_tools_returns_five_tools() {
+    fn agent_tools_returns_eight_tools() {
         let tools = agent_tools();
-        assert_eq!(tools.len(), 5);
+        assert_eq!(tools.len(), 8);
         assert_eq!(tools[0].name, "list_agents");
-        assert_eq!(tools[1].name, "create_agent");
-        assert_eq!(tools[2].name, "assign_task");
-        assert_eq!(tools[3].name, "get_task_result");
-        assert_eq!(tools[4].name, "remove_agent");
+        assert_eq!(tools[1].name, "list_roles");
+        assert_eq!(tools[2].name, "create_agent");
+        assert_eq!(tools[3].name, "assign_task");
+        assert_eq!(tools[4].name, "get_task_result");
+        assert_eq!(tools[5].name, "list_pending_approvals");
+        assert_eq!(tools[6].name, "respond_to_approval");
+        assert_eq!(tools[7].name, "remove_agent");
     }
 
     #[test]

@@ -794,7 +794,7 @@ mod tests {
         };
 
         let request = planner.build_correction_request(&ticket, &error);
-        let prompt_text = &request.messages[0].content;
+        let prompt_text = request.messages[0].text();
         assert!(prompt_text.contains("CORRECTION NEEDED"));
         assert!(prompt_text.contains("bad json"));
         assert!(prompt_text.contains("some invalid output"));
@@ -811,7 +811,7 @@ mod tests {
         );
 
         let request = planner.build_correction_request(&ticket, &error);
-        let prompt_text = &request.messages[0].content;
+        let prompt_text = request.messages[0].text();
         assert!(prompt_text.contains("CORRECTION NEEDED"));
         assert!(prompt_text.contains("failed validation"));
     }
@@ -825,7 +825,7 @@ mod tests {
         let error = DecompositionError::LlmError("timeout".to_string());
 
         let request = planner.build_correction_request(&ticket, &error);
-        let prompt_text = &request.messages[0].content;
+        let prompt_text = request.messages[0].text();
         assert!(prompt_text.contains("CORRECTION NEEDED"));
         assert!(prompt_text.contains("Previous attempt failed"));
     }
@@ -843,7 +843,7 @@ mod tests {
         };
 
         let request = planner.build_correction_request(&ticket, &error);
-        let prompt_text = &request.messages[0].content;
+        let prompt_text = request.messages[0].text();
         // The raw output should be truncated to 500 chars
         assert!(prompt_text.contains("CORRECTION NEEDED"));
     }
