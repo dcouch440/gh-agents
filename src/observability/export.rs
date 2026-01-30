@@ -2,6 +2,7 @@
 //!
 //! Export observability data for external analysis.
 
+use crate::db::traits::ObservabilityRepo;
 use crate::observability::logging::{Decision, LlmCall, LlmCallLogger};
 use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
@@ -107,13 +108,13 @@ impl ExportSummary {
 }
 
 /// Session exporter
-pub struct SessionExporter {
-    logger: LlmCallLogger,
+pub struct SessionExporter<R: ObservabilityRepo = crate::db::pg_repo::PgRepo> {
+    logger: LlmCallLogger<R>,
 }
 
-impl SessionExporter {
+impl<R: ObservabilityRepo> SessionExporter<R> {
     /// Create a new exporter
-    pub fn new(logger: LlmCallLogger) -> Self {
+    pub fn new(logger: LlmCallLogger<R>) -> Self {
         Self { logger }
     }
 
@@ -192,8 +193,8 @@ impl SessionExporter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::traits::MockObservabilityRepo;
     use crate::observability::{DecisionType, LlmPrompt};
-    use crate::db::test_utils::TestDb;
     use tempfile::TempDir;
 
     fn mock_call(model: &str, cost: f64, tokens: u32) -> LlmCall {
@@ -429,12 +430,19 @@ mod tests {
         );
     }
 
-    // --- Async DB tests for SessionExporter ---
+    // --- Async mock tests for SessionExporter ---
 
     #[tokio::test]
     async fn exporter_export_empty_range() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_get_calls_in_range()
+            .times(1)
+            .returning(|_, _| Ok(vec![]));
+        mock.expect_get_decisions_in_range()
+            .times(1)
+            .returning(|_, _| Ok(vec![]));
+
+        let logger = LlmCallLogger::new(mock);
         let exporter = SessionExporter::new(logger);
 
         let range = TimeRange::last_hours(1);
@@ -445,26 +453,31 @@ mod tests {
         assert!(export.llm_calls.is_empty());
         assert!(export.decisions.is_empty());
         assert!(!export.version.is_empty());
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn exporter_export_with_data() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
-
         let task_id = Uuid::new_v4();
         let call = LlmCall::new("test-model", LlmPrompt::new("sys"), "resp")
             .with_task_id(task_id)
             .with_tokens(10, 20)
             .with_cost(0.01)
             .with_latency(100);
-        logger.log_call(&call).await.unwrap();
-
         let decision =
             Decision::new(task_id, DecisionType::TierRouting, "reason", "outcome").with_cost(0.02);
-        logger.log_decision(&decision).await.unwrap();
 
+        let call_c = call.clone();
+        let dec_c = decision.clone();
+
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_get_calls_in_range()
+            .times(1)
+            .returning(move |_, _| Ok(vec![call_c.clone()]));
+        mock.expect_get_decisions_in_range()
+            .times(1)
+            .returning(move |_, _| Ok(vec![dec_c.clone()]));
+
+        let logger = LlmCallLogger::new(mock);
         let exporter = SessionExporter::new(logger);
         let range = TimeRange::last_hours(1);
         let export = exporter.export(range).await.unwrap();
@@ -474,16 +487,25 @@ mod tests {
         assert_eq!(export.llm_calls.len(), 1);
         assert_eq!(export.decisions.len(), 1);
         assert_eq!(export.llm_calls[0].model, "test-model");
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn exporter_export_task_empty() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
+        let task_id = Uuid::new_v4();
+
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_get_calls_for_task()
+            .with(mockall::predicate::eq(task_id))
+            .times(1)
+            .returning(|_| Ok(vec![]));
+        mock.expect_get_decisions_for_task()
+            .with(mockall::predicate::eq(task_id))
+            .times(1)
+            .returning(|_| Ok(vec![]));
+
+        let logger = LlmCallLogger::new(mock);
         let exporter = SessionExporter::new(logger);
 
-        let task_id = Uuid::new_v4();
         let export = exporter.export_task(task_id).await.unwrap();
 
         // When no data, should fall back to last_24_hours time range
@@ -491,66 +513,80 @@ mod tests {
         assert_eq!(export.summary.total_decisions, 0);
         let dur = export.time_range.duration_secs();
         assert!(dur >= 86400 - 10 && dur <= 86400 + 10);
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn exporter_export_task_with_calls_only() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
-
         let task_id = Uuid::new_v4();
         let call = LlmCall::new("m", LlmPrompt::new("s"), "r")
             .with_task_id(task_id)
             .with_tokens(5, 5)
             .with_cost(0.001);
-        logger.log_call(&call).await.unwrap();
+        let call_c = call.clone();
 
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_get_calls_for_task()
+            .times(1)
+            .returning(move |_| Ok(vec![call_c.clone()]));
+        mock.expect_get_decisions_for_task()
+            .times(1)
+            .returning(|_| Ok(vec![]));
+
+        let logger = LlmCallLogger::new(mock);
         let exporter = SessionExporter::new(logger);
         let export = exporter.export_task(task_id).await.unwrap();
 
         assert_eq!(export.summary.total_llm_calls, 1);
         assert_eq!(export.summary.total_decisions, 0);
-        // Time range derived from the single call's timestamp
         assert!(export.time_range.duration_secs() >= 0);
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn exporter_export_task_with_decisions_only() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
-
         let task_id = Uuid::new_v4();
         let decision =
             Decision::new(task_id, DecisionType::Decomposition, "r", "o").with_cost(0.05);
-        logger.log_decision(&decision).await.unwrap();
+        let dc = decision.clone();
 
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_get_calls_for_task()
+            .times(1)
+            .returning(|_| Ok(vec![]));
+        mock.expect_get_decisions_for_task()
+            .times(1)
+            .returning(move |_| Ok(vec![dc.clone()]));
+
+        let logger = LlmCallLogger::new(mock);
         let exporter = SessionExporter::new(logger);
         let export = exporter.export_task(task_id).await.unwrap();
 
         assert_eq!(export.summary.total_llm_calls, 0);
         assert_eq!(export.summary.total_decisions, 1);
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn exporter_export_task_with_both() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
-
         let task_id = Uuid::new_v4();
 
         let call = LlmCall::new("model", LlmPrompt::new("s"), "r")
             .with_task_id(task_id)
             .with_tokens(10, 10)
             .with_cost(0.01);
-        logger.log_call(&call).await.unwrap();
-
         let decision =
             Decision::new(task_id, DecisionType::ReviewOutcome, "r", "o").with_cost(0.02);
-        logger.log_decision(&decision).await.unwrap();
 
+        let call_c = call.clone();
+        let dec_c = decision.clone();
+
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_get_calls_for_task()
+            .times(1)
+            .returning(move |_| Ok(vec![call_c.clone()]));
+        mock.expect_get_decisions_for_task()
+            .times(1)
+            .returning(move |_| Ok(vec![dec_c.clone()]));
+
+        let logger = LlmCallLogger::new(mock);
         let exporter = SessionExporter::new(logger);
         let export = exporter.export_task(task_id).await.unwrap();
 
@@ -558,23 +594,26 @@ mod tests {
         assert_eq!(export.summary.total_decisions, 1);
         assert_eq!(export.llm_calls.len(), 1);
         assert_eq!(export.decisions.len(), 1);
-        // Time range should span from earliest to latest timestamp
         assert!(export.time_range.duration_secs() >= 0);
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn exporter_export_to_file() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
-
-        let task_id = Uuid::new_v4();
         let call = LlmCall::new("file-model", LlmPrompt::new("s"), "r")
-            .with_task_id(task_id)
+            .with_task_id(Uuid::new_v4())
             .with_tokens(5, 5)
             .with_cost(0.001);
-        logger.log_call(&call).await.unwrap();
+        let call_c = call.clone();
 
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_get_calls_in_range()
+            .times(1)
+            .returning(move |_, _| Ok(vec![call_c.clone()]));
+        mock.expect_get_decisions_in_range()
+            .times(1)
+            .returning(|_, _| Ok(vec![]));
+
+        let logger = LlmCallLogger::new(mock);
         let exporter = SessionExporter::new(logger);
         let out_dir = TempDir::new().unwrap();
         let out_path = out_dir.path().join("export.json");
@@ -591,18 +630,23 @@ mod tests {
         // Verify it's valid JSON
         let parsed: serde_json::Value = serde_json::from_str(&contents).unwrap();
         assert_eq!(parsed["summary"]["total_llm_calls"], 1);
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn exporter_export_task_to_file() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
-
         let task_id = Uuid::new_v4();
         let decision = Decision::new(task_id, DecisionType::Recovery, "r", "o").with_cost(0.03);
-        logger.log_decision(&decision).await.unwrap();
+        let dc = decision.clone();
 
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_get_calls_for_task()
+            .times(1)
+            .returning(|_| Ok(vec![]));
+        mock.expect_get_decisions_for_task()
+            .times(1)
+            .returning(move |_| Ok(vec![dc.clone()]));
+
+        let logger = LlmCallLogger::new(mock);
         let exporter = SessionExporter::new(logger);
         let out_dir = TempDir::new().unwrap();
         let out_path = out_dir.path().join("task_export.json");
@@ -616,13 +660,19 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&contents).unwrap();
         assert_eq!(parsed["summary"]["total_decisions"], 1);
         assert_eq!(parsed["summary"]["total_llm_calls"], 0);
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn exporter_export_to_file_empty() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_get_calls_in_range()
+            .times(1)
+            .returning(|_, _| Ok(vec![]));
+        mock.expect_get_decisions_in_range()
+            .times(1)
+            .returning(|_, _| Ok(vec![]));
+
+        let logger = LlmCallLogger::new(mock);
         let exporter = SessionExporter::new(logger);
 
         let out_dir = TempDir::new().unwrap();
@@ -637,13 +687,19 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&contents).unwrap();
         assert_eq!(parsed["summary"]["total_llm_calls"], 0);
         assert_eq!(parsed["llm_calls"].as_array().unwrap().len(), 0);
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn exporter_export_task_to_file_empty() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_get_calls_for_task()
+            .times(1)
+            .returning(|_| Ok(vec![]));
+        mock.expect_get_decisions_for_task()
+            .times(1)
+            .returning(|_| Ok(vec![]));
+
+        let logger = LlmCallLogger::new(mock);
         let exporter = SessionExporter::new(logger);
 
         let out_dir = TempDir::new().unwrap();
@@ -658,6 +714,5 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&contents).unwrap();
         assert_eq!(parsed["summary"]["total_llm_calls"], 0);
         assert_eq!(parsed["summary"]["total_decisions"], 0);
-        db.cleanup().await;
     }
 }

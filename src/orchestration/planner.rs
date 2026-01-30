@@ -12,9 +12,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use chrono::Utc;
-use sqlx::PgPool;
 use thiserror::Error;
 
+use crate::db::traits::PlannerRepo;
 use crate::llm::{LLMProvider, LLMRequest, Message};
 use crate::prompts::schemas::{ComplexityOutput, DecompositionOutput, TierOutput, ValidationError};
 use crate::prompts::templates::OrchestratorPrompts;
@@ -68,9 +68,9 @@ impl Default for PlannerConfig {
 pub type DecompositionResult<T> = Result<T, DecompositionError>;
 
 /// The Planner decomposes tickets into vertical slices.
-pub struct Planner<P: LLMProvider> {
+pub struct Planner<P: LLMProvider, R: PlannerRepo = crate::db::pg_repo::PgRepo> {
     provider: Arc<P>,
-    pool: Option<PgPool>,
+    repo: Option<Arc<R>>,
     config: PlannerConfig,
 }
 
@@ -78,21 +78,21 @@ pub struct Planner<P: LLMProvider> {
 // Slice 5.1.2: Core Decomposition Method
 // ============================================================================
 
-impl<P: LLMProvider> Planner<P> {
+impl<P: LLMProvider, R: PlannerRepo> Planner<P, R> {
     /// Create a new Planner without database persistence.
     pub fn new(provider: Arc<P>, config: PlannerConfig) -> Self {
         Self {
             provider,
-            pool: None,
+            repo: None,
             config,
         }
     }
 
-    /// Create a new Planner with database persistence.
-    pub fn with_db(provider: Arc<P>, pool: PgPool, config: PlannerConfig) -> Self {
+    /// Create a new Planner with repository for database persistence.
+    pub fn with_repo(provider: Arc<P>, repo: Arc<R>, config: PlannerConfig) -> Self {
         Self {
             provider,
-            pool: Some(pool),
+            repo: Some(repo),
             config,
         }
     }
@@ -148,8 +148,10 @@ impl<P: LLMProvider> Planner<P> {
     pub async fn decompose_and_save(&self, ticket: &Ticket) -> DecompositionResult<PlannerOutput> {
         let output = self.decompose(ticket).await?;
 
-        if self.pool.is_some() {
-            self.save_output(&output).await?;
+        if let Some(ref repo) = self.repo {
+            repo.save_planner_output(output.clone())
+                .await
+                .map_err(DecompositionError::DatabaseError)?;
         }
 
         Ok(output)
@@ -354,78 +356,6 @@ impl<P: LLMProvider> Planner<P> {
             thinking: output.thinking,
         }
     }
-
-    // ============================================================================
-    // Slice 5.1.5: Persist to Database
-    // ============================================================================
-
-    async fn save_output(&self, output: &PlannerOutput) -> DecompositionResult<()> {
-        let pool = self
-            .pool
-            .as_ref()
-            .ok_or_else(|| DecompositionError::DatabaseError("No database pool".to_string()))?;
-
-        let mut tx = pool
-            .begin()
-            .await
-            .map_err(|e| DecompositionError::DatabaseError(e.to_string()))?;
-
-        // Insert slices
-        for slice in &output.slices {
-            sqlx::query(
-                r#"
-                INSERT INTO vertical_slices (id, ticket_id, title, description, status, created_at)
-                VALUES ($1, $2, $3, $4, $5, $6)
-                "#,
-            )
-            .bind(slice.id.0)
-            .bind(slice.ticket_id)
-            .bind(&slice.title)
-            .bind(&slice.description)
-            .bind("pending")
-            .bind(slice.created_at)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| DecompositionError::DatabaseError(e.to_string()))?;
-        }
-
-        // Insert tasks
-        for task in &output.tasks {
-            let slice_id = task.slice_id.as_ref().map(|s| s.0);
-
-            sqlx::query(
-                r#"
-                INSERT INTO tasks (id, slice_id, title, description, assigned_tier, status, priority, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                "#,
-            )
-            .bind(task.id.0)
-            .bind(slice_id)
-            .bind(&task.title)
-            .bind(&task.description)
-            .bind(format!("{:?}", task.assigned_tier))
-            .bind("pending")
-            .bind(format!("{:?}", task.priority))
-            .bind(task.created_at)
-            .bind(task.updated_at)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| DecompositionError::DatabaseError(e.to_string()))?;
-        }
-
-        tx.commit()
-            .await
-            .map_err(|e| DecompositionError::DatabaseError(e.to_string()))?;
-
-        tracing::info!(
-            ticket_id = %output.ticket_id.0,
-            slices = output.slices.len(),
-            tasks = output.tasks.len(),
-            "Decomposition saved to database"
-        );
-
-        Ok(())
-    }
 }
 
 /// Output from the Planner
@@ -474,10 +404,14 @@ impl PlannerOutput {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::traits::MockPlannerRepo;
     use crate::llm::{LLMResponse, LLMResult, StopReason, TokenUsage};
     use async_trait::async_trait;
     use futures::Stream;
     use std::pin::Pin;
+
+    /// Type alias so `Planner::new(...)` doesn't need turbofish in every test.
+    type TestPlanner<P> = Planner<P, MockPlannerRepo>;
 
     /// Mock LLM provider for testing
     struct MockProvider {
@@ -586,7 +520,7 @@ mod tests {
     #[test]
     fn test_extract_json_from_code_block() {
         let provider = Arc::new(MockProvider::with_response(""));
-        let planner = Planner::new(provider, PlannerConfig::default());
+        let planner = TestPlanner::new(provider, PlannerConfig::default());
 
         let content = r#"Here's the decomposition:
 
@@ -602,7 +536,7 @@ mod tests {
     #[test]
     fn test_extract_json_raw() {
         let provider = Arc::new(MockProvider::with_response(""));
-        let planner = Planner::new(provider, PlannerConfig::default());
+        let planner = TestPlanner::new(provider, PlannerConfig::default());
 
         let content = r#"{"thinking": "test", "slices": []}"#;
 
@@ -613,7 +547,7 @@ mod tests {
     #[test]
     fn test_extract_json_no_json() {
         let provider = Arc::new(MockProvider::with_response(""));
-        let planner = Planner::new(provider, PlannerConfig::default());
+        let planner = TestPlanner::new(provider, PlannerConfig::default());
 
         let content = "No JSON here, just text.";
 
@@ -624,7 +558,7 @@ mod tests {
     #[test]
     fn test_parse_and_validate_valid() {
         let provider = Arc::new(MockProvider::with_response(""));
-        let planner = Planner::new(provider, PlannerConfig::default());
+        let planner = TestPlanner::new(provider, PlannerConfig::default());
 
         let result = planner.parse_and_validate(valid_decomposition_json());
         assert!(result.is_ok());
@@ -638,7 +572,7 @@ mod tests {
     #[test]
     fn test_parse_and_validate_invalid_json() {
         let provider = Arc::new(MockProvider::with_response(""));
-        let planner = Planner::new(provider, PlannerConfig::default());
+        let planner = TestPlanner::new(provider, PlannerConfig::default());
 
         let result = planner.parse_and_validate("not json");
         assert!(matches!(result, Err(DecompositionError::ParseError { .. })));
@@ -647,7 +581,7 @@ mod tests {
     #[test]
     fn test_parse_and_validate_missing_thinking() {
         let provider = Arc::new(MockProvider::with_response(""));
-        let planner = Planner::new(provider, PlannerConfig::default());
+        let planner = TestPlanner::new(provider, PlannerConfig::default());
 
         let json = r#"{"thinking": "", "slices": [], "questions": ["What?"]}"#;
         let result = planner.parse_and_validate(json);
@@ -660,7 +594,7 @@ mod tests {
     #[test]
     fn test_convert_to_planner_output() {
         let provider = Arc::new(MockProvider::with_response(""));
-        let planner = Planner::new(provider, PlannerConfig::default());
+        let planner = TestPlanner::new(provider, PlannerConfig::default());
 
         let ticket = create_test_ticket();
         let decomp: DecompositionOutput = serde_json::from_str(valid_decomposition_json()).unwrap();
@@ -676,7 +610,7 @@ mod tests {
     #[tokio::test]
     async fn test_decompose_success() {
         let provider = Arc::new(MockProvider::with_response(valid_decomposition_json()));
-        let planner = Planner::new(provider, PlannerConfig::default());
+        let planner = TestPlanner::new(provider, PlannerConfig::default());
 
         let ticket = create_test_ticket();
         let result = planner.decompose(&ticket).await;
@@ -737,7 +671,7 @@ mod tests {
         let provider = Arc::new(RetryMockProvider {
             call_count: std::sync::atomic::AtomicU32::new(0),
         });
-        let planner = Planner::new(provider.clone(), PlannerConfig::default());
+        let planner = TestPlanner::new(provider.clone(), PlannerConfig::default());
 
         let ticket = create_test_ticket();
         let result = planner.decompose(&ticket).await;
@@ -758,7 +692,7 @@ mod tests {
             max_retries: 2,
             ..Default::default()
         };
-        let planner = Planner::new(provider, config);
+        let planner = TestPlanner::new(provider, config);
 
         let ticket = create_test_ticket();
         let result = planner.decompose(&ticket).await;
@@ -812,7 +746,7 @@ mod tests {
     #[test]
     fn test_extract_json_from_generic_code_block() {
         let provider = Arc::new(MockProvider::with_response(""));
-        let planner = Planner::new(provider, PlannerConfig::default());
+        let planner = TestPlanner::new(provider, PlannerConfig::default());
 
         let content = "Here's the result:\n\n```\n{\"thinking\": \"test\", \"slices\": []}\n```";
 
@@ -824,7 +758,7 @@ mod tests {
     #[test]
     fn test_extract_json_generic_code_block_non_json() {
         let provider = Arc::new(MockProvider::with_response(""));
-        let planner = Planner::new(provider, PlannerConfig::default());
+        let planner = TestPlanner::new(provider, PlannerConfig::default());
 
         // Generic code block that doesn't start with '{' — falls through to raw JSON search
         let content = "```\nsome text\n```\n{\"key\": \"value\"}";
@@ -837,7 +771,7 @@ mod tests {
     #[test]
     fn test_extract_json_code_block_with_language_tag() {
         let provider = Arc::new(MockProvider::with_response(""));
-        let planner = Planner::new(provider, PlannerConfig::default());
+        let planner = TestPlanner::new(provider, PlannerConfig::default());
 
         // Generic code block with a language tag that isn't "json"
         let content = "```javascript\n{\"thinking\": \"test\"}\n```";
@@ -849,7 +783,7 @@ mod tests {
     #[test]
     fn test_build_correction_request_parse_error() {
         let provider = Arc::new(MockProvider::with_response(""));
-        let planner = Planner::new(provider, PlannerConfig::default());
+        let planner = TestPlanner::new(provider, PlannerConfig::default());
         let ticket = create_test_ticket();
 
         let error = DecompositionError::ParseError {
@@ -867,7 +801,7 @@ mod tests {
     #[test]
     fn test_build_correction_request_validation_error() {
         let provider = Arc::new(MockProvider::with_response(""));
-        let planner = Planner::new(provider, PlannerConfig::default());
+        let planner = TestPlanner::new(provider, PlannerConfig::default());
         let ticket = create_test_ticket();
 
         let error = DecompositionError::ValidationError(
@@ -883,7 +817,7 @@ mod tests {
     #[test]
     fn test_build_correction_request_other_error() {
         let provider = Arc::new(MockProvider::with_response(""));
-        let planner = Planner::new(provider, PlannerConfig::default());
+        let planner = TestPlanner::new(provider, PlannerConfig::default());
         let ticket = create_test_ticket();
 
         let error = DecompositionError::LlmError("timeout".to_string());
@@ -897,7 +831,7 @@ mod tests {
     #[test]
     fn test_build_correction_request_truncates_long_output() {
         let provider = Arc::new(MockProvider::with_response(""));
-        let planner = Planner::new(provider, PlannerConfig::default());
+        let planner = TestPlanner::new(provider, PlannerConfig::default());
         let ticket = create_test_ticket();
 
         let long_output = "x".repeat(1000);
@@ -915,7 +849,7 @@ mod tests {
     #[test]
     fn test_convert_to_planner_output_multiple_slices_and_tiers() {
         let provider = Arc::new(MockProvider::with_response(""));
-        let planner = Planner::new(provider, PlannerConfig::default());
+        let planner = TestPlanner::new(provider, PlannerConfig::default());
         let ticket = create_test_ticket();
 
         let json = r#"{
@@ -1004,7 +938,7 @@ mod tests {
             model_id: "test-model".to_string(),
             max_tokens: 4096,
         };
-        let planner = Planner::new(provider, config);
+        let planner = TestPlanner::new(provider, config);
         let ticket = create_test_ticket();
 
         let request = planner.build_decomposition_request(&ticket);
@@ -1016,7 +950,7 @@ mod tests {
     #[tokio::test]
     async fn test_decompose_and_save_without_pool() {
         let provider = Arc::new(MockProvider::with_response(valid_decomposition_json()));
-        let planner = Planner::new(provider, PlannerConfig::default());
+        let planner = TestPlanner::new(provider, PlannerConfig::default());
 
         let ticket = create_test_ticket();
         let result = planner.decompose_and_save(&ticket).await;
@@ -1031,7 +965,7 @@ mod tests {
             max_retries: 2,
             ..Default::default()
         };
-        let planner = Planner::new(provider, config);
+        let planner = TestPlanner::new(provider, config);
 
         let ticket = create_test_ticket();
         let result = planner.decompose(&ticket).await;
@@ -1042,50 +976,29 @@ mod tests {
     }
 
     #[test]
-    fn test_with_db_constructor() {
-        // Just verify with_db sets the pool
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let db = crate::db::test_utils::TestDb::new().await;
-
-            let provider = Arc::new(MockProvider::with_response(""));
-            let planner = Planner::with_db(provider, db.pool.clone(), PlannerConfig::default());
-            assert!(planner.pool.is_some());
-
-            db.cleanup().await;
-        });
+    fn test_with_repo_constructor() {
+        let provider = Arc::new(MockProvider::with_response(""));
+        let mut mock_repo = crate::db::traits::MockPlannerRepo::new();
+        mock_repo.expect_save_planner_output().returning(|_| Ok(()));
+        let planner = Planner::with_repo(provider, Arc::new(mock_repo), PlannerConfig::default());
+        assert!(planner.repo.is_some());
     }
 
     #[tokio::test]
-    async fn test_decompose_and_save_with_db() {
-        let db = crate::db::test_utils::TestDb::new().await;
-
+    async fn test_decompose_and_save_with_repo() {
         let ticket = create_test_ticket();
 
-        // Insert the ticket into the DB first to satisfy foreign key constraints
-        sqlx::query(
-            "INSERT INTO tickets (id, source_type, title, description, status, created_at) VALUES ($1, $2, $3, $4, $5, $6)"
-        )
-        .bind(ticket.id.0.to_string())
-        .bind("manual")
-        .bind(&ticket.title)
-        .bind(&ticket.description)
-        .bind("new")
-        .bind(ticket.created_at.to_rfc3339())
-        .execute(&db.pool)
-        .await
-        .unwrap();
+        let mut mock_repo = crate::db::traits::MockPlannerRepo::new();
+        mock_repo
+            .expect_save_planner_output()
+            .times(1)
+            .returning(|_| Ok(()));
 
         let provider = Arc::new(MockProvider::with_response(valid_decomposition_json()));
-        let planner = Planner::with_db(provider, db.pool.clone(), PlannerConfig::default());
+        let planner = Planner::with_repo(provider, Arc::new(mock_repo), PlannerConfig::default());
 
         let result = planner.decompose_and_save(&ticket).await;
-        if let Err(ref e) = result {
-            panic!("decompose_and_save failed: {}", e);
-        }
         assert!(result.is_ok());
-
-        db.cleanup().await;
     }
 
     #[test]
@@ -1108,7 +1021,7 @@ mod tests {
     #[test]
     fn test_parse_and_validate_in_code_block() {
         let provider = Arc::new(MockProvider::with_response(""));
-        let planner = Planner::new(provider, PlannerConfig::default());
+        let planner = TestPlanner::new(provider, PlannerConfig::default());
 
         let content = format!("```json\n{}\n```", valid_decomposition_json());
         let result = planner.parse_and_validate(&content);
@@ -1118,7 +1031,7 @@ mod tests {
     #[test]
     fn test_parse_and_validate_empty_slices_no_questions() {
         let provider = Arc::new(MockProvider::with_response(""));
-        let planner = Planner::new(provider, PlannerConfig::default());
+        let planner = TestPlanner::new(provider, PlannerConfig::default());
 
         let json = r#"{"thinking": "Some thought", "slices": [], "questions": [], "risks": []}"#;
         let result = planner.parse_and_validate(json);
@@ -1179,7 +1092,7 @@ mod tests {
         let provider = Arc::new(LlmFailThenSucceed {
             call_count: std::sync::atomic::AtomicU32::new(0),
         });
-        let planner = Planner::new(provider.clone(), PlannerConfig::default());
+        let planner = TestPlanner::new(provider.clone(), PlannerConfig::default());
 
         let ticket = create_test_ticket();
         let result = planner.decompose(&ticket).await;
@@ -1195,7 +1108,7 @@ mod tests {
     #[test]
     fn test_extract_json_only_opening_brace() {
         let provider = Arc::new(MockProvider::with_response(""));
-        let planner = Planner::new(provider, PlannerConfig::default());
+        let planner = TestPlanner::new(provider, PlannerConfig::default());
 
         // Has '{' but no '}' — should fail
         let content = "{ incomplete json without closing";

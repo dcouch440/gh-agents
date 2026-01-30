@@ -3,13 +3,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use once_cell::sync::Lazy;
-use sqlx::PgPool;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use super::types::TokenUsage;
+use crate::db::pg_repo::PgRepo;
+use crate::db::traits::CostRepo;
 use crate::types::{AgentId, AgentTier, CostRecord, CostSummary, TaskId};
 
 /// Pricing information for a model (per 1000 tokens)
@@ -188,25 +189,35 @@ mod tests {
 
     #[test]
     fn cost_tracker_in_memory() {
-        let tracker = CostTracker::in_memory();
-        assert!(tracker.db_pool.is_none());
+        let tracker = CostTracker::<PgRepo>::in_memory();
+        assert!(tracker.repo.is_none());
     }
 }
 
 /// Tracks LLM API costs
-pub struct CostTracker {
-    /// Database pool (optional for testing without DB)
-    db_pool: Option<PgPool>,
+pub struct CostTracker<R: CostRepo = PgRepo> {
+    /// Repository for persistence (optional for testing without DB)
+    repo: Option<R>,
 
     /// In-memory records for current session
     records: Arc<RwLock<Vec<CostRecord>>>,
 }
 
-impl CostTracker {
+impl CostTracker<PgRepo> {
     /// Create a new cost tracker with database persistence
-    pub fn new(db_pool: PgPool) -> Self {
+    pub fn new(db_pool: sqlx::PgPool) -> Self {
         Self {
-            db_pool: Some(db_pool),
+            repo: Some(PgRepo::new(db_pool)),
+            records: Arc::new(RwLock::new(Vec::new())),
+        }
+    }
+}
+
+impl<R: CostRepo> CostTracker<R> {
+    /// Create a cost tracker with an explicit repo
+    pub fn with_repo(repo: R) -> Self {
+        Self {
+            repo: Some(repo),
             records: Arc::new(RwLock::new(Vec::new())),
         }
     }
@@ -214,7 +225,7 @@ impl CostTracker {
     /// Create a cost tracker without database (for testing)
     pub fn in_memory() -> Self {
         Self {
-            db_pool: None,
+            repo: None,
             records: Arc::new(RwLock::new(Vec::new())),
         }
     }
@@ -250,8 +261,10 @@ impl CostTracker {
         }
 
         // Persist to database if available
-        if let Some(pool) = &self.db_pool {
-            self.persist_record(pool, &record).await?;
+        if let Some(repo) = &self.repo {
+            repo.persist_cost_record(record.clone())
+                .await
+                .map_err(CostTrackerError::DatabaseError)?;
         }
 
         tracing::debug!(
@@ -263,39 +276,6 @@ impl CostTracker {
         );
 
         Ok(record)
-    }
-
-    /// Persist a record to the database
-    async fn persist_record(
-        &self,
-        pool: &PgPool,
-        record: &CostRecord,
-    ) -> Result<(), CostTrackerError> {
-        let task_id = record.task_id.as_ref().map(|id| id.0);
-        let tier_str = format!("{:?}", record.agent_tier);
-
-        sqlx::query(
-            r#"
-            INSERT INTO cost_records (
-                id, task_id, agent_id, agent_tier, model_id,
-                input_tokens, output_tokens, cost_usd, timestamp
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            "#,
-        )
-        .bind(record.id)
-        .bind(task_id)
-        .bind(record.agent_id.0)
-        .bind(tier_str)
-        .bind(&record.model_id)
-        .bind(record.input_tokens as i32)
-        .bind(record.output_tokens as i32)
-        .bind(record.cost_usd)
-        .bind(record.timestamp)
-        .execute(pool)
-        .await
-        .map_err(|e| CostTrackerError::DatabaseError(e.to_string()))?;
-
-        Ok(())
     }
 
     /// Get all records for current session
@@ -319,43 +299,15 @@ impl CostTracker {
         &self,
         since: Option<chrono::DateTime<Utc>>,
     ) -> Result<CostSummary, CostTrackerError> {
-        let Some(pool) = &self.db_pool else {
+        let Some(repo) = &self.repo else {
             // No database, return session summary
             return Ok(self.get_summary().await);
         };
 
-        let records = if let Some(since_time) = since {
-            sqlx::query_as::<_, CostRecordRow>(
-                r#"
-                SELECT id, task_id, agent_id, agent_tier, model_id,
-                       input_tokens, output_tokens, cost_usd, timestamp
-                FROM cost_records
-                WHERE timestamp >= $1
-                ORDER BY timestamp DESC
-                "#,
-            )
-            .bind(since_time)
-            .fetch_all(pool)
+        let cost_records = repo
+            .get_cost_records(since)
             .await
-            .map_err(|e| CostTrackerError::DatabaseError(e.to_string()))?
-        } else {
-            sqlx::query_as::<_, CostRecordRow>(
-                r#"
-                SELECT id, task_id, agent_id, agent_tier, model_id,
-                       input_tokens, output_tokens, cost_usd, timestamp
-                FROM cost_records
-                ORDER BY timestamp DESC
-                "#,
-            )
-            .fetch_all(pool)
-            .await
-            .map_err(|e| CostTrackerError::DatabaseError(e.to_string()))?
-        };
-
-        let cost_records: Vec<CostRecord> = records
-            .into_iter()
-            .filter_map(|row| row.try_into().ok())
-            .collect();
+            .map_err(CostTrackerError::DatabaseError)?;
 
         Ok(Self::summarize_records(&cost_records))
     }
@@ -428,52 +380,13 @@ pub enum CostTrackerError {
     InvalidData(String),
 }
 
-/// Database row for cost records
-#[derive(Debug, sqlx::FromRow)]
-struct CostRecordRow {
-    id: Uuid,
-    task_id: Option<Uuid>,
-    agent_id: Uuid,
-    agent_tier: String,
-    model_id: String,
-    input_tokens: i32,
-    output_tokens: i32,
-    cost_usd: f64,
-    timestamp: DateTime<Utc>,
-}
-
-impl TryFrom<CostRecordRow> for CostRecord {
-    type Error = String;
-
-    fn try_from(row: CostRecordRow) -> Result<Self, Self::Error> {
-        let agent_tier = match row.agent_tier.as_str() {
-            "Orchestrator" => AgentTier::Orchestrator,
-            "Worker" => AgentTier::Worker,
-            "Utility" => AgentTier::Utility,
-            _ => AgentTier::Worker,
-        };
-
-        Ok(CostRecord {
-            id: row.id,
-            task_id: row.task_id.map(TaskId),
-            agent_id: AgentId(row.agent_id),
-            agent_tier,
-            model_id: row.model_id,
-            input_tokens: row.input_tokens as u32,
-            output_tokens: row.output_tokens as u32,
-            cost_usd: row.cost_usd,
-            timestamp: row.timestamp,
-        })
-    }
-}
-
 #[cfg(test)]
 mod tracker_tests {
     use super::*;
 
     #[tokio::test]
     async fn test_record_call_in_memory() {
-        let tracker = CostTracker::in_memory();
+        let tracker = CostTracker::<PgRepo>::in_memory();
 
         let result = tracker
             .record_call(
@@ -495,7 +408,7 @@ mod tracker_tests {
 
     #[tokio::test]
     async fn test_session_total() {
-        let tracker = CostTracker::in_memory();
+        let tracker = CostTracker::<PgRepo>::in_memory();
 
         // Record two calls
         tracker
@@ -537,7 +450,7 @@ mod summary_tests {
 
     #[tokio::test]
     async fn test_costs_by_tier() {
-        let tracker = CostTracker::in_memory();
+        let tracker = CostTracker::<PgRepo>::in_memory();
 
         // Worker call
         tracker
@@ -578,7 +491,7 @@ mod summary_tests {
 
     #[tokio::test]
     async fn test_costs_by_model() {
-        let tracker = CostTracker::in_memory();
+        let tracker = CostTracker::<PgRepo>::in_memory();
 
         tracker
             .record_call(
@@ -615,7 +528,7 @@ mod summary_tests {
 
     #[tokio::test]
     async fn test_get_summary() {
-        let tracker = CostTracker::in_memory();
+        let tracker = CostTracker::<PgRepo>::in_memory();
 
         tracker
             .record_call(
@@ -639,49 +552,34 @@ mod summary_tests {
 
     #[test]
     fn test_format_cost() {
-        assert_eq!(CostTracker::format_cost(0.0001), "$0.0001");
-        assert_eq!(CostTracker::format_cost(0.123), "$0.123");
-        assert_eq!(CostTracker::format_cost(1.50), "$1.50");
+        assert_eq!(CostTracker::<PgRepo>::format_cost(0.0001), "$0.0001");
+        assert_eq!(CostTracker::<PgRepo>::format_cost(0.123), "$0.123");
+        assert_eq!(CostTracker::<PgRepo>::format_cost(1.50), "$1.50");
     }
 }
 
 #[cfg(test)]
 mod db_tests {
     use super::*;
-    use crate::db::test_utils::TestDb;
+    use crate::db::traits::MockCostRepo;
 
-    async fn insert_agent(pool: &PgPool, agent_id: &AgentId) {
-        sqlx::query("INSERT INTO agents (id, tier, persona_name, model_id) VALUES ($1, 'Worker', 'test', 'test-model')")
-            .bind(agent_id.0.to_string())
-            .execute(pool)
-            .await
-            .unwrap();
-    }
-
-    async fn insert_task(pool: &PgPool, task_id: &TaskId) {
-        sqlx::query("INSERT INTO tasks (id, title) VALUES ($1, 'test task')")
-            .bind(task_id.0.to_string())
-            .execute(pool)
-            .await
-            .unwrap();
+    #[tokio::test]
+    async fn cost_tracker_new_with_repo() {
+        let mock = MockCostRepo::new();
+        let tracker = CostTracker::with_repo(mock);
+        assert!(tracker.repo.is_some());
     }
 
     #[tokio::test]
-    async fn cost_tracker_new_with_db() {
-        let db = TestDb::new().await;
-        let tracker = CostTracker::new(db.pool.clone());
-        assert!(tracker.db_pool.is_some());
-        db.cleanup().await;
-    }
+    async fn record_call_persists_to_repo() {
+        let mut mock = MockCostRepo::new();
+        mock.expect_persist_cost_record()
+            .times(1)
+            .returning(|_| Ok(()));
 
-    #[tokio::test]
-    async fn record_call_persists_to_db() {
-        let db = TestDb::new().await;
         let task_id = TaskId::new();
         let agent_id = AgentId::new();
-        insert_agent(&db.pool, &agent_id).await;
-        insert_task(&db.pool, &task_id).await;
-        let tracker = CostTracker::new(db.pool.clone());
+        let tracker = CostTracker::with_repo(mock);
 
         let record = tracker
             .record_call(
@@ -709,15 +607,32 @@ mod db_tests {
         let task_cost = tracker.cost_for_task(&task_id).await;
         assert!(task_cost > 0.0);
         assert!((task_cost - record.cost_usd).abs() < f64::EPSILON);
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn get_historical_summary_without_since() {
-        let db = TestDb::new().await;
+        let mut mock = MockCostRepo::new();
+        // First call: persist_cost_record
+        mock.expect_persist_cost_record()
+            .times(1)
+            .returning(|_| Ok(()));
+        // Second call: get_cost_records for historical summary
+        mock.expect_get_cost_records().times(1).returning(|_| {
+            Ok(vec![CostRecord {
+                id: Uuid::new_v4(),
+                task_id: None,
+                agent_id: AgentId::new(),
+                agent_tier: AgentTier::Worker,
+                model_id: "claude-3-haiku-20240307".to_string(),
+                input_tokens: 1000,
+                output_tokens: 500,
+                cost_usd: 0.0009,
+                timestamp: Utc::now(),
+            }])
+        });
+
         let agent_id = AgentId::new();
-        insert_agent(&db.pool, &agent_id).await;
-        let tracker = CostTracker::new(db.pool.clone());
+        let tracker = CostTracker::with_repo(mock);
 
         tracker
             .record_call(
@@ -736,15 +651,35 @@ mod db_tests {
         let summary = tracker.get_historical_summary(None).await.unwrap();
         assert!(summary.session_total > 0.0);
         assert!(summary.by_model.contains_key("claude-3-haiku-20240307"));
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn get_historical_summary_with_since() {
-        let db = TestDb::new().await;
+        let mut mock = MockCostRepo::new();
+        mock.expect_persist_cost_record()
+            .times(1)
+            .returning(|_| Ok(()));
+        // First get_cost_records call: returns records (since = before)
+        mock.expect_get_cost_records().times(1).returning(|_| {
+            Ok(vec![CostRecord {
+                id: Uuid::new_v4(),
+                task_id: None,
+                agent_id: AgentId::new(),
+                agent_tier: AgentTier::Orchestrator,
+                model_id: "claude-3-opus-20240229".to_string(),
+                input_tokens: 500,
+                output_tokens: 200,
+                cost_usd: 0.01,
+                timestamp: Utc::now(),
+            }])
+        });
+        // Second get_cost_records call: returns empty (since = future)
+        mock.expect_get_cost_records()
+            .times(1)
+            .returning(|_| Ok(vec![]));
+
         let agent_id = AgentId::new();
-        insert_agent(&db.pool, &agent_id).await;
-        let tracker = CostTracker::new(db.pool.clone());
+        let tracker = CostTracker::with_repo(mock);
 
         let before = Utc::now();
 
@@ -770,53 +705,11 @@ mod db_tests {
         let future = Utc::now() + chrono::Duration::hours(1);
         let summary_empty = tracker.get_historical_summary(Some(future)).await.unwrap();
         assert_eq!(summary_empty.session_total, 0.0);
-        db.cleanup().await;
     }
 
     #[test]
-    fn cost_record_row_try_from_various_tiers() {
-        let id = Uuid::new_v4();
-        let agent_id = Uuid::new_v4();
-        let now = Utc::now();
-
-        for (tier_str, expected) in [
-            ("Orchestrator", AgentTier::Orchestrator),
-            ("Worker", AgentTier::Worker),
-            ("Utility", AgentTier::Utility),
-            ("UnknownTier", AgentTier::Worker), // fallback
-        ] {
-            let row = CostRecordRow {
-                id,
-                task_id: None,
-                agent_id,
-                agent_tier: tier_str.to_string(),
-                model_id: "claude-3-haiku".to_string(),
-                input_tokens: 100,
-                output_tokens: 50,
-                cost_usd: 0.001,
-                timestamp: now,
-            };
-
-            let record: CostRecord = row.try_into().unwrap();
-            assert_eq!(record.agent_tier, expected, "Failed for tier {}", tier_str);
-        }
-    }
-
-    #[test]
-    fn cost_record_row_try_from_with_task_id() {
-        let row = CostRecordRow {
-            id: Uuid::new_v4(),
-            task_id: Some(Uuid::new_v4()),
-            agent_id: Uuid::new_v4(),
-            agent_tier: "Worker".to_string(),
-            model_id: "claude-3-haiku".to_string(),
-            input_tokens: 100,
-            output_tokens: 50,
-            cost_usd: 0.001,
-            timestamp: Utc::now(),
-        };
-
-        let record: CostRecord = row.try_into().unwrap();
-        assert!(record.task_id.is_some());
+    fn cost_tracker_in_memory_no_repo() {
+        let tracker = CostTracker::<MockCostRepo>::in_memory();
+        assert!(tracker.repo.is_none());
     }
 }

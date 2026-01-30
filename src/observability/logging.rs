@@ -5,8 +5,10 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use std::sync::Arc;
 use uuid::Uuid;
+
+use crate::db::traits::ObservabilityRepo;
 
 /// A logged LLM API call
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -208,65 +210,26 @@ impl std::fmt::Display for DecisionType {
 
 /// Logger for LLM calls and decisions
 #[derive(Clone)]
-pub struct LlmCallLogger {
-    pool: PgPool,
+pub struct LlmCallLogger<R: ObservabilityRepo = crate::db::pg_repo::PgRepo> {
+    repo: Arc<R>,
 }
 
-impl LlmCallLogger {
+impl<R: ObservabilityRepo> LlmCallLogger<R> {
     /// Create a new logger
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(repo: R) -> Self {
+        Self {
+            repo: Arc::new(repo),
+        }
     }
 
     /// Log an LLM call
     pub async fn log_call(&self, call: &LlmCall) -> Result<()> {
-        let prompt_json = serde_json::to_string(&call.prompt)?;
-        let input_tokens = call.input_tokens as i32;
-        let output_tokens = call.output_tokens as i32;
-        let latency_ms = call.latency_ms as i32;
-
-        sqlx::query(
-            r#"
-            INSERT INTO llm_calls (
-                id, task_id, agent_id, model, prompt, response,
-                input_tokens, output_tokens, latency_ms, timestamp, cost_usd
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            "#,
-        )
-        .bind(call.id)
-        .bind(call.task_id)
-        .bind(&call.agent_id)
-        .bind(&call.model)
-        .bind(&prompt_json)
-        .bind(&call.response)
-        .bind(input_tokens)
-        .bind(output_tokens)
-        .bind(latency_ms)
-        .bind(call.timestamp)
-        .bind(call.cost_usd)
-        .execute(&self.pool)
-        .await?;
-
-        Ok(())
+        self.repo.insert_llm_call(call.clone()).await
     }
 
     /// Get all LLM calls for a task
     pub async fn get_calls_for_task(&self, task_id: Uuid) -> Result<Vec<LlmCall>> {
-        let rows: Vec<LlmCallRow> = sqlx::query_as(
-            r#"
-            SELECT id, task_id, agent_id, model, prompt, response,
-                   input_tokens, output_tokens, latency_ms, timestamp, cost_usd
-            FROM llm_calls
-            WHERE task_id = $1
-            ORDER BY timestamp ASC
-            "#,
-        )
-        .bind(task_id)
-        .fetch_all(&self.pool)
-        .await?;
-
-        rows.into_iter().map(|row| row.try_into()).collect()
+        self.repo.get_calls_for_task(task_id).await
     }
 
     /// Get LLM calls within a time range
@@ -275,64 +238,17 @@ impl LlmCallLogger {
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<Vec<LlmCall>> {
-        let rows: Vec<LlmCallRow> = sqlx::query_as(
-            r#"
-            SELECT id, task_id, agent_id, model, prompt, response,
-                   input_tokens, output_tokens, latency_ms, timestamp, cost_usd
-            FROM llm_calls
-            WHERE timestamp >= $1 AND timestamp <= $2
-            ORDER BY timestamp ASC
-            "#,
-        )
-        .bind(start)
-        .bind(end)
-        .fetch_all(&self.pool)
-        .await?;
-
-        rows.into_iter().map(|row| row.try_into()).collect()
+        self.repo.get_calls_in_range(start, end).await
     }
 
     /// Log a decision
     pub async fn log_decision(&self, decision: &Decision) -> Result<()> {
-        let decision_type = serde_json::to_string(&decision.decision_type)?;
-
-        sqlx::query(
-            r#"
-            INSERT INTO decisions (
-                id, task_id, decision_type, reasoning, outcome, llm_call_id, cost_usd, timestamp
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            "#,
-        )
-        .bind(decision.id)
-        .bind(decision.task_id)
-        .bind(&decision_type)
-        .bind(&decision.reasoning)
-        .bind(&decision.outcome)
-        .bind(decision.llm_call_id)
-        .bind(decision.cost_usd)
-        .bind(decision.timestamp)
-        .execute(&self.pool)
-        .await?;
-
-        Ok(())
+        self.repo.insert_decision(decision.clone()).await
     }
 
     /// Get all decisions for a task
     pub async fn get_decisions_for_task(&self, task_id: Uuid) -> Result<Vec<Decision>> {
-        let rows: Vec<DecisionRow> = sqlx::query_as(
-            r#"
-            SELECT id, task_id, decision_type, reasoning, outcome, llm_call_id, cost_usd, timestamp
-            FROM decisions
-            WHERE task_id = $1
-            ORDER BY timestamp ASC
-            "#,
-        )
-        .bind(task_id)
-        .fetch_all(&self.pool)
-        .await?;
-
-        rows.into_iter().map(|row| row.try_into()).collect()
+        self.repo.get_decisions_for_task(task_id).await
     }
 
     /// Get decisions within a time range
@@ -341,92 +257,15 @@ impl LlmCallLogger {
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<Vec<Decision>> {
-        let rows: Vec<DecisionRow> = sqlx::query_as(
-            r#"
-            SELECT id, task_id, decision_type, reasoning, outcome, llm_call_id, cost_usd, timestamp
-            FROM decisions
-            WHERE timestamp >= $1 AND timestamp <= $2
-            ORDER BY timestamp ASC
-            "#,
-        )
-        .bind(start)
-        .bind(end)
-        .fetch_all(&self.pool)
-        .await?;
-
-        rows.into_iter().map(|row| row.try_into()).collect()
-    }
-}
-
-// Internal row types for SQLx
-
-#[derive(sqlx::FromRow)]
-struct LlmCallRow {
-    id: Uuid,
-    task_id: Option<Uuid>,
-    agent_id: Option<String>,
-    model: String,
-    prompt: String,
-    response: String,
-    input_tokens: i32,
-    output_tokens: i32,
-    latency_ms: i32,
-    timestamp: DateTime<Utc>,
-    cost_usd: f64,
-}
-
-impl TryFrom<LlmCallRow> for LlmCall {
-    type Error = anyhow::Error;
-
-    fn try_from(row: LlmCallRow) -> Result<Self> {
-        Ok(LlmCall {
-            id: row.id,
-            task_id: row.task_id,
-            agent_id: row.agent_id,
-            model: row.model,
-            prompt: serde_json::from_str(&row.prompt)?,
-            response: row.response,
-            input_tokens: row.input_tokens as u32,
-            output_tokens: row.output_tokens as u32,
-            latency_ms: row.latency_ms as u64,
-            timestamp: row.timestamp,
-            cost_usd: row.cost_usd,
-        })
-    }
-}
-
-#[derive(sqlx::FromRow)]
-struct DecisionRow {
-    id: Uuid,
-    task_id: Uuid,
-    decision_type: String,
-    reasoning: String,
-    outcome: String,
-    llm_call_id: Option<Uuid>,
-    cost_usd: f64,
-    timestamp: DateTime<Utc>,
-}
-
-impl TryFrom<DecisionRow> for Decision {
-    type Error = anyhow::Error;
-
-    fn try_from(row: DecisionRow) -> Result<Self> {
-        Ok(Decision {
-            id: row.id,
-            task_id: row.task_id,
-            decision_type: serde_json::from_str(&row.decision_type)?,
-            reasoning: row.reasoning,
-            outcome: row.outcome,
-            llm_call_id: row.llm_call_id,
-            cost_usd: row.cost_usd,
-            timestamp: row.timestamp,
-        })
+        self.repo.get_decisions_in_range(start, end).await
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::traits::MockObservabilityRepo;
+    use mockall::predicate::*;
 
     #[test]
     fn llm_call_builder() {
@@ -576,9 +415,7 @@ mod tests {
         }
     }
 
-    // --- Async DB tests ---
-
-    use crate::db::test_utils::TestDb;
+    // --- Async mock tests ---
 
     fn make_call(model: &str, task_id: Option<Uuid>) -> LlmCall {
         let prompt = LlmPrompt::new("system").with_messages(vec![PromptMessage::user("hi")]);
@@ -594,66 +431,94 @@ mod tests {
 
     #[tokio::test]
     async fn log_call_and_retrieve() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
-
         let task_id = Uuid::new_v4();
-        let call = make_call("test-model", Some(task_id)).with_agent_id("agent-1");
+        let agent_uuid = Uuid::new_v4();
+        let call = make_call("test-model", Some(task_id)).with_agent_id(&agent_uuid.to_string());
+        let call_clone = call.clone();
+
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_insert_llm_call().times(1).returning(|_| Ok(()));
+        mock.expect_get_calls_for_task()
+            .with(eq(task_id))
+            .times(1)
+            .returning(move |_| Ok(vec![call_clone.clone()]));
+
+        let logger = LlmCallLogger::new(mock);
         logger.log_call(&call).await.unwrap();
 
         let calls = logger.get_calls_for_task(task_id).await.unwrap();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].id, call.id);
         assert_eq!(calls[0].model, "test-model");
-        assert_eq!(calls[0].agent_id, Some("agent-1".to_string()));
+        assert_eq!(calls[0].agent_id, Some(agent_uuid.to_string()));
         assert_eq!(calls[0].input_tokens, 10);
         assert_eq!(calls[0].output_tokens, 20);
         assert_eq!(calls[0].latency_ms, 100);
-        assert!((calls[0].cost_usd - 0.001).abs() < f64::EPSILON);
-        db.cleanup().await;
+        assert!((calls[0].cost_usd - 0.001).abs() < 1e-6);
     }
 
     #[tokio::test]
     async fn get_calls_for_task_filters_correctly() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
-
         let tid1 = Uuid::new_v4();
         let tid2 = Uuid::new_v4();
-        logger.log_call(&make_call("m1", Some(tid1))).await.unwrap();
-        logger.log_call(&make_call("m2", Some(tid1))).await.unwrap();
-        logger.log_call(&make_call("m3", Some(tid2))).await.unwrap();
+        let c1 = make_call("m1", Some(tid1));
+        let c2 = make_call("m2", Some(tid1));
+        let c3 = make_call("m3", Some(tid2));
+
+        let c1c = c1.clone();
+        let c2c = c2.clone();
+        let c3c = c3.clone();
+
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_insert_llm_call().times(3).returning(|_| Ok(()));
+        mock.expect_get_calls_for_task()
+            .with(eq(tid1))
+            .times(1)
+            .returning(move |_| Ok(vec![c1c.clone(), c2c.clone()]));
+        mock.expect_get_calls_for_task()
+            .with(eq(tid2))
+            .times(1)
+            .returning(move |_| Ok(vec![c3c.clone()]));
+
+        let logger = LlmCallLogger::new(mock);
+        logger.log_call(&c1).await.unwrap();
+        logger.log_call(&c2).await.unwrap();
+        logger.log_call(&c3).await.unwrap();
 
         let calls = logger.get_calls_for_task(tid1).await.unwrap();
         assert_eq!(calls.len(), 2);
         let calls2 = logger.get_calls_for_task(tid2).await.unwrap();
         assert_eq!(calls2.len(), 1);
         assert_eq!(calls2[0].model, "m3");
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn get_calls_in_range_filters_correctly() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
-
         let t1 = Utc::now() - chrono::Duration::hours(2);
         let t2 = Utc::now() - chrono::Duration::hours(1);
-        let t3 = Utc::now();
 
         let mut c1 = make_call("old", None);
         c1.timestamp = t1;
         let mut c2 = make_call("mid", None);
         c2.timestamp = t2;
-        let mut c3 = make_call("new", None);
-        c3.timestamp = t3;
 
-        logger.log_call(&c1).await.unwrap();
-        logger.log_call(&c2).await.unwrap();
-        logger.log_call(&c3).await.unwrap();
+        let c1c = c1.clone();
+        let c2c = c2.clone();
 
         let range_start = t1 - chrono::Duration::seconds(1);
         let range_end = t2 + chrono::Duration::seconds(1);
+
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_insert_llm_call().times(3).returning(|_| Ok(()));
+        mock.expect_get_calls_in_range()
+            .times(1)
+            .returning(move |_, _| Ok(vec![c1c.clone(), c2c.clone()]));
+
+        let logger = LlmCallLogger::new(mock);
+        logger.log_call(&c1).await.unwrap();
+        logger.log_call(&c2).await.unwrap();
+        logger.log_call(&make_call("new", None)).await.unwrap();
+
         let calls = logger
             .get_calls_in_range(range_start, range_end)
             .await
@@ -661,19 +526,25 @@ mod tests {
         assert_eq!(calls.len(), 2);
         assert_eq!(calls[0].model, "old");
         assert_eq!(calls[1].model, "mid");
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn log_decision_and_retrieve() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
-
         let task_id = Uuid::new_v4();
         let call_id = Uuid::new_v4();
         let decision = Decision::new(task_id, DecisionType::TierRouting, "reason", "outcome")
             .with_llm_call(call_id)
             .with_cost(0.05);
+        let dc = decision.clone();
+
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_insert_decision().times(1).returning(|_| Ok(()));
+        mock.expect_get_decisions_for_task()
+            .with(eq(task_id))
+            .times(1)
+            .returning(move |_| Ok(vec![dc.clone()]));
+
+        let logger = LlmCallLogger::new(mock);
         logger.log_decision(&decision).await.unwrap();
 
         let decisions = logger.get_decisions_for_task(task_id).await.unwrap();
@@ -683,195 +554,165 @@ mod tests {
         assert_eq!(decisions[0].reasoning, "reason");
         assert_eq!(decisions[0].outcome, "outcome");
         assert_eq!(decisions[0].llm_call_id, Some(call_id));
-        assert!((decisions[0].cost_usd - 0.05).abs() < f64::EPSILON);
-        db.cleanup().await;
+        assert!((decisions[0].cost_usd - 0.05).abs() < 1e-6);
     }
 
     #[tokio::test]
     async fn get_decisions_for_task_filters_correctly() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
-
         let tid1 = Uuid::new_v4();
         let tid2 = Uuid::new_v4();
-        logger
-            .log_decision(&Decision::new(
-                tid1,
-                DecisionType::Decomposition,
-                "r1",
-                "o1",
-            ))
-            .await
-            .unwrap();
-        logger
-            .log_decision(&Decision::new(tid1, DecisionType::Escalation, "r2", "o2"))
-            .await
-            .unwrap();
-        logger
-            .log_decision(&Decision::new(tid2, DecisionType::Recovery, "r3", "o3"))
-            .await
-            .unwrap();
 
-        let d1 = logger.get_decisions_for_task(tid1).await.unwrap();
-        assert_eq!(d1.len(), 2);
-        let d2 = logger.get_decisions_for_task(tid2).await.unwrap();
-        assert_eq!(d2.len(), 1);
-        assert_eq!(d2[0].decision_type, DecisionType::Recovery);
-        db.cleanup().await;
+        let d1 = Decision::new(tid1, DecisionType::Decomposition, "r1", "o1");
+        let d2 = Decision::new(tid1, DecisionType::Escalation, "r2", "o2");
+        let d3 = Decision::new(tid2, DecisionType::Recovery, "r3", "o3");
+
+        let d1c = d1.clone();
+        let d2c = d2.clone();
+        let d3c = d3.clone();
+
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_insert_decision().times(3).returning(|_| Ok(()));
+        mock.expect_get_decisions_for_task()
+            .with(eq(tid1))
+            .times(1)
+            .returning(move |_| Ok(vec![d1c.clone(), d2c.clone()]));
+        mock.expect_get_decisions_for_task()
+            .with(eq(tid2))
+            .times(1)
+            .returning(move |_| Ok(vec![d3c.clone()]));
+
+        let logger = LlmCallLogger::new(mock);
+        logger.log_decision(&d1).await.unwrap();
+        logger.log_decision(&d2).await.unwrap();
+        logger.log_decision(&d3).await.unwrap();
+
+        let res1 = logger.get_decisions_for_task(tid1).await.unwrap();
+        assert_eq!(res1.len(), 2);
+        let res2 = logger.get_decisions_for_task(tid2).await.unwrap();
+        assert_eq!(res2.len(), 1);
+        assert_eq!(res2[0].decision_type, DecisionType::Recovery);
     }
 
     #[tokio::test]
     async fn get_decisions_in_range_filters_correctly() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
-
         let tid = Uuid::new_v4();
         let t1 = Utc::now() - chrono::Duration::hours(3);
-        let t2 = Utc::now();
 
         let mut d1 = Decision::new(tid, DecisionType::Decomposition, "old", "o1");
         d1.timestamp = t1;
-        let mut d2 = Decision::new(tid, DecisionType::Escalation, "new", "o2");
-        d2.timestamp = t2;
-
-        logger.log_decision(&d1).await.unwrap();
-        logger.log_decision(&d2).await.unwrap();
+        let d1c = d1.clone();
 
         let range_start = t1 - chrono::Duration::seconds(1);
         let range_end = t1 + chrono::Duration::seconds(1);
+
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_insert_decision().times(2).returning(|_| Ok(()));
+        mock.expect_get_decisions_in_range()
+            .times(1)
+            .returning(move |_, _| Ok(vec![d1c.clone()]));
+
+        let logger = LlmCallLogger::new(mock);
+        logger.log_decision(&d1).await.unwrap();
+        let d2 = Decision::new(tid, DecisionType::Escalation, "new", "o2");
+        logger.log_decision(&d2).await.unwrap();
+
         let results = logger
             .get_decisions_in_range(range_start, range_end)
             .await
             .unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].reasoning, "old");
-        db.cleanup().await;
     }
 
-    #[test]
-    fn llm_call_row_try_from_valid() {
-        let id = Uuid::new_v4();
+    #[tokio::test]
+    async fn log_decision_without_llm_call() {
         let task_id = Uuid::new_v4();
-        let prompt = LlmPrompt::new("sys");
-        let prompt_json = serde_json::to_string(&prompt).unwrap();
-        let ts = Utc::now();
+        let decision = Decision::new(task_id, DecisionType::Decomposition, "r", "o");
+        let dc = decision.clone();
 
-        let row = LlmCallRow {
-            id,
-            task_id: Some(task_id),
-            agent_id: Some("a1".to_string()),
-            model: "m".to_string(),
-            prompt: prompt_json,
-            response: "r".to_string(),
-            input_tokens: 5,
-            output_tokens: 10,
-            latency_ms: 50,
-            timestamp: ts,
-            cost_usd: 0.01,
-        };
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_insert_decision().times(1).returning(|_| Ok(()));
+        mock.expect_get_decisions_for_task()
+            .with(eq(task_id))
+            .times(1)
+            .returning(move |_| Ok(vec![dc.clone()]));
 
-        let call: LlmCall = row.try_into().unwrap();
-        assert_eq!(call.id, id);
-        assert_eq!(call.task_id, Some(task_id));
-        assert_eq!(call.input_tokens, 5);
+        let logger = LlmCallLogger::new(mock);
+        logger.log_decision(&decision).await.unwrap();
+
+        let decisions = logger.get_decisions_for_task(task_id).await.unwrap();
+        assert_eq!(decisions.len(), 1);
+        assert!(decisions[0].llm_call_id.is_none());
     }
 
-    #[test]
-    fn decision_row_try_from_valid() {
-        let id = Uuid::new_v4();
-        let task_id = Uuid::new_v4();
-        let call_id = Uuid::new_v4();
-        let ts = Utc::now();
-        let dt_json = serde_json::to_string(&DecisionType::ReviewOutcome).unwrap();
+    #[tokio::test]
+    async fn get_calls_for_nonexistent_task() {
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_get_calls_for_task()
+            .times(1)
+            .returning(|_| Ok(vec![]));
 
-        let row = DecisionRow {
-            id,
-            task_id,
-            decision_type: dt_json,
-            reasoning: "r".to_string(),
-            outcome: "o".to_string(),
-            llm_call_id: Some(call_id),
-            cost_usd: 0.02,
-            timestamp: ts,
-        };
-
-        let d: Decision = row.try_into().unwrap();
-        assert_eq!(d.id, id);
-        assert_eq!(d.decision_type, DecisionType::ReviewOutcome);
-        assert_eq!(d.llm_call_id, Some(call_id));
+        let logger = LlmCallLogger::new(mock);
+        let calls = logger.get_calls_for_task(Uuid::new_v4()).await.unwrap();
+        assert!(calls.is_empty());
     }
 
-    #[test]
-    fn llm_call_row_try_from_invalid_prompt_json() {
-        let row = LlmCallRow {
-            id: Uuid::new_v4(),
-            task_id: None,
-            agent_id: None,
-            model: "m".to_string(),
-            prompt: "not json".to_string(),
-            response: "r".to_string(),
-            input_tokens: 0,
-            output_tokens: 0,
-            latency_ms: 0,
-            timestamp: Utc::now(),
-            cost_usd: 0.0,
-        };
-        let result: Result<LlmCall> = row.try_into();
-        assert!(result.is_err());
+    #[tokio::test]
+    async fn get_decisions_for_nonexistent_task() {
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_get_decisions_for_task()
+            .times(1)
+            .returning(|_| Ok(vec![]));
+
+        let logger = LlmCallLogger::new(mock);
+        let decisions = logger.get_decisions_for_task(Uuid::new_v4()).await.unwrap();
+        assert!(decisions.is_empty());
     }
 
-    #[test]
-    fn llm_call_row_try_from_no_task_id() {
-        let prompt = LlmPrompt::new("sys");
-        let prompt_json = serde_json::to_string(&prompt).unwrap();
-        let row = LlmCallRow {
-            id: Uuid::new_v4(),
-            task_id: None,
-            agent_id: None,
-            model: "m".to_string(),
-            prompt: prompt_json,
-            response: "r".to_string(),
-            input_tokens: 0,
-            output_tokens: 0,
-            latency_ms: 0,
-            timestamp: Utc::now(),
-            cost_usd: 0.0,
-        };
-        let call: LlmCall = row.try_into().unwrap();
-        assert!(call.task_id.is_none());
-        assert!(call.agent_id.is_none());
+    #[tokio::test]
+    async fn get_calls_in_range_empty() {
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_get_calls_in_range()
+            .times(1)
+            .returning(|_, _| Ok(vec![]));
+
+        let logger = LlmCallLogger::new(mock);
+        let start = Utc::now() - chrono::Duration::hours(10);
+        let end = Utc::now() - chrono::Duration::hours(9);
+        let calls = logger.get_calls_in_range(start, end).await.unwrap();
+        assert!(calls.is_empty());
     }
 
-    #[test]
-    fn decision_row_try_from_invalid_decision_type() {
-        let row = DecisionRow {
-            id: Uuid::new_v4(),
-            task_id: Uuid::new_v4(),
-            decision_type: "not valid json".to_string(),
-            reasoning: "r".to_string(),
-            outcome: "o".to_string(),
-            llm_call_id: None,
-            cost_usd: 0.0,
-            timestamp: Utc::now(),
-        };
-        let result: Result<Decision> = row.try_into();
-        assert!(result.is_err());
+    #[tokio::test]
+    async fn get_decisions_in_range_empty() {
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_get_decisions_in_range()
+            .times(1)
+            .returning(|_, _| Ok(vec![]));
+
+        let logger = LlmCallLogger::new(mock);
+        let start = Utc::now() - chrono::Duration::hours(10);
+        let end = Utc::now() - chrono::Duration::hours(9);
+        let decisions = logger.get_decisions_in_range(start, end).await.unwrap();
+        assert!(decisions.is_empty());
     }
 
-    #[test]
-    fn decision_row_try_from_no_llm_call_id() {
-        let row = DecisionRow {
-            id: Uuid::new_v4(),
-            task_id: Uuid::new_v4(),
-            decision_type: r#""TierRouting""#.to_string(),
-            reasoning: "r".to_string(),
-            outcome: "o".to_string(),
-            llm_call_id: None,
-            cost_usd: 0.0,
-            timestamp: Utc::now(),
-        };
-        let d: Decision = row.try_into().unwrap();
-        assert!(d.llm_call_id.is_none());
+    #[tokio::test]
+    async fn log_call_without_task_id() {
+        let call = make_call("model", None);
+
+        let mut mock = MockObservabilityRepo::new();
+        mock.expect_insert_llm_call().times(1).returning(|_| Ok(()));
+        mock.expect_get_calls_for_task()
+            .times(1)
+            .returning(|_| Ok(vec![]));
+
+        let logger = LlmCallLogger::new(mock);
+        logger.log_call(&call).await.unwrap();
+
+        // Should not appear when filtering by a random task_id
+        let calls = logger.get_calls_for_task(Uuid::new_v4()).await.unwrap();
+        assert!(calls.is_empty());
     }
 
     #[test]
@@ -984,72 +825,5 @@ mod tests {
         let cloned = d.clone();
         assert_eq!(d.id, cloned.id);
         assert_eq!(d.decision_type, cloned.decision_type);
-    }
-
-    #[tokio::test]
-    async fn log_decision_without_llm_call() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
-
-        let task_id = Uuid::new_v4();
-        let decision = Decision::new(task_id, DecisionType::Decomposition, "r", "o");
-        logger.log_decision(&decision).await.unwrap();
-
-        let decisions = logger.get_decisions_for_task(task_id).await.unwrap();
-        assert_eq!(decisions.len(), 1);
-        assert!(decisions[0].llm_call_id.is_none());
-    }
-
-    #[tokio::test]
-    async fn get_calls_for_nonexistent_task() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
-
-        let calls = logger.get_calls_for_task(Uuid::new_v4()).await.unwrap();
-        assert!(calls.is_empty());
-    }
-
-    #[tokio::test]
-    async fn get_decisions_for_nonexistent_task() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
-
-        let decisions = logger.get_decisions_for_task(Uuid::new_v4()).await.unwrap();
-        assert!(decisions.is_empty());
-    }
-
-    #[tokio::test]
-    async fn get_calls_in_range_empty() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
-
-        let start = Utc::now() - chrono::Duration::hours(10);
-        let end = Utc::now() - chrono::Duration::hours(9);
-        let calls = logger.get_calls_in_range(start, end).await.unwrap();
-        assert!(calls.is_empty());
-    }
-
-    #[tokio::test]
-    async fn get_decisions_in_range_empty() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
-
-        let start = Utc::now() - chrono::Duration::hours(10);
-        let end = Utc::now() - chrono::Duration::hours(9);
-        let decisions = logger.get_decisions_in_range(start, end).await.unwrap();
-        assert!(decisions.is_empty());
-    }
-
-    #[tokio::test]
-    async fn log_call_without_task_id() {
-        let db = TestDb::new().await;
-        let logger = LlmCallLogger::new(db.pool.clone());
-
-        let call = make_call("model", None);
-        logger.log_call(&call).await.unwrap();
-
-        // Should not appear when filtering by a random task_id
-        let calls = logger.get_calls_for_task(Uuid::new_v4()).await.unwrap();
-        assert!(calls.is_empty());
     }
 }

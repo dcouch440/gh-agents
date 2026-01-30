@@ -9,10 +9,10 @@ use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 
 use chrono::Utc;
-use sqlx::PgPool;
 use thiserror::Error;
-use uuid::Uuid;
 
+use crate::db::pg_repo::PgRepo;
+use crate::db::traits::{DependencyRepo, TaskQueueRepo};
 use crate::types::{Priority, Task, TaskId, TaskStatus};
 
 // ============================================================================
@@ -191,17 +191,24 @@ fn priority_value(p: Priority) -> u8 {
 // ============================================================================
 
 /// Persistent task queue with database backing.
-pub struct PersistentTaskQueue {
+pub struct PersistentTaskQueue<R: TaskQueueRepo = PgRepo> {
     inner: TaskQueue,
-    pool: PgPool,
+    repo: R,
 }
 
-impl PersistentTaskQueue {
+impl PersistentTaskQueue<PgRepo> {
+    /// Create a new persistent queue backed by PgRepo and load pending tasks from database.
+    pub async fn from_pool(pool: sqlx::PgPool) -> Result<Self, QueueError> {
+        Self::new(PgRepo::new(pool)).await
+    }
+}
+
+impl<R: TaskQueueRepo> PersistentTaskQueue<R> {
     /// Create a new persistent queue and load pending tasks from database.
-    pub async fn new(pool: PgPool) -> Result<Self, QueueError> {
+    pub async fn new(repo: R) -> Result<Self, QueueError> {
         let mut queue = Self {
             inner: TaskQueue::new(),
-            pool,
+            repo,
         };
         queue.load_from_db().await?;
         Ok(queue)
@@ -209,9 +216,7 @@ impl PersistentTaskQueue {
 
     /// Load all pending tasks from database into memory queue.
     async fn load_from_db(&mut self) -> Result<(), QueueError> {
-        let tasks = crate::db::list_tasks_by_status(&self.pool, TaskStatus::Pending)
-            .await
-            .map_err(|e| QueueError::DatabaseError(e.to_string()))?;
+        let tasks = self.repo.list_tasks_by_status(TaskStatus::Pending).await?;
 
         for task in tasks {
             self.inner.enqueue(task);
@@ -231,9 +236,9 @@ impl PersistentTaskQueue {
 
     /// Enqueue and update task status in database.
     pub async fn enqueue_and_persist(&mut self, task: Task) -> Result<(), QueueError> {
-        crate::db::update_task_status(&self.pool, &task.id, TaskStatus::Pending)
-            .await
-            .map_err(|e| QueueError::DatabaseError(e.to_string()))?;
+        self.repo
+            .update_task_status(task.id.clone(), TaskStatus::Pending)
+            .await?;
 
         self.inner.enqueue(task);
         Ok(())
@@ -243,9 +248,9 @@ impl PersistentTaskQueue {
     pub async fn dequeue(&mut self) -> Result<Option<Task>, QueueError> {
         match self.inner.dequeue() {
             Some(task) => {
-                crate::db::update_task_status(&self.pool, &task.id, TaskStatus::InProgress)
-                    .await
-                    .map_err(|e| QueueError::DatabaseError(e.to_string()))?;
+                self.repo
+                    .update_task_status(task.id.clone(), TaskStatus::InProgress)
+                    .await?;
 
                 Ok(Some(task))
             }
@@ -305,7 +310,13 @@ impl PersistentTaskQueue {
         task.updated_at = Utc::now();
 
         // Persist changes
-        self.update_task_for_requeue(&task, &policy).await?;
+        let priority_str = format!("{:?}", task.priority).to_lowercase();
+        let policy_description = format!("Requeued with policy {:?}", policy);
+        let now = Utc::now();
+
+        self.repo
+            .update_task_for_requeue(task.id.clone(), priority_str, policy_description, now)
+            .await?;
 
         tracing::info!(
             task_id = %task.id.0,
@@ -315,48 +326,6 @@ impl PersistentTaskQueue {
         );
 
         self.inner.enqueue(task);
-        Ok(())
-    }
-
-    async fn update_task_for_requeue(
-        &self,
-        task: &Task,
-        policy: &RequeuePolicy,
-    ) -> Result<(), QueueError> {
-        let priority_str = format!("{:?}", task.priority).to_lowercase();
-        let now = Utc::now();
-
-        sqlx::query(
-            r#"
-            UPDATE tasks
-            SET status = 'pending',
-                priority = $1,
-                updated_at = $2
-            WHERE id = $3
-            "#,
-        )
-        .bind(&priority_str)
-        .bind(now)
-        .bind(task.id.0)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| QueueError::DatabaseError(e.to_string()))?;
-
-        // Log task event for audit trail
-        sqlx::query(
-            r#"
-            INSERT INTO task_events (id, task_id, event_type, details, timestamp)
-            VALUES ($1, $2, 'requeued', $3, $4)
-            "#,
-        )
-        .bind(Uuid::new_v4())
-        .bind(task.id.0)
-        .bind(format!("Requeued with policy {:?}", policy))
-        .bind(now)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| QueueError::DatabaseError(e.to_string()))?;
-
         Ok(())
     }
 }
@@ -399,23 +368,66 @@ pub struct QueueStats {
 /// A task queue that respects dependencies between tasks.
 ///
 /// Wraps PersistentTaskQueue and filters out blocked tasks during dequeue.
-pub struct DependencyAwareQueue {
-    queue: PersistentTaskQueue,
-    dependency_tracker: DependencyTracker,
+pub struct DependencyAwareQueue<TQ: TaskQueueRepo = PgRepo, DR: DependencyRepo = PgRepo> {
+    queue: PersistentTaskQueue<TQ>,
+    dependency_tracker: DependencyTracker<DR>,
 }
 
 impl DependencyAwareQueue {
     /// Create a new dependency-aware queue
-    pub async fn new(pool: PgPool) -> Result<Self, QueueError> {
-        let queue = PersistentTaskQueue::new(pool.clone()).await?;
-        let dependency_tracker = DependencyTracker::new(pool);
+    pub async fn new(pool: sqlx::PgPool) -> Result<Self, QueueError> {
+        let queue = PersistentTaskQueue::from_pool(pool.clone()).await?;
+        let dependency_tracker = DependencyTracker::new(PgRepo::new(pool));
 
         Ok(Self {
             queue,
             dependency_tracker,
         })
     }
+}
 
+/// Create an in-memory dependency-aware queue for testing.
+///
+/// Uses mock repos that return empty results. Tasks should be added
+/// via `enqueue_in_memory`.
+#[cfg(test)]
+impl
+    DependencyAwareQueue<
+        crate::db::traits::MockTaskQueueRepo,
+        crate::db::traits::MockDependencyRepo,
+    >
+{
+    pub async fn in_memory() -> Self {
+        use crate::db::traits::{MockDependencyRepo, MockTaskQueueRepo};
+
+        let mut task_mock = MockTaskQueueRepo::new();
+        task_mock
+            .expect_list_tasks_by_status()
+            .returning(|_| Ok(vec![]));
+        task_mock
+            .expect_update_task_status()
+            .returning(|_, _| Ok(()));
+        task_mock
+            .expect_update_task_for_requeue()
+            .returning(|_, _, _, _| Ok(()));
+
+        let mut dep_mock = MockDependencyRepo::new();
+        dep_mock.expect_get_blocked_by().returning(|_| Ok(vec![]));
+        dep_mock
+            .expect_get_task_dependencies()
+            .returning(|_| Ok(vec![]));
+        dep_mock.expect_get_task_status().returning(|_| Ok(None));
+
+        let queue = PersistentTaskQueue::new(task_mock).await.unwrap();
+
+        Self {
+            queue,
+            dependency_tracker: DependencyTracker::new(dep_mock),
+        }
+    }
+}
+
+impl<TQ: TaskQueueRepo, DR: DependencyRepo> DependencyAwareQueue<TQ, DR> {
     /// Enqueue a task and save its dependencies
     pub async fn enqueue(&mut self, task: Task) -> Result<(), QueueError> {
         // Save dependencies first
@@ -555,9 +567,11 @@ impl DependencyAwareQueue {
 
         Ok(unblocked)
     }
+}
 
+impl DependencyAwareQueue {
     /// Get the dependency tracker for direct access
-    pub fn dependency_tracker(&self) -> &DependencyTracker {
+    pub fn dependency_tracker(&self) -> &DependencyTracker<PgRepo> {
         &self.dependency_tracker
     }
 }
@@ -965,9 +979,8 @@ mod tests {
 #[cfg(test)]
 mod persistent_queue_tests {
     use super::*;
-    use crate::db::test_utils::TestDb;
+    use crate::db::traits::MockTaskQueueRepo;
     use crate::types::AgentTier;
-
 
     fn make_task(priority: Priority) -> Task {
         Task {
@@ -987,72 +1000,64 @@ mod persistent_queue_tests {
         }
     }
 
+    fn mock_empty_repo() -> MockTaskQueueRepo {
+        let mut mock = MockTaskQueueRepo::new();
+        mock.expect_list_tasks_by_status().returning(|_| Ok(vec![]));
+        mock
+    }
+
+    fn mock_repo_with_tasks(tasks: Vec<Task>) -> MockTaskQueueRepo {
+        let mut mock = MockTaskQueueRepo::new();
+        mock.expect_list_tasks_by_status()
+            .returning(move |_| Ok(tasks.clone()));
+        mock
+    }
+
     #[tokio::test]
     async fn persistent_queue_loads_pending_tasks() {
-        let db = TestDb::new().await;
-
-        // Insert a pending task
         let task = make_task(Priority::Normal);
-        crate::db::insert_task(&db.pool, &task).await.unwrap();
+        let mock = mock_repo_with_tasks(vec![task]);
 
-        // Create queue - should load the task
-        let queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
+        let queue = PersistentTaskQueue::new(mock).await.unwrap();
         assert_eq!(queue.len(), 1);
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn persistent_queue_ignores_non_pending() {
-        let db = TestDb::new().await;
+        // The repo only returns pending tasks (that's the contract),
+        // so returning empty means no pending tasks exist.
+        let mock = mock_empty_repo();
 
-        // Insert a completed task
-        let mut task = make_task(Priority::Normal);
-        task.status = TaskStatus::Completed;
-        crate::db::insert_task(&db.pool, &task).await.unwrap();
-
-        // Create queue - should not load completed task
-        let queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
+        let queue = PersistentTaskQueue::new(mock).await.unwrap();
         assert!(queue.is_empty());
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn dequeue_updates_status_to_in_progress() {
-        let db = TestDb::new().await;
-
         let task = make_task(Priority::Normal);
-        let task_id = task.id.clone();
-        crate::db::insert_task(&db.pool, &task).await.unwrap();
+        let mut mock = mock_repo_with_tasks(vec![task]);
+        mock.expect_update_task_status()
+            .withf(|_, status| *status == TaskStatus::InProgress)
+            .returning(|_, _| Ok(()));
 
-        let mut queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
+        let mut queue = PersistentTaskQueue::new(mock).await.unwrap();
         let dequeued = queue.dequeue().await.unwrap();
-
         assert!(dequeued.is_some());
-
-        // Check database was updated
-        let db_task = crate::db::get_task(&db.pool, &task_id).await.unwrap().unwrap();
-        assert_eq!(db_task.status, TaskStatus::InProgress);
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn requeue_updates_priority_and_status() {
-        let db = TestDb::new().await;
-
         let task = make_task(Priority::Normal);
-        let task_id = task.id.clone();
-        crate::db::insert_task(&db.pool, &task).await.unwrap();
+        let mut mock = mock_repo_with_tasks(vec![task]);
+        mock.expect_update_task_status().returning(|_, _| Ok(()));
+        mock.expect_update_task_for_requeue()
+            .withf(|_, priority_str, _, _| priority_str == "high")
+            .returning(|_, _, _, _| Ok(()));
 
-        let mut queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
-
-        // Dequeue the task
+        let mut queue = PersistentTaskQueue::new(mock).await.unwrap();
         let task = queue.dequeue().await.unwrap().unwrap();
         assert!(queue.is_empty());
 
-        // Requeue with escalation
         queue
             .requeue(task, RequeuePolicy::EscalatePriority)
             .await
@@ -1060,23 +1065,17 @@ mod persistent_queue_tests {
 
         assert_eq!(queue.len(), 1);
         assert_eq!(queue.peek().unwrap().priority, Priority::High);
-
-        // Check database
-        let db_task = crate::db::get_task(&db.pool, &task_id).await.unwrap().unwrap();
-        assert_eq!(db_task.status, TaskStatus::Pending);
-        assert_eq!(db_task.priority, Priority::High);
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn requeue_with_set_priority() {
-        let db = TestDb::new().await;
-
         let task = make_task(Priority::Low);
-        crate::db::insert_task(&db.pool, &task).await.unwrap();
+        let mut mock = mock_repo_with_tasks(vec![task]);
+        mock.expect_update_task_status().returning(|_, _| Ok(()));
+        mock.expect_update_task_for_requeue()
+            .returning(|_, _, _, _| Ok(()));
 
-        let mut queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
+        let mut queue = PersistentTaskQueue::new(mock).await.unwrap();
         let task = queue.dequeue().await.unwrap().unwrap();
 
         queue
@@ -1085,167 +1084,122 @@ mod persistent_queue_tests {
             .unwrap();
 
         assert_eq!(queue.peek().unwrap().priority, Priority::Urgent);
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn requeue_creates_event() {
-        let db = TestDb::new().await;
-
         let task = make_task(Priority::Normal);
-        let task_id = task.id.clone();
-        crate::db::insert_task(&db.pool, &task).await.unwrap();
+        let mut mock = mock_repo_with_tasks(vec![task]);
+        mock.expect_update_task_status().returning(|_, _| Ok(()));
+        mock.expect_update_task_for_requeue()
+            .withf(|_, _, policy_desc, _| policy_desc.contains("SamePriority"))
+            .times(1)
+            .returning(|_, _, _, _| Ok(()));
 
-        let mut queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
+        let mut queue = PersistentTaskQueue::new(mock).await.unwrap();
         let task = queue.dequeue().await.unwrap().unwrap();
         queue
             .requeue(task, RequeuePolicy::SamePriority)
             .await
             .unwrap();
-
-        // Check event was created
-        let event_count: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM task_events WHERE task_id = $1 AND event_type = 'requeued'",
-        )
-        .bind(task_id.0.to_string())
-        .fetch_one(&db.pool)
-        .await
-        .unwrap();
-
-        assert_eq!(event_count.0, 1);
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn persistent_queue_dequeue_empty_returns_none() {
-        let db = TestDb::new().await;
+        let mock = mock_empty_repo();
 
-        let mut queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
+        let mut queue = PersistentTaskQueue::new(mock).await.unwrap();
         let result = queue.dequeue().await.unwrap();
         assert!(result.is_none());
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn persistent_queue_enqueue_and_persist() {
-        let db = TestDb::new().await;
-
         let task = make_task(Priority::High);
-        let _task_id = task.id.clone();
-        crate::db::insert_task(&db.pool, &task).await.unwrap();
+        let mut mock = mock_repo_with_tasks(vec![task]);
+        mock.expect_update_task_status().returning(|_, _| Ok(()));
 
-        let mut queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
-        // Dequeue to clear the loaded task
+        let mut queue = PersistentTaskQueue::new(mock).await.unwrap();
         queue.dequeue().await.unwrap();
 
-        // Now enqueue_and_persist a new task
         let task2 = make_task(Priority::Low);
         let task2_id = task2.id.clone();
-        crate::db::insert_task(&db.pool, &task2).await.unwrap();
         queue.enqueue_and_persist(task2).await.unwrap();
 
         assert_eq!(queue.len(), 1);
         assert!(queue.contains(&task2_id));
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn persistent_queue_peek() {
-        let db = TestDb::new().await;
+        let mock = mock_empty_repo();
 
-        let mut queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
-
-        // Peek on empty
+        let mut queue = PersistentTaskQueue::new(mock).await.unwrap();
         assert!(queue.peek().is_none());
 
         let task = make_task(Priority::Urgent);
-        crate::db::insert_task(&db.pool, &task).await.unwrap();
         queue.enqueue(task);
 
         assert!(queue.peek().is_some());
         assert_eq!(queue.peek().unwrap().priority, Priority::Urgent);
-        // Peek doesn't remove
         assert_eq!(queue.len(), 1);
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn persistent_queue_contains() {
-        let db = TestDb::new().await;
-
         let task = make_task(Priority::Normal);
         let task_id = task.id.clone();
-        crate::db::insert_task(&db.pool, &task).await.unwrap();
+        let mock = mock_repo_with_tasks(vec![task]);
 
-        let queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
+        let queue = PersistentTaskQueue::new(mock).await.unwrap();
         assert!(queue.contains(&task_id));
         assert!(!queue.contains(&TaskId::new()));
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn persistent_queue_all_tasks() {
-        let db = TestDb::new().await;
-
         let t1 = make_task(Priority::Low);
         let t2 = make_task(Priority::High);
-        crate::db::insert_task(&db.pool, &t1).await.unwrap();
-        crate::db::insert_task(&db.pool, &t2).await.unwrap();
+        let mock = mock_repo_with_tasks(vec![t1, t2]);
 
-        let queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
+        let queue = PersistentTaskQueue::new(mock).await.unwrap();
         let tasks = queue.all_tasks();
         assert_eq!(tasks.len(), 2);
-        // Should be sorted: High first
         assert_eq!(tasks[0].priority, Priority::High);
         assert_eq!(tasks[1].priority, Priority::Low);
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn persistent_queue_count_by_priority() {
-        let db = TestDb::new().await;
-
         let t1 = make_task(Priority::Normal);
         let t2 = make_task(Priority::Normal);
         let t3 = make_task(Priority::Urgent);
-        crate::db::insert_task(&db.pool, &t1).await.unwrap();
-        crate::db::insert_task(&db.pool, &t2).await.unwrap();
-        crate::db::insert_task(&db.pool, &t3).await.unwrap();
+        let mock = mock_repo_with_tasks(vec![t1, t2, t3]);
 
-        let queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
+        let queue = PersistentTaskQueue::new(mock).await.unwrap();
         let counts = queue.count_by_priority();
         assert_eq!(counts.get(&Priority::Normal), Some(&2));
         assert_eq!(counts.get(&Priority::Urgent), Some(&1));
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn persistent_queue_is_empty_and_len() {
-        let db = TestDb::new().await;
+        let mock = mock_empty_repo();
 
-        let queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
+        let queue = PersistentTaskQueue::new(mock).await.unwrap();
         assert!(queue.is_empty());
         assert_eq!(queue.len(), 0);
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn requeue_with_same_priority() {
-        let db = TestDb::new().await;
-
         let task = make_task(Priority::High);
-        crate::db::insert_task(&db.pool, &task).await.unwrap();
+        let mut mock = mock_repo_with_tasks(vec![task]);
+        mock.expect_update_task_status().returning(|_, _| Ok(()));
+        mock.expect_update_task_for_requeue()
+            .returning(|_, _, _, _| Ok(()));
 
-        let mut queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
+        let mut queue = PersistentTaskQueue::new(mock).await.unwrap();
         let task = queue.dequeue().await.unwrap().unwrap();
 
         queue
@@ -1254,48 +1208,38 @@ mod persistent_queue_tests {
             .unwrap();
 
         assert_eq!(queue.peek().unwrap().priority, Priority::High);
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn persistent_queue_loads_multiple_pending() {
-        let db = TestDb::new().await;
-
-        // Insert multiple pending tasks
-        for p in [
+        let tasks: Vec<Task> = [
             Priority::Low,
             Priority::Normal,
             Priority::High,
             Priority::Urgent,
-        ] {
-            let task = make_task(p);
-            crate::db::insert_task(&db.pool, &task).await.unwrap();
-        }
+        ]
+        .into_iter()
+        .map(make_task)
+        .collect();
+        let mock = mock_repo_with_tasks(tasks);
 
-        let queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
+        let queue = PersistentTaskQueue::new(mock).await.unwrap();
         assert_eq!(queue.len(), 4);
-
-        db.cleanup().await;
     }
 
     #[tokio::test]
     async fn persistent_queue_dequeue_priority_order() {
-        let db = TestDb::new().await;
-
         let low = make_task(Priority::Low);
         let urgent = make_task(Priority::Urgent);
-        crate::db::insert_task(&db.pool, &low).await.unwrap();
-        crate::db::insert_task(&db.pool, &urgent).await.unwrap();
+        let mut mock = mock_repo_with_tasks(vec![low, urgent]);
+        mock.expect_update_task_status().returning(|_, _| Ok(()));
 
-        let mut queue = PersistentTaskQueue::new(db.pool.clone()).await.unwrap();
+        let mut queue = PersistentTaskQueue::new(mock).await.unwrap();
 
         let first = queue.dequeue().await.unwrap().unwrap();
         assert_eq!(first.priority, Priority::Urgent);
 
         let second = queue.dequeue().await.unwrap().unwrap();
         assert_eq!(second.priority, Priority::Low);
-
-        db.cleanup().await;
     }
 }
