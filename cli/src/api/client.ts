@@ -72,15 +72,15 @@ async function fetchApi<T>(
 }
 
 export const api = {
-  health: () => fetchApi<HealthResponse>('/health'),
+  health: () => fetchApi<HealthResponse>('/api/health'),
 
   auth: {
     login: (password: string) =>
-      fetchApi<LoginResponse>('/auth/login', {
+      fetchApi<LoginResponse>('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify({ password }),
       }),
-    me: () => fetchApi<AuthMeResponse>('/auth/me'),
+    me: () => fetchApi<AuthMeResponse>('/api/auth/me'),
   },
 
   agents: {
@@ -89,14 +89,14 @@ export const api = {
 
   chat: {
     send: (message: string) =>
-      fetchApi<ChatSendResponse>('/chat', {
+      fetchApi<ChatSendResponse>('/api/chat', {
         method: 'POST',
         body: JSON.stringify({ message }),
       }),
     history: (limit = 50, offset = 0) =>
       fetchApi<ChatMessage[]>(
-        `/chat/history?limit=${limit}&offset=${offset}`,
+        `/api/chat/history?limit=${limit}&offset=${offset}`,
       ),
-    clear: () => fetchApi<void>('/chat/history', { method: 'DELETE' }),
+    clear: () => fetchApi<void>('/api/chat/history', { method: 'DELETE' }),
   },
 };

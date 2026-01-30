@@ -7,6 +7,7 @@
 
 pub mod api;
 pub mod auth;
+pub mod orchestrator;
 pub mod state;
 pub mod ws;
 
@@ -48,7 +49,11 @@ pub async fn start_server(
     config: AppConfig,
     addr: SocketAddr,
 ) -> Result<()> {
-    let state = AppState::new(db, scheduler, config);
+    let (state, orchestrator_rx) = AppState::new(db, scheduler, config);
+
+    // Spawn the orchestrator consumer to process chat messages via LLM
+    let _orchestrator_handle = orchestrator::spawn_orchestrator(state.clone(), orchestrator_rx);
+
     let app = create_router(state);
 
     info!("Server listening on http://{}", addr);
@@ -300,7 +305,10 @@ mod tests {
 
     fn setup_mock_state() -> AppState {
         let repo: Arc<dyn ServerRepo> = Arc::new(InMemoryServerRepo::new());
-        AppState::with_repo(None, repo, None, AppConfig::default())
+        let (state, rx) = AppState::with_repo(None, repo, None, AppConfig::default());
+        // Keep the receiver alive so orchestrator_tx.send() doesn't fail in tests
+        std::mem::forget(rx);
+        state
     }
 
     fn setup_test_app() -> Router {
