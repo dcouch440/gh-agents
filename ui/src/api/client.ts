@@ -90,6 +90,27 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ message }),
       }),
+    stream: (messageId: string, onToken: (text: string) => void, onDone: () => void, onError: (err: string) => void) => {
+      const eventSource = new EventSource(
+        `${API_BASE}/chat/${messageId}/stream`
+      );
+      eventSource.onmessage = (event) => {
+        onToken(event.data);
+      };
+      eventSource.addEventListener('done', () => {
+        eventSource.close();
+        onDone();
+      });
+      eventSource.addEventListener('error', (event) => {
+        eventSource.close();
+        onError((event as MessageEvent).data ?? 'Stream error');
+      });
+      eventSource.onerror = () => {
+        eventSource.close();
+        onError('Connection lost');
+      };
+      return eventSource;
+    },
     history: (limit?: number, offset?: number) =>
       fetchApi<ChatMessage[]>(`/chat/history?limit=${limit ?? 50}&offset=${offset ?? 0}`),
     clear: () =>
