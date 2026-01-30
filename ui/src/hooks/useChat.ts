@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, type ChatMessage } from '../api/client';
-import { wsClient } from '../api/websocket';
 
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -13,17 +12,6 @@ export function useChat() {
       setMessages(history);
       setLoading(false);
     });
-
-    // Subscribe to chat updates
-    const handleMessage = (data: unknown) => {
-      setMessages((prev) => [...prev, data as ChatMessage]);
-    };
-
-    wsClient.on('chat', handleMessage);
-
-    return () => {
-      wsClient.off('chat', handleMessage);
-    };
   }, []);
 
   const sendMessage = useCallback(async (content: string) => {
@@ -38,8 +26,38 @@ export function useChat() {
       };
       setMessages((prev) => [...prev, userMessage]);
 
-      await api.chat.send(content);
-    } finally {
+      const { message_id } = await api.chat.send(content);
+
+      // Create a placeholder assistant message for streaming
+      const assistantId = crypto.randomUUID();
+      const assistantMessage: ChatMessage = {
+        id: assistantId,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, assistantMessage]);
+
+      // Subscribe to the SSE stream for this response
+      api.chat.stream(
+        message_id,
+        (token) => {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantId
+                ? { ...msg, content: msg.content + token }
+                : msg
+            )
+          );
+        },
+        () => {
+          setSending(false);
+        },
+        () => {
+          setSending(false);
+        }
+      );
+    } catch {
       setSending(false);
     }
   }, []);
