@@ -197,7 +197,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
                                 let response = handle_client_message(client_msg, &subscriptions).await;
                                 if let Some(server_msg) = response {
                                     let json = serde_json::to_string(&server_msg).unwrap();
-                                    if sender.send(Message::Text(json.into())).await.is_err() {
+                                    if sender.send(Message::Text(json)).await.is_err() {
                                         warn!("Failed to send message to client");
                                         break;
                                     }
@@ -209,7 +209,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
                                     message: format!("Invalid message format: {}", e),
                                 };
                                 let json = serde_json::to_string(&error_msg).unwrap();
-                                if sender.send(Message::Text(json.into())).await.is_err() {
+                                if sender.send(Message::Text(json)).await.is_err() {
                                     break;
                                 }
                             }
@@ -252,7 +252,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
                         if should_send {
                             let msg = ServerMessage::Feed { data: update };
                             let json = serde_json::to_string(&msg).unwrap();
-                            if sender.send(Message::Text(json.into())).await.is_err() {
+                            if sender.send(Message::Text(json)).await.is_err() {
                                 break;
                             }
                         }
@@ -270,7 +270,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
                         if should_send {
                             let msg = ServerMessage::TaskUpdate { data: update };
                             let json = serde_json::to_string(&msg).unwrap();
-                            if sender.send(Message::Text(json.into())).await.is_err() {
+                            if sender.send(Message::Text(json)).await.is_err() {
                                 break;
                             }
                         }
@@ -288,7 +288,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
                         if should_send {
                             let msg = ServerMessage::AgentUpdate { data: update };
                             let json = serde_json::to_string(&msg).unwrap();
-                            if sender.send(Message::Text(json.into())).await.is_err() {
+                            if sender.send(Message::Text(json)).await.is_err() {
                                 break;
                             }
                         }
@@ -306,7 +306,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
                         if should_send {
                             let msg = ServerMessage::SessionUpdate { data: update };
                             let json = serde_json::to_string(&msg).unwrap();
-                            if sender.send(Message::Text(json.into())).await.is_err() {
+                            if sender.send(Message::Text(json)).await.is_err() {
                                 break;
                             }
                         }
@@ -324,7 +324,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
                         if should_send {
                             let msg = ServerMessage::PipelineUpdate { data: update };
                             let json = serde_json::to_string(&msg).unwrap();
-                            if sender.send(Message::Text(json.into())).await.is_err() {
+                            if sender.send(Message::Text(json)).await.is_err() {
                                 break;
                             }
                         }

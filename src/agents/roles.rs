@@ -75,12 +75,14 @@ impl RoleId {
 /// Output format for role responses
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum OutputFormat {
     /// Structured plan with tickets/slices
     Plan,
     /// Code with report
     CodeAndReport,
     /// Simple result/answer
+    #[default]
     Result,
     /// Summary document
     Summary,
@@ -88,11 +90,6 @@ pub enum OutputFormat {
     Custom(String),
 }
 
-impl Default for OutputFormat {
-    fn default() -> Self {
-        OutputFormat::Result
-    }
-}
 
 /// A role defines agent behavior, file access, and delegation rules
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -365,7 +362,7 @@ impl RoleLibrary {
         self.roles.insert(id.clone(), role);
         self.by_category
             .entry(category)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(id);
     }
 

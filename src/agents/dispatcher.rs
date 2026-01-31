@@ -54,7 +54,7 @@ impl Dispatcher {
         self.handles.insert(agent_id.clone(), handle);
         self.by_tier
             .entry(tier)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(agent_id);
     }
 

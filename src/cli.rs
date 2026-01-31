@@ -8,25 +8,9 @@ use std::path::PathBuf;
 #[command(name = "nexor")]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
-    /// Run in headless mode (no server)
-    #[arg(short = 'H', long)]
-    pub headless: bool,
-
-    /// Port to listen on (server mode only)
+    /// Port to listen on
     #[arg(short, long, default_value = "3000")]
     pub port: u16,
-
-    /// Task description to process (headless mode)
-    #[arg(short, long)]
-    pub task: Option<String>,
-
-    /// Read task(s) from file (headless mode)
-    #[arg(short, long)]
-    pub input: Option<PathBuf>,
-
-    /// Write output to file instead of stdout (headless mode)
-    #[arg(short, long)]
-    pub output: Option<PathBuf>,
 
     /// Override config file location
     #[arg(short, long)]
@@ -35,10 +19,6 @@ pub struct Args {
     /// Increase log verbosity (-v, -vv, -vvv)
     #[arg(short, long, action = clap::ArgAction::Count)]
     pub verbose: u8,
-
-    /// GitHub issue URL to sync and work on
-    #[arg(long)]
-    pub sync: Option<String>,
 }
 
 impl Args {
@@ -49,21 +29,6 @@ impl Args {
 
     /// Validate argument combinations
     pub fn validate(&self) -> Result<(), String> {
-        if self.headless {
-            // In headless mode, need either --task, --input, or --sync
-            if self.task.is_none() && self.input.is_none() && self.sync.is_none() {
-                return Err("headless mode requires --task, --input, or --sync".to_string());
-            }
-        }
-
-        if self.input.is_some() && !self.headless {
-            return Err("--input requires --headless mode".to_string());
-        }
-
-        if self.output.is_some() && !self.headless {
-            return Err("--output requires --headless mode".to_string());
-        }
-
         Ok(())
     }
 
@@ -75,24 +40,14 @@ impl Args {
             _ => tracing::Level::TRACE,
         }
     }
-
-    /// Check if running in headless mode
-    pub fn is_headless(&self) -> bool {
-        self.headless
-    }
 }
 
 impl Default for Args {
     fn default() -> Self {
         Self {
-            headless: false,
             port: 3000,
-            task: None,
-            input: None,
-            output: None,
             config: None,
             verbose: 0,
-            sync: None,
         }
     }
 }
@@ -102,69 +57,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn headless_requires_task_or_input() {
-        let args = Args {
-            headless: true,
-            task: None,
-            input: None,
-            sync: None,
-            ..Default::default()
-        };
-        assert!(args.validate().is_err());
-    }
-
-    #[test]
-    fn headless_with_task_valid() {
-        let args = Args {
-            headless: true,
-            task: Some("test task".to_string()),
-            ..Default::default()
-        };
-        assert!(args.validate().is_ok());
-    }
-
-    #[test]
-    fn headless_with_input_valid() {
-        let args = Args {
-            headless: true,
-            input: Some(PathBuf::from("tasks.txt")),
-            ..Default::default()
-        };
-        assert!(args.validate().is_ok());
-    }
-
-    #[test]
-    fn headless_with_sync_valid() {
-        let args = Args {
-            headless: true,
-            sync: Some("https://github.com/owner/repo/issues/1".to_string()),
-            ..Default::default()
-        };
-        assert!(args.validate().is_ok());
-    }
-
-    #[test]
-    fn input_requires_headless() {
-        let args = Args {
-            headless: false,
-            input: Some(PathBuf::from("tasks.txt")),
-            ..Default::default()
-        };
-        assert!(args.validate().is_err());
-    }
-
-    #[test]
-    fn output_requires_headless() {
-        let args = Args {
-            headless: false,
-            output: Some(PathBuf::from("output.txt")),
-            ..Default::default()
-        };
-        assert!(args.validate().is_err());
-    }
-
-    #[test]
-    fn non_headless_is_valid() {
+    fn default_is_valid() {
         let args = Args::default();
         assert!(args.validate().is_ok());
     }

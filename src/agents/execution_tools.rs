@@ -251,10 +251,7 @@ async fn exec_edit_file(input: &Value, ctx: &ExecutionContext) -> Value {
 
     // Handle append mode: empty old_string means append to end
     if old_string.is_empty() {
-        let existing = match file_ops.read_file(&full_path).await {
-            Ok(c) => c,
-            Err(_) => String::new(), // file doesn't exist yet, start empty
-        };
+        let existing = file_ops.read_file(&full_path).await.unwrap_or_default();
         let new_content = if existing.is_empty() {
             new_string.to_string()
         } else if existing.ends_with('\n') {

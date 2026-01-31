@@ -212,7 +212,7 @@ impl Default for DelegationContext {
     fn default() -> Self {
         Self {
             depth: 0,
-            max_depth: crate::constants::DEFAULT_MAX_DELEGATION_DEPTH as u8,
+            max_depth: crate::constants::DEFAULT_MAX_DELEGATION_DEPTH,
             parent_agent: None,
             parent_role: None,
             delegation_chain: vec![],

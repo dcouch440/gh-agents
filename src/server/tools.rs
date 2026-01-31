@@ -1000,7 +1000,6 @@ async fn execute_assign_task(input: &Value, state: &AppState) -> Value {
     ));
 
     let conventions = cluster_conventions;
-    let required_reading = required_reading;
 
     // Parse allowed_tools if provided
     let allowed_tools = input["allowed_tools"].as_array().map(|arr| {
@@ -1009,8 +1008,7 @@ async fn execute_assign_task(input: &Value, state: &AppState) -> Value {
             .collect()
     });
 
-    let mut constraints = TaskConstraints::default();
-    constraints.allowed_tools = allowed_tools;
+    let constraints = TaskConstraints { allowed_tools, ..Default::default() };
 
     let assignment = TaskAssignment {
         task_id: uuid::Uuid::new_v4(),
@@ -1039,7 +1037,7 @@ async fn execute_assign_task(input: &Value, state: &AppState) -> Value {
     let task_id = assignment.task_id;
     let dispatcher = dispatcher.lock().await;
     match dispatcher
-        .send_to_agent(&agent_id, AgentCommand::AssignTask(assignment))
+        .send_to_agent(&agent_id, AgentCommand::AssignTask(Box::new(assignment)))
         .await
     {
         Ok(()) => json!({
@@ -1626,7 +1624,7 @@ async fn execute_start_pipeline(input: &Value, state: &AppState, user_id: UserId
 
     let dispatcher = dispatcher.lock().await;
     match dispatcher
-        .send_to_agent(&first_agent_id, AgentCommand::AssignTask(assignment))
+        .send_to_agent(&first_agent_id, AgentCommand::AssignTask(Box::new(assignment)))
         .await
     {
         Ok(()) => json!({
@@ -2408,28 +2406,28 @@ async fn execute_submit_prd(input: &Value, state: &AppState, user_id: UserId) ->
 
     // Validate required array fields
     let goals = input["goals"].as_array();
-    if goals.map_or(true, |a| a.is_empty()) {
+    if goals.is_none_or(|a| a.is_empty()) {
         errors.push("goals must have at least 1 entry".to_string());
     }
     let non_goals = input["non_goals"].as_array();
-    if non_goals.map_or(true, |a| a.is_empty()) {
+    if non_goals.is_none_or(|a| a.is_empty()) {
         errors.push("non_goals must have at least 1 entry".to_string());
     }
     let user_stories = input["user_stories"].as_array();
-    if user_stories.map_or(true, |a| a.is_empty()) {
+    if user_stories.is_none_or(|a| a.is_empty()) {
         errors.push("user_stories must have at least 1 entry".to_string());
     }
 
     // Validate milestones
     let milestones = input["milestones"].as_array();
-    if milestones.map_or(true, |a| a.is_empty()) {
+    if milestones.is_none_or(|a| a.is_empty()) {
         errors.push("milestones must have at least 1 entry".to_string());
     } else if let Some(ms) = milestones {
         for (i, m) in ms.iter().enumerate() {
             if m["name"].as_str().unwrap_or("").is_empty() {
                 errors.push(format!("milestones[{}] missing name", i));
             }
-            if m["deliverables"].as_array().map_or(true, |a| a.is_empty()) {
+            if m["deliverables"].as_array().is_none_or(|a| a.is_empty()) {
                 errors.push(format!(
                     "milestones[{}] must have at least 1 deliverable",
                     i
@@ -2557,11 +2555,11 @@ async fn execute_submit_ticket(input: &Value) -> Value {
     }
 
     let acceptance_criteria = input["acceptance_criteria"].as_array();
-    if acceptance_criteria.map_or(true, |a| a.is_empty()) {
+    if acceptance_criteria.is_none_or(|a| a.is_empty()) {
         errors.push("acceptance_criteria must have at least 1 entry".to_string());
     }
     let files_to_modify = input["files_to_modify"].as_array();
-    if files_to_modify.map_or(true, |a| a.is_empty()) {
+    if files_to_modify.is_none_or(|a| a.is_empty()) {
         errors.push("files_to_modify must have at least 1 entry".to_string());
     }
 

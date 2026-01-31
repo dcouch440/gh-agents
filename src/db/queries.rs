@@ -17,7 +17,7 @@ pub async fn insert_task(pool: &PgPool, user_id: UserId, task: &Task) -> Result<
     let metadata = task
         .metadata
         .as_ref()
-        .map(|m| serde_json::to_value(m))
+        .map(serde_json::to_value)
         .transpose()?;
 
     sqlx::query(

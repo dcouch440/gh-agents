@@ -266,11 +266,7 @@ impl FileSummarizer {
     }
 
     fn extract_js_export_signature(&self, line: &str) -> Option<String> {
-        if let Some(brace_pos) = line.find('{') {
-            Some(line[..brace_pos].trim().to_string())
-        } else {
-            None
-        }
+        line.find('{').map(|brace_pos| line[..brace_pos].trim().to_string())
     }
 
     fn truncate_with_notice(&self, content: &str, max_tokens: usize) -> String {

@@ -134,7 +134,7 @@ impl Agent {
 
                 AgentCommand::AssignTask(assignment) => {
                     info!(task_id = ?assignment.task_id, "Received task assignment");
-                    if let Err(e) = self.handle_task_assignment(assignment).await {
+                    if let Err(e) = self.handle_task_assignment(*assignment).await {
                         error!(error = ?e, "Task execution failed");
                     }
                 }
@@ -569,7 +569,6 @@ impl Agent {
                 temperature,
                 stream: true,
                 tools: tool_defs.clone(),
-                ..Default::default()
             };
 
             let mut stream = self
@@ -739,7 +738,6 @@ impl Agent {
                     temperature,
                     stream: true,
                     tools: tool_defs.clone(),
-                    ..Default::default()
                 };
 
                 let mut fix_stream = self

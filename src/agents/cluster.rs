@@ -10,6 +10,12 @@ use super::channels::FileContent;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ClusterId(pub Uuid);
 
+impl Default for ClusterId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ClusterId {
     pub fn new() -> Self {
         Self(Uuid::new_v4())
