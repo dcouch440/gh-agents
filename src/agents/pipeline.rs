@@ -239,8 +239,12 @@ mod tests {
     fn add_stages() {
         let mut mgr = PipelineManager::new();
         let pid = mgr.create_pipeline("p".into());
-        let s0 = mgr.add_stage(pid, agent(1), Some("worker".into()), false).unwrap();
-        let s1 = mgr.add_stage(pid, agent(2), Some("reviewer".into()), true).unwrap();
+        let s0 = mgr
+            .add_stage(pid, agent(1), Some("worker".into()), false)
+            .unwrap();
+        let s1 = mgr
+            .add_stage(pid, agent(2), Some("reviewer".into()), true)
+            .unwrap();
         assert_eq!(s0, 0);
         assert_eq!(s1, 1);
         assert_eq!(mgr.get_pipeline(&pid).unwrap().stages.len(), 2);
@@ -283,7 +287,10 @@ mod tests {
         // Advance past last stage → completed
         let next = mgr.advance_stage(run_id).unwrap();
         assert!(next.is_none());
-        assert_eq!(mgr.get_run(run_id).unwrap().status, PipelineRunStatus::Completed);
+        assert_eq!(
+            mgr.get_run(run_id).unwrap().status,
+            PipelineRunStatus::Completed
+        );
     }
 
     #[test]
@@ -300,7 +307,10 @@ mod tests {
         mgr.add_stage(pid, agent(1), None, false).unwrap();
         let (run_id, _) = mgr.start_run(pid, "task".into()).unwrap();
         mgr.fail_run(run_id);
-        assert_eq!(mgr.get_run(run_id).unwrap().status, PipelineRunStatus::Failed);
+        assert_eq!(
+            mgr.get_run(run_id).unwrap().status,
+            PipelineRunStatus::Failed
+        );
     }
 
     #[test]

@@ -84,5 +84,5 @@ docker exec -it gh-agents-postgres-1 psql -U nexor -d nexor              # Inter
 - Read `PROGRESS.md` before starting work to check dependencies
 - Always write tests when completing a ticket
 - Verify with `cargo check` and `cargo test` before committing
-- For CLI: run `cd cli && npm test` to verify TypeScript tests
 - Save notes to `doc/` when requested
+- Stay out of /cli

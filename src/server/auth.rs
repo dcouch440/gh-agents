@@ -98,15 +98,10 @@ impl FromRequestParts<AppState> for AuthUser {
             .and_then(|s| s.strip_prefix("Bearer "))
             .map(|s| s.to_string())
             .or_else(|| {
-                parts
-                    .uri
-                    .query()
-                    .and_then(|q| {
-                        q.split('&')
-                            .find_map(|pair| {
-                                pair.strip_prefix("token=").map(|v| v.to_string())
-                            })
-                    })
+                parts.uri.query().and_then(|q| {
+                    q.split('&')
+                        .find_map(|pair| pair.strip_prefix("token=").map(|v| v.to_string()))
+                })
             })
             .ok_or(StatusCode::UNAUTHORIZED)?;
         let token = &token;
@@ -141,8 +136,8 @@ mod tests {
     fn test_create_and_verify_token() {
         let secret = b"test_secret_key_123";
         let user_id = UserId::new();
-        let token = create_token(secret, 24, user_id, "test@example.com")
-            .expect("Failed to create token");
+        let token =
+            create_token(secret, 24, user_id, "test@example.com").expect("Failed to create token");
 
         let claims = verify_token(&token, secret).expect("Failed to verify token");
         assert!(uuid::Uuid::parse_str(&claims.sub).is_ok());
@@ -155,8 +150,8 @@ mod tests {
         let secret = b"test_secret_key_123";
         let wrong_secret = b"wrong_secret_key";
         let user_id = UserId::new();
-        let token = create_token(secret, 24, user_id, "test@example.com")
-            .expect("Failed to create token");
+        let token =
+            create_token(secret, 24, user_id, "test@example.com").expect("Failed to create token");
 
         assert!(verify_token(&token, wrong_secret).is_err());
     }

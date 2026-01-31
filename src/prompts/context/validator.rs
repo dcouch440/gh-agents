@@ -166,9 +166,9 @@ impl ModelLimits {
             | "claude-sonnet-4-20250514"
             | "claude-sonnet"
             | "claude-3-sonnet" => Self::claude_sonnet(),
-            "claude-3-haiku-20240307"
-            | "claude-3-5-haiku-20241022"
-            | "claude-haiku" => Self::claude_haiku(),
+            "claude-3-haiku-20240307" | "claude-3-5-haiku-20241022" | "claude-haiku" => {
+                Self::claude_haiku()
+            }
 
             // Default/unknown - conservative limits
             _ => Self::default_limits(model_id),

@@ -23,7 +23,12 @@ pub struct AgentRow {
     pub id: Uuid,
     pub tier: String,
     pub persona_name: String,
+    pub persona_prompt: String,
+    pub persona_style: String,
+    pub model_provider: String,
     pub model_id: String,
+    pub model_max_tokens: i32,
+    pub model_temperature: f32,
     pub status: String,
 }
 

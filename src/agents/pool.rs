@@ -762,7 +762,9 @@ mod tests {
     #[test]
     fn get_available_agent_id_returns_none_when_empty() {
         let pool = create_test_pool();
-        assert!(pool.get_available_agent_id(AgentTier::Orchestrator).is_none());
+        assert!(pool
+            .get_available_agent_id(AgentTier::Orchestrator)
+            .is_none());
     }
 
     #[test]

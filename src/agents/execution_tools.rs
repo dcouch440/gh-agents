@@ -343,7 +343,11 @@ fn exec_git_status(ctx: &ExecutionContext) -> Value {
 fn exec_git_diff(input: &Value, ctx: &ExecutionContext) -> Value {
     let git = GitOps::new(ctx.clone());
     let staged = input["staged"].as_bool().unwrap_or(false);
-    let result = if staged { git.diff_staged() } else { git.diff() };
+    let result = if staged {
+        git.diff_staged()
+    } else {
+        git.diff()
+    };
     match result {
         Ok(diff) => json!({ "diff": diff }),
         Err(e) => json!({ "error": e.to_string() }),
@@ -352,10 +356,7 @@ fn exec_git_diff(input: &Value, ctx: &ExecutionContext) -> Value {
 
 fn exec_git_add(input: &Value, ctx: &ExecutionContext) -> Value {
     let paths = match input["paths"].as_array() {
-        Some(arr) => arr
-            .iter()
-            .filter_map(|v| v.as_str())
-            .collect::<Vec<_>>(),
+        Some(arr) => arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>(),
         None => return json!({ "error": "Missing required parameter: paths" }),
     };
     let git = GitOps::new(ctx.clone());
@@ -477,13 +478,8 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         std::fs::write(tmp.path().join("test.txt"), "hello world").unwrap();
         let ctx = ExecutionContext::new(tmp.path().to_path_buf());
-        let result = execute_execution_tool(
-            "read_file",
-            &json!({ "path": "test.txt" }),
-            &ctx,
-            None,
-        )
-        .await;
+        let result =
+            execute_execution_tool("read_file", &json!({ "path": "test.txt" }), &ctx, None).await;
         assert_eq!(result["content"], "hello world");
     }
 
@@ -509,13 +505,8 @@ mod tests {
         std::fs::write(tmp.path().join("a.txt"), "").unwrap();
         std::fs::write(tmp.path().join("b.txt"), "").unwrap();
         let ctx = ExecutionContext::new(tmp.path().to_path_buf());
-        let result = execute_execution_tool(
-            "list_files",
-            &json!({ "path": "." }),
-            &ctx,
-            None,
-        )
-        .await;
+        let result =
+            execute_execution_tool("list_files", &json!({ "path": "." }), &ctx, None).await;
         let files = result["files"].as_array().unwrap();
         assert_eq!(files.len(), 2);
     }
@@ -538,7 +529,11 @@ mod tests {
     #[tokio::test]
     async fn edit_file_replaces_unique_match() {
         let tmp = TempDir::new().unwrap();
-        std::fs::write(tmp.path().join("code.rs"), "fn main() {\n    println!(\"old\");\n}\n").unwrap();
+        std::fs::write(
+            tmp.path().join("code.rs"),
+            "fn main() {\n    println!(\"old\");\n}\n",
+        )
+        .unwrap();
         let ctx = ExecutionContext::new(tmp.path().to_path_buf());
         let result = execute_execution_tool(
             "edit_file",
@@ -581,7 +576,10 @@ mod tests {
             None,
         )
         .await;
-        assert!(result["error"].as_str().unwrap().contains("matches 2 locations"));
+        assert!(result["error"]
+            .as_str()
+            .unwrap()
+            .contains("matches 2 locations"));
     }
 
     #[tokio::test]

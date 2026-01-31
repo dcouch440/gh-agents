@@ -14,14 +14,12 @@ use uuid::Uuid;
 
 use crate::llm::{
     AnthropicClient, ContentBlock, LLMProvider, LLMRequest, Message, RateLimitedProvider,
-    RetryingProvider, Role,
-    StreamAccumulator, StopReason,
-    StreamChunk as LLMStreamChunk,
+    RetryingProvider, Role, StopReason, StreamAccumulator, StreamChunk as LLMStreamChunk,
 };
 
 use crate::agents::{
-    AgentCommand, AgentResponse, CommunicationStyle, FileContent, OutputFormat, RoleContext, RoleId,
-    TaskAssignment, TaskConstraints, TaskContext, TriggerEvent,
+    AgentCommand, AgentResponse, CommunicationStyle, FileContent, OutputFormat, RoleContext,
+    RoleId, TaskAssignment, TaskConstraints, TaskContext, TriggerEvent,
 };
 
 use super::state::{AppState, OrchestratorMessage, StreamChunk};
@@ -154,8 +152,11 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                             let mut resolved_files = Vec::new();
                             for path in &request.files_needed {
                                 if let Ok(content) = tokio::fs::read_to_string(path).await {
-                                    let truncated = if content.len() > crate::constants::TRUNCATE_CONTEXT_FILE {
-                                        content[..crate::constants::TRUNCATE_CONTEXT_FILE].to_string()
+                                    let truncated = if content.len()
+                                        > crate::constants::TRUNCATE_CONTEXT_FILE
+                                    {
+                                        content[..crate::constants::TRUNCATE_CONTEXT_FILE]
+                                            .to_string()
                                     } else {
                                         content
                                     };
@@ -230,8 +231,11 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                     };
 
                     if let Some(id) = task_id {
-                        debug!("Response consumer received {:?} for task {}",
-                            std::mem::discriminant(&resp), id);
+                        debug!(
+                            "Response consumer received {:?} for task {}",
+                            std::mem::discriminant(&resp),
+                            id
+                        );
                         state.task_results.write().await.insert(id, resp);
                     }
 
@@ -262,7 +266,10 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                     state.broadcast_feed(FeedUpdate {
                                         id: run_id,
                                         agent_id: "pipeline".into(),
-                                        content: format!("Pipeline waiting for approval at stage {}", next_stage.stage_number),
+                                        content: format!(
+                                            "Pipeline waiting for approval at stage {}",
+                                            next_stage.stage_number
+                                        ),
                                         item_type: "pipeline_approval".into(),
                                         timestamp: chrono::Utc::now(),
                                         user_id: None,
@@ -289,7 +296,8 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         if let Some(rm) = &state.role_manager {
                                             if let Some(role) = rm.get_role(&role_id) {
                                                 let vars = std::collections::HashMap::new();
-                                                let ctx = rm.build_context_for_role(role, &vars).await;
+                                                let ctx =
+                                                    rm.build_context_for_role(role, &vars).await;
                                                 let prompt = ctx.build_system_prompt();
                                                 let s = role.style;
                                                 let fmt = role.output_format.clone();
@@ -304,7 +312,10 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                                 (prompt, s, fmt, files)
                                             } else {
                                                 (
-                                                    format!("You are a {} working on: {}", role_str, initial_task),
+                                                    format!(
+                                                        "You are a {} working on: {}",
+                                                        role_str, initial_task
+                                                    ),
                                                     CommunicationStyle::Technical,
                                                     OutputFormat::CodeAndReport,
                                                     vec![],
@@ -312,7 +323,10 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                             }
                                         } else {
                                             (
-                                                format!("You are a {} working on: {}", role_str, initial_task),
+                                                format!(
+                                                    "You are a {} working on: {}",
+                                                    role_str, initial_task
+                                                ),
                                                 CommunicationStyle::Technical,
                                                 OutputFormat::CodeAndReport,
                                                 vec![],
@@ -320,9 +334,8 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         };
 
                                     let project_root = std::env::current_dir().unwrap_or_default();
-                                    let execution_context = Some(
-                                        crate::execution::ExecutionContext::new(project_root),
-                                    );
+                                    let execution_context =
+                                        Some(crate::execution::ExecutionContext::new(project_root));
 
                                     let assignment = TaskAssignment {
                                         task_id: Uuid::new_v4(),
@@ -345,7 +358,9 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                             execution_context,
                                         },
                                         constraints: TaskConstraints::default(),
-                                        timeout: std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),
+                                        timeout: std::time::Duration::from_secs(
+                                            crate::constants::DEFAULT_TIMEOUT_SECS,
+                                        ),
                                         role_id,
                                     };
 
@@ -426,28 +441,46 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         history: vec![],
                                         conventions: String::new(),
                                         role_context: RoleContext {
-                                            system_prompt: format!("You are a {} triggered by event: {}", role_str, event.as_str()),
+                                            system_prompt: format!(
+                                                "You are a {} triggered by event: {}",
+                                                role_str,
+                                                event.as_str()
+                                            ),
                                             style: CommunicationStyle::Technical,
                                             output_format: OutputFormat::CodeAndReport,
                                         },
                                         chat_messages: vec![],
-                                        execution_context: Some(crate::execution::ExecutionContext::new(
-                                            std::env::current_dir().unwrap_or_default(),
-                                        )),
+                                        execution_context: Some(
+                                            crate::execution::ExecutionContext::new(
+                                                std::env::current_dir().unwrap_or_default(),
+                                            ),
+                                        ),
                                     },
                                     constraints: TaskConstraints::default(),
-                                    timeout: std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),
+                                    timeout: std::time::Duration::from_secs(
+                                        crate::constants::DEFAULT_TIMEOUT_SECS,
+                                    ),
                                     role_id,
                                 };
 
                                 let disp = disp.lock().await;
-                                if let Err(e) = disp.send_to_agent(&trigger.agent_id, AgentCommand::AssignTask(assignment)).await {
+                                if let Err(e) = disp
+                                    .send_to_agent(
+                                        &trigger.agent_id,
+                                        AgentCommand::AssignTask(assignment),
+                                    )
+                                    .await
+                                {
                                     error!("Trigger {} failed to assign task: {}", trigger.name, e);
                                 } else {
                                     state.broadcast_feed(FeedUpdate {
                                         id: Uuid::new_v4(),
                                         agent_id: "trigger".into(),
-                                        content: format!("Trigger '{}' fired on {}", trigger.name, event.as_str()),
+                                        content: format!(
+                                            "Trigger '{}' fired on {}",
+                                            trigger.name,
+                                            event.as_str()
+                                        ),
                                         item_type: "trigger_fired".into(),
                                         timestamp: chrono::Utc::now(),
                                         user_id: None,
@@ -497,7 +530,10 @@ pub fn spawn_schedule_runner(state: AppState) -> Option<tokio::task::JoinHandle<
                         history: vec![],
                         conventions: String::new(),
                         role_context: RoleContext {
-                            system_prompt: format!("You are a {} running on schedule: {}", role_str, schedule.name),
+                            system_prompt: format!(
+                                "You are a {} running on schedule: {}",
+                                role_str, schedule.name
+                            ),
                             style: CommunicationStyle::Technical,
                             output_format: OutputFormat::CodeAndReport,
                         },
@@ -512,10 +548,16 @@ pub fn spawn_schedule_runner(state: AppState) -> Option<tokio::task::JoinHandle<
                 };
 
                 let disp = dispatcher.lock().await;
-                if let Err(e) = disp.send_to_agent(&schedule.agent_id, AgentCommand::AssignTask(assignment)).await {
+                if let Err(e) = disp
+                    .send_to_agent(&schedule.agent_id, AgentCommand::AssignTask(assignment))
+                    .await
+                {
                     error!("Schedule {} failed to assign task: {}", schedule.name, e);
                 } else {
-                    info!("Schedule '{}' fired, assigned task to agent {}", schedule.name, schedule.agent_id.0);
+                    info!(
+                        "Schedule '{}' fired, assigned task to agent {}",
+                        schedule.name, schedule.agent_id.0
+                    );
                     state.broadcast_feed(FeedUpdate {
                         id: Uuid::new_v4(),
                         agent_id: "scheduler".into(),
@@ -533,7 +575,11 @@ pub fn spawn_schedule_runner(state: AppState) -> Option<tokio::task::JoinHandle<
                     let mut mgr = state.schedule_manager.write().await;
                     mgr.mark_run(schedule.id, now);
                 }
-                if let Err(e) = state.repo.update_schedule_last_run(schedule.id.0, now).await {
+                if let Err(e) = state
+                    .repo
+                    .update_schedule_last_run(schedule.id.0, now)
+                    .await
+                {
                     error!("Failed to persist schedule last_run_at: {}", e);
                 }
             }
@@ -559,10 +605,15 @@ async fn run_orchestrator(
                 "Orchestrator started with model: {}",
                 p.model_id().to_string()
             );
-            Arc::new(RetryingProvider::with_defaults(RateLimitedProvider::with_defaults(p)))
+            Arc::new(RetryingProvider::with_defaults(
+                RateLimitedProvider::with_defaults(p),
+            ))
         }
         Err(e) => {
-            error!("Failed to initialize LLM provider: {}. Chat will not work. Set ANTHROPIC_API_KEY.", e);
+            error!(
+                "Failed to initialize LLM provider: {}. Chat will not work. Set ANTHROPIC_API_KEY.",
+                e
+            );
             while let Some(msg) = orchestrator_rx.recv().await {
                 state
                     .send_stream_chunk(
@@ -651,10 +702,18 @@ async fn handle_message(
                 // Phase 2: Targeted injection from session summary
                 if let Ok(Some(session)) = state.repo.get_session(session_id).await {
                     if !session.summary.is_empty() {
-                        if let Some(targeted) = tools::haiku_extract_context(&session.summary, &msg.content).await {
+                        if let Some(targeted) =
+                            tools::haiku_extract_context(&session.summary, &msg.content).await
+                        {
                             if !targeted.contains("No prior context needed") {
-                                hist_messages.insert(0, Message::user(&format!("[Prior context] {}", targeted)));
-                                hist_messages.insert(1, Message::assistant("Understood, I have the relevant context."));
+                                hist_messages.insert(
+                                    0,
+                                    Message::user(&format!("[Prior context] {}", targeted)),
+                                );
+                                hist_messages.insert(
+                                    1,
+                                    Message::assistant("Understood, I have the relevant context."),
+                                );
                             }
                         }
                     }
@@ -700,7 +759,12 @@ async fn handle_message(
             break;
         }
 
-        debug!("Tool use round {} for message {} (~{}K chars)", round, message_id, estimated_chars / 1000);
+        debug!(
+            "Tool use round {} for message {} (~{}K chars)",
+            round,
+            message_id,
+            estimated_chars / 1000
+        );
 
         let request = LLMRequest {
             model: model_id.clone(),
@@ -741,12 +805,12 @@ async fn handle_message(
                         )
                         .await;
                     // Don't remove immediately — the SSE client may not have connected yet.
-    // Schedule cleanup after a delay to allow the client to replay the buffer.
-    let cleanup_state = state.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_secs(120)).await;
-        cleanup_state.remove_response_stream(message_id).await;
-    });
+                    // Schedule cleanup after a delay to allow the client to replay the buffer.
+                    let cleanup_state = state.clone();
+                    tokio::spawn(async move {
+                        tokio::time::sleep(std::time::Duration::from_secs(120)).await;
+                        cleanup_state.remove_response_stream(message_id).await;
+                    });
                     return Ok(());
                 }
             }
@@ -763,12 +827,12 @@ async fn handle_message(
                     )
                     .await;
                 // Don't remove immediately — the SSE client may not have connected yet.
-    // Schedule cleanup after a delay to allow the client to replay the buffer.
-    let cleanup_state = state.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_secs(120)).await;
-        cleanup_state.remove_response_stream(message_id).await;
-    });
+                // Schedule cleanup after a delay to allow the client to replay the buffer.
+                let cleanup_state = state.clone();
+                tokio::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(120)).await;
+                    cleanup_state.remove_response_stream(message_id).await;
+                });
                 return Ok(());
             }
         };
@@ -781,21 +845,25 @@ async fn handle_message(
             let input_tokens = response.usage.input_tokens as i64;
             let output_tokens = response.usage.output_tokens as i64;
             tokio::spawn(async move {
-                let _ = repo.insert_token_usage(
-                    session_id,
-                    None,
-                    "orchestrator",
-                    &model,
-                    input_tokens,
-                    output_tokens,
-                ).await;
+                let _ = repo
+                    .insert_token_usage(
+                        session_id,
+                        None,
+                        "orchestrator",
+                        &model,
+                        input_tokens,
+                        output_tokens,
+                    )
+                    .await;
             });
         }
 
         // Check if we need to execute tools
         if response.stop_reason == StopReason::ToolUse {
             // Add assistant message with all content blocks (text + tool_use)
-            messages.push(Message::assistant_with_blocks(response.content_blocks.clone()));
+            messages.push(Message::assistant_with_blocks(
+                response.content_blocks.clone(),
+            ));
 
             // Execute each tool call and collect results
             let mut tool_results = Vec::new();
@@ -808,18 +876,21 @@ async fn handle_message(
                     // Signal tool start to the UI (skip internal tools)
                     if !is_internal {
                         state
-                            .send_stream_chunk(message_id, StreamChunk::ToolStart {
-                                name: name.clone(),
-                                tool_id: id.clone(),
-                            })
+                            .send_stream_chunk(
+                                message_id,
+                                StreamChunk::ToolStart {
+                                    name: name.clone(),
+                                    tool_id: id.clone(),
+                                },
+                            )
                             .await;
                     }
 
                     let tool_start = std::time::Instant::now();
                     let result = tools::execute_tool(name, input, state, user_id).await;
                     let tool_latency = tool_start.elapsed().as_millis() as i32;
-                    let result_str = serde_json::to_string(&result)
-                        .unwrap_or_else(|_| result.to_string());
+                    let result_str =
+                        serde_json::to_string(&result).unwrap_or_else(|_| result.to_string());
 
                     // Persist tool call to database
                     {
@@ -831,16 +902,18 @@ async fn handle_message(
                         let tool_output = result_str.clone();
                         let tool_round = round as i32;
                         tokio::spawn(async move {
-                            let _ = repo.insert_tool_call(
-                                session_id,
-                                message_id,
-                                tool_round,
-                                &tool_name,
-                                &tool_use_id,
-                                &tool_input,
-                                &tool_output,
-                                tool_latency,
-                            ).await;
+                            let _ = repo
+                                .insert_tool_call(
+                                    session_id,
+                                    message_id,
+                                    tool_round,
+                                    &tool_name,
+                                    &tool_use_id,
+                                    &tool_input,
+                                    &tool_output,
+                                    tool_latency,
+                                )
+                                .await;
                         });
                     }
 
@@ -864,10 +937,13 @@ async fn handle_message(
                     // Signal tool end to the UI (skip internal tools)
                     if !is_internal {
                         state
-                            .send_stream_chunk(message_id, StreamChunk::ToolEnd {
-                                name: name.clone(),
-                                tool_id: id.clone(),
-                            })
+                            .send_stream_chunk(
+                                message_id,
+                                StreamChunk::ToolEnd {
+                                    name: name.clone(),
+                                    tool_id: id.clone(),
+                                },
+                            )
                             .await;
                     }
                 }
@@ -888,9 +964,7 @@ async fn handle_message(
     }
 
     // Send done signal
-    state
-        .send_stream_chunk(message_id, StreamChunk::Done)
-        .await;
+    state.send_stream_chunk(message_id, StreamChunk::Done).await;
 
     // Save the assistant response to the database
     if !accumulated_response.is_empty() {
@@ -898,12 +972,23 @@ async fn handle_message(
         let save_result = if let Some(session_id) = msg.session_id {
             state
                 .repo
-                .insert_session_message(user_id, session_id, response_id, "assistant".into(), accumulated_response)
+                .insert_session_message(
+                    user_id,
+                    session_id,
+                    response_id,
+                    "assistant".into(),
+                    accumulated_response,
+                )
                 .await
         } else {
             state
                 .repo
-                .insert_chat_message(user_id, response_id, "assistant".into(), accumulated_response)
+                .insert_chat_message(
+                    user_id,
+                    response_id,
+                    "assistant".into(),
+                    accumulated_response,
+                )
                 .await
         };
         if let Err(e) = save_result {
@@ -918,7 +1003,10 @@ async fn handle_message(
                 // Only auto-name if title starts with "New " (default)
                 if let Ok(Some(session)) = state2.repo.get_session(session_id).await {
                     if session.title.starts_with("New ") {
-                        let prompt = format!("Conversation opener: {}", &user_msg[..user_msg.len().min(500)]);
+                        let prompt = format!(
+                            "Conversation opener: {}",
+                            &user_msg[..user_msg.len().min(500)]
+                        );
                         if let Some(title) = tools::haiku_summarize_title(&prompt).await {
                             let _ = state2.repo.update_session_title(session_id, &title).await;
                             state2.broadcast_session(super::ws::SessionUpdate {
@@ -938,17 +1026,37 @@ async fn handle_message(
         if let Some(session_id) = msg.session_id {
             let state = state.clone();
             tokio::spawn(async move {
-                let count = state.repo.count_session_messages(session_id).await.unwrap_or(0);
+                let count = state
+                    .repo
+                    .count_session_messages(session_id)
+                    .await
+                    .unwrap_or(0);
                 if count > crate::constants::SUMMARIZE_THRESHOLD as u32 {
-                    let history = state.repo.get_session_history(session_id, count).await.unwrap_or_default();
-                    let older_messages: Vec<_> = history.iter().take((count as usize).saturating_sub(crate::constants::SUMMARIZE_KEEP_RECENT)).collect();
+                    let history = state
+                        .repo
+                        .get_session_history(session_id, count)
+                        .await
+                        .unwrap_or_default();
+                    let older_messages: Vec<_> = history
+                        .iter()
+                        .take(
+                            (count as usize)
+                                .saturating_sub(crate::constants::SUMMARIZE_KEEP_RECENT),
+                        )
+                        .collect();
                     if !older_messages.is_empty() {
-                        let conversation_text = older_messages.iter()
+                        let conversation_text = older_messages
+                            .iter()
                             .map(|m| format!("{}: {}", m.role, m.content))
                             .collect::<Vec<_>>()
                             .join("\n");
-                        if let Some(summary) = crate::server::tools::haiku_summarize(&conversation_text).await {
-                            let _ = state.repo.update_session_summary(session_id, &summary).await;
+                        if let Some(summary) =
+                            crate::server::tools::haiku_summarize(&conversation_text).await
+                        {
+                            let _ = state
+                                .repo
+                                .update_session_summary(session_id, &summary)
+                                .await;
                         }
                     }
                 }
@@ -970,7 +1078,9 @@ async fn handle_message(
 mod tests {
     use super::*;
     use crate::db::traits::ServerRepo;
-    use crate::db::{ChatMessageRow, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow};
+    use crate::db::{
+        ChatMessageRow, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow,
+    };
     use crate::types::{AppConfig, UserId};
     use chrono::{DateTime, Utc};
     use std::sync::Arc;
@@ -990,57 +1100,260 @@ mod tests {
 
     #[async_trait::async_trait]
     impl ServerRepo for TestRepo {
-        async fn health_check(&self) -> bool { true }
-        async fn list_tasks(&self, _user_id: UserId, _: Option<String>, _: Option<u32>) -> anyhow::Result<Vec<crate::types::Task>> { Ok(vec![]) }
-        async fn get_task_by_uuid(&self, _user_id: UserId, _: Uuid) -> anyhow::Result<Option<crate::types::Task>> { Ok(None) }
-        async fn insert_task(&self, _user_id: UserId, _: crate::types::Task) -> anyhow::Result<()> { Ok(()) }
-        async fn insert_chat_message(&self, _user_id: UserId, id: Uuid, role: String, content: String) -> anyhow::Result<()> {
+        async fn health_check(&self) -> bool {
+            true
+        }
+        async fn list_tasks(
+            &self,
+            _user_id: UserId,
+            _: Option<String>,
+            _: Option<u32>,
+        ) -> anyhow::Result<Vec<crate::types::Task>> {
+            Ok(vec![])
+        }
+        async fn get_task_by_uuid(
+            &self,
+            _user_id: UserId,
+            _: Uuid,
+        ) -> anyhow::Result<Option<crate::types::Task>> {
+            Ok(None)
+        }
+        async fn insert_task(&self, _user_id: UserId, _: crate::types::Task) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn insert_chat_message(
+            &self,
+            _user_id: UserId,
+            id: Uuid,
+            role: String,
+            content: String,
+        ) -> anyhow::Result<()> {
             self.messages.lock().unwrap().push(ChatMessageRow {
-                id, role, content, timestamp: Utc::now(),
+                id,
+                role,
+                content,
+                timestamp: Utc::now(),
             });
             Ok(())
         }
-        async fn get_chat_history(&self, _user_id: UserId, limit: u32, offset: u32) -> anyhow::Result<Vec<ChatMessageRow>> {
+        async fn get_chat_history(
+            &self,
+            _user_id: UserId,
+            limit: u32,
+            offset: u32,
+        ) -> anyhow::Result<Vec<ChatMessageRow>> {
             let msgs = self.messages.lock().unwrap();
-            Ok(msgs.iter().skip(offset as usize).take(limit as usize).cloned().collect())
+            Ok(msgs
+                .iter()
+                .skip(offset as usize)
+                .take(limit as usize)
+                .cloned()
+                .collect())
         }
-        async fn clear_chat_history(&self, _user_id: UserId) -> anyhow::Result<()> { Ok(()) }
-        async fn has_password(&self) -> anyhow::Result<bool> { Ok(false) }
-        async fn set_password(&self, _: String) -> anyhow::Result<()> { Ok(()) }
-        async fn get_password(&self) -> anyhow::Result<Option<String>> { Ok(None) }
-        async fn list_persisted_agents(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::AgentRow>> { Ok(vec![]) }
-        async fn upsert_agent(&self, _user_id: UserId, _agent: crate::db::AgentRow) -> anyhow::Result<()> { Ok(()) }
-        async fn delete_persisted_agent(&self, _agent_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn list_persisted_clusters(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::ClusterRow>> { Ok(vec![]) }
-        async fn upsert_cluster(&self, _user_id: UserId, _cluster: crate::db::ClusterRow) -> anyhow::Result<()> { Ok(()) }
-        async fn delete_cluster(&self, _cluster_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn list_cluster_members(&self, _cluster_id: Uuid) -> anyhow::Result<Vec<Uuid>> { Ok(vec![]) }
-        async fn add_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn remove_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn list_pipelines(&self, _user_id: UserId) -> anyhow::Result<Vec<PipelineRow>> { Ok(vec![]) }
-        async fn upsert_pipeline(&self, _user_id: UserId, _pipeline: PipelineRow) -> anyhow::Result<()> { Ok(()) }
-        async fn delete_pipeline(&self, _pipeline_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn list_pipeline_stages(&self, _pipeline_id: Uuid) -> anyhow::Result<Vec<PipelineStageRow>> { Ok(vec![]) }
-        async fn upsert_pipeline_stage(&self, _stage: PipelineStageRow) -> anyhow::Result<()> { Ok(()) }
-        async fn list_schedules(&self, _user_id: UserId) -> anyhow::Result<Vec<ScheduleRow>> { Ok(vec![]) }
-        async fn upsert_schedule(&self, _user_id: UserId, _schedule: ScheduleRow) -> anyhow::Result<()> { Ok(()) }
-        async fn delete_schedule(&self, _schedule_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn update_schedule_last_run(&self, _schedule_id: Uuid, _last_run_at: DateTime<Utc>) -> anyhow::Result<()> { Ok(()) }
-        async fn list_triggers(&self, _user_id: UserId) -> anyhow::Result<Vec<TriggerRow>> { Ok(vec![]) }
-        async fn upsert_trigger(&self, _user_id: UserId, _trigger: TriggerRow) -> anyhow::Result<()> { Ok(()) }
-        async fn delete_trigger(&self, _trigger_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn create_session(&self, _user_id: UserId, _session_id: Uuid, _mode_id: &str, _title: &str) -> anyhow::Result<()> { Ok(()) }
-        async fn list_sessions(&self, _user_id: UserId) -> anyhow::Result<Vec<SessionRow>> { Ok(vec![]) }
-        async fn get_session(&self, _session_id: Uuid) -> anyhow::Result<Option<SessionRow>> { Ok(None) }
-        async fn delete_session(&self, _session_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn insert_session_message(&self, _user_id: UserId, _session_id: Uuid, _id: Uuid, _role: String, _content: String) -> anyhow::Result<()> { Ok(()) }
-        async fn get_session_history(&self, _session_id: Uuid, _limit: u32) -> anyhow::Result<Vec<ChatMessageRow>> { Ok(vec![]) }
-        async fn update_session_title(&self, _session_id: Uuid, _title: &str) -> anyhow::Result<()> { Ok(()) }
-        async fn update_session_summary(&self, _session_id: Uuid, _summary: &str) -> anyhow::Result<()> { Ok(()) }
-        async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> { Ok(0) }
-        async fn insert_token_usage(&self, _session_id: Option<Uuid>, _agent_id: Option<Uuid>, _tier: &str, _model_id: &str, _input_tokens: i64, _output_tokens: i64) -> anyhow::Result<()> { Ok(()) }
-        async fn get_usage_summary(&self, _since_hours: u32) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> { Ok(vec![]) }
-        async fn insert_tool_call(&self, _session_id: Option<Uuid>, _message_id: Uuid, _round: i32, _tool_name: &str, _tool_use_id: &str, _input: &serde_json::Value, _output: &str, _latency_ms: i32) -> anyhow::Result<()> { Ok(()) }
+        async fn clear_chat_history(&self, _user_id: UserId) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn has_password(&self) -> anyhow::Result<bool> {
+            Ok(false)
+        }
+        async fn set_password(&self, _: String) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn get_password(&self) -> anyhow::Result<Option<String>> {
+            Ok(None)
+        }
+        async fn list_persisted_agents(
+            &self,
+            _user_id: UserId,
+        ) -> anyhow::Result<Vec<crate::db::AgentRow>> {
+            Ok(vec![])
+        }
+        async fn get_persisted_agent(
+            &self,
+            _agent_id: Uuid,
+        ) -> anyhow::Result<Option<crate::db::AgentRow>> {
+            Ok(None)
+        }
+        async fn upsert_agent(
+            &self,
+            _user_id: UserId,
+            _agent: crate::db::AgentRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn delete_persisted_agent(&self, _agent_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_persisted_clusters(
+            &self,
+            _user_id: UserId,
+        ) -> anyhow::Result<Vec<crate::db::ClusterRow>> {
+            Ok(vec![])
+        }
+        async fn upsert_cluster(
+            &self,
+            _user_id: UserId,
+            _cluster: crate::db::ClusterRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn delete_cluster(&self, _cluster_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_cluster_members(&self, _cluster_id: Uuid) -> anyhow::Result<Vec<Uuid>> {
+            Ok(vec![])
+        }
+        async fn add_cluster_member(
+            &self,
+            _cluster_id: Uuid,
+            _agent_id: Uuid,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn remove_cluster_member(
+            &self,
+            _cluster_id: Uuid,
+            _agent_id: Uuid,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_pipelines(&self, _user_id: UserId) -> anyhow::Result<Vec<PipelineRow>> {
+            Ok(vec![])
+        }
+        async fn upsert_pipeline(
+            &self,
+            _user_id: UserId,
+            _pipeline: PipelineRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn delete_pipeline(&self, _pipeline_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_pipeline_stages(
+            &self,
+            _pipeline_id: Uuid,
+        ) -> anyhow::Result<Vec<PipelineStageRow>> {
+            Ok(vec![])
+        }
+        async fn upsert_pipeline_stage(&self, _stage: PipelineStageRow) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_schedules(&self, _user_id: UserId) -> anyhow::Result<Vec<ScheduleRow>> {
+            Ok(vec![])
+        }
+        async fn upsert_schedule(
+            &self,
+            _user_id: UserId,
+            _schedule: ScheduleRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn delete_schedule(&self, _schedule_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn update_schedule_last_run(
+            &self,
+            _schedule_id: Uuid,
+            _last_run_at: DateTime<Utc>,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_triggers(&self, _user_id: UserId) -> anyhow::Result<Vec<TriggerRow>> {
+            Ok(vec![])
+        }
+        async fn upsert_trigger(
+            &self,
+            _user_id: UserId,
+            _trigger: TriggerRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn delete_trigger(&self, _trigger_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn create_session(
+            &self,
+            _user_id: UserId,
+            _session_id: Uuid,
+            _mode_id: &str,
+            _title: &str,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_sessions(&self, _user_id: UserId) -> anyhow::Result<Vec<SessionRow>> {
+            Ok(vec![])
+        }
+        async fn get_session(&self, _session_id: Uuid) -> anyhow::Result<Option<SessionRow>> {
+            Ok(None)
+        }
+        async fn delete_session(&self, _session_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn insert_session_message(
+            &self,
+            _user_id: UserId,
+            _session_id: Uuid,
+            _id: Uuid,
+            _role: String,
+            _content: String,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn get_session_history(
+            &self,
+            _session_id: Uuid,
+            _limit: u32,
+        ) -> anyhow::Result<Vec<ChatMessageRow>> {
+            Ok(vec![])
+        }
+        async fn update_session_title(
+            &self,
+            _session_id: Uuid,
+            _title: &str,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn update_session_summary(
+            &self,
+            _session_id: Uuid,
+            _summary: &str,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> {
+            Ok(0)
+        }
+        async fn insert_token_usage(
+            &self,
+            _session_id: Option<Uuid>,
+            _agent_id: Option<Uuid>,
+            _tier: &str,
+            _model_id: &str,
+            _input_tokens: i64,
+            _output_tokens: i64,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn get_usage_summary(
+            &self,
+            _since_hours: u32,
+        ) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> {
+            Ok(vec![])
+        }
+        async fn insert_tool_call(
+            &self,
+            _session_id: Option<Uuid>,
+            _message_id: Uuid,
+            _round: i32,
+            _tool_name: &str,
+            _tool_use_id: &str,
+            _input: &serde_json::Value,
+            _output: &str,
+            _latency_ms: i32,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
     }
 
     #[tokio::test]

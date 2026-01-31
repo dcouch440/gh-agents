@@ -87,6 +87,28 @@ The pre-defined agents and chat views aren't working well. Too many hardcoded to
 4. **Code editor**: Read-write. Full Monaco editor that saves to disk.
 5. **Teams scope**: TBD — revisit when we get to team designer.
 
+## Completed Work
+
+### Part 1: Agent CRUD — Server (2026-01-31)
+
+**Files modified:**
+- `src/db/mod.rs` — Expanded `AgentRow` with all DB fields (persona_prompt, persona_style, model_provider, model_max_tokens, model_temperature)
+- `src/db/pg_repo.rs` — Expanded list/upsert queries, added `get_persisted_agent`
+- `src/db/traits.rs` — Added `get_persisted_agent` to `ServerRepo` trait
+- `src/server/api.rs` — Added `CreateAgentRequest`, `UpdateAgentRequest`, expanded `AgentResponse`, added create/get/update/delete handlers, updated list_agents to query DB, added 7 integration tests
+- `src/server/mod.rs` — Added routes: POST /agents, GET/PATCH/DELETE /agents/:id
+- `src/server/tools.rs` — Updated AgentRow construction to include new fields
+- `src/server/orchestrator.rs` — Added `get_persisted_agent` to test mock
+
+**Endpoints added:**
+- `POST /api/agents` — Create agent with full config
+- `GET /api/agents` — List agents from DB (was returning empty vec)
+- `GET /api/agents/:id` — Get single agent
+- `PATCH /api/agents/:id` — Partial update
+- `DELETE /api/agents/:id` — Delete agent
+
+**Tests:** All 1,970 tests pass.
+
 ## Open Questions (remaining)
 
 1. Should teams be scoped per-project or global?

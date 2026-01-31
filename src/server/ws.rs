@@ -128,11 +128,11 @@ pub async fn ws_handler(
     State(state): State<AppState>,
     Query(query): Query<WsQuery>,
 ) -> Response {
-    let user_id = query.token.and_then(|token| {
-        super::auth::verify_token(&token, &state.jwt_secret).ok()
-    }).and_then(|claims| {
-        uuid::Uuid::parse_str(&claims.sub).ok()
-    }).map(UserId);
+    let user_id = query
+        .token
+        .and_then(|token| super::auth::verify_token(&token, &state.jwt_secret).ok())
+        .and_then(|claims| uuid::Uuid::parse_str(&claims.sub).ok())
+        .map(UserId);
 
     ws.on_upgrade(move |socket| handle_socket(socket, state, user_id))
 }
@@ -340,7 +340,10 @@ async fn handle_client_message(
 
 /// Check if a channel name is valid
 fn is_valid_channel(channel: &str) -> bool {
-    matches!(channel, CHANNEL_FEED | CHANNEL_TASKS | CHANNEL_AGENTS | CHANNEL_SESSIONS)
+    matches!(
+        channel,
+        CHANNEL_FEED | CHANNEL_TASKS | CHANNEL_AGENTS | CHANNEL_SESSIONS
+    )
 }
 
 #[cfg(test)]

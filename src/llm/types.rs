@@ -266,9 +266,10 @@ impl ContentBlock {
             ContentBlock::ToolUse { id, name, input } => {
                 id.len() + name.len() + input.to_string().len()
             }
-            ContentBlock::ToolResult { tool_use_id, content } => {
-                tool_use_id.len() + content.len()
-            }
+            ContentBlock::ToolResult {
+                tool_use_id,
+                content,
+            } => tool_use_id.len() + content.len(),
         }
     }
 }

@@ -18,6 +18,9 @@ Thumbs.db
 .env.local
 .env.*.local
 
+# Claude Code
+.claude/
+
 # Runtime data
 .nexor/state.db
 .nexor/state.db-*

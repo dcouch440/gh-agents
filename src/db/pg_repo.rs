@@ -10,7 +10,10 @@ use crate::db::traits::{
     CostRepo, DependencyRepo, DocumentRepo, MergeQueueRepo, ObservabilityRepo, PlannerRepo,
     RefactorRepo, SchedulerRepo, ServerRepo, TaskQueueRepo, UserRepo,
 };
-use crate::db::{AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow, UsageSummaryRow};
+use crate::db::{
+    AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, PipelineRow,
+    PipelineStageRow, ScheduleRow, SessionRow, TriggerRow, UsageSummaryRow,
+};
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::observability::{Decision, LlmCall};
 use crate::orchestration::DependencyError;
@@ -887,7 +890,12 @@ impl ServerRepo for PgRepo {
         sqlx::query("SELECT 1").fetch_one(&self.pool).await.is_ok()
     }
 
-    async fn list_tasks(&self, user_id: UserId, status: Option<String>, limit: Option<u32>) -> Result<Vec<Task>> {
+    async fn list_tasks(
+        &self,
+        user_id: UserId,
+        status: Option<String>,
+        limit: Option<u32>,
+    ) -> Result<Vec<Task>> {
         crate::db::list_tasks(&self.pool, user_id, status.as_deref(), limit).await
     }
 
@@ -899,11 +907,22 @@ impl ServerRepo for PgRepo {
         crate::db::insert_task(&self.pool, user_id, &task).await
     }
 
-    async fn insert_chat_message(&self, user_id: UserId, id: Uuid, role: String, content: String) -> Result<()> {
+    async fn insert_chat_message(
+        &self,
+        user_id: UserId,
+        id: Uuid,
+        role: String,
+        content: String,
+    ) -> Result<()> {
         crate::db::insert_chat_message(&self.pool, user_id, &id, &role, &content).await
     }
 
-    async fn get_chat_history(&self, user_id: UserId, limit: u32, offset: u32) -> Result<Vec<ChatMessageRow>> {
+    async fn get_chat_history(
+        &self,
+        user_id: UserId,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<ChatMessageRow>> {
         crate::db::get_chat_history(&self.pool, user_id, limit, offset).await
     }
 
@@ -927,36 +946,76 @@ impl ServerRepo for PgRepo {
 
     async fn list_persisted_agents(&self, user_id: UserId) -> Result<Vec<AgentRow>> {
         let rows = sqlx::query_as::<_, PgAgentRow>(
-            "SELECT id, tier, persona_name, model_id, status FROM agents WHERE user_id = $1"
+            "SELECT id, tier, persona_name, persona_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status FROM agents WHERE user_id = $1"
         )
         .bind(user_id.0)
         .fetch_all(&self.pool)
         .await?;
 
-        Ok(rows.into_iter().map(|r| AgentRow {
+        Ok(rows
+            .into_iter()
+            .map(|r| AgentRow {
+                id: r.id,
+                tier: r.tier,
+                persona_name: r.persona_name,
+                persona_prompt: r.persona_prompt,
+                persona_style: r.persona_style,
+                model_provider: r.model_provider,
+                model_id: r.model_id,
+                model_max_tokens: r.model_max_tokens,
+                model_temperature: r.model_temperature,
+                status: r.status,
+            })
+            .collect())
+    }
+
+    async fn get_persisted_agent(&self, agent_id: Uuid) -> Result<Option<AgentRow>> {
+        let row = sqlx::query_as::<_, PgAgentRow>(
+            "SELECT id, tier, persona_name, persona_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status FROM agents WHERE id = $1"
+        )
+        .bind(agent_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| AgentRow {
             id: r.id,
             tier: r.tier,
             persona_name: r.persona_name,
+            persona_prompt: r.persona_prompt,
+            persona_style: r.persona_style,
+            model_provider: r.model_provider,
             model_id: r.model_id,
+            model_max_tokens: r.model_max_tokens,
+            model_temperature: r.model_temperature,
             status: r.status,
-        }).collect())
+        }))
     }
 
     async fn upsert_agent(&self, user_id: UserId, agent: AgentRow) -> Result<()> {
         sqlx::query(r#"
-            INSERT INTO agents (id, user_id, tier, persona_name, model_id, status)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO agents (id, user_id, tier, persona_name, persona_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             ON CONFLICT (id) DO UPDATE SET
                 tier = EXCLUDED.tier,
                 persona_name = EXCLUDED.persona_name,
+                persona_prompt = EXCLUDED.persona_prompt,
+                persona_style = EXCLUDED.persona_style,
+                model_provider = EXCLUDED.model_provider,
                 model_id = EXCLUDED.model_id,
+                model_max_tokens = EXCLUDED.model_max_tokens,
+                model_temperature = EXCLUDED.model_temperature,
                 status = EXCLUDED.status
         "#)
         .bind(agent.id)
         .bind(user_id.0)
         .bind(&agent.tier)
         .bind(&agent.persona_name)
+        .bind(&agent.persona_prompt)
+        .bind(&agent.persona_style)
+        .bind(&agent.model_provider)
         .bind(&agent.model_id)
+        .bind(agent.model_max_tokens)
+        .bind(agent.model_temperature)
         .bind(&agent.status)
         .execute(&self.pool)
         .await?;
@@ -981,17 +1040,21 @@ impl ServerRepo for PgRepo {
         .fetch_all(&self.pool)
         .await?;
 
-        Ok(rows.into_iter().map(|r| ClusterRow {
-            id: r.id,
-            name: r.name,
-            description: r.description,
-            conventions: r.conventions,
-            shared_files: r.shared_files,
-        }).collect())
+        Ok(rows
+            .into_iter()
+            .map(|r| ClusterRow {
+                id: r.id,
+                name: r.name,
+                description: r.description,
+                conventions: r.conventions,
+                shared_files: r.shared_files,
+            })
+            .collect())
     }
 
     async fn upsert_cluster(&self, user_id: UserId, cluster: ClusterRow) -> Result<()> {
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             INSERT INTO clusters (id, user_id, name, description, conventions, shared_files)
             VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (id) DO UPDATE SET
@@ -999,7 +1062,8 @@ impl ServerRepo for PgRepo {
                 description = EXCLUDED.description,
                 conventions = EXCLUDED.conventions,
                 shared_files = EXCLUDED.shared_files
-        "#)
+        "#,
+        )
         .bind(cluster.id)
         .bind(user_id.0)
         .bind(&cluster.name)
@@ -1020,12 +1084,11 @@ impl ServerRepo for PgRepo {
     }
 
     async fn list_cluster_members(&self, cluster_id: Uuid) -> Result<Vec<Uuid>> {
-        let rows: Vec<(Uuid,)> = sqlx::query_as(
-            "SELECT agent_id FROM cluster_members WHERE cluster_id = $1"
-        )
-        .bind(cluster_id)
-        .fetch_all(&self.pool)
-        .await?;
+        let rows: Vec<(Uuid,)> =
+            sqlx::query_as("SELECT agent_id FROM cluster_members WHERE cluster_id = $1")
+                .bind(cluster_id)
+                .fetch_all(&self.pool)
+                .await?;
         Ok(rows.into_iter().map(|r| r.0).collect())
     }
 
@@ -1052,22 +1115,26 @@ impl ServerRepo for PgRepo {
     // --- Pipeline persistence ---
 
     async fn list_pipelines(&self, user_id: UserId) -> Result<Vec<PipelineRow>> {
-        let rows: Vec<(Uuid, String)> = sqlx::query_as(
-            "SELECT id, name FROM pipelines WHERE user_id = $1"
-        )
-        .bind(user_id.0)
-        .fetch_all(&self.pool)
-        .await?;
+        let rows: Vec<(Uuid, String)> =
+            sqlx::query_as("SELECT id, name FROM pipelines WHERE user_id = $1")
+                .bind(user_id.0)
+                .fetch_all(&self.pool)
+                .await?;
 
-        Ok(rows.into_iter().map(|(id, name)| PipelineRow { id, name }).collect())
+        Ok(rows
+            .into_iter()
+            .map(|(id, name)| PipelineRow { id, name })
+            .collect())
     }
 
     async fn upsert_pipeline(&self, user_id: UserId, pipeline: PipelineRow) -> Result<()> {
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             INSERT INTO pipelines (id, user_id, name)
             VALUES ($1, $2, $3)
             ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
-        "#)
+        "#,
+        )
         .bind(pipeline.id)
         .bind(user_id.0)
         .bind(&pipeline.name)
@@ -1092,9 +1159,18 @@ impl ServerRepo for PgRepo {
         .fetch_all(&self.pool)
         .await?;
 
-        Ok(rows.into_iter().map(|(pipeline_id, stage_number, agent_id, role, approval_required)| {
-            PipelineStageRow { pipeline_id, stage_number, agent_id, role, approval_required }
-        }).collect())
+        Ok(rows
+            .into_iter()
+            .map(
+                |(pipeline_id, stage_number, agent_id, role, approval_required)| PipelineStageRow {
+                    pipeline_id,
+                    stage_number,
+                    agent_id,
+                    role,
+                    approval_required,
+                },
+            )
+            .collect())
     }
 
     async fn upsert_pipeline_stage(&self, stage: PipelineStageRow) -> Result<()> {
@@ -1126,9 +1202,34 @@ impl ServerRepo for PgRepo {
         .fetch_all(&self.pool)
         .await?;
 
-        Ok(rows.into_iter().map(|(id, name, agent_id, interval_seconds, task_title, task_description, role, enabled, last_run_at)| {
-            ScheduleRow { id, name, agent_id, interval_seconds, task_title, task_description, role, enabled, last_run_at }
-        }).collect())
+        Ok(rows
+            .into_iter()
+            .map(
+                |(
+                    id,
+                    name,
+                    agent_id,
+                    interval_seconds,
+                    task_title,
+                    task_description,
+                    role,
+                    enabled,
+                    last_run_at,
+                )| {
+                    ScheduleRow {
+                        id,
+                        name,
+                        agent_id,
+                        interval_seconds,
+                        task_title,
+                        task_description,
+                        role,
+                        enabled,
+                        last_run_at,
+                    }
+                },
+            )
+            .collect())
     }
 
     async fn upsert_schedule(&self, user_id: UserId, schedule: ScheduleRow) -> Result<()> {
@@ -1168,7 +1269,11 @@ impl ServerRepo for PgRepo {
         Ok(())
     }
 
-    async fn update_schedule_last_run(&self, schedule_id: Uuid, last_run_at: DateTime<Utc>) -> Result<()> {
+    async fn update_schedule_last_run(
+        &self,
+        schedule_id: Uuid,
+        last_run_at: DateTime<Utc>,
+    ) -> Result<()> {
         sqlx::query("UPDATE schedules SET last_run_at = $1 WHERE id = $2")
             .bind(last_run_at)
             .bind(schedule_id)
@@ -1187,9 +1292,20 @@ impl ServerRepo for PgRepo {
         .fetch_all(&self.pool)
         .await?;
 
-        Ok(rows.into_iter().map(|(id, name, event_type, agent_id, task_title, task_description, role)| {
-            TriggerRow { id, name, event_type, agent_id, task_title, task_description, role }
-        }).collect())
+        Ok(rows
+            .into_iter()
+            .map(
+                |(id, name, event_type, agent_id, task_title, task_description, role)| TriggerRow {
+                    id,
+                    name,
+                    event_type,
+                    agent_id,
+                    task_title,
+                    task_description,
+                    role,
+                },
+            )
+            .collect())
     }
 
     async fn upsert_trigger(&self, user_id: UserId, trigger: TriggerRow) -> Result<()> {
@@ -1227,7 +1343,13 @@ impl ServerRepo for PgRepo {
 
     // --- Session management ---
 
-    async fn create_session(&self, user_id: UserId, session_id: Uuid, mode_id: &str, title: &str) -> Result<()> {
+    async fn create_session(
+        &self,
+        user_id: UserId,
+        session_id: Uuid,
+        mode_id: &str,
+        title: &str,
+    ) -> Result<()> {
         crate::db::create_session(&self.pool, user_id, session_id, mode_id, title).await
     }
 
@@ -1243,11 +1365,23 @@ impl ServerRepo for PgRepo {
         crate::db::delete_session(&self.pool, session_id).await
     }
 
-    async fn insert_session_message(&self, user_id: UserId, session_id: Uuid, id: Uuid, role: String, content: String) -> Result<()> {
-        crate::db::insert_session_message(&self.pool, user_id, session_id, &id, &role, &content).await
+    async fn insert_session_message(
+        &self,
+        user_id: UserId,
+        session_id: Uuid,
+        id: Uuid,
+        role: String,
+        content: String,
+    ) -> Result<()> {
+        crate::db::insert_session_message(&self.pool, user_id, session_id, &id, &role, &content)
+            .await
     }
 
-    async fn get_session_history(&self, session_id: Uuid, limit: u32) -> Result<Vec<ChatMessageRow>> {
+    async fn get_session_history(
+        &self,
+        session_id: Uuid,
+        limit: u32,
+    ) -> Result<Vec<ChatMessageRow>> {
         crate::db::get_session_history(&self.pool, session_id, limit).await
     }
 
@@ -1265,10 +1399,11 @@ impl ServerRepo for PgRepo {
     }
 
     async fn count_session_messages(&self, session_id: Uuid) -> Result<u32> {
-        let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM chat_messages WHERE session_id = $1")
-            .bind(session_id)
-            .fetch_one(&self.pool)
-            .await?;
+        let row: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM chat_messages WHERE session_id = $1")
+                .bind(session_id)
+                .fetch_one(&self.pool)
+                .await?;
         Ok(row.0 as u32)
     }
 
@@ -1308,7 +1443,7 @@ impl ServerRepo for PgRepo {
             WHERE created_at > NOW() - make_interval(hours => $1::int)
             GROUP BY tier, model_id
             ORDER BY SUM(input_tokens + output_tokens) DESC
-            "#
+            "#,
         )
         .bind(since_hours as i32)
         .fetch_all(&self.pool)
@@ -1354,7 +1489,12 @@ struct PgAgentRow {
     id: Uuid,
     tier: String,
     persona_name: String,
+    persona_prompt: String,
+    persona_style: String,
+    model_provider: String,
     model_id: String,
+    model_max_tokens: i32,
+    model_temperature: f32,
     status: String,
 }
 
@@ -1610,7 +1750,11 @@ impl DocumentRepo for PgRepo {
         Ok(rows)
     }
 
-    async fn search_documents(&self, user_id: Uuid, query: &str) -> Result<Vec<DocumentSearchResult>> {
+    async fn search_documents(
+        &self,
+        user_id: Uuid,
+        query: &str,
+    ) -> Result<Vec<DocumentSearchResult>> {
         let rows: Vec<DocumentSearchResult> = sqlx::query_as(
             r#"
             SELECT id, title, summary, ref_tag,
