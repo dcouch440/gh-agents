@@ -1,28 +1,28 @@
-import { useState, FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { api } from '../../api/client';
-import { Input } from '../../components/Input';
-import { Button } from '../../components/Button';
-import styles from './SetupPage.module.css';
+import {useState, FormEvent} from "react";
+import {useNavigate} from "react-router-dom";
+import {api} from "../../api/client";
+import {Input} from "../../components/Input";
+import {Button} from "../../components/Button";
+import styles from "./SetupPage.module.css";
 
 export function SetupPage() {
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [error, setError] = useState('');
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setError('');
+    setError("");
 
     // Validation
     if (password.length < 8) {
-      setError('Password must be at least 8 characters');
+      setError("Password must be at least 8 characters");
       return;
     }
     if (password !== confirm) {
-      setError('Passwords do not match');
+      setError("Passwords do not match");
       return;
     }
 
@@ -30,9 +30,9 @@ export function SetupPage() {
 
     try {
       await api.auth.setup(password);
-      navigate('/login');
-    } catch (err) {
-      setError('Failed to set up password');
+      navigate("/login");
+    } catch {
+      setError("Failed to set up password");
     } finally {
       setLoading(false);
     }
@@ -48,8 +48,8 @@ export function SetupPage() {
 
         <form onSubmit={handleSubmit} className={styles.form}>
           <p className={styles.description}>
-            Create a password to protect your nexor instance.
-            This password is stored locally and never sent anywhere.
+            Create a password to protect your nexor instance. This password is
+            stored locally and never sent anywhere.
           </p>
 
           <Input

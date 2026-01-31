@@ -143,17 +143,28 @@ async fn require_auth(
     request: axum::http::Request<Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    let auth_header = request
+    // Try Authorization header first, then fall back to ?token= query param
+    // (needed for EventSource/SSE which cannot set custom headers)
+    let token = request
         .headers()
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .map(|s| s.to_string())
+        .or_else(|| {
+            request
+                .uri()
+                .query()
+                .and_then(|q| {
+                    q.split('&')
+                        .find_map(|pair| {
+                            pair.strip_prefix("token=").map(|v| v.to_string())
+                        })
+                })
+        })
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    let token = auth_header
-        .strip_prefix("Bearer ")
-        .ok_or(StatusCode::UNAUTHORIZED)?;
-
-    auth::verify_token(token, &state.jwt_secret)
+    auth::verify_token(&token, &state.jwt_secret)
         .map_err(|_| StatusCode::UNAUTHORIZED)?;
 
     Ok(next.run(request).await)

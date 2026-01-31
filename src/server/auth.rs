@@ -89,15 +89,27 @@ impl FromRequestParts<AppState> for AuthUser {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let auth_header = parts
+        // Try Authorization header first, then fall back to ?token= query param
+        // (needed for EventSource/SSE which cannot set custom headers)
+        let token = parts
             .headers
             .get(AUTHORIZATION)
             .and_then(|value| value.to_str().ok())
+            .and_then(|s| s.strip_prefix("Bearer "))
+            .map(|s| s.to_string())
+            .or_else(|| {
+                parts
+                    .uri
+                    .query()
+                    .and_then(|q| {
+                        q.split('&')
+                            .find_map(|pair| {
+                                pair.strip_prefix("token=").map(|v| v.to_string())
+                            })
+                    })
+            })
             .ok_or(StatusCode::UNAUTHORIZED)?;
-
-        let token = auth_header
-            .strip_prefix("Bearer ")
-            .ok_or(StatusCode::UNAUTHORIZED)?;
+        let token = &token;
 
         let claims =
             verify_token(token, &state.jwt_secret).map_err(|_| StatusCode::UNAUTHORIZED)?;

@@ -517,9 +517,21 @@ async fn run_orchestrator(
     while let Some(msg) = orchestrator_rx.recv().await {
         let state = state.clone();
         let provider = Arc::clone(&provider);
+        let message_id = msg.id;
         tokio::spawn(async move {
             if let Err(e) = handle_message(&state, provider, msg).await {
                 warn!("Orchestrator message handling failed: {}", e);
+                state
+                    .send_stream_chunk(
+                        message_id,
+                        StreamChunk::Error(format!("Orchestrator error: {}", e)),
+                    )
+                    .await;
+                let cleanup_state = state.clone();
+                tokio::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(120)).await;
+                    cleanup_state.remove_response_stream(message_id).await;
+                });
             }
         });
     }

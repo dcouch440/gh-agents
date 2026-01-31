@@ -56,10 +56,10 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ password }),
       }),
-    login: (password: string) =>
+    login: (email: string, password: string) =>
       fetchApi<{ token: string; expires_in: number }>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ email, password }),
       }),
     me: () => fetchApi<{ user: string; authenticated: boolean }>('/auth/me'),
   },
@@ -91,12 +91,13 @@ export const api = {
         body: JSON.stringify({ message }),
       }),
     stream: (messageId: string, onToken: (text: string) => void, onDone: () => void, onError: (err: string) => void) => {
+      const token = useAuthStore.getState().token;
       const eventSource = new EventSource(
-        `${API_BASE}/chat/${messageId}/stream`
+        `${API_BASE}/chat/${messageId}/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`
       );
-      eventSource.onmessage = (event) => {
-        onToken(event.data);
-      };
+      eventSource.addEventListener('token', (event) => {
+        onToken((event as MessageEvent).data);
+      });
       eventSource.addEventListener('done', () => {
         eventSource.close();
         onDone();
@@ -138,12 +139,13 @@ export const api = {
         body: JSON.stringify({ message }),
       }),
     stream: (sessionId: string, messageId: string, onToken: (text: string) => void, onDone: () => void, onError: (err: string) => void) => {
+      const token = useAuthStore.getState().token;
       const eventSource = new EventSource(
-        `${API_BASE}/sessions/${sessionId}/chat/${messageId}/stream`
+        `${API_BASE}/sessions/${sessionId}/chat/${messageId}/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`
       );
-      eventSource.onmessage = (event) => {
-        onToken(event.data);
-      };
+      eventSource.addEventListener('token', (event) => {
+        onToken((event as MessageEvent).data);
+      });
       eventSource.addEventListener('done', () => {
         eventSource.close();
         onDone();
