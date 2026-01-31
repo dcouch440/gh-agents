@@ -7,6 +7,7 @@ import { Button } from '../../components/Button';
 import styles from './LoginPage.module.css';
 
 export function LoginPage() {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,11 +20,11 @@ export function LoginPage() {
     setLoading(true);
 
     try {
-      const { token, expires_in } = await api.auth.login(password);
+      const { token, expires_in } = await api.auth.login(email, password);
       setToken(token, expires_in);
       navigate('/');
-    } catch (err) {
-      setError('Invalid password');
+    } catch {
+      setError('Invalid email or password');
     } finally {
       setLoading(false);
     }
@@ -39,6 +40,16 @@ export function LoginPage() {
 
         <form onSubmit={handleSubmit} className={styles.form}>
           <Input
+            id="email"
+            type="email"
+            label="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Enter your email"
+            autoFocus
+          />
+
+          <Input
             id="password"
             type="password"
             label="Password"
@@ -46,12 +57,11 @@ export function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Enter your password"
             error={error}
-            autoFocus
           />
 
           <Button
             type="submit"
-            disabled={!password}
+            disabled={!email || !password}
             isLoading={loading}
             fullWidth
           >
