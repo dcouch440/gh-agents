@@ -855,6 +855,13 @@ async fn handle_message(
                         let prompt = format!("Conversation opener: {}", &user_msg[..user_msg.len().min(500)]);
                         if let Some(title) = tools::haiku_summarize_title(&prompt).await {
                             let _ = state2.repo.update_session_title(session_id, &title).await;
+                            state2.broadcast_session(super::ws::SessionUpdate {
+                                id: session_id,
+                                action: "updated".to_string(),
+                                title: Some(title),
+                                mode_id: None,
+                                user_id: None,
+                            });
                         }
                     }
                 }

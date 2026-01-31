@@ -28,6 +28,7 @@ const PING_INTERVAL: Duration = Duration::from_secs(30);
 pub const CHANNEL_FEED: &str = "feed";
 pub const CHANNEL_TASKS: &str = "tasks";
 pub const CHANNEL_AGENTS: &str = "agents";
+pub const CHANNEL_SESSIONS: &str = "sessions";
 
 /// Message sent from client to server
 #[derive(Debug, Clone, Deserialize)]
@@ -57,6 +58,9 @@ pub enum ServerMessage {
     /// Agent status update
     #[serde(rename = "agent_update")]
     AgentUpdate { data: AgentUpdate },
+    /// Session update
+    #[serde(rename = "session_update")]
+    SessionUpdate { data: SessionUpdate },
     /// Error message
     #[serde(rename = "error")]
     Error { message: String },
@@ -91,6 +95,17 @@ pub struct AgentUpdate {
     pub id: String,
     pub status: String,
     pub current_task: Option<Uuid>,
+    #[serde(default)]
+    pub user_id: Option<Uuid>,
+}
+
+/// Session update data broadcast to subscribers
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionUpdate {
+    pub id: Uuid,
+    pub action: String, // "created", "updated", "deleted"
+    pub title: Option<String>,
+    pub mode_id: Option<String>,
     #[serde(default)]
     pub user_id: Option<Uuid>,
 }
@@ -131,6 +146,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
     let mut feed_rx = state.subscribe_feed();
     let mut task_rx = state.subscribe_tasks();
     let mut agent_rx = state.subscribe_agents();
+    let mut session_rx = state.subscribe_sessions();
 
     // Ping interval for keeping connection alive
     let mut ping_interval = interval(PING_INTERVAL);
@@ -255,6 +271,24 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
                     }
                 }
             }
+
+            // Handle session updates
+            session = session_rx.recv() => {
+                if let Ok(update) = session {
+                    let subs = subscriptions.lock().await;
+                    if subs.contains(CHANNEL_SESSIONS) {
+                        let should_send = update.user_id.is_none()
+                            || user_id.map(|u| Some(u.0) == update.user_id).unwrap_or(false);
+                        if should_send {
+                            let msg = ServerMessage::SessionUpdate { data: update };
+                            let json = serde_json::to_string(&msg).unwrap();
+                            if sender.send(Message::Text(json.into())).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -306,7 +340,7 @@ async fn handle_client_message(
 
 /// Check if a channel name is valid
 fn is_valid_channel(channel: &str) -> bool {
-    matches!(channel, CHANNEL_FEED | CHANNEL_TASKS | CHANNEL_AGENTS)
+    matches!(channel, CHANNEL_FEED | CHANNEL_TASKS | CHANNEL_AGENTS | CHANNEL_SESSIONS)
 }
 
 #[cfg(test)]

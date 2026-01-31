@@ -17,7 +17,7 @@ use crate::orchestration::Scheduler;
 use crate::types::{AgentPoolConfig, AppConfig, UserId};
 
 use super::agent_mode::{AgentModeId, ModeRegistry};
-use super::ws::{AgentUpdate, FeedUpdate, TaskUpdate};
+use super::ws::{AgentUpdate, FeedUpdate, SessionUpdate, TaskUpdate};
 
 /// Message sent to the orchestrator
 #[derive(Debug, Clone)]
@@ -82,6 +82,8 @@ pub struct AppState {
     pub task_tx: broadcast::Sender<TaskUpdate>,
     /// Broadcast channel for agent updates
     pub agent_tx: broadcast::Sender<AgentUpdate>,
+    /// Broadcast channel for session updates
+    pub session_tx: broadcast::Sender<SessionUpdate>,
     /// Agent pool for managing agents (None in tests that don't need agents)
     pub pool: Option<Arc<tokio::sync::Mutex<AgentPool>>>,
     /// Dispatcher for routing commands to agents (None in tests)
@@ -266,6 +268,7 @@ impl AppState {
         let (feed_tx, _) = broadcast::channel(100);
         let (task_tx, _) = broadcast::channel(100);
         let (agent_tx, _) = broadcast::channel(100);
+        let (session_tx, _) = broadcast::channel(100);
 
         // Generate a random JWT secret
         // In production, this should be persisted or configured via environment variable
@@ -285,6 +288,7 @@ impl AppState {
                 feed_tx,
                 task_tx,
                 agent_tx,
+                session_tx,
                 pool: None,
                 dispatcher: None,
                 task_results: Arc::new(RwLock::new(HashMap::new())),
@@ -327,6 +331,16 @@ impl AppState {
     /// Broadcast an agent update to all subscribers
     pub fn broadcast_agent(&self, update: AgentUpdate) {
         let _ = self.agent_tx.send(update);
+    }
+
+    /// Subscribe to session updates
+    pub fn subscribe_sessions(&self) -> broadcast::Receiver<SessionUpdate> {
+        self.session_tx.subscribe()
+    }
+
+    /// Broadcast a session update to all subscribers
+    pub fn broadcast_session(&self, update: SessionUpdate) {
+        let _ = self.session_tx.send(update);
     }
 
     /// Ensure a response stream exists for this message (creates if missing).

@@ -64,3 +64,44 @@ export const useToastStore = create<ToastState>((set) => ({
   removeToast: (id) =>
     set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
 }));
+
+import { api, type SessionResponse, type ModeInfo } from '../api/client';
+
+interface SessionState {
+  sessions: SessionResponse[];
+  modes: ModeInfo[];
+  loaded: boolean;
+  load: () => Promise<void>;
+  refresh: () => Promise<void>;
+  addSession: (session: SessionResponse) => void;
+  updateSession: (id: string, updated: SessionResponse) => void;
+  removeSession: (id: string) => void;
+}
+
+export const useSessionStore = create<SessionState>((set, get) => ({
+  sessions: [],
+  modes: [],
+  loaded: false,
+  load: async () => {
+    if (get().loaded) return;
+    const [sessions, modes] = await Promise.all([
+      api.sessions.list().catch(() => [] as SessionResponse[]),
+      api.modes.list().catch(() => [] as ModeInfo[]),
+    ]);
+    set({ sessions, modes, loaded: true });
+  },
+  refresh: async () => {
+    const sessions = await api.sessions.list().catch(() => [] as SessionResponse[]);
+    set({ sessions });
+  },
+  addSession: (session) =>
+    set((state) => ({ sessions: [session, ...state.sessions] })),
+  updateSession: (id, updated) =>
+    set((state) => ({
+      sessions: state.sessions.map((s) => (s.id === id ? updated : s)),
+    })),
+  removeSession: (id) =>
+    set((state) => ({
+      sessions: state.sessions.filter((s) => s.id !== id),
+    })),
+}));
