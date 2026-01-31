@@ -14,7 +14,7 @@ export function Layout() {
   const contentMaxWidth = isChat ? 'max-w-6xl' : 'max-w-4xl';
 
   return (
-    <div className="min-h-screen bg-bg-primary flex">
+    <div className="h-screen bg-bg-primary flex overflow-hidden">
       {/* Mobile overlay */}
       {!sidebarCollapsed && (
         <div

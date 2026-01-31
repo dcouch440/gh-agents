@@ -1,4 +1,4 @@
-.PHONY: build check test fmt lint clean run release help \
+.PHONY: build check test fmt lint clean run run-opus run-haiku release help \
        ui-install ui-dev ui-build ui-lint ui-preview \
        cli-install cli-dev cli-build \
        dev build-all lint-all test-all ci
@@ -14,7 +14,9 @@ help:
 	@echo "    make test        - Run all tests"
 	@echo "    make fmt         - Format code"
 	@echo "    make lint        - Run clippy linter"
-	@echo "    make run         - Run the application"
+	@echo "    make run         - Run the application (Sonnet)"
+	@echo "    make run-opus    - Run with Opus model"
+	@echo "    make run-haiku   - Run with Haiku model (cheap)"
 	@echo "    make run-debug   - Run with debug logging"
 	@echo "    make watch       - Watch and rebuild on changes"
 	@echo ""
@@ -66,6 +68,12 @@ run:
 
 run-debug:
 	RUST_LOG=debug cargo run
+
+run-opus:
+	ANTHROPIC_MODEL=claude-opus-4-20250514 cargo run
+
+run-haiku:
+	ANTHROPIC_MODEL=claude-3-5-haiku-20241022 cargo run
 
 watch:
 	cargo watch -x check -x test
