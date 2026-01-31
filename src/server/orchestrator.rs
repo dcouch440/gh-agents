@@ -1219,6 +1219,19 @@ mod tests {
         ) -> anyhow::Result<()> {
             Ok(())
         }
+        async fn get_agent_context(
+            &self,
+            _agent_id: Uuid,
+        ) -> anyhow::Result<Vec<crate::db::DocumentRow>> {
+            Ok(vec![])
+        }
+        async fn set_agent_context(
+            &self,
+            _agent_id: Uuid,
+            _document_ids: Vec<Uuid>,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
         async fn list_persisted_clusters(
             &self,
             _user_id: UserId,

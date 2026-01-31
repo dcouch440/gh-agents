@@ -364,6 +364,14 @@ pub trait ServerRepo: Send + Sync {
     /// Set the full tool list for an agent (replaces existing).
     async fn set_agent_tools(&self, agent_id: Uuid, tool_ids: Vec<Uuid>) -> Result<()>;
 
+    // --- Agent context (document linkage) ---
+
+    /// Get all context documents assigned to an agent.
+    async fn get_agent_context(&self, agent_id: Uuid) -> Result<Vec<DocumentRow>>;
+
+    /// Set the full context document list for an agent (replaces existing).
+    async fn set_agent_context(&self, agent_id: Uuid, document_ids: Vec<Uuid>) -> Result<()>;
+
     // --- Cluster persistence ---
 
     /// List all clusters for a user.

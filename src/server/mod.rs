@@ -114,6 +114,10 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
             "/agents/:id/tools",
             get(api::get_agent_tools).put(api::set_agent_tools),
         )
+        .route(
+            "/agents/:id/context",
+            get(api::get_agent_context).put(api::set_agent_context),
+        )
         .route("/tools", get(api::list_tools).post(api::create_tool))
         .route(
             "/tools/:id",
@@ -479,6 +483,19 @@ mod tests {
             &self,
             _agent_id: Uuid,
             _tool_ids: Vec<Uuid>,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn get_agent_context(
+            &self,
+            _agent_id: Uuid,
+        ) -> anyhow::Result<Vec<crate::db::DocumentRow>> {
+            Ok(vec![])
+        }
+        async fn set_agent_context(
+            &self,
+            _agent_id: Uuid,
+            _document_ids: Vec<Uuid>,
         ) -> anyhow::Result<()> {
             Ok(())
         }

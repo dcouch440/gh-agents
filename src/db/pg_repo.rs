@@ -1149,6 +1149,38 @@ impl ServerRepo for PgRepo {
         Ok(())
     }
 
+    // --- Agent context (document linkage) ---
+
+    async fn get_agent_context(&self, agent_id: Uuid) -> Result<Vec<DocumentRow>> {
+        let rows = sqlx::query_as::<_, DocumentRow>(
+            "SELECT d.id, d.user_id, d.session_id, d.title, d.content, d.summary, d.doc_type, d.ref_tag, d.tags, d.created_at, d.updated_at FROM documents d INNER JOIN agent_context ac ON d.id = ac.document_id WHERE ac.agent_id = $1 ORDER BY d.title",
+        )
+        .bind(agent_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn set_agent_context(&self, agent_id: Uuid, document_ids: Vec<Uuid>) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query("DELETE FROM agent_context WHERE agent_id = $1")
+            .bind(agent_id)
+            .execute(&mut *tx)
+            .await?;
+
+        for doc_id in document_ids {
+            sqlx::query("INSERT INTO agent_context (agent_id, document_id) VALUES ($1, $2)")
+                .bind(agent_id)
+                .bind(doc_id)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        tx.commit().await?;
+        Ok(())
+    }
+
     // --- Cluster persistence ---
 
     async fn list_persisted_clusters(&self, user_id: UserId) -> Result<Vec<ClusterRow>> {
