@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  MessageSquare,
   Activity,
   ListTodo,
   Users,
@@ -10,22 +9,21 @@ import {
   Settings,
   LogOut,
   Plus,
-  ChevronDown,
-  ChevronRight,
   Pencil,
   Trash2,
   Check,
   X,
+  Clock,
 } from 'lucide-react';
 import { useAuthStore, useSessionStore } from '../../store';
 import { api } from '../../api/client';
+import styles from './Sidebar.module.css';
 
 interface SidebarProps {
   collapsed: boolean;
 }
 
 const navItems = [
-  { to: '/chat', icon: MessageSquare, label: 'Chat' },
   { to: '/feed', icon: Activity, label: 'Feed' },
   { to: '/tasks', icon: ListTodo, label: 'Tasks' },
   { to: '/agents', icon: Users, label: 'Agents' },
@@ -37,10 +35,12 @@ export function Sidebar({ collapsed }: SidebarProps) {
   const navigate = useNavigate();
   const logout = useAuthStore((state) => state.logout);
   const { sessions, modes, load, addSession, updateSession, removeSession } = useSessionStore();
-  const [sessionsOpen, setSessionsOpen] = useState(false);
+  const [showNewMenu, setShowNewMenu] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
+  const [newSessionId, setNewSessionId] = useState<string | null>(null);
   const editRef = useRef<HTMLInputElement>(null);
+  const newMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     load();
@@ -53,15 +53,37 @@ export function Sidebar({ collapsed }: SidebarProps) {
     }
   }, [editingId]);
 
+  // Close new menu on outside click
+  useEffect(() => {
+    if (!showNewMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (newMenuRef.current && !newMenuRef.current.contains(e.target as Node)) {
+        setShowNewMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showNewMenu]);
+
+  // Clear new session animation after it plays
+  useEffect(() => {
+    if (newSessionId) {
+      const timer = setTimeout(() => setNewSessionId(null), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [newSessionId]);
+
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
   const handleCreateSession = async (modeId: string) => {
+    setShowNewMenu(false);
     try {
       const session = await api.sessions.create(modeId);
       addSession(session);
+      setNewSessionId(session.id);
       navigate(`/chat/${session.id}`);
     } catch {
       // ignore
@@ -103,168 +125,150 @@ export function Sidebar({ collapsed }: SidebarProps) {
     if (e.key === 'Escape') handleCancelEdit();
   };
 
+  const availableModes = modes.filter((m) => m.id !== 'home');
+
   return (
     <aside
-      className={`bg-bg-secondary border-r border-border flex flex-col
-                  transition-all duration-200
-                  fixed lg:relative inset-y-0 left-0 z-40
-                  ${collapsed ? '-translate-x-full lg:translate-x-0 lg:w-16' : 'w-56'}`}
+      className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`}
     >
       {/* Logo */}
-      <div className="h-14 flex items-center px-4 border-b border-border">
-        <span className="text-xl font-bold text-text-primary font-mono">
-          {collapsed ? 'n' : 'nexor'}
-        </span>
+      <div className={styles.logo}>
+        <NavLink to="/chat" className={styles.logoLink}>
+          <span className={styles.logoText}>
+            {collapsed ? 'n' : 'nexor'}
+          </span>
+        </NavLink>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-4 overflow-y-auto">
-        <ul className="space-y-1 px-2">
+      <nav className={styles.nav}>
+        <ul className={styles.navList}>
           {navItems.map(({ to, icon: Icon, label }) => (
             <li key={to}>
               <NavLink
                 to={to}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors
-                   ${isActive
-                     ? 'bg-bg-tertiary text-text-primary'
-                     : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary/50'
-                   }`
+                  `${styles.navItem} ${isActive ? styles.navItemActive : ''}`
                 }
               >
-                <Icon size={20} />
+                <Icon size={18} />
                 {!collapsed && <span>{label}</span>}
               </NavLink>
             </li>
           ))}
         </ul>
 
-        {/* Sessions section */}
+        {/* History section */}
         {!collapsed && (
-          <div className="mt-4 px-2">
-            <button
-              onClick={() => setSessionsOpen(!sessionsOpen)}
-              className="flex items-center gap-2 px-3 py-2 w-full text-text-secondary
-                         hover:text-text-primary text-xs font-semibold uppercase tracking-wide"
-            >
-              {sessionsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              Sessions
-            </button>
-
-            {sessionsOpen && (
-              <div className="space-y-1">
-                {/* New session buttons by mode */}
-                {modes.filter((m) => m.id !== 'home').map((mode) => (
-                  <button
-                    key={mode.id}
-                    onClick={() => handleCreateSession(mode.id)}
-                    className="flex items-center gap-2 px-3 py-1.5 w-full text-sm rounded-lg
-                               text-text-secondary hover:text-text-primary hover:bg-bg-tertiary/50
-                               transition-colors"
-                  >
-                    <Plus size={14} />
-                    <span>{mode.name}</span>
-                  </button>
-                ))}
-
-                {/* Existing sessions */}
-                {sessions.length > 0 && (
-                  <div className="border-t border-border mt-2 pt-2">
-                    {sessions.map((session) => (
-                      <div key={session.id} className="group relative">
-                        {editingId === session.id ? (
-                          <div className="flex items-center gap-1 px-2 py-1">
-                            <input
-                              ref={editRef}
-                              value={editTitle}
-                              onChange={(e) => setEditTitle(e.target.value)}
-                              onKeyDown={handleEditKeyDown}
-                              onBlur={handleSaveEdit}
-                              className="flex-1 min-w-0 px-1.5 py-0.5 text-sm rounded
-                                         bg-bg-primary border border-border text-text-primary
-                                         outline-none focus:border-accent"
-                            />
-                            <button
-                              onClick={handleSaveEdit}
-                              className="p-0.5 text-green-400 hover:text-green-300"
-                            >
-                              <Check size={12} />
-                            </button>
-                            <button
-                              onMouseDown={(e) => { e.preventDefault(); handleCancelEdit(); }}
-                              className="p-0.5 text-text-tertiary hover:text-text-primary"
-                            >
-                              <X size={12} />
-                            </button>
-                          </div>
-                        ) : (
-                          <NavLink
-                            to={`/chat/${session.id}`}
-                            className={({ isActive }) =>
-                              `block px-3 py-1.5 text-sm rounded-lg truncate transition-colors pr-14
-                               ${isActive
-                                 ? 'bg-bg-tertiary text-text-primary'
-                                 : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary/50'
-                               }`
-                            }
-                          >
-                            {session.title || session.mode_id}
-                          </NavLink>
-                        )}
-                        {editingId !== session.id && (
-                          <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-0.5
-                                          opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={(e) => { e.preventDefault(); handleStartEdit(session); }}
-                              className="p-1 rounded text-text-tertiary hover:text-text-primary
-                                         hover:bg-bg-tertiary/80 transition-colors"
-                              title="Rename"
-                            >
-                              <Pencil size={11} />
-                            </button>
-                            <button
-                              onClick={(e) => { e.preventDefault(); handleDelete(session.id); }}
-                              className="p-1 rounded text-text-tertiary hover:text-red-400
-                                         hover:bg-bg-tertiary/80 transition-colors"
-                              title="Delete"
-                            >
-                              <Trash2 size={11} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
+          <div className={styles.history}>
+            <div className={styles.historyHeader}>
+              <div className={styles.historyTitle}>
+                <Clock size={12} />
+                <span>History</span>
+              </div>
+              <div className={styles.newMenuWrapper} ref={newMenuRef}>
+                <button
+                  className={styles.newBtn}
+                  onClick={() => setShowNewMenu(!showNewMenu)}
+                  title="New session"
+                >
+                  <Plus size={14} />
+                </button>
+                {showNewMenu && (
+                  <div className={styles.newMenu}>
+                    {availableModes.map((mode) => (
+                      <button
+                        key={mode.id}
+                        className={styles.newMenuItem}
+                        onClick={() => handleCreateSession(mode.id)}
+                      >
+                        <span className={styles.newMenuName}>{mode.name}</span>
+                        <span className={styles.newMenuDesc}>{mode.description}</span>
+                      </button>
                     ))}
                   </div>
                 )}
               </div>
-            )}
+            </div>
+
+            <div className={styles.sessionList}>
+              {sessions.length === 0 && (
+                <p className={styles.emptyHistory}>No sessions yet</p>
+              )}
+              {sessions.map((session) => (
+                <div
+                  key={session.id}
+                  className={`${styles.sessionItem} ${newSessionId === session.id ? styles.sessionNew : ''}`}
+                >
+                  {editingId === session.id ? (
+                    <div className={styles.sessionEdit}>
+                      <input
+                        ref={editRef}
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        onKeyDown={handleEditKeyDown}
+                        onBlur={handleSaveEdit}
+                        className={styles.sessionEditInput}
+                      />
+                      <button onClick={handleSaveEdit} className={styles.sessionEditSave}>
+                        <Check size={12} />
+                      </button>
+                      <button
+                        onMouseDown={(e) => { e.preventDefault(); handleCancelEdit(); }}
+                        className={styles.sessionEditCancel}
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ) : (
+                    <NavLink
+                      to={`/chat/${session.id}`}
+                      className={({ isActive }) =>
+                        `${styles.sessionLink} ${isActive ? styles.sessionLinkActive : ''}`
+                      }
+                    >
+                      {session.title || session.mode_id}
+                    </NavLink>
+                  )}
+                  {editingId !== session.id && (
+                    <div className={styles.sessionActions}>
+                      <button
+                        onClick={(e) => { e.preventDefault(); handleStartEdit(session); }}
+                        className={styles.sessionActionBtn}
+                        title="Rename"
+                      >
+                        <Pencil size={11} />
+                      </button>
+                      <button
+                        onClick={(e) => { e.preventDefault(); handleDelete(session.id); }}
+                        className={`${styles.sessionActionBtn} ${styles.sessionDeleteBtn}`}
+                        title="Delete"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </nav>
 
       {/* Bottom section */}
-      <div className="border-t border-border p-2">
+      <div className={styles.bottom}>
         <NavLink
           to="/settings"
           className={({ isActive }) =>
-            `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors
-             ${isActive
-               ? 'bg-bg-tertiary text-text-primary'
-               : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary/50'
-             }`
+            `${styles.navItem} ${isActive ? styles.navItemActive : ''}`
           }
         >
-          <Settings size={20} />
+          <Settings size={18} />
           {!collapsed && <span>Settings</span>}
         </NavLink>
 
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg
-                     text-text-secondary hover:text-text-primary hover:bg-bg-tertiary/50
-                     transition-colors"
-        >
-          <LogOut size={20} />
+        <button onClick={handleLogout} className={styles.navItem}>
+          <LogOut size={18} />
           {!collapsed && <span>Logout</span>}
         </button>
       </div>

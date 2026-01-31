@@ -1,12 +1,11 @@
-import { useLocation } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { Menu, Wifi, WifiOff } from 'lucide-react';
-import { useAppStore } from '../../store';
+import { useAppStore, useSessionStore } from '../../store';
 import { StatusDot } from '../StatusDot';
 import { useAgentStatus } from '../../hooks/useAgentStatus';
 import { useWebSocketStatus } from '../../hooks/useWebSocketStatus';
 
 const pageTitles: Record<string, string> = {
-  '/chat': 'Chat',
   '/feed': 'Feed',
   '/tasks': 'Tasks',
   '/agents': 'Agents',
@@ -17,11 +16,21 @@ const pageTitles: Record<string, string> = {
 
 export function Header() {
   const location = useLocation();
+  const { sessionId } = useParams<{ sessionId?: string }>();
   const toggleSidebar = useAppStore((state) => state.toggleSidebar);
+  const sessions = useSessionStore((s) => s.sessions);
   const { workers, orchestrators } = useAgentStatus();
   const connected = useWebSocketStatus();
 
-  const title = pageTitles[location.pathname] || 'nexor';
+  let title = pageTitles[location.pathname] || 'nexor';
+
+  // Show session title when in a chat session
+  if (location.pathname.startsWith('/chat/') && sessionId) {
+    const session = sessions.find((s) => s.id === sessionId);
+    title = session?.title || 'Chat';
+  } else if (location.pathname === '/chat') {
+    title = 'nexor';
+  }
 
   return (
     <header className="h-14 bg-bg-secondary border-b border-border flex items-center justify-between px-4">

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronDown, FileText } from 'lucide-react';
 import { useChat } from '../../hooks/useChat';
+import { useSessionStore } from '../../store';
+import { api } from '../../api/client';
 import { Message } from '../../components/Message';
 import { ChatInput } from '../../components/ChatInput';
 import { ChatSkeleton } from '../../components/Skeleton';
@@ -35,9 +37,59 @@ const MOCK_DOC_CONTENT: Record<string, { id: string; title: string; content: str
 
 export function ChatPage() {
   const { sessionId } = useParams<{ sessionId?: string }>();
-  const { messages, loading, sending, waitingForResponse, sendMessage, retryLastMessage, toolExecutions } = useChat(
-    sessionId ? { sessionId } : undefined
+
+  if (!sessionId) {
+    return <ModePicker />;
+  }
+
+  return <ChatSession sessionId={sessionId} />;
+}
+
+function ModePicker() {
+  const navigate = useNavigate();
+  const { modes, load, addSession } = useSessionStore();
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleCreate = async (modeId: string) => {
+    try {
+      const session = await api.sessions.create(modeId);
+      addSession(session);
+      navigate(`/chat/${session.id}`);
+    } catch {
+      // ignore
+    }
+  };
+
+  const availableModes = modes.filter((m) => m.id !== 'home');
+
+  return (
+    <div className={styles.picker}>
+      <div className={styles.pickerContent}>
+        <h1 className={styles.pickerBrand}>nexor</h1>
+        <p className={styles.pickerTagline}>Start a new session to begin</p>
+        <div className={styles.pickerGrid}>
+          {availableModes.map((mode, i) => (
+            <button
+              key={mode.id}
+              className={styles.modeCard}
+              style={{ animationDelay: `${i * 80}ms` }}
+              onClick={() => handleCreate(mode.id)}
+            >
+              <span className={styles.modeCardName}>{mode.name}</span>
+              <span className={styles.modeCardDesc}>{mode.description}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   );
+}
+
+function ChatSession({ sessionId }: { sessionId: string }) {
+  const { messages, loading, sending, waitingForResponse, sendMessage, retryLastMessage, toolExecutions } = useChat({ sessionId });
   const bottomRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);

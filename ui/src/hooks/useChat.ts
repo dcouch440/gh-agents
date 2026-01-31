@@ -8,11 +8,11 @@ export interface ToolExecution {
 }
 
 interface UseChatOptions {
-  sessionId?: string;
+  sessionId: string;
 }
 
-export function useChat(options?: UseChatOptions) {
-  const sessionId = options?.sessionId;
+export function useChat(options: UseChatOptions) {
+  const { sessionId } = options;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -22,10 +22,7 @@ export function useChat(options?: UseChatOptions) {
   const [docUpdated, setDocUpdated] = useState(0);
 
   useEffect(() => {
-    const loadHistory = sessionId
-      ? api.sessions.history(sessionId)
-      : api.chat.history();
-    loadHistory.then((history) => {
+    api.sessions.history(sessionId).then((history) => {
       setMessages(history);
       setLoading(false);
     });
@@ -35,7 +32,6 @@ export function useChat(options?: UseChatOptions) {
     setSending(true);
     setWaitingForResponse(true);
     try {
-      // Add user message optimistically
       const userMessage: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'user',
@@ -44,11 +40,8 @@ export function useChat(options?: UseChatOptions) {
       };
       setMessages((prev) => [...prev, userMessage]);
 
-      const { message_id } = sessionId
-        ? await api.sessions.send(sessionId, content)
-        : await api.chat.send(content);
+      const { message_id } = await api.sessions.send(sessionId, content);
 
-      // Create a placeholder assistant message for streaming
       const assistantId = crypto.randomUUID();
       const assistantMessage: ChatMessage = {
         id: assistantId,
@@ -101,12 +94,7 @@ export function useChat(options?: UseChatOptions) {
         }));
       };
 
-      // Subscribe to the SSE stream for this response
-      if (sessionId) {
-        api.sessions.stream(sessionId, message_id, onToken, onDone, onError, onToolStart, onToolEnd, onDocUpdate);
-      } else {
-        api.chat.stream(message_id, onToken, onDone, onError, onToolStart, onToolEnd, onDocUpdate);
-      }
+      api.sessions.stream(sessionId, message_id, onToken, onDone, onError, onToolStart, onToolEnd, onDocUpdate);
     } catch {
       setSending(false);
       setWaitingForResponse(false);
@@ -114,21 +102,15 @@ export function useChat(options?: UseChatOptions) {
   }, [sessionId]);
 
   const retryLastMessage = useCallback(async () => {
-    // Find the last user message
     const lastUserIdx = messages.reduce((last, m, i) => m.role === 'user' ? i : last, -1);
     if (lastUserIdx === -1) return;
     const lastUserContent = messages[lastUserIdx].content;
-    // Remove the last assistant message (and the user message, we'll re-send)
     setMessages((prev) => prev.slice(0, lastUserIdx));
     await sendMessage(lastUserContent);
   }, [messages, sendMessage]);
 
   const clearHistory = useCallback(async () => {
-    if (sessionId) {
-      await api.sessions.delete(sessionId);
-    } else {
-      await api.chat.clear();
-    }
+    await api.sessions.delete(sessionId);
     setMessages([]);
     setToolExecutions({});
   }, [sessionId]);
