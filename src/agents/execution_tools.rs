@@ -35,6 +35,19 @@ pub fn execution_tools() -> Vec<Tool> {
             }),
         },
         Tool {
+            name: "edit_file".into(),
+            description: "Edit a file by replacing an exact string match. Provide old_string (the existing code) and new_string (the replacement). old_string must match exactly one location in the file. Prefer this over write_file for modifying existing files.".into(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "description": "Relative path from project root" },
+                    "old_string": { "type": "string", "description": "Exact existing text to find and replace. Must be unique in the file." },
+                    "new_string": { "type": "string", "description": "Replacement text" }
+                },
+                "required": ["path", "old_string", "new_string"]
+            }),
+        },
+        Tool {
             name: "list_files".into(),
             description: "List files and directories at a path.".into(),
             input_schema: json!({
@@ -145,6 +158,7 @@ pub async fn execute_execution_tool(
     match name {
         "read_file" => exec_read_file(input, ctx).await,
         "write_file" => exec_write_file(input, ctx).await,
+        "edit_file" => exec_edit_file(input, ctx).await,
         "list_files" => exec_list_files(input, ctx).await,
         "git_status" => exec_git_status(ctx),
         "git_diff" => exec_git_diff(input, ctx),
@@ -185,6 +199,102 @@ async fn exec_write_file(input: &Value, ctx: &ExecutionContext) -> Value {
     let full_path = ctx.project_root.join(path);
     match file_ops.write_file(&full_path, content).await {
         Ok(()) => json!({ "success": true, "path": path }),
+        Err(e) => json!({ "error": e.to_string() }),
+    }
+}
+
+async fn exec_edit_file(input: &Value, ctx: &ExecutionContext) -> Value {
+    let path = match input["path"].as_str() {
+        Some(p) => p,
+        None => return json!({ "error": "Missing required parameter: path" }),
+    };
+    let old_string = match input["old_string"].as_str() {
+        Some(s) => s,
+        None => return json!({ "error": "Missing required parameter: old_string" }),
+    };
+    let new_string = match input["new_string"].as_str() {
+        Some(s) => s,
+        None => return json!({ "error": "Missing required parameter: new_string" }),
+    };
+
+    let file_ops = FileOps::new(ctx.clone());
+    let full_path = ctx.project_root.join(path);
+
+    // Handle append mode: empty old_string means append to end
+    if old_string.is_empty() {
+        let existing = match file_ops.read_file(&full_path).await {
+            Ok(c) => c,
+            Err(_) => String::new(), // file doesn't exist yet, start empty
+        };
+        let new_content = if existing.is_empty() {
+            new_string.to_string()
+        } else if existing.ends_with('\n') {
+            format!("{}{}", existing, new_string)
+        } else {
+            format!("{}\n{}", existing, new_string)
+        };
+        return match file_ops.write_file(&full_path, &new_content).await {
+            Ok(()) => json!({ "success": true, "path": path, "action": "appended" }),
+            Err(e) => json!({ "error": e.to_string() }),
+        };
+    }
+
+    // Read the existing file
+    let content = match file_ops.read_file(&full_path).await {
+        Ok(c) => c,
+        Err(e) => return json!({ "error": e.to_string() }),
+    };
+
+    // Count occurrences
+    let matches: Vec<_> = content.match_indices(old_string).collect();
+
+    if matches.is_empty() {
+        return json!({
+            "error": format!("old_string not found in {}", path),
+            "hint": "Check for exact whitespace and newline matches. Use read_file to see the current content."
+        });
+    }
+
+    if matches.len() > 1 {
+        return json!({
+            "error": format!("old_string matches {} locations in {}. Add surrounding context to make it unique.", matches.len(), path),
+            "match_count": matches.len()
+        });
+    }
+
+    // Exactly one match — perform the replacement
+    let byte_offset = matches[0].0;
+    let new_content = format!(
+        "{}{}{}",
+        &content[..byte_offset],
+        new_string,
+        &content[byte_offset + old_string.len()..]
+    );
+
+    match file_ops.write_file(&full_path, &new_content).await {
+        Ok(()) => {
+            // Calculate line numbers for the edited region
+            let line_start = content[..byte_offset].matches('\n').count() + 1;
+            let line_end = line_start + new_string.matches('\n').count();
+
+            // Build a preview: show the replaced lines with a few lines of context
+            let new_lines: Vec<&str> = new_content.lines().collect();
+            let preview_start = line_start.saturating_sub(2); // 1 line before (0-indexed)
+            let preview_end = (line_end + 2).min(new_lines.len()); // 1 line after
+            let preview: Vec<String> = new_lines[preview_start..preview_end]
+                .iter()
+                .enumerate()
+                .map(|(i, line)| format!("{:>4} | {}", preview_start + i + 1, line))
+                .collect();
+
+            json!({
+                "success": true,
+                "path": path,
+                "line_start": line_start,
+                "line_end": line_end,
+                "preview": preview.join("\n")
+            })
+        }
         Err(e) => json!({ "error": e.to_string() }),
     }
 }
@@ -345,7 +455,7 @@ mod tests {
     #[test]
     fn tool_schemas_are_valid() {
         let tools = execution_tools();
-        assert_eq!(tools.len(), 10);
+        assert_eq!(tools.len(), 11);
         for tool in &tools {
             assert!(!tool.name.is_empty());
             assert!(!tool.description.is_empty());
@@ -423,6 +533,72 @@ mod tests {
         )
         .await;
         assert!(result["error"].as_str().unwrap().contains("not allowed"));
+    }
+
+    #[tokio::test]
+    async fn edit_file_replaces_unique_match() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("code.rs"), "fn main() {\n    println!(\"old\");\n}\n").unwrap();
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let result = execute_execution_tool(
+            "edit_file",
+            &json!({ "path": "code.rs", "old_string": "println!(\"old\")", "new_string": "println!(\"new\")" }),
+            &ctx,
+            None,
+        )
+        .await;
+        assert_eq!(result["success"], true);
+        assert!(result["line_start"].as_u64().is_some());
+        let content = std::fs::read_to_string(tmp.path().join("code.rs")).unwrap();
+        assert!(content.contains("println!(\"new\")"));
+        assert!(!content.contains("println!(\"old\")"));
+    }
+
+    #[tokio::test]
+    async fn edit_file_rejects_no_match() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("code.rs"), "fn main() {}\n").unwrap();
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let result = execute_execution_tool(
+            "edit_file",
+            &json!({ "path": "code.rs", "old_string": "nonexistent", "new_string": "replacement" }),
+            &ctx,
+            None,
+        )
+        .await;
+        assert!(result["error"].as_str().unwrap().contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn edit_file_rejects_multiple_matches() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("code.rs"), "let x = 1;\nlet x = 1;\n").unwrap();
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let result = execute_execution_tool(
+            "edit_file",
+            &json!({ "path": "code.rs", "old_string": "let x = 1;", "new_string": "let x = 2;" }),
+            &ctx,
+            None,
+        )
+        .await;
+        assert!(result["error"].as_str().unwrap().contains("matches 2 locations"));
+    }
+
+    #[tokio::test]
+    async fn edit_file_appends_with_empty_old_string() {
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("code.rs"), "line1\n").unwrap();
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+        let result = execute_execution_tool(
+            "edit_file",
+            &json!({ "path": "code.rs", "old_string": "", "new_string": "line2\n" }),
+            &ctx,
+            None,
+        )
+        .await;
+        assert_eq!(result["success"], true);
+        let content = std::fs::read_to_string(tmp.path().join("code.rs")).unwrap();
+        assert_eq!(content, "line1\nline2\n");
     }
 
     #[tokio::test]

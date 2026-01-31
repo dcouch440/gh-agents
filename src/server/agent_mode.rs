@@ -84,7 +84,7 @@ impl ModeRegistry {
             id: AgentModeId::new("planning"),
             name: "Planning".to_string(),
             description: "Build and refine a PRD collaboratively.".to_string(),
-            system_prompt: include_str!("prompts/planning.txt").to_string(),
+            system_prompt: include_str!("../prompts/planning.txt").to_string(),
             tools: vec![
                 "create_doc".to_string(),
                 "update_doc".to_string(),
@@ -100,7 +100,7 @@ impl ModeRegistry {
             id: AgentModeId::new("agent_builder"),
             name: "Agent Builder".to_string(),
             description: "Create and configure agents, assign tasks, define roles.".to_string(),
-            system_prompt: include_str!("prompts/agent_builder.txt").to_string(),
+            system_prompt: include_str!("../prompts/agent_builder.txt").to_string(),
             tools: vec![
                 "list_agents".to_string(),
                 "list_roles".to_string(),
