@@ -22,6 +22,7 @@ use crate::llm::{
 use crate::types::{AgentPersona, AgentTier, ModelConfig, UserId};
 
 use super::state::AppState;
+use super::ws::PipelineUpdate;
 
 /// Return tool definitions filtered by allowed names.
 /// If `allowed` is empty, returns all tools.
@@ -1604,6 +1605,38 @@ async fn execute_start_pipeline(input: &Value, state: &AppState, user_id: UserId
         duration_ms: 0,
     };
     let _ = state.repo.create_stage_execution(&stage_exec).await;
+
+    // Broadcast run_started + stage_started
+    state.broadcast_pipeline(PipelineUpdate {
+        run_id,
+        pipeline_id: pipeline_uuid,
+        event: "run_started".into(),
+        stage_number: None,
+        stage_name: None,
+        agent_id: None,
+        output: None,
+        input_tokens: None,
+        output_tokens: None,
+        duration_ms: None,
+        user_input: None,
+        timestamp: now,
+        user_id: Some(user_id.0),
+    });
+    state.broadcast_pipeline(PipelineUpdate {
+        run_id,
+        pipeline_id: pipeline_uuid,
+        event: "stage_started".into(),
+        stage_number: Some(0),
+        stage_name: Some(first_stage_clone.stage_name.clone()),
+        agent_id: Some(first_agent_id.0.to_string()),
+        output: None,
+        input_tokens: None,
+        output_tokens: None,
+        duration_ms: None,
+        user_input: None,
+        timestamp: now,
+        user_id: Some(user_id.0),
+    });
 
     let dispatcher = dispatcher.lock().await;
     match dispatcher
