@@ -609,7 +609,7 @@ async fn handle_message(
             model: model_id.clone(),
             system: Some(mode.system_prompt.clone()),
             messages: messages.clone(),
-            max_tokens: 4096,
+            max_tokens: 16384,
             stream: true,
             tools: tool_defs.clone(),
             ..Default::default()

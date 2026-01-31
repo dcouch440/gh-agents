@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 use thiserror::Error;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 use tracing::{info, warn};
 use uuid::Uuid;
 
@@ -60,6 +60,8 @@ pub struct Agent {
     pub current_task: Option<Uuid>,
     /// Current status
     pub status: AgentStatus,
+    /// Shared status observable by the pool (updated alongside self.status)
+    shared_status: Arc<Mutex<AgentStatus>>,
     /// Reference to LLM provider (shared across agents)
     llm_provider: Arc<dyn LLMProvider + Send + Sync>,
     /// Channel for receiving commands
@@ -87,11 +89,17 @@ impl Agent {
             model_config,
             current_task: None,
             status: AgentStatus::Idle,
+            shared_status: Arc::new(Mutex::new(AgentStatus::Idle)),
             llm_provider,
             command_rx,
             response_tx,
             is_shutdown: false,
         }
+    }
+
+    /// Get the shared status handle (for external observation by the pool)
+    pub fn shared_status(&self) -> Arc<Mutex<AgentStatus>> {
+        Arc::clone(&self.shared_status)
     }
 
     /// Get the agent's ID
@@ -114,6 +122,15 @@ impl Agent {
         matches!(self.status, AgentStatus::Idle)
     }
 
+    /// Update both local and shared status
+    fn set_status(&mut self, status: AgentStatus) {
+        self.status = status;
+        // Use try_lock to avoid blocking; shared_status is only read externally
+        if let Ok(mut s) = self.shared_status.try_lock() {
+            *s = status;
+        }
+    }
+
     /// Start working on a task
     /// Transitions: Idle → Working
     pub fn start_task(&mut self, task_id: Uuid) -> Result<(), AgentError> {
@@ -124,7 +141,7 @@ impl Agent {
             });
         }
         self.current_task = Some(task_id);
-        self.status = AgentStatus::Working;
+        self.set_status(AgentStatus::Working);
         Ok(())
     }
 
@@ -137,7 +154,7 @@ impl Agent {
                 current_status: self.status,
             });
         }
-        self.status = AgentStatus::WaitingForContext;
+        self.set_status(AgentStatus::WaitingForContext);
         Ok(())
     }
 
@@ -150,7 +167,7 @@ impl Agent {
                 current_status: self.status,
             });
         }
-        self.status = AgentStatus::WaitingForApproval;
+        self.set_status(AgentStatus::WaitingForApproval);
         Ok(())
     }
 
@@ -159,7 +176,7 @@ impl Agent {
     pub fn resume(&mut self) -> Result<(), AgentError> {
         match self.status {
             AgentStatus::WaitingForContext | AgentStatus::WaitingForApproval => {
-                self.status = AgentStatus::Working;
+                self.set_status(AgentStatus::Working);
                 Ok(())
             }
             _ => Err(AgentError::InvalidStateTransition {
@@ -179,7 +196,7 @@ impl Agent {
             });
         }
         let task_id = self.current_task.take().ok_or(AgentError::NoCurrentTask)?;
-        self.status = AgentStatus::Idle;
+        self.set_status(AgentStatus::Idle);
         Ok(task_id)
     }
 
@@ -193,7 +210,7 @@ impl Agent {
             }),
             _ => {
                 let task_id = self.current_task.take().ok_or(AgentError::NoCurrentTask)?;
-                self.status = AgentStatus::Idle;
+                self.set_status(AgentStatus::Idle);
                 Ok(task_id)
             }
         }

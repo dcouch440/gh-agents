@@ -71,6 +71,35 @@ pub fn agent_tools() -> Vec<Tool> {
             }),
         },
         Tool {
+            name: "create_agents".to_string(),
+            description: "Create multiple agents at once. More efficient than calling create_agent repeatedly. Returns all agent IDs.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "agents": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "tier": {
+                                    "type": "string",
+                                    "enum": ["orchestrator", "worker", "utility"],
+                                    "description": "The agent tier"
+                                },
+                                "name": {
+                                    "type": "string",
+                                    "description": "Display name for the agent"
+                                }
+                            },
+                            "required": ["tier"]
+                        },
+                        "description": "Array of agent definitions to create"
+                    }
+                },
+                "required": ["agents"]
+            }),
+        },
+        Tool {
             name: "assign_task".to_string(),
             description: "Assign a task to an agent by its ID. The agent will begin working on it."
                 .to_string(),
@@ -407,6 +436,35 @@ pub fn agent_tools() -> Vec<Tool> {
                 "required": []
             }),
         },
+        // --- Codebase exploration tools (read-only) ---
+        Tool {
+            name: "read_file".to_string(),
+            description: "Read the contents of a file in the project. Returns the file text. Use this to understand existing code before designing agent systems.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "File path relative to the project root (e.g. 'src/main.rs', 'ui/src/App.tsx')"
+                    }
+                },
+                "required": ["path"]
+            }),
+        },
+        Tool {
+            name: "list_files".to_string(),
+            description: "List files and directories at a given path in the project. Use this to explore the codebase structure.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Directory path relative to the project root. Use '.' or '' for the root."
+                    }
+                },
+                "required": ["path"]
+            }),
+        },
     ]
 }
 
@@ -418,6 +476,7 @@ pub async fn execute_tool(name: &str, input: &Value, state: &AppState, user_id: 
         "list_agents" => execute_list_agents(state).await,
         "list_roles" => execute_list_roles(state).await,
         "create_agent" => execute_create_agent(input, state, user_id).await,
+        "create_agents" => execute_create_agents(input, state, user_id).await,
         "assign_task" => execute_assign_task(input, state).await,
         "get_task_result" => execute_get_task_result(input, state).await,
         "list_pending_approvals" => execute_list_pending_approvals(state).await,
@@ -436,6 +495,8 @@ pub async fn execute_tool(name: &str, input: &Value, state: &AppState, user_id: 
         "toggle_schedule" => execute_toggle_schedule(input, state, user_id).await,
         "create_trigger" => execute_create_trigger(input, state, user_id).await,
         "list_triggers" => execute_list_triggers(state).await,
+        "read_file" => execute_read_file(input).await,
+        "list_files" => execute_list_files(input).await,
         _ => json!({ "error": format!("Unknown tool: {}", name) }),
     }
 }
@@ -548,6 +609,86 @@ async fn execute_create_agent(input: &Value, state: &AppState, user_id: UserId) 
         }
         Err(e) => json!({ "error": e.to_string() }),
     }
+}
+
+async fn execute_create_agents(input: &Value, state: &AppState, user_id: UserId) -> Value {
+    let Some(agents_arr) = input["agents"].as_array() else {
+        return json!({ "error": "agents array is required" });
+    };
+
+    let Some(pool) = &state.pool else {
+        return json!({ "error": "Agent pool not initialized" });
+    };
+    let Some(dispatcher) = &state.dispatcher else {
+        return json!({ "error": "Dispatcher not initialized" });
+    };
+
+    let mut pool = pool.lock().await;
+    let mut dispatcher = dispatcher.lock().await;
+    let mut created = Vec::new();
+    let mut errors = Vec::new();
+
+    for agent_def in agents_arr {
+        let tier_str = agent_def["tier"].as_str().unwrap_or("worker");
+        let tier = match tier_str {
+            "orchestrator" => AgentTier::Orchestrator,
+            "worker" => AgentTier::Worker,
+            "utility" => AgentTier::Utility,
+            other => {
+                errors.push(json!({ "error": format!("Invalid tier: {}", other) }));
+                continue;
+            }
+        };
+
+        let name = agent_def["name"]
+            .as_str()
+            .unwrap_or(tier_str)
+            .to_string();
+
+        let persona = AgentPersona {
+            name: name.clone(),
+            ..Default::default()
+        };
+
+        let model_config = ModelConfig::default();
+
+        match pool.spawn_agent_with_dispatcher(tier, persona, model_config.clone(), &mut dispatcher)
+        {
+            Ok(agent_id) => {
+                if let Err(e) = state
+                    .repo
+                    .upsert_agent(
+                        user_id,
+                        AgentRow {
+                            id: agent_id.0,
+                            tier: tier_str.to_string(),
+                            persona_name: name.clone(),
+                            model_id: model_config.model_id.clone(),
+                            status: "idle".to_string(),
+                        },
+                    )
+                    .await
+                {
+                    tracing::error!("Failed to persist agent: {}", e);
+                }
+                created.push(json!({
+                    "agent_id": agent_id.0.to_string(),
+                    "tier": tier_str,
+                    "name": name,
+                    "status": "created"
+                }));
+            }
+            Err(e) => {
+                errors.push(json!({ "name": name, "error": e.to_string() }));
+            }
+        }
+    }
+
+    json!({
+        "created": created,
+        "errors": errors,
+        "total_created": created.len()
+    })
 }
 
 async fn execute_assign_task(input: &Value, state: &AppState) -> Value {
@@ -1356,35 +1497,126 @@ async fn execute_list_triggers(state: &AppState) -> Value {
     })
 }
 
+// --- Codebase exploration tool handlers ---
+
+async fn execute_read_file(input: &Value) -> Value {
+    let Some(path_str) = input["path"].as_str() else {
+        return json!({ "error": "Missing required parameter: path" });
+    };
+
+    // Resolve relative to current working directory (project root)
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let file_path = cwd.join(path_str);
+
+    // Basic safety: don't escape the project root
+    match file_path.canonicalize() {
+        Ok(canonical) => {
+            if !canonical.starts_with(&cwd) {
+                return json!({ "error": "Path is outside the project directory" });
+            }
+            match tokio::fs::read_to_string(&canonical).await {
+                Ok(content) => {
+                    // Truncate very large files to avoid blowing up context
+                    let truncated = content.len() > 50_000;
+                    let text = if truncated {
+                        &content[..50_000]
+                    } else {
+                        &content
+                    };
+                    json!({
+                        "path": path_str,
+                        "content": text,
+                        "truncated": truncated,
+                        "size_bytes": content.len()
+                    })
+                }
+                Err(e) => json!({ "error": format!("Could not read file: {}", e) }),
+            }
+        }
+        Err(e) => json!({ "error": format!("File not found or inaccessible: {}", e) }),
+    }
+}
+
+async fn execute_list_files(input: &Value) -> Value {
+    let path_str = input["path"].as_str().unwrap_or(".");
+
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let dir_path = if path_str.is_empty() || path_str == "." {
+        cwd.clone()
+    } else {
+        cwd.join(path_str)
+    };
+
+    match dir_path.canonicalize() {
+        Ok(canonical) => {
+            if !canonical.starts_with(&cwd) {
+                return json!({ "error": "Path is outside the project directory" });
+            }
+            match tokio::fs::read_dir(&canonical).await {
+                Ok(mut entries) => {
+                    let mut files = Vec::new();
+                    let mut dirs = Vec::new();
+                    while let Ok(Some(entry)) = entries.next_entry().await {
+                        let name = entry.file_name().to_string_lossy().to_string();
+                        // Skip hidden files/dirs
+                        if name.starts_with('.') {
+                            continue;
+                        }
+                        if let Ok(ft) = entry.file_type().await {
+                            if ft.is_dir() {
+                                dirs.push(format!("{}/", name));
+                            } else {
+                                files.push(name);
+                            }
+                        }
+                    }
+                    dirs.sort();
+                    files.sort();
+                    json!({
+                        "path": path_str,
+                        "directories": dirs,
+                        "files": files
+                    })
+                }
+                Err(e) => json!({ "error": format!("Could not list directory: {}", e) }),
+            }
+        }
+        Err(e) => json!({ "error": format!("Directory not found: {}", e) }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn agent_tools_returns_twentyone_tools() {
+    fn agent_tools_returns_all_tools() {
         let tools = agent_tools();
-        assert_eq!(tools.len(), 21);
+        assert_eq!(tools.len(), 24);
         assert_eq!(tools[0].name, "list_agents");
         assert_eq!(tools[1].name, "list_roles");
         assert_eq!(tools[2].name, "create_agent");
-        assert_eq!(tools[3].name, "assign_task");
-        assert_eq!(tools[4].name, "get_task_result");
-        assert_eq!(tools[5].name, "list_pending_approvals");
-        assert_eq!(tools[6].name, "respond_to_approval");
-        assert_eq!(tools[7].name, "remove_agent");
-        assert_eq!(tools[8].name, "create_cluster");
-        assert_eq!(tools[9].name, "add_to_cluster");
-        assert_eq!(tools[10].name, "remove_from_cluster");
-        assert_eq!(tools[11].name, "list_clusters");
-        assert_eq!(tools[12].name, "create_pipeline");
-        assert_eq!(tools[13].name, "add_pipeline_stage");
-        assert_eq!(tools[14].name, "start_pipeline");
-        assert_eq!(tools[15].name, "get_pipeline_status");
-        assert_eq!(tools[16].name, "create_schedule");
-        assert_eq!(tools[17].name, "list_schedules");
-        assert_eq!(tools[18].name, "toggle_schedule");
-        assert_eq!(tools[19].name, "create_trigger");
-        assert_eq!(tools[20].name, "list_triggers");
+        assert_eq!(tools[3].name, "create_agents");
+        assert_eq!(tools[4].name, "assign_task");
+        assert_eq!(tools[5].name, "get_task_result");
+        assert_eq!(tools[6].name, "list_pending_approvals");
+        assert_eq!(tools[7].name, "respond_to_approval");
+        assert_eq!(tools[8].name, "remove_agent");
+        assert_eq!(tools[9].name, "create_cluster");
+        assert_eq!(tools[10].name, "add_to_cluster");
+        assert_eq!(tools[11].name, "remove_from_cluster");
+        assert_eq!(tools[12].name, "list_clusters");
+        assert_eq!(tools[13].name, "create_pipeline");
+        assert_eq!(tools[14].name, "add_pipeline_stage");
+        assert_eq!(tools[15].name, "start_pipeline");
+        assert_eq!(tools[16].name, "get_pipeline_status");
+        assert_eq!(tools[17].name, "create_schedule");
+        assert_eq!(tools[18].name, "list_schedules");
+        assert_eq!(tools[19].name, "toggle_schedule");
+        assert_eq!(tools[20].name, "create_trigger");
+        assert_eq!(tools[21].name, "list_triggers");
+        assert_eq!(tools[22].name, "read_file");
+        assert_eq!(tools[23].name, "list_files");
     }
 
     #[test]
