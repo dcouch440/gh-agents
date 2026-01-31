@@ -2748,6 +2748,23 @@ pub async fn approve_pipeline_run(
                             }
                         }
 
+                        // Broadcast gate_resumed
+                        state.broadcast_pipeline(super::ws::PipelineUpdate {
+                            run_id: run_uuid,
+                            pipeline_id: pipeline_id.map(|p| p.0).unwrap_or(run_uuid),
+                            event: "gate_resumed".into(),
+                            stage_number: Some(next_stage.stage_number as i32),
+                            stage_name: Some(next_stage.stage_name.clone()),
+                            agent_id: resolved_agent_id.as_ref().map(|a| a.0.to_string()),
+                            output: None,
+                            input_tokens: None,
+                            output_tokens: None,
+                            duration_ms: None,
+                            user_input: request.user_input.clone(),
+                            timestamp: chrono::Utc::now(),
+                            user_id: Some(_user.user_id.0),
+                        });
+
                         return Ok(Json(
                             serde_json::json!({ "status": "resumed", "next_stage": next_stage.stage_number }),
                         ));

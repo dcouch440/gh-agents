@@ -24,7 +24,7 @@ use crate::agents::{
 
 use super::state::{AppState, OrchestratorMessage, StreamChunk};
 use super::tools;
-use super::ws::{AgentUpdate, FeedUpdate, TaskUpdate};
+use super::ws::{AgentUpdate, FeedUpdate, PipelineUpdate, TaskUpdate};
 
 use super::agent_mode::HistoryPolicy;
 
@@ -319,6 +319,29 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                             }
                         }
 
+                        // Broadcast stage completion/failure
+                        {
+                            let pipeline_id = {
+                                let mgr = state.pipeline_manager.read().await;
+                                mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
+                            };
+                            state.broadcast_pipeline(PipelineUpdate {
+                                run_id,
+                                pipeline_id,
+                                event: if succeeded { "stage_completed".into() } else { "stage_failed".into() },
+                                stage_number: Some(completed_stage_number as i32),
+                                stage_name: None,
+                                agent_id: None,
+                                output: if succeeded { Some(prev_output.clone()) } else { None },
+                                input_tokens: Some(stage_input_tokens),
+                                output_tokens: Some(stage_output_tokens),
+                                duration_ms: Some(stage_duration_ms),
+                                user_input: None,
+                                timestamp: chrono::Utc::now(),
+                                user_id: None,
+                            });
+                        }
+
                         if !succeeded {
                             let mut mgr = state.pipeline_manager.write().await;
                             mgr.fail_run(run_id);
@@ -330,6 +353,28 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                 timestamp: chrono::Utc::now(),
                                 user_id: None,
                             });
+                            // Broadcast run_failed
+                            {
+                                let pipeline_id = {
+                                    let mgr = state.pipeline_manager.read().await;
+                                    mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
+                                };
+                                state.broadcast_pipeline(PipelineUpdate {
+                                    run_id,
+                                    pipeline_id,
+                                    event: "run_failed".into(),
+                                    stage_number: Some(completed_stage_number as i32),
+                                    stage_name: None,
+                                    agent_id: None,
+                                    output: None,
+                                    input_tokens: None,
+                                    output_tokens: None,
+                                    duration_ms: None,
+                                    user_input: None,
+                                    timestamp: chrono::Utc::now(),
+                                    user_id: None,
+                                });
+                            }
                         } else {
                             // Record structured output from completed stage
                             {
@@ -399,6 +444,28 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         timestamp: chrono::Utc::now(),
                                         user_id: None,
                                     });
+                                    // Broadcast gate_waiting
+                                    {
+                                        let pipeline_id = {
+                                            let mgr = state.pipeline_manager.read().await;
+                                            mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
+                                        };
+                                        state.broadcast_pipeline(PipelineUpdate {
+                                            run_id,
+                                            pipeline_id,
+                                            event: "gate_waiting".into(),
+                                            stage_number: Some(next_stage.stage_number as i32),
+                                            stage_name: Some(next_stage.stage_name.clone()),
+                                            agent_id: next_stage.agent_id.as_ref().map(|a| a.0.to_string()),
+                                            output: None,
+                                            input_tokens: None,
+                                            output_tokens: None,
+                                            duration_ms: None,
+                                            user_input: None,
+                                            timestamp: chrono::Utc::now(),
+                                            user_id: None,
+                                        });
+                                    }
                                 } else {
                                     // Auto-assign next stage using template rendering
                                     let initial_task = {
@@ -623,6 +690,28 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                                     timestamp: chrono::Utc::now(),
                                                     user_id: None,
                                                 });
+                                                // Broadcast stage_started
+                                                {
+                                                    let pipeline_id = {
+                                                        let mgr = state.pipeline_manager.read().await;
+                                                        mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
+                                                    };
+                                                    state.broadcast_pipeline(PipelineUpdate {
+                                                        run_id,
+                                                        pipeline_id,
+                                                        event: "stage_started".into(),
+                                                        stage_number: Some(next_stage.stage_number as i32),
+                                                        stage_name: Some(next_stage.stage_name.clone()),
+                                                        agent_id: resolved_agent_id.as_ref().map(|a| a.0.to_string()),
+                                                        output: None,
+                                                        input_tokens: None,
+                                                        output_tokens: None,
+                                                        duration_ms: None,
+                                                        user_input: None,
+                                                        timestamp: chrono::Utc::now(),
+                                                        user_id: None,
+                                                    });
+                                                }
                                             }
                                         }
                                     } else {
@@ -651,6 +740,28 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                     timestamp: chrono::Utc::now(),
                                     user_id: None,
                                 });
+                                // Broadcast run_completed
+                                {
+                                    let pipeline_id = {
+                                        let mgr = state.pipeline_manager.read().await;
+                                        mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
+                                    };
+                                    state.broadcast_pipeline(PipelineUpdate {
+                                        run_id,
+                                        pipeline_id,
+                                        event: "run_completed".into(),
+                                        stage_number: None,
+                                        stage_name: None,
+                                        agent_id: None,
+                                        output: None,
+                                        input_tokens: None,
+                                        output_tokens: None,
+                                        duration_ms: None,
+                                        user_input: None,
+                                        timestamp: chrono::Utc::now(),
+                                        user_id: None,
+                                    });
+                                }
                             }
                         }
                     }

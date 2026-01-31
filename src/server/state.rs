@@ -20,7 +20,7 @@ use crate::orchestration::Scheduler;
 use crate::types::{AgentPoolConfig, AppConfig, UserId};
 
 use super::agent_mode::{AgentModeId, ModeRegistry};
-use super::ws::{AgentUpdate, FeedUpdate, SessionUpdate, TaskUpdate};
+use super::ws::{AgentUpdate, FeedUpdate, PipelineUpdate, SessionUpdate, TaskUpdate};
 
 /// Message sent to the orchestrator
 #[derive(Debug, Clone)]
@@ -87,6 +87,8 @@ pub struct AppState {
     pub agent_tx: broadcast::Sender<AgentUpdate>,
     /// Broadcast channel for session updates
     pub session_tx: broadcast::Sender<SessionUpdate>,
+    /// Broadcast channel for pipeline execution updates
+    pub pipeline_tx: broadcast::Sender<PipelineUpdate>,
     /// Agent pool for managing agents (None in tests that don't need agents)
     pub pool: Option<Arc<tokio::sync::Mutex<AgentPool>>>,
     /// Dispatcher for routing commands to agents (None in tests)
@@ -270,6 +272,7 @@ impl AppState {
         let (task_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
         let (agent_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
         let (session_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
+        let (pipeline_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
 
         // Generate a random JWT secret
         // In production, this should be persisted or configured via environment variable
@@ -290,6 +293,7 @@ impl AppState {
                 task_tx,
                 agent_tx,
                 session_tx,
+                pipeline_tx,
                 pool: None,
                 dispatcher: None,
                 task_results: Arc::new(RwLock::new(HashMap::new())),
@@ -343,6 +347,16 @@ impl AppState {
     /// Broadcast a session update to all subscribers
     pub fn broadcast_session(&self, update: SessionUpdate) {
         let _ = self.session_tx.send(update);
+    }
+
+    /// Subscribe to pipeline execution updates
+    pub fn subscribe_pipelines(&self) -> broadcast::Receiver<PipelineUpdate> {
+        self.pipeline_tx.subscribe()
+    }
+
+    /// Broadcast a pipeline execution update to all subscribers
+    pub fn broadcast_pipeline(&self, update: PipelineUpdate) {
+        let _ = self.pipeline_tx.send(update);
     }
 
     /// Ensure a response stream exists for this message (creates if missing).

@@ -29,6 +29,7 @@ pub const CHANNEL_FEED: &str = "feed";
 pub const CHANNEL_TASKS: &str = "tasks";
 pub const CHANNEL_AGENTS: &str = "agents";
 pub const CHANNEL_SESSIONS: &str = "sessions";
+pub const CHANNEL_PIPELINES: &str = "pipelines";
 
 /// Message sent from client to server
 #[derive(Debug, Clone, Deserialize)]
@@ -61,6 +62,9 @@ pub enum ServerMessage {
     /// Session update
     #[serde(rename = "session_update")]
     SessionUpdate { data: SessionUpdate },
+    /// Pipeline execution update
+    #[serde(rename = "pipeline_update")]
+    PipelineUpdate { data: PipelineUpdate },
     /// Error message
     #[serde(rename = "error")]
     Error { message: String },
@@ -110,6 +114,25 @@ pub struct SessionUpdate {
     pub user_id: Option<Uuid>,
 }
 
+/// Pipeline execution update broadcast to subscribers
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PipelineUpdate {
+    pub run_id: Uuid,
+    pub pipeline_id: Uuid,
+    pub event: String,
+    pub stage_number: Option<i32>,
+    pub stage_name: Option<String>,
+    pub agent_id: Option<String>,
+    pub output: Option<String>,
+    pub input_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
+    pub duration_ms: Option<u64>,
+    pub user_input: Option<String>,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    #[serde(default)]
+    pub user_id: Option<Uuid>,
+}
+
 /// Shared subscriptions state for a client
 type Subscriptions = Arc<Mutex<HashSet<String>>>;
 
@@ -147,6 +170,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
     let mut task_rx = state.subscribe_tasks();
     let mut agent_rx = state.subscribe_agents();
     let mut session_rx = state.subscribe_sessions();
+    let mut pipeline_rx = state.subscribe_pipelines();
 
     // Ping interval for keeping connection alive
     let mut ping_interval = interval(PING_INTERVAL);
@@ -289,6 +313,24 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
                     }
                 }
             }
+
+            // Handle pipeline updates
+            pipeline = pipeline_rx.recv() => {
+                if let Ok(update) = pipeline {
+                    let subs = subscriptions.lock().await;
+                    if subs.contains(CHANNEL_PIPELINES) {
+                        let should_send = update.user_id.is_none()
+                            || user_id.map(|u| Some(u.0) == update.user_id).unwrap_or(false);
+                        if should_send {
+                            let msg = ServerMessage::PipelineUpdate { data: update };
+                            let json = serde_json::to_string(&msg).unwrap();
+                            if sender.send(Message::Text(json.into())).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -342,7 +384,7 @@ async fn handle_client_message(
 fn is_valid_channel(channel: &str) -> bool {
     matches!(
         channel,
-        CHANNEL_FEED | CHANNEL_TASKS | CHANNEL_AGENTS | CHANNEL_SESSIONS
+        CHANNEL_FEED | CHANNEL_TASKS | CHANNEL_AGENTS | CHANNEL_SESSIONS | CHANNEL_PIPELINES
     )
 }
 
