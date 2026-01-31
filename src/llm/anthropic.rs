@@ -170,11 +170,9 @@ impl AnthropicClient {
         if let Ok(error) = serde_json::from_str::<AnthropicError>(body) {
             match status {
                 401 => LLMError::AuthError(error.error.message),
-                429 => {
-                    LLMError::RateLimited {
-                        retry_after_ms: retry_after_ms.unwrap_or(60000),
-                    }
-                }
+                429 => LLMError::RateLimited {
+                    retry_after_ms: retry_after_ms.unwrap_or(60000),
+                },
                 _ => LLMError::ApiError {
                     status,
                     message: error.error.message,
@@ -466,9 +464,8 @@ impl LLMProvider for AnthropicClient {
                 "text" => {
                     if let Some(text) = &block.text {
                         text_parts.push(text.clone());
-                        content_blocks.push(super::types::ContentBlock::Text {
-                            text: text.clone(),
-                        });
+                        content_blocks
+                            .push(super::types::ContentBlock::Text { text: text.clone() });
                     }
                 }
                 "tool_use" => {

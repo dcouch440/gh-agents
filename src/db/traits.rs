@@ -8,7 +8,10 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use crate::db::{AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow, UsageSummaryRow};
+use crate::db::{
+    AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, PipelineRow,
+    PipelineStageRow, ScheduleRow, SessionRow, TriggerRow, UsageSummaryRow,
+};
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::observability::{Decision, LlmCall};
 use crate::orchestration::DependencyError;
@@ -284,7 +287,12 @@ pub trait ServerRepo: Send + Sync {
     async fn health_check(&self) -> bool;
 
     /// List tasks with optional status filter and limit.
-    async fn list_tasks(&self, user_id: UserId, status: Option<String>, limit: Option<u32>) -> Result<Vec<Task>>;
+    async fn list_tasks(
+        &self,
+        user_id: UserId,
+        status: Option<String>,
+        limit: Option<u32>,
+    ) -> Result<Vec<Task>>;
 
     /// Get a single task by UUID.
     async fn get_task_by_uuid(&self, user_id: UserId, id: Uuid) -> Result<Option<Task>>;
@@ -293,10 +301,21 @@ pub trait ServerRepo: Send + Sync {
     async fn insert_task(&self, user_id: UserId, task: Task) -> Result<()>;
 
     /// Insert a chat message.
-    async fn insert_chat_message(&self, user_id: UserId, id: Uuid, role: String, content: String) -> Result<()>;
+    async fn insert_chat_message(
+        &self,
+        user_id: UserId,
+        id: Uuid,
+        role: String,
+        content: String,
+    ) -> Result<()>;
 
     /// Get chat history with pagination.
-    async fn get_chat_history(&self, user_id: UserId, limit: u32, offset: u32) -> Result<Vec<ChatMessageRow>>;
+    async fn get_chat_history(
+        &self,
+        user_id: UserId,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<ChatMessageRow>>;
 
     /// Clear all chat history.
     async fn clear_chat_history(&self, user_id: UserId) -> Result<()>;
@@ -317,6 +336,9 @@ pub trait ServerRepo: Send + Sync {
 
     /// Insert or update an agent definition.
     async fn upsert_agent(&self, user_id: UserId, agent: AgentRow) -> Result<()>;
+
+    /// Get a single agent by ID.
+    async fn get_persisted_agent(&self, agent_id: Uuid) -> Result<Option<AgentRow>>;
 
     /// Delete an agent by ID.
     async fn delete_persisted_agent(&self, agent_id: Uuid) -> Result<()>;
@@ -370,7 +392,11 @@ pub trait ServerRepo: Send + Sync {
     async fn delete_schedule(&self, schedule_id: Uuid) -> Result<()>;
 
     /// Update last_run_at for a schedule.
-    async fn update_schedule_last_run(&self, schedule_id: Uuid, last_run_at: DateTime<Utc>) -> Result<()>;
+    async fn update_schedule_last_run(
+        &self,
+        schedule_id: Uuid,
+        last_run_at: DateTime<Utc>,
+    ) -> Result<()>;
 
     // --- Trigger persistence ---
 
@@ -386,7 +412,13 @@ pub trait ServerRepo: Send + Sync {
     // --- Session management ---
 
     /// Create a new chat session.
-    async fn create_session(&self, user_id: UserId, session_id: Uuid, mode_id: &str, title: &str) -> Result<()>;
+    async fn create_session(
+        &self,
+        user_id: UserId,
+        session_id: Uuid,
+        mode_id: &str,
+        title: &str,
+    ) -> Result<()>;
 
     /// List sessions for a user.
     async fn list_sessions(&self, user_id: UserId) -> Result<Vec<SessionRow>>;
@@ -398,10 +430,21 @@ pub trait ServerRepo: Send + Sync {
     async fn delete_session(&self, session_id: Uuid) -> Result<()>;
 
     /// Insert a chat message scoped to a session.
-    async fn insert_session_message(&self, user_id: UserId, session_id: Uuid, id: Uuid, role: String, content: String) -> Result<()>;
+    async fn insert_session_message(
+        &self,
+        user_id: UserId,
+        session_id: Uuid,
+        id: Uuid,
+        role: String,
+        content: String,
+    ) -> Result<()>;
 
     /// Get chat history for a session.
-    async fn get_session_history(&self, session_id: Uuid, limit: u32) -> Result<Vec<ChatMessageRow>>;
+    async fn get_session_history(
+        &self,
+        session_id: Uuid,
+        limit: u32,
+    ) -> Result<Vec<ChatMessageRow>>;
 
     /// Update the title for a session.
     async fn update_session_title(&self, session_id: Uuid, title: &str) -> Result<()>;
@@ -523,7 +566,11 @@ pub trait DocumentRepo: Send + Sync {
     async fn list_session_documents(&self, session_id: Uuid) -> Result<Vec<DocumentRow>>;
 
     /// Full-text search documents for a user.
-    async fn search_documents(&self, user_id: Uuid, query: &str) -> Result<Vec<DocumentSearchResult>>;
+    async fn search_documents(
+        &self,
+        user_id: Uuid,
+        query: &str,
+    ) -> Result<Vec<DocumentSearchResult>>;
 
     /// Delete a document by ID.
     async fn delete_document(&self, doc_id: Uuid) -> Result<()>;

@@ -107,7 +107,11 @@ impl GlobalBackoff {
         let delay = retry_after_ms.max(our_delay);
         self.until = Some(Instant::now() + Duration::from_millis(delay));
         self.current_delay_ms = (our_delay * 2).min(self.max_delay_ms);
-        tracing::warn!("Global rate limit backoff set for {}ms (server asked {}ms)", delay, retry_after_ms);
+        tracing::warn!(
+            "Global rate limit backoff set for {}ms (server asked {}ms)",
+            delay,
+            retry_after_ms
+        );
     }
 
     fn record_success(&mut self) {
@@ -142,7 +146,9 @@ pub struct RateLimitedProvider<P: LLMProvider> {
 impl<P: LLMProvider + 'static> RateLimitedProvider<P> {
     pub fn new(provider: P, config: RateLimitConfig) -> Self {
         let token_bucket = if config.requests_per_minute > 0 {
-            Some(Arc::new(Mutex::new(TokenBucket::new(config.requests_per_minute))))
+            Some(Arc::new(Mutex::new(TokenBucket::new(
+                config.requests_per_minute,
+            ))))
         } else {
             None
         };
@@ -177,7 +183,10 @@ impl<P: LLMProvider + 'static> RateLimitedProvider<P> {
     }
 
     async fn on_rate_limited(&self, retry_after_ms: u64) {
-        self.global_backoff.write().await.record_rate_limit(retry_after_ms);
+        self.global_backoff
+            .write()
+            .await
+            .record_rate_limit(retry_after_ms);
     }
 
     async fn on_success(&self) {
@@ -326,8 +335,7 @@ mod tests {
         impl LLMProvider for SlowMock {
             async fn send_message(&self, _req: LLMRequest) -> LLMResult<LLMResponse> {
                 let current = self.in_flight.fetch_add(1, Ordering::SeqCst) + 1;
-                self.max_concurrent
-                    .fetch_max(current, Ordering::SeqCst);
+                self.max_concurrent.fetch_max(current, Ordering::SeqCst);
                 tokio::time::sleep(Duration::from_millis(50)).await;
                 self.in_flight.fetch_sub(1, Ordering::SeqCst);
                 Ok(LLMResponse {
@@ -447,10 +455,8 @@ mod tests {
     #[tokio::test]
     async fn test_streaming_respects_rate_limit() {
         let count = Arc::new(AtomicU32::new(0));
-        let provider = RateLimitedProvider::new(
-            MockProvider::new(count.clone(), 1),
-            test_config(10, 0),
-        );
+        let provider =
+            RateLimitedProvider::new(MockProvider::new(count.clone(), 1), test_config(10, 0));
 
         // First stream call triggers 429
         let result = provider.send_message_stream(dummy_request()).await;
@@ -495,10 +501,7 @@ mod tests {
     #[test]
     fn test_provider_name_and_model_passthrough() {
         let count = Arc::new(AtomicU32::new(0));
-        let provider = RateLimitedProvider::new(
-            MockProvider::always_ok(count),
-            test_config(10, 0),
-        );
+        let provider = RateLimitedProvider::new(MockProvider::always_ok(count), test_config(10, 0));
         assert_eq!(provider.provider_name(), "mock");
         assert_eq!(provider.model_id(), "mock-model");
     }

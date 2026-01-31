@@ -3,7 +3,9 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use crate::llm::{AnthropicClient, AnthropicConfig, LLMProvider, LLMRequest, Message as LlmMessage};
+use crate::llm::{
+    AnthropicClient, AnthropicConfig, LLMProvider, LLMRequest, Message as LlmMessage,
+};
 
 use super::RepoIndex;
 
@@ -68,17 +70,23 @@ pub async fn compile_context(
         let top_20: Vec<(&str, &str)> = candidates
             .iter()
             .take(20)
-            .filter_map(|(p, _)| {
-                index.files.get(*p).map(|e| (*p, e.summary.as_str()))
-            })
+            .filter_map(|(p, _)| index.files.get(*p).map(|e| (*p, e.summary.as_str())))
             .collect();
         haiku_rank_files(title, description, &top_20)
             .await
             .unwrap_or_else(|| {
-                candidates.iter().take(MAX_FILES).map(|(p, _)| p.to_string()).collect()
+                candidates
+                    .iter()
+                    .take(MAX_FILES)
+                    .map(|(p, _)| p.to_string())
+                    .collect()
             })
     } else {
-        candidates.iter().take(MAX_FILES).map(|(p, _)| p.to_string()).collect()
+        candidates
+            .iter()
+            .take(MAX_FILES)
+            .map(|(p, _)| p.to_string())
+            .collect()
     };
 
     // Step 3: Load file contents
@@ -137,19 +145,117 @@ pub async fn compile_context(
 fn extract_keywords(title: &str, description: &str) -> Vec<String> {
     let combined = format!("{} {}", title, description);
     let stop_words = [
-        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-        "have", "has", "had", "do", "does", "did", "will", "would", "could",
-        "should", "may", "might", "shall", "can", "need", "dare", "ought",
-        "used", "to", "of", "in", "for", "on", "with", "at", "by", "from",
-        "as", "into", "through", "during", "before", "after", "above", "below",
-        "between", "out", "off", "over", "under", "again", "further", "then",
-        "once", "here", "there", "when", "where", "why", "how", "all", "each",
-        "every", "both", "few", "more", "most", "other", "some", "such", "no",
-        "nor", "not", "only", "own", "same", "so", "than", "too", "very",
-        "and", "but", "or", "if", "while", "because", "until", "that", "this",
-        "these", "those", "it", "its", "we", "they", "them", "their", "what",
-        "which", "who", "whom", "add", "create", "update", "fix", "implement",
-        "change", "modify", "new", "file", "code",
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "shall",
+        "can",
+        "need",
+        "dare",
+        "ought",
+        "used",
+        "to",
+        "of",
+        "in",
+        "for",
+        "on",
+        "with",
+        "at",
+        "by",
+        "from",
+        "as",
+        "into",
+        "through",
+        "during",
+        "before",
+        "after",
+        "above",
+        "below",
+        "between",
+        "out",
+        "off",
+        "over",
+        "under",
+        "again",
+        "further",
+        "then",
+        "once",
+        "here",
+        "there",
+        "when",
+        "where",
+        "why",
+        "how",
+        "all",
+        "each",
+        "every",
+        "both",
+        "few",
+        "more",
+        "most",
+        "other",
+        "some",
+        "such",
+        "no",
+        "nor",
+        "not",
+        "only",
+        "own",
+        "same",
+        "so",
+        "than",
+        "too",
+        "very",
+        "and",
+        "but",
+        "or",
+        "if",
+        "while",
+        "because",
+        "until",
+        "that",
+        "this",
+        "these",
+        "those",
+        "it",
+        "its",
+        "we",
+        "they",
+        "them",
+        "their",
+        "what",
+        "which",
+        "who",
+        "whom",
+        "add",
+        "create",
+        "update",
+        "fix",
+        "implement",
+        "change",
+        "modify",
+        "new",
+        "file",
+        "code",
     ];
     let stop_set: std::collections::HashSet<&str> = stop_words.iter().copied().collect();
 
@@ -240,18 +346,23 @@ mod tests {
     #[tokio::test]
     async fn compile_scores_symbol_matches() {
         let mut index = RepoIndex::default();
-        index.files.insert("src/auth.rs".into(), super::super::FileEntry {
-            path: "src/auth.rs".into(),
-            summary: "Authentication module".into(),
-            symbols: vec![super::super::Symbol {
-                name: "AuthService".into(),
-                kind: "Struct".into(),
-                line: 10,
-            }],
-            size_bytes: 100,
-            last_modified: std::time::SystemTime::now(),
-        });
-        index.symbol_map.insert("authservice".into(), vec!["src/auth.rs".into()]);
+        index.files.insert(
+            "src/auth.rs".into(),
+            super::super::FileEntry {
+                path: "src/auth.rs".into(),
+                summary: "Authentication module".into(),
+                symbols: vec![super::super::Symbol {
+                    name: "AuthService".into(),
+                    kind: "Struct".into(),
+                    line: 10,
+                }],
+                size_bytes: 100,
+                last_modified: std::time::SystemTime::now(),
+            },
+        );
+        index
+            .symbol_map
+            .insert("authservice".into(), vec!["src/auth.rs".into()]);
         index.ready = true;
 
         let ctx = compile_context(
@@ -259,7 +370,8 @@ mod tests {
             "Fix AuthService login",
             "The login method crashes",
             Path::new("/nonexistent"),
-        ).await;
+        )
+        .await;
         assert!(ctx.briefing.contains("auth.rs"));
     }
 }

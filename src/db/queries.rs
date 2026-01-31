@@ -100,7 +100,9 @@ pub async fn list_tasks(
     status: Option<&str>,
     limit: Option<u32>,
 ) -> Result<Vec<Task>> {
-    let limit = limit.unwrap_or(crate::constants::DEFAULT_QUERY_LIMIT as u32).min(crate::constants::MAX_QUERY_LIMIT as u32) as i64;
+    let limit = limit
+        .unwrap_or(crate::constants::DEFAULT_QUERY_LIMIT as u32)
+        .min(crate::constants::MAX_QUERY_LIMIT as u32) as i64;
 
     let rows: Vec<TaskRow> = if let Some(status_filter) = status {
         sqlx::query_as(
@@ -290,16 +292,14 @@ pub async fn create_session(
     mode_id: &str,
     title: &str,
 ) -> Result<()> {
-    sqlx::query(
-        "INSERT INTO chat_sessions (id, user_id, mode_id, title) VALUES ($1, $2, $3, $4)",
-    )
-    .bind(session_id)
-    .bind(user_id.0)
-    .bind(mode_id)
-    .bind(title)
-    .execute(pool)
-    .await
-    .context("Failed to create session")?;
+    sqlx::query("INSERT INTO chat_sessions (id, user_id, mode_id, title) VALUES ($1, $2, $3, $4)")
+        .bind(session_id)
+        .bind(user_id.0)
+        .bind(mode_id)
+        .bind(title)
+        .execute(pool)
+        .await
+        .context("Failed to create session")?;
     Ok(())
 }
 
@@ -497,7 +497,10 @@ mod tests {
             .await
             .unwrap();
 
-        let retrieved = get_task(&db.pool, test_user_id(), &task.id).await.unwrap().unwrap();
+        let retrieved = get_task(&db.pool, test_user_id(), &task.id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(retrieved.status, TaskStatus::InProgress);
 
         db.cleanup().await;
@@ -534,7 +537,9 @@ mod tests {
             .await
             .unwrap();
 
-        let history = get_chat_history(&db.pool, test_user_id(), 50, 0).await.unwrap();
+        let history = get_chat_history(&db.pool, test_user_id(), 50, 0)
+            .await
+            .unwrap();
         assert!(history.len() >= 1);
 
         db.cleanup().await;
@@ -548,13 +553,21 @@ mod tests {
         // Insert 5 messages
         for i in 0..5 {
             let id = Uuid::new_v4();
-            insert_chat_message(&db.pool, test_user_id(), &id, "user", &format!("Message {}", i))
-                .await
-                .unwrap();
+            insert_chat_message(
+                &db.pool,
+                test_user_id(),
+                &id,
+                "user",
+                &format!("Message {}", i),
+            )
+            .await
+            .unwrap();
         }
 
         // Get first 2
-        let history = get_chat_history(&db.pool, test_user_id(), 2, 0).await.unwrap();
+        let history = get_chat_history(&db.pool, test_user_id(), 2, 0)
+            .await
+            .unwrap();
         assert_eq!(history.len(), 2);
 
         db.cleanup().await;
@@ -572,12 +585,16 @@ mod tests {
                 .unwrap();
         }
 
-        let history = get_chat_history(&db.pool, test_user_id(), 50, 0).await.unwrap();
+        let history = get_chat_history(&db.pool, test_user_id(), 50, 0)
+            .await
+            .unwrap();
         assert!(history.len() >= 3);
 
         clear_chat_history(&db.pool, test_user_id()).await.unwrap();
 
-        let history = get_chat_history(&db.pool, test_user_id(), 50, 0).await.unwrap();
+        let history = get_chat_history(&db.pool, test_user_id(), 50, 0)
+            .await
+            .unwrap();
         assert_eq!(history.len(), 0);
 
         db.cleanup().await;

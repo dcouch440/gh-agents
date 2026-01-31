@@ -75,7 +75,11 @@ impl ClusterManager {
     }
 
     /// Add an agent to a cluster. Removes from previous cluster if any.
-    pub fn add_agent(&mut self, cluster_id: ClusterId, agent_id: AgentId) -> Result<(), ClusterError> {
+    pub fn add_agent(
+        &mut self,
+        cluster_id: ClusterId,
+        agent_id: AgentId,
+    ) -> Result<(), ClusterError> {
         if !self.clusters.contains_key(&cluster_id) {
             return Err(ClusterError::NotFound(cluster_id));
         }
@@ -96,8 +100,15 @@ impl ClusterManager {
     }
 
     /// Remove an agent from its cluster.
-    pub fn remove_agent(&mut self, cluster_id: ClusterId, agent_id: AgentId) -> Result<(), ClusterError> {
-        let cluster = self.clusters.get_mut(&cluster_id).ok_or(ClusterError::NotFound(cluster_id))?;
+    pub fn remove_agent(
+        &mut self,
+        cluster_id: ClusterId,
+        agent_id: AgentId,
+    ) -> Result<(), ClusterError> {
+        let cluster = self
+            .clusters
+            .get_mut(&cluster_id)
+            .ok_or(ClusterError::NotFound(cluster_id))?;
         cluster.members.retain(|id| *id != agent_id);
         self.agent_to_cluster.remove(&agent_id);
         Ok(())

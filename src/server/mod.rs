@@ -103,7 +103,13 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
         .route("/auth/me", get(api::auth_me))
         .route("/tasks", get(api::list_tasks).post(api::create_task))
         .route("/tasks/:id", get(api::get_task))
-        .route("/agents", get(api::list_agents))
+        .route("/agents", get(api::list_agents).post(api::create_agent))
+        .route(
+            "/agents/:id",
+            get(api::get_agent)
+                .patch(api::update_agent)
+                .delete(api::delete_agent),
+        )
         .route("/config", get(api::get_config).patch(api::update_config))
         // Chat endpoints (Ticket 10.3)
         .route("/chat", post(api::send_chat))
@@ -114,15 +120,37 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
         .route("/chat/:message_id/stream", get(api::chat_stream))
         // Mode & Session endpoints
         .route("/modes", get(api::list_modes))
-        .route("/sessions", get(api::list_sessions).post(api::create_session))
-        .route("/sessions/:session_id", get(api::get_session).patch(api::update_session).delete(api::delete_session))
+        .route(
+            "/sessions",
+            get(api::list_sessions).post(api::create_session),
+        )
+        .route(
+            "/sessions/:session_id",
+            get(api::get_session)
+                .patch(api::update_session)
+                .delete(api::delete_session),
+        )
         .route("/sessions/:session_id/chat", post(api::send_session_chat))
-        .route("/sessions/:session_id/history", get(api::get_session_history))
-        .route("/sessions/:session_id/chat/:message_id/stream", get(api::session_chat_stream))
+        .route(
+            "/sessions/:session_id/history",
+            get(api::get_session_history),
+        )
+        .route(
+            "/sessions/:session_id/chat/:message_id/stream",
+            get(api::session_chat_stream),
+        )
         // Document endpoints
-        .route("/documents", get(api::list_documents).post(api::create_document))
+        .route(
+            "/documents",
+            get(api::list_documents).post(api::create_document),
+        )
         .route("/documents/search", get(api::search_documents))
-        .route("/documents/:id", get(api::get_document).patch(api::update_document).delete(api::delete_document))
+        .route(
+            "/documents/:id",
+            get(api::get_document)
+                .patch(api::update_document)
+                .delete(api::delete_document),
+        )
         .route("/stats", get(api::get_usage_stats))
         // Indexing control
         .route("/indexing/status", get(api::get_indexing_status))
@@ -163,20 +191,14 @@ async fn require_auth(
         .and_then(|s| s.strip_prefix("Bearer "))
         .map(|s| s.to_string())
         .or_else(|| {
-            request
-                .uri()
-                .query()
-                .and_then(|q| {
-                    q.split('&')
-                        .find_map(|pair| {
-                            pair.strip_prefix("token=").map(|v| v.to_string())
-                        })
-                })
+            request.uri().query().and_then(|q| {
+                q.split('&')
+                    .find_map(|pair| pair.strip_prefix("token=").map(|v| v.to_string()))
+            })
         })
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    auth::verify_token(&token, &state.jwt_secret)
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    auth::verify_token(&token, &state.jwt_secret).map_err(|_| StatusCode::UNAUTHORIZED)?;
 
     Ok(next.run(request).await)
 }
@@ -257,7 +279,9 @@ async fn shutdown_signal() {
 mod tests {
     use super::*;
     use crate::db::traits::ServerRepo;
-    use crate::db::{ChatMessageRow, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow};
+    use crate::db::{
+        ChatMessageRow, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow,
+    };
     use crate::types::UserId;
     use axum::{
         body::Body,
@@ -297,7 +321,9 @@ mod tests {
             limit: Option<u32>,
         ) -> anyhow::Result<Vec<crate::types::Task>> {
             let tasks = self.tasks.lock().unwrap();
-            let limit = limit.unwrap_or(crate::constants::DEFAULT_QUERY_LIMIT as u32).min(crate::constants::MAX_QUERY_LIMIT as u32) as usize;
+            let limit = limit
+                .unwrap_or(crate::constants::DEFAULT_QUERY_LIMIT as u32)
+                .min(crate::constants::MAX_QUERY_LIMIT as u32) as usize;
             Ok(tasks
                 .iter()
                 .filter(|t| {
@@ -312,7 +338,11 @@ mod tests {
                 .cloned()
                 .collect())
         }
-        async fn get_task_by_uuid(&self, _user_id: UserId, id: Uuid) -> anyhow::Result<Option<crate::types::Task>> {
+        async fn get_task_by_uuid(
+            &self,
+            _user_id: UserId,
+            id: Uuid,
+        ) -> anyhow::Result<Option<crate::types::Task>> {
             Ok(self
                 .tasks
                 .lock()
@@ -321,7 +351,11 @@ mod tests {
                 .find(|t| t.id.0 == id)
                 .cloned())
         }
-        async fn insert_task(&self, _user_id: UserId, task: crate::types::Task) -> anyhow::Result<()> {
+        async fn insert_task(
+            &self,
+            _user_id: UserId,
+            task: crate::types::Task,
+        ) -> anyhow::Result<()> {
             self.tasks.lock().unwrap().push(task);
             Ok(())
         }
@@ -368,39 +402,198 @@ mod tests {
         async fn get_password(&self) -> anyhow::Result<Option<String>> {
             Ok(self.password_hash.lock().unwrap().clone())
         }
-        async fn list_persisted_agents(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::AgentRow>> { Ok(vec![]) }
-        async fn upsert_agent(&self, _user_id: UserId, _agent: crate::db::AgentRow) -> anyhow::Result<()> { Ok(()) }
-        async fn delete_persisted_agent(&self, _agent_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn list_persisted_clusters(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::ClusterRow>> { Ok(vec![]) }
-        async fn upsert_cluster(&self, _user_id: UserId, _cluster: crate::db::ClusterRow) -> anyhow::Result<()> { Ok(()) }
-        async fn delete_cluster(&self, _cluster_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn list_cluster_members(&self, _cluster_id: Uuid) -> anyhow::Result<Vec<Uuid>> { Ok(vec![]) }
-        async fn add_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn remove_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn list_pipelines(&self, _user_id: UserId) -> anyhow::Result<Vec<PipelineRow>> { Ok(vec![]) }
-        async fn upsert_pipeline(&self, _user_id: UserId, _pipeline: PipelineRow) -> anyhow::Result<()> { Ok(()) }
-        async fn delete_pipeline(&self, _pipeline_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn list_pipeline_stages(&self, _pipeline_id: Uuid) -> anyhow::Result<Vec<PipelineStageRow>> { Ok(vec![]) }
-        async fn upsert_pipeline_stage(&self, _stage: PipelineStageRow) -> anyhow::Result<()> { Ok(()) }
-        async fn list_schedules(&self, _user_id: UserId) -> anyhow::Result<Vec<ScheduleRow>> { Ok(vec![]) }
-        async fn upsert_schedule(&self, _user_id: UserId, _schedule: ScheduleRow) -> anyhow::Result<()> { Ok(()) }
-        async fn delete_schedule(&self, _schedule_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn update_schedule_last_run(&self, _schedule_id: Uuid, _last_run_at: DateTime<Utc>) -> anyhow::Result<()> { Ok(()) }
-        async fn list_triggers(&self, _user_id: UserId) -> anyhow::Result<Vec<TriggerRow>> { Ok(vec![]) }
-        async fn upsert_trigger(&self, _user_id: UserId, _trigger: TriggerRow) -> anyhow::Result<()> { Ok(()) }
-        async fn delete_trigger(&self, _trigger_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn create_session(&self, _user_id: UserId, _session_id: Uuid, _mode_id: &str, _title: &str) -> anyhow::Result<()> { Ok(()) }
-        async fn list_sessions(&self, _user_id: UserId) -> anyhow::Result<Vec<SessionRow>> { Ok(vec![]) }
-        async fn get_session(&self, _session_id: Uuid) -> anyhow::Result<Option<SessionRow>> { Ok(None) }
-        async fn delete_session(&self, _session_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn insert_session_message(&self, _user_id: UserId, _session_id: Uuid, _id: Uuid, _role: String, _content: String) -> anyhow::Result<()> { Ok(()) }
-        async fn get_session_history(&self, _session_id: Uuid, _limit: u32) -> anyhow::Result<Vec<ChatMessageRow>> { Ok(vec![]) }
-        async fn update_session_title(&self, _session_id: Uuid, _title: &str) -> anyhow::Result<()> { Ok(()) }
-        async fn update_session_summary(&self, _session_id: Uuid, _summary: &str) -> anyhow::Result<()> { Ok(()) }
-        async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> { Ok(0) }
-        async fn insert_token_usage(&self, _session_id: Option<Uuid>, _agent_id: Option<Uuid>, _tier: &str, _model_id: &str, _input_tokens: i64, _output_tokens: i64) -> anyhow::Result<()> { Ok(()) }
-        async fn get_usage_summary(&self, _since_hours: u32) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> { Ok(vec![]) }
-        async fn insert_tool_call(&self, _session_id: Option<Uuid>, _message_id: Uuid, _round: i32, _tool_name: &str, _tool_use_id: &str, _input: &serde_json::Value, _output: &str, _latency_ms: i32) -> anyhow::Result<()> { Ok(()) }
+        async fn list_persisted_agents(
+            &self,
+            _user_id: UserId,
+        ) -> anyhow::Result<Vec<crate::db::AgentRow>> {
+            Ok(vec![])
+        }
+        async fn get_persisted_agent(
+            &self,
+            _agent_id: Uuid,
+        ) -> anyhow::Result<Option<crate::db::AgentRow>> {
+            Ok(None)
+        }
+        async fn upsert_agent(
+            &self,
+            _user_id: UserId,
+            _agent: crate::db::AgentRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn delete_persisted_agent(&self, _agent_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_persisted_clusters(
+            &self,
+            _user_id: UserId,
+        ) -> anyhow::Result<Vec<crate::db::ClusterRow>> {
+            Ok(vec![])
+        }
+        async fn upsert_cluster(
+            &self,
+            _user_id: UserId,
+            _cluster: crate::db::ClusterRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn delete_cluster(&self, _cluster_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_cluster_members(&self, _cluster_id: Uuid) -> anyhow::Result<Vec<Uuid>> {
+            Ok(vec![])
+        }
+        async fn add_cluster_member(
+            &self,
+            _cluster_id: Uuid,
+            _agent_id: Uuid,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn remove_cluster_member(
+            &self,
+            _cluster_id: Uuid,
+            _agent_id: Uuid,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_pipelines(&self, _user_id: UserId) -> anyhow::Result<Vec<PipelineRow>> {
+            Ok(vec![])
+        }
+        async fn upsert_pipeline(
+            &self,
+            _user_id: UserId,
+            _pipeline: PipelineRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn delete_pipeline(&self, _pipeline_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_pipeline_stages(
+            &self,
+            _pipeline_id: Uuid,
+        ) -> anyhow::Result<Vec<PipelineStageRow>> {
+            Ok(vec![])
+        }
+        async fn upsert_pipeline_stage(&self, _stage: PipelineStageRow) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_schedules(&self, _user_id: UserId) -> anyhow::Result<Vec<ScheduleRow>> {
+            Ok(vec![])
+        }
+        async fn upsert_schedule(
+            &self,
+            _user_id: UserId,
+            _schedule: ScheduleRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn delete_schedule(&self, _schedule_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn update_schedule_last_run(
+            &self,
+            _schedule_id: Uuid,
+            _last_run_at: DateTime<Utc>,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_triggers(&self, _user_id: UserId) -> anyhow::Result<Vec<TriggerRow>> {
+            Ok(vec![])
+        }
+        async fn upsert_trigger(
+            &self,
+            _user_id: UserId,
+            _trigger: TriggerRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn delete_trigger(&self, _trigger_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn create_session(
+            &self,
+            _user_id: UserId,
+            _session_id: Uuid,
+            _mode_id: &str,
+            _title: &str,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_sessions(&self, _user_id: UserId) -> anyhow::Result<Vec<SessionRow>> {
+            Ok(vec![])
+        }
+        async fn get_session(&self, _session_id: Uuid) -> anyhow::Result<Option<SessionRow>> {
+            Ok(None)
+        }
+        async fn delete_session(&self, _session_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn insert_session_message(
+            &self,
+            _user_id: UserId,
+            _session_id: Uuid,
+            _id: Uuid,
+            _role: String,
+            _content: String,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn get_session_history(
+            &self,
+            _session_id: Uuid,
+            _limit: u32,
+        ) -> anyhow::Result<Vec<ChatMessageRow>> {
+            Ok(vec![])
+        }
+        async fn update_session_title(
+            &self,
+            _session_id: Uuid,
+            _title: &str,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn update_session_summary(
+            &self,
+            _session_id: Uuid,
+            _summary: &str,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> {
+            Ok(0)
+        }
+        async fn insert_token_usage(
+            &self,
+            _session_id: Option<Uuid>,
+            _agent_id: Option<Uuid>,
+            _tier: &str,
+            _model_id: &str,
+            _input_tokens: i64,
+            _output_tokens: i64,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn get_usage_summary(
+            &self,
+            _since_hours: u32,
+        ) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> {
+            Ok(vec![])
+        }
+        async fn insert_tool_call(
+            &self,
+            _session_id: Option<Uuid>,
+            _message_id: Uuid,
+            _round: i32,
+            _tool_name: &str,
+            _tool_use_id: &str,
+            _input: &serde_json::Value,
+            _output: &str,
+            _latency_ms: i32,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
     }
 
     fn setup_mock_state() -> AppState {
@@ -444,7 +637,10 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/tasks")
-                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
+                    .header(
+                        "authorization",
+                        format!("Bearer {}", create_test_token(&state)),
+                    )
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -460,7 +656,10 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/agents")
-                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
+                    .header(
+                        "authorization",
+                        format!("Bearer {}", create_test_token(&state)),
+                    )
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -476,7 +675,10 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/config")
-                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
+                    .header(
+                        "authorization",
+                        format!("Bearer {}", create_test_token(&state)),
+                    )
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -492,7 +694,10 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/tasks/00000000-0000-0000-0000-000000000000")
-                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
+                    .header(
+                        "authorization",
+                        format!("Bearer {}", create_test_token(&state)),
+                    )
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -510,7 +715,10 @@ mod tests {
                     .method("POST")
                     .uri("/api/chat")
                     .header("content-type", "application/json")
-                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
+                    .header(
+                        "authorization",
+                        format!("Bearer {}", create_test_token(&state)),
+                    )
                     .body(Body::from(r#"{"message": "Hello!"}"#))
                     .unwrap(),
             )
@@ -528,7 +736,10 @@ mod tests {
                     .method("POST")
                     .uri("/api/chat")
                     .header("content-type", "application/json")
-                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
+                    .header(
+                        "authorization",
+                        format!("Bearer {}", create_test_token(&state)),
+                    )
                     .body(Body::from(r#"{"message": "   "}"#))
                     .unwrap(),
             )
@@ -544,7 +755,10 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/chat/history")
-                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
+                    .header(
+                        "authorization",
+                        format!("Bearer {}", create_test_token(&state)),
+                    )
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -561,7 +775,10 @@ mod tests {
                 Request::builder()
                     .method("DELETE")
                     .uri("/api/chat/history")
-                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
+                    .header(
+                        "authorization",
+                        format!("Bearer {}", create_test_token(&state)),
+                    )
                     .body(Body::empty())
                     .unwrap(),
             )

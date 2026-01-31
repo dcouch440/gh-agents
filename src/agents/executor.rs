@@ -14,7 +14,7 @@ use super::execution_tools;
 use super::roles::{CommunicationStyle, OutputFormat};
 use crate::llm::{
     AnthropicClient, AnthropicConfig, ContentBlock, LLMProvider, LLMRequest, LLMResponse, Message,
-    StreamAccumulator, StopReason, StreamChunk as LLMStreamChunk,
+    StopReason, StreamAccumulator, StreamChunk as LLMStreamChunk,
 };
 use crate::types::{AgentStatus, TaskStatus};
 
@@ -500,8 +500,12 @@ impl Agent {
 
         for round in 0..max_tool_rounds {
             let progress = 10 + (round as u8 * 5).min(70);
-            self.emit_progress(task_id, &format!("Working... (round {})", round + 1), Some(progress))
-                .await?;
+            self.emit_progress(
+                task_id,
+                &format!("Working... (round {})", round + 1),
+                Some(progress),
+            )
+            .await?;
 
             let request = LLMRequest {
                 model: self.model_config.model_id.clone(),
@@ -544,7 +548,9 @@ impl Agent {
             if response.stop_reason == StopReason::ToolUse {
                 if let Some(exec_ctx) = &assignment.context.execution_context {
                     // Add assistant message with content blocks
-                    messages.push(Message::assistant_with_blocks(response.content_blocks.clone()));
+                    messages.push(Message::assistant_with_blocks(
+                        response.content_blocks.clone(),
+                    ));
 
                     // Execute each tool call
                     let mut tool_results = Vec::new();
@@ -554,7 +560,10 @@ impl Agent {
                                 .await?;
 
                             let result = execution_tools::execute_execution_tool(
-                                name, input, exec_ctx, allowed_tools,
+                                name,
+                                input,
+                                exec_ctx,
+                                allowed_tools,
                             )
                             .await;
 
@@ -669,8 +678,7 @@ impl Agent {
                                         }
                                     } else if name == "git_commit" {
                                         if let Some(path) = result["sha"].as_str() {
-                                            files_modified
-                                                .push(format!("commit:{}", path));
+                                            files_modified.push(format!("commit:{}", path));
                                         }
                                     }
 

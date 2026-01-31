@@ -155,7 +155,7 @@ pub async fn create_task(
 }
 
 // ============================================================================
-// Agents Endpoint (Slice 10.2.4)
+// Agents Endpoints (Slice 10.2.4)
 // ============================================================================
 
 /// Response for a single agent
@@ -163,8 +163,31 @@ pub async fn create_task(
 pub struct AgentResponse {
     pub id: String,
     pub tier: String,
+    pub persona_name: String,
+    pub persona_prompt: String,
+    pub persona_style: String,
+    pub model_provider: String,
+    pub model_id: String,
+    pub model_max_tokens: i32,
+    pub model_temperature: f32,
     pub status: String,
-    pub current_task: Option<Uuid>,
+}
+
+impl AgentResponse {
+    fn from_row(row: crate::db::AgentRow) -> Self {
+        Self {
+            id: row.id.to_string(),
+            tier: row.tier,
+            persona_name: row.persona_name,
+            persona_prompt: row.persona_prompt,
+            persona_style: row.persona_style,
+            model_provider: row.model_provider,
+            model_id: row.model_id,
+            model_max_tokens: row.model_max_tokens,
+            model_temperature: row.model_temperature,
+            status: row.status,
+        }
+    }
 }
 
 /// Response for the agents list endpoint
@@ -190,38 +213,179 @@ pub struct TierStats {
     pub max: u8,
 }
 
+/// Request to create a new agent
+#[derive(Deserialize)]
+pub struct CreateAgentRequest {
+    pub tier: String,
+    pub persona_name: String,
+    pub persona_prompt: Option<String>,
+    pub persona_style: Option<String>,
+    pub model_provider: Option<String>,
+    pub model_id: String,
+    pub model_max_tokens: Option<i32>,
+    pub model_temperature: Option<f32>,
+}
+
+/// Request to update an existing agent
+#[derive(Deserialize)]
+pub struct UpdateAgentRequest {
+    pub tier: Option<String>,
+    pub persona_name: Option<String>,
+    pub persona_prompt: Option<String>,
+    pub persona_style: Option<String>,
+    pub model_provider: Option<String>,
+    pub model_id: Option<String>,
+    pub model_max_tokens: Option<i32>,
+    pub model_temperature: Option<f32>,
+}
+
 /// List all agents and their status
-///
-/// Returns the list of agents along with pool statistics based on configuration.
-/// Note: In server mode, the agent pool may not be active - this returns config limits.
-pub async fn list_agents(State(state): State<AppState>) -> Json<AgentsListResponse> {
+pub async fn list_agents(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+) -> Result<Json<AgentsListResponse>, StatusCode> {
     let config = state.config.read().await;
     let pool_config = &config.pool;
 
-    // Return configuration-based stats
-    // When the agent pool is active, this will be updated to show actual agents
+    let rows = state
+        .repo
+        .list_persisted_agents(auth.user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let agents: Vec<AgentResponse> = rows.into_iter().map(AgentResponse::from_row).collect();
+
+    let count_tier = |tier: &str| agents.iter().filter(|a| a.tier == tier).count();
+
     let response = AgentsListResponse {
-        agents: vec![],
         stats: AgentPoolStats {
             orchestrators: TierStats {
-                total: 0,
-                available: 0,
+                total: count_tier("orchestrator"),
+                available: count_tier("orchestrator"),
                 max: pool_config.max_orchestrators,
             },
             workers: TierStats {
-                total: 0,
-                available: 0,
+                total: count_tier("worker"),
+                available: count_tier("worker"),
                 max: pool_config.max_workers,
             },
             utilities: TierStats {
-                total: 0,
-                available: 0,
+                total: count_tier("utility"),
+                available: count_tier("utility"),
                 max: pool_config.max_utilities,
             },
         },
+        agents,
     };
 
-    Json(response)
+    Ok(Json(response))
+}
+
+/// Create a new agent
+pub async fn create_agent(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+    Json(request): Json<CreateAgentRequest>,
+) -> Result<(StatusCode, Json<AgentResponse>), StatusCode> {
+    if request.tier.trim().is_empty() || request.model_id.trim().is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let row = crate::db::AgentRow {
+        id: Uuid::new_v4(),
+        tier: request.tier.trim().to_lowercase(),
+        persona_name: request.persona_name.trim().to_string(),
+        persona_prompt: request.persona_prompt.unwrap_or_default(),
+        persona_style: request
+            .persona_style
+            .unwrap_or_else(|| "casual".to_string()),
+        model_provider: request
+            .model_provider
+            .unwrap_or_else(|| "anthropic".to_string()),
+        model_id: request.model_id.trim().to_string(),
+        model_max_tokens: request.model_max_tokens.unwrap_or(4096),
+        model_temperature: request.model_temperature.unwrap_or(0.7),
+        status: "idle".to_string(),
+    };
+
+    state
+        .repo
+        .upsert_agent(auth.user_id, row.clone())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok((StatusCode::CREATED, Json(AgentResponse::from_row(row))))
+}
+
+/// Get a single agent by ID
+pub async fn get_agent(
+    State(state): State<AppState>,
+    _auth: auth::AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<AgentResponse>, StatusCode> {
+    let row = state
+        .repo
+        .get_persisted_agent(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    Ok(Json(AgentResponse::from_row(row)))
+}
+
+/// Update an existing agent (partial)
+pub async fn update_agent(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+    Path(id): Path<Uuid>,
+    Json(request): Json<UpdateAgentRequest>,
+) -> Result<Json<AgentResponse>, StatusCode> {
+    let existing = state
+        .repo
+        .get_persisted_agent(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let updated = crate::db::AgentRow {
+        id: existing.id,
+        tier: request.tier.unwrap_or(existing.tier),
+        persona_name: request.persona_name.unwrap_or(existing.persona_name),
+        persona_prompt: request.persona_prompt.unwrap_or(existing.persona_prompt),
+        persona_style: request.persona_style.unwrap_or(existing.persona_style),
+        model_provider: request.model_provider.unwrap_or(existing.model_provider),
+        model_id: request.model_id.unwrap_or(existing.model_id),
+        model_max_tokens: request
+            .model_max_tokens
+            .unwrap_or(existing.model_max_tokens),
+        model_temperature: request
+            .model_temperature
+            .unwrap_or(existing.model_temperature),
+        status: existing.status,
+    };
+
+    state
+        .repo
+        .upsert_agent(auth.user_id, updated.clone())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(AgentResponse::from_row(updated)))
+}
+
+/// Delete an agent by ID
+pub async fn delete_agent(
+    State(state): State<AppState>,
+    _auth: auth::AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, StatusCode> {
+    state
+        .repo
+        .delete_persisted_agent(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 // ============================================================================
@@ -424,7 +588,12 @@ pub async fn send_chat(
     // Store the user message in the database
     state
         .repo
-        .insert_chat_message(auth.user_id, message_id, "user".to_string(), request.message.clone())
+        .insert_chat_message(
+            auth.user_id,
+            message_id,
+            "user".to_string(),
+            request.message.clone(),
+        )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -606,10 +775,7 @@ fn chat_stream_inner(
 /// Clear all chat history
 ///
 /// Returns 204 No Content on success.
-pub async fn clear_chat_history(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-) -> StatusCode {
+pub async fn clear_chat_history(State(state): State<AppState>, auth: auth::AuthUser) -> StatusCode {
     match state.repo.clear_chat_history(auth.user_id).await {
         Ok(_) => StatusCode::NO_CONTENT,
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -1058,10 +1224,10 @@ pub async fn auth_register(
         ));
     }
 
-    let user_repo = state
-        .user_repo
-        .as_ref()
-        .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "User service unavailable".into()))?;
+    let user_repo = state.user_repo.as_ref().ok_or((
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "User service unavailable".into(),
+    ))?;
 
     // Check if email already exists
     if user_repo
@@ -1119,7 +1285,10 @@ pub async fn auth_login(
     State(state): State<AppState>,
     Json(request): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, StatusCode> {
-    let user_repo = state.user_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let user_repo = state
+        .user_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let user = user_repo
         .get_user_by_email(&request.email)
@@ -1127,7 +1296,10 @@ pub async fn auth_login(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    let password_hash = user.password_hash.as_ref().ok_or(StatusCode::UNAUTHORIZED)?;
+    let password_hash = user
+        .password_hash
+        .as_ref()
+        .ok_or(StatusCode::UNAUTHORIZED)?;
     if !auth::verify_password(&request.password, password_hash) {
         return Err(StatusCode::UNAUTHORIZED);
     }
@@ -1220,7 +1392,10 @@ pub async fn list_documents(
     State(state): State<AppState>,
     auth: auth::AuthUser,
 ) -> Result<Json<Vec<DocumentListItem>>, StatusCode> {
-    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc_repo = state
+        .doc_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let docs = doc_repo
         .list_documents(auth.user_id.0)
         .await
@@ -1248,7 +1423,10 @@ pub async fn search_documents(
     auth: auth::AuthUser,
     Query(query): Query<DocumentSearchQuery>,
 ) -> Result<Json<Vec<crate::db::DocumentSearchResult>>, StatusCode> {
-    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc_repo = state
+        .doc_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let results = doc_repo
         .search_documents(auth.user_id.0, &query.q)
         .await
@@ -1263,7 +1441,10 @@ pub async fn get_document(
     auth: auth::AuthUser,
     Path(doc_id): Path<Uuid>,
 ) -> Result<Json<DocumentResponse>, StatusCode> {
-    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc_repo = state
+        .doc_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let doc = doc_repo
         .get_document(doc_id)
         .await
@@ -1299,14 +1480,19 @@ pub async fn create_document(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc_repo = state
+        .doc_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let doc = doc_repo
         .create_document(
             auth.user_id.0,
             request.session_id,
             request.title,
             request.content,
-            request.doc_type.unwrap_or_else(|| "architecture".to_string()),
+            request
+                .doc_type
+                .unwrap_or_else(|| "architecture".to_string()),
             String::new(),
             request.tags.unwrap_or_default(),
         )
@@ -1337,7 +1523,10 @@ pub async fn update_document(
     Path(doc_id): Path<Uuid>,
     Json(request): Json<UpdateDocumentRequest>,
 ) -> Result<Json<DocumentResponse>, StatusCode> {
-    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc_repo = state
+        .doc_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Verify ownership
     let existing = doc_repo
@@ -1375,7 +1564,10 @@ pub async fn delete_document(
     auth: auth::AuthUser,
     Path(doc_id): Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
-    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc_repo = state
+        .doc_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Verify ownership
     let existing = doc_repo
@@ -1441,7 +1633,10 @@ pub async fn submit_context_response(
         vec![request.context]
     };
 
-    let dispatcher = state.dispatcher.as_ref().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let dispatcher = state
+        .dispatcher
+        .as_ref()
+        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
     let disp = dispatcher.lock().await;
     disp.send_to_agent(
         &agent_id,
@@ -1465,11 +1660,10 @@ pub async fn submit_context_response(
 pub async fn get_usage_stats(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<crate::db::UsageSummaryRow>>, StatusCode> {
-    let stats = state.repo.get_usage_summary(24).await
-        .map_err(|e| {
-            tracing::error!("get_usage_stats failed: {e:?}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let stats = state.repo.get_usage_summary(24).await.map_err(|e| {
+        tracing::error!("get_usage_stats failed: {e:?}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
     Ok(Json(stats))
 }
 
@@ -1503,7 +1697,8 @@ pub async fn start_indexing(
     let status = state.indexing_status.clone();
 
     tokio::spawn(async move {
-        let index = crate::indexing::indexer::build_index_tracked(&project_root, status.clone()).await;
+        let index =
+            crate::indexing::indexer::build_index_tracked(&project_root, status.clone()).await;
         let file_count = index.files.len();
         *idx.write().await = index;
 
@@ -1517,9 +1712,7 @@ pub async fn start_indexing(
 }
 
 /// Stop a running indexing job (best-effort — sets status to idle).
-pub async fn stop_indexing(
-    State(state): State<AppState>,
-) -> Json<serde_json::Value> {
+pub async fn stop_indexing(State(state): State<AppState>) -> Json<serde_json::Value> {
     let mut status = state.indexing_status.write().await;
     status.state = crate::indexing::IndexingState::Idle;
     status.error = Some("Stopped by user".to_string());
@@ -1666,6 +1859,7 @@ mod tests {
         tasks: std::sync::Mutex<Vec<Task>>,
         chat_messages: std::sync::Mutex<Vec<ChatMessageRow>>,
         password_hash: std::sync::Mutex<Option<String>>,
+        agents: std::sync::Mutex<Vec<crate::db::AgentRow>>,
     }
 
     impl InMemoryServerRepo {
@@ -1674,6 +1868,7 @@ mod tests {
                 tasks: std::sync::Mutex::new(vec![]),
                 chat_messages: std::sync::Mutex::new(vec![]),
                 password_hash: std::sync::Mutex::new(None),
+                agents: std::sync::Mutex::new(vec![]),
             }
         }
     }
@@ -1691,7 +1886,9 @@ mod tests {
             limit: Option<u32>,
         ) -> anyhow::Result<Vec<Task>> {
             let tasks = self.tasks.lock().unwrap();
-            let limit = limit.unwrap_or(crate::constants::DEFAULT_QUERY_LIMIT as u32).min(crate::constants::MAX_QUERY_LIMIT as u32) as usize;
+            let limit = limit
+                .unwrap_or(crate::constants::DEFAULT_QUERY_LIMIT as u32)
+                .min(crate::constants::MAX_QUERY_LIMIT as u32) as usize;
             let filtered: Vec<Task> = tasks
                 .iter()
                 .filter(|t| {
@@ -1709,7 +1906,11 @@ mod tests {
             Ok(filtered)
         }
 
-        async fn get_task_by_uuid(&self, _user_id: UserId, id: Uuid) -> anyhow::Result<Option<Task>> {
+        async fn get_task_by_uuid(
+            &self,
+            _user_id: UserId,
+            id: Uuid,
+        ) -> anyhow::Result<Option<Task>> {
             let tasks = self.tasks.lock().unwrap();
             Ok(tasks.iter().find(|t| t.id.0 == id).cloned())
         }
@@ -1768,39 +1969,217 @@ mod tests {
         async fn get_password(&self) -> anyhow::Result<Option<String>> {
             Ok(self.password_hash.lock().unwrap().clone())
         }
-        async fn list_persisted_agents(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::AgentRow>> { Ok(vec![]) }
-        async fn upsert_agent(&self, _user_id: UserId, _agent: crate::db::AgentRow) -> anyhow::Result<()> { Ok(()) }
-        async fn delete_persisted_agent(&self, _agent_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn list_persisted_clusters(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::ClusterRow>> { Ok(vec![]) }
-        async fn upsert_cluster(&self, _user_id: UserId, _cluster: crate::db::ClusterRow) -> anyhow::Result<()> { Ok(()) }
-        async fn delete_cluster(&self, _cluster_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn list_cluster_members(&self, _cluster_id: Uuid) -> anyhow::Result<Vec<Uuid>> { Ok(vec![]) }
-        async fn add_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn remove_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn list_pipelines(&self, _user_id: UserId) -> anyhow::Result<Vec<PipelineRow>> { Ok(vec![]) }
-        async fn upsert_pipeline(&self, _user_id: UserId, _pipeline: PipelineRow) -> anyhow::Result<()> { Ok(()) }
-        async fn delete_pipeline(&self, _pipeline_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn list_pipeline_stages(&self, _pipeline_id: Uuid) -> anyhow::Result<Vec<PipelineStageRow>> { Ok(vec![]) }
-        async fn upsert_pipeline_stage(&self, _stage: PipelineStageRow) -> anyhow::Result<()> { Ok(()) }
-        async fn list_schedules(&self, _user_id: UserId) -> anyhow::Result<Vec<ScheduleRow>> { Ok(vec![]) }
-        async fn upsert_schedule(&self, _user_id: UserId, _schedule: ScheduleRow) -> anyhow::Result<()> { Ok(()) }
-        async fn delete_schedule(&self, _schedule_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn update_schedule_last_run(&self, _schedule_id: Uuid, _last_run_at: DateTime<Utc>) -> anyhow::Result<()> { Ok(()) }
-        async fn list_triggers(&self, _user_id: UserId) -> anyhow::Result<Vec<TriggerRow>> { Ok(vec![]) }
-        async fn upsert_trigger(&self, _user_id: UserId, _trigger: TriggerRow) -> anyhow::Result<()> { Ok(()) }
-        async fn delete_trigger(&self, _trigger_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn create_session(&self, _user_id: UserId, _session_id: Uuid, _mode_id: &str, _title: &str) -> anyhow::Result<()> { Ok(()) }
-        async fn list_sessions(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::SessionRow>> { Ok(vec![]) }
-        async fn get_session(&self, _session_id: Uuid) -> anyhow::Result<Option<crate::db::SessionRow>> { Ok(None) }
-        async fn delete_session(&self, _session_id: Uuid) -> anyhow::Result<()> { Ok(()) }
-        async fn insert_session_message(&self, _user_id: UserId, _session_id: Uuid, _id: Uuid, _role: String, _content: String) -> anyhow::Result<()> { Ok(()) }
-        async fn get_session_history(&self, _session_id: Uuid, _limit: u32) -> anyhow::Result<Vec<ChatMessageRow>> { Ok(vec![]) }
-        async fn update_session_title(&self, _session_id: Uuid, _title: &str) -> anyhow::Result<()> { Ok(()) }
-        async fn update_session_summary(&self, _session_id: Uuid, _summary: &str) -> anyhow::Result<()> { Ok(()) }
-        async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> { Ok(0) }
-        async fn insert_token_usage(&self, _session_id: Option<Uuid>, _agent_id: Option<Uuid>, _tier: &str, _model_id: &str, _input_tokens: i64, _output_tokens: i64) -> anyhow::Result<()> { Ok(()) }
-        async fn get_usage_summary(&self, _since_hours: u32) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> { Ok(vec![]) }
-        async fn insert_tool_call(&self, _session_id: Option<Uuid>, _message_id: Uuid, _round: i32, _tool_name: &str, _tool_use_id: &str, _input: &serde_json::Value, _output: &str, _latency_ms: i32) -> anyhow::Result<()> { Ok(()) }
+        async fn list_persisted_agents(
+            &self,
+            _user_id: UserId,
+        ) -> anyhow::Result<Vec<crate::db::AgentRow>> {
+            Ok(self.agents.lock().unwrap().clone())
+        }
+        async fn get_persisted_agent(
+            &self,
+            agent_id: Uuid,
+        ) -> anyhow::Result<Option<crate::db::AgentRow>> {
+            Ok(self
+                .agents
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|a| a.id == agent_id)
+                .cloned())
+        }
+        async fn upsert_agent(
+            &self,
+            _user_id: UserId,
+            agent: crate::db::AgentRow,
+        ) -> anyhow::Result<()> {
+            let mut agents = self.agents.lock().unwrap();
+            if let Some(existing) = agents.iter_mut().find(|a| a.id == agent.id) {
+                *existing = agent;
+            } else {
+                agents.push(agent);
+            }
+            Ok(())
+        }
+        async fn delete_persisted_agent(&self, agent_id: Uuid) -> anyhow::Result<()> {
+            self.agents.lock().unwrap().retain(|a| a.id != agent_id);
+            Ok(())
+        }
+        async fn list_persisted_clusters(
+            &self,
+            _user_id: UserId,
+        ) -> anyhow::Result<Vec<crate::db::ClusterRow>> {
+            Ok(vec![])
+        }
+        async fn upsert_cluster(
+            &self,
+            _user_id: UserId,
+            _cluster: crate::db::ClusterRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn delete_cluster(&self, _cluster_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_cluster_members(&self, _cluster_id: Uuid) -> anyhow::Result<Vec<Uuid>> {
+            Ok(vec![])
+        }
+        async fn add_cluster_member(
+            &self,
+            _cluster_id: Uuid,
+            _agent_id: Uuid,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn remove_cluster_member(
+            &self,
+            _cluster_id: Uuid,
+            _agent_id: Uuid,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_pipelines(&self, _user_id: UserId) -> anyhow::Result<Vec<PipelineRow>> {
+            Ok(vec![])
+        }
+        async fn upsert_pipeline(
+            &self,
+            _user_id: UserId,
+            _pipeline: PipelineRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn delete_pipeline(&self, _pipeline_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_pipeline_stages(
+            &self,
+            _pipeline_id: Uuid,
+        ) -> anyhow::Result<Vec<PipelineStageRow>> {
+            Ok(vec![])
+        }
+        async fn upsert_pipeline_stage(&self, _stage: PipelineStageRow) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_schedules(&self, _user_id: UserId) -> anyhow::Result<Vec<ScheduleRow>> {
+            Ok(vec![])
+        }
+        async fn upsert_schedule(
+            &self,
+            _user_id: UserId,
+            _schedule: ScheduleRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn delete_schedule(&self, _schedule_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn update_schedule_last_run(
+            &self,
+            _schedule_id: Uuid,
+            _last_run_at: DateTime<Utc>,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_triggers(&self, _user_id: UserId) -> anyhow::Result<Vec<TriggerRow>> {
+            Ok(vec![])
+        }
+        async fn upsert_trigger(
+            &self,
+            _user_id: UserId,
+            _trigger: TriggerRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn delete_trigger(&self, _trigger_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn create_session(
+            &self,
+            _user_id: UserId,
+            _session_id: Uuid,
+            _mode_id: &str,
+            _title: &str,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_sessions(
+            &self,
+            _user_id: UserId,
+        ) -> anyhow::Result<Vec<crate::db::SessionRow>> {
+            Ok(vec![])
+        }
+        async fn get_session(
+            &self,
+            _session_id: Uuid,
+        ) -> anyhow::Result<Option<crate::db::SessionRow>> {
+            Ok(None)
+        }
+        async fn delete_session(&self, _session_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn insert_session_message(
+            &self,
+            _user_id: UserId,
+            _session_id: Uuid,
+            _id: Uuid,
+            _role: String,
+            _content: String,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn get_session_history(
+            &self,
+            _session_id: Uuid,
+            _limit: u32,
+        ) -> anyhow::Result<Vec<ChatMessageRow>> {
+            Ok(vec![])
+        }
+        async fn update_session_title(
+            &self,
+            _session_id: Uuid,
+            _title: &str,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn update_session_summary(
+            &self,
+            _session_id: Uuid,
+            _summary: &str,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> {
+            Ok(0)
+        }
+        async fn insert_token_usage(
+            &self,
+            _session_id: Option<Uuid>,
+            _agent_id: Option<Uuid>,
+            _tier: &str,
+            _model_id: &str,
+            _input_tokens: i64,
+            _output_tokens: i64,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn get_usage_summary(
+            &self,
+            _since_hours: u32,
+        ) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> {
+            Ok(vec![])
+        }
+        async fn insert_tool_call(
+            &self,
+            _session_id: Option<Uuid>,
+            _message_id: Uuid,
+            _round: i32,
+            _tool_name: &str,
+            _tool_use_id: &str,
+            _input: &serde_json::Value,
+            _output: &str,
+            _latency_ms: i32,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
     }
 
     fn create_test_token(jwt_secret: &[u8]) -> String {
@@ -2484,6 +2863,285 @@ mod tests {
         assert!(resp["stats"]["utilities"].is_object());
     }
 
+    // === Agent CRUD tests ===
+
+    #[tokio::test]
+    async fn create_agent_returns_created() {
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/agents")
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::from(
+                        r#"{"tier":"worker","persona_name":"Builder","model_id":"claude-sonnet-4-20250514"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let agent: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(agent["tier"].as_str().unwrap(), "worker");
+        assert_eq!(agent["persona_name"].as_str().unwrap(), "Builder");
+        assert_eq!(agent["persona_style"].as_str().unwrap(), "casual");
+        assert_eq!(agent["model_provider"].as_str().unwrap(), "anthropic");
+        assert_eq!(agent["model_max_tokens"].as_i64().unwrap(), 4096);
+        assert_eq!(agent["status"].as_str().unwrap(), "idle");
+    }
+
+    #[tokio::test]
+    async fn create_agent_empty_tier_returns_bad_request() {
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/agents")
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::from(
+                        r#"{"tier":"","persona_name":"X","model_id":"claude-sonnet-4-20250514"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn list_agents_includes_created_agent() {
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
+
+        // Create an agent
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/agents")
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::from(
+                        r#"{"tier":"orchestrator","persona_name":"Planner","model_id":"claude-sonnet-4-20250514"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // List agents
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/agents")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let agents = resp["agents"].as_array().unwrap();
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0]["persona_name"].as_str().unwrap(), "Planner");
+    }
+
+    #[tokio::test]
+    async fn get_agent_returns_created_agent() {
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
+
+        // Create
+        let create_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/agents")
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::from(
+                        r#"{"tier":"utility","persona_name":"Helper","model_id":"claude-haiku-35-20241022"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let body = axum::body::to_bytes(create_resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let agent_id = created["id"].as_str().unwrap();
+
+        // Get by ID
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/agents/{}", agent_id))
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let agent: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(agent["persona_name"].as_str().unwrap(), "Helper");
+        assert_eq!(agent["tier"].as_str().unwrap(), "utility");
+    }
+
+    #[tokio::test]
+    async fn get_agent_not_found() {
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/agents/00000000-0000-0000-0000-000000000000")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn update_agent_partial_fields() {
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
+
+        // Create
+        let create_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/agents")
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::from(
+                        r#"{"tier":"worker","persona_name":"OldName","model_id":"claude-sonnet-4-20250514"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let body = axum::body::to_bytes(create_resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let agent_id = created["id"].as_str().unwrap();
+
+        // Update only persona_name
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri(format!("/api/agents/{}", agent_id))
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::from(r#"{"persona_name":"NewName"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let agent: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(agent["persona_name"].as_str().unwrap(), "NewName");
+        assert_eq!(agent["tier"].as_str().unwrap(), "worker"); // unchanged
+    }
+
+    #[tokio::test]
+    async fn delete_agent_returns_no_content() {
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
+
+        // Create
+        let create_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/agents")
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::from(
+                        r#"{"tier":"worker","persona_name":"ToDelete","model_id":"claude-sonnet-4-20250514"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let body = axum::body::to_bytes(create_resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let agent_id = created["id"].as_str().unwrap();
+
+        // Delete
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri(format!("/api/agents/{}", agent_id))
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        // Verify gone
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/agents/{}", agent_id))
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
     // === get_config response body ===
 
     #[tokio::test]
@@ -2610,14 +3268,13 @@ mod tests {
         };
         let mut mock = MockUserRepo::new();
         let user_clone = test_user.clone();
-        mock.expect_get_user_by_email()
-            .returning(move |email| {
-                if email == "test@test.com" {
-                    Ok(Some(user_clone.clone()))
-                } else {
-                    Ok(None)
-                }
-            });
+        mock.expect_get_user_by_email().returning(move |email| {
+            if email == "test@test.com" {
+                Ok(Some(user_clone.clone()))
+            } else {
+                Ok(None)
+            }
+        });
         setup_test_app_with_user_repo(Some(Arc::new(mock)))
     }
 
@@ -2632,7 +3289,9 @@ mod tests {
                     .method("POST")
                     .uri("/api/auth/login")
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"email":"test@test.com","password":"anything"}"#))
+                    .body(Body::from(
+                        r#"{"email":"test@test.com","password":"anything"}"#,
+                    ))
                     .unwrap(),
             )
             .await
@@ -2653,7 +3312,9 @@ mod tests {
                     .method("POST")
                     .uri("/api/auth/login")
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"email":"test@test.com","password":"wrongpassword!"}"#))
+                    .body(Body::from(
+                        r#"{"email":"test@test.com","password":"wrongpassword!"}"#,
+                    ))
                     .unwrap(),
             )
             .await
@@ -2673,7 +3334,9 @@ mod tests {
                     .method("POST")
                     .uri("/api/auth/login")
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"email":"test@test.com","password":"correctpassword"}"#))
+                    .body(Body::from(
+                        r#"{"email":"test@test.com","password":"correctpassword"}"#,
+                    ))
                     .unwrap(),
             )
             .await
@@ -2870,15 +3533,25 @@ mod tests {
         assert!(json.contains("\"token_expires\":99999"));
     }
 
+    fn test_agent_response() -> AgentResponse {
+        AgentResponse {
+            id: "agent-1".to_string(),
+            tier: "worker".to_string(),
+            persona_name: "Test Agent".to_string(),
+            persona_prompt: "You are a test agent".to_string(),
+            persona_style: "casual".to_string(),
+            model_provider: "anthropic".to_string(),
+            model_id: "claude-sonnet-4-20250514".to_string(),
+            model_max_tokens: 4096,
+            model_temperature: 0.7,
+            status: "idle".to_string(),
+        }
+    }
+
     #[test]
     fn agents_list_response_serializes() {
         let response = AgentsListResponse {
-            agents: vec![AgentResponse {
-                id: "agent-1".to_string(),
-                tier: "worker".to_string(),
-                status: "idle".to_string(),
-                current_task: None,
-            }],
+            agents: vec![test_agent_response()],
             stats: AgentPoolStats {
                 orchestrators: TierStats {
                     total: 0,
@@ -2903,16 +3576,12 @@ mod tests {
     }
 
     #[test]
-    fn agent_response_with_current_task() {
-        let task_id = Uuid::new_v4();
-        let response = AgentResponse {
-            id: "agent-2".to_string(),
-            tier: "orchestrator".to_string(),
-            status: "busy".to_string(),
-            current_task: Some(task_id),
-        };
+    fn agent_response_serializes_all_fields() {
+        let response = test_agent_response();
         let json = serde_json::to_string(&response).unwrap();
-        assert!(json.contains(&task_id.to_string()));
+        assert!(json.contains("\"persona_name\":\"Test Agent\""));
+        assert!(json.contains("\"model_provider\":\"anthropic\""));
+        assert!(json.contains("\"model_max_tokens\":4096"));
     }
 
     // === send_chat response body ===

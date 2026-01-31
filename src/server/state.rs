@@ -8,10 +8,13 @@ use sqlx::PgPool;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use uuid::Uuid;
 
-use crate::agents::{AgentPool, AgentResponse, ClusterManager, Dispatcher, PipelineManager, RoleManager, ScheduleManager};
-use crate::indexing::{IndexingStatus, RepoIndex};
+use crate::agents::{
+    AgentPool, AgentResponse, ClusterManager, Dispatcher, PipelineManager, RoleManager,
+    ScheduleManager,
+};
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::{DocumentRepo, ServerRepo, UserRepo};
+use crate::indexing::{IndexingStatus, RepoIndex};
 use crate::llm::AnthropicClient;
 use crate::orchestration::Scheduler;
 use crate::types::{AgentPoolConfig, AppConfig, UserId};
@@ -137,7 +140,8 @@ impl AppState {
             let mut dispatcher = Dispatcher::new(64);
 
             // Reconstruct agents from DB
-            let legacy_user = UserId(uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap());
+            let legacy_user =
+                UserId(uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap());
             if let Ok(agent_rows) = state.repo.list_persisted_agents(legacy_user).await {
                 for row in agent_rows {
                     let tier = match row.tier.as_str() {
@@ -149,9 +153,16 @@ impl AppState {
                         name: row.persona_name.clone(),
                         ..Default::default()
                     };
-                    match pool.spawn_agent_with_dispatcher(tier, persona, crate::types::ModelConfig::default(), &mut dispatcher) {
+                    match pool.spawn_agent_with_dispatcher(
+                        tier,
+                        persona,
+                        crate::types::ModelConfig::default(),
+                        &mut dispatcher,
+                    ) {
                         Ok(id) => tracing::info!("Restored agent {} ({})", row.persona_name, id.0),
-                        Err(e) => tracing::warn!("Failed to restore agent {}: {}", row.persona_name, e),
+                        Err(e) => {
+                            tracing::warn!("Failed to restore agent {}: {}", row.persona_name, e)
+                        }
                     }
                 }
             }
@@ -218,7 +229,8 @@ impl AppState {
             if let Ok(trigger_rows) = state.repo.list_triggers(legacy_user).await {
                 let mut mgr = state.schedule_manager.write().await;
                 for row in trigger_rows {
-                    if let Some(event_type) = crate::agents::TriggerEvent::from_str(&row.event_type) {
+                    if let Some(event_type) = crate::agents::TriggerEvent::from_str(&row.event_type)
+                    {
                         let tid = crate::agents::TriggerId(row.id);
                         mgr.create_trigger_with_id(
                             tid,
@@ -246,7 +258,8 @@ impl AppState {
         scheduler: Option<Arc<RwLock<Scheduler>>>,
         config: AppConfig,
     ) -> (Self, mpsc::Receiver<OrchestratorMessage>) {
-        let (orchestrator_tx, orchestrator_rx) = mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
+        let (orchestrator_tx, orchestrator_rx) =
+            mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
         let (feed_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
         let (task_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
         let (agent_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
@@ -389,7 +402,6 @@ impl AppState {
         let mut streams = self.response_streams.write().await;
         streams.remove(&message_id);
     }
-
 }
 
 #[cfg(test)]
@@ -538,8 +550,12 @@ mod tests {
         state.ensure_response_stream(msg_id).await;
 
         // Send chunks with no SSE client connected
-        state.send_stream_chunk(msg_id, StreamChunk::Token("hello ".into())).await;
-        state.send_stream_chunk(msg_id, StreamChunk::Token("world".into())).await;
+        state
+            .send_stream_chunk(msg_id, StreamChunk::Token("hello ".into()))
+            .await;
+        state
+            .send_stream_chunk(msg_id, StreamChunk::Token("world".into()))
+            .await;
         state.send_stream_chunk(msg_id, StreamChunk::Done).await;
 
         // Late subscriber gets the full buffer

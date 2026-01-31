@@ -8,7 +8,9 @@ use std::time::SystemTime;
 use futures::stream::{self, StreamExt};
 use tokio::fs;
 
-use crate::llm::{AnthropicClient, AnthropicConfig, LLMProvider, LLMRequest, Message as LlmMessage};
+use crate::llm::{
+    AnthropicClient, AnthropicConfig, LLMProvider, LLMRequest, Message as LlmMessage,
+};
 
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -17,14 +19,23 @@ use super::{FileEntry, IndexingState, IndexingStatus, RepoIndex, Symbol};
 
 /// File extensions we index.
 const SOURCE_EXTENSIONS: &[&str] = &[
-    "rs", "ts", "tsx", "js", "jsx", "py", "go", "java", "rb", "sql",
-    "toml", "yaml", "yml", "json", "md", "txt", "sh", "css", "html",
+    "rs", "ts", "tsx", "js", "jsx", "py", "go", "java", "rb", "sql", "toml", "yaml", "yml", "json",
+    "md", "txt", "sh", "css", "html",
 ];
 
 /// Directories to skip during walk.
 const SKIP_DIRS: &[&str] = &[
-    ".git", "target", "node_modules", "dist", "build", ".next",
-    "__pycache__", ".venv", "vendor", "decomp", "coverage",
+    ".git",
+    "target",
+    "node_modules",
+    "dist",
+    "build",
+    ".next",
+    "__pycache__",
+    ".venv",
+    "vendor",
+    "decomp",
+    "coverage",
 ];
 
 /// Max file size to index (100KB).
@@ -95,8 +106,10 @@ pub async fn build_index_tracked(
 /// Incrementally update the index — re-index only changed/new files, remove deleted.
 pub async fn update_index(index: &mut RepoIndex, project_root: &Path) {
     let current_files = collect_source_files(project_root).await;
-    let current_set: std::collections::HashSet<String> =
-        current_files.iter().map(|p| p.to_string_lossy().to_string()).collect();
+    let current_set: std::collections::HashSet<String> = current_files
+        .iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
 
     // Remove deleted files
     let to_remove: Vec<String> = index
@@ -117,7 +130,10 @@ pub async fn update_index(index: &mut RepoIndex, project_root: &Path) {
     for path in &current_files {
         let rel = path.strip_prefix(project_root).unwrap_or(path);
         let rel_str = rel.to_string_lossy().to_string();
-        let mtime = fs::metadata(path).await.ok().and_then(|m| m.modified().ok());
+        let mtime = fs::metadata(path)
+            .await
+            .ok()
+            .and_then(|m| m.modified().ok());
         let needs_update = match (index.files.get(&rel_str), mtime) {
             (Some(existing), Some(mtime)) => mtime > existing.last_modified,
             (None, _) => true,
@@ -158,11 +174,7 @@ pub async fn update_index(index: &mut RepoIndex, project_root: &Path) {
 }
 
 /// Re-index a single file (for post-write hooks).
-pub async fn reindex_single_file(
-    index: &mut RepoIndex,
-    project_root: &Path,
-    file_path: &Path,
-) {
+pub async fn reindex_single_file(index: &mut RepoIndex, project_root: &Path, file_path: &Path) {
     if let Some(entry) = index_file(project_root, file_path).await {
         // Remove old symbols for this path
         let old_path = entry.path.clone();
@@ -249,7 +261,10 @@ async fn haiku_index_file(path: &str, content: &str) -> (String, Vec<Symbol>) {
     };
 
     // Truncate to 4000 chars for Haiku
-    let truncated: String = content.chars().take(crate::constants::TRUNCATE_INDEX_INPUT).collect();
+    let truncated: String = content
+        .chars()
+        .take(crate::constants::TRUNCATE_INDEX_INPUT)
+        .collect();
     let prompt = format!(
         "File: {}\n\n```\n{}\n```\n\nReturn JSON only, no markdown:\n{{\"summary\": \"1-2 sentence description\", \"symbols\": [{{\"name\": \"...\", \"kind\": \"Struct|Function|Trait|Enum|Mod|Const|Impl|Type\", \"line\": N}}]}}",
         path, truncated
@@ -398,7 +413,10 @@ mod tests {
 
     #[test]
     fn first_line_summary_works() {
-        assert_eq!(first_line_summary("// Hello world\nfn main() {}"), "// Hello world");
+        assert_eq!(
+            first_line_summary("// Hello world\nfn main() {}"),
+            "// Hello world"
+        );
         assert_eq!(first_line_summary("\n\nfn main() {}"), "fn main() {}");
         assert_eq!(first_line_summary(""), "(empty file)");
     }
@@ -406,20 +424,26 @@ mod tests {
     #[test]
     fn build_tree_summary_sorted() {
         let mut files = HashMap::new();
-        files.insert("b.rs".into(), FileEntry {
-            path: "b.rs".into(),
-            summary: "B file".into(),
-            symbols: vec![],
-            size_bytes: 10,
-            last_modified: SystemTime::now(),
-        });
-        files.insert("a.rs".into(), FileEntry {
-            path: "a.rs".into(),
-            summary: "A file".into(),
-            symbols: vec![],
-            size_bytes: 10,
-            last_modified: SystemTime::now(),
-        });
+        files.insert(
+            "b.rs".into(),
+            FileEntry {
+                path: "b.rs".into(),
+                summary: "B file".into(),
+                symbols: vec![],
+                size_bytes: 10,
+                last_modified: SystemTime::now(),
+            },
+        );
+        files.insert(
+            "a.rs".into(),
+            FileEntry {
+                path: "a.rs".into(),
+                summary: "A file".into(),
+                symbols: vec![],
+                size_bytes: 10,
+                last_modified: SystemTime::now(),
+            },
+        );
         let tree = build_tree_summary(&files);
         assert!(tree.starts_with("a.rs:"));
         assert!(tree.contains("b.rs:"));
@@ -430,7 +454,11 @@ mod tests {
         let entries = vec![FileEntry {
             path: "src/main.rs".into(),
             summary: "Entry".into(),
-            symbols: vec![Symbol { name: "main".into(), kind: "Function".into(), line: 1 }],
+            symbols: vec![Symbol {
+                name: "main".into(),
+                kind: "Function".into(),
+                line: 1,
+            }],
             size_bytes: 50,
             last_modified: SystemTime::now(),
         }];
