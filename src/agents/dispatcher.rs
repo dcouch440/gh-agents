@@ -15,8 +15,8 @@ pub struct Dispatcher {
     handles: HashMap<AgentId, AgentHandle>,
     /// Handles grouped by tier
     by_tier: HashMap<AgentTier, Vec<AgentId>>,
-    /// Channel for receiving responses from agents
-    response_rx: mpsc::Receiver<AgentResponse>,
+    /// Channel for receiving responses from agents (None if taken by consumer)
+    response_rx: Option<mpsc::Receiver<AgentResponse>>,
     /// Sender that agents use to send responses (cloned to each agent)
     response_tx: mpsc::Sender<AgentResponse>,
 }
@@ -34,7 +34,7 @@ impl Dispatcher {
         Self {
             handles: HashMap::new(),
             by_tier,
-            response_rx,
+            response_rx: Some(response_rx),
             response_tx,
         }
     }
@@ -107,14 +107,27 @@ impl Dispatcher {
         errors
     }
 
+    /// Take ownership of the response receiver.
+    /// Call this once to hand the receiver to a dedicated consumer task
+    /// so it can await responses without holding the dispatcher mutex.
+    pub fn take_response_rx(&mut self) -> Option<mpsc::Receiver<AgentResponse>> {
+        self.response_rx.take()
+    }
+
     /// Receive the next response from any agent
     pub async fn recv_response(&mut self) -> Option<AgentResponse> {
-        self.response_rx.recv().await
+        match &mut self.response_rx {
+            Some(rx) => rx.recv().await,
+            None => None,
+        }
     }
 
     /// Try to receive a response without blocking
     pub fn try_recv_response(&mut self) -> Option<AgentResponse> {
-        self.response_rx.try_recv().ok()
+        match &mut self.response_rx {
+            Some(rx) => rx.try_recv().ok(),
+            None => None,
+        }
     }
 
     /// Get the number of registered agents

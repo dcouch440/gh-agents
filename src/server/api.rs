@@ -530,7 +530,7 @@ fn chat_stream_inner(
         for chunk in buffered {
             match chunk {
                 StreamChunk::Token(text) => {
-                    yield Ok(Event::default().event("token").data(text));
+                    yield Ok(Event::default().event("token").data(serde_json::to_string(&text).unwrap_or(text)));
                 }
                 StreamChunk::ToolStart { name, tool_id } => {
                     let data = format!(r#"{{"name":"{}","id":"{}"}}"#, name, tool_id);
@@ -566,7 +566,7 @@ fn chat_stream_inner(
                 Ok(chunk) => {
                     match chunk {
                         StreamChunk::Token(text) => {
-                            yield Ok(Event::default().event("token").data(text));
+                            yield Ok(Event::default().event("token").data(serde_json::to_string(&text).unwrap_or(text)));
                         }
                         StreamChunk::ToolStart { name, tool_id } => {
                             let data = format!(r#"{{"name":"{}","id":"{}"}}"#, name, tool_id);
