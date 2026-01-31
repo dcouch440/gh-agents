@@ -427,6 +427,18 @@ fn chat_stream_inner(
                 StreamChunk::Token(text) => {
                     yield Ok(Event::default().event("token").data(text));
                 }
+                StreamChunk::ToolStart { name, tool_id } => {
+                    let data = format!(r#"{{"name":"{}","id":"{}"}}"#, name, tool_id);
+                    yield Ok(Event::default().event("tool_start").data(data));
+                }
+                StreamChunk::ToolEnd { name, tool_id } => {
+                    let data = format!(r#"{{"name":"{}","id":"{}"}}"#, name, tool_id);
+                    yield Ok(Event::default().event("tool_end").data(data));
+                }
+                StreamChunk::DocUpdate { doc_id, title } => {
+                    let data = format!(r#"{{"doc_id":"{}","title":"{}"}}"#, doc_id, title);
+                    yield Ok(Event::default().event("doc_update").data(data));
+                }
                 StreamChunk::Done => {
                     yield Ok(Event::default().event("done").data(""));
                     return;
@@ -450,6 +462,18 @@ fn chat_stream_inner(
                     match chunk {
                         StreamChunk::Token(text) => {
                             yield Ok(Event::default().event("token").data(text));
+                        }
+                        StreamChunk::ToolStart { name, tool_id } => {
+                            let data = format!(r#"{{"name":"{}","id":"{}"}}"#, name, tool_id);
+                            yield Ok(Event::default().event("tool_start").data(data));
+                        }
+                        StreamChunk::ToolEnd { name, tool_id } => {
+                            let data = format!(r#"{{"name":"{}","id":"{}"}}"#, name, tool_id);
+                            yield Ok(Event::default().event("tool_end").data(data));
+                        }
+                        StreamChunk::DocUpdate { doc_id, title } => {
+                            let data = format!(r#"{{"doc_id":"{}","title":"{}"}}"#, doc_id, title);
+                            yield Ok(Event::default().event("doc_update").data(data));
                         }
                         StreamChunk::Done => {
                             yield Ok(Event::default().event("done").data(""));
@@ -959,6 +983,242 @@ pub async fn auth_me(auth: auth::AuthUser) -> Json<MeResponse> {
         authenticated: true,
         token_expires: auth.claims.exp,
     })
+}
+
+// ============================================================================
+// Document Endpoints
+// ============================================================================
+
+/// List item for documents (excludes content).
+#[derive(Serialize)]
+pub struct DocumentListItem {
+    pub id: Uuid,
+    pub title: String,
+    pub summary: String,
+    pub ref_tag: String,
+    pub tags: Vec<String>,
+    pub doc_type: String,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Response for a full document (includes content).
+#[derive(Serialize)]
+pub struct DocumentResponse {
+    pub id: Uuid,
+    pub title: String,
+    pub content: String,
+    pub summary: String,
+    pub ref_tag: String,
+    pub tags: Vec<String>,
+    pub doc_type: String,
+    pub session_id: Option<Uuid>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Request body for creating a document.
+#[derive(Deserialize)]
+pub struct CreateDocumentRequest {
+    pub title: String,
+    pub content: String,
+    pub doc_type: Option<String>,
+    pub session_id: Option<Uuid>,
+    pub tags: Option<Vec<String>>,
+}
+
+/// Request body for updating a document.
+#[derive(Deserialize)]
+pub struct UpdateDocumentRequest {
+    pub content: Option<String>,
+    pub title: Option<String>,
+    pub tags: Option<Vec<String>>,
+}
+
+/// Query parameters for document search.
+#[derive(Deserialize)]
+pub struct DocumentSearchQuery {
+    pub q: String,
+}
+
+/// GET /api/documents - List all documents for the authenticated user.
+pub async fn list_documents(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+) -> Result<Json<Vec<DocumentListItem>>, StatusCode> {
+    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let docs = doc_repo
+        .list_documents(auth.user_id.0)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let items: Vec<DocumentListItem> = docs
+        .into_iter()
+        .map(|d| DocumentListItem {
+            id: d.id,
+            title: d.title,
+            summary: d.summary,
+            ref_tag: d.ref_tag,
+            tags: d.tags,
+            doc_type: d.doc_type,
+            updated_at: d.updated_at,
+        })
+        .collect();
+
+    Ok(Json(items))
+}
+
+/// GET /api/documents/search?q=query - Search documents.
+pub async fn search_documents(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+    Query(query): Query<DocumentSearchQuery>,
+) -> Result<Json<Vec<crate::db::DocumentSearchResult>>, StatusCode> {
+    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let results = doc_repo
+        .search_documents(auth.user_id.0, &query.q)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(results))
+}
+
+/// GET /api/documents/:id - Get a full document by ID.
+pub async fn get_document(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+    Path(doc_id): Path<Uuid>,
+) -> Result<Json<DocumentResponse>, StatusCode> {
+    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc = doc_repo
+        .get_document(doc_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    // Verify ownership
+    if doc.user_id != auth.user_id.0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    Ok(Json(DocumentResponse {
+        id: doc.id,
+        title: doc.title,
+        content: doc.content,
+        summary: doc.summary,
+        ref_tag: doc.ref_tag,
+        tags: doc.tags,
+        doc_type: doc.doc_type,
+        session_id: doc.session_id,
+        created_at: doc.created_at,
+        updated_at: doc.updated_at,
+    }))
+}
+
+/// POST /api/documents - Create a new document.
+pub async fn create_document(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+    Json(request): Json<CreateDocumentRequest>,
+) -> Result<(StatusCode, Json<DocumentResponse>), StatusCode> {
+    if request.title.trim().is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc = doc_repo
+        .create_document(
+            auth.user_id.0,
+            request.session_id,
+            request.title,
+            request.content,
+            request.doc_type.unwrap_or_else(|| "architecture".to_string()),
+            String::new(),
+            request.tags.unwrap_or_default(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(DocumentResponse {
+            id: doc.id,
+            title: doc.title,
+            content: doc.content,
+            summary: doc.summary,
+            ref_tag: doc.ref_tag,
+            tags: doc.tags,
+            doc_type: doc.doc_type,
+            session_id: doc.session_id,
+            created_at: doc.created_at,
+            updated_at: doc.updated_at,
+        }),
+    ))
+}
+
+/// PATCH /api/documents/:id - Update a document.
+pub async fn update_document(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+    Path(doc_id): Path<Uuid>,
+    Json(request): Json<UpdateDocumentRequest>,
+) -> Result<Json<DocumentResponse>, StatusCode> {
+    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Verify ownership
+    let existing = doc_repo
+        .get_document(doc_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if existing.user_id != auth.user_id.0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let doc = doc_repo
+        .update_document(doc_id, request.content, request.title, request.tags)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(DocumentResponse {
+        id: doc.id,
+        title: doc.title,
+        content: doc.content,
+        summary: doc.summary,
+        ref_tag: doc.ref_tag,
+        tags: doc.tags,
+        doc_type: doc.doc_type,
+        session_id: doc.session_id,
+        created_at: doc.created_at,
+        updated_at: doc.updated_at,
+    }))
+}
+
+/// DELETE /api/documents/:id - Delete a document.
+pub async fn delete_document(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+    Path(doc_id): Path<Uuid>,
+) -> Result<StatusCode, StatusCode> {
+    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Verify ownership
+    let existing = doc_repo
+        .get_document(doc_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if existing.user_id != auth.user_id.0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    doc_repo
+        .delete_document(doc_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 // ============================================================================

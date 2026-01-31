@@ -80,6 +80,32 @@ pub struct ClusterRow {
     pub shared_files: serde_json::Value,
 }
 
+/// Row type for persisted documents.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct DocumentRow {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub session_id: Option<Uuid>,
+    pub title: String,
+    pub content: String,
+    pub summary: String,
+    pub doc_type: String,
+    pub ref_tag: String,
+    pub tags: Vec<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Search result for documents (no full content).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct DocumentSearchResult {
+    pub id: Uuid,
+    pub title: String,
+    pub summary: String,
+    pub ref_tag: String,
+    pub snippet: String,
+}
+
 /// Type alias for the database pool
 pub type DbPool = PgPool;
 

@@ -686,6 +686,19 @@ async fn handle_message(
             for block in &response.content_blocks {
                 if let ContentBlock::ToolUse { id, name, input } = block {
                     debug!("Executing tool: {} (id: {})", name, id);
+
+                    let is_internal = name == "think";
+
+                    // Signal tool start to the UI (skip internal tools)
+                    if !is_internal {
+                        state
+                            .send_stream_chunk(message_id, StreamChunk::ToolStart {
+                                name: name.clone(),
+                                tool_id: id.clone(),
+                            })
+                            .await;
+                    }
+
                     let result = tools::execute_tool(name, input, state, user_id).await;
                     let result_str = serde_json::to_string_pretty(&result)
                         .unwrap_or_else(|_| result.to_string());
@@ -695,12 +708,15 @@ async fn handle_message(
                         content: result_str,
                     });
 
-                    // Stream tool execution info to user
-                    let tool_info = format!("\n\n*Executed tool `{}`*\n\n", name);
-                    accumulated_response.push_str(&tool_info);
-                    state
-                        .send_stream_chunk(message_id, StreamChunk::Token(tool_info))
-                        .await;
+                    // Signal tool end to the UI (skip internal tools)
+                    if !is_internal {
+                        state
+                            .send_stream_chunk(message_id, StreamChunk::ToolEnd {
+                                name: name.clone(),
+                                tool_id: id.clone(),
+                            })
+                            .await;
+                    }
                 }
             }
 

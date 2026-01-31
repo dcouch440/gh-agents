@@ -119,6 +119,10 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
         .route("/sessions/:session_id/chat", post(api::send_session_chat))
         .route("/sessions/:session_id/history", get(api::get_session_history))
         .route("/sessions/:session_id/chat/:message_id/stream", get(api::session_chat_stream))
+        // Document endpoints
+        .route("/documents", get(api::list_documents).post(api::create_document))
+        .route("/documents/search", get(api::search_documents))
+        .route("/documents/:id", get(api::get_document).patch(api::update_document).delete(api::delete_document))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // Static file serving for production (Ticket 10.6)

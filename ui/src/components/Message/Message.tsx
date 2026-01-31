@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Copy, Check, RotateCcw } from 'lucide-react';
 import type { ChatMessage } from '../../api/client';
+import type { ToolExecution } from '../../hooks/useChat';
 import { useToastStore } from '../../store';
 import { MarkdownContent } from '../MarkdownContent';
+import { ToolActivity } from '../ToolActivity';
 import styles from './Message.module.css';
 
 interface MessageProps {
@@ -10,9 +12,10 @@ interface MessageProps {
   streaming?: boolean;
   isLast?: boolean;
   onRetry?: () => void;
+  toolExecutions?: ToolExecution[];
 }
 
-export function Message({ message, streaming, isLast, onRetry }: MessageProps) {
+export function Message({ message, streaming, isLast, onRetry, toolExecutions }: MessageProps) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
   const addToast = useToastStore((s) => s.addToast);
@@ -39,6 +42,9 @@ export function Message({ message, streaming, isLast, onRetry }: MessageProps) {
           <p className={styles.text}>{message.content}</p>
         ) : (
           <>
+            {toolExecutions && toolExecutions.length > 0 && (
+              <ToolActivity executions={toolExecutions} />
+            )}
             <MarkdownContent content={message.content} />
             {streaming && <span className={styles.cursor} />}
           </>

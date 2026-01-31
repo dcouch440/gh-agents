@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::agents::{AgentPool, AgentResponse, ClusterManager, Dispatcher, PipelineManager, RoleManager, ScheduleManager};
 use crate::db::pg_repo::PgRepo;
-use crate::db::traits::{ServerRepo, UserRepo};
+use crate::db::traits::{DocumentRepo, ServerRepo, UserRepo};
 use crate::llm::AnthropicClient;
 use crate::orchestration::Scheduler;
 use crate::types::{AgentPoolConfig, AppConfig, UserId};
@@ -34,6 +34,12 @@ pub struct OrchestratorMessage {
 pub enum StreamChunk {
     /// A token of text
     Token(String),
+    /// A tool has started executing
+    ToolStart { name: String, tool_id: String },
+    /// A tool has finished executing
+    ToolEnd { name: String, tool_id: String },
+    /// A document was created or updated
+    DocUpdate { doc_id: String, title: String },
     /// Stream completed successfully
     Done,
     /// Stream error
@@ -57,6 +63,8 @@ pub struct AppState {
     pub repo: Arc<dyn ServerRepo>,
     /// User repository for authentication operations (None in legacy/test mode)
     pub user_repo: Option<Arc<dyn UserRepo>>,
+    /// Document repository for document CRUD operations (None in legacy/test mode)
+    pub doc_repo: Option<Arc<dyn DocumentRepo>>,
     /// Task scheduler for orchestration (None in mock-based tests)
     pub scheduler: Option<Arc<RwLock<Scheduler>>>,
     /// Application configuration
@@ -103,8 +111,10 @@ impl AppState {
     ) -> (Self, mpsc::Receiver<OrchestratorMessage>) {
         let repo: Arc<dyn ServerRepo> = Arc::new(PgRepo::new(db.clone()));
         let user_repo: Arc<dyn UserRepo> = Arc::new(PgRepo::new(db.clone()));
+        let doc_repo: Arc<dyn DocumentRepo> = Arc::new(PgRepo::new(db.clone()));
         let (mut state, rx) = Self::with_repo(Some(db), repo, Some(scheduler), config);
         state.user_repo = Some(user_repo);
+        state.doc_repo = Some(doc_repo);
 
         // Initialize role manager with current working directory as project root
         let project_root = std::env::current_dir().unwrap_or_default();
@@ -240,6 +250,7 @@ impl AppState {
                 db,
                 repo,
                 user_repo: None,
+                doc_repo: None,
                 scheduler,
                 config: Arc::new(config),
                 jwt_secret,

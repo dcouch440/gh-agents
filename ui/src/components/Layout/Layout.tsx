@@ -10,8 +10,8 @@ export function Layout() {
   const toggleSidebar = useAppStore((state) => state.toggleSidebar);
   const location = useLocation();
 
-  const isChat = location.pathname === '/chat' || location.pathname === '/';
-  const contentMaxWidth = isChat ? 'max-w-6xl' : 'max-w-4xl';
+  const isChat = location.pathname === '/chat' || location.pathname === '/' || location.pathname.startsWith('/chat/');
+  const contentMaxWidth = isChat ? '' : 'max-w-4xl';
 
   return (
     <div className="h-screen bg-bg-primary flex overflow-hidden">
@@ -28,11 +28,17 @@ export function Layout() {
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0">
         <Header />
-        <main className="flex-1 overflow-auto p-6">
-          <div className={`${contentMaxWidth} mx-auto`}>
+        {isChat ? (
+          <main className="flex-1 overflow-hidden">
             <Outlet />
-          </div>
-        </main>
+          </main>
+        ) : (
+          <main className="flex-1 overflow-auto p-6">
+            <div className={`${contentMaxWidth} mx-auto`}>
+              <Outlet />
+            </div>
+          </main>
+        )}
       </div>
     </div>
   );

@@ -8,12 +8,15 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 
+use std::sync::Arc;
+
 use crate::agents::{
     AgentCommand, AgentResponse, ClusterId, CommunicationStyle, OutputFormat, PipelineId,
     RoleContext, RoleId, ScheduleId, TaskAssignment, TaskConstraints, TaskContext, TriggerEvent,
 };
+use crate::db::traits::DocumentRepo;
 use crate::db::{AgentRow, ClusterRow, PipelineRow, PipelineStageRow, ScheduleRow, TriggerRow};
-use crate::llm::Tool;
+use crate::llm::{AnthropicClient, AnthropicConfig, LLMProvider, LLMRequest, Message as LlmMessage, Tool};
 use crate::types::{AgentPersona, AgentTier, ModelConfig, UserId};
 
 use super::state::AppState;
@@ -465,6 +468,88 @@ pub fn agent_tools() -> Vec<Tool> {
                 "required": ["path"]
             }),
         },
+        Tool {
+            name: "think".to_string(),
+            description: "Use this tool to think step-by-step before taking action. Write out your reasoning, \
+                plan your approach, and consider edge cases. This tool has no side effects — it simply \
+                returns your thoughts back to you. Use it before complex decisions, when choosing between \
+                multiple approaches, or when you need to analyze information before responding.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "thought": {
+                        "type": "string",
+                        "description": "Your step-by-step reasoning, analysis, or plan."
+                    }
+                },
+                "required": ["thought"]
+            }),
+        },
+        // --- Document tools ---
+        Tool {
+            name: "create_doc".to_string(),
+            description: "Create a new document (architecture note, design doc, etc.). Returns the document ID and ref_tag. A summary is generated automatically in the background.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Title of the document"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Full content/body of the document"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Optional tags for categorization"
+                    }
+                },
+                "required": ["title", "content"]
+            }),
+        },
+        Tool {
+            name: "update_doc".to_string(),
+            description: "Update an existing document's content, title, or tags. A new summary is regenerated automatically in the background.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "doc_id": {
+                        "type": "string",
+                        "description": "The UUID of the document to update"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "New content for the document"
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "New title for the document"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "New tags for the document"
+                    }
+                },
+                "required": ["doc_id"]
+            }),
+        },
+        Tool {
+            name: "search_docs".to_string(),
+            description: "Search documents by full-text query. Returns summaries and snippets, not full content.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query string"
+                    }
+                },
+                "required": ["query"]
+            }),
+        },
     ]
 }
 
@@ -497,6 +582,10 @@ pub async fn execute_tool(name: &str, input: &Value, state: &AppState, user_id: 
         "list_triggers" => execute_list_triggers(state).await,
         "read_file" => execute_read_file(input).await,
         "list_files" => execute_list_files(input).await,
+        "think" => execute_think(input),
+        "create_doc" => execute_create_doc(input, state, user_id).await,
+        "update_doc" => execute_update_doc(input, state).await,
+        "search_docs" => execute_search_docs(input, state, user_id).await,
         _ => json!({ "error": format!("Unknown tool: {}", name) }),
     }
 }
@@ -1585,6 +1674,168 @@ async fn execute_list_files(input: &Value) -> Value {
     }
 }
 
+/// The think tool is a no-op — it returns the agent's reasoning back to it.
+/// This gives the model a scratchpad to reason step-by-step before acting.
+fn execute_think(input: &Value) -> Value {
+    let thought = input["thought"].as_str().unwrap_or("");
+    json!({ "thought_recorded": true, "length": thought.len() })
+}
+
+// --- Document tool handlers ---
+
+/// Generate a kebab-case ref_tag from a title.
+fn title_to_ref_tag(title: &str) -> String {
+    title
+        .to_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join("-")
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == '-')
+        .collect()
+}
+
+/// Call Haiku to generate a short summary for search indexing.
+async fn haiku_summarize(content: &str) -> Option<String> {
+    let config = AnthropicConfig::from_env().ok()?;
+    let client = AnthropicClient::new(config).ok()?;
+
+    let truncated: String = content.chars().take(8000).collect();
+    let request = LLMRequest::new(
+        "claude-haiku-4-20250514",
+        vec![LlmMessage::user(truncated)],
+    )
+    .with_system("Summarize this document in 2-3 sentences for search indexing. Be concise.")
+    .with_max_tokens(256);
+
+    match client.send_message(request).await {
+        Ok(resp) => Some(resp.content),
+        Err(e) => {
+            tracing::warn!("Haiku summarization failed: {}", e);
+            None
+        }
+    }
+}
+
+/// Spawn a background task to generate and store a document summary.
+fn spawn_summary_task(doc_repo: Arc<dyn DocumentRepo>, doc_id: uuid::Uuid, content: String) {
+    tokio::spawn(async move {
+        if let Some(summary) = haiku_summarize(&content).await {
+            if let Err(e) = doc_repo.update_document_summary(doc_id, summary).await {
+                tracing::error!("Failed to update document summary: {}", e);
+            }
+        }
+    });
+}
+
+async fn execute_create_doc(input: &Value, state: &AppState, user_id: UserId) -> Value {
+    let Some(doc_repo) = &state.doc_repo else {
+        return json!({ "error": "Document repository not initialized" });
+    };
+
+    let Some(title) = input["title"].as_str() else {
+        return json!({ "error": "title is required" });
+    };
+    let Some(content) = input["content"].as_str() else {
+        return json!({ "error": "content is required" });
+    };
+
+    let tags: Vec<String> = input["tags"]
+        .as_array()
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+
+    let ref_tag = title_to_ref_tag(title);
+
+    match doc_repo
+        .create_document(
+            user_id.0,
+            None, // session_id
+            title.to_string(),
+            content.to_string(),
+            "architecture".to_string(),
+            ref_tag.clone(),
+            tags,
+        )
+        .await
+    {
+        Ok(row) => {
+            // Spawn background summary generation
+            spawn_summary_task(Arc::clone(doc_repo), row.id, content.to_string());
+
+            json!({
+                "doc_id": row.id.to_string(),
+                "ref_tag": ref_tag,
+                "title": title
+            })
+        }
+        Err(e) => json!({ "error": e.to_string() }),
+    }
+}
+
+async fn execute_update_doc(input: &Value, state: &AppState) -> Value {
+    let Some(doc_repo) = &state.doc_repo else {
+        return json!({ "error": "Document repository not initialized" });
+    };
+
+    let Some(id_str) = input["doc_id"].as_str() else {
+        return json!({ "error": "doc_id is required" });
+    };
+    let Ok(doc_id) = uuid::Uuid::parse_str(id_str) else {
+        return json!({ "error": format!("Invalid UUID: {}", id_str) });
+    };
+
+    let content = input["content"].as_str().map(String::from);
+    let title = input["title"].as_str().map(String::from);
+    let tags: Option<Vec<String>> = input["tags"]
+        .as_array()
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
+
+    match doc_repo.update_document(doc_id, content.clone(), title.clone(), tags).await {
+        Ok(row) => {
+            // Spawn background summary regeneration using updated content
+            let summary_content = content.unwrap_or(row.content.clone());
+            spawn_summary_task(Arc::clone(doc_repo), doc_id, summary_content);
+
+            json!({
+                "updated": true,
+                "doc_id": doc_id.to_string(),
+                "title": row.title
+            })
+        }
+        Err(e) => json!({ "error": e.to_string() }),
+    }
+}
+
+async fn execute_search_docs(input: &Value, state: &AppState, user_id: UserId) -> Value {
+    let Some(doc_repo) = &state.doc_repo else {
+        return json!({ "error": "Document repository not initialized" });
+    };
+
+    let Some(query) = input["query"].as_str() else {
+        return json!({ "error": "query is required" });
+    };
+
+    match doc_repo.search_documents(user_id.0, query).await {
+        Ok(results) => {
+            let items: Vec<Value> = results
+                .into_iter()
+                .map(|r| {
+                    json!({
+                        "id": r.id.to_string(),
+                        "title": r.title,
+                        "ref_tag": r.ref_tag,
+                        "summary": r.summary,
+                        "snippet": r.snippet
+                    })
+                })
+                .collect();
+            json!({ "results": items, "count": items.len() })
+        }
+        Err(e) => json!({ "error": e.to_string() }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1592,7 +1843,7 @@ mod tests {
     #[test]
     fn agent_tools_returns_all_tools() {
         let tools = agent_tools();
-        assert_eq!(tools.len(), 24);
+        assert_eq!(tools.len(), 25);
         assert_eq!(tools[0].name, "list_agents");
         assert_eq!(tools[1].name, "list_roles");
         assert_eq!(tools[2].name, "create_agent");
