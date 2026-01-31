@@ -121,6 +121,10 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
                 .patch(api::update_tool)
                 .delete(api::delete_tool),
         )
+        .route(
+            "/pipelines/:id/stages/:stage_number/render",
+            post(api::render_pipeline_stage),
+        )
         .route("/config", get(api::get_config).patch(api::update_config))
         // Chat endpoints (Ticket 10.3)
         .route("/chat", post(api::send_chat))

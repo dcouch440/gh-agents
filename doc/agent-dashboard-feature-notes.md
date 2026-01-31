@@ -133,6 +133,30 @@ The pre-defined agents and chat views aren't working well. Too many hardcoded to
 
 **Tests:** All 1,978 tests pass.
 
+### Part 3: Pipeline Stage Templates — Server (2026-01-31)
+
+**Files modified:**
+- `migrations/025_add_stage_templates.sql` — Added 4 columns to `pipeline_stages`: `stage_name`, `input_definitions`, `output_description`, `output_schema`
+- `src/db/mod.rs` — Added 4 fields to `PipelineStageRow`
+- `src/agents/pipeline.rs` — Added 4 fields to `PipelineStage`, updated `add_stage()` signature
+- `src/db/pg_repo.rs` — Updated list/upsert queries for new columns
+- `src/server/tools.rs` — Updated `add_pipeline_stage` tool schema and handler with new fields
+- `src/server/state.rs` — Updated pipeline restoration to pass new fields
+- `src/server/api.rs` — Added `resolve_template()`, `render_stage_prompt()`, `render_pipeline_stage` endpoint, 7 unit tests
+
+**Endpoints added:**
+- `POST /api/pipelines/:id/stages/:stage_number/render` — Render a stage into a resolved markdown prompt given previous stage outputs
+
+**Data model:**
+- `stage_name` — unique name within pipeline, used in `{{stage_name.field}}` template refs
+- `input_definitions` — JSON array of `{key, source: "static"|"stage", value?, ref?}`
+- `output_description` — template text describing the goal, supports `{{}}` refs
+- `output_schema` — `{fields: [{name, type, values?, description}]}` output contract
+
+**Notes:** Data-only pass. The render endpoint is a pure function that resolves templates and produces a markdown prompt. No runtime execution wiring — the orchestrator does not yet call render automatically during pipeline runs.
+
+**Tests:** All 1,985 tests pass.
+
 ## Open Questions (remaining)
 
 1. Should teams be scoped per-project or global?

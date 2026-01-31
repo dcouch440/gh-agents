@@ -199,6 +199,10 @@ impl AppState {
                                 crate::agents::AgentId(stage.agent_id),
                                 stage.role,
                                 stage.approval_required,
+                                stage.stage_name,
+                                stage.input_definitions,
+                                stage.output_description,
+                                stage.output_schema,
                             );
                         }
                     }

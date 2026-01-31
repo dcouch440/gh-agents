@@ -1,6 +1,7 @@
 //! Pipeline — chained agent workflows where one agent's output feeds the next.
 
 use std::collections::HashMap;
+use serde_json::{self, Value};
 use uuid::Uuid;
 
 use super::agent::AgentId;
@@ -22,6 +23,10 @@ pub struct PipelineStage {
     pub agent_id: AgentId,
     pub role: Option<String>,
     pub approval_required: bool,
+    pub stage_name: String,
+    pub input_definitions: serde_json::Value,
+    pub output_description: String,
+    pub output_schema: serde_json::Value,
 }
 
 /// A named pipeline template with ordered stages.
@@ -96,6 +101,10 @@ impl PipelineManager {
         agent_id: AgentId,
         role: Option<String>,
         approval_required: bool,
+        stage_name: String,
+        input_definitions: Value,
+        output_description: String,
+        output_schema: Value,
     ) -> Result<u32, PipelineError> {
         let pipeline = self
             .pipelines
@@ -107,6 +116,10 @@ impl PipelineManager {
             agent_id,
             role,
             approval_required,
+            stage_name,
+            input_definitions,
+            output_description,
+            output_schema,
         });
         Ok(stage_number)
     }
@@ -225,6 +238,22 @@ mod tests {
         AgentId(Uuid::from_u128(n))
     }
 
+    fn default_stage_args() -> (String, Value, String, Value) {
+        (
+            String::new(),
+            serde_json::json!([]),
+            String::new(),
+            serde_json::json!({"fields": []}),
+        )
+    }
+
+    macro_rules! add_stage {
+        ($mgr:expr, $pid:expr, $agent:expr, $role:expr, $approval:expr) => {{
+            let (sn, id, od, os) = default_stage_args();
+            $mgr.add_stage($pid, $agent, $role, $approval, sn, id, od, os)
+        }};
+    }
+
     #[test]
     fn create_and_list() {
         let mut mgr = PipelineManager::new();
@@ -239,12 +268,8 @@ mod tests {
     fn add_stages() {
         let mut mgr = PipelineManager::new();
         let pid = mgr.create_pipeline("p".into());
-        let s0 = mgr
-            .add_stage(pid, agent(1), Some("worker".into()), false)
-            .unwrap();
-        let s1 = mgr
-            .add_stage(pid, agent(2), Some("reviewer".into()), true)
-            .unwrap();
+        let s0 = add_stage!(mgr, pid, agent(1), Some("worker".into()), false).unwrap();
+        let s1 = add_stage!(mgr, pid, agent(2), Some("reviewer".into()), true).unwrap();
         assert_eq!(s0, 0);
         assert_eq!(s1, 1);
         assert_eq!(mgr.get_pipeline(&pid).unwrap().stages.len(), 2);
@@ -254,16 +279,16 @@ mod tests {
     fn add_stage_to_nonexistent_fails() {
         let mut mgr = PipelineManager::new();
         let bad = PipelineId::new();
-        assert!(mgr.add_stage(bad, agent(1), None, false).is_err());
+        assert!(add_stage!(mgr, bad, agent(1), None, false).is_err());
     }
 
     #[test]
     fn start_run_and_advance() {
         let mut mgr = PipelineManager::new();
         let pid = mgr.create_pipeline("p".into());
-        mgr.add_stage(pid, agent(1), None, false).unwrap();
-        mgr.add_stage(pid, agent(2), None, false).unwrap();
-        mgr.add_stage(pid, agent(3), None, false).unwrap();
+        add_stage!(mgr, pid, agent(1), None, false).unwrap();
+        add_stage!(mgr, pid, agent(2), None, false).unwrap();
+        add_stage!(mgr, pid, agent(3), None, false).unwrap();
 
         let (run_id, first) = mgr.start_run(pid, "do stuff".into()).unwrap();
         assert_eq!(first.stage_number, 0);
@@ -304,7 +329,7 @@ mod tests {
     fn fail_run() {
         let mut mgr = PipelineManager::new();
         let pid = mgr.create_pipeline("p".into());
-        mgr.add_stage(pid, agent(1), None, false).unwrap();
+        add_stage!(mgr, pid, agent(1), None, false).unwrap();
         let (run_id, _) = mgr.start_run(pid, "task".into()).unwrap();
         mgr.fail_run(run_id);
         assert_eq!(
