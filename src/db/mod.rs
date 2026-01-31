@@ -75,6 +75,18 @@ pub struct TriggerRow {
     pub role: Option<String>,
 }
 
+/// Row type for persisted tool definitions.
+#[derive(Debug, Clone)]
+pub struct ToolRow {
+    pub id: Uuid,
+    pub name: String,
+    pub description: String,
+    pub category: String,
+    pub parameter_schema: serde_json::Value,
+    pub output_schema: serde_json::Value,
+    pub enabled: bool,
+}
+
 /// Row type for persisted clusters.
 #[derive(Debug, Clone)]
 pub struct ClusterRow {

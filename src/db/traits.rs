@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::db::{
     AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, PipelineRow,
-    PipelineStageRow, ScheduleRow, SessionRow, TriggerRow, UsageSummaryRow,
+    PipelineStageRow, ScheduleRow, SessionRow, ToolRow, TriggerRow, UsageSummaryRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::observability::{Decision, LlmCall};
@@ -342,6 +342,26 @@ pub trait ServerRepo: Send + Sync {
 
     /// Delete an agent by ID.
     async fn delete_persisted_agent(&self, agent_id: Uuid) -> Result<()>;
+
+    // --- Tool persistence ---
+
+    /// List all tools for a user.
+    async fn list_tools(&self, user_id: UserId) -> Result<Vec<ToolRow>>;
+
+    /// Get a tool by ID.
+    async fn get_tool(&self, tool_id: Uuid) -> Result<Option<ToolRow>>;
+
+    /// Insert or update a tool.
+    async fn upsert_tool(&self, user_id: UserId, tool: ToolRow) -> Result<()>;
+
+    /// Delete a tool by ID.
+    async fn delete_tool(&self, tool_id: Uuid) -> Result<()>;
+
+    /// Get all tools assigned to an agent.
+    async fn get_agent_tools(&self, agent_id: Uuid) -> Result<Vec<ToolRow>>;
+
+    /// Set the full tool list for an agent (replaces existing).
+    async fn set_agent_tools(&self, agent_id: Uuid, tool_ids: Vec<Uuid>) -> Result<()>;
 
     // --- Cluster persistence ---
 

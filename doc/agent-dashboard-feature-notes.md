@@ -109,6 +109,30 @@ The pre-defined agents and chat views aren't working well. Too many hardcoded to
 
 **Tests:** All 1,970 tests pass.
 
+### Part 2: Tool Registry — Server (2026-01-31)
+
+**Files modified:**
+- `migrations/024_create_tools.sql` — Created `tools` table (id, user_id, name, description, category, parameter_schema JSONB, output_schema JSONB, enabled) + `agent_tools` join table
+- `src/db/mod.rs` — Added `ToolRow` struct
+- `src/db/traits.rs` — Added 6 tool methods to `ServerRepo` trait (list_tools, get_tool, upsert_tool, delete_tool, get_agent_tools, set_agent_tools)
+- `src/db/pg_repo.rs` — Added `PgToolRow` + implemented all 6 queries (set_agent_tools uses transaction)
+- `src/server/api.rs` — Added ToolResponse, CreateToolRequest, UpdateToolRequest, SetAgentToolsRequest, AgentToolsResponse + 7 handlers + 8 tests
+- `src/server/mod.rs` — Added routes for /tools, /tools/:id, /agents/:id/tools + updated InMemoryServerRepo mock
+- `src/server/orchestrator.rs` — Added tool method stubs to TestRepo mock
+
+**Endpoints added:**
+- `POST /api/tools` — Create tool with schema definitions
+- `GET /api/tools` — List tools for user
+- `GET /api/tools/:id` — Get single tool
+- `PATCH /api/tools/:id` — Partial update
+- `DELETE /api/tools/:id` — Delete tool
+- `GET /api/agents/:id/tools` — Get agent's assigned tools
+- `PUT /api/agents/:id/tools` — Set agent's tool assignments
+
+**Notes:** Data-only registry. Tool handlers remain hardcoded in Rust. Registry tracks metadata (name, schemas, enabled) and per-agent assignment. Runtime wiring (executor reads from DB) deferred to future pass.
+
+**Tests:** All 1,978 tests pass.
+
 ## Open Questions (remaining)
 
 1. Should teams be scoped per-project or global?

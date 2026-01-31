@@ -389,6 +389,242 @@ pub async fn delete_agent(
 }
 
 // ============================================================================
+// Tool Endpoints
+// ============================================================================
+
+/// Response for a single tool
+#[derive(Serialize)]
+pub struct ToolResponse {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub category: String,
+    pub parameter_schema: serde_json::Value,
+    pub output_schema: serde_json::Value,
+    pub enabled: bool,
+}
+
+impl ToolResponse {
+    fn from_row(row: crate::db::ToolRow) -> Self {
+        Self {
+            id: row.id.to_string(),
+            name: row.name,
+            description: row.description,
+            category: row.category,
+            parameter_schema: row.parameter_schema,
+            output_schema: row.output_schema,
+            enabled: row.enabled,
+        }
+    }
+}
+
+/// Request to create a new tool
+#[derive(Deserialize)]
+pub struct CreateToolRequest {
+    pub name: String,
+    pub description: Option<String>,
+    pub category: Option<String>,
+    pub parameter_schema: Option<serde_json::Value>,
+    pub output_schema: Option<serde_json::Value>,
+    pub enabled: Option<bool>,
+}
+
+/// Request to update an existing tool
+#[derive(Deserialize)]
+pub struct UpdateToolRequest {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub category: Option<String>,
+    pub parameter_schema: Option<serde_json::Value>,
+    pub output_schema: Option<serde_json::Value>,
+    pub enabled: Option<bool>,
+}
+
+/// Request to set tools for an agent
+#[derive(Deserialize)]
+pub struct SetAgentToolsRequest {
+    pub tool_ids: Vec<String>,
+}
+
+/// Response for agent tools
+#[derive(Serialize)]
+pub struct AgentToolsResponse {
+    pub agent_id: String,
+    pub tools: Vec<ToolResponse>,
+}
+
+/// List all tools
+pub async fn list_tools(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
+    let rows = state
+        .repo
+        .list_tools(auth.user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let tools = rows.into_iter().map(ToolResponse::from_row).collect();
+    Ok(Json(tools))
+}
+
+/// Create a new tool
+pub async fn create_tool(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+    Json(request): Json<CreateToolRequest>,
+) -> Result<(StatusCode, Json<ToolResponse>), StatusCode> {
+    if request.name.trim().is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let row = crate::db::ToolRow {
+        id: Uuid::new_v4(),
+        name: request.name.trim().to_string(),
+        description: request.description.unwrap_or_default(),
+        category: request
+            .category
+            .unwrap_or_else(|| "general".to_string()),
+        parameter_schema: request
+            .parameter_schema
+            .unwrap_or_else(|| serde_json::json!({})),
+        output_schema: request
+            .output_schema
+            .unwrap_or_else(|| serde_json::json!({})),
+        enabled: request.enabled.unwrap_or(true),
+    };
+
+    state
+        .repo
+        .upsert_tool(auth.user_id, row.clone())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok((StatusCode::CREATED, Json(ToolResponse::from_row(row))))
+}
+
+/// Get a single tool by ID
+pub async fn get_tool(
+    State(state): State<AppState>,
+    _auth: auth::AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<ToolResponse>, StatusCode> {
+    let row = state
+        .repo
+        .get_tool(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    Ok(Json(ToolResponse::from_row(row)))
+}
+
+/// Update an existing tool (partial)
+pub async fn update_tool(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+    Path(id): Path<Uuid>,
+    Json(request): Json<UpdateToolRequest>,
+) -> Result<Json<ToolResponse>, StatusCode> {
+    let existing = state
+        .repo
+        .get_tool(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let updated = crate::db::ToolRow {
+        id: existing.id,
+        name: request.name.unwrap_or(existing.name),
+        description: request.description.unwrap_or(existing.description),
+        category: request.category.unwrap_or(existing.category),
+        parameter_schema: request
+            .parameter_schema
+            .unwrap_or(existing.parameter_schema),
+        output_schema: request.output_schema.unwrap_or(existing.output_schema),
+        enabled: request.enabled.unwrap_or(existing.enabled),
+    };
+
+    state
+        .repo
+        .upsert_tool(auth.user_id, updated.clone())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(ToolResponse::from_row(updated)))
+}
+
+/// Delete a tool by ID
+pub async fn delete_tool(
+    State(state): State<AppState>,
+    _auth: auth::AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, StatusCode> {
+    state
+        .repo
+        .delete_tool(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Get tools assigned to an agent
+pub async fn get_agent_tools(
+    State(state): State<AppState>,
+    _auth: auth::AuthUser,
+    Path(agent_id): Path<Uuid>,
+) -> Result<Json<AgentToolsResponse>, StatusCode> {
+    let rows = state
+        .repo
+        .get_agent_tools(agent_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let tools = rows.into_iter().map(ToolResponse::from_row).collect();
+
+    Ok(Json(AgentToolsResponse {
+        agent_id: agent_id.to_string(),
+        tools,
+    }))
+}
+
+/// Set tools for an agent (replaces existing)
+pub async fn set_agent_tools(
+    State(state): State<AppState>,
+    _auth: auth::AuthUser,
+    Path(agent_id): Path<Uuid>,
+    Json(request): Json<SetAgentToolsRequest>,
+) -> Result<Json<AgentToolsResponse>, StatusCode> {
+    let tool_ids: Result<Vec<Uuid>, _> = request
+        .tool_ids
+        .iter()
+        .map(|s| Uuid::parse_str(s))
+        .collect();
+
+    let tool_ids = tool_ids.map_err(|_| StatusCode::BAD_REQUEST)?;
+
+    state
+        .repo
+        .set_agent_tools(agent_id, tool_ids)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let rows = state
+        .repo
+        .get_agent_tools(agent_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let tools = rows.into_iter().map(ToolResponse::from_row).collect();
+
+    Ok(Json(AgentToolsResponse {
+        agent_id: agent_id.to_string(),
+        tools,
+    }))
+}
+
+// ============================================================================
 // Config Endpoints (Slice 10.2.5)
 // ============================================================================
 
@@ -1860,6 +2096,8 @@ mod tests {
         chat_messages: std::sync::Mutex<Vec<ChatMessageRow>>,
         password_hash: std::sync::Mutex<Option<String>>,
         agents: std::sync::Mutex<Vec<crate::db::AgentRow>>,
+        tools: std::sync::Mutex<Vec<crate::db::ToolRow>>,
+        agent_tools: std::sync::Mutex<Vec<(Uuid, Uuid)>>,
     }
 
     impl InMemoryServerRepo {
@@ -1869,6 +2107,8 @@ mod tests {
                 chat_messages: std::sync::Mutex::new(vec![]),
                 password_hash: std::sync::Mutex::new(None),
                 agents: std::sync::Mutex::new(vec![]),
+                tools: std::sync::Mutex::new(vec![]),
+                agent_tools: std::sync::Mutex::new(vec![]),
             }
         }
     }
@@ -2002,6 +2242,74 @@ mod tests {
         }
         async fn delete_persisted_agent(&self, agent_id: Uuid) -> anyhow::Result<()> {
             self.agents.lock().unwrap().retain(|a| a.id != agent_id);
+            Ok(())
+        }
+        async fn list_tools(
+            &self,
+            _user_id: UserId,
+        ) -> anyhow::Result<Vec<crate::db::ToolRow>> {
+            Ok(self.tools.lock().unwrap().clone())
+        }
+        async fn get_tool(
+            &self,
+            tool_id: Uuid,
+        ) -> anyhow::Result<Option<crate::db::ToolRow>> {
+            Ok(self
+                .tools
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|t| t.id == tool_id)
+                .cloned())
+        }
+        async fn upsert_tool(
+            &self,
+            _user_id: UserId,
+            tool: crate::db::ToolRow,
+        ) -> anyhow::Result<()> {
+            let mut tools = self.tools.lock().unwrap();
+            if let Some(existing) = tools.iter_mut().find(|t| t.id == tool.id) {
+                *existing = tool;
+            } else {
+                tools.push(tool);
+            }
+            Ok(())
+        }
+        async fn delete_tool(&self, tool_id: Uuid) -> anyhow::Result<()> {
+            self.tools.lock().unwrap().retain(|t| t.id != tool_id);
+            self.agent_tools
+                .lock()
+                .unwrap()
+                .retain(|(_, tid)| *tid != tool_id);
+            Ok(())
+        }
+        async fn get_agent_tools(
+            &self,
+            agent_id: Uuid,
+        ) -> anyhow::Result<Vec<crate::db::ToolRow>> {
+            let at = self.agent_tools.lock().unwrap();
+            let tool_ids: Vec<Uuid> = at
+                .iter()
+                .filter(|(aid, _)| *aid == agent_id)
+                .map(|(_, tid)| *tid)
+                .collect();
+            let tools = self.tools.lock().unwrap();
+            Ok(tools
+                .iter()
+                .filter(|t| tool_ids.contains(&t.id))
+                .cloned()
+                .collect())
+        }
+        async fn set_agent_tools(
+            &self,
+            agent_id: Uuid,
+            tool_ids: Vec<Uuid>,
+        ) -> anyhow::Result<()> {
+            let mut at = self.agent_tools.lock().unwrap();
+            at.retain(|(aid, _)| *aid != agent_id);
+            for tid in tool_ids {
+                at.push((agent_id, tid));
+            }
             Ok(())
         }
         async fn list_persisted_clusters(
@@ -3140,6 +3448,372 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    // === Tool CRUD tests ===
+
+    #[tokio::test]
+    async fn create_tool_returns_created() {
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/tools")
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::from(
+                        r#"{"name":"read_file","description":"Read a file","category":"file","parameter_schema":{"type":"object"},"output_schema":{"type":"object"}}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let tool: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(tool["name"], "read_file");
+        assert_eq!(tool["category"], "file");
+        assert_eq!(tool["enabled"], true);
+    }
+
+    #[tokio::test]
+    async fn create_tool_empty_name_returns_bad_request() {
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/tools")
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::from(r#"{"name":"  "}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn list_tools_includes_created() {
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
+
+        // Create
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/tools")
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::from(r#"{"name":"git_status","description":"Show git status","category":"git"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // List
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/tools")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let tools: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0]["name"], "git_status");
+    }
+
+    #[tokio::test]
+    async fn get_tool_by_id() {
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
+
+        let create_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/tools")
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::from(r#"{"name":"run_tests","description":"Run tests"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let body = axum::body::to_bytes(create_resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let tool_id = created["id"].as_str().unwrap();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/tools/{}", tool_id))
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let tool: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(tool["name"], "run_tests");
+    }
+
+    #[tokio::test]
+    async fn get_tool_not_found() {
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/tools/{}", Uuid::new_v4()))
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn update_tool_partial() {
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
+
+        let create_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/tools")
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::from(r#"{"name":"write_file","description":"Write a file","category":"file"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let body = axum::body::to_bytes(create_resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let tool_id = created["id"].as_str().unwrap();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri(format!("/api/tools/{}", tool_id))
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::from(r#"{"description":"Write content to a file","enabled":false}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let tool: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(tool["description"], "Write content to a file");
+        assert_eq!(tool["enabled"], false);
+        assert_eq!(tool["name"], "write_file");
+    }
+
+    #[tokio::test]
+    async fn delete_tool_returns_no_content() {
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
+
+        let create_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/tools")
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::from(r#"{"name":"to_delete","description":"temp"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let body = axum::body::to_bytes(create_resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let tool_id = created["id"].as_str().unwrap();
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri(format!("/api/tools/{}", tool_id))
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        // Verify gone
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/tools/{}", tool_id))
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn set_and_get_agent_tools() {
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
+
+        // Create an agent
+        let agent_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/agents")
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::from(
+                        r#"{"tier":"worker","persona_name":"ToolUser","model_id":"claude-sonnet-4-20250514"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let body = axum::body::to_bytes(agent_resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let agent: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let agent_id = agent["id"].as_str().unwrap();
+
+        // Create two tools
+        let tool1_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/tools")
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::from(r#"{"name":"read_file","description":"Read"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(tool1_resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let tool1: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let tool1_id = tool1["id"].as_str().unwrap();
+
+        let tool2_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/tools")
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::from(r#"{"name":"write_file","description":"Write"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(tool2_resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let tool2: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let tool2_id = tool2["id"].as_str().unwrap();
+
+        // Set agent tools
+        let set_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri(format!("/api/agents/{}/tools", agent_id))
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::from(
+                        serde_json::json!({"tool_ids": [tool1_id, tool2_id]}).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(set_resp.status(), StatusCode::OK);
+
+        // Get agent tools
+        let get_resp = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/agents/{}/tools", agent_id))
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(get_resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(get_resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let result: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(result["agent_id"], agent_id);
+        assert_eq!(result["tools"].as_array().unwrap().len(), 2);
     }
 
     // === get_config response body ===
