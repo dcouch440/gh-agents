@@ -14,7 +14,6 @@ use crate::db::{
     ToolRow, TriggerRow, UsageSummaryRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
-use crate::observability::{Decision, LlmCall};
 use crate::orchestration::DependencyError;
 use crate::orchestration::QueueError as TaskQueueError;
 use crate::types::{
@@ -106,41 +105,6 @@ pub trait MergeQueueRepo: Send + Sync {
 }
 
 // ============================================================================
-// Observability Repository (LLM calls + decisions)
-// ============================================================================
-
-/// Database operations for LLM call and decision logging.
-#[cfg_attr(test, mockall::automock)]
-#[async_trait]
-pub trait ObservabilityRepo: Send + Sync {
-    /// Insert an LLM call record.
-    async fn insert_llm_call(&self, call: LlmCall) -> Result<()>;
-
-    /// Get all LLM calls for a task.
-    async fn get_calls_for_task(&self, task_id: Uuid) -> Result<Vec<LlmCall>>;
-
-    /// Get LLM calls within a time range.
-    async fn get_calls_in_range(
-        &self,
-        start: DateTime<Utc>,
-        end: DateTime<Utc>,
-    ) -> Result<Vec<LlmCall>>;
-
-    /// Insert a decision record.
-    async fn insert_decision(&self, decision: Decision) -> Result<()>;
-
-    /// Get all decisions for a task.
-    async fn get_decisions_for_task(&self, task_id: Uuid) -> Result<Vec<Decision>>;
-
-    /// Get decisions within a time range.
-    async fn get_decisions_in_range(
-        &self,
-        start: DateTime<Utc>,
-        end: DateTime<Utc>,
-    ) -> Result<Vec<Decision>>;
-}
-
-// ============================================================================
 // Dependency Repository
 // ============================================================================
 
@@ -220,21 +184,6 @@ pub trait CostRepo: Send + Sync {
         &self,
         since: Option<DateTime<Utc>>,
     ) -> Result<Vec<CostRecord>, String>;
-}
-
-// ============================================================================
-// Planner Repository
-// ============================================================================
-
-/// Database operations for the planner (saving decomposition output).
-#[cfg_attr(test, mockall::automock)]
-#[async_trait]
-pub trait PlannerRepo: Send + Sync {
-    /// Save a planner output (slices + tasks) in a single transaction.
-    async fn save_planner_output(
-        &self,
-        output: crate::orchestration::PlannerOutput,
-    ) -> Result<(), String>;
 }
 
 // ============================================================================

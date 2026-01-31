@@ -30,6 +30,9 @@ pub enum QueueError {
 
     #[error("queue is empty")]
     Empty,
+
+    #[error("task {0:?} exceeded max retries")]
+    MaxRetriesExceeded(TaskId),
 }
 
 /// Wrapper for priority ordering in BinaryHeap.
@@ -293,11 +296,33 @@ impl<R: TaskQueueRepo> PersistentTaskQueue<R> {
     // ========================================================================
 
     /// Requeue a task that failed or needs retry.
+    ///
+    /// Increments `retry_count` and checks against `max_retries`.
+    /// Returns `QueueError::MaxRetriesExceeded` if the task has exhausted its retries.
     pub async fn requeue(
         &mut self,
         mut task: Task,
         policy: RequeuePolicy,
+        error_reason: Option<&str>,
     ) -> Result<(), QueueError> {
+        // Track retry count and last error
+        task.retry_count += 1;
+        if let Some(reason) = error_reason {
+            task.last_error = Some(reason.to_string());
+        }
+
+        // Enforce max retries
+        if task.retry_count >= task.max_retries {
+            tracing::warn!(
+                task_id = %task.id.0,
+                retry_count = task.retry_count,
+                max_retries = task.max_retries,
+                last_error = ?task.last_error,
+                "Task exceeded max retries, permanently failing"
+            );
+            return Err(QueueError::MaxRetriesExceeded(task.id));
+        }
+
         // Apply priority policy
         task.priority = match policy {
             RequeuePolicy::SamePriority => task.priority,
@@ -311,7 +336,10 @@ impl<R: TaskQueueRepo> PersistentTaskQueue<R> {
 
         // Persist changes
         let priority_str = format!("{:?}", task.priority).to_lowercase();
-        let policy_description = format!("Requeued with policy {:?}", policy);
+        let policy_description = format!(
+            "Requeued with policy {:?} (attempt {}/{})",
+            policy, task.retry_count, task.max_retries
+        );
         let now = Utc::now();
 
         self.repo
@@ -320,8 +348,11 @@ impl<R: TaskQueueRepo> PersistentTaskQueue<R> {
 
         tracing::info!(
             task_id = %task.id.0,
+            retry_count = task.retry_count,
+            max_retries = task.max_retries,
             priority = ?task.priority,
             policy = ?policy,
+            last_error = ?task.last_error,
             "Task requeued"
         );
 
@@ -545,8 +576,13 @@ impl<TQ: TaskQueueRepo, DR: DependencyRepo> DependencyAwareQueue<TQ, DR> {
     }
 
     /// Requeue a failed task
-    pub async fn requeue(&mut self, task: Task, policy: RequeuePolicy) -> Result<(), QueueError> {
-        self.queue.requeue(task, policy).await
+    pub async fn requeue(
+        &mut self,
+        task: Task,
+        policy: RequeuePolicy,
+        error_reason: Option<&str>,
+    ) -> Result<(), QueueError> {
+        self.queue.requeue(task, policy, error_reason).await
     }
 
     /// Notify that a task completed - returns IDs of tasks that may be unblocked
@@ -598,6 +634,9 @@ mod tests {
             context_files: vec![],
             metadata: None,
             depends_on: vec![],
+            retry_count: 0,
+            max_retries: 3,
+            last_error: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         }
@@ -995,6 +1034,9 @@ mod persistent_queue_tests {
             context_files: vec![],
             metadata: None,
             depends_on: vec![],
+            retry_count: 0,
+            max_retries: 3,
+            last_error: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         }
@@ -1059,7 +1101,7 @@ mod persistent_queue_tests {
         assert!(queue.is_empty());
 
         queue
-            .requeue(task, RequeuePolicy::EscalatePriority)
+            .requeue(task, RequeuePolicy::EscalatePriority, None)
             .await
             .unwrap();
 
@@ -1079,7 +1121,7 @@ mod persistent_queue_tests {
         let task = queue.dequeue().await.unwrap().unwrap();
 
         queue
-            .requeue(task, RequeuePolicy::SetPriority(Priority::Urgent))
+            .requeue(task, RequeuePolicy::SetPriority(Priority::Urgent), None)
             .await
             .unwrap();
 
@@ -1099,7 +1141,7 @@ mod persistent_queue_tests {
         let mut queue = PersistentTaskQueue::new(mock).await.unwrap();
         let task = queue.dequeue().await.unwrap().unwrap();
         queue
-            .requeue(task, RequeuePolicy::SamePriority)
+            .requeue(task, RequeuePolicy::SamePriority, None)
             .await
             .unwrap();
     }
@@ -1203,7 +1245,7 @@ mod persistent_queue_tests {
         let task = queue.dequeue().await.unwrap().unwrap();
 
         queue
-            .requeue(task, RequeuePolicy::SamePriority)
+            .requeue(task, RequeuePolicy::SamePriority, None)
             .await
             .unwrap();
 
@@ -1241,5 +1283,66 @@ mod persistent_queue_tests {
 
         let second = queue.dequeue().await.unwrap().unwrap();
         assert_eq!(second.priority, Priority::Low);
+    }
+
+    #[tokio::test]
+    async fn requeue_increments_retry_count() {
+        let task = make_task(Priority::Normal);
+        let mut mock = mock_repo_with_tasks(vec![task]);
+        mock.expect_update_task_status().returning(|_, _| Ok(()));
+        mock.expect_update_task_for_requeue()
+            .returning(|_, _, _, _| Ok(()));
+
+        let mut queue = PersistentTaskQueue::new(mock).await.unwrap();
+        let task = queue.dequeue().await.unwrap().unwrap();
+        assert_eq!(task.retry_count, 0);
+
+        queue
+            .requeue(task, RequeuePolicy::SamePriority, Some("test error"))
+            .await
+            .unwrap();
+
+        let task = queue.peek().unwrap();
+        assert_eq!(task.retry_count, 1);
+        assert_eq!(task.last_error.as_deref(), Some("test error"));
+    }
+
+    #[tokio::test]
+    async fn requeue_max_retries_exceeded() {
+        let mut task = make_task(Priority::Normal);
+        task.max_retries = 2;
+        task.retry_count = 1; // Already retried once
+        let mut mock = mock_repo_with_tasks(vec![task]);
+        mock.expect_update_task_status().returning(|_, _| Ok(()));
+
+        let mut queue = PersistentTaskQueue::new(mock).await.unwrap();
+        let task = queue.dequeue().await.unwrap().unwrap();
+
+        let result = queue
+            .requeue(task, RequeuePolicy::SamePriority, Some("failed again"))
+            .await;
+
+        assert!(matches!(result, Err(QueueError::MaxRetriesExceeded(_))));
+        assert!(queue.is_empty());
+    }
+
+    #[tokio::test]
+    async fn requeue_stores_last_error() {
+        let task = make_task(Priority::Normal);
+        let mut mock = mock_repo_with_tasks(vec![task]);
+        mock.expect_update_task_status().returning(|_, _| Ok(()));
+        mock.expect_update_task_for_requeue()
+            .returning(|_, _, _, _| Ok(()));
+
+        let mut queue = PersistentTaskQueue::new(mock).await.unwrap();
+        let task = queue.dequeue().await.unwrap().unwrap();
+
+        queue
+            .requeue(task, RequeuePolicy::SamePriority, Some("LLM timeout"))
+            .await
+            .unwrap();
+
+        let task = queue.peek().unwrap();
+        assert_eq!(task.last_error.as_deref(), Some("LLM timeout"));
     }
 }

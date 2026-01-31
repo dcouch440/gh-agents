@@ -147,6 +147,9 @@ struct TaskRow {
     priority: String,
     context_files: serde_json::Value,
     metadata: Option<serde_json::Value>,
+    retry_count: Option<i32>,
+    max_retries: Option<i32>,
+    last_error: Option<String>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
 }
@@ -194,6 +197,9 @@ impl TaskRow {
             context_files,
             metadata,
             depends_on: vec![], // Dependencies loaded separately via DependencyTracker
+            retry_count: self.retry_count.unwrap_or(0) as u32,
+            max_retries: self.max_retries.unwrap_or(3) as u32,
+            last_error: self.last_error,
             created_at: self.created_at,
             updated_at: self.updated_at,
         }
@@ -465,6 +471,9 @@ mod tests {
             context_files: vec![],
             metadata: None,
             depends_on: vec![],
+            retry_count: 0,
+            max_retries: 3,
+            last_error: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         }

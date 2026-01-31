@@ -2021,58 +2021,6 @@ pub async fn get_usage_stats(
 }
 
 // ============================================================================
-// Indexing Control Endpoints
-// ============================================================================
-
-/// Get current indexing status.
-pub async fn get_indexing_status(
-    State(state): State<AppState>,
-) -> Json<crate::indexing::IndexingStatus> {
-    let status = state.indexing_status.read().await.clone();
-    Json(status)
-}
-
-/// Start a new indexing run. Returns 409 if already running.
-pub async fn start_indexing(
-    State(state): State<AppState>,
-) -> Result<Json<serde_json::Value>, StatusCode> {
-    {
-        let status = state.indexing_status.read().await;
-        if status.state == crate::indexing::IndexingState::Running {
-            return Err(StatusCode::CONFLICT);
-        }
-    }
-
-    // Count files first
-    let project_root = std::env::current_dir().unwrap_or_default();
-
-    let idx = state.repo_index.clone();
-    let status = state.indexing_status.clone();
-
-    tokio::spawn(async move {
-        let index =
-            crate::indexing::indexer::build_index_tracked(&project_root, status.clone()).await;
-        let file_count = index.files.len();
-        *idx.write().await = index;
-
-        let mut s = status.write().await;
-        s.state = crate::indexing::IndexingState::Complete;
-        s.last_completed = Some(chrono::Utc::now().to_rfc3339());
-        tracing::info!("Repo index complete: {} files indexed", file_count);
-    });
-
-    Ok(Json(serde_json::json!({ "status": "started" })))
-}
-
-/// Stop a running indexing job (best-effort — sets status to idle).
-pub async fn stop_indexing(State(state): State<AppState>) -> Json<serde_json::Value> {
-    let mut status = state.indexing_status.write().await;
-    status.state = crate::indexing::IndexingState::Idle;
-    status.error = Some("Stopped by user".to_string());
-    Json(serde_json::json!({ "status": "stopped" }))
-}
-
-// ============================================================================
 // Pipeline Stage Template Rendering
 // ============================================================================
 
@@ -2772,7 +2720,7 @@ pub async fn approve_pipeline_run(
                                 {
                                     tracing::error!("Gate resume dispatch failed: {}", e);
                                     let mut mgr2 = state.pipeline_manager.write().await;
-                                    mgr2.fail_run(run_uuid);
+                                    let _ = mgr2.fail_run(run_uuid, &e.to_string());
                                 }
                             }
                         }

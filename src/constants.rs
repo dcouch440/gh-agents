@@ -42,6 +42,20 @@ pub const TEMPERATURE_FORMAL: f32 = 0.4;
 pub const TEMPERATURE_FRIENDLY: f32 = 0.6;
 pub const TEMPERATURE_CASUAL: f32 = 0.7;
 
+// ── Task Execution ──────────────────────────────────────────────────────────
+
+/// Default maximum retries before a task is permanently failed.
+pub const TASK_MAX_RETRIES: u32 = 3;
+/// Maximum tool call rounds per task execution.
+pub const TASK_MAX_TOOL_ROUNDS: u32 = 15;
+/// Consecutive tool errors before the executor bails out early.
+pub const TASK_MAX_CONSECUTIVE_TOOL_ERRORS: u32 = 3;
+
+// ── Pipeline ────────────────────────────────────────────────────────────────
+
+/// Maximum retries per pipeline stage before the run is failed.
+pub const PIPELINE_MAX_STAGE_RETRIES: u32 = 1;
+
 // ── Timeouts ────────────────────────────────────────────────────────────────
 
 /// Default timeout for task execution, tool calls, and approvals (5 min).

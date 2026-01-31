@@ -14,7 +14,6 @@ use crate::agents::{
 };
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::{DocumentRepo, ServerRepo, UserRepo};
-use crate::indexing::{IndexingStatus, RepoIndex};
 use crate::llm::AnthropicClient;
 use crate::orchestration::Scheduler;
 use crate::types::{AgentPoolConfig, AppConfig, UserId};
@@ -105,10 +104,6 @@ pub struct AppState {
     pub schedule_manager: Arc<RwLock<ScheduleManager>>,
     /// Registry of available agent modes
     pub mode_registry: Arc<ModeRegistry>,
-    /// Live repo index for context injection
-    pub repo_index: Arc<RwLock<RepoIndex>>,
-    /// Indexing progress status (for API visibility)
-    pub indexing_status: Arc<RwLock<IndexingStatus>>,
 }
 
 impl AppState {
@@ -131,9 +126,6 @@ impl AppState {
         // Initialize role manager with current working directory as project root
         let project_root = std::env::current_dir().unwrap_or_default();
         state.role_manager = Some(Arc::new(RoleManager::new(project_root.clone())));
-
-        // Repo indexing is on-demand via POST /api/indexing/start
-        tracing::info!("Repo indexing available on-demand (POST /api/indexing/start)");
 
         // Initialize agent pool + dispatcher if API key is available
         if let Ok(provider) = AnthropicClient::from_env() {
@@ -302,8 +294,6 @@ impl AppState {
                 pipeline_manager: Arc::new(RwLock::new(PipelineManager::new())),
                 schedule_manager: Arc::new(RwLock::new(ScheduleManager::new())),
                 mode_registry: Arc::new(ModeRegistry::new()),
-                repo_index: Arc::new(RwLock::new(RepoIndex::default())),
-                indexing_status: Arc::new(RwLock::new(IndexingStatus::default())),
             },
             orchestrator_rx,
         )

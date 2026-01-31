@@ -329,6 +329,9 @@ impl<P: LLMProvider, R: PlannerRepo> Planner<P, R> {
                         .collect(),
                     metadata: Some(metadata),
                     depends_on: vec![],
+                    retry_count: 0,
+                    max_retries: crate::constants::TASK_MAX_RETRIES,
+                    last_error: None,
                     created_at: now,
                     updated_at: now,
                 };

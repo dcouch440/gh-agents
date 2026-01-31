@@ -11,7 +11,6 @@ use tracing::{debug, info};
 use nexor::cli::Args;
 use nexor::config::load_config;
 use nexor::db::init_db;
-use nexor::headless::HeadlessRunner;
 use nexor::logging::{init_logging_with_file, LOG_DIR};
 use nexor::orchestration::Scheduler;
 use nexor::server::start_server;
@@ -31,33 +30,7 @@ async fn main() -> Result<()> {
         std::process::exit(1);
     }
 
-    if args.is_headless() {
-        // Headless mode - no server
-        run_headless(args).await
-    } else {
-        // Server mode
-        run_server_mode(args).await
-    }
-}
-
-/// Run in headless mode (no server)
-async fn run_headless(args: Args) -> Result<()> {
-    // Initialize logging based on verbosity (to stderr so stdout is clean for output)
-    let log_level = args.log_level();
-    let filter = tracing_subscriber::EnvFilter::new(format!("nexor={},sqlx=warn", log_level));
-    tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .with_writer(std::io::stderr)
-        .init();
-
-    info!("nexor headless mode starting...");
-
-    // Run headless session
-    let runner = HeadlessRunner::new(args)?;
-    runner.run().await?;
-
-    info!("nexor headless mode complete");
-    Ok(())
+    run_server_mode(args).await
 }
 
 /// Run in server mode (HTTP + WebSocket)

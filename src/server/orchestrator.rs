@@ -344,7 +344,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
 
                         if !succeeded {
                             let mut mgr = state.pipeline_manager.write().await;
-                            mgr.fail_run(run_id);
+                            let _ = mgr.fail_run(run_id, "Stage task failed");
                             state.broadcast_feed(FeedUpdate {
                                 id: run_id,
                                 agent_id: "pipeline".into(),
@@ -679,7 +679,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                             {
                                                 error!("Pipeline auto-advance failed: {}", e);
                                                 let mut mgr = state.pipeline_manager.write().await;
-                                                mgr.fail_run(run_id);
+                                                let _ = mgr.fail_run(run_id, &e.to_string());
                                             } else {
                                                 state.broadcast_feed(FeedUpdate {
                                                     id: run_id,
@@ -717,12 +717,13 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                             }
                                         }
                                     } else {
-                                        error!(
+                                        let reason = format!(
                                             "Pipeline stage {} has no agent_id or cluster_id",
                                             next_stage.stage_number
                                         );
+                                        error!("{}", reason);
                                         let mut mgr = state.pipeline_manager.write().await;
-                                        mgr.fail_run(run_id);
+                                        let _ = mgr.fail_run(run_id, &reason);
                                     }
                                 }
                             } else {

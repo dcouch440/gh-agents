@@ -887,6 +887,9 @@ mod tests {
             context_files: vec![],
             metadata,
             depends_on: vec![],
+            retry_count: 0,
+            max_retries: 3,
+            last_error: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
         }
