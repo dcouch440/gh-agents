@@ -30,6 +30,7 @@ pub struct AgentRow {
     pub model_max_tokens: i32,
     pub model_temperature: f32,
     pub status: String,
+    pub router_mode: bool,
 }
 
 /// Row type for persisted pipeline definitions.
@@ -91,6 +92,8 @@ pub struct ToolRow {
     pub parameter_schema: serde_json::Value,
     pub output_schema: serde_json::Value,
     pub enabled: bool,
+    pub cluster_id: Option<Uuid>,
+    pub is_builtin: bool,
 }
 
 /// Row type for persisted clusters.

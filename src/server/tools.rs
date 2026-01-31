@@ -789,6 +789,7 @@ async fn execute_create_agent(input: &Value, state: &AppState, user_id: UserId) 
                         model_max_tokens: model_config.max_tokens as i32,
                         model_temperature: model_config.temperature,
                         status: "idle".to_string(),
+                        router_mode: false,
                     },
                 )
                 .await
@@ -863,6 +864,7 @@ async fn execute_create_agents(input: &Value, state: &AppState, user_id: UserId)
                             model_max_tokens: model_config.max_tokens as i32,
                             model_temperature: model_config.temperature,
                             status: "idle".to_string(),
+                            router_mode: false,
                         },
                     )
                     .await
@@ -1046,6 +1048,8 @@ async fn execute_assign_task(input: &Value, state: &AppState) -> Value {
             },
             chat_messages: vec![],
             execution_context,
+            tool_rows: vec![],
+            router_mode: false,
         },
         constraints,
         timeout: Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),
@@ -1556,6 +1560,8 @@ async fn execute_start_pipeline(input: &Value, state: &AppState, user_id: UserId
             },
             chat_messages: vec![],
             execution_context,
+            tool_rows: vec![],
+            router_mode: false,
         },
         constraints: TaskConstraints::default(),
         timeout: Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),

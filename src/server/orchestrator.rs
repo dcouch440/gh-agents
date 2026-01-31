@@ -625,6 +625,8 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                             },
                                             chat_messages: vec![],
                                             execution_context,
+                                            tool_rows: vec![],
+                                            router_mode: false,
                                         },
                                         constraints: TaskConstraints::default(),
                                         timeout: std::time::Duration::from_secs(
@@ -804,6 +806,8 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                                 std::env::current_dir().unwrap_or_default(),
                                             ),
                                         ),
+                                        tool_rows: vec![],
+                                        router_mode: false,
                                     },
                                     constraints: TaskConstraints::default(),
                                     timeout: std::time::Duration::from_secs(
@@ -890,6 +894,8 @@ pub fn spawn_schedule_runner(state: AppState) -> Option<tokio::task::JoinHandle<
                         execution_context: Some(crate::execution::ExecutionContext::new(
                             std::env::current_dir().unwrap_or_default(),
                         )),
+                        tool_rows: vec![],
+                        router_mode: false,
                     },
                     constraints: TaskConstraints::default(),
                     timeout: std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),
@@ -1554,6 +1560,9 @@ mod tests {
             _agent_id: Uuid,
         ) -> anyhow::Result<Vec<crate::db::ToolRow>> {
             Ok(vec![])
+        }
+        async fn seed_builtin_tools(&self, _user_id: UserId) -> anyhow::Result<()> {
+            Ok(())
         }
         async fn set_agent_tools(
             &self,

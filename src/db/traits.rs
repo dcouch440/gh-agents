@@ -364,6 +364,9 @@ pub trait ServerRepo: Send + Sync {
     /// Set the full tool list for an agent (replaces existing).
     async fn set_agent_tools(&self, agent_id: Uuid, tool_ids: Vec<Uuid>) -> Result<()>;
 
+    /// Seed the 11 built-in execution tools for a user. Idempotent.
+    async fn seed_builtin_tools(&self, user_id: UserId) -> Result<()>;
+
     // --- Agent context (document linkage) ---
 
     /// Get all context documents assigned to an agent.

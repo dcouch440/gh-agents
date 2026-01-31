@@ -90,6 +90,12 @@ pub struct TaskContext {
     pub chat_messages: Vec<crate::llm::Message>,
     /// Execution context for file/git/test/sandbox operations.
     pub execution_context: Option<ExecutionContext>,
+    /// Tool definitions loaded from DB for this agent. When non-empty,
+    /// the executor uses these instead of the hardcoded execution tools.
+    pub tool_rows: Vec<crate::db::ToolRow>,
+    /// When true, the agent receives only the `request_assistance` meta-tool
+    /// instead of individual tools. Tool calls are routed to clusters.
+    pub router_mode: bool,
 }
 
 /// Role-specific context for prompt building

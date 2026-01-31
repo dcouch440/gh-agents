@@ -4,9 +4,38 @@
 //! as Anthropic-compatible tool definitions with a single dispatcher.
 
 use serde_json::{json, Value};
+use uuid::Uuid;
 
+use crate::db::ToolRow;
 use crate::execution::{ExecutionContext, FileOps, GitOps, Sandbox, TestRunner};
 use crate::llm::Tool;
+
+/// Namespace UUID for generating deterministic builtin tool IDs.
+const TOOLS_NS: Uuid = Uuid::from_bytes([
+    0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30,
+    0xc8,
+]);
+
+/// Return the 11 built-in execution tools as DB rows for seeding.
+///
+/// Each tool gets a deterministic UUID via `Uuid::new_v5(TOOLS_NS, name)` so
+/// seeding is idempotent.
+pub fn builtin_tool_rows() -> Vec<ToolRow> {
+    execution_tools()
+        .into_iter()
+        .map(|t| ToolRow {
+            id: Uuid::new_v5(&TOOLS_NS, t.name.as_bytes()),
+            name: t.name,
+            description: t.description,
+            category: "execution".to_string(),
+            parameter_schema: t.input_schema,
+            output_schema: json!({}),
+            enabled: true,
+            cluster_id: None,
+            is_builtin: true,
+        })
+        .collect()
+}
 
 /// Return all execution tool definitions for the Anthropic API.
 pub fn execution_tools() -> Vec<Tool> {
@@ -471,6 +500,37 @@ mod tests {
         names.sort();
         names.dedup();
         assert_eq!(names.len(), tools.len());
+    }
+
+    #[test]
+    fn builtin_tool_rows_returns_11() {
+        let rows = builtin_tool_rows();
+        assert_eq!(rows.len(), 11);
+        for row in &rows {
+            assert!(row.is_builtin);
+            assert!(row.cluster_id.is_none());
+            assert_eq!(row.category, "execution");
+            assert!(row.enabled);
+        }
+    }
+
+    #[test]
+    fn builtin_tool_rows_have_unique_ids() {
+        let rows = builtin_tool_rows();
+        let mut ids: Vec<_> = rows.iter().map(|r| r.id).collect();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids.len(), rows.len());
+    }
+
+    #[test]
+    fn builtin_tool_rows_are_deterministic() {
+        let a = builtin_tool_rows();
+        let b = builtin_tool_rows();
+        for (ra, rb) in a.iter().zip(b.iter()) {
+            assert_eq!(ra.id, rb.id);
+            assert_eq!(ra.name, rb.name);
+        }
     }
 
     #[tokio::test]

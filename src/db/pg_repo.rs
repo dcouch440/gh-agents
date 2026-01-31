@@ -947,55 +947,30 @@ impl ServerRepo for PgRepo {
 
     async fn list_persisted_agents(&self, user_id: UserId) -> Result<Vec<AgentRow>> {
         let rows = sqlx::query_as::<_, PgAgentRow>(
-            "SELECT id, tier, persona_name, persona_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status FROM agents WHERE user_id = $1"
+            "SELECT id, tier, persona_name, persona_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode FROM agents WHERE user_id = $1"
         )
         .bind(user_id.0)
         .fetch_all(&self.pool)
         .await?;
 
-        Ok(rows
-            .into_iter()
-            .map(|r| AgentRow {
-                id: r.id,
-                tier: r.tier,
-                persona_name: r.persona_name,
-                persona_prompt: r.persona_prompt,
-                persona_style: r.persona_style,
-                model_provider: r.model_provider,
-                model_id: r.model_id,
-                model_max_tokens: r.model_max_tokens,
-                model_temperature: r.model_temperature,
-                status: r.status,
-            })
-            .collect())
+        Ok(rows.into_iter().map(agent_row_from_pg).collect())
     }
 
     async fn get_persisted_agent(&self, agent_id: Uuid) -> Result<Option<AgentRow>> {
         let row = sqlx::query_as::<_, PgAgentRow>(
-            "SELECT id, tier, persona_name, persona_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status FROM agents WHERE id = $1"
+            "SELECT id, tier, persona_name, persona_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode FROM agents WHERE id = $1"
         )
         .bind(agent_id)
         .fetch_optional(&self.pool)
         .await?;
 
-        Ok(row.map(|r| AgentRow {
-            id: r.id,
-            tier: r.tier,
-            persona_name: r.persona_name,
-            persona_prompt: r.persona_prompt,
-            persona_style: r.persona_style,
-            model_provider: r.model_provider,
-            model_id: r.model_id,
-            model_max_tokens: r.model_max_tokens,
-            model_temperature: r.model_temperature,
-            status: r.status,
-        }))
+        Ok(row.map(agent_row_from_pg))
     }
 
     async fn upsert_agent(&self, user_id: UserId, agent: AgentRow) -> Result<()> {
         sqlx::query(r#"
-            INSERT INTO agents (id, user_id, tier, persona_name, persona_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            INSERT INTO agents (id, user_id, tier, persona_name, persona_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             ON CONFLICT (id) DO UPDATE SET
                 tier = EXCLUDED.tier,
                 persona_name = EXCLUDED.persona_name,
@@ -1005,7 +980,8 @@ impl ServerRepo for PgRepo {
                 model_id = EXCLUDED.model_id,
                 model_max_tokens = EXCLUDED.model_max_tokens,
                 model_temperature = EXCLUDED.model_temperature,
-                status = EXCLUDED.status
+                status = EXCLUDED.status,
+                router_mode = EXCLUDED.router_mode
         "#)
         .bind(agent.id)
         .bind(user_id.0)
@@ -1018,6 +994,7 @@ impl ServerRepo for PgRepo {
         .bind(agent.model_max_tokens)
         .bind(agent.model_temperature)
         .bind(&agent.status)
+        .bind(agent.router_mode)
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -1035,56 +1012,39 @@ impl ServerRepo for PgRepo {
 
     async fn list_tools(&self, user_id: UserId) -> Result<Vec<ToolRow>> {
         let rows = sqlx::query_as::<_, PgToolRow>(
-            "SELECT id, name, description, category, parameter_schema, output_schema, enabled FROM tools WHERE user_id = $1 ORDER BY category, name",
+            "SELECT id, name, description, category, parameter_schema, output_schema, enabled, cluster_id, is_builtin FROM tools WHERE user_id = $1 ORDER BY category, name",
         )
         .bind(user_id.0)
         .fetch_all(&self.pool)
         .await?;
 
-        Ok(rows
-            .into_iter()
-            .map(|r| ToolRow {
-                id: r.id,
-                name: r.name,
-                description: r.description,
-                category: r.category,
-                parameter_schema: r.parameter_schema,
-                output_schema: r.output_schema,
-                enabled: r.enabled,
-            })
-            .collect())
+        Ok(rows.into_iter().map(tool_row_from_pg).collect())
     }
 
     async fn get_tool(&self, tool_id: Uuid) -> Result<Option<ToolRow>> {
         let row = sqlx::query_as::<_, PgToolRow>(
-            "SELECT id, name, description, category, parameter_schema, output_schema, enabled FROM tools WHERE id = $1",
+            "SELECT id, name, description, category, parameter_schema, output_schema, enabled, cluster_id, is_builtin FROM tools WHERE id = $1",
         )
         .bind(tool_id)
         .fetch_optional(&self.pool)
         .await?;
 
-        Ok(row.map(|r| ToolRow {
-            id: r.id,
-            name: r.name,
-            description: r.description,
-            category: r.category,
-            parameter_schema: r.parameter_schema,
-            output_schema: r.output_schema,
-            enabled: r.enabled,
-        }))
+        Ok(row.map(tool_row_from_pg))
     }
 
     async fn upsert_tool(&self, user_id: UserId, tool: ToolRow) -> Result<()> {
         sqlx::query(r#"
-            INSERT INTO tools (id, user_id, name, description, category, parameter_schema, output_schema, enabled)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO tools (id, user_id, name, description, category, parameter_schema, output_schema, enabled, cluster_id, is_builtin)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
                 description = EXCLUDED.description,
                 category = EXCLUDED.category,
                 parameter_schema = EXCLUDED.parameter_schema,
                 output_schema = EXCLUDED.output_schema,
-                enabled = EXCLUDED.enabled
+                enabled = EXCLUDED.enabled,
+                cluster_id = EXCLUDED.cluster_id,
+                is_builtin = EXCLUDED.is_builtin
         "#)
         .bind(tool.id)
         .bind(user_id.0)
@@ -1094,13 +1054,15 @@ impl ServerRepo for PgRepo {
         .bind(&tool.parameter_schema)
         .bind(&tool.output_schema)
         .bind(tool.enabled)
+        .bind(tool.cluster_id)
+        .bind(tool.is_builtin)
         .execute(&self.pool)
         .await?;
         Ok(())
     }
 
     async fn delete_tool(&self, tool_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM tools WHERE id = $1")
+        sqlx::query("DELETE FROM tools WHERE id = $1 AND is_builtin = false")
             .bind(tool_id)
             .execute(&self.pool)
             .await?;
@@ -1109,24 +1071,13 @@ impl ServerRepo for PgRepo {
 
     async fn get_agent_tools(&self, agent_id: Uuid) -> Result<Vec<ToolRow>> {
         let rows = sqlx::query_as::<_, PgToolRow>(
-            "SELECT t.id, t.name, t.description, t.category, t.parameter_schema, t.output_schema, t.enabled FROM tools t INNER JOIN agent_tools at ON t.id = at.tool_id WHERE at.agent_id = $1 ORDER BY t.category, t.name",
+            "SELECT t.id, t.name, t.description, t.category, t.parameter_schema, t.output_schema, t.enabled, t.cluster_id, t.is_builtin FROM tools t INNER JOIN agent_tools at ON t.id = at.tool_id WHERE at.agent_id = $1 ORDER BY t.category, t.name",
         )
         .bind(agent_id)
         .fetch_all(&self.pool)
         .await?;
 
-        Ok(rows
-            .into_iter()
-            .map(|r| ToolRow {
-                id: r.id,
-                name: r.name,
-                description: r.description,
-                category: r.category,
-                parameter_schema: r.parameter_schema,
-                output_schema: r.output_schema,
-                enabled: r.enabled,
-            })
-            .collect())
+        Ok(rows.into_iter().map(tool_row_from_pg).collect())
     }
 
     async fn set_agent_tools(&self, agent_id: Uuid, tool_ids: Vec<Uuid>) -> Result<()> {
@@ -1146,6 +1097,29 @@ impl ServerRepo for PgRepo {
         }
 
         tx.commit().await?;
+        Ok(())
+    }
+
+    async fn seed_builtin_tools(&self, user_id: UserId) -> Result<()> {
+        for tool in crate::agents::execution_tools::builtin_tool_rows() {
+            sqlx::query(r#"
+                INSERT INTO tools (id, user_id, name, description, category, parameter_schema, output_schema, enabled, cluster_id, is_builtin)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                ON CONFLICT (user_id, name) DO NOTHING
+            "#)
+            .bind(tool.id)
+            .bind(user_id.0)
+            .bind(&tool.name)
+            .bind(&tool.description)
+            .bind(&tool.category)
+            .bind(&tool.parameter_schema)
+            .bind(&tool.output_schema)
+            .bind(tool.enabled)
+            .bind(tool.cluster_id)
+            .bind(tool.is_builtin)
+            .execute(&self.pool)
+            .await?;
+        }
         Ok(())
     }
 
@@ -1967,6 +1941,23 @@ struct PgAgentRow {
     model_max_tokens: i32,
     model_temperature: f32,
     status: String,
+    router_mode: bool,
+}
+
+fn agent_row_from_pg(r: PgAgentRow) -> AgentRow {
+    AgentRow {
+        id: r.id,
+        tier: r.tier,
+        persona_name: r.persona_name,
+        persona_prompt: r.persona_prompt,
+        persona_style: r.persona_style,
+        model_provider: r.model_provider,
+        model_id: r.model_id,
+        model_max_tokens: r.model_max_tokens,
+        model_temperature: r.model_temperature,
+        status: r.status,
+        router_mode: r.router_mode,
+    }
 }
 
 #[derive(sqlx::FromRow)]
@@ -1978,6 +1969,22 @@ struct PgToolRow {
     parameter_schema: serde_json::Value,
     output_schema: serde_json::Value,
     enabled: bool,
+    cluster_id: Option<Uuid>,
+    is_builtin: bool,
+}
+
+fn tool_row_from_pg(r: PgToolRow) -> ToolRow {
+    ToolRow {
+        id: r.id,
+        name: r.name,
+        description: r.description,
+        category: r.category,
+        parameter_schema: r.parameter_schema,
+        output_schema: r.output_schema,
+        enabled: r.enabled,
+        cluster_id: r.cluster_id,
+        is_builtin: r.is_builtin,
+    }
 }
 
 #[derive(sqlx::FromRow)]

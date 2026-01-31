@@ -492,8 +492,23 @@ impl Agent {
         let system_prompt = self.build_role_aware_prompt(assignment, role_context);
         let temperature = self.temperature_for_style(&role_context.style);
 
-        // Build tool definitions if we have an execution context
-        let tool_defs = if assignment.context.execution_context.is_some() {
+        // Build tool definitions: router_mode gets only request_assistance,
+        // otherwise prefer DB-loaded tool_rows, fall back to hardcoded
+        let tool_defs = if assignment.context.router_mode {
+            vec![super::tool_router::request_assistance_tool()]
+        } else if !assignment.context.tool_rows.is_empty() {
+            assignment
+                .context
+                .tool_rows
+                .iter()
+                .filter(|t| t.enabled)
+                .map(|t| crate::llm::Tool {
+                    name: t.name.clone(),
+                    description: t.description.clone(),
+                    input_schema: t.parameter_schema.clone(),
+                })
+                .collect()
+        } else if assignment.context.execution_context.is_some() {
             execution_tools::execution_tools()
         } else {
             vec![]
@@ -577,13 +592,38 @@ impl Agent {
                             self.emit_progress(task_id, &format!("Executing tool: {}", name), None)
                                 .await?;
 
-                            let result = execution_tools::execute_execution_tool(
-                                name,
-                                input,
-                                exec_ctx,
-                                allowed_tools,
-                            )
-                            .await;
+                            let result = if name == "request_assistance" {
+                                // Router mode: delegate to tool_router
+                                super::tool_router::execute_request_assistance(
+                                    input,
+                                    &assignment.context.tool_rows,
+                                    assignment.context.execution_context.as_ref(),
+                                    allowed_tools,
+                                )
+                                .await
+                            } else {
+                                // Check if tool routes to a cluster
+                                let tool_cluster = assignment
+                                    .context
+                                    .tool_rows
+                                    .iter()
+                                    .find(|t| t.name == *name)
+                                    .and_then(|t| t.cluster_id);
+
+                                if tool_cluster.is_some() {
+                                    serde_json::json!({
+                                        "error": "Cluster routing not yet implemented for this tool"
+                                    })
+                                } else {
+                                    execution_tools::execute_execution_tool(
+                                        name,
+                                        input,
+                                        exec_ctx,
+                                        allowed_tools,
+                                    )
+                                    .await
+                                }
+                            };
 
                             // Track file modifications
                             if name == "write_file" {
@@ -684,13 +724,36 @@ impl Agent {
                             let mut tool_results = Vec::new();
                             for block in &fix_response.content_blocks {
                                 if let ContentBlock::ToolUse { id, name, input } = block {
-                                    let result = execution_tools::execute_execution_tool(
-                                        name,
-                                        input,
-                                        exec_ctx,
-                                        allowed_tools,
-                                    )
-                                    .await;
+                                    let result = if name == "request_assistance" {
+                                        super::tool_router::execute_request_assistance(
+                                            input,
+                                            &assignment.context.tool_rows,
+                                            assignment.context.execution_context.as_ref(),
+                                            allowed_tools,
+                                        )
+                                        .await
+                                    } else {
+                                        let fix_cluster = assignment
+                                            .context
+                                            .tool_rows
+                                            .iter()
+                                            .find(|t| t.name == *name)
+                                            .and_then(|t| t.cluster_id);
+
+                                        if fix_cluster.is_some() {
+                                            serde_json::json!({
+                                                "error": "Cluster routing not yet implemented for this tool"
+                                            })
+                                        } else {
+                                            execution_tools::execute_execution_tool(
+                                                name,
+                                                input,
+                                                exec_ctx,
+                                                allowed_tools,
+                                            )
+                                            .await
+                                        }
+                                    };
 
                                     if name == "write_file" {
                                         if let Some(path) = input["path"].as_str() {
@@ -1061,6 +1124,8 @@ mod tests {
                 role_context: make_role_context(),
                 chat_messages: vec![],
                 execution_context: None,
+                tool_rows: vec![],
+                router_mode: false,
             },
             constraints: TaskConstraints::default(),
             timeout: Duration::from_secs(30),
