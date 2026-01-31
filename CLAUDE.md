@@ -8,7 +8,7 @@ Rust backend + React frontend + Ink CLI that orchestrates AI agents for software
 
 ```
 Rust (Axum)        → REST API, WebSocket, LLM providers, agents, orchestration, execution
-React (Vite)       → Web UI in ui/
+React (Vite)       → New frontend in frontend/ (ui/ is deprecated)
 Ink (TypeScript)   → Terminal CLI in cli/
 PostgreSQL         → nexor database
 ```
@@ -24,6 +24,11 @@ PostgreSQL         → nexor database
 ~/.cargo/bin/cargo clippy                   # Lint
 ~/.cargo/bin/cargo run                      # Run server
 RUST_LOG=debug ~/.cargo/bin/cargo run       # Debug logging
+
+# Frontend (run from frontend/)
+npx tsc --noEmit                            # Type check
+npx eslint .                                # Lint (must pass, zero warnings)
+npx vite build                              # Production build
 ```
 
 ## Key Source Layout
@@ -41,9 +46,9 @@ src/
 ├── prompts/           # Prompt templates
 ├── execution/         # File/git/test operations
 ├── github/            # GitHub API integration
-├── cli.rs             # CLI arg parsing
-└── headless.rs        # Headless mode
-ui/                    # React frontend (Vite + TailwindCSS + Zustand)
+└── cli.rs             # CLI arg parsing
+frontend/              # React frontend (Vite) — active development
+ui/                    # Legacy frontend (deprecated)
 cli/                   # Ink terminal CLI
 migrations/            # PostgreSQL migrations
 decomp/                # Ticket breakdowns by milestone
@@ -51,7 +56,8 @@ decomp/                # Ticket breakdowns by milestone
 
 ## Conventions
 
-- `cargo fmt` and `cargo clippy` before committing
+- `cargo fmt` and `cargo clippy` before committing Rust code
+- `npx tsc --noEmit` and `npx eslint .` before committing frontend code — zero warnings required
 - `thiserror` for library errors, `anyhow` for application code
 - Tokio for async, always timeout external calls
 - Newtypes for IDs: `TaskId(Uuid)`, `AgentId(Uuid)`
@@ -64,6 +70,7 @@ decomp/                # Ticket breakdowns by milestone
 Do NOT read, modify, or reference files in these directories:
 
 - `decomp/` — Ticket breakdowns managed by the project owner. Read-only for humans.
+- `ui/` — Deprecated legacy frontend. Do not modify.
 
 ## Database
 
@@ -80,4 +87,23 @@ docker exec -it gh-agents-postgres-1 psql -U nexor -d nexor              # Inter
 - Verify with `cargo check` and `cargo test` before committing
 - Save notes to `doc/` when requested
 - Stay out of /cli and /archive
-= In ui/ always prefer reusable components.
+- In frontend/ always prefer reusable components.
+
+## Frontend Conventions (frontend/)
+
+**Strict TypeScript is mandatory.** `"strict": true` in tsconfig. No `any`, no `as` casts (unless commented why), no `@ts-ignore`.
+
+- **Components** use `function` declarations. Everything else (hooks, helpers, callbacks) uses arrow functions.
+- **`type` over `interface`** for all props and data shapes. Prefer discriminated unions with a `type` field for state actions and variant data.
+- **No `React.FC`, `PropsWithChildren`, or `forwardRef` wrappers.** Destructure props directly with an inline or co-located `type`. If children are needed, add `children: ReactNode` explicitly.
+- **No external state libraries.** Vanilla React only: `useState` for simple values, `useReducer` for complex state with multiple actions.
+- **Every context gets a custom hook** that throws if used outside its provider, so consumers get non-nullable types without optional chaining.
+- **`null` over `undefined`** for intentional absence. One bottom value.
+- **Named exports only.** No `export default`.
+- **One component per file.** File name matches component name.
+- **Colocate** hooks, types, and helpers with the feature that uses them. Barrel `index.ts` only at feature/directory boundaries.
+- **API layer:** Thin generic fetch wrapper, no classes. Return typed promises.
+- **Early returns** for empty/loading/error states before the main render.
+- **Constants file for app-wide values:** API base URL, WS URL, app name, route paths, WS channel names, polling intervals, localStorage keys. No magic strings or numbers scattered in components. All in `src/constants.ts`.
+
+- **ESLint rules are strict (React 19):** No setState directly in effect bodies, no ref access during render, no mixing component and non-component exports in the same file (react-refresh). Fix the code, don't suppress with eslint-disable.
