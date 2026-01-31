@@ -90,13 +90,30 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ message }),
       }),
-    stream: (messageId: string, onToken: (text: string) => void, onDone: () => void, onError: (err: string) => void) => {
+    stream: (
+      messageId: string,
+      onToken: (text: string) => void,
+      onDone: () => void,
+      onError: (err: string) => void,
+      onToolStart?: (data: { name: string; id: string }) => void,
+      onToolEnd?: (data: { name: string; id: string }) => void,
+      onDocUpdate?: (data: { doc_id: string; title: string }) => void,
+    ) => {
       const token = useAuthStore.getState().token;
       const eventSource = new EventSource(
         `${API_BASE}/chat/${messageId}/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`
       );
       eventSource.addEventListener('token', (event) => {
         onToken((event as MessageEvent).data);
+      });
+      eventSource.addEventListener('tool_start', (event) => {
+        onToolStart?.(JSON.parse((event as MessageEvent).data));
+      });
+      eventSource.addEventListener('tool_end', (event) => {
+        onToolEnd?.(JSON.parse((event as MessageEvent).data));
+      });
+      eventSource.addEventListener('doc_update', (event) => {
+        onDocUpdate?.(JSON.parse((event as MessageEvent).data));
       });
       eventSource.addEventListener('done', () => {
         eventSource.close();
@@ -138,13 +155,31 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ message }),
       }),
-    stream: (sessionId: string, messageId: string, onToken: (text: string) => void, onDone: () => void, onError: (err: string) => void) => {
+    stream: (
+      sessionId: string,
+      messageId: string,
+      onToken: (text: string) => void,
+      onDone: () => void,
+      onError: (err: string) => void,
+      onToolStart?: (data: { name: string; id: string }) => void,
+      onToolEnd?: (data: { name: string; id: string }) => void,
+      onDocUpdate?: (data: { doc_id: string; title: string }) => void,
+    ) => {
       const token = useAuthStore.getState().token;
       const eventSource = new EventSource(
         `${API_BASE}/sessions/${sessionId}/chat/${messageId}/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`
       );
       eventSource.addEventListener('token', (event) => {
         onToken((event as MessageEvent).data);
+      });
+      eventSource.addEventListener('tool_start', (event) => {
+        onToolStart?.(JSON.parse((event as MessageEvent).data));
+      });
+      eventSource.addEventListener('tool_end', (event) => {
+        onToolEnd?.(JSON.parse((event as MessageEvent).data));
+      });
+      eventSource.addEventListener('doc_update', (event) => {
+        onDocUpdate?.(JSON.parse((event as MessageEvent).data));
       });
       eventSource.addEventListener('done', () => {
         eventSource.close();

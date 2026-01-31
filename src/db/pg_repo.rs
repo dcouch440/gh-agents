@@ -7,10 +7,10 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::db::traits::{
-    CostRepo, DependencyRepo, MergeQueueRepo, ObservabilityRepo, PlannerRepo, RefactorRepo,
-    SchedulerRepo, ServerRepo, TaskQueueRepo, UserRepo,
+    CostRepo, DependencyRepo, DocumentRepo, MergeQueueRepo, ObservabilityRepo, PlannerRepo,
+    RefactorRepo, SchedulerRepo, ServerRepo, TaskQueueRepo, UserRepo,
 };
-use crate::db::{AgentRow, ChatMessageRow, ClusterRow, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow};
+use crate::db::{AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow};
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::observability::{Decision, LlmCall};
 use crate::orchestration::DependencyError;
@@ -1398,5 +1398,150 @@ impl UserRepo for PgRepo {
         .await?;
 
         Ok(row.into())
+    }
+}
+
+// ============================================================================
+// Document Repository
+// ============================================================================
+
+#[async_trait]
+impl DocumentRepo for PgRepo {
+    async fn create_document(
+        &self,
+        user_id: Uuid,
+        session_id: Option<Uuid>,
+        title: String,
+        content: String,
+        doc_type: String,
+        ref_tag: String,
+        tags: Vec<String>,
+    ) -> Result<DocumentRow> {
+        let id = Uuid::new_v4();
+        let row: DocumentRow = sqlx::query_as(
+            r#"
+            INSERT INTO documents (id, user_id, session_id, title, content, doc_type, ref_tag, tags)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at
+            "#,
+        )
+        .bind(id)
+        .bind(user_id)
+        .bind(session_id)
+        .bind(&title)
+        .bind(&content)
+        .bind(&doc_type)
+        .bind(&ref_tag)
+        .bind(&tags)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(row)
+    }
+
+    async fn update_document(
+        &self,
+        doc_id: Uuid,
+        content: Option<String>,
+        title: Option<String>,
+        tags: Option<Vec<String>>,
+    ) -> Result<DocumentRow> {
+        let row: DocumentRow = sqlx::query_as(
+            r#"
+            UPDATE documents
+            SET
+                content = COALESCE($1, content),
+                title = COALESCE($2, title),
+                tags = COALESCE($3, tags),
+                updated_at = NOW()
+            WHERE id = $4
+            RETURNING id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at
+            "#,
+        )
+        .bind(content)
+        .bind(title)
+        .bind(tags)
+        .bind(doc_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(row)
+    }
+
+    async fn update_document_summary(&self, doc_id: Uuid, summary: String) -> Result<()> {
+        sqlx::query("UPDATE documents SET summary = $1, updated_at = NOW() WHERE id = $2")
+            .bind(&summary)
+            .bind(doc_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn get_document(&self, doc_id: Uuid) -> Result<Option<DocumentRow>> {
+        let row: Option<DocumentRow> = sqlx::query_as(
+            "SELECT id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at FROM documents WHERE id = $1",
+        )
+        .bind(doc_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn get_document_by_ref_tag(&self, ref_tag: &str) -> Result<Option<DocumentRow>> {
+        let row: Option<DocumentRow> = sqlx::query_as(
+            "SELECT id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at FROM documents WHERE ref_tag = $1",
+        )
+        .bind(ref_tag)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn list_documents(&self, user_id: Uuid) -> Result<Vec<DocumentRow>> {
+        let rows: Vec<DocumentRow> = sqlx::query_as(
+            "SELECT id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at FROM documents WHERE user_id = $1 ORDER BY updated_at DESC",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn list_session_documents(&self, session_id: Uuid) -> Result<Vec<DocumentRow>> {
+        let rows: Vec<DocumentRow> = sqlx::query_as(
+            "SELECT id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at FROM documents WHERE session_id = $1 ORDER BY updated_at DESC",
+        )
+        .bind(session_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn search_documents(&self, user_id: Uuid, query: &str) -> Result<Vec<DocumentSearchResult>> {
+        let rows: Vec<DocumentSearchResult> = sqlx::query_as(
+            r#"
+            SELECT id, title, summary, ref_tag,
+                   ts_headline('english', content, plainto_tsquery('english', $2),
+                       'StartSel=**, StopSel=**, MaxWords=35, MinWords=15') AS snippet
+            FROM documents
+            WHERE user_id = $1
+              AND to_tsvector('english', title || ' ' || content) @@ plainto_tsquery('english', $2)
+            ORDER BY ts_rank(to_tsvector('english', title || ' ' || content), plainto_tsquery('english', $2)) DESC
+            LIMIT 50
+            "#,
+        )
+        .bind(user_id)
+        .bind(query)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn delete_document(&self, doc_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM documents WHERE id = $1")
+            .bind(doc_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 }

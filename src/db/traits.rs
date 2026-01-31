@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use crate::db::{AgentRow, ChatMessageRow, ClusterRow, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow};
+use crate::db::{AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow};
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::observability::{Decision, LlmCall};
 use crate::orchestration::DependencyError;
@@ -436,4 +436,55 @@ pub trait UserRepo: Send + Sync {
         github_login: &str,
         token_encrypted: &str,
     ) -> Result<User>;
+}
+
+// ============================================================================
+// Document Repository
+// ============================================================================
+
+/// Database operations for document management.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait DocumentRepo: Send + Sync {
+    /// Create a new document.
+    async fn create_document(
+        &self,
+        user_id: Uuid,
+        session_id: Option<Uuid>,
+        title: String,
+        content: String,
+        doc_type: String,
+        ref_tag: String,
+        tags: Vec<String>,
+    ) -> Result<DocumentRow>;
+
+    /// Update a document's content, title, and tags.
+    async fn update_document(
+        &self,
+        doc_id: Uuid,
+        content: Option<String>,
+        title: Option<String>,
+        tags: Option<Vec<String>>,
+    ) -> Result<DocumentRow>;
+
+    /// Update a document's summary.
+    async fn update_document_summary(&self, doc_id: Uuid, summary: String) -> Result<()>;
+
+    /// Get a document by ID.
+    async fn get_document(&self, doc_id: Uuid) -> Result<Option<DocumentRow>>;
+
+    /// Get a document by ref_tag.
+    async fn get_document_by_ref_tag(&self, ref_tag: &str) -> Result<Option<DocumentRow>>;
+
+    /// List all documents for a user.
+    async fn list_documents(&self, user_id: Uuid) -> Result<Vec<DocumentRow>>;
+
+    /// List all documents for a session.
+    async fn list_session_documents(&self, session_id: Uuid) -> Result<Vec<DocumentRow>>;
+
+    /// Full-text search documents for a user.
+    async fn search_documents(&self, user_id: Uuid, query: &str) -> Result<Vec<DocumentSearchResult>>;
+
+    /// Delete a document by ID.
+    async fn delete_document(&self, doc_id: Uuid) -> Result<()>;
 }
