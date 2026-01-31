@@ -7,6 +7,7 @@ pub mod db;
 pub mod error;
 pub mod execution;
 pub mod github;
+pub mod indexing;
 pub mod headless;
 pub mod llm;
 pub mod logging;
