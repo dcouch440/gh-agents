@@ -211,7 +211,7 @@ impl AgentPool {
         );
         self.by_tier
             .entry(tier)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(agent_id.clone());
 
         info!(agent_id = ?agent_id, tier = ?tier, "Spawned agent with dispatcher (run loop started)");

@@ -25,20 +25,17 @@ impl Default for TicketId {
 /// Source of a ticket
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "type")]
+#[derive(Default)]
 pub enum TicketSource {
     GitHub {
         owner: String,
         repo: String,
         issue_number: u32,
     },
+    #[default]
     Manual,
 }
 
-impl Default for TicketSource {
-    fn default() -> Self {
-        Self::Manual
-    }
-}
 
 /// Ticket lifecycle status
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]

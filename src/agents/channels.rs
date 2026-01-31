@@ -13,7 +13,7 @@ use crate::types::{AgentTier, TaskStatus};
 #[derive(Debug, Clone)]
 pub enum AgentCommand {
     /// Assign a task to this agent
-    AssignTask(TaskAssignment),
+    AssignTask(Box<TaskAssignment>),
     /// Provide context the agent requested
     ProvideContext(ContextResponse),
     /// Grant approval for a pending action

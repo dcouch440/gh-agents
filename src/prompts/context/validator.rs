@@ -62,7 +62,7 @@ impl TokenCounter {
         // Rough estimation that works reasonably well
         // Most tokenizers average 3-5 chars per token
         let char_count = text.chars().count();
-        (char_count + 3) / 4 // Round up
+        char_count.div_ceil(4) // Round up
     }
 
     /// Claude-specific counting (placeholder - would use actual tokenizer)

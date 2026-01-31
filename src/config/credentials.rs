@@ -24,6 +24,7 @@ pub enum CredentialsError {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct StoredCredentials {
     pub github_token: Option<String>,
     #[serde(default)]
@@ -32,15 +33,6 @@ pub struct StoredCredentials {
     pub created_at: Option<String>,
 }
 
-impl Default for StoredCredentials {
-    fn default() -> Self {
-        Self {
-            github_token: None,
-            github_user: None,
-            created_at: None,
-        }
-    }
-}
 
 pub struct CredentialsStore {
     path: PathBuf,

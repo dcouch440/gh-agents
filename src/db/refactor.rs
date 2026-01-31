@@ -73,7 +73,7 @@ pub async fn set_milestone_limit(pool: &PgPool, milestone: Option<u8>) -> Result
     match milestone {
         Some(m) => {
             // Validate milestone is in range 1-9
-            if m < 1 || m > 9 {
+            if !(1..=9).contains(&m) {
                 anyhow::bail!("Milestone must be between 1 and 9");
             }
             let value = m.to_string();

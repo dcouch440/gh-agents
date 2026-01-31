@@ -11,6 +11,12 @@ use super::cluster::ClusterId;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PipelineId(pub Uuid);
 
+impl Default for PipelineId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PipelineId {
     pub fn new() -> Self {
         Self(Uuid::new_v4())
@@ -307,7 +313,7 @@ pub fn parse_stage_output(raw: &str, output_schema: &Value) -> Value {
     let has_fields = output_schema
         .get("fields")
         .and_then(|f| f.as_array())
-        .map_or(false, |a| !a.is_empty());
+        .is_some_and(|a| !a.is_empty());
 
     if has_fields {
         // Try ```json ... ``` fenced block

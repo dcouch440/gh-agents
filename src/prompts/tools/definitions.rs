@@ -118,7 +118,7 @@ impl ToolDefinition {
                 format!(
                     "  - {}: {}{} - {}",
                     p.name,
-                    p.param_type.to_string(),
+                    p.param_type,
                     required,
                     p.description
                 )
@@ -138,7 +138,7 @@ Requires approval: {}"#,
             self.name,
             self.description,
             params.join("\n"),
-            self.returns.return_type.to_string(),
+            self.returns.return_type,
             self.returns.description,
             self.side_effects,
             self.requires_approval
@@ -158,14 +158,14 @@ Requires approval: {}"#,
     }
 }
 
-impl ToString for ParameterType {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for ParameterType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::String => "string".to_string(),
-            Self::Number => "number".to_string(),
-            Self::Boolean => "boolean".to_string(),
-            Self::Array { item_type } => format!("array<{}>", item_type.to_string()),
-            Self::Object { .. } => "object".to_string(),
+            Self::String => write!(f, "string"),
+            Self::Number => write!(f, "number"),
+            Self::Boolean => write!(f, "boolean"),
+            Self::Array { item_type } => write!(f, "array<{}>", item_type),
+            Self::Object { .. } => write!(f, "object"),
         }
     }
 }

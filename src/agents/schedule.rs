@@ -11,6 +11,12 @@ use super::agent::AgentId;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ScheduleId(pub Uuid);
 
+impl Default for ScheduleId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ScheduleId {
     pub fn new() -> Self {
         Self(Uuid::new_v4())
@@ -20,6 +26,12 @@ impl ScheduleId {
 /// Unique identifier for a trigger.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TriggerId(pub Uuid);
+
+impl Default for TriggerId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl TriggerId {
     pub fn new() -> Self {

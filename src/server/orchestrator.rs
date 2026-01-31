@@ -673,7 +673,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                             if let Err(e) = disp
                                                 .send_to_agent(
                                                     agent_id,
-                                                    AgentCommand::AssignTask(assignment),
+                                                    AgentCommand::AssignTask(Box::new(assignment)),
                                                 )
                                                 .await
                                             {
@@ -821,7 +821,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                 if let Err(e) = disp
                                     .send_to_agent(
                                         &trigger.agent_id,
-                                        AgentCommand::AssignTask(assignment),
+                                        AgentCommand::AssignTask(Box::new(assignment)),
                                     )
                                     .await
                                 {
@@ -905,7 +905,7 @@ pub fn spawn_schedule_runner(state: AppState) -> Option<tokio::task::JoinHandle<
 
                 let disp = dispatcher.lock().await;
                 if let Err(e) = disp
-                    .send_to_agent(&schedule.agent_id, AgentCommand::AssignTask(assignment))
+                    .send_to_agent(&schedule.agent_id, AgentCommand::AssignTask(Box::new(assignment)))
                     .await
                 {
                     error!("Schedule {} failed to assign task: {}", schedule.name, e);
@@ -1064,7 +1064,7 @@ async fn handle_message(
                             if !targeted.contains("No prior context needed") {
                                 hist_messages.insert(
                                     0,
-                                    Message::user(&format!("[Prior context] {}", targeted)),
+                                    Message::user(format!("[Prior context] {}", targeted)),
                                 );
                                 hist_messages.insert(
                                     1,
@@ -1256,7 +1256,7 @@ async fn handle_message(
                         let tool_use_id = id.clone();
                         let tool_input = input.clone();
                         let tool_output = result_str.clone();
-                        let tool_round = round as i32;
+                        let tool_round = round;
                         tokio::spawn(async move {
                             let _ = repo
                                 .insert_tool_call(
