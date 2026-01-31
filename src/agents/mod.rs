@@ -7,6 +7,7 @@ mod dispatcher;
 mod escalation;
 pub mod execution_tools;
 mod executor;
+pub mod tool_router;
 pub mod pipeline;
 pub mod planner_bot;
 mod pool;

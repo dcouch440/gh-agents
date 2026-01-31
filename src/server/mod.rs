@@ -487,6 +487,9 @@ mod tests {
         ) -> anyhow::Result<()> {
             Ok(())
         }
+        async fn seed_builtin_tools(&self, _user_id: UserId) -> anyhow::Result<()> {
+            Ok(())
+        }
         async fn get_agent_context(
             &self,
             _agent_id: Uuid,

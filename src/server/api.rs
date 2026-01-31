@@ -306,6 +306,7 @@ pub async fn create_agent(
         model_max_tokens: request.model_max_tokens.unwrap_or(4096),
         model_temperature: request.model_temperature.unwrap_or(0.7),
         status: "idle".to_string(),
+        router_mode: false,
     };
 
     state
@@ -362,6 +363,7 @@ pub async fn update_agent(
             .model_temperature
             .unwrap_or(existing.model_temperature),
         status: existing.status,
+        router_mode: existing.router_mode,
     };
 
     state
@@ -402,6 +404,8 @@ pub struct ToolResponse {
     pub parameter_schema: serde_json::Value,
     pub output_schema: serde_json::Value,
     pub enabled: bool,
+    pub cluster_id: Option<String>,
+    pub is_builtin: bool,
 }
 
 impl ToolResponse {
@@ -414,6 +418,8 @@ impl ToolResponse {
             parameter_schema: row.parameter_schema,
             output_schema: row.output_schema,
             enabled: row.enabled,
+            cluster_id: row.cluster_id.map(|id| id.to_string()),
+            is_builtin: row.is_builtin,
         }
     }
 }
@@ -427,6 +433,7 @@ pub struct CreateToolRequest {
     pub parameter_schema: Option<serde_json::Value>,
     pub output_schema: Option<serde_json::Value>,
     pub enabled: Option<bool>,
+    pub cluster_id: Option<String>,
 }
 
 /// Request to update an existing tool
@@ -438,6 +445,7 @@ pub struct UpdateToolRequest {
     pub parameter_schema: Option<serde_json::Value>,
     pub output_schema: Option<serde_json::Value>,
     pub enabled: Option<bool>,
+    pub cluster_id: Option<String>,
 }
 
 /// Request to set tools for an agent
@@ -478,6 +486,13 @@ pub async fn create_tool(
         return Err(StatusCode::BAD_REQUEST);
     }
 
+    let cluster_id = request
+        .cluster_id
+        .as_deref()
+        .map(Uuid::parse_str)
+        .transpose()
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+
     let row = crate::db::ToolRow {
         id: Uuid::new_v4(),
         name: request.name.trim().to_string(),
@@ -490,6 +505,8 @@ pub async fn create_tool(
             .output_schema
             .unwrap_or_else(|| serde_json::json!({})),
         enabled: request.enabled.unwrap_or(true),
+        cluster_id,
+        is_builtin: false,
     };
 
     state
@@ -531,6 +548,11 @@ pub async fn update_tool(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
 
+    let cluster_id = match &request.cluster_id {
+        Some(cid) => Some(Uuid::parse_str(cid).map_err(|_| StatusCode::BAD_REQUEST)?),
+        None => existing.cluster_id,
+    };
+
     let updated = crate::db::ToolRow {
         id: existing.id,
         name: request.name.unwrap_or(existing.name),
@@ -541,6 +563,8 @@ pub async fn update_tool(
             .unwrap_or(existing.parameter_schema),
         output_schema: request.output_schema.unwrap_or(existing.output_schema),
         enabled: request.enabled.unwrap_or(existing.enabled),
+        cluster_id,
+        is_builtin: existing.is_builtin,
     };
 
     state
@@ -1572,6 +1596,9 @@ pub async fn auth_register(
         .create_user(&request.email, &hash)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Seed built-in execution tools for the new user
+    let _ = state.repo.seed_builtin_tools(user.id).await;
 
     let token = auth::create_token(&state.jwt_secret, 24, user.id, &user.email)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -2720,6 +2747,8 @@ pub async fn approve_pipeline_run(
                                 execution_context: Some(crate::execution::ExecutionContext::new(
                                     std::env::current_dir().unwrap_or_default(),
                                 )),
+                                tool_rows: vec![],
+                                router_mode: false,
                             },
                             constraints: TaskConstraints::default(),
                             timeout: std::time::Duration::from_secs(
@@ -3127,6 +3156,9 @@ mod tests {
             for tid in tool_ids {
                 at.push((agent_id, tid));
             }
+            Ok(())
+        }
+        async fn seed_builtin_tools(&self, _user_id: UserId) -> anyhow::Result<()> {
             Ok(())
         }
         async fn get_agent_context(
