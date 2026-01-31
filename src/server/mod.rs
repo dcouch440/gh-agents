@@ -110,6 +110,17 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
                 .patch(api::update_agent)
                 .delete(api::delete_agent),
         )
+        .route(
+            "/agents/:id/tools",
+            get(api::get_agent_tools).put(api::set_agent_tools),
+        )
+        .route("/tools", get(api::list_tools).post(api::create_tool))
+        .route(
+            "/tools/:id",
+            get(api::get_tool)
+                .patch(api::update_tool)
+                .delete(api::delete_tool),
+        )
         .route("/config", get(api::get_config).patch(api::update_config))
         // Chat endpoints (Ticket 10.3)
         .route("/chat", post(api::send_chat))
@@ -422,6 +433,41 @@ mod tests {
             Ok(())
         }
         async fn delete_persisted_agent(&self, _agent_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_tools(
+            &self,
+            _user_id: UserId,
+        ) -> anyhow::Result<Vec<crate::db::ToolRow>> {
+            Ok(vec![])
+        }
+        async fn get_tool(
+            &self,
+            _tool_id: Uuid,
+        ) -> anyhow::Result<Option<crate::db::ToolRow>> {
+            Ok(None)
+        }
+        async fn upsert_tool(
+            &self,
+            _user_id: UserId,
+            _tool: crate::db::ToolRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn delete_tool(&self, _tool_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn get_agent_tools(
+            &self,
+            _agent_id: Uuid,
+        ) -> anyhow::Result<Vec<crate::db::ToolRow>> {
+            Ok(vec![])
+        }
+        async fn set_agent_tools(
+            &self,
+            _agent_id: Uuid,
+            _tool_ids: Vec<Uuid>,
+        ) -> anyhow::Result<()> {
             Ok(())
         }
         async fn list_persisted_clusters(

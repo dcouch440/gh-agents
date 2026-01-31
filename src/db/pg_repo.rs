@@ -12,7 +12,7 @@ use crate::db::traits::{
 };
 use crate::db::{
     AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, PipelineRow,
-    PipelineStageRow, ScheduleRow, SessionRow, TriggerRow, UsageSummaryRow,
+    PipelineStageRow, ScheduleRow, SessionRow, ToolRow, TriggerRow, UsageSummaryRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::observability::{Decision, LlmCall};
@@ -1030,6 +1030,124 @@ impl ServerRepo for PgRepo {
         Ok(())
     }
 
+    // --- Tool persistence ---
+
+    async fn list_tools(&self, user_id: UserId) -> Result<Vec<ToolRow>> {
+        let rows = sqlx::query_as::<_, PgToolRow>(
+            "SELECT id, name, description, category, parameter_schema, output_schema, enabled FROM tools WHERE user_id = $1 ORDER BY category, name",
+        )
+        .bind(user_id.0)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| ToolRow {
+                id: r.id,
+                name: r.name,
+                description: r.description,
+                category: r.category,
+                parameter_schema: r.parameter_schema,
+                output_schema: r.output_schema,
+                enabled: r.enabled,
+            })
+            .collect())
+    }
+
+    async fn get_tool(&self, tool_id: Uuid) -> Result<Option<ToolRow>> {
+        let row = sqlx::query_as::<_, PgToolRow>(
+            "SELECT id, name, description, category, parameter_schema, output_schema, enabled FROM tools WHERE id = $1",
+        )
+        .bind(tool_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| ToolRow {
+            id: r.id,
+            name: r.name,
+            description: r.description,
+            category: r.category,
+            parameter_schema: r.parameter_schema,
+            output_schema: r.output_schema,
+            enabled: r.enabled,
+        }))
+    }
+
+    async fn upsert_tool(&self, user_id: UserId, tool: ToolRow) -> Result<()> {
+        sqlx::query(r#"
+            INSERT INTO tools (id, user_id, name, description, category, parameter_schema, output_schema, enabled)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (id) DO UPDATE SET
+                name = EXCLUDED.name,
+                description = EXCLUDED.description,
+                category = EXCLUDED.category,
+                parameter_schema = EXCLUDED.parameter_schema,
+                output_schema = EXCLUDED.output_schema,
+                enabled = EXCLUDED.enabled
+        "#)
+        .bind(tool.id)
+        .bind(user_id.0)
+        .bind(&tool.name)
+        .bind(&tool.description)
+        .bind(&tool.category)
+        .bind(&tool.parameter_schema)
+        .bind(&tool.output_schema)
+        .bind(tool.enabled)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn delete_tool(&self, tool_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM tools WHERE id = $1")
+            .bind(tool_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn get_agent_tools(&self, agent_id: Uuid) -> Result<Vec<ToolRow>> {
+        let rows = sqlx::query_as::<_, PgToolRow>(
+            "SELECT t.id, t.name, t.description, t.category, t.parameter_schema, t.output_schema, t.enabled FROM tools t INNER JOIN agent_tools at ON t.id = at.tool_id WHERE at.agent_id = $1 ORDER BY t.category, t.name",
+        )
+        .bind(agent_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| ToolRow {
+                id: r.id,
+                name: r.name,
+                description: r.description,
+                category: r.category,
+                parameter_schema: r.parameter_schema,
+                output_schema: r.output_schema,
+                enabled: r.enabled,
+            })
+            .collect())
+    }
+
+    async fn set_agent_tools(&self, agent_id: Uuid, tool_ids: Vec<Uuid>) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query("DELETE FROM agent_tools WHERE agent_id = $1")
+            .bind(agent_id)
+            .execute(&mut *tx)
+            .await?;
+
+        for tool_id in tool_ids {
+            sqlx::query("INSERT INTO agent_tools (agent_id, tool_id) VALUES ($1, $2)")
+                .bind(agent_id)
+                .bind(tool_id)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        tx.commit().await?;
+        Ok(())
+    }
+
     // --- Cluster persistence ---
 
     async fn list_persisted_clusters(&self, user_id: UserId) -> Result<Vec<ClusterRow>> {
@@ -1496,6 +1614,17 @@ struct PgAgentRow {
     model_max_tokens: i32,
     model_temperature: f32,
     status: String,
+}
+
+#[derive(sqlx::FromRow)]
+struct PgToolRow {
+    id: Uuid,
+    name: String,
+    description: String,
+    category: String,
+    parameter_schema: serde_json::Value,
+    output_schema: serde_json::Value,
+    enabled: bool,
 }
 
 #[derive(sqlx::FromRow)]
