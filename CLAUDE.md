@@ -58,11 +58,6 @@ decomp/                # Ticket breakdowns by milestone
 - Unit tests in `#[cfg(test)]` modules, integration tests in `tests/`
 - Commit format: `type(scope): description` (feat, fix, docs, refactor, test, chore)
 
-## Status
-
-See `PROGRESS.md` for detailed tracking. See `ROADMAP.md` for milestone plans.
-
-M1-M5, M7-M11: Complete. M6: Deprecated (TUI). M12: In progress. M13-M16: Planned.
 
 ## Off-limits directories
 
@@ -81,8 +76,8 @@ docker exec -it gh-agents-postgres-1 psql -U nexor -d nexor              # Inter
 
 ## Working with this repo
 
-- Read `PROGRESS.md` before starting work to check dependencies
 - Always write tests when completing a ticket
 - Verify with `cargo check` and `cargo test` before committing
 - Save notes to `doc/` when requested
 - Stay out of /cli
+= In ui/ always prefer reusable components.
