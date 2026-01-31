@@ -1251,6 +1251,10 @@ impl ServerRepo for PgRepo {
         crate::db::get_session_history(&self.pool, session_id, limit).await
     }
 
+    async fn update_session_title(&self, session_id: Uuid, title: &str) -> Result<()> {
+        crate::db::update_session_title(&self.pool, session_id, title).await
+    }
+
     async fn update_session_summary(&self, session_id: Uuid, summary: &str) -> Result<()> {
         sqlx::query("UPDATE chat_sessions SET summary = $1 WHERE id = $2")
             .bind(summary)

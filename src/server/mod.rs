@@ -115,7 +115,7 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
         // Mode & Session endpoints
         .route("/modes", get(api::list_modes))
         .route("/sessions", get(api::list_sessions).post(api::create_session))
-        .route("/sessions/:session_id", get(api::get_session).delete(api::delete_session))
+        .route("/sessions/:session_id", get(api::get_session).patch(api::update_session).delete(api::delete_session))
         .route("/sessions/:session_id/chat", post(api::send_session_chat))
         .route("/sessions/:session_id/history", get(api::get_session_history))
         .route("/sessions/:session_id/chat/:message_id/stream", get(api::session_chat_stream))
@@ -391,6 +391,7 @@ mod tests {
         async fn delete_session(&self, _session_id: Uuid) -> anyhow::Result<()> { Ok(()) }
         async fn insert_session_message(&self, _user_id: UserId, _session_id: Uuid, _id: Uuid, _role: String, _content: String) -> anyhow::Result<()> { Ok(()) }
         async fn get_session_history(&self, _session_id: Uuid, _limit: u32) -> anyhow::Result<Vec<ChatMessageRow>> { Ok(vec![]) }
+        async fn update_session_title(&self, _session_id: Uuid, _title: &str) -> anyhow::Result<()> { Ok(()) }
         async fn update_session_summary(&self, _session_id: Uuid, _summary: &str) -> anyhow::Result<()> { Ok(()) }
         async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> { Ok(0) }
         async fn insert_token_usage(&self, _session_id: Option<Uuid>, _agent_id: Option<Uuid>, _tier: &str, _model_id: &str, _input_tokens: i64, _output_tokens: i64) -> anyhow::Result<()> { Ok(()) }

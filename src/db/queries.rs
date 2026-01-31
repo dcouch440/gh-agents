@@ -384,6 +384,17 @@ pub async fn get_session_history(
     Ok(rows)
 }
 
+/// Update session title
+pub async fn update_session_title(pool: &PgPool, session_id: Uuid, title: &str) -> Result<()> {
+    sqlx::query("UPDATE chat_sessions SET title = $2, updated_at = NOW() WHERE id = $1")
+        .bind(session_id)
+        .bind(title)
+        .execute(pool)
+        .await
+        .context("Failed to update session title")?;
+    Ok(())
+}
+
 /// Update session updated_at timestamp
 pub async fn touch_session(pool: &PgPool, session_id: Uuid) -> Result<()> {
     sqlx::query("UPDATE chat_sessions SET updated_at = NOW() WHERE id = $1")

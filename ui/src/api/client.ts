@@ -148,6 +148,11 @@ export const api = {
       }),
     list: () => fetchApi<SessionResponse[]>('/sessions'),
     get: (sessionId: string) => fetchApi<SessionResponse>(`/sessions/${sessionId}`),
+    update: (sessionId: string, title: string) =>
+      fetchApi<SessionResponse>(`/sessions/${sessionId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ title }),
+      }),
     delete: (sessionId: string) =>
       fetchApi<void>(`/sessions/${sessionId}`, { method: 'DELETE' }),
     send: (sessionId: string, message: string) =>
