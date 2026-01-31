@@ -46,10 +46,13 @@ impl AnthropicConfig {
         let api_key = std::env::var("ANTHROPIC_API_KEY")
             .map_err(|_| LLMError::AuthError("ANTHROPIC_API_KEY not set".to_string()))?;
 
+        let model = std::env::var("ANTHROPIC_MODEL")
+            .unwrap_or_else(|_| "claude-sonnet-4-20250514".to_string());
+
         Ok(Self {
             api_key,
             base_url: DEFAULT_BASE_URL.to_string(),
-            model: "claude-sonnet-4-20250514".to_string(),
+            model,
             timeout_secs: DEFAULT_TIMEOUT_SECS,
         })
     }

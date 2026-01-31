@@ -400,6 +400,24 @@ pub async fn chat_stream(
     State(state): State<AppState>,
     Path(message_id): Path<Uuid>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    chat_stream_inner(state, message_id)
+}
+
+/// Stream chat response for session-scoped messages.
+///
+/// Same as `chat_stream` but extracts both session_id and message_id
+/// from the path (only message_id is used for stream lookup).
+pub async fn session_chat_stream(
+    State(state): State<AppState>,
+    Path((_session_id, message_id)): Path<(Uuid, Uuid)>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    chat_stream_inner(state, message_id)
+}
+
+fn chat_stream_inner(
+    state: AppState,
+    message_id: Uuid,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let stream = async_stream::stream! {
         let (buffered, mut rx, already_done) = state.get_response_stream(message_id).await;
 
