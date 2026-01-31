@@ -79,5 +79,5 @@ docker exec -it gh-agents-postgres-1 psql -U nexor -d nexor              # Inter
 - Always write tests when completing a ticket
 - Verify with `cargo check` and `cargo test` before committing
 - Save notes to `doc/` when requested
-- Stay out of /cli
+- Stay out of /cli and /archive
 = In ui/ always prefer reusable components.
