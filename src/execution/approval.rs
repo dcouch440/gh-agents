@@ -410,7 +410,7 @@ impl InteractiveApprovalGate {
 
         // Wait for response with timeout
         let response = tokio::time::timeout(
-            std::time::Duration::from_secs(300), // 5 minute timeout
+            std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),
             response_rx,
         )
         .await

@@ -100,7 +100,7 @@ pub async fn list_tasks(
     status: Option<&str>,
     limit: Option<u32>,
 ) -> Result<Vec<Task>> {
-    let limit = limit.unwrap_or(100).min(1000) as i64;
+    let limit = limit.unwrap_or(crate::constants::DEFAULT_QUERY_LIMIT as u32).min(crate::constants::MAX_QUERY_LIMIT as u32) as i64;
 
     let rows: Vec<TaskRow> = if let Some(status_filter) = status {
         sqlx::query_as(

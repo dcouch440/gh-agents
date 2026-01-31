@@ -249,7 +249,7 @@ async fn haiku_index_file(path: &str, content: &str) -> (String, Vec<Symbol>) {
     };
 
     // Truncate to 4000 chars for Haiku
-    let truncated: String = content.chars().take(4000).collect();
+    let truncated: String = content.chars().take(crate::constants::TRUNCATE_INDEX_INPUT).collect();
     let prompt = format!(
         "File: {}\n\n```\n{}\n```\n\nReturn JSON only, no markdown:\n{{\"summary\": \"1-2 sentence description\", \"symbols\": [{{\"name\": \"...\", \"kind\": \"Struct|Function|Trait|Enum|Mod|Const|Impl|Type\", \"line\": N}}]}}",
         path, truncated

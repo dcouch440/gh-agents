@@ -148,9 +148,9 @@ pub struct SchedulerConfig {
 impl Default for SchedulerConfig {
     fn default() -> Self {
         Self {
-            poll_interval_ms: 100,
-            batch_size: 5,
-            agent_wait_timeout_ms: 500,
+            poll_interval_ms: crate::constants::SCHEDULER_POLL_INTERVAL_MS,
+            batch_size: crate::constants::SCHEDULER_BATCH_SIZE,
+            agent_wait_timeout_ms: crate::constants::SCHEDULER_AGENT_WAIT_MS,
         }
     }
 }

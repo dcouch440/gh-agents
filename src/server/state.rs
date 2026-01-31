@@ -246,11 +246,11 @@ impl AppState {
         scheduler: Option<Arc<RwLock<Scheduler>>>,
         config: AppConfig,
     ) -> (Self, mpsc::Receiver<OrchestratorMessage>) {
-        let (orchestrator_tx, orchestrator_rx) = mpsc::channel(100);
-        let (feed_tx, _) = broadcast::channel(100);
-        let (task_tx, _) = broadcast::channel(100);
-        let (agent_tx, _) = broadcast::channel(100);
-        let (session_tx, _) = broadcast::channel(100);
+        let (orchestrator_tx, orchestrator_rx) = mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
+        let (feed_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
+        let (task_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
+        let (agent_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
+        let (session_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
 
         // Generate a random JWT secret
         // In production, this should be persisted or configured via environment variable

@@ -1691,7 +1691,7 @@ mod tests {
             limit: Option<u32>,
         ) -> anyhow::Result<Vec<Task>> {
             let tasks = self.tasks.lock().unwrap();
-            let limit = limit.unwrap_or(100).min(1000) as usize;
+            let limit = limit.unwrap_or(crate::constants::DEFAULT_QUERY_LIMIT as u32).min(crate::constants::MAX_QUERY_LIMIT as u32) as usize;
             let filtered: Vec<Task> = tasks
                 .iter()
                 .filter(|t| {

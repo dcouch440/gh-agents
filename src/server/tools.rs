@@ -1011,7 +1011,7 @@ async fn execute_assign_task(input: &Value, state: &AppState) -> Value {
             execution_context,
         },
         constraints,
-        timeout: Duration::from_secs(300),
+        timeout: Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),
         role_id,
     };
 
@@ -1434,7 +1434,7 @@ async fn execute_start_pipeline(input: &Value, state: &AppState) -> Value {
             execution_context,
         },
         constraints: TaskConstraints::default(),
-        timeout: Duration::from_secs(300),
+        timeout: Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),
         role_id,
     };
 
@@ -1738,7 +1738,7 @@ async fn execute_read_file(input: &Value) -> Value {
                     let line_count = content.lines().count();
 
                     // Small files: return directly
-                    if content.len() <= 2_000 {
+                    if content.len() <= crate::constants::TRUNCATE_SMALL_FILE {
                         return json!({
                             "path": path_str,
                             "content": content,
@@ -1749,7 +1749,7 @@ async fn execute_read_file(input: &Value) -> Value {
                     }
 
                     // Large files: summarize with Haiku
-                    let truncated_for_haiku: String = content.chars().take(10_000).collect();
+                    let truncated_for_haiku: String = content.chars().take(crate::constants::TRUNCATE_SUMMARIZE_INPUT).collect();
                     let focus_instruction = match focus {
                         Some(f) => format!(
                             "Focus on: {}. Extract the most relevant code sections, function signatures, and logic related to this focus area.",
@@ -1773,7 +1773,7 @@ async fn execute_read_file(input: &Value) -> Value {
                         }),
                         None => {
                             // Haiku failed — fall back to truncated content
-                            let fallback: String = content.chars().take(2_000).collect();
+                            let fallback: String = content.chars().take(crate::constants::TRUNCATE_SMALL_FILE).collect();
                             json!({
                                 "path": path_str,
                                 "content": fallback,
@@ -1845,7 +1845,7 @@ async fn execute_search_files(input: &Value) -> Value {
         return json!({ "error": "Missing required parameter: pattern" });
     };
     let path_str = input["path"].as_str().unwrap_or(".");
-    let max_results = input["max_results"].as_u64().unwrap_or(20) as usize;
+    let max_results = input["max_results"].as_u64().unwrap_or(crate::constants::DEFAULT_SEARCH_RESULTS as u64) as usize;
 
     let cwd = std::env::current_dir().unwrap_or_default();
     let search_dir = if path_str.is_empty() || path_str == "." {
@@ -1963,7 +1963,7 @@ pub async fn haiku_summarize(content: &str) -> Option<String> {
     let config = AnthropicConfig::from_env().ok()?;
     let client = AnthropicClient::new(config).ok()?;
 
-    let truncated: String = content.chars().take(8000).collect();
+    let truncated: String = content.chars().take(crate::constants::TRUNCATE_SUMMARY_INPUT).collect();
     let request = LLMRequest::new(
         crate::constants::MODEL_HAIKU,
         vec![LlmMessage::user(truncated)],
@@ -1985,7 +1985,7 @@ pub async fn haiku_summarize_title(content: &str) -> Option<String> {
     let config = AnthropicConfig::from_env().ok()?;
     let client = AnthropicClient::new(config).ok()?;
 
-    let truncated: String = content.chars().take(2000).collect();
+    let truncated: String = content.chars().take(crate::constants::TRUNCATE_TITLE_INPUT).collect();
     let request = LLMRequest::new(
         crate::constants::MODEL_HAIKU,
         vec![LlmMessage::user(truncated)],
