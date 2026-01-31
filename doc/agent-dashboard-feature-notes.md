@@ -157,6 +157,118 @@ The pre-defined agents and chat views aren't working well. Too many hardcoded to
 
 **Tests:** All 1,985 tests pass.
 
+### Part 4: Pipeline-Cluster Wiring + Fan-out + Side Tasks — Server (2026-01-31)
+
+**Files modified:**
+- `migrations/026_pipeline_cluster_wiring.sql` — Added cluster_id + fan_out to pipeline_stages, made agent_id nullable, added role + persona_override to cluster_members, created stage_side_tasks table
+- `src/db/mod.rs` — Updated PipelineStageRow (agent_id → Option, added cluster_id, fan_out), added StageSideTaskRow
+- `src/db/traits.rs` — Added 3 side task methods to ServerRepo (list_stage_side_tasks, upsert_stage_side_task, delete_stage_side_task)
+- `src/db/pg_repo.rs` — Updated pipeline stage queries for new columns, added 3 side task query implementations
+- `src/agents/pipeline.rs` — Updated PipelineStage (agent_id → Option, added cluster_id, fan_out), updated add_stage() signature, updated test macro
+- `src/server/tools.rs` — Updated add_pipeline_stage handler (agent_id/cluster_id both optional, added fan_out), updated start_pipeline for optional agent_id
+- `src/server/state.rs` — Updated pipeline restoration for new add_stage params
+- `src/server/api.rs` — Added CreateSideTaskRequest, SideTaskResponse, 3 side task handlers, 3 integration tests
+- `src/server/mod.rs` — Added side task routes, added `delete` import, updated mock
+- `src/server/orchestrator.rs` — Updated pipeline advance for optional agent_id, updated mock
+
+**Endpoints added:**
+- `GET /api/pipelines/:id/stages/:n/side-tasks` — List side tasks for a stage
+- `POST /api/pipelines/:id/stages/:n/side-tasks` — Create side task
+- `DELETE /api/pipelines/:id/stages/:n/side-tasks/:sid` — Delete side task
+
+**Schema changes:**
+- `pipeline_stages.agent_id` now nullable (stages can use cluster_id instead)
+- `pipeline_stages.cluster_id` — optional FK to clusters table
+- `pipeline_stages.fan_out` — boolean, controls array output → N instances of next stage
+- `cluster_members.role` — optional role override per cluster member
+- `cluster_members.persona_override` — persona override per cluster member
+- `stage_side_tasks` — new table for independent parallel agents (id, pipeline_id, stage_number, agent_id, input_definitions, output_name, blocking, output_schema)
+
+**Notes:** Data-only pass. Fan-out execution, side task runtime, and cluster-based stage execution not yet wired — schema and API are ready for it.
+
+**Tests:** All 1,988 tests pass.
+
+## Design Notes
+
+### Core Execution Model: Pipelines and Clusters
+
+**Agents are stateless prompt-in / response-out units.** They don't "delegate." They don't know who came before or after them. The *pipeline* orchestrates everything — agents just receive a prompt and return a response.
+
+**Pipeline** = the job. A sequence of stages that transforms input into output. The pipeline owns the execution flow: what runs, in what order, what fans out.
+
+**Cluster** = a group of agents that handles one stage. A cluster defines *who* does the work at a given stage — which agents, how many, what role/persona they use. Multiple clusters participate in a single pipeline.
+
+**Fan-out** = when a stage produces an array output, the pipeline can spawn one instance of the next stage per item. The next cluster handles each item independently.
+
+**Example pipeline:**
+```
+Pipeline: "Feature Build"
+
+Stage 1 → Cluster A (1 Orchestrator-type agent)
+  Input: static ticket array from DB
+  Output: array of individual tickets
+  Fan-out: yes → each ticket goes to Stage 2 independently
+
+Stage 2 → Cluster B (N Planner agents)
+  Input: single ticket (from fan-out)
+  Output: implementation plan
+  Fan-out: yes → each plan goes to Stage 3
+
+Stage 3 → Cluster C (N Implementer agents)
+  Input: single plan (from fan-out)
+  Output: code + report
+```
+
+**Key principles:**
+1. **No tier system.** Agents are just agents with a persona, model config, and tools. A "smart" agent can hand off to other "smart" agents — the pipeline controls the flow, not a hierarchy.
+2. **Agents are unaware of each other.** They receive a rendered prompt (from the stage template system) and return structured output. The pipeline stitches it together.
+3. **Clusters are reusable.** The same cluster can appear in multiple pipelines.
+4. **Fan-out is optional per stage.** If output is an array and next stage is configured for fan-out, the pipeline spawns N instances. Otherwise it passes the full output as-is.
+
+**Side tasks:**
+- Any stage can have zero or more **side tasks** — independent agents that run in parallel with the cluster's main work.
+- A side task gets its own input (referencing any previous stage output), produces its own named output, and has a **blocking flag**.
+- **Blocking = true**: pipeline waits for the side task before advancing to the next stage.
+- **Blocking = false**: pipeline continues; the side task's output becomes available to later stages whenever it finishes.
+- Use cases: generating docs in parallel, pre-processing data for a future stage, validation checks, anything that can run alongside the main work.
+- Side task output feeds into later stages via the same `{{side_task_name.field}}` template system.
+
+**Schema implications:**
+- `clusters` table — id, user_id, name, description
+- `cluster_agents` join table — cluster_id, agent_id, role/persona override
+- `pipeline_stages` reworked — reference cluster_id instead of agent_id, add fan_out config
+- `stage_side_tasks` table — stage reference, agent_id, input source, output_name, blocking flag
+- Drop `AgentTier` enum from execution path (keep as optional label/tag if useful for UI)
+- Delegation system (`DelegationContext`, `can_delegate_to`) becomes unnecessary — the pipeline handles all routing
+
+### Required Reading Must Be Enforced
+
+Previous iterations had agents with required_reading configured but they never actually read the files. Going forward:
+
+1. **Required reading = cloud documents, not repo files.** These are user-authored docs (conventions, style guides, PRDs, etc.) stored in the DB and managed through the UI editor — not files in the git repo.
+2. **Content must be injected into context**, not just referenced. The system prompt should include the actual document contents, not just a "please read X" instruction. The system fetches from DB and injects at task assignment time.
+3. **CRUD via the dashboard** — users create, edit, and manage these documents in the UI editor. The role config links documents to roles as required reading.
+4. **Validate at task assignment time** — if a required document has been deleted or is empty, surface a warning in the UI rather than silently skipping it.
+5. **DB schema needed** — a `documents` table (id, user_id, title, content, created_at, updated_at) and a join to roles via required_reading references.
+
+### Future: Human-in-the-Loop Stage Checkpoints
+
+The pipeline should support pausing at any stage for human interaction before and after execution:
+
+1. **Pre-execution chat** — when a stage is paused, the user can open a chat with the agent to discuss the task. The agent presents its understanding of the work (e.g. "here are the features I'll implement"), and the human refines, adds detail, or corrects before approving execution.
+2. **Prompt intervention** — the rendered prompt is visible and editable. The human can modify it before the agent runs. Similar to the existing chat experience but scoped to a specific stage instance.
+3. **Post-execution verification** — after a stage completes, the pipeline can loop through a checklist (feature list, requirements, acceptance criteria) and verify each item was addressed before advancing to the next stage.
+4. **Stage execution states** — beyond pending/running/done, stages need: `paused_pre`, `awaiting_approval`, `paused_post`, `verified`. Schema should leave room for this.
+5. **Chat session per stage instance** — tie a chat/conversation to a specific stage execution so the context is preserved and reviewable.
+
+This is a future feature. The current schema should accommodate it by:
+- Including a `status` field on stage executions with extensible states
+- Supporting a link between stage instances and chat sessions
+- Keeping the rendered prompt as a stored artifact (not just computed on the fly)
+
 ## Open Questions (remaining)
 
 1. Should teams be scoped per-project or global?
+2. Fan-in: when multiple fan-out instances complete, does the pipeline need a "reduce" stage that collects all results? Or is that a future concern?
+3. Concurrency limits on fan-out — if a stage fans out to 50 items, do we cap parallel execution?
+4. Error handling in fan-out — if 1 of N fails, does the whole pipeline fail or continue with partial results?

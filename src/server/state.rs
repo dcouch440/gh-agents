@@ -196,9 +196,11 @@ impl AppState {
                         for stage in stages {
                             let _ = mgr.add_stage(
                                 pid,
-                                crate::agents::AgentId(stage.agent_id),
+                                stage.agent_id.map(crate::agents::AgentId),
+                                stage.cluster_id.map(crate::agents::ClusterId),
                                 stage.role,
                                 stage.approval_required,
+                                stage.fan_out,
                                 stage.stage_name,
                                 stage.input_definitions,
                                 stage.output_description,

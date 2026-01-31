@@ -376,11 +376,11 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         );
                                     }
 
-                                    if let Some(disp) = &state.dispatcher {
+                                    if let (Some(disp), Some(agent_id)) = (&state.dispatcher, &next_stage.agent_id) {
                                         let disp = disp.lock().await;
                                         if let Err(e) = disp
                                             .send_to_agent(
-                                                &next_stage.agent_id,
+                                                agent_id,
                                                 AgentCommand::AssignTask(assignment),
                                             )
                                             .await
@@ -1272,6 +1272,22 @@ mod tests {
             Ok(vec![])
         }
         async fn upsert_pipeline_stage(&self, _stage: PipelineStageRow) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_stage_side_tasks(
+            &self,
+            _pipeline_id: Uuid,
+            _stage_number: i32,
+        ) -> anyhow::Result<Vec<crate::db::StageSideTaskRow>> {
+            Ok(vec![])
+        }
+        async fn upsert_stage_side_task(
+            &self,
+            _side_task: crate::db::StageSideTaskRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn delete_stage_side_task(&self, _side_task_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
         async fn list_schedules(&self, _user_id: UserId) -> anyhow::Result<Vec<ScheduleRow>> {

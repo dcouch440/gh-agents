@@ -2119,6 +2119,112 @@ pub async fn render_pipeline_stage(
 }
 
 // ============================================================================
+// Stage Side Tasks
+// ============================================================================
+
+#[derive(Deserialize)]
+pub struct CreateSideTaskRequest {
+    pub agent_id: String,
+    pub input_definitions: Option<serde_json::Value>,
+    pub output_name: Option<String>,
+    pub blocking: Option<bool>,
+    pub output_schema: Option<serde_json::Value>,
+}
+
+#[derive(Serialize)]
+pub struct SideTaskResponse {
+    pub id: String,
+    pub agent_id: String,
+    pub input_definitions: serde_json::Value,
+    pub output_name: String,
+    pub blocking: bool,
+    pub output_schema: serde_json::Value,
+}
+
+impl SideTaskResponse {
+    fn from_row(row: crate::db::StageSideTaskRow) -> Self {
+        Self {
+            id: row.id.to_string(),
+            agent_id: row.agent_id.to_string(),
+            input_definitions: row.input_definitions,
+            output_name: row.output_name,
+            blocking: row.blocking,
+            output_schema: row.output_schema,
+        }
+    }
+}
+
+pub async fn list_stage_side_tasks(
+    State(state): State<AppState>,
+    _user: auth::AuthUser,
+    Path((pipeline_id, stage_number)): Path<(String, i32)>,
+) -> Result<Json<Vec<SideTaskResponse>>, StatusCode> {
+    let Ok(pipeline_uuid) = Uuid::parse_str(&pipeline_id) else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+    let rows = state
+        .repo
+        .list_stage_side_tasks(pipeline_uuid, stage_number)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let tasks = rows.into_iter().map(SideTaskResponse::from_row).collect();
+    Ok(Json(tasks))
+}
+
+pub async fn create_stage_side_task(
+    State(state): State<AppState>,
+    _user: auth::AuthUser,
+    Path((pipeline_id, stage_number)): Path<(String, i32)>,
+    Json(request): Json<CreateSideTaskRequest>,
+) -> Result<(StatusCode, Json<SideTaskResponse>), StatusCode> {
+    let Ok(pipeline_uuid) = Uuid::parse_str(&pipeline_id) else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+    let Ok(agent_uuid) = Uuid::parse_str(&request.agent_id) else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+
+    let row = crate::db::StageSideTaskRow {
+        id: Uuid::new_v4(),
+        pipeline_id: pipeline_uuid,
+        stage_number,
+        agent_id: agent_uuid,
+        input_definitions: request
+            .input_definitions
+            .unwrap_or_else(|| serde_json::json!([])),
+        output_name: request.output_name.unwrap_or_default(),
+        blocking: request.blocking.unwrap_or(false),
+        output_schema: request
+            .output_schema
+            .unwrap_or_else(|| serde_json::json!({"fields": []})),
+    };
+
+    state
+        .repo
+        .upsert_stage_side_task(row.clone())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok((StatusCode::CREATED, Json(SideTaskResponse::from_row(row))))
+}
+
+pub async fn delete_stage_side_task(
+    State(state): State<AppState>,
+    _user: auth::AuthUser,
+    Path((_pipeline_id, _stage_number, side_task_id)): Path<(String, i32, String)>,
+) -> Result<StatusCode, StatusCode> {
+    let Ok(side_task_uuid) = Uuid::parse_str(&side_task_id) else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+    state
+        .repo
+        .delete_stage_side_task(side_task_uuid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -2528,6 +2634,22 @@ mod tests {
             Ok(vec![])
         }
         async fn upsert_pipeline_stage(&self, _stage: PipelineStageRow) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_stage_side_tasks(
+            &self,
+            _pipeline_id: Uuid,
+            _stage_number: i32,
+        ) -> anyhow::Result<Vec<crate::db::StageSideTaskRow>> {
+            Ok(vec![])
+        }
+        async fn upsert_stage_side_task(
+            &self,
+            _side_task: crate::db::StageSideTaskRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn delete_stage_side_task(&self, _side_task_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
         async fn list_schedules(&self, _user_id: UserId) -> anyhow::Result<Vec<ScheduleRow>> {
@@ -4628,5 +4750,96 @@ mod tests {
         assert!(result.contains("# Goal"));
         assert!(result.contains("- x: 1"));
         assert!(!result.contains("# Output Schema"));
+    }
+
+    // === Stage side task endpoint tests ===
+
+    #[tokio::test]
+    async fn list_stage_side_tasks_returns_200() {
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
+        let pipeline_id = Uuid::new_v4();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(format!(
+                        "/api/pipelines/{}/stages/0/side-tasks",
+                        pipeline_id
+                    ))
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn create_stage_side_task_returns_201() {
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
+        let pipeline_id = Uuid::new_v4();
+        let agent_id = Uuid::new_v4();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!(
+                        "/api/pipelines/{}/stages/0/side-tasks",
+                        pipeline_id
+                    ))
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::from(
+                        serde_json::json!({
+                            "agent_id": agent_id.to_string(),
+                            "output_name": "docs",
+                            "blocking": false
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(resp["agent_id"].as_str().unwrap(), agent_id.to_string());
+        assert_eq!(resp["output_name"].as_str().unwrap(), "docs");
+        assert_eq!(resp["blocking"].as_bool().unwrap(), false);
+    }
+
+    #[tokio::test]
+    async fn delete_stage_side_task_returns_204() {
+        let (app, jwt_secret) = setup_test_app();
+        let token = create_test_token(&jwt_secret);
+        let pipeline_id = Uuid::new_v4();
+        let side_task_id = Uuid::new_v4();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri(format!(
+                        "/api/pipelines/{}/stages/0/side-tasks/{}",
+                        pipeline_id, side_task_id
+                    ))
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
     }
 }

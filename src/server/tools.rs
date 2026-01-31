@@ -1357,19 +1357,22 @@ async fn execute_add_pipeline_stage(input: &Value, state: &AppState, user_id: Us
     let Some(pipeline_str) = input["pipeline_id"].as_str() else {
         return json!({ "error": "pipeline_id is required" });
     };
-    let Some(agent_str) = input["agent_id"].as_str() else {
-        return json!({ "error": "agent_id is required" });
-    };
 
     let Ok(pipeline_uuid) = uuid::Uuid::parse_str(pipeline_str) else {
         return json!({ "error": format!("Invalid pipeline UUID: {}", pipeline_str) });
     };
-    let Ok(agent_uuid) = uuid::Uuid::parse_str(agent_str) else {
-        return json!({ "error": format!("Invalid agent UUID: {}", agent_str) });
-    };
+
+    // agent_id and cluster_id are both optional, but at least one should be provided
+    let agent_uuid = input["agent_id"]
+        .as_str()
+        .and_then(|s| uuid::Uuid::parse_str(s).ok());
+    let cluster_uuid = input["cluster_id"]
+        .as_str()
+        .and_then(|s| uuid::Uuid::parse_str(s).ok());
 
     let role = input["role"].as_str().map(String::from);
     let approval_required = input["approval_required"].as_bool().unwrap_or(false);
+    let fan_out = input["fan_out"].as_bool().unwrap_or(false);
     let stage_name = input["stage_name"]
         .as_str()
         .unwrap_or("")
@@ -1390,9 +1393,11 @@ async fn execute_add_pipeline_stage(input: &Value, state: &AppState, user_id: Us
     let mut mgr = state.pipeline_manager.write().await;
     match mgr.add_stage(
         PipelineId(pipeline_uuid),
-        crate::agents::AgentId(agent_uuid),
+        agent_uuid.map(crate::agents::AgentId),
+        cluster_uuid.map(crate::agents::ClusterId),
         role.clone(),
         approval_required,
+        fan_out,
         stage_name.clone(),
         input_definitions.clone(),
         output_description.clone(),
@@ -1407,8 +1412,10 @@ async fn execute_add_pipeline_stage(input: &Value, state: &AppState, user_id: Us
                     pipeline_id: pipeline_uuid,
                     stage_number: stage_number as i32,
                     agent_id: agent_uuid,
+                    cluster_id: cluster_uuid,
                     role: role.clone(),
                     approval_required,
+                    fan_out,
                     stage_name: stage_name.clone(),
                     input_definitions: input_definitions.clone(),
                     output_description: output_description.clone(),
@@ -1423,9 +1430,11 @@ async fn execute_add_pipeline_stage(input: &Value, state: &AppState, user_id: Us
                 "status": "added",
                 "pipeline_id": pipeline_str,
                 "stage_number": stage_number,
-                "agent_id": agent_str,
+                "agent_id": agent_uuid.map(|u| u.to_string()),
+                "cluster_id": cluster_uuid.map(|u| u.to_string()),
                 "role": role,
                 "approval_required": approval_required,
+                "fan_out": fan_out,
                 "stage_name": stage_name,
                 "output_description": output_description
             })
@@ -1455,7 +1464,9 @@ async fn execute_start_pipeline(input: &Value, state: &AppState) -> Value {
         let mut mgr = state.pipeline_manager.write().await;
         match mgr.start_run(PipelineId(pipeline_uuid), task.to_string()) {
             Ok((run_id, first_stage)) => {
-                let agent_id = first_stage.agent_id.clone();
+                let Some(agent_id) = first_stage.agent_id.clone() else {
+                    return json!({ "error": "First stage has no agent_id (cluster-only stages not yet supported at runtime)" });
+                };
                 let role = first_stage.role.clone();
                 (run_id, agent_id, role)
             }

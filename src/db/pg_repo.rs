@@ -12,7 +12,8 @@ use crate::db::traits::{
 };
 use crate::db::{
     AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, PipelineRow,
-    PipelineStageRow, ScheduleRow, SessionRow, ToolRow, TriggerRow, UsageSummaryRow,
+    PipelineStageRow, ScheduleRow, SessionRow, StageSideTaskRow, ToolRow, TriggerRow,
+    UsageSummaryRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::observability::{Decision, LlmCall};
@@ -1270,8 +1271,8 @@ impl ServerRepo for PgRepo {
     }
 
     async fn list_pipeline_stages(&self, pipeline_id: Uuid) -> Result<Vec<PipelineStageRow>> {
-        let rows: Vec<(Uuid, i32, Uuid, Option<String>, bool, String, serde_json::Value, String, serde_json::Value)> = sqlx::query_as(
-            "SELECT pipeline_id, stage_number, agent_id, role, approval_required, stage_name, input_definitions, output_description, output_schema FROM pipeline_stages WHERE pipeline_id = $1 ORDER BY stage_number"
+        let rows: Vec<(Uuid, i32, Option<Uuid>, Option<Uuid>, Option<String>, bool, bool, String, serde_json::Value, String, serde_json::Value)> = sqlx::query_as(
+            "SELECT pipeline_id, stage_number, agent_id, cluster_id, role, approval_required, fan_out, stage_name, input_definitions, output_description, output_schema FROM pipeline_stages WHERE pipeline_id = $1 ORDER BY stage_number"
         )
         .bind(pipeline_id)
         .fetch_all(&self.pool)
@@ -1280,12 +1281,14 @@ impl ServerRepo for PgRepo {
         Ok(rows
             .into_iter()
             .map(
-                |(pipeline_id, stage_number, agent_id, role, approval_required, stage_name, input_definitions, output_description, output_schema)| PipelineStageRow {
+                |(pipeline_id, stage_number, agent_id, cluster_id, role, approval_required, fan_out, stage_name, input_definitions, output_description, output_schema)| PipelineStageRow {
                     pipeline_id,
                     stage_number,
                     agent_id,
+                    cluster_id,
                     role,
                     approval_required,
+                    fan_out,
                     stage_name,
                     input_definitions,
                     output_description,
@@ -1297,12 +1300,14 @@ impl ServerRepo for PgRepo {
 
     async fn upsert_pipeline_stage(&self, stage: PipelineStageRow) -> Result<()> {
         sqlx::query(r#"
-            INSERT INTO pipeline_stages (pipeline_id, stage_number, agent_id, role, approval_required, stage_name, input_definitions, output_description, output_schema)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            INSERT INTO pipeline_stages (pipeline_id, stage_number, agent_id, cluster_id, role, approval_required, fan_out, stage_name, input_definitions, output_description, output_schema)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             ON CONFLICT (pipeline_id, stage_number) DO UPDATE SET
                 agent_id = EXCLUDED.agent_id,
+                cluster_id = EXCLUDED.cluster_id,
                 role = EXCLUDED.role,
                 approval_required = EXCLUDED.approval_required,
+                fan_out = EXCLUDED.fan_out,
                 stage_name = EXCLUDED.stage_name,
                 input_definitions = EXCLUDED.input_definitions,
                 output_description = EXCLUDED.output_description,
@@ -1311,14 +1316,78 @@ impl ServerRepo for PgRepo {
         .bind(stage.pipeline_id)
         .bind(stage.stage_number)
         .bind(stage.agent_id)
+        .bind(stage.cluster_id)
         .bind(&stage.role)
         .bind(stage.approval_required)
+        .bind(stage.fan_out)
         .bind(&stage.stage_name)
         .bind(&stage.input_definitions)
         .bind(&stage.output_description)
         .bind(&stage.output_schema)
         .execute(&self.pool)
         .await?;
+        Ok(())
+    }
+
+    // --- Stage side task persistence ---
+
+    async fn list_stage_side_tasks(
+        &self,
+        pipeline_id: Uuid,
+        stage_number: i32,
+    ) -> Result<Vec<StageSideTaskRow>> {
+        let rows: Vec<(Uuid, Uuid, i32, Uuid, serde_json::Value, String, bool, serde_json::Value)> = sqlx::query_as(
+            "SELECT id, pipeline_id, stage_number, agent_id, input_definitions, output_name, blocking, output_schema FROM stage_side_tasks WHERE pipeline_id = $1 AND stage_number = $2"
+        )
+        .bind(pipeline_id)
+        .bind(stage_number)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(id, pipeline_id, stage_number, agent_id, input_definitions, output_name, blocking, output_schema)| StageSideTaskRow {
+                id,
+                pipeline_id,
+                stage_number,
+                agent_id,
+                input_definitions,
+                output_name,
+                blocking,
+                output_schema,
+            })
+            .collect())
+    }
+
+    async fn upsert_stage_side_task(&self, side_task: StageSideTaskRow) -> Result<()> {
+        sqlx::query(r#"
+            INSERT INTO stage_side_tasks (id, pipeline_id, stage_number, agent_id, input_definitions, output_name, blocking, output_schema)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (id) DO UPDATE SET
+                agent_id = EXCLUDED.agent_id,
+                input_definitions = EXCLUDED.input_definitions,
+                output_name = EXCLUDED.output_name,
+                blocking = EXCLUDED.blocking,
+                output_schema = EXCLUDED.output_schema
+        "#)
+        .bind(side_task.id)
+        .bind(side_task.pipeline_id)
+        .bind(side_task.stage_number)
+        .bind(side_task.agent_id)
+        .bind(&side_task.input_definitions)
+        .bind(&side_task.output_name)
+        .bind(side_task.blocking)
+        .bind(&side_task.output_schema)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn delete_stage_side_task(&self, side_task_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM stage_side_tasks WHERE id = $1")
+            .bind(side_task_id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
