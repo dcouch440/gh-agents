@@ -1,3 +1,6 @@
+import { BarChart3 } from 'lucide-react';
+import { EmptyState } from '../components/EmptyState';
+
 export function StatsPage() {
-  return <div className="text-text-secondary">Stats dashboard coming in 13.1</div>;
+  return <EmptyState icon={BarChart3} title="Stats" subtitle="Analytics dashboard is coming soon. View agent performance and usage metrics here." />;
 }

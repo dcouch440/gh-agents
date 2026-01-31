@@ -12,6 +12,8 @@ import { AgentsPage } from './pages/AgentsPage';
 import { FilesPage } from './pages/FilesPage';
 import { StatsPage } from './pages/StatsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { ToastContainer } from './components/Toast';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 function App() {
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
@@ -61,6 +63,7 @@ function App() {
 
   return (
     <BrowserRouter>
+      <ToastContainer />
       <Routes>
         <Route
           path="/setup"
@@ -91,14 +94,14 @@ function App() {
           }
         >
           <Route index element={<Navigate to="/chat" replace />} />
-          <Route path="chat" element={<ChatPage />} />
-          <Route path="chat/:sessionId" element={<ChatPage />} />
-          <Route path="feed" element={<FeedPage />} />
-          <Route path="tasks" element={<TasksPage />} />
-          <Route path="agents" element={<AgentsPage />} />
-          <Route path="files" element={<FilesPage />} />
-          <Route path="stats" element={<StatsPage />} />
-          <Route path="settings" element={<SettingsPage />} />
+          <Route path="chat" element={<ErrorBoundary><ChatPage /></ErrorBoundary>} />
+          <Route path="chat/:sessionId" element={<ErrorBoundary><ChatPage /></ErrorBoundary>} />
+          <Route path="feed" element={<ErrorBoundary><FeedPage /></ErrorBoundary>} />
+          <Route path="tasks" element={<ErrorBoundary><TasksPage /></ErrorBoundary>} />
+          <Route path="agents" element={<ErrorBoundary><AgentsPage /></ErrorBoundary>} />
+          <Route path="files" element={<ErrorBoundary><FilesPage /></ErrorBoundary>} />
+          <Route path="stats" element={<ErrorBoundary><StatsPage /></ErrorBoundary>} />
+          <Route path="settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />
         </Route>
       </Routes>
     </BrowserRouter>

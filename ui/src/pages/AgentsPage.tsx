@@ -1,3 +1,6 @@
+import { Bot } from 'lucide-react';
+import { EmptyState } from '../components/EmptyState';
+
 export function AgentsPage() {
-  return <div className="text-text-secondary">Agents view coming in 12.4</div>;
+  return <EmptyState icon={Bot} title="Agents" subtitle="Agent management is coming soon. Monitor and configure your AI agents here." />;
 }

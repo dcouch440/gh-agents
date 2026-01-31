@@ -1,3 +1,6 @@
+import { ListTodo } from 'lucide-react';
+import { EmptyState } from '../components/EmptyState';
+
 export function TasksPage() {
-  return <div className="text-text-secondary">Tasks view coming in 12.3</div>;
+  return <EmptyState icon={ListTodo} title="Tasks" subtitle="Task management is coming soon. Track and manage agent work items here." />;
 }

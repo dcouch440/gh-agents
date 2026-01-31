@@ -42,3 +42,31 @@
 .emptyTagline {
   font-size: 0.875rem;
 }
+
+.scrollBtn {
+  position: sticky;
+  bottom: 0.75rem;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.scrollBtn:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-accent);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
