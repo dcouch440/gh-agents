@@ -25,6 +25,14 @@
   --color-status-error: #f87171;
   --color-status-info: #60a5fa;
 
+  /* Gothic / Diablo palette */
+  --color-gold: #d4a347;
+  --color-gold-dim: #8b6914;
+  --color-amber-glow: #f59e0b;
+  --color-parchment: #1a1812;
+  --color-parchment-light: #232018;
+  --color-blood: #991b1b;
+
   /* Font families */
   --font-family-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
   --font-family-mono: 'Share Tech Mono', 'IBM Plex Mono', 'Courier New', Courier, monospace;
@@ -37,6 +45,20 @@
   --status-success-rgb: 52, 211, 153;
   --status-warning-rgb: 251, 191, 36;
   --status-error-rgb: 248, 113, 113;
+  --gold-rgb: 212, 163, 71;
+}
+
+.ember-glow {
+  box-shadow: 0 0 8px rgba(var(--gold-rgb), 0.4), 0 0 2px rgba(var(--gold-rgb), 0.6);
+}
+
+.ember-glow-pulse {
+  animation: ember-pulse 2s ease-in-out infinite;
+}
+
+@keyframes ember-pulse {
+  0%, 100% { box-shadow: 0 0 6px rgba(var(--gold-rgb), 0.3); }
+  50% { box-shadow: 0 0 14px rgba(var(--gold-rgb), 0.6), 0 0 4px rgba(var(--gold-rgb), 0.8); }
 }
 
 body {

@@ -1,0 +1,126 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.header {
+  color: var(--color-gold);
+  font-size: 1.125rem;
+  letter-spacing: 0.05em;
+}
+
+.headerSub {
+  color: var(--color-text-tertiary);
+  font-size: 0.8125rem;
+  margin-top: 0.25rem;
+}
+
+.gaugeRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.gaugeLabel {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+.gaugeBar {
+  height: 1.25rem;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-gold-dim);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+
+.gaugeFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-gold-dim), var(--color-gold));
+  transition: width 0.4s ease;
+}
+
+.gaugeText {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6875rem;
+  color: var(--color-text-primary);
+}
+
+.agentGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.75rem;
+}
+
+.agentCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.agentName {
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+}
+
+.agentRole {
+  font-size: 0.75rem;
+  color: var(--color-text-tertiary);
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+}
+
+.statusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.idle { background: var(--color-text-tertiary); }
+.busy { background: var(--color-gold); }
+.offline { background: var(--color-blood); }
+
+.taskLabel {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dimmed {
+  opacity: 0.6;
+}
+
+.empty {
+  color: var(--color-text-tertiary);
+  font-size: 0.875rem;
+  padding: 2rem 0;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .gaugeRow {
+    grid-template-columns: 1fr;
+  }
+}

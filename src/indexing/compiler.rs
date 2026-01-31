@@ -185,11 +185,11 @@ async fn haiku_rank_files(
     );
 
     let request = LLMRequest::new(
-        "claude-haiku-4-20250514",
+        crate::constants::MODEL_HAIKU,
         vec![LlmMessage::user(prompt)],
     )
     .with_system("You rank source files by relevance to a task. Return ONLY a JSON array of file paths, most relevant first. No explanation.")
-    .with_max_tokens(256);
+    .with_max_tokens(crate::constants::MAX_TOKENS_COMPILER);
 
     match client.send_message(request).await {
         Ok(resp) => {

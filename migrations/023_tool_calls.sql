@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS tool_calls (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_tool_calls_session ON tool_calls(session_id);
-CREATE INDEX idx_tool_calls_message ON tool_calls(message_id);
-CREATE INDEX idx_tool_calls_created ON tool_calls(created_at);
-CREATE INDEX idx_tool_calls_tool_name ON tool_calls(tool_name);
+CREATE INDEX IF NOT EXISTS idx_tool_calls_session ON tool_calls(session_id);
+CREATE INDEX IF NOT EXISTS idx_tool_calls_message ON tool_calls(message_id);
+CREATE INDEX IF NOT EXISTS idx_tool_calls_created ON tool_calls(created_at);
+CREATE INDEX IF NOT EXISTS idx_tool_calls_tool_name ON tool_calls(tool_name);

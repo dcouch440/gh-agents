@@ -158,16 +158,17 @@ impl ModelLimits {
     pub fn for_model(model_id: &str) -> Self {
         match model_id {
             // Anthropic Claude models - exact matches and short names
-            "claude-3-opus-20240229" | "claude-opus-4-20250514" | "claude-opus" => {
-                Self::claude_opus()
-            }
+            "claude-3-opus-20240229"
+            | "claude-opus-4-20250514"
+            | "claude-opus-4-5-20251101"
+            | "claude-opus" => Self::claude_opus(),
             "claude-3-sonnet-20240229"
             | "claude-sonnet-4-20250514"
             | "claude-sonnet"
             | "claude-3-sonnet" => Self::claude_sonnet(),
-            "claude-3-haiku-20240307" | "claude-haiku-3-20250514" | "claude-haiku" => {
-                Self::claude_haiku()
-            }
+            "claude-3-haiku-20240307"
+            | "claude-3-5-haiku-20241022"
+            | "claude-haiku" => Self::claude_haiku(),
 
             // Default/unknown - conservative limits
             _ => Self::default_limits(model_id),

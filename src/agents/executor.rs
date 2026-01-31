@@ -50,7 +50,7 @@ async fn verify_work(
     let client = AnthropicClient::new(config).ok()?;
 
     let request = LLMRequest {
-        model: "claude-haiku-4-20250514".to_string(),
+        model: crate::constants::MODEL_HAIKU.to_string(),
         system: None,
         messages: vec![Message::user(&verification_prompt)],
         max_tokens: 512,
@@ -308,10 +308,10 @@ impl Agent {
     /// Get temperature based on communication style
     fn temperature_for_style(&self, style: &CommunicationStyle) -> f32 {
         match style {
-            CommunicationStyle::Technical => 0.3, // More deterministic
-            CommunicationStyle::Casual => 0.7,    // More creative
-            CommunicationStyle::Formal => 0.4,    // Balanced but precise
-            CommunicationStyle::Friendly => 0.6,  // Warm but focused
+            CommunicationStyle::Technical => crate::constants::TEMPERATURE_TECHNICAL,
+            CommunicationStyle::Casual => crate::constants::TEMPERATURE_CASUAL,
+            CommunicationStyle::Formal => crate::constants::TEMPERATURE_FORMAL,
+            CommunicationStyle::Friendly => crate::constants::TEMPERATURE_FRIENDLY,
         }
     }
 

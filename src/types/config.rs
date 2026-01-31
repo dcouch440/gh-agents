@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::agent::ModelConfig;
 use super::message::VerbosityLevel;
+use crate::constants::*;
 
 /// Model configuration for each agent tier
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -17,18 +18,18 @@ impl Default for TierModels {
     fn default() -> Self {
         Self {
             orchestrator: ModelConfig {
-                model_id: "claude-opus-4-5-20251101".to_string(),
-                max_tokens: 16384,
+                model_id: MODEL_OPUS.to_string(),
+                max_tokens: DEFAULT_MAX_TOKENS_ORCHESTRATOR,
                 ..Default::default()
             },
             worker: ModelConfig {
-                model_id: "claude-sonnet-4-20250514".to_string(),
-                max_tokens: 8192,
+                model_id: MODEL_SONNET.to_string(),
+                max_tokens: DEFAULT_MAX_TOKENS_WORKER,
                 ..Default::default()
             },
             utility: ModelConfig {
-                model_id: "claude-haiku-4-20250514".to_string(),
-                max_tokens: 4096,
+                model_id: MODEL_HAIKU.to_string(),
+                max_tokens: DEFAULT_MAX_TOKENS_UTILITY,
                 ..Default::default()
             },
         }

@@ -73,15 +73,15 @@ pub struct ModelConfig {
 }
 
 fn default_temperature() -> f32 {
-    0.7
+    crate::constants::DEFAULT_TEMPERATURE
 }
 
 impl Default for ModelConfig {
     fn default() -> Self {
         Self {
             provider: LLMProvider::Anthropic,
-            model_id: "claude-sonnet-4-20250514".to_string(),
-            max_tokens: 4096,
+            model_id: crate::constants::DEFAULT_MODEL.to_string(),
+            max_tokens: crate::constants::DEFAULT_MAX_TOKENS_UTILITY,
             temperature: default_temperature(),
         }
     }

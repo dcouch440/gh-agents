@@ -204,6 +204,18 @@ export const api = {
       fetchApi<ChatMessage[]>(`/sessions/${sessionId}/history?limit=${limit ?? 50}`),
   },
 
+  // Stats
+  stats: {
+    get: () => fetchApi<UsageSummaryRow[]>('/stats'),
+  },
+
+  // Indexing
+  indexing: {
+    status: () => fetchApi<IndexingStatus>('/indexing/status'),
+    start: () => fetchApi<{ status: string }>('/indexing/start', { method: 'POST' }),
+    stop: () => fetchApi<{ status: string }>('/indexing/stop', { method: 'POST' }),
+  },
+
   // Config
   config: {
     get: () => fetchApi<Config>('/config'),
@@ -228,8 +240,11 @@ export interface Task {
 
 export interface Agent {
   id: string;
+  name?: string;
   tier: string;
+  role?: string;
   status: string;
+  model?: string;
   current_task?: string;
 }
 
@@ -240,16 +255,60 @@ export interface ChatMessage {
   timestamp: string;
 }
 
+export interface ModelConfig {
+  provider: string;
+  model_id: string;
+  max_tokens: number;
+  temperature: number;
+}
+
+export interface TierModels {
+  orchestrator: ModelConfig;
+  worker: ModelConfig;
+  utility: ModelConfig;
+}
+
+export interface PoolConfig {
+  max_orchestrators: number;
+  max_workers: number;
+  max_utilities: number;
+}
+
 export interface Config {
   verbosity: string;
-  models: Record<string, unknown>;
-  pool: Record<string, unknown>;
+  models: TierModels;
+  pool: PoolConfig;
+  autonomy: string;
+  git_strategy: string;
+  sandbox_mode: string;
 }
 
 export interface ModeInfo {
   id: string;
   name: string;
   description: string;
+}
+
+export interface IndexingStatus {
+  state: 'idle' | 'running' | 'complete' | 'failed';
+  files_total: number;
+  files_indexed: number;
+  last_completed: string | null;
+  error: string | null;
+}
+
+export interface UsageSummaryRow {
+  tier: string;
+  model_id: string;
+  total_input: number;
+  total_output: number;
+  call_count: number;
+}
+
+export interface StatsResponse {
+  token_usage: Record<string, number>;
+  total_tokens: number;
+  call_counts: Record<string, number>;
 }
 
 export interface SessionResponse {

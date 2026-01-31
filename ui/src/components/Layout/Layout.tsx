@@ -13,7 +13,9 @@ export function Layout() {
   const location = useLocation();
 
   const isChat = location.pathname === '/chat' || location.pathname === '/' || location.pathname.startsWith('/chat/');
-  const contentMaxWidth = isChat ? '' : 'max-w-4xl';
+  const fullWidthPaths = ['/agents', '/tasks', '/files', '/stats', '/settings'];
+  const isFullWidth = isChat || fullWidthPaths.some((p) => location.pathname.startsWith(p));
+  const contentMaxWidth = isFullWidth ? '' : 'max-w-4xl';
 
   return (
     <div className="h-screen bg-bg-primary flex overflow-hidden">

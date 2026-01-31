@@ -1937,7 +1937,7 @@ pub async fn haiku_read_file(prompt: &str) -> Option<String> {
     let client = AnthropicClient::new(config).ok()?;
 
     let request = LLMRequest::new(
-        "claude-haiku-4-20250514",
+        crate::constants::MODEL_HAIKU,
         vec![LlmMessage::user(prompt.to_string())],
     )
     .with_system(
@@ -1947,7 +1947,7 @@ pub async fn haiku_read_file(prompt: &str) -> Option<String> {
          If a focus area is specified, prioritize content related to it. \
          Be concise but preserve technical accuracy. Do not add commentary."
     )
-    .with_max_tokens(1024);
+    .with_max_tokens(crate::constants::MAX_TOKENS_FILE_READ);
 
     match client.send_message(request).await {
         Ok(resp) => Some(resp.content),
@@ -1965,11 +1965,11 @@ pub async fn haiku_summarize(content: &str) -> Option<String> {
 
     let truncated: String = content.chars().take(8000).collect();
     let request = LLMRequest::new(
-        "claude-haiku-4-20250514",
+        crate::constants::MODEL_HAIKU,
         vec![LlmMessage::user(truncated)],
     )
     .with_system("Summarize this document in 2-3 sentences for search indexing. Be concise.")
-    .with_max_tokens(256);
+    .with_max_tokens(crate::constants::MAX_TOKENS_SUMMARIZE);
 
     match client.send_message(request).await {
         Ok(resp) => Some(resp.content),
@@ -1987,11 +1987,11 @@ pub async fn haiku_summarize_title(content: &str) -> Option<String> {
 
     let truncated: String = content.chars().take(2000).collect();
     let request = LLMRequest::new(
-        "claude-haiku-4-20250514",
+        crate::constants::MODEL_HAIKU,
         vec![LlmMessage::user(truncated)],
     )
     .with_system("Generate a short title (3-6 words) for this conversation. Return ONLY the title, no quotes, no punctuation at the end.")
-    .with_max_tokens(32);
+    .with_max_tokens(crate::constants::MAX_TOKENS_TITLE);
 
     match client.send_message(request).await {
         Ok(resp) => {
@@ -2013,11 +2013,11 @@ pub async fn haiku_extract_context(summary: &str, current_message: &str) -> Opti
 
     let user_text = format!("Summary:\n{}\n\nCurrent message:\n{}", summary, current_message);
     let request = LLMRequest::new(
-        "claude-haiku-4-20250514",
+        crate::constants::MODEL_HAIKU,
         vec![LlmMessage::user(user_text)],
     )
     .with_system("You extract relevant context from a conversation summary based on the user's current message. Return 2-4 sentences of context that are directly relevant to what the user is asking about now. If nothing is relevant, return 'No prior context needed.'")
-    .with_max_tokens(256);
+    .with_max_tokens(crate::constants::MAX_TOKENS_CONTEXT);
 
     match client.send_message(request).await {
         Ok(resp) => Some(resp.content),

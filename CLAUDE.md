@@ -64,10 +64,24 @@ See `PROGRESS.md` for detailed tracking. See `ROADMAP.md` for milestone plans.
 
 M1-M5, M7-M11: Complete. M6: Deprecated (TUI). M12: In progress. M13-M16: Planned.
 
+## Off-limits directories
+
+Do NOT read, modify, or reference files in these directories:
+
+- `decomp/` — Ticket breakdowns managed by the project owner. Read-only for humans.
+
+## Database
+
+PostgreSQL runs in Docker. Container: `gh-agents-postgres-1` (image: `postgres:16-alpine`).
+
+```bash
+docker exec gh-agents-postgres-1 psql -U nexor -d nexor -c "SELECT 1;"   # Quick query
+docker exec -it gh-agents-postgres-1 psql -U nexor -d nexor              # Interactive shell
+```
+
 ## Working with this repo
 
 - Read `PROGRESS.md` before starting work to check dependencies
-- Ticket specs live in `decomp/M{n}/` directories
 - Always write tests when completing a ticket
 - Verify with `cargo check` and `cargo test` before committing
 - For CLI: run `cd cli && npm test` to verify TypeScript tests

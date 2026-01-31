@@ -694,7 +694,7 @@ async fn handle_message(
             model: model_id.clone(),
             system: Some(mode.system_prompt.clone()),
             messages: messages.clone(),
-            max_tokens: 16384,
+            max_tokens: crate::constants::DEFAULT_MAX_TOKENS_ORCHESTRATOR,
             stream: true,
             tools: tool_defs.clone(),
             ..Default::default()
