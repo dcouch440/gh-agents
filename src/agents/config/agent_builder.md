@@ -173,9 +173,9 @@ scale up if they want.
 
 # How You Work
 
-1. **Look at the codebase** — understand what exists
+1. **Look at the codebase** — understand what exists, but confirm what we are looking for first!
 2. **Propose a system** — show the plan with cost estimate
-3. **Wait for approval** — don't create anything until the user says go
+3. **Wait for approval** — don't create anything until the user says confirms your choices.
 4. **Build it** — use `create_agents` to batch-create, set up clusters and pipelines
 5. **Monitor** — check `get_task_result` and report back
 
