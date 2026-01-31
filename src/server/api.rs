@@ -195,7 +195,8 @@ pub struct TierStats {
 /// Returns the list of agents along with pool statistics based on configuration.
 /// Note: In server mode, the agent pool may not be active - this returns config limits.
 pub async fn list_agents(State(state): State<AppState>) -> Json<AgentsListResponse> {
-    let pool_config = &state.config.pool;
+    let config = state.config.read().await;
+    let pool_config = &config.pool;
 
     // Return configuration-based stats
     // When the agent pool is active, this will be updated to show actual agents
@@ -240,7 +241,7 @@ pub struct ConfigResponse {
 
 /// Get current configuration
 pub async fn get_config(State(state): State<AppState>) -> Json<ConfigResponse> {
-    let config = state.config.as_ref();
+    let config = state.config.read().await;
 
     Json(ConfigResponse {
         verbosity: format!("{:?}", config.verbosity).to_lowercase(),
@@ -252,33 +253,136 @@ pub async fn get_config(State(state): State<AppState>) -> Json<ConfigResponse> {
     })
 }
 
+/// Request body for updating a single model tier's config
+#[derive(Deserialize)]
+pub struct UpdateModelConfig {
+    pub model_id: Option<String>,
+    pub max_tokens: Option<u32>,
+    pub temperature: Option<f32>,
+}
+
+/// Request body for updating model configs by tier
+#[derive(Deserialize)]
+pub struct UpdateModelsRequest {
+    pub orchestrator: Option<UpdateModelConfig>,
+    pub worker: Option<UpdateModelConfig>,
+    pub utility: Option<UpdateModelConfig>,
+}
+
+/// Request body for updating pool sizes
+#[derive(Deserialize)]
+pub struct UpdatePoolRequest {
+    pub max_orchestrators: Option<u8>,
+    pub max_workers: Option<u8>,
+    pub max_utilities: Option<u8>,
+}
+
 /// Request body for updating configuration
 #[derive(Deserialize)]
 pub struct UpdateConfigRequest {
     pub verbosity: Option<String>,
+    pub models: Option<UpdateModelsRequest>,
+    pub pool: Option<UpdatePoolRequest>,
+    pub autonomy: Option<String>,
+    pub git_strategy: Option<String>,
+    pub sandbox_mode: Option<String>,
 }
 
 /// Update configuration (partial update)
-///
-/// Currently supports updating verbosity level.
-/// Note: Full config persistence requires additional implementation.
 pub async fn update_config(
     State(state): State<AppState>,
     Json(request): Json<UpdateConfigRequest>,
 ) -> Result<Json<ConfigResponse>, StatusCode> {
-    // Validate verbosity if provided
+    use crate::types::{AutonomyLevel, GitStrategy, SandboxMode, VerbosityLevel};
+
+    let mut config = state.config.write().await;
+
+    // Verbosity
     if let Some(ref v) = request.verbosity {
         match v.to_lowercase().as_str() {
-            "quiet" | "normal" | "verbose" => {}
+            "quiet" => config.verbosity = VerbosityLevel::Quiet,
+            "normal" => config.verbosity = VerbosityLevel::Normal,
+            "verbose" => config.verbosity = VerbosityLevel::Verbose,
             _ => return Err(StatusCode::BAD_REQUEST),
         }
     }
 
-    // Note: Configuration updates would require mutable state or a config service
-    // For now, we just validate and return the current config
-    // Full implementation would persist changes to config file
+    // Models
+    if let Some(ref models) = request.models {
+        fn apply_model(target: &mut crate::types::ModelConfig, update: &UpdateModelConfig) {
+            if let Some(ref id) = update.model_id {
+                target.model_id = id.clone();
+            }
+            if let Some(tokens) = update.max_tokens {
+                target.max_tokens = tokens;
+            }
+            if let Some(temp) = update.temperature {
+                target.temperature = temp;
+            }
+        }
+        if let Some(ref o) = models.orchestrator {
+            apply_model(&mut config.models.orchestrator, o);
+        }
+        if let Some(ref w) = models.worker {
+            apply_model(&mut config.models.worker, w);
+        }
+        if let Some(ref u) = models.utility {
+            apply_model(&mut config.models.utility, u);
+        }
+    }
 
-    Ok(Json(get_config(State(state)).await.0))
+    // Pool
+    if let Some(ref pool) = request.pool {
+        if let Some(v) = pool.max_orchestrators {
+            config.pool.max_orchestrators = v;
+        }
+        if let Some(v) = pool.max_workers {
+            config.pool.max_workers = v;
+        }
+        if let Some(v) = pool.max_utilities {
+            config.pool.max_utilities = v;
+        }
+    }
+
+    // Autonomy
+    if let Some(ref a) = request.autonomy {
+        match a.to_lowercase().as_str() {
+            "full_auto" => config.autonomy = AutonomyLevel::FullAuto,
+            "approval_gates" => config.autonomy = AutonomyLevel::ApprovalGates,
+            "supervised" => config.autonomy = AutonomyLevel::Supervised,
+            _ => return Err(StatusCode::BAD_REQUEST),
+        }
+    }
+
+    // Git strategy
+    if let Some(ref g) = request.git_strategy {
+        match g.to_lowercase().as_str() {
+            "branch_per_slice" => config.git_strategy = GitStrategy::BranchPerSlice,
+            "branch_per_ticket" => config.git_strategy = GitStrategy::BranchPerTicket,
+            _ => return Err(StatusCode::BAD_REQUEST),
+        }
+    }
+
+    // Sandbox mode
+    if let Some(ref s) = request.sandbox_mode {
+        match s.to_lowercase().as_str() {
+            "docker" => config.sandbox_mode = SandboxMode::Docker,
+            "local_restricted" => config.sandbox_mode = SandboxMode::LocalRestricted,
+            "none" => config.sandbox_mode = SandboxMode::None,
+            _ => return Err(StatusCode::BAD_REQUEST),
+        }
+    }
+
+    let resp = ConfigResponse {
+        verbosity: format!("{:?}", config.verbosity).to_lowercase(),
+        models: config.models.clone(),
+        pool: config.pool.clone(),
+        autonomy: format!("{:?}", config.autonomy).to_lowercase(),
+        git_strategy: format!("{:?}", config.git_strategy).to_lowercase(),
+        sandbox_mode: format!("{:?}", config.sandbox_mode).to_lowercase(),
+    };
+
+    Ok(Json(resp))
 }
 
 // ============================================================================
@@ -1360,11 +1464,66 @@ pub async fn submit_context_response(
 /// Get token usage summary for the last 24 hours.
 pub async fn get_usage_stats(
     State(state): State<AppState>,
-    _auth: auth::AuthUser,
 ) -> Result<Json<Vec<crate::db::UsageSummaryRow>>, StatusCode> {
     let stats = state.repo.get_usage_summary(24).await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("get_usage_stats failed: {e:?}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
     Ok(Json(stats))
+}
+
+// ============================================================================
+// Indexing Control Endpoints
+// ============================================================================
+
+/// Get current indexing status.
+pub async fn get_indexing_status(
+    State(state): State<AppState>,
+) -> Json<crate::indexing::IndexingStatus> {
+    let status = state.indexing_status.read().await.clone();
+    Json(status)
+}
+
+/// Start a new indexing run. Returns 409 if already running.
+pub async fn start_indexing(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    {
+        let status = state.indexing_status.read().await;
+        if status.state == crate::indexing::IndexingState::Running {
+            return Err(StatusCode::CONFLICT);
+        }
+    }
+
+    // Count files first
+    let project_root = std::env::current_dir().unwrap_or_default();
+
+    let idx = state.repo_index.clone();
+    let status = state.indexing_status.clone();
+
+    tokio::spawn(async move {
+        let index = crate::indexing::indexer::build_index_tracked(&project_root, status.clone()).await;
+        let file_count = index.files.len();
+        *idx.write().await = index;
+
+        let mut s = status.write().await;
+        s.state = crate::indexing::IndexingState::Complete;
+        s.last_completed = Some(chrono::Utc::now().to_rfc3339());
+        tracing::info!("Repo index complete: {} files indexed", file_count);
+    });
+
+    Ok(Json(serde_json::json!({ "status": "started" })))
+}
+
+/// Stop a running indexing job (best-effort — sets status to idle).
+pub async fn stop_indexing(
+    State(state): State<AppState>,
+) -> Json<serde_json::Value> {
+    let mut status = state.indexing_status.write().await;
+    status.state = crate::indexing::IndexingState::Idle;
+    status.error = Some("Stopped by user".to_string());
+    Json(serde_json::json!({ "status": "stopped" }))
 }
 
 // ============================================================================

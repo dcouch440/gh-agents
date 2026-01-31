@@ -1301,8 +1301,8 @@ impl ServerRepo for PgRepo {
         let rows = sqlx::query_as::<_, UsageSummaryRow>(
             r#"
             SELECT tier, model_id,
-                   COALESCE(SUM(input_tokens), 0) AS total_input,
-                   COALESCE(SUM(output_tokens), 0) AS total_output,
+                   COALESCE(SUM(input_tokens), 0)::bigint AS total_input,
+                   COALESCE(SUM(output_tokens), 0)::bigint AS total_output,
                    COUNT(*) AS call_count
             FROM token_usage
             WHERE created_at > NOW() - make_interval(hours => $1::int)

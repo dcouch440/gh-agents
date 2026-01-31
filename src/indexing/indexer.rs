@@ -10,7 +10,10 @@ use tokio::fs;
 
 use crate::llm::{AnthropicClient, AnthropicConfig, LLMProvider, LLMRequest, Message as LlmMessage};
 
-use super::{FileEntry, RepoIndex, Symbol};
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+use super::{FileEntry, IndexingState, IndexingStatus, RepoIndex, Symbol};
 
 /// File extensions we index.
 const SOURCE_EXTENSIONS: &[&str] = &[
@@ -21,14 +24,17 @@ const SOURCE_EXTENSIONS: &[&str] = &[
 /// Directories to skip during walk.
 const SKIP_DIRS: &[&str] = &[
     ".git", "target", "node_modules", "dist", "build", ".next",
-    "__pycache__", ".venv", "vendor",
+    "__pycache__", ".venv", "vendor", "decomp", "coverage",
 ];
 
 /// Max file size to index (100KB).
 const MAX_FILE_SIZE: u64 = 100_000;
 
 /// Max concurrent Haiku calls during indexing.
-const CONCURRENCY: usize = 10;
+const CONCURRENCY: usize = 3;
+
+/// Delay between batches to avoid API rate limits.
+const BATCH_DELAY_MS: u64 = 500;
 
 /// Build the full repo index from scratch.
 pub async fn build_index(project_root: &Path) -> RepoIndex {
@@ -39,6 +45,44 @@ pub async fn build_index(project_root: &Path) -> RepoIndex {
         .map(|path| {
             let root = project_root.to_path_buf();
             async move { index_file(&root, &path).await }
+        })
+        .buffer_unordered(CONCURRENCY)
+        .filter_map(|e| async { e })
+        .collect()
+        .await;
+
+    build_index_from_entries(entries)
+}
+
+/// Build the full repo index with progress tracking via shared status.
+pub async fn build_index_tracked(
+    project_root: &Path,
+    status: Arc<RwLock<IndexingStatus>>,
+) -> RepoIndex {
+    let files = collect_source_files(project_root).await;
+    let total = files.len();
+    tracing::info!("Indexing {} source files (tracked)", total);
+
+    {
+        let mut s = status.write().await;
+        s.files_total = total;
+        s.files_indexed = 0;
+        s.state = IndexingState::Running;
+    }
+
+    let status_ref = status.clone();
+    let entries: Vec<FileEntry> = stream::iter(files)
+        .map(|path| {
+            let root = project_root.to_path_buf();
+            let st = status_ref.clone();
+            async move {
+                let result = index_file(&root, &path).await;
+                {
+                    let mut s = st.write().await;
+                    s.files_indexed += 1;
+                }
+                result
+            }
         })
         .buffer_unordered(CONCURRENCY)
         .filter_map(|e| async { e })
@@ -181,6 +225,9 @@ async fn index_file(project_root: &Path, path: &Path) -> Option<FileEntry> {
 
     let (summary, symbols) = haiku_index_file(&rel_str, &content).await;
 
+    // Rate limit: pause between API calls
+    tokio::time::sleep(std::time::Duration::from_millis(BATCH_DELAY_MS)).await;
+
     Some(FileEntry {
         path: rel_str,
         summary,
@@ -209,11 +256,11 @@ async fn haiku_index_file(path: &str, content: &str) -> (String, Vec<Symbol>) {
     );
 
     let request = LLMRequest::new(
-        "claude-haiku-4-20250514",
+        crate::constants::MODEL_HAIKU,
         vec![LlmMessage::user(prompt)],
     )
     .with_system("You analyze source files and return structured JSON with a brief summary and a list of key symbol definitions. Return ONLY valid JSON, no explanation.")
-    .with_max_tokens(512);
+    .with_max_tokens(crate::constants::MAX_TOKENS_INDEXER);
 
     match client.send_message(request).await {
         Ok(resp) => parse_index_response(&resp.content),

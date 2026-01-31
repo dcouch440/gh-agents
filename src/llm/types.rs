@@ -177,7 +177,7 @@ impl Default for LLMRequest {
             model: String::new(),
             messages: vec![],
             system: None,
-            max_tokens: 4096,
+            max_tokens: crate::constants::DEFAULT_MAX_TOKENS_UTILITY,
             temperature: default_temperature(),
             stream: false,
             tools: vec![],
@@ -186,7 +186,7 @@ impl Default for LLMRequest {
 }
 
 fn default_temperature() -> f32 {
-    0.7
+    crate::constants::DEFAULT_TEMPERATURE
 }
 
 impl LLMRequest {
@@ -196,7 +196,7 @@ impl LLMRequest {
             model: model.into(),
             messages,
             system: None,
-            max_tokens: 4096,
+            max_tokens: crate::constants::DEFAULT_MAX_TOKENS_UTILITY,
             temperature: default_temperature(),
             stream: false,
             tools: vec![],

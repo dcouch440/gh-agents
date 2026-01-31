@@ -58,8 +58,8 @@ impl Default for PlannerConfig {
     fn default() -> Self {
         Self {
             max_retries: 3,
-            model_id: "claude-sonnet-4-20250514".to_string(),
-            max_tokens: 8192,
+            model_id: crate::constants::MODEL_SONNET.to_string(),
+            max_tokens: crate::constants::MAX_TOKENS_PLANNER,
         }
     }
 }

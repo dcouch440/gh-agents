@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useAuthStore, useSessionStore } from '../store';
+import { useAgentStore } from '../store/agentStore';
+import { useTaskStore } from '../store/taskStore';
 
 interface SessionUpdateMsg {
   type: 'session_update';
@@ -74,6 +76,16 @@ export function useWebSocket() {
 }
 
 function handleMessage(msg: ServerMessage) {
+  if (msg.type === 'agent_update') {
+    useAgentStore.getState().fetch();
+    return;
+  }
+
+  if (msg.type === 'task_update') {
+    useTaskStore.getState().fetch();
+    return;
+  }
+
   if (msg.type === 'session_update') {
     const { data } = msg as SessionUpdateMsg;
     const store = useSessionStore.getState();

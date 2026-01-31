@@ -9,7 +9,7 @@ use tokio::sync::{broadcast, mpsc, RwLock};
 use uuid::Uuid;
 
 use crate::agents::{AgentPool, AgentResponse, ClusterManager, Dispatcher, PipelineManager, RoleManager, ScheduleManager};
-use crate::indexing::RepoIndex;
+use crate::indexing::{IndexingStatus, RepoIndex};
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::{DocumentRepo, ServerRepo, UserRepo};
 use crate::llm::AnthropicClient;
@@ -68,8 +68,8 @@ pub struct AppState {
     pub doc_repo: Option<Arc<dyn DocumentRepo>>,
     /// Task scheduler for orchestration (None in mock-based tests)
     pub scheduler: Option<Arc<RwLock<Scheduler>>>,
-    /// Application configuration
-    pub config: Arc<AppConfig>,
+    /// Application configuration (mutable at runtime via API)
+    pub config: Arc<RwLock<AppConfig>>,
     /// JWT secret for token signing
     pub jwt_secret: Vec<u8>,
     /// Channel to send messages to the orchestrator
@@ -102,6 +102,8 @@ pub struct AppState {
     pub mode_registry: Arc<ModeRegistry>,
     /// Live repo index for context injection
     pub repo_index: Arc<RwLock<RepoIndex>>,
+    /// Indexing progress status (for API visibility)
+    pub indexing_status: Arc<RwLock<IndexingStatus>>,
 }
 
 impl AppState {
@@ -117,7 +119,7 @@ impl AppState {
         let repo: Arc<dyn ServerRepo> = Arc::new(PgRepo::new(db.clone()));
         let user_repo: Arc<dyn UserRepo> = Arc::new(PgRepo::new(db.clone()));
         let doc_repo: Arc<dyn DocumentRepo> = Arc::new(PgRepo::new(db.clone()));
-        let (mut state, rx) = Self::with_repo(Some(db), repo, Some(scheduler), config);
+        let (mut state, rx) = Self::with_repo(Some(db), repo, Some(scheduler), config.clone());
         state.user_repo = Some(user_repo);
         state.doc_repo = Some(doc_repo);
 
@@ -125,28 +127,8 @@ impl AppState {
         let project_root = std::env::current_dir().unwrap_or_default();
         state.role_manager = Some(Arc::new(RoleManager::new(project_root.clone())));
 
-        // Spawn background repo indexer
-        {
-            let idx = state.repo_index.clone();
-            let root = project_root.clone();
-            tokio::spawn(async move {
-                let index = crate::indexing::indexer::build_index(&root).await;
-                tracing::info!("Repo index built: {} files indexed", index.files.len());
-                *idx.write().await = index;
-            });
-
-            // Periodic refresh every 5 minutes
-            let idx = state.repo_index.clone();
-            let root = project_root.clone();
-            tokio::spawn(async move {
-                loop {
-                    tokio::time::sleep(std::time::Duration::from_secs(300)).await;
-                    let mut index = idx.write().await;
-                    crate::indexing::indexer::update_index(&mut index, &root).await;
-                    tracing::debug!("Repo index refreshed: {} files", index.files.len());
-                }
-            });
-        }
+        // Repo indexing is on-demand via POST /api/indexing/start
+        tracing::info!("Repo indexing available on-demand (POST /api/indexing/start)");
 
         // Initialize agent pool + dispatcher if API key is available
         if let Ok(provider) = AnthropicClient::from_env() {
@@ -281,7 +263,7 @@ impl AppState {
                 user_repo: None,
                 doc_repo: None,
                 scheduler,
-                config: Arc::new(config),
+                config: Arc::new(RwLock::new(config)),
                 jwt_secret,
                 orchestrator_tx,
                 response_streams: Arc::new(RwLock::new(HashMap::new())),
@@ -298,6 +280,7 @@ impl AppState {
                 schedule_manager: Arc::new(RwLock::new(ScheduleManager::new())),
                 mode_registry: Arc::new(ModeRegistry::new()),
                 repo_index: Arc::new(RwLock::new(RepoIndex::default())),
+                indexing_status: Arc::new(RwLock::new(IndexingStatus::default())),
             },
             orchestrator_rx,
         )

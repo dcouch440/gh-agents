@@ -41,6 +41,38 @@ pub struct RepoIndex {
     pub ready: bool,
 }
 
+/// Status of the repo indexing process.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct IndexingStatus {
+    pub state: IndexingState,
+    pub files_total: usize,
+    pub files_indexed: usize,
+    pub last_completed: Option<String>,
+    pub error: Option<String>,
+}
+
+impl Default for IndexingStatus {
+    fn default() -> Self {
+        Self {
+            state: IndexingState::Idle,
+            files_total: 0,
+            files_indexed: 0,
+            last_completed: None,
+            error: None,
+        }
+    }
+}
+
+/// State of the indexing process.
+#[derive(Debug, Clone, serde::Serialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum IndexingState {
+    Idle,
+    Running,
+    Complete,
+    Failed,
+}
+
 /// Compiled context ready for injection into TaskContext.
 #[derive(Debug, Clone)]
 pub struct CompiledContext {
