@@ -10,8 +10,8 @@ use uuid::Uuid;
 
 use crate::db::{
     AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, PipelineRow,
-    PipelineStageRow, ScheduleRow, SessionRow, StageSideTaskRow, ToolRow, TriggerRow,
-    UsageSummaryRow,
+    PipelineRunRow, PipelineStageRow, ScheduleRow, SessionRow, StageExecutionRow, StageSideTaskRow,
+    ToolRow, TriggerRow, UsageSummaryRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::observability::{Decision, LlmCall};
@@ -514,6 +514,29 @@ pub trait ServerRepo: Send + Sync {
 
     /// Get aggregated usage summary for the last N hours.
     async fn get_usage_summary(&self, since_hours: u32) -> Result<Vec<UsageSummaryRow>>;
+
+    // --- Pipeline run persistence ---
+
+    /// Create a pipeline run record.
+    async fn create_pipeline_run(&self, run: &PipelineRunRow) -> Result<()>;
+
+    /// Update a pipeline run record.
+    async fn update_pipeline_run(&self, run: &PipelineRunRow) -> Result<()>;
+
+    /// Get a pipeline run by ID.
+    async fn get_pipeline_run(&self, run_id: Uuid) -> Result<Option<PipelineRunRow>>;
+
+    /// List runs for a pipeline.
+    async fn list_pipeline_runs(&self, pipeline_id: Uuid) -> Result<Vec<PipelineRunRow>>;
+
+    /// Create a stage execution record.
+    async fn create_stage_execution(&self, exec: &StageExecutionRow) -> Result<()>;
+
+    /// Update a stage execution record.
+    async fn update_stage_execution(&self, exec: &StageExecutionRow) -> Result<()>;
+
+    /// List stage executions for a run.
+    async fn list_stage_executions(&self, run_id: Uuid) -> Result<Vec<StageExecutionRow>>;
 
     // --- Tool call logging ---
 

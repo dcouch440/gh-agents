@@ -159,6 +159,9 @@ impl Agent {
                     output: "Agent shutdown during task execution".to_string(),
                     files_modified: vec![],
                     errors: vec!["Agent shutdown".to_string()],
+                    input_tokens: 0,
+                    output_tokens: 0,
+                    duration_ms: 0,
                 },
             })
             .await?;
@@ -217,6 +220,9 @@ impl Agent {
                         output: String::new(),
                         files_modified: vec![],
                         errors: vec![e.to_string()],
+                        input_tokens: 0,
+                        output_tokens: 0,
+                        duration_ms: 0,
                     },
                 })
                 .await?;
@@ -357,6 +363,9 @@ impl Agent {
             output: response.content,
             files_modified,
             errors: vec![],
+            input_tokens: 0,
+            output_tokens: 0,
+            duration_ms: 0,
         })
     }
 
@@ -456,6 +465,9 @@ impl Agent {
             output: accumulated,
             files_modified: vec![],
             errors: vec![],
+            input_tokens: 0,
+            output_tokens: 0,
+            duration_ms: 0,
         })
     }
 
@@ -497,6 +509,9 @@ impl Agent {
         let mut accumulated_response = String::new();
         let mut files_modified = Vec::new();
         let max_tool_rounds = 15;
+        let mut total_input_tokens: u64 = 0;
+        let mut total_output_tokens: u64 = 0;
+        let task_start = std::time::Instant::now();
 
         for round in 0..max_tool_rounds {
             let progress = 10 + (round as u8 * 5).min(70);
@@ -544,6 +559,9 @@ impl Agent {
                 Some(r) => r,
                 None => return Err(AgentError::LLMError("Incomplete LLM response".into())),
             };
+
+            total_input_tokens += response.usage.input_tokens as u64;
+            total_output_tokens += response.usage.output_tokens as u64;
 
             if response.stop_reason == StopReason::ToolUse {
                 if let Some(exec_ctx) = &assignment.context.execution_context {
@@ -656,6 +674,8 @@ impl Agent {
 
                 // Handle any tool calls from the fix round
                 if let Some(fix_response) = fix_accumulator.build() {
+                    total_input_tokens += fix_response.usage.input_tokens as u64;
+                    total_output_tokens += fix_response.usage.output_tokens as u64;
                     if fix_response.stop_reason == StopReason::ToolUse {
                         if let Some(exec_ctx) = &assignment.context.execution_context {
                             messages.push(Message::assistant_with_blocks(
@@ -707,6 +727,9 @@ impl Agent {
             output: accumulated_response,
             files_modified,
             errors: vec![],
+            input_tokens: total_input_tokens,
+            output_tokens: total_output_tokens,
+            duration_ms: task_start.elapsed().as_millis() as u64,
         })
     }
 
@@ -787,6 +810,9 @@ impl Agent {
                 output: String::new(),
                 files_modified: vec![],
                 errors: vec![format!("Approval denied: {}", reason)],
+                input_tokens: 0,
+                output_tokens: 0,
+                duration_ms: 0,
             },
         })
         .await?;

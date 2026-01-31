@@ -482,9 +482,7 @@ pub async fn create_tool(
         id: Uuid::new_v4(),
         name: request.name.trim().to_string(),
         description: request.description.unwrap_or_default(),
-        category: request
-            .category
-            .unwrap_or_else(|| "general".to_string()),
+        category: request.category.unwrap_or_else(|| "general".to_string()),
         parameter_schema: request
             .parameter_schema
             .unwrap_or_else(|| serde_json::json!({})),
@@ -2124,15 +2122,17 @@ pub fn render_stage_prompt(
             prompt.push_str("# Output Schema\nReturn a JSON object with these fields:\n");
             for field in fields {
                 let name = field.get("name").and_then(|n| n.as_str()).unwrap_or("?");
-                let ftype = field.get("type").and_then(|t| t.as_str()).unwrap_or("string");
+                let ftype = field
+                    .get("type")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("string");
                 let desc = field
                     .get("description")
                     .and_then(|d| d.as_str())
                     .unwrap_or("");
                 let type_str = if ftype == "enum" {
                     if let Some(values) = field.get("values").and_then(|v| v.as_array()) {
-                        let vals: Vec<&str> =
-                            values.iter().filter_map(|v| v.as_str()).collect();
+                        let vals: Vec<&str> = values.iter().filter_map(|v| v.as_str()).collect();
                         format!("one of {:?}", vals)
                     } else {
                         "enum".to_string()
@@ -2220,7 +2220,11 @@ pub async fn render_stage(
     let resolved_description =
         resolve_template(&stage.output_description, stage_outputs, &context_docs);
 
-    render_stage_prompt(&resolved_description, &resolved_inputs, &stage.output_schema)
+    render_stage_prompt(
+        &resolved_description,
+        &resolved_inputs,
+        &stage.output_schema,
+    )
 }
 
 /// Request body for rendering a pipeline stage prompt.
@@ -2367,6 +2371,401 @@ pub async fn delete_stage_side_task(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+// ============================================================================
+// Pipeline Run Endpoints
+// ============================================================================
+
+#[derive(Deserialize)]
+pub struct ApproveRunRequest {
+    pub user_input: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct PipelineRunResponse {
+    pub id: String,
+    pub pipeline_id: String,
+    pub status: String,
+    pub initial_task: String,
+    pub stage_outputs: serde_json::Value,
+    pub current_stage: i32,
+    pub started_at: String,
+    pub completed_at: Option<String>,
+    pub total_input_tokens: i64,
+    pub total_output_tokens: i64,
+}
+
+impl PipelineRunResponse {
+    fn from_row(row: crate::db::PipelineRunRow) -> Self {
+        Self {
+            id: row.id.to_string(),
+            pipeline_id: row.pipeline_id.to_string(),
+            status: row.status,
+            initial_task: row.initial_task,
+            stage_outputs: row.stage_outputs,
+            current_stage: row.current_stage,
+            started_at: row.started_at.to_rfc3339(),
+            completed_at: row.completed_at.map(|t| t.to_rfc3339()),
+            total_input_tokens: row.total_input_tokens,
+            total_output_tokens: row.total_output_tokens,
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct StageExecutionResponse {
+    pub id: String,
+    pub run_id: String,
+    pub stage_number: i32,
+    pub stage_name: String,
+    pub agent_id: Option<String>,
+    pub status: String,
+    pub rendered_prompt: Option<String>,
+    pub output: Option<String>,
+    pub structured_output: Option<serde_json::Value>,
+    pub user_input: Option<String>,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub started_at: String,
+    pub completed_at: Option<String>,
+    pub duration_ms: i64,
+}
+
+impl StageExecutionResponse {
+    fn from_row(row: crate::db::StageExecutionRow) -> Self {
+        Self {
+            id: row.id.to_string(),
+            run_id: row.run_id.to_string(),
+            stage_number: row.stage_number,
+            stage_name: row.stage_name,
+            agent_id: row.agent_id.map(|id| id.to_string()),
+            status: row.status,
+            rendered_prompt: row.rendered_prompt,
+            output: row.output,
+            structured_output: row.structured_output,
+            user_input: row.user_input,
+            input_tokens: row.input_tokens,
+            output_tokens: row.output_tokens,
+            started_at: row.started_at.to_rfc3339(),
+            completed_at: row.completed_at.map(|t| t.to_rfc3339()),
+            duration_ms: row.duration_ms,
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct PipelineRunDetailResponse {
+    #[serde(flatten)]
+    pub run: PipelineRunResponse,
+    pub stages: Vec<StageExecutionResponse>,
+}
+
+#[derive(Deserialize)]
+pub struct ListRunsQuery {
+    pub pipeline_id: Option<String>,
+}
+
+/// List pipeline runs, optionally filtered by pipeline_id.
+pub async fn list_pipeline_runs(
+    State(state): State<AppState>,
+    _user: auth::AuthUser,
+    Query(query): Query<ListRunsQuery>,
+) -> Result<Json<Vec<PipelineRunResponse>>, StatusCode> {
+    let pipeline_id = query
+        .pipeline_id
+        .as_deref()
+        .and_then(|s| Uuid::parse_str(s).ok())
+        .ok_or(StatusCode::BAD_REQUEST)?;
+
+    let runs = state
+        .repo
+        .list_pipeline_runs(pipeline_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(
+        runs.into_iter()
+            .map(PipelineRunResponse::from_row)
+            .collect(),
+    ))
+}
+
+/// Get a pipeline run with its stage executions.
+pub async fn get_pipeline_run(
+    State(state): State<AppState>,
+    _user: auth::AuthUser,
+    Path(run_id): Path<String>,
+) -> Result<Json<PipelineRunDetailResponse>, StatusCode> {
+    let run_uuid = Uuid::parse_str(&run_id).map_err(|_| StatusCode::BAD_REQUEST)?;
+
+    let run = state
+        .repo
+        .get_pipeline_run(run_uuid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let stages = state
+        .repo
+        .list_stage_executions(run_uuid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(PipelineRunDetailResponse {
+        run: PipelineRunResponse::from_row(run),
+        stages: stages
+            .into_iter()
+            .map(StageExecutionResponse::from_row)
+            .collect(),
+    }))
+}
+
+/// Approve a pipeline run gate and optionally inject user context.
+pub async fn approve_pipeline_run(
+    State(state): State<AppState>,
+    _user: auth::AuthUser,
+    Path(run_id): Path<String>,
+    Json(request): Json<ApproveRunRequest>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let run_uuid = Uuid::parse_str(&run_id).map_err(|_| StatusCode::BAD_REQUEST)?;
+
+    // Validate the run is waiting for approval
+    let run = state
+        .repo
+        .get_pipeline_run(run_uuid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if run.status != "waiting_for_approval" {
+        return Err(StatusCode::CONFLICT);
+    }
+
+    // If user provided input, store it on the current stage execution
+    if let Some(ref user_input) = request.user_input {
+        let stages = state
+            .repo
+            .list_stage_executions(run_uuid)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        if let Some(current_exec) = stages
+            .into_iter()
+            .find(|s| s.stage_number == run.current_stage)
+        {
+            let mut updated = current_exec;
+            updated.user_input = Some(user_input.clone());
+            updated.status = "completed".to_string();
+            updated.completed_at = Some(chrono::Utc::now());
+            let _ = state.repo.update_stage_execution(&updated).await;
+        }
+
+        // Record user_input in stage_outputs for template access
+        let stage_name = {
+            let mgr = state.pipeline_manager.read().await;
+            mgr.get_stage_name(run_uuid, run.current_stage as u32)
+                .unwrap_or_else(|| format!("stage_{}", run.current_stage))
+        };
+        {
+            let mut mgr = state.pipeline_manager.write().await;
+            mgr.record_stage_output(
+                run_uuid,
+                stage_name,
+                serde_json::json!({ "user_input": user_input }),
+            );
+        }
+    }
+
+    // Update run status back to running
+    let mut updated_run = run;
+    updated_run.status = "running".to_string();
+    let _ = state.repo.update_pipeline_run(&updated_run).await;
+
+    // Resume the in-memory pipeline manager
+    {
+        let mut mgr = state.pipeline_manager.write().await;
+        // Set status back to Running
+        if let Some(mem_run) = mgr.get_run(run_uuid) {
+            if mem_run.status == crate::agents::pipeline::PipelineRunStatus::WaitingForApproval {
+                // Advance to next stage
+                match mgr.advance_stage(run_uuid) {
+                    Ok(Some(next_stage)) => {
+                        drop(mgr);
+
+                        // Trigger task assignment for the next stage
+                        let initial_task = {
+                            let mgr2 = state.pipeline_manager.read().await;
+                            mgr2.get_run_initial_task(run_uuid)
+                                .unwrap_or_default()
+                                .to_string()
+                        };
+                        let stage_outputs = {
+                            let mgr2 = state.pipeline_manager.read().await;
+                            mgr2.get_stage_outputs(run_uuid)
+                                .cloned()
+                                .unwrap_or_default()
+                        };
+                        let pipeline_id = {
+                            let mgr2 = state.pipeline_manager.read().await;
+                            mgr2.get_run_pipeline_id(run_uuid)
+                        };
+
+                        let rendered_prompt = if let Some(pid) = pipeline_id {
+                            match state.repo.list_pipeline_stages(pid.0).await {
+                                Ok(db_stages) => {
+                                    if let Some(db_stage) = db_stages
+                                        .into_iter()
+                                        .find(|s| s.stage_number == next_stage.stage_number as i32)
+                                    {
+                                        let doc_repo_ref = state.doc_repo.as_deref();
+                                        Some(
+                                            render_stage(doc_repo_ref, &db_stage, &stage_outputs)
+                                                .await,
+                                        )
+                                    } else {
+                                        None
+                                    }
+                                }
+                                Err(_) => None,
+                            }
+                        } else {
+                            None
+                        };
+
+                        let description = rendered_prompt.unwrap_or_else(|| {
+                            format!(
+                                "{}\n\nPrevious output available in stage context.",
+                                initial_task
+                            )
+                        });
+
+                        let mut context_reading: Vec<crate::agents::FileContent> = Vec::new();
+
+                        let resolved_agent_id = if let Some(aid) = &next_stage.agent_id {
+                            if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
+                                for doc in &docs {
+                                    context_reading.push(crate::agents::FileContent {
+                                        path: format!(
+                                            "context:{}",
+                                            if doc.ref_tag.is_empty() {
+                                                &doc.title
+                                            } else {
+                                                &doc.ref_tag
+                                            }
+                                        ),
+                                        content: doc.content.clone(),
+                                    });
+                                }
+                            }
+                            Some(aid.clone())
+                        } else if let Some(cid) = &next_stage.cluster_id {
+                            match state.repo.list_cluster_members(cid.0).await {
+                                Ok(member_ids) => {
+                                    let picked =
+                                        member_ids.first().map(|mid| crate::agents::AgentId(*mid));
+                                    if let Some(aid) = &picked {
+                                        if let Ok(docs) = state.repo.get_agent_context(aid.0).await
+                                        {
+                                            for doc in &docs {
+                                                context_reading.push(crate::agents::FileContent {
+                                                    path: format!(
+                                                        "context:{}",
+                                                        if doc.ref_tag.is_empty() {
+                                                            &doc.title
+                                                        } else {
+                                                            &doc.ref_tag
+                                                        }
+                                                    ),
+                                                    content: doc.content.clone(),
+                                                });
+                                            }
+                                        }
+                                    }
+                                    picked
+                                }
+                                Err(_) => None,
+                            }
+                        } else {
+                            None
+                        };
+
+                        use crate::agents::{
+                            AgentCommand, CommunicationStyle, OutputFormat, RoleContext, RoleId,
+                            TaskAssignment, TaskConstraints, TaskContext,
+                        };
+
+                        let role_str = next_stage.role.as_deref().unwrap_or("worker");
+                        let assignment = TaskAssignment {
+                            task_id: Uuid::new_v4(),
+                            title: format!(
+                                "Pipeline stage {}: {}",
+                                next_stage.stage_number, initial_task
+                            ),
+                            description,
+                            context: TaskContext {
+                                required_reading: context_reading,
+                                files: vec![],
+                                history: vec![],
+                                conventions: String::new(),
+                                role_context: RoleContext {
+                                    system_prompt: format!(
+                                        "You are a {} working on: {}",
+                                        role_str, initial_task
+                                    ),
+                                    style: CommunicationStyle::Technical,
+                                    output_format: OutputFormat::CodeAndReport,
+                                },
+                                chat_messages: vec![],
+                                execution_context: Some(crate::execution::ExecutionContext::new(
+                                    std::env::current_dir().unwrap_or_default(),
+                                )),
+                            },
+                            constraints: TaskConstraints::default(),
+                            timeout: std::time::Duration::from_secs(
+                                crate::constants::DEFAULT_TIMEOUT_SECS,
+                            ),
+                            role_id: RoleId::new(role_str),
+                        };
+
+                        let new_task_id = assignment.task_id;
+                        {
+                            let mut mgr2 = state.pipeline_manager.write().await;
+                            mgr2.record_stage_task(run_uuid, next_stage.stage_number, new_task_id);
+                        }
+
+                        if let Some(agent_id) = &resolved_agent_id {
+                            if let Some(disp) = &state.dispatcher {
+                                let disp = disp.lock().await;
+                                if let Err(e) = disp
+                                    .send_to_agent(agent_id, AgentCommand::AssignTask(assignment))
+                                    .await
+                                {
+                                    tracing::error!("Gate resume dispatch failed: {}", e);
+                                    let mut mgr2 = state.pipeline_manager.write().await;
+                                    mgr2.fail_run(run_uuid);
+                                }
+                            }
+                        }
+
+                        return Ok(Json(
+                            serde_json::json!({ "status": "resumed", "next_stage": next_stage.stage_number }),
+                        ));
+                    }
+                    Ok(None) => {
+                        // Pipeline completed
+                        return Ok(Json(serde_json::json!({ "status": "completed" })));
+                    }
+                    Err(e) => {
+                        tracing::error!("Gate resume advance error: {}", e);
+                        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(Json(serde_json::json!({ "status": "resumed" })))
 }
 
 // ============================================================================
@@ -2658,16 +3057,10 @@ mod tests {
             self.agents.lock().unwrap().retain(|a| a.id != agent_id);
             Ok(())
         }
-        async fn list_tools(
-            &self,
-            _user_id: UserId,
-        ) -> anyhow::Result<Vec<crate::db::ToolRow>> {
+        async fn list_tools(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::ToolRow>> {
             Ok(self.tools.lock().unwrap().clone())
         }
-        async fn get_tool(
-            &self,
-            tool_id: Uuid,
-        ) -> anyhow::Result<Option<crate::db::ToolRow>> {
+        async fn get_tool(&self, tool_id: Uuid) -> anyhow::Result<Option<crate::db::ToolRow>> {
             Ok(self
                 .tools
                 .lock()
@@ -2697,10 +3090,7 @@ mod tests {
                 .retain(|(_, tid)| *tid != tool_id);
             Ok(())
         }
-        async fn get_agent_tools(
-            &self,
-            agent_id: Uuid,
-        ) -> anyhow::Result<Vec<crate::db::ToolRow>> {
+        async fn get_agent_tools(&self, agent_id: Uuid) -> anyhow::Result<Vec<crate::db::ToolRow>> {
             let at = self.agent_tools.lock().unwrap();
             let tool_ids: Vec<Uuid> = at
                 .iter()
@@ -2714,11 +3104,7 @@ mod tests {
                 .cloned()
                 .collect())
         }
-        async fn set_agent_tools(
-            &self,
-            agent_id: Uuid,
-            tool_ids: Vec<Uuid>,
-        ) -> anyhow::Result<()> {
+        async fn set_agent_tools(&self, agent_id: Uuid, tool_ids: Vec<Uuid>) -> anyhow::Result<()> {
             let mut at = self.agent_tools.lock().unwrap();
             at.retain(|(aid, _)| *aid != agent_id);
             for tid in tool_ids {
@@ -2918,6 +3304,49 @@ mod tests {
         ) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> {
             Ok(vec![])
         }
+        async fn create_pipeline_run(
+            &self,
+            _run: &crate::db::PipelineRunRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn update_pipeline_run(
+            &self,
+            _run: &crate::db::PipelineRunRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn get_pipeline_run(
+            &self,
+            _run_id: Uuid,
+        ) -> anyhow::Result<Option<crate::db::PipelineRunRow>> {
+            Ok(None)
+        }
+        async fn list_pipeline_runs(
+            &self,
+            _pipeline_id: Uuid,
+        ) -> anyhow::Result<Vec<crate::db::PipelineRunRow>> {
+            Ok(vec![])
+        }
+        async fn create_stage_execution(
+            &self,
+            _exec: &crate::db::StageExecutionRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn update_stage_execution(
+            &self,
+            _exec: &crate::db::StageExecutionRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_stage_executions(
+            &self,
+            _run_id: Uuid,
+        ) -> anyhow::Result<Vec<crate::db::StageExecutionRow>> {
+            Ok(vec![])
+        }
+
         async fn insert_tool_call(
             &self,
             _session_id: Option<Uuid>,
@@ -3959,7 +4388,9 @@ mod tests {
                     .uri("/api/tools")
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(r#"{"name":"git_status","description":"Show git status","category":"git"}"#))
+                    .body(Body::from(
+                        r#"{"name":"git_status","description":"Show git status","category":"git"}"#,
+                    ))
                     .unwrap(),
             )
             .await
@@ -3999,7 +4430,9 @@ mod tests {
                     .uri("/api/tools")
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(r#"{"name":"run_tests","description":"Run tests"}"#))
+                    .body(Body::from(
+                        r#"{"name":"run_tests","description":"Run tests"}"#,
+                    ))
                     .unwrap(),
             )
             .await
@@ -4062,7 +4495,9 @@ mod tests {
                     .uri("/api/tools")
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(r#"{"name":"write_file","description":"Write a file","category":"file"}"#))
+                    .body(Body::from(
+                        r#"{"name":"write_file","description":"Write a file","category":"file"}"#,
+                    ))
                     .unwrap(),
             )
             .await
@@ -4081,7 +4516,9 @@ mod tests {
                     .uri(format!("/api/tools/{}", tool_id))
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(r#"{"description":"Write content to a file","enabled":false}"#))
+                    .body(Body::from(
+                        r#"{"description":"Write content to a file","enabled":false}"#,
+                    ))
                     .unwrap(),
             )
             .await
@@ -4851,10 +5288,7 @@ mod tests {
     #[test]
     fn resolve_template_numeric_value() {
         let mut outputs = std::collections::HashMap::new();
-        outputs.insert(
-            "scorer".to_string(),
-            serde_json::json!({"confidence": 95}),
-        );
+        outputs.insert("scorer".to_string(), serde_json::json!({"confidence": 95}));
         let no_ctx = std::collections::HashMap::new();
         let result = resolve_template("Confidence: {{scorer.confidence}}%", &outputs, &no_ctx);
         assert_eq!(result, "Confidence: 95%");
@@ -4863,14 +5297,8 @@ mod tests {
     #[test]
     fn resolve_template_multiple_stages() {
         let mut outputs = std::collections::HashMap::new();
-        outputs.insert(
-            "stage_a".to_string(),
-            serde_json::json!({"x": "hello"}),
-        );
-        outputs.insert(
-            "stage_b".to_string(),
-            serde_json::json!({"y": "world"}),
-        );
+        outputs.insert("stage_a".to_string(), serde_json::json!({"x": "hello"}));
+        outputs.insert("stage_b".to_string(), serde_json::json!({"y": "world"}));
         let no_ctx = std::collections::HashMap::new();
         let result = resolve_template("{{stage_a.x}} {{stage_b.y}}", &outputs, &no_ctx);
         assert_eq!(result, "hello world");
@@ -4905,8 +5333,11 @@ mod tests {
         );
         let mut ctx = std::collections::HashMap::new();
         ctx.insert("prd".to_string(), "Build a login feature.".to_string());
-        let result =
-            resolve_template("{{context.prd}} Status: {{analysis.status}}", &outputs, &ctx);
+        let result = resolve_template(
+            "{{context.prd}} Status: {{analysis.status}}",
+            &outputs,
+            &ctx,
+        );
         assert_eq!(result, "Build a login feature. Status: complete");
     }
 

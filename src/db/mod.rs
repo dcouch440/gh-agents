@@ -152,6 +152,38 @@ pub struct UsageSummaryRow {
     pub call_count: i64,
 }
 
+pub struct PipelineRunRow {
+    pub id: Uuid,
+    pub pipeline_id: Uuid,
+    pub user_id: Uuid,
+    pub status: String,
+    pub initial_task: String,
+    pub stage_outputs: serde_json::Value,
+    pub current_stage: i32,
+    pub started_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub total_input_tokens: i64,
+    pub total_output_tokens: i64,
+}
+
+pub struct StageExecutionRow {
+    pub id: Uuid,
+    pub run_id: Uuid,
+    pub stage_number: i32,
+    pub stage_name: String,
+    pub agent_id: Option<Uuid>,
+    pub status: String,
+    pub rendered_prompt: Option<String>,
+    pub output: Option<String>,
+    pub structured_output: Option<serde_json::Value>,
+    pub user_input: Option<String>,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub started_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub duration_ms: i64,
+}
+
 /// Type alias for the database pool
 pub type DbPool = PgPool;
 

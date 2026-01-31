@@ -209,16 +209,37 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                     }
 
                     // Check for pipeline auto-advance on completion/failure
+                    // Tuple: (run_id, stage_number, output, succeeded, input_tokens, output_tokens, duration_ms)
                     let pipeline_advance = match &resp {
                         AgentResponse::TaskCompleted { result, .. } => {
                             let mgr = state.pipeline_manager.read().await;
                             mgr.lookup_run_by_task(result.task_id)
-                                .map(|(run_id, stage_number)| (run_id, stage_number, result.output.clone(), true))
+                                .map(|(run_id, stage_number)| {
+                                    (
+                                        run_id,
+                                        stage_number,
+                                        result.output.clone(),
+                                        true,
+                                        result.input_tokens,
+                                        result.output_tokens,
+                                        result.duration_ms,
+                                    )
+                                })
                         }
                         AgentResponse::TaskFailed { result, .. } => {
                             let mgr = state.pipeline_manager.read().await;
                             mgr.lookup_run_by_task(result.task_id)
-                                .map(|(run_id, stage_number)| (run_id, stage_number, String::new(), false))
+                                .map(|(run_id, stage_number)| {
+                                    (
+                                        run_id,
+                                        stage_number,
+                                        String::new(),
+                                        false,
+                                        result.input_tokens,
+                                        result.output_tokens,
+                                        result.duration_ms,
+                                    )
+                                })
                         }
                         _ => None,
                     };
@@ -240,7 +261,64 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                     }
 
                     // Pipeline auto-advance
-                    if let Some((run_id, completed_stage_number, prev_output, succeeded)) = pipeline_advance {
+                    if let Some((
+                        run_id,
+                        completed_stage_number,
+                        prev_output,
+                        succeeded,
+                        stage_input_tokens,
+                        stage_output_tokens,
+                        stage_duration_ms,
+                    )) = pipeline_advance
+                    {
+                        // Persist stage execution completion/failure
+                        {
+                            let now = chrono::Utc::now();
+                            // Try to find existing stage execution by listing and matching
+                            if let Ok(execs) = state.repo.list_stage_executions(run_id).await {
+                                if let Some(exec) = execs
+                                    .into_iter()
+                                    .find(|e| e.stage_number == completed_stage_number as i32)
+                                {
+                                    let mut updated = exec;
+                                    updated.status = if succeeded {
+                                        "completed".to_string()
+                                    } else {
+                                        "failed".to_string()
+                                    };
+                                    updated.output = if succeeded {
+                                        Some(prev_output.clone())
+                                    } else {
+                                        None
+                                    };
+                                    updated.input_tokens = stage_input_tokens as i64;
+                                    updated.output_tokens = stage_output_tokens as i64;
+                                    updated.duration_ms = stage_duration_ms as i64;
+                                    updated.completed_at = Some(now);
+                                    let _ = state.repo.update_stage_execution(&updated).await;
+                                }
+                            }
+                            // Update run token totals
+                            if let Ok(Some(mut run_row)) = state.repo.get_pipeline_run(run_id).await
+                            {
+                                run_row.total_input_tokens += stage_input_tokens as i64;
+                                run_row.total_output_tokens += stage_output_tokens as i64;
+                                run_row.current_stage = completed_stage_number as i32;
+                                if !succeeded {
+                                    run_row.status = "failed".to_string();
+                                    run_row.completed_at = Some(now);
+                                }
+                                // Update stage_outputs from in-memory
+                                let mgr = state.pipeline_manager.read().await;
+                                if let Some(outputs) = mgr.get_stage_outputs(run_id) {
+                                    run_row.stage_outputs =
+                                        serde_json::to_value(outputs).unwrap_or_default();
+                                }
+                                drop(mgr);
+                                let _ = state.repo.update_pipeline_run(&run_row).await;
+                            }
+                        }
+
                         if !succeeded {
                             let mut mgr = state.pipeline_manager.write().await;
                             mgr.fail_run(run_id);
@@ -284,6 +362,32 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                 if next_stage.approval_required {
                                     let mut mgr = state.pipeline_manager.write().await;
                                     mgr.set_waiting_for_approval(run_id);
+                                    // Persist waiting status
+                                    if let Ok(Some(mut run_row)) =
+                                        state.repo.get_pipeline_run(run_id).await
+                                    {
+                                        run_row.status = "waiting_for_approval".to_string();
+                                        let _ = state.repo.update_pipeline_run(&run_row).await;
+                                    }
+                                    // Create stage execution for the gate stage
+                                    let gate_exec = crate::db::StageExecutionRow {
+                                        id: uuid::Uuid::new_v4(),
+                                        run_id,
+                                        stage_number: next_stage.stage_number as i32,
+                                        stage_name: next_stage.stage_name.clone(),
+                                        agent_id: next_stage.agent_id.as_ref().map(|a| a.0),
+                                        status: "waiting_for_approval".to_string(),
+                                        rendered_prompt: None,
+                                        output: None,
+                                        structured_output: None,
+                                        user_input: None,
+                                        input_tokens: 0,
+                                        output_tokens: 0,
+                                        started_at: chrono::Utc::now(),
+                                        completed_at: None,
+                                        duration_ms: 0,
+                                    };
+                                    let _ = state.repo.create_stage_execution(&gate_exec).await;
                                     state.broadcast_feed(FeedUpdate {
                                         id: run_id,
                                         agent_id: "pipeline".into(),
@@ -307,9 +411,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                     // Get stage outputs for template resolution
                                     let stage_outputs = {
                                         let mgr = state.pipeline_manager.read().await;
-                                        mgr.get_stage_outputs(run_id)
-                                            .cloned()
-                                            .unwrap_or_default()
+                                        mgr.get_stage_outputs(run_id).cloned().unwrap_or_default()
                                     };
 
                                     // Get pipeline_id to load DB stage row
@@ -322,15 +424,30 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                     let rendered_prompt = if let Some(pid) = pipeline_id {
                                         match state.repo.list_pipeline_stages(pid.0).await {
                                             Ok(db_stages) => {
-                                                if let Some(db_stage) = db_stages.into_iter().find(|s| s.stage_number == next_stage.stage_number as i32) {
+                                                if let Some(db_stage) =
+                                                    db_stages.into_iter().find(|s| {
+                                                        s.stage_number
+                                                            == next_stage.stage_number as i32
+                                                    })
+                                                {
                                                     let doc_repo_ref = state.doc_repo.as_deref();
-                                                    Some(super::api::render_stage(doc_repo_ref, &db_stage, &stage_outputs).await)
+                                                    Some(
+                                                        super::api::render_stage(
+                                                            doc_repo_ref,
+                                                            &db_stage,
+                                                            &stage_outputs,
+                                                        )
+                                                        .await,
+                                                    )
                                                 } else {
                                                     None
                                                 }
                                             }
                                             Err(e) => {
-                                                warn!("Failed to load pipeline stages from DB: {}", e);
+                                                warn!(
+                                                    "Failed to load pipeline stages from DB: {}",
+                                                    e
+                                                );
                                                 None
                                             }
                                         }
@@ -339,19 +456,32 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                     };
 
                                     let description = rendered_prompt.unwrap_or_else(|| {
-                                        format!("{}\n\nPrevious stage output:\n{}", initial_task, prev_output)
+                                        format!(
+                                            "{}\n\nPrevious stage output:\n{}",
+                                            initial_task, prev_output
+                                        )
                                     });
+                                    let rendered_prompt_copy = description.clone();
 
                                     // Load agent-level context documents
                                     let mut context_reading: Vec<FileContent> = Vec::new();
 
                                     // Resolve agent: prefer agent_id, fall back to cluster selection
-                                    let resolved_agent_id = if let Some(aid) = &next_stage.agent_id {
+                                    let resolved_agent_id = if let Some(aid) = &next_stage.agent_id
+                                    {
                                         // Load context docs for this agent
-                                        if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
+                                        if let Ok(docs) = state.repo.get_agent_context(aid.0).await
+                                        {
                                             for doc in &docs {
                                                 context_reading.push(FileContent {
-                                                    path: format!("context:{}", if doc.ref_tag.is_empty() { &doc.title } else { &doc.ref_tag }),
+                                                    path: format!(
+                                                        "context:{}",
+                                                        if doc.ref_tag.is_empty() {
+                                                            &doc.title
+                                                        } else {
+                                                            &doc.ref_tag
+                                                        }
+                                                    ),
                                                     content: doc.content.clone(),
                                                 });
                                             }
@@ -361,15 +491,24 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         // Pick an agent from the cluster (first available member)
                                         match state.repo.list_cluster_members(cid.0).await {
                                             Ok(member_ids) => {
-                                                let picked = member_ids.first().map(|mid| {
-                                                    crate::agents::AgentId(*mid)
-                                                });
+                                                let picked = member_ids
+                                                    .first()
+                                                    .map(|mid| crate::agents::AgentId(*mid));
                                                 // Load context docs for picked agent
                                                 if let Some(aid) = &picked {
-                                                    if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
+                                                    if let Ok(docs) =
+                                                        state.repo.get_agent_context(aid.0).await
+                                                    {
                                                         for doc in &docs {
                                                             context_reading.push(FileContent {
-                                                                path: format!("context:{}", if doc.ref_tag.is_empty() { &doc.title } else { &doc.ref_tag }),
+                                                                path: format!(
+                                                                    "context:{}",
+                                                                    if doc.ref_tag.is_empty() {
+                                                                        &doc.title
+                                                                    } else {
+                                                                        &doc.ref_tag
+                                                                    }
+                                                                ),
                                                                 content: doc.content.clone(),
                                                             });
                                                         }
@@ -439,6 +578,26 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         );
                                     }
 
+                                    // Persist new stage execution
+                                    let stage_exec = crate::db::StageExecutionRow {
+                                        id: uuid::Uuid::new_v4(),
+                                        run_id,
+                                        stage_number: next_stage.stage_number as i32,
+                                        stage_name: next_stage.stage_name.clone(),
+                                        agent_id: resolved_agent_id.as_ref().map(|a| a.0),
+                                        status: "running".to_string(),
+                                        rendered_prompt: Some(rendered_prompt_copy),
+                                        output: None,
+                                        structured_output: None,
+                                        user_input: None,
+                                        input_tokens: 0,
+                                        output_tokens: 0,
+                                        started_at: chrono::Utc::now(),
+                                        completed_at: None,
+                                        duration_ms: 0,
+                                    };
+                                    let _ = state.repo.create_stage_execution(&stage_exec).await;
+
                                     if let Some(agent_id) = &resolved_agent_id {
                                         if let Some(disp) = &state.dispatcher {
                                             let disp = disp.lock().await;
@@ -467,13 +626,23 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                             }
                                         }
                                     } else {
-                                        error!("Pipeline stage {} has no agent_id or cluster_id", next_stage.stage_number);
+                                        error!(
+                                            "Pipeline stage {} has no agent_id or cluster_id",
+                                            next_stage.stage_number
+                                        );
                                         let mut mgr = state.pipeline_manager.write().await;
                                         mgr.fail_run(run_id);
                                     }
                                 }
                             } else {
-                                // Pipeline completed
+                                // Pipeline completed — persist
+                                if let Ok(Some(mut run_row)) =
+                                    state.repo.get_pipeline_run(run_id).await
+                                {
+                                    run_row.status = "completed".to_string();
+                                    run_row.completed_at = Some(chrono::Utc::now());
+                                    let _ = state.repo.update_pipeline_run(&run_row).await;
+                                }
                                 state.broadcast_feed(FeedUpdate {
                                     id: run_id,
                                     agent_id: "pipeline".into(),
@@ -1253,16 +1422,10 @@ mod tests {
         async fn delete_persisted_agent(&self, _agent_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn list_tools(
-            &self,
-            _user_id: UserId,
-        ) -> anyhow::Result<Vec<crate::db::ToolRow>> {
+        async fn list_tools(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::ToolRow>> {
             Ok(vec![])
         }
-        async fn get_tool(
-            &self,
-            _tool_id: Uuid,
-        ) -> anyhow::Result<Option<crate::db::ToolRow>> {
+        async fn get_tool(&self, _tool_id: Uuid) -> anyhow::Result<Option<crate::db::ToolRow>> {
             Ok(None)
         }
         async fn upsert_tool(
@@ -1474,6 +1637,49 @@ mod tests {
         ) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> {
             Ok(vec![])
         }
+        async fn create_pipeline_run(
+            &self,
+            _run: &crate::db::PipelineRunRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn update_pipeline_run(
+            &self,
+            _run: &crate::db::PipelineRunRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn get_pipeline_run(
+            &self,
+            _run_id: Uuid,
+        ) -> anyhow::Result<Option<crate::db::PipelineRunRow>> {
+            Ok(None)
+        }
+        async fn list_pipeline_runs(
+            &self,
+            _pipeline_id: Uuid,
+        ) -> anyhow::Result<Vec<crate::db::PipelineRunRow>> {
+            Ok(vec![])
+        }
+        async fn create_stage_execution(
+            &self,
+            _exec: &crate::db::StageExecutionRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn update_stage_execution(
+            &self,
+            _exec: &crate::db::StageExecutionRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_stage_executions(
+            &self,
+            _run_id: Uuid,
+        ) -> anyhow::Result<Vec<crate::db::StageExecutionRow>> {
+            Ok(vec![])
+        }
+
         async fn insert_tool_call(
             &self,
             _session_id: Option<Uuid>,

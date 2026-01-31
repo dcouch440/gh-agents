@@ -12,8 +12,8 @@ use crate::db::traits::{
 };
 use crate::db::{
     AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, PipelineRow,
-    PipelineStageRow, ScheduleRow, SessionRow, StageSideTaskRow, ToolRow, TriggerRow,
-    UsageSummaryRow,
+    PipelineRunRow, PipelineStageRow, ScheduleRow, SessionRow, StageExecutionRow, StageSideTaskRow,
+    ToolRow, TriggerRow, UsageSummaryRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::observability::{Decision, LlmCall};
@@ -1313,7 +1313,19 @@ impl ServerRepo for PgRepo {
         Ok(rows
             .into_iter()
             .map(
-                |(pipeline_id, stage_number, agent_id, cluster_id, role, approval_required, fan_out, stage_name, input_definitions, output_description, output_schema)| PipelineStageRow {
+                |(
+                    pipeline_id,
+                    stage_number,
+                    agent_id,
+                    cluster_id,
+                    role,
+                    approval_required,
+                    fan_out,
+                    stage_name,
+                    input_definitions,
+                    output_description,
+                    output_schema,
+                )| PipelineStageRow {
                     pipeline_id,
                     stage_number,
                     agent_id,
@@ -1378,16 +1390,27 @@ impl ServerRepo for PgRepo {
 
         Ok(rows
             .into_iter()
-            .map(|(id, pipeline_id, stage_number, agent_id, input_definitions, output_name, blocking, output_schema)| StageSideTaskRow {
-                id,
-                pipeline_id,
-                stage_number,
-                agent_id,
-                input_definitions,
-                output_name,
-                blocking,
-                output_schema,
-            })
+            .map(
+                |(
+                    id,
+                    pipeline_id,
+                    stage_number,
+                    agent_id,
+                    input_definitions,
+                    output_name,
+                    blocking,
+                    output_schema,
+                )| StageSideTaskRow {
+                    id,
+                    pipeline_id,
+                    stage_number,
+                    agent_id,
+                    input_definitions,
+                    output_name,
+                    blocking,
+                    output_schema,
+                },
+            )
             .collect())
     }
 
@@ -1680,6 +1703,223 @@ impl ServerRepo for PgRepo {
         .fetch_all(&self.pool)
         .await?;
         Ok(rows)
+    }
+
+    async fn create_pipeline_run(&self, run: &PipelineRunRow) -> Result<()> {
+        sqlx::query(
+            r#"
+            INSERT INTO pipeline_runs (id, pipeline_id, user_id, status, initial_task, stage_outputs, current_stage, started_at, completed_at, total_input_tokens, total_output_tokens)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            "#,
+        )
+        .bind(run.id)
+        .bind(run.pipeline_id)
+        .bind(run.user_id)
+        .bind(&run.status)
+        .bind(&run.initial_task)
+        .bind(&run.stage_outputs)
+        .bind(run.current_stage)
+        .bind(run.started_at)
+        .bind(run.completed_at)
+        .bind(run.total_input_tokens)
+        .bind(run.total_output_tokens)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn update_pipeline_run(&self, run: &PipelineRunRow) -> Result<()> {
+        sqlx::query(
+            r#"
+            UPDATE pipeline_runs
+            SET status = $2, stage_outputs = $3, current_stage = $4, completed_at = $5, total_input_tokens = $6, total_output_tokens = $7
+            WHERE id = $1
+            "#,
+        )
+        .bind(run.id)
+        .bind(&run.status)
+        .bind(&run.stage_outputs)
+        .bind(run.current_stage)
+        .bind(run.completed_at)
+        .bind(run.total_input_tokens)
+        .bind(run.total_output_tokens)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn get_pipeline_run(&self, run_id: Uuid) -> Result<Option<PipelineRunRow>> {
+        let row: Option<(Uuid, Uuid, Uuid, String, String, serde_json::Value, i32, chrono::DateTime<chrono::Utc>, Option<chrono::DateTime<chrono::Utc>>, i64, i64)> = sqlx::query_as(
+            "SELECT id, pipeline_id, user_id, status, initial_task, stage_outputs, current_stage, started_at, completed_at, total_input_tokens, total_output_tokens FROM pipeline_runs WHERE id = $1"
+        )
+        .bind(run_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(
+            |(
+                id,
+                pipeline_id,
+                user_id,
+                status,
+                initial_task,
+                stage_outputs,
+                current_stage,
+                started_at,
+                completed_at,
+                total_input_tokens,
+                total_output_tokens,
+            )| PipelineRunRow {
+                id,
+                pipeline_id,
+                user_id,
+                status,
+                initial_task,
+                stage_outputs,
+                current_stage,
+                started_at,
+                completed_at,
+                total_input_tokens,
+                total_output_tokens,
+            },
+        ))
+    }
+
+    async fn list_pipeline_runs(&self, pipeline_id: Uuid) -> Result<Vec<PipelineRunRow>> {
+        let rows: Vec<(Uuid, Uuid, Uuid, String, String, serde_json::Value, i32, chrono::DateTime<chrono::Utc>, Option<chrono::DateTime<chrono::Utc>>, i64, i64)> = sqlx::query_as(
+            "SELECT id, pipeline_id, user_id, status, initial_task, stage_outputs, current_stage, started_at, completed_at, total_input_tokens, total_output_tokens FROM pipeline_runs WHERE pipeline_id = $1 ORDER BY started_at DESC"
+        )
+        .bind(pipeline_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(
+                    id,
+                    pipeline_id,
+                    user_id,
+                    status,
+                    initial_task,
+                    stage_outputs,
+                    current_stage,
+                    started_at,
+                    completed_at,
+                    total_input_tokens,
+                    total_output_tokens,
+                )| PipelineRunRow {
+                    id,
+                    pipeline_id,
+                    user_id,
+                    status,
+                    initial_task,
+                    stage_outputs,
+                    current_stage,
+                    started_at,
+                    completed_at,
+                    total_input_tokens,
+                    total_output_tokens,
+                },
+            )
+            .collect())
+    }
+
+    async fn create_stage_execution(&self, exec: &StageExecutionRow) -> Result<()> {
+        sqlx::query(
+            r#"
+            INSERT INTO stage_executions (id, run_id, stage_number, stage_name, agent_id, status, rendered_prompt, output, structured_output, user_input, input_tokens, output_tokens, started_at, completed_at, duration_ms)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            "#,
+        )
+        .bind(exec.id)
+        .bind(exec.run_id)
+        .bind(exec.stage_number)
+        .bind(&exec.stage_name)
+        .bind(exec.agent_id)
+        .bind(&exec.status)
+        .bind(exec.rendered_prompt.as_deref())
+        .bind(exec.output.as_deref())
+        .bind(&exec.structured_output)
+        .bind(exec.user_input.as_deref())
+        .bind(exec.input_tokens)
+        .bind(exec.output_tokens)
+        .bind(exec.started_at)
+        .bind(exec.completed_at)
+        .bind(exec.duration_ms)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn update_stage_execution(&self, exec: &StageExecutionRow) -> Result<()> {
+        sqlx::query(
+            r#"
+            UPDATE stage_executions
+            SET status = $2, output = $3, structured_output = $4, user_input = $5, input_tokens = $6, output_tokens = $7, completed_at = $8, duration_ms = $9
+            WHERE id = $1
+            "#,
+        )
+        .bind(exec.id)
+        .bind(&exec.status)
+        .bind(exec.output.as_deref())
+        .bind(&exec.structured_output)
+        .bind(exec.user_input.as_deref())
+        .bind(exec.input_tokens)
+        .bind(exec.output_tokens)
+        .bind(exec.completed_at)
+        .bind(exec.duration_ms)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn list_stage_executions(&self, run_id: Uuid) -> Result<Vec<StageExecutionRow>> {
+        let rows: Vec<(Uuid, Uuid, i32, String, Option<Uuid>, String, Option<String>, Option<String>, Option<serde_json::Value>, Option<String>, i64, i64, chrono::DateTime<chrono::Utc>, Option<chrono::DateTime<chrono::Utc>>, i64)> = sqlx::query_as(
+            "SELECT id, run_id, stage_number, stage_name, agent_id, status, rendered_prompt, output, structured_output, user_input, input_tokens, output_tokens, started_at, completed_at, duration_ms FROM stage_executions WHERE run_id = $1 ORDER BY stage_number"
+        )
+        .bind(run_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(
+                    id,
+                    run_id,
+                    stage_number,
+                    stage_name,
+                    agent_id,
+                    status,
+                    rendered_prompt,
+                    output,
+                    structured_output,
+                    user_input,
+                    input_tokens,
+                    output_tokens,
+                    started_at,
+                    completed_at,
+                    duration_ms,
+                )| StageExecutionRow {
+                    id,
+                    run_id,
+                    stage_number,
+                    stage_name,
+                    agent_id,
+                    status,
+                    rendered_prompt,
+                    output,
+                    structured_output,
+                    user_input,
+                    input_tokens,
+                    output_tokens,
+                    started_at,
+                    completed_at,
+                    duration_ms,
+                },
+            )
+            .collect())
     }
 
     async fn insert_tool_call(
