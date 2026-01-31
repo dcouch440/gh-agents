@@ -60,7 +60,7 @@ impl TaskAssignment {
             description: description.into(),
             context: TaskContext::default(),
             constraints: TaskConstraints::default(),
-            timeout_secs: 300, // 5 minute default
+            timeout_secs: crate::constants::DEFAULT_TIMEOUT_SECS,
             created_at: Utc::now(),
             target_tier,
             role_id: RoleId::new("worker"),
@@ -212,7 +212,7 @@ impl Default for DelegationContext {
     fn default() -> Self {
         Self {
             depth: 0,
-            max_depth: 2, // Default: user -> agent -> sub-agent
+            max_depth: crate::constants::DEFAULT_MAX_DELEGATION_DEPTH as u8,
             parent_agent: None,
             parent_role: None,
             delegation_chain: vec![],

@@ -34,11 +34,11 @@ pub struct BackoffConfig {
 impl Default for BackoffConfig {
     fn default() -> Self {
         Self {
-            initial_delay: Duration::from_millis(500),
-            max_delay: Duration::from_secs(60),
+            initial_delay: Duration::from_millis(crate::constants::RETRY_INITIAL_BACKOFF_MS),
+            max_delay: Duration::from_secs(crate::constants::RETRY_MAX_BACKOFF_SECS),
             multiplier: 2.0,
-            jitter: 0.25,
-            max_retries: 5,
+            jitter: crate::constants::RETRY_JITTER_FACTOR,
+            max_retries: crate::constants::RETRY_MAX_ATTEMPTS,
         }
     }
 }

@@ -44,10 +44,10 @@ pub struct SandboxConfig {
 impl Default for SandboxConfig {
     fn default() -> Self {
         Self {
-            image: "alpine:latest".to_string(),
-            memory_limit: "512m".to_string(),
-            cpu_limit: "1.0".to_string(),
-            timeout_secs: 300, // 5 minutes
+            image: crate::constants::SANDBOX_DEFAULT_IMAGE.to_string(),
+            memory_limit: crate::constants::SANDBOX_DEFAULT_MEMORY.to_string(),
+            cpu_limit: crate::constants::SANDBOX_DEFAULT_CPUS.to_string(),
+            timeout_secs: crate::constants::DEFAULT_TIMEOUT_SECS,
             network_enabled: false,
             env_vars: vec![],
         }
@@ -74,8 +74,8 @@ impl SandboxConfig {
     /// Configure for resource-intensive tasks
     pub fn high_resources() -> Self {
         Self {
-            memory_limit: "2g".to_string(),
-            cpu_limit: "2.0".to_string(),
+            memory_limit: crate::constants::SANDBOX_COMPUTE_MEMORY.to_string(),
+            cpu_limit: crate::constants::SANDBOX_COMPUTE_CPUS.to_string(),
             timeout_secs: 600, // 10 minutes
             ..Default::default()
         }
@@ -84,8 +84,8 @@ impl SandboxConfig {
     /// Configure for quick, lightweight tasks
     pub fn minimal_resources() -> Self {
         Self {
-            memory_limit: "128m".to_string(),
-            cpu_limit: "0.5".to_string(),
+            memory_limit: crate::constants::SANDBOX_READONLY_MEMORY.to_string(),
+            cpu_limit: crate::constants::SANDBOX_READONLY_CPUS.to_string(),
             timeout_secs: 60, // 1 minute
             ..Default::default()
         }

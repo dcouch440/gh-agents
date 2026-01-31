@@ -142,8 +142,8 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                             let mut resolved_files = Vec::new();
                             for path in &request.files_needed {
                                 if let Ok(content) = tokio::fs::read_to_string(path).await {
-                                    let truncated = if content.len() > 50_000 {
-                                        content[..50_000].to_string()
+                                    let truncated = if content.len() > crate::constants::TRUNCATE_CONTEXT_FILE {
+                                        content[..crate::constants::TRUNCATE_CONTEXT_FILE].to_string()
                                     } else {
                                         content
                                     };
@@ -333,7 +333,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                             execution_context,
                                         },
                                         constraints: TaskConstraints::default(),
-                                        timeout: std::time::Duration::from_secs(300),
+                                        timeout: std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),
                                         role_id,
                                     };
 
@@ -424,7 +424,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         )),
                                     },
                                     constraints: TaskConstraints::default(),
-                                    timeout: std::time::Duration::from_secs(300),
+                                    timeout: std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),
                                     role_id,
                                 };
 
@@ -495,7 +495,7 @@ pub fn spawn_schedule_runner(state: AppState) -> Option<tokio::task::JoinHandle<
                         )),
                     },
                     constraints: TaskConstraints::default(),
-                    timeout: std::time::Duration::from_secs(300),
+                    timeout: std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),
                     role_id,
                 };
 
@@ -833,10 +833,11 @@ async fn handle_message(
                     }
 
                     // Truncate oversized tool results to keep context manageable
-                    let result_str = if result_str.len() > 10_000 {
+                    let result_str = if result_str.len() > crate::constants::TRUNCATE_TOOL_RESULT {
                         format!(
-                            "{}...\n[truncated, showing first 10000 of {} chars]",
-                            &result_str[..10_000],
+                            "{}...\n[truncated, showing first {} of {} chars]",
+                            &result_str[..crate::constants::TRUNCATE_TOOL_RESULT],
+                            crate::constants::TRUNCATE_TOOL_RESULT,
                             result_str.len()
                         )
                     } else {
@@ -926,9 +927,9 @@ async fn handle_message(
             let state = state.clone();
             tokio::spawn(async move {
                 let count = state.repo.count_session_messages(session_id).await.unwrap_or(0);
-                if count > 20 {
+                if count > crate::constants::SUMMARIZE_THRESHOLD as u32 {
                     let history = state.repo.get_session_history(session_id, count).await.unwrap_or_default();
-                    let older_messages: Vec<_> = history.iter().take((count - 10) as usize).collect();
+                    let older_messages: Vec<_> = history.iter().take((count as usize).saturating_sub(crate::constants::SUMMARIZE_KEEP_RECENT)).collect();
                     if !older_messages.is_empty() {
                         let conversation_text = older_messages.iter()
                             .map(|m| format!("{}: {}", m.role, m.content))

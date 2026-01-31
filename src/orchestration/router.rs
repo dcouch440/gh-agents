@@ -291,9 +291,9 @@ impl Router {
         let file_count = task.context_files.len();
         let desc_len = task.description.len();
 
-        let inferred = if file_count > 5 || desc_len > 500 {
+        let inferred = if file_count > crate::constants::COMPLEXITY_HIGH_FILES || desc_len > crate::constants::COMPLEXITY_HIGH_DESC_LEN {
             3 // high
-        } else if file_count > 2 || desc_len > 200 {
+        } else if file_count > crate::constants::COMPLEXITY_MEDIUM_FILES || desc_len > crate::constants::COMPLEXITY_MEDIUM_DESC_LEN {
             2 // medium
         } else {
             1 // low
