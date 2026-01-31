@@ -277,6 +277,7 @@ pub struct SessionRow {
     pub user_id: Uuid,
     pub mode_id: String,
     pub title: String,
+    pub summary: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -305,7 +306,7 @@ pub async fn create_session(
 /// List sessions for a user
 pub async fn list_sessions(pool: &PgPool, user_id: UserId) -> Result<Vec<SessionRow>> {
     let rows: Vec<SessionRow> = sqlx::query_as(
-        "SELECT id, user_id, mode_id, title, created_at, updated_at FROM chat_sessions WHERE user_id = $1 ORDER BY updated_at DESC",
+        "SELECT id, user_id, mode_id, title, summary, created_at, updated_at FROM chat_sessions WHERE user_id = $1 ORDER BY updated_at DESC",
     )
     .bind(user_id.0)
     .fetch_all(pool)
@@ -317,7 +318,7 @@ pub async fn list_sessions(pool: &PgPool, user_id: UserId) -> Result<Vec<Session
 /// Get a session by ID
 pub async fn get_session(pool: &PgPool, session_id: Uuid) -> Result<Option<SessionRow>> {
     let row: Option<SessionRow> = sqlx::query_as(
-        "SELECT id, user_id, mode_id, title, created_at, updated_at FROM chat_sessions WHERE id = $1",
+        "SELECT id, user_id, mode_id, title, summary, created_at, updated_at FROM chat_sessions WHERE id = $1",
     )
     .bind(session_id)
     .fetch_optional(pool)

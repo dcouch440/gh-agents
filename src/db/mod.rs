@@ -106,6 +106,16 @@ pub struct DocumentSearchResult {
     pub snippet: String,
 }
 
+/// Row type for token usage summary.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct UsageSummaryRow {
+    pub tier: String,
+    pub model_id: String,
+    pub total_input: i64,
+    pub total_output: i64,
+    pub call_count: i64,
+}
+
 /// Type alias for the database pool
 pub type DbPool = PgPool;
 

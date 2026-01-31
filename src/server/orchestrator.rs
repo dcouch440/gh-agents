@@ -135,6 +135,63 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                 user_id: None,
                             });
                         }
+                        AgentResponse::ContextRequest { agent_id, request } => {
+                            info!("Context request from agent {:?}: {:?}", agent_id, request);
+
+                            // Auto-resolve file requests
+                            let mut resolved_files = Vec::new();
+                            for path in &request.files_needed {
+                                if let Ok(content) = tokio::fs::read_to_string(path).await {
+                                    let truncated = if content.len() > 50_000 {
+                                        content[..50_000].to_string()
+                                    } else {
+                                        content
+                                    };
+                                    resolved_files.push(FileContent {
+                                        path: path.clone(),
+                                        content: truncated,
+                                    });
+                                }
+                            }
+
+                            // Send context back to the agent
+                            if !resolved_files.is_empty() {
+                                if let Some(disp) = &state.dispatcher {
+                                    let disp = disp.lock().await;
+                                    let _ = disp
+                                        .send_to_agent(
+                                            agent_id,
+                                            AgentCommand::ProvideContext(
+                                                crate::agents::ContextResponse {
+                                                    task_id: request.task_id,
+                                                    files: resolved_files,
+                                                    answers: vec![],
+                                                },
+                                            ),
+                                        )
+                                        .await;
+                                }
+                            }
+
+                            // Broadcast to feed for UI visibility
+                            state.broadcast_feed(FeedUpdate {
+                                id: request.task_id,
+                                agent_id: agent_id.0.to_string(),
+                                content: format!(
+                                    "Context request — questions: {:?}, files: {:?}",
+                                    request.questions, request.files_needed
+                                ),
+                                item_type: "context_request".into(),
+                                timestamp: chrono::Utc::now(),
+                                user_id: None,
+                            });
+                            state.broadcast_agent(AgentUpdate {
+                                id: agent_id.0.to_string(),
+                                status: "waiting_for_context".into(),
+                                current_task: Some(request.task_id),
+                                user_id: None,
+                            });
+                        }
                         _ => {}
                     }
 
@@ -571,13 +628,27 @@ async fn handle_message(
                     .get_session_history(session_id, *max_messages)
                     .await
                     .unwrap_or_default();
-                history
+                let mut hist_messages: Vec<Message> = history
                     .iter()
                     .map(|row| match row.role.as_str() {
                         "assistant" => Message::assistant(&row.content),
                         _ => Message::user(&row.content),
                     })
-                    .collect()
+                    .collect();
+
+                // Phase 2: Targeted injection from session summary
+                if let Ok(Some(session)) = state.repo.get_session(session_id).await {
+                    if !session.summary.is_empty() {
+                        if let Some(targeted) = tools::haiku_extract_context(&session.summary, &msg.content).await {
+                            if !targeted.contains("No prior context needed") {
+                                hist_messages.insert(0, Message::user(&format!("[Prior context] {}", targeted)));
+                                hist_messages.insert(1, Message::assistant("Understood, I have the relevant context."));
+                            }
+                        }
+                    }
+                }
+
+                hist_messages
             } else {
                 vec![]
             }
@@ -676,6 +747,25 @@ async fn handle_message(
             }
         };
 
+        // Record token usage in the background
+        {
+            let repo = state.repo.clone();
+            let session_id = msg.session_id;
+            let model = model_id.clone();
+            let input_tokens = response.usage.input_tokens as i64;
+            let output_tokens = response.usage.output_tokens as i64;
+            tokio::spawn(async move {
+                let _ = repo.insert_token_usage(
+                    session_id,
+                    None,
+                    "orchestrator",
+                    &model,
+                    input_tokens,
+                    output_tokens,
+                ).await;
+            });
+        }
+
         // Check if we need to execute tools
         if response.stop_reason == StopReason::ToolUse {
             // Add assistant message with all content blocks (text + tool_use)
@@ -752,6 +842,27 @@ async fn handle_message(
         };
         if let Err(e) = save_result {
             error!("Failed to save assistant message: {}", e);
+        }
+
+        // Phase 1: Spawn background compaction if session has > 20 messages
+        if let Some(session_id) = msg.session_id {
+            let state = state.clone();
+            tokio::spawn(async move {
+                let count = state.repo.count_session_messages(session_id).await.unwrap_or(0);
+                if count > 20 {
+                    let history = state.repo.get_session_history(session_id, count).await.unwrap_or_default();
+                    let older_messages: Vec<_> = history.iter().take((count - 10) as usize).collect();
+                    if !older_messages.is_empty() {
+                        let conversation_text = older_messages.iter()
+                            .map(|m| format!("{}: {}", m.role, m.content))
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        if let Some(summary) = crate::server::tools::haiku_summarize(&conversation_text).await {
+                            let _ = state.repo.update_session_summary(session_id, &summary).await;
+                        }
+                    }
+                }
+            });
         }
     }
 
@@ -834,6 +945,10 @@ mod tests {
         async fn delete_session(&self, _session_id: Uuid) -> anyhow::Result<()> { Ok(()) }
         async fn insert_session_message(&self, _user_id: UserId, _session_id: Uuid, _id: Uuid, _role: String, _content: String) -> anyhow::Result<()> { Ok(()) }
         async fn get_session_history(&self, _session_id: Uuid, _limit: u32) -> anyhow::Result<Vec<ChatMessageRow>> { Ok(vec![]) }
+        async fn update_session_summary(&self, _session_id: Uuid, _summary: &str) -> anyhow::Result<()> { Ok(()) }
+        async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> { Ok(0) }
+        async fn insert_token_usage(&self, _session_id: Option<Uuid>, _agent_id: Option<Uuid>, _tier: &str, _model_id: &str, _input_tokens: i64, _output_tokens: i64) -> anyhow::Result<()> { Ok(()) }
+        async fn get_usage_summary(&self, _since_hours: u32) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> { Ok(vec![]) }
     }
 
     #[tokio::test]

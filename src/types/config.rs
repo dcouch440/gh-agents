@@ -27,7 +27,7 @@ impl Default for TierModels {
                 ..Default::default()
             },
             utility: ModelConfig {
-                model_id: "claude-sonnet-4-20250514".to_string(),
+                model_id: "claude-haiku-4-20250514".to_string(),
                 max_tokens: 4096,
                 ..Default::default()
             },
@@ -474,7 +474,7 @@ mod tests {
         let models = TierModels::default();
         assert!(models.orchestrator.model_id.contains("opus"));
         assert!(models.worker.model_id.contains("sonnet"));
-        assert!(models.utility.model_id.contains("sonnet"));
+        assert!(models.utility.model_id.contains("haiku"));
         assert!(models.orchestrator.max_tokens > models.worker.max_tokens);
         assert!(models.worker.max_tokens > models.utility.max_tokens);
     }
