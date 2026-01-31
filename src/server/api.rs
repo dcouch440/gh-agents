@@ -2152,35 +2152,15 @@ pub fn render_stage_prompt(
     prompt.trim_end().to_string()
 }
 
-/// Request body for rendering a pipeline stage prompt.
-#[derive(Deserialize)]
-pub struct RenderStageRequest {
-    /// Map of stage_name → JSON output from that stage.
-    pub stage_outputs: std::collections::HashMap<String, serde_json::Value>,
-}
-
-/// Render a pipeline stage into a resolved prompt.
-pub async fn render_pipeline_stage(
-    State(state): State<AppState>,
-    _user: auth::AuthUser,
-    Path((pipeline_id, stage_number)): Path<(String, i32)>,
-    Json(body): Json<RenderStageRequest>,
-) -> Result<Json<serde_json::Value>, StatusCode> {
-    let Ok(pipeline_uuid) = Uuid::parse_str(&pipeline_id) else {
-        return Err(StatusCode::BAD_REQUEST);
-    };
-
-    let stages = state
-        .repo
-        .list_pipeline_stages(pipeline_uuid)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let stage = stages
-        .into_iter()
-        .find(|s| s.stage_number == stage_number)
-        .ok_or(StatusCode::NOT_FOUND)?;
-
+/// Render a pipeline stage into a resolved prompt string.
+///
+/// Reusable core that can be called from HTTP endpoints or the orchestrator.
+/// Resolves input definitions, context documents, and output_description templates.
+pub async fn render_stage(
+    doc_repo: Option<&dyn crate::db::traits::DocumentRepo>,
+    stage: &crate::db::PipelineStageRow,
+    stage_outputs: &std::collections::HashMap<String, serde_json::Value>,
+) -> String {
     // Fetch context documents referenced via {{context.ref_tag}} patterns
     let mut context_docs: std::collections::HashMap<String, String> =
         std::collections::HashMap::new();
@@ -2194,7 +2174,7 @@ pub async fn render_pipeline_stage(
             }
         }
     }
-    if let Some(doc_repo) = &state.doc_repo {
+    if let Some(doc_repo) = doc_repo {
         for cap in context_re.captures_iter(&all_text) {
             let ref_tag = cap[1].to_string();
             if !context_docs.contains_key(&ref_tag) {
@@ -2225,9 +2205,8 @@ pub async fn render_pipeline_stage(
                     .unwrap_or_default(),
                 "stage" => {
                     let ref_str = def.get("ref").and_then(|r| r.as_str()).unwrap_or("");
-                    // ref format: "stage_name.field"
                     let template = format!("{{{{{}}}}}", ref_str);
-                    resolve_template(&template, &body.stage_outputs, &context_docs)
+                    resolve_template(&template, stage_outputs, &context_docs)
                 }
                 _ => String::new(),
             };
@@ -2239,9 +2218,42 @@ pub async fn render_pipeline_stage(
 
     // Resolve output_description template
     let resolved_description =
-        resolve_template(&stage.output_description, &body.stage_outputs, &context_docs);
+        resolve_template(&stage.output_description, stage_outputs, &context_docs);
 
-    let prompt = render_stage_prompt(&resolved_description, &resolved_inputs, &stage.output_schema);
+    render_stage_prompt(&resolved_description, &resolved_inputs, &stage.output_schema)
+}
+
+/// Request body for rendering a pipeline stage prompt.
+#[derive(Deserialize)]
+pub struct RenderStageRequest {
+    /// Map of stage_name → JSON output from that stage.
+    pub stage_outputs: std::collections::HashMap<String, serde_json::Value>,
+}
+
+/// Render a pipeline stage into a resolved prompt (HTTP endpoint wrapper).
+pub async fn render_pipeline_stage(
+    State(state): State<AppState>,
+    _user: auth::AuthUser,
+    Path((pipeline_id, stage_number)): Path<(String, i32)>,
+    Json(body): Json<RenderStageRequest>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let Ok(pipeline_uuid) = Uuid::parse_str(&pipeline_id) else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+
+    let stages = state
+        .repo
+        .list_pipeline_stages(pipeline_uuid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let stage = stages
+        .into_iter()
+        .find(|s| s.stage_number == stage_number)
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let doc_repo_ref = state.doc_repo.as_deref();
+    let prompt = render_stage(doc_repo_ref, &stage, &body.stage_outputs).await;
 
     Ok(Json(serde_json::json!({
         "pipeline_id": pipeline_id,

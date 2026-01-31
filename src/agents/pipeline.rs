@@ -58,6 +58,8 @@ pub struct PipelineRun {
     pub current_stage: u32,
     /// Maps stage_number → task_id assigned to that stage's agent.
     pub stage_task_ids: HashMap<u32, Uuid>,
+    /// Maps stage_name → structured output JSON from that stage.
+    pub stage_outputs: HashMap<String, Value>,
     pub status: PipelineRunStatus,
 }
 
@@ -152,6 +154,7 @@ impl PipelineManager {
             initial_task: task_description,
             current_stage: 0,
             stage_task_ids: HashMap::new(),
+            stage_outputs: HashMap::new(),
             status: PipelineRunStatus::Running,
         };
         self.runs.insert(run_id, run);
@@ -221,10 +224,76 @@ impl PipelineManager {
         self.runs.get(&run_id).map(|r| r.initial_task.as_str())
     }
 
+    /// Record the structured output for a completed stage.
+    pub fn record_stage_output(&mut self, run_id: Uuid, stage_name: String, output: Value) {
+        if let Some(run) = self.runs.get_mut(&run_id) {
+            run.stage_outputs.insert(stage_name, output);
+        }
+    }
+
+    /// Get all stage outputs for a run (keyed by stage_name).
+    pub fn get_stage_outputs(&self, run_id: Uuid) -> Option<&HashMap<String, Value>> {
+        self.runs.get(&run_id).map(|r| &r.stage_outputs)
+    }
+
+    /// Get the pipeline_id for a run.
+    pub fn get_run_pipeline_id(&self, run_id: Uuid) -> Option<PipelineId> {
+        self.runs.get(&run_id).map(|r| r.pipeline_id)
+    }
+
+    /// Get the stage_name for a given stage_number in a pipeline run.
+    pub fn get_stage_name(&self, run_id: Uuid, stage_number: u32) -> Option<String> {
+        let run = self.runs.get(&run_id)?;
+        let pipeline = self.pipelines.get(&run.pipeline_id)?;
+        pipeline
+            .stages
+            .get(stage_number as usize)
+            .map(|s| s.stage_name.clone())
+    }
+
     /// List all pipelines.
     pub fn list_pipelines(&self) -> Vec<&Pipeline> {
         self.pipelines.values().collect()
     }
+}
+
+/// Parse raw LLM output into structured JSON based on the output schema.
+///
+/// Tries to extract a JSON object from the output (fenced ```json blocks or bare `{...}`).
+/// Falls back to wrapping the raw text as `{"output": "..."}`.
+pub fn parse_stage_output(raw: &str, output_schema: &Value) -> Value {
+    let has_fields = output_schema
+        .get("fields")
+        .and_then(|f| f.as_array())
+        .map_or(false, |a| !a.is_empty());
+
+    if has_fields {
+        // Try ```json ... ``` fenced block
+        if let Some(start) = raw.find("```json") {
+            let after = &raw[start + 7..];
+            if let Some(end) = after.find("```") {
+                let json_str = after[..end].trim();
+                if let Ok(val) = serde_json::from_str::<Value>(json_str) {
+                    if val.is_object() {
+                        return val;
+                    }
+                }
+            }
+        }
+        // Try bare JSON object
+        if let Some(start) = raw.find('{') {
+            if let Some(end) = raw.rfind('}') {
+                let json_str = &raw[start..=end];
+                if let Ok(val) = serde_json::from_str::<Value>(json_str) {
+                    if val.is_object() {
+                        return val;
+                    }
+                }
+            }
+        }
+    }
+
+    serde_json::json!({ "output": raw })
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -351,5 +420,41 @@ mod tests {
         let id = PipelineId::new();
         mgr.create_pipeline_with_id(id, "restored".into());
         assert_eq!(mgr.get_pipeline(&id).unwrap().name, "restored");
+    }
+
+    #[test]
+    fn record_and_get_stage_outputs() {
+        let mut mgr = PipelineManager::new();
+        let pid = mgr.create_pipeline("p".into());
+        add_stage!(mgr, pid, agent(1), None, false).unwrap();
+        let (run_id, _) = mgr.start_run(pid, "task".into()).unwrap();
+
+        mgr.record_stage_output(run_id, "analysis".into(), serde_json::json!({"score": 85}));
+        let outputs = mgr.get_stage_outputs(run_id).unwrap();
+        assert_eq!(outputs["analysis"]["score"], 85);
+    }
+
+    #[test]
+    fn parse_stage_output_json_fence() {
+        let schema = serde_json::json!({"fields": [{"name": "plan"}]});
+        let raw = "Here is my analysis:\n```json\n{\"plan\": \"do stuff\"}\n```\nDone.";
+        let result = super::parse_stage_output(raw, &schema);
+        assert_eq!(result["plan"], "do stuff");
+    }
+
+    #[test]
+    fn parse_stage_output_bare_json() {
+        let schema = serde_json::json!({"fields": [{"name": "x"}]});
+        let raw = "Result: {\"x\": 42}";
+        let result = super::parse_stage_output(raw, &schema);
+        assert_eq!(result["x"], 42);
+    }
+
+    #[test]
+    fn parse_stage_output_no_schema() {
+        let schema = serde_json::json!({"fields": []});
+        let raw = "just plain text";
+        let result = super::parse_stage_output(raw, &schema);
+        assert_eq!(result["output"], "just plain text");
     }
 }
