@@ -22,4 +22,6 @@ Task Identifier: "a simple key to write thats easy to identify"
 Additional Values: "suggestions needed"
 
 
-This could return a response that 
+This could return a response that is detailed in framing for the primary agent to have targeted context for the task at and and the data is precieved with the most capable agent.
+
+For chat interface items I think we can need strong context and timing to make sure that our tool use in chat next level.
