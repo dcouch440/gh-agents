@@ -1,10 +1,16 @@
 .turn {
   border-top: 1px solid var(--color-border-muted);
   padding: 1rem 0;
+  position: relative;
+  animation: slideIn 0.3s ease-out;
 }
 
 .turn:first-child {
   border-top: none;
+}
+
+.turn:hover .actions {
+  opacity: 1;
 }
 
 .header {
@@ -59,7 +65,47 @@
   animation: pulse 1s infinite;
 }
 
+.actions {
+  position: absolute;
+  top: 0.5rem;
+  right: 0;
+  display: flex;
+  gap: 0.25rem;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: 0.375rem;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.actionBtn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

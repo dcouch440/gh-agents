@@ -2,8 +2,10 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from '../Sidebar';
 import { Header } from '../Header';
 import { useAppStore } from '../../store';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 
 export function Layout() {
+  useKeyboardShortcuts();
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
   const toggleSidebar = useAppStore((state) => state.toggleSidebar);
   const location = useLocation();

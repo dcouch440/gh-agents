@@ -37,6 +37,26 @@
   color: var(--text-primary);
 }
 
+.codeWrapper {
+  position: relative;
+  transition: max-height 0.3s ease;
+}
+
+.collapsed {
+  max-height: 20rem;
+  overflow: hidden;
+}
+
+.fadeOverlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4rem;
+  background: linear-gradient(transparent, var(--color-bg-primary));
+  pointer-events: none;
+}
+
 .pre {
   padding: 0.75rem;
   background-color: var(--bg-primary);
@@ -55,4 +75,24 @@
   user-select: none;
   min-width: 1.5rem;
   text-align: right;
+}
+
+.toggleBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  width: 100%;
+  padding: 0.375rem;
+  background: var(--color-bg-tertiary);
+  border: none;
+  border-top: 1px solid var(--color-border-muted);
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.toggleBtn:hover {
+  color: var(--color-text-primary);
 }

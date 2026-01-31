@@ -1,7 +1,9 @@
 import { Highlight, themes } from 'prism-react-renderer';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import styles from './CodeBlock.module.css';
+
+const COLLAPSE_THRESHOLD = 15;
 
 interface CodeBlockProps {
   code: string;
@@ -10,6 +12,10 @@ interface CodeBlockProps {
 
 export function CodeBlock({ code, language }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
+
+  const lines = code.split('\n');
+  const isLong = lines.length > COLLAPSE_THRESHOLD;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(code);
@@ -35,22 +41,34 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
           {copied ? <Check size={14} /> : <Copy size={14} />}
         </button>
       </div>
-      <Highlight theme={themes.nightOwl} code={code} language={language}>
-        {({ style, tokens, getLineProps, getTokenProps }) => (
-          <pre className={styles.pre} style={style}>
-            {tokens.map((line, i) => (
-              <div key={i} {...getLineProps({ line })} className={styles.line}>
-                <span className={styles.lineNumber}>
-                  {String(i + 1).padStart(2, ' ')}
-                </span>
-                {line.map((token, key) => (
-                  <span key={key} {...getTokenProps({ token })} />
-                ))}
-              </div>
-            ))}
-          </pre>
-        )}
-      </Highlight>
+      <div className={`${styles.codeWrapper} ${isLong && collapsed ? styles.collapsed : ''}`}>
+        <Highlight theme={themes.nightOwl} code={code} language={language}>
+          {({ style, tokens, getLineProps, getTokenProps }) => (
+            <pre className={styles.pre} style={style}>
+              {tokens.map((line, i) => (
+                <div key={i} {...getLineProps({ line })} className={styles.line}>
+                  <span className={styles.lineNumber}>
+                    {String(i + 1).padStart(2, ' ')}
+                  </span>
+                  {line.map((token, key) => (
+                    <span key={key} {...getTokenProps({ token })} />
+                  ))}
+                </div>
+              ))}
+            </pre>
+          )}
+        </Highlight>
+        {isLong && collapsed && <div className={styles.fadeOverlay} />}
+      </div>
+      {isLong && (
+        <button className={styles.toggleBtn} onClick={() => setCollapsed(!collapsed)}>
+          {collapsed ? (
+            <>Show all {lines.length} lines <ChevronDown size={14} /></>
+          ) : (
+            <>Collapse <ChevronUp size={14} /></>
+          )}
+        </button>
+      )}
     </div>
   );
 }

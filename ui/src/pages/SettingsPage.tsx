@@ -1,3 +1,6 @@
+import { Settings } from 'lucide-react';
+import { EmptyState } from '../components/EmptyState';
+
 export function SettingsPage() {
-  return <div className="text-text-secondary">Settings coming in 13.2</div>;
+  return <EmptyState icon={Settings} title="Settings" subtitle="Configuration is coming soon. Manage LLM providers, API keys, and preferences here." />;
 }

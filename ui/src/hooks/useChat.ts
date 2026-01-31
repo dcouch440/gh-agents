@@ -10,6 +10,7 @@ export function useChat(options?: UseChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [waitingForResponse, setWaitingForResponse] = useState(false);
 
   useEffect(() => {
     const loadHistory = sessionId
@@ -23,6 +24,7 @@ export function useChat(options?: UseChatOptions) {
 
   const sendMessage = useCallback(async (content: string) => {
     setSending(true);
+    setWaitingForResponse(true);
     try {
       // Add user message optimistically
       const userMessage: ChatMessage = {
@@ -46,6 +48,7 @@ export function useChat(options?: UseChatOptions) {
         timestamp: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, assistantMessage]);
+      setWaitingForResponse(false);
 
       // Subscribe to the SSE stream for this response
       const streamFn = sessionId
@@ -73,8 +76,19 @@ export function useChat(options?: UseChatOptions) {
       );
     } catch {
       setSending(false);
+      setWaitingForResponse(false);
     }
   }, [sessionId]);
+
+  const retryLastMessage = useCallback(async () => {
+    // Find the last user message
+    const lastUserIdx = messages.reduce((last, m, i) => m.role === 'user' ? i : last, -1);
+    if (lastUserIdx === -1) return;
+    const lastUserContent = messages[lastUserIdx].content;
+    // Remove the last assistant message (and the user message, we'll re-send)
+    setMessages((prev) => prev.slice(0, lastUserIdx));
+    await sendMessage(lastUserContent);
+  }, [messages, sendMessage]);
 
   const clearHistory = useCallback(async () => {
     if (sessionId) {
@@ -85,5 +99,5 @@ export function useChat(options?: UseChatOptions) {
     setMessages([]);
   }, [sessionId]);
 
-  return { messages, loading, sending, sendMessage, clearHistory };
+  return { messages, loading, sending, waitingForResponse, sendMessage, clearHistory, retryLastMessage };
 }
