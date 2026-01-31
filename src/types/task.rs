@@ -98,6 +98,12 @@ pub struct Task {
     pub metadata: Option<HashMap<String, String>>,
     /// Tasks that must complete before this task can start
     pub depends_on: Vec<TaskId>,
+    /// Number of times this task has been requeued after failure
+    pub retry_count: u32,
+    /// Maximum retries before the task is permanently failed
+    pub max_retries: u32,
+    /// Last error message when the task failed
+    pub last_error: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -117,6 +123,9 @@ impl Task {
             context_files: vec![],
             metadata: None,
             depends_on: vec![],
+            retry_count: 0,
+            max_retries: crate::constants::TASK_MAX_RETRIES,
+            last_error: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         }
@@ -221,6 +230,9 @@ mod tests {
         assert!(task.context_files.is_empty());
         assert!(task.metadata.is_none());
         assert!(task.depends_on.is_empty());
+        assert_eq!(task.retry_count, 0);
+        assert_eq!(task.max_retries, crate::constants::TASK_MAX_RETRIES);
+        assert!(task.last_error.is_none());
         assert!(task.slice_id.is_none());
         assert!(task.assigned_agent.is_none());
     }

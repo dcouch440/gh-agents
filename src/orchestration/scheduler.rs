@@ -328,7 +328,7 @@ impl<TQ: TaskQueueRepo, DR: DependencyRepo, SR: SchedulerRepo> TaskScheduler<TQ,
             None => {
                 // Put task back and report no agents
                 let mut queue = self.queue.write().await;
-                queue.requeue(task, RequeuePolicy::SamePriority).await?;
+                queue.requeue(task, RequeuePolicy::SamePriority, None).await?;
                 Ok(AssignResult::NoAgents(tier))
             }
         }
@@ -933,6 +933,9 @@ mod task_scheduler_integration_tests {
             context_files: vec![],
             metadata: None,
             depends_on: vec![],
+            retry_count: 0,
+            max_retries: 3,
+            last_error: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         }

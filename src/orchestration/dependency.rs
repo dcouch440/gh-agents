@@ -223,6 +223,9 @@ mod tests {
             context_files: vec![],
             metadata: None,
             depends_on: vec![],
+            retry_count: 0,
+            max_retries: 3,
+            last_error: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         }

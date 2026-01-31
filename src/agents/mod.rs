@@ -4,12 +4,10 @@ mod agent;
 mod channels;
 pub mod cluster;
 mod dispatcher;
-mod escalation;
 pub mod execution_tools;
 mod executor;
 pub mod tool_router;
 pub mod pipeline;
-pub mod planner_bot;
 mod pool;
 pub mod protocol;
 mod roles;
@@ -23,10 +21,6 @@ pub use channels::{
 };
 pub use cluster::{Cluster, ClusterContext, ClusterError, ClusterId, ClusterManager};
 pub use dispatcher::{DispatchError, Dispatcher};
-pub use escalation::{
-    EscalationDecision, EscalationError, EscalationManager, EscalationPolicy, HumanAction,
-    HumanReviewRequest, HumanReviewSummary, TaskEscalationState, TierAttempt,
-};
 pub use pipeline::{
     Pipeline, PipelineError, PipelineId, PipelineManager, PipelineRun, PipelineRunStatus,
     PipelineStage,

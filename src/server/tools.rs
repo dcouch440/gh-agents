@@ -999,28 +999,8 @@ async fn execute_assign_task(input: &Value, state: &AppState) -> Value {
         project_root.clone(),
     ));
 
-    // Compile live context from repo index (if ready)
-    let index = state.repo_index.read().await;
-    let (context_briefing, context_files) = if index.ready {
-        let compiled =
-            crate::indexing::compiler::compile_context(&index, title, &description, &project_root)
-                .await;
-        (compiled.briefing, compiled.relevant_files)
-    } else {
-        (String::new(), vec![])
-    };
-    drop(index);
-
-    // Merge context briefing into conventions and context files into required_reading
-    let conventions = if context_briefing.is_empty() {
-        cluster_conventions
-    } else {
-        format!("{}\n\n{}", context_briefing, cluster_conventions)
-    };
-    let mut required_reading = required_reading;
-    for (path, content) in context_files {
-        required_reading.push(crate::agents::FileContent { path, content });
-    }
+    let conventions = cluster_conventions;
+    let required_reading = required_reading;
 
     // Parse allowed_tools if provided
     let allowed_tools = input["allowed_tools"].as_array().map(|arr| {

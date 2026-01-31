@@ -45,9 +45,21 @@ async fn verify_work(
         files_modified,
     );
 
-    let api_key = std::env::var("ANTHROPIC_API_KEY").ok()?;
+    let api_key = match std::env::var("ANTHROPIC_API_KEY") {
+        Ok(key) => key,
+        Err(_) => {
+            warn!("verify_work: ANTHROPIC_API_KEY not set, skipping verification");
+            return None;
+        }
+    };
     let config = AnthropicConfig::new(api_key);
-    let client = AnthropicClient::new(config).ok()?;
+    let client = match AnthropicClient::new(config) {
+        Ok(c) => c,
+        Err(e) => {
+            warn!(error = %e, "verify_work: failed to create Anthropic client");
+            return None;
+        }
+    };
 
     let request = LLMRequest {
         model: crate::constants::MODEL_HAIKU.to_string(),
@@ -58,28 +70,39 @@ async fn verify_work(
         ..Default::default()
     };
 
-    let response = client.send_message(request).await.ok()?;
+    let response = match client.send_message(request).await {
+        Ok(r) => r,
+        Err(e) => {
+            warn!(error = %e, "verify_work: LLM call failed");
+            return None;
+        }
+    };
 
     // Parse JSON from response text
     if let Some(text) = response.content_blocks.first().and_then(|b| match b {
         ContentBlock::Text { text } => Some(text.as_str()),
         _ => None,
     }) {
-        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(text) {
-            if parsed["issues_found"].as_bool() == Some(true) {
-                if let Some(issues) = parsed["issues"].as_array() {
-                    return Some(
-                        issues
-                            .iter()
-                            .filter_map(|i| i.as_str().map(String::from))
-                            .collect(),
-                    );
+        match serde_json::from_str::<serde_json::Value>(text) {
+            Ok(parsed) => {
+                if parsed["issues_found"].as_bool() == Some(true) {
+                    if let Some(issues) = parsed["issues"].as_array() {
+                        return Some(
+                            issues
+                                .iter()
+                                .filter_map(|i| i.as_str().map(String::from))
+                                .collect(),
+                        );
+                    }
                 }
+            }
+            Err(e) => {
+                warn!(error = %e, raw_text = %text, "verify_work: failed to parse JSON response");
             }
         }
     }
 
-    None // No issues found or couldn't parse
+    None // No issues found
 }
 
 impl Agent {
@@ -523,9 +546,10 @@ impl Agent {
 
         let mut accumulated_response = String::new();
         let mut files_modified = Vec::new();
-        let max_tool_rounds = 15;
+        let max_tool_rounds = crate::constants::TASK_MAX_TOOL_ROUNDS;
         let mut total_input_tokens: u64 = 0;
         let mut total_output_tokens: u64 = 0;
+        let mut consecutive_tool_errors: u32 = 0;
         let task_start = std::time::Instant::now();
 
         for round in 0..max_tool_rounds {
@@ -589,8 +613,12 @@ impl Agent {
                     let mut tool_results = Vec::new();
                     for block in &response.content_blocks {
                         if let ContentBlock::ToolUse { id, name, input } = block {
-                            self.emit_progress(task_id, &format!("Executing tool: {}", name), None)
-                                .await?;
+                            info!(
+                                task_id = %task_id,
+                                round = round,
+                                tool_name = %name,
+                                "Executing tool"
+                            );
 
                             let result = if name == "request_assistance" {
                                 // Router mode: delegate to tool_router
@@ -625,6 +653,21 @@ impl Agent {
                                 }
                             };
 
+                            // Track consecutive errors for early bail-out
+                            if result.get("error").is_some() {
+                                consecutive_tool_errors += 1;
+                                warn!(
+                                    task_id = %task_id,
+                                    round = round,
+                                    tool_name = %name,
+                                    consecutive_errors = consecutive_tool_errors,
+                                    error = %result["error"],
+                                    "Tool execution returned error"
+                                );
+                            } else {
+                                consecutive_tool_errors = 0;
+                            }
+
                             // Track file modifications
                             if name == "write_file" {
                                 if let Some(path) = input["path"].as_str() {
@@ -647,6 +690,17 @@ impl Agent {
                     }
 
                     messages.push(Message::tool_results(tool_results));
+
+                    // Bail out if too many consecutive tool errors
+                    if consecutive_tool_errors >= crate::constants::TASK_MAX_CONSECUTIVE_TOOL_ERRORS {
+                        warn!(
+                            task_id = %task_id,
+                            consecutive_errors = consecutive_tool_errors,
+                            "Breaking tool loop: too many consecutive errors"
+                        );
+                        break;
+                    }
+
                     continue;
                 }
             }
@@ -783,6 +837,15 @@ impl Agent {
 
         self.emit_progress(task_id, "Task complete", Some(100))
             .await?;
+
+        info!(
+            task_id = %task_id,
+            total_input_tokens = total_input_tokens,
+            total_output_tokens = total_output_tokens,
+            files_modified = files_modified.len(),
+            elapsed_ms = task_start.elapsed().as_millis() as u64,
+            "Task execution complete"
+        );
 
         Ok(TaskResult {
             task_id,

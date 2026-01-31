@@ -61,6 +61,10 @@ pub struct PipelineRun {
     /// Maps stage_name → structured output JSON from that stage.
     pub stage_outputs: HashMap<String, Value>,
     pub status: PipelineRunStatus,
+    /// Number of retries attempted for the current stage.
+    pub stage_retries: u32,
+    /// Maximum retries per stage before the run is failed.
+    pub max_stage_retries: u32,
 }
 
 /// Manages pipeline definitions and active runs.
@@ -156,6 +160,8 @@ impl PipelineManager {
             stage_task_ids: HashMap::new(),
             stage_outputs: HashMap::new(),
             status: PipelineRunStatus::Running,
+            stage_retries: 0,
+            max_stage_retries: crate::constants::PIPELINE_MAX_STAGE_RETRIES,
         };
         self.runs.insert(run_id, run);
         let first_stage = &self.pipelines[&pipeline_id].stages[0];
@@ -192,6 +198,7 @@ impl PipelineManager {
             return Ok(None);
         }
         run.current_stage = next;
+        run.stage_retries = 0; // Reset retries for new stage
         Ok(Some(pipeline.stages[next as usize].clone()))
     }
 
@@ -202,11 +209,46 @@ impl PipelineManager {
         }
     }
 
-    /// Mark a run as failed.
-    pub fn fail_run(&mut self, run_id: Uuid) {
-        if let Some(run) = self.runs.get_mut(&run_id) {
+    /// Retry the current stage. Returns the stage to re-execute, or fails the run
+    /// if max retries are exceeded.
+    pub fn retry_stage(&mut self, run_id: Uuid) -> Result<Option<PipelineStage>, PipelineError> {
+        let run = self
+            .runs
+            .get_mut(&run_id)
+            .ok_or(PipelineError::RunNotFound(run_id))?;
+        if run.stage_retries >= run.max_stage_retries {
             run.status = PipelineRunStatus::Failed;
+            return Err(PipelineError::MaxRetriesExceeded(run_id));
         }
+        run.stage_retries += 1;
+        let pipeline = self
+            .pipelines
+            .get(&run.pipeline_id)
+            .ok_or(PipelineError::NotFound(run.pipeline_id))?;
+        tracing::info!(
+            run_id = %run_id,
+            stage = run.current_stage,
+            retry = run.stage_retries,
+            max_retries = run.max_stage_retries,
+            "Retrying pipeline stage"
+        );
+        Ok(Some(pipeline.stages[run.current_stage as usize].clone()))
+    }
+
+    /// Mark a run as failed with a reason.
+    pub fn fail_run(&mut self, run_id: Uuid, reason: &str) -> Result<(), PipelineError> {
+        let run = self
+            .runs
+            .get_mut(&run_id)
+            .ok_or(PipelineError::RunNotFound(run_id))?;
+        run.status = PipelineRunStatus::Failed;
+        tracing::warn!(
+            run_id = %run_id,
+            stage = run.current_stage,
+            reason = reason,
+            "Pipeline run failed"
+        );
+        Ok(())
     }
 
     /// Get a pipeline by ID.
@@ -304,6 +346,8 @@ pub enum PipelineError {
     NoStages(PipelineId),
     #[error("Pipeline run not found: {0}")]
     RunNotFound(Uuid),
+    #[error("Pipeline run {0} exceeded max stage retries")]
+    MaxRetriesExceeded(Uuid),
 }
 
 #[cfg(test)]
@@ -418,7 +462,7 @@ mod tests {
         let pid = mgr.create_pipeline("p".into());
         add_stage!(mgr, pid, agent(1), None, false).unwrap();
         let (run_id, _) = mgr.start_run(pid, "task".into()).unwrap();
-        mgr.fail_run(run_id);
+        mgr.fail_run(run_id, "test failure").unwrap();
         assert_eq!(
             mgr.get_run(run_id).unwrap().status,
             PipelineRunStatus::Failed
@@ -467,5 +511,65 @@ mod tests {
         let raw = "just plain text";
         let result = super::parse_stage_output(raw, &schema);
         assert_eq!(result["output"], "just plain text");
+    }
+
+    #[test]
+    fn retry_stage_increments_and_returns_stage() {
+        let mut mgr = PipelineManager::new();
+        let pid = mgr.create_pipeline("p".into());
+        add_stage!(mgr, pid, agent(1), None, false).unwrap();
+        add_stage!(mgr, pid, agent(2), None, false).unwrap();
+        let (run_id, _) = mgr.start_run(pid, "task".into()).unwrap();
+
+        // First retry should succeed
+        let stage = mgr.retry_stage(run_id).unwrap().unwrap();
+        assert_eq!(stage.stage_number, 0);
+        assert_eq!(mgr.get_run(run_id).unwrap().stage_retries, 1);
+    }
+
+    #[test]
+    fn retry_stage_max_retries_fails_run() {
+        let mut mgr = PipelineManager::new();
+        let pid = mgr.create_pipeline("p".into());
+        add_stage!(mgr, pid, agent(1), None, false).unwrap();
+        let (run_id, _) = mgr.start_run(pid, "task".into()).unwrap();
+
+        // First retry succeeds (max_stage_retries = 1)
+        mgr.retry_stage(run_id).unwrap();
+
+        // Second retry exceeds max
+        let result = mgr.retry_stage(run_id);
+        assert!(matches!(
+            result,
+            Err(PipelineError::MaxRetriesExceeded(_))
+        ));
+        assert_eq!(
+            mgr.get_run(run_id).unwrap().status,
+            PipelineRunStatus::Failed
+        );
+    }
+
+    #[test]
+    fn advance_stage_resets_retries() {
+        let mut mgr = PipelineManager::new();
+        let pid = mgr.create_pipeline("p".into());
+        add_stage!(mgr, pid, agent(1), None, false).unwrap();
+        add_stage!(mgr, pid, agent(2), None, false).unwrap();
+        let (run_id, _) = mgr.start_run(pid, "task".into()).unwrap();
+
+        // Retry stage 0 once
+        mgr.retry_stage(run_id).unwrap();
+        assert_eq!(mgr.get_run(run_id).unwrap().stage_retries, 1);
+
+        // Advance to stage 1 — retries should reset
+        mgr.advance_stage(run_id).unwrap();
+        assert_eq!(mgr.get_run(run_id).unwrap().stage_retries, 0);
+    }
+
+    #[test]
+    fn fail_run_nonexistent_returns_error() {
+        let mut mgr = PipelineManager::new();
+        let result = mgr.fail_run(Uuid::new_v4(), "no such run");
+        assert!(matches!(result, Err(PipelineError::RunNotFound(_))));
     }
 }

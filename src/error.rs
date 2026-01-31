@@ -71,8 +71,24 @@ impl NexorError {
     pub fn is_recoverable(&self) -> bool {
         match self {
             NexorError::TaskFailed { recoverable, .. } => *recoverable,
-            NexorError::LlmApi { .. } => true, // Usually transient
-            NexorError::GitHubApi { .. } => true,
+            NexorError::LlmApi { .. } => true, // Usually transient (rate limits, network)
+            NexorError::GitHubApi { message, .. } => {
+                // 404/403 are permanent; rate limits and server errors are transient
+                let msg = message.to_lowercase();
+                !msg.contains("not found")
+                    && !msg.contains("404")
+                    && !msg.contains("forbidden")
+                    && !msg.contains("403")
+                    && !msg.contains("authentication")
+            }
+            NexorError::Database { message, .. } => {
+                // Connection/timeout issues are transient; constraint violations are not
+                let msg = message.to_lowercase();
+                msg.contains("timeout")
+                    || msg.contains("connection")
+                    || msg.contains("locked")
+                    || msg.contains("pool")
+            }
             _ => false,
         }
     }
@@ -586,18 +602,66 @@ mod tests {
     }
 
     #[test]
-    fn is_recoverable_github_api() {
+    fn is_recoverable_github_api_transient() {
         let err = NexorError::GitHubApi {
-            message: "timeout".into(),
+            message: "rate limit exceeded".into(),
+            suggestion: None,
+        };
+        assert!(err.is_recoverable());
+
+        let err = NexorError::GitHubApi {
+            message: "server error 500".into(),
             suggestion: None,
         };
         assert!(err.is_recoverable());
     }
 
     #[test]
-    fn is_recoverable_database_not_recoverable() {
+    fn is_not_recoverable_github_api_permanent() {
+        let err = NexorError::GitHubApi {
+            message: "not found 404".into(),
+            suggestion: None,
+        };
+        assert!(!err.is_recoverable());
+
+        let err = NexorError::GitHubApi {
+            message: "forbidden 403".into(),
+            suggestion: None,
+        };
+        assert!(!err.is_recoverable());
+
+        let err = NexorError::GitHubApi {
+            message: "authentication failed".into(),
+            suggestion: None,
+        };
+        assert!(!err.is_recoverable());
+    }
+
+    #[test]
+    fn is_recoverable_database_transient() {
         let err = NexorError::Database {
-            message: "corrupt".into(),
+            message: "connection timeout".into(),
+            suggestion: None,
+        };
+        assert!(err.is_recoverable());
+
+        let err = NexorError::Database {
+            message: "database is locked".into(),
+            suggestion: None,
+        };
+        assert!(err.is_recoverable());
+
+        let err = NexorError::Database {
+            message: "pool timed out".into(),
+            suggestion: None,
+        };
+        assert!(err.is_recoverable());
+    }
+
+    #[test]
+    fn is_not_recoverable_database_permanent() {
+        let err = NexorError::Database {
+            message: "constraint violation".into(),
             suggestion: None,
         };
         assert!(!err.is_recoverable());

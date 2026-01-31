@@ -186,10 +186,6 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
                 .delete(api::delete_document),
         )
         .route("/stats", get(api::get_usage_stats))
-        // Indexing control
-        .route("/indexing/status", get(api::get_indexing_status))
-        .route("/indexing/start", post(api::start_indexing))
-        .route("/indexing/stop", post(api::stop_indexing))
         // Context response endpoint (F6)
         .route("/context-response", post(api::submit_context_response))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
