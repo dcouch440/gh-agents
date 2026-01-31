@@ -4,10 +4,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use thiserror::Error;
+use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
 use crate::llm::LLMProvider;
-use crate::types::{AgentPersona, AgentPoolConfig, AgentTier, ModelConfig, Task};
+use crate::types::{AgentPersona, AgentPoolConfig, AgentStatus, AgentTier, ModelConfig, Task};
 
 use super::agent::{Agent, AgentError, AgentId};
 use super::channels::{create_agent_channel, AgentHandle};
@@ -29,10 +31,22 @@ pub enum PoolError {
     AgentError(#[from] AgentError),
 }
 
+/// Lightweight tracking entry for a running agent.
+///
+/// The actual `Agent` is consumed by `tokio::spawn(agent.run())`.
+/// We keep metadata here for pool bookkeeping.
+struct AgentEntry {
+    tier: AgentTier,
+    /// Shared status updated by the running agent, readable by the pool
+    status: Arc<Mutex<AgentStatus>>,
+    /// Handle to the spawned agent task (None for test-only agents)
+    _join_handle: Option<JoinHandle<Result<(), AgentError>>>,
+}
+
 /// Manages pools of agents organized by tier
 pub struct AgentPool {
-    /// All agents managed by this pool
-    agents: HashMap<AgentId, Agent>,
+    /// Running agent entries (metadata only — the Agent itself runs in a tokio task)
+    agents: HashMap<AgentId, AgentEntry>,
     /// Agent IDs grouped by tier for fast lookup
     by_tier: HashMap<AgentTier, Vec<AgentId>>,
     /// Pool configuration (max agents per tier)
@@ -81,19 +95,11 @@ impl AgentPool {
         self.agents.len()
     }
 
-    /// Spawn a new agent of the specified tier
+    /// Spawn a new agent of the specified tier (test-only, no dispatcher or run loop).
     ///
-    /// Returns the new agent's ID, or an error if the pool limit is reached.
-    ///
-    /// # Model Configuration
-    /// The agent uses the provided `model_config`. For difficulty-based model
-    /// selection, tasks are routed to appropriate tiers:
-    /// - `difficulty=complex` → Orchestrator tier → Opus
-    /// - `difficulty=standard` → Worker tier → Sonnet
-    /// - `difficulty=simple` → Utility tier → Sonnet
-    ///
-    /// Use [`resolve_model_for_task`] to apply per-task model overrides before
-    /// passing `model_config` to this method.
+    /// The agent is NOT started as a tokio task. Use `spawn_agent_with_dispatcher`
+    /// for production agents that need to process commands.
+    #[cfg(test)]
     pub fn spawn_agent(
         &mut self,
         tier: AgentTier,
@@ -120,15 +126,23 @@ impl AgentPool {
             response_tx,
         );
         let agent_id = agent.id.clone();
+        let shared_status = agent.shared_status();
 
         info!(
             agent_id = ?agent_id,
             tier = ?tier,
-            "Spawned new agent"
+            "Spawned new agent (test mode, no run loop)"
         );
 
-        // Track the agent
-        self.agents.insert(agent_id.clone(), agent);
+        // Track the entry (no join handle — agent is not spawned)
+        self.agents.insert(
+            agent_id.clone(),
+            AgentEntry {
+                tier,
+                status: shared_status,
+                _join_handle: None,
+            },
+        );
         self.by_tier
             .entry(tier)
             .or_insert_with(Vec::new)
@@ -137,9 +151,10 @@ impl AgentPool {
         Ok(agent_id)
     }
 
-    /// Spawn a new agent with channel connections to the dispatcher
+    /// Spawn a new agent with channel connections to the dispatcher.
     ///
-    /// This method properly wires up both command and response channels.
+    /// The agent's `run()` loop is started as a tokio task immediately,
+    /// so it can receive and process commands.
     pub fn spawn_agent_with_dispatcher(
         &mut self,
         tier: AgentTier,
@@ -167,34 +182,53 @@ impl AgentPool {
             response_tx,
         );
         let agent_id = agent.id.clone();
+        let shared_status = agent.shared_status();
 
         // Create handle and register with dispatcher
         let handle = AgentHandle::new(agent_id.clone(), tier, command_tx);
         dispatcher.register_agent(handle);
 
-        // Track in pool
-        self.agents.insert(agent_id.clone(), agent);
+        // Spawn the agent's run loop as a tokio task
+        let spawned_id = agent_id.clone();
+        let join_handle = tokio::spawn(async move {
+            let result = agent.run().await;
+            if let Err(ref e) = result {
+                tracing::error!(agent_id = ?spawned_id, error = ?e, "Agent run loop exited with error");
+            } else {
+                tracing::info!(agent_id = ?spawned_id, "Agent run loop completed");
+            }
+            result
+        });
+
+        // Track the entry
+        self.agents.insert(
+            agent_id.clone(),
+            AgentEntry {
+                tier,
+                status: shared_status,
+                _join_handle: Some(join_handle),
+            },
+        );
         self.by_tier
             .entry(tier)
             .or_insert_with(Vec::new)
             .push(agent_id.clone());
 
-        info!(agent_id = ?agent_id, tier = ?tier, "Spawned agent with dispatcher connection");
+        info!(agent_id = ?agent_id, tier = ?tier, "Spawned agent with dispatcher (run loop started)");
 
         Ok(agent_id)
     }
 
     /// Get the ID of an available (idle) agent of the specified tier
-    ///
-    /// Returns the ID without borrowing mutably, useful when you need to
-    /// check availability before taking action.
     pub fn get_available_agent_id(&self, tier: AgentTier) -> Option<AgentId> {
         let agent_ids = self.by_tier.get(&tier)?;
 
         for agent_id in agent_ids {
-            if let Some(agent) = self.agents.get(agent_id) {
-                if agent.is_available() {
-                    return Some(agent_id.clone());
+            if let Some(entry) = self.agents.get(agent_id) {
+                if let Ok(status) = entry.status.try_lock() {
+                    if *status == AgentStatus::Idle {
+                        return Some(agent_id.clone());
+                    }
                 }
             }
         }
@@ -202,58 +236,40 @@ impl AgentPool {
         None
     }
 
-    /// Get an available (idle) agent of the specified tier
-    ///
-    /// Returns a mutable reference to the agent, or None if no agents are available.
-    pub fn get_available_agent(&mut self, tier: AgentTier) -> Option<&mut Agent> {
-        // First find an available agent ID without holding mutable borrow
-        let agent_id = self.get_available_agent_id(tier)?;
-        // Then get mutable reference
-        self.agents.get_mut(&agent_id)
+    /// Check if a specific agent is available (idle)
+    pub fn is_agent_available(&self, id: &AgentId) -> bool {
+        self.agents
+            .get(id)
+            .and_then(|e| e.status.try_lock().ok())
+            .map(|s| *s == AgentStatus::Idle)
+            .unwrap_or(false)
     }
 
-    /// Get a reference to an agent by ID
-    pub fn get_agent(&self, id: &AgentId) -> Option<&Agent> {
-        self.agents.get(id)
+    /// Check if an agent exists in the pool
+    pub fn has_agent(&self, id: &AgentId) -> bool {
+        self.agents.contains_key(id)
     }
 
-    /// Get a mutable reference to an agent by ID
-    pub fn get_agent_mut(&mut self, id: &AgentId) -> Option<&mut Agent> {
-        self.agents.get_mut(id)
-    }
-
-    /// Release an agent back to idle state
-    ///
-    /// If the agent is working on a task, the task will be failed.
-    pub fn release_agent(&mut self, id: &AgentId) -> Result<(), PoolError> {
-        let agent = self
-            .agents
-            .get_mut(id)
-            .ok_or_else(|| PoolError::AgentNotFound(id.clone()))?;
-
-        // If agent is not idle, fail any current task
-        if !agent.is_available() {
-            if let Err(e) = agent.fail_task() {
-                warn!(agent_id = ?id, error = ?e, "Error failing task during release");
-            }
-        }
-
-        info!(agent_id = ?id, "Agent released to pool");
-        Ok(())
+    /// Get the tier of an agent by ID
+    pub fn agent_tier(&self, id: &AgentId) -> Option<AgentTier> {
+        self.agents.get(id).map(|e| e.tier)
     }
 
     /// Remove an agent from the pool entirely
     ///
-    /// The agent will be shut down before removal.
+    /// The agent's tokio task will be aborted.
     pub fn remove_agent(&mut self, id: &AgentId) -> Result<(), PoolError> {
-        // Get and shutdown the agent
-        let mut agent = self
+        let entry = self
             .agents
             .remove(id)
             .ok_or_else(|| PoolError::AgentNotFound(id.clone()))?;
 
-        let tier = agent.tier();
-        agent.shutdown()?;
+        let tier = entry.tier;
+
+        // Abort the agent's tokio task if running
+        if let Some(handle) = entry._join_handle {
+            handle.abort();
+        }
 
         // Remove from tier index
         if let Some(tier_agents) = self.by_tier.get_mut(&tier) {
@@ -287,7 +303,8 @@ impl AgentPool {
                     .filter(|id| {
                         self.agents
                             .get(*id)
-                            .map(|a| a.is_available())
+                            .and_then(|e| e.status.try_lock().ok())
+                            .map(|s| *s == AgentStatus::Idle)
                             .unwrap_or(false)
                     })
                     .count()
@@ -441,7 +458,7 @@ mod tests {
         assert_eq!(pool.total_count(), 1);
 
         // Verify the agent is tracked
-        assert!(pool.agents.contains_key(&agent_id));
+        assert!(pool.has_agent(&agent_id));
         assert!(pool
             .by_tier
             .get(&AgentTier::Worker)
@@ -528,30 +545,8 @@ mod tests {
         assert!(available_id.is_some());
         assert_eq!(available_id.unwrap(), agent_id);
 
-        // get_available_agent should also work
-        let agent = pool.get_available_agent(AgentTier::Worker);
-        assert!(agent.is_some());
-        assert!(agent.unwrap().is_available());
-    }
-
-    #[test]
-    fn get_available_agent_returns_none_when_all_busy() {
-        let mut pool = create_test_pool();
-        let persona = AgentPersona::default();
-        let model_config = ModelConfig::default();
-
-        // Spawn an agent and make it busy
-        let agent_id = pool
-            .spawn_agent(AgentTier::Worker, persona, model_config)
-            .unwrap();
-
-        // Start a task to make the agent busy
-        let agent = pool.get_agent_mut(&agent_id).unwrap();
-        agent.start_task(uuid::Uuid::new_v4()).unwrap();
-
-        // Now get_available_agent should return None
-        let available = pool.get_available_agent_id(AgentTier::Worker);
-        assert!(available.is_none());
+        // is_agent_available should also work
+        assert!(pool.is_agent_available(&agent_id));
     }
 
     #[test]
@@ -564,7 +559,7 @@ mod tests {
     }
 
     #[test]
-    fn get_agent_by_id() {
+    fn has_agent_by_id() {
         let mut pool = create_test_pool();
         let persona = AgentPersona::default();
         let model_config = ModelConfig::default();
@@ -573,96 +568,14 @@ mod tests {
             .spawn_agent(AgentTier::Worker, persona, model_config)
             .unwrap();
 
-        // Get by ID should work
-        let agent = pool.get_agent(&agent_id);
-        assert!(agent.is_some());
-        assert_eq!(agent.unwrap().tier(), AgentTier::Worker);
+        // Has agent should work
+        assert!(pool.has_agent(&agent_id));
+        assert_eq!(pool.agent_tier(&agent_id), Some(AgentTier::Worker));
 
-        // Unknown ID should return None
+        // Unknown ID should return false/None
         let unknown_id = AgentId::new();
-        assert!(pool.get_agent(&unknown_id).is_none());
-    }
-
-    #[test]
-    fn get_available_agent_finds_first_idle_among_busy() {
-        let mut pool = create_test_pool();
-        let persona = AgentPersona::default();
-        let model_config = ModelConfig::default();
-
-        // Spawn two agents
-        let agent1_id = pool
-            .spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone())
-            .unwrap();
-        let agent2_id = pool
-            .spawn_agent(AgentTier::Worker, persona, model_config)
-            .unwrap();
-
-        // Make first agent busy
-        pool.get_agent_mut(&agent1_id)
-            .unwrap()
-            .start_task(uuid::Uuid::new_v4())
-            .unwrap();
-
-        // Should find the second agent (still idle)
-        let available_id = pool.get_available_agent_id(AgentTier::Worker);
-        assert!(available_id.is_some());
-        assert_eq!(available_id.unwrap(), agent2_id);
-    }
-
-    #[test]
-    fn release_idle_agent_is_noop() {
-        let mut pool = create_test_pool();
-        let persona = AgentPersona::default();
-        let model_config = ModelConfig::default();
-
-        let agent_id = pool
-            .spawn_agent(AgentTier::Worker, persona, model_config)
-            .unwrap();
-
-        // Agent is already idle, release should succeed
-        let result = pool.release_agent(&agent_id);
-        assert!(result.is_ok());
-
-        // Agent should still be available
-        assert!(pool.get_agent(&agent_id).unwrap().is_available());
-    }
-
-    #[test]
-    fn release_working_agent_returns_to_idle() {
-        let mut pool = create_test_pool();
-        let persona = AgentPersona::default();
-        let model_config = ModelConfig::default();
-
-        let agent_id = pool
-            .spawn_agent(AgentTier::Worker, persona, model_config)
-            .unwrap();
-
-        // Make the agent busy
-        pool.get_agent_mut(&agent_id)
-            .unwrap()
-            .start_task(uuid::Uuid::new_v4())
-            .unwrap();
-
-        assert!(!pool.get_agent(&agent_id).unwrap().is_available());
-
-        // Release should return it to idle
-        let result = pool.release_agent(&agent_id);
-        assert!(result.is_ok());
-        assert!(pool.get_agent(&agent_id).unwrap().is_available());
-    }
-
-    #[test]
-    fn release_unknown_agent_fails() {
-        let mut pool = create_test_pool();
-
-        let unknown_id = AgentId::new();
-        let result = pool.release_agent(&unknown_id);
-        assert!(result.is_err());
-
-        match result {
-            Err(PoolError::AgentNotFound(_)) => {}
-            _ => panic!("Expected AgentNotFound error"),
-        }
+        assert!(!pool.has_agent(&unknown_id));
+        assert_eq!(pool.agent_tier(&unknown_id), None);
     }
 
     #[test]
@@ -685,7 +598,7 @@ mod tests {
         // Agent should be gone
         assert_eq!(pool.count(AgentTier::Worker), 0);
         assert_eq!(pool.total_count(), 0);
-        assert!(pool.get_agent(&agent_id).is_none());
+        assert!(!pool.has_agent(&agent_id));
         assert!(pool.by_tier.get(&AgentTier::Worker).unwrap().is_empty());
     }
 
@@ -740,9 +653,8 @@ mod tests {
         assert_eq!(stats.workers.available, 0);
         assert_eq!(stats.workers.max, 3);
 
-        // Spawn some agents
-        let agent1_id = pool
-            .spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone())
+        // Spawn some agents (in test mode, agents start Idle)
+        pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone())
             .unwrap();
         pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone())
             .unwrap();
@@ -750,16 +662,6 @@ mod tests {
         let stats = pool.stats();
         assert_eq!(stats.workers.total, 2);
         assert_eq!(stats.workers.available, 2);
-
-        // Make one busy
-        pool.get_agent_mut(&agent1_id)
-            .unwrap()
-            .start_task(uuid::Uuid::new_v4())
-            .unwrap();
-
-        let stats = pool.stats();
-        assert_eq!(stats.workers.total, 2);
-        assert_eq!(stats.workers.available, 1);
     }
 
     #[test]
@@ -798,15 +700,9 @@ mod tests {
             .spawn_agent(AgentTier::Utility, persona, model_config)
             .unwrap();
 
-        assert_eq!(
-            pool.get_agent(&orch_id).unwrap().tier(),
-            AgentTier::Orchestrator
-        );
-        assert_eq!(
-            pool.get_agent(&worker_id).unwrap().tier(),
-            AgentTier::Worker
-        );
-        assert_eq!(pool.get_agent(&util_id).unwrap().tier(), AgentTier::Utility);
+        assert_eq!(pool.agent_tier(&orch_id), Some(AgentTier::Orchestrator));
+        assert_eq!(pool.agent_tier(&worker_id), Some(AgentTier::Worker));
+        assert_eq!(pool.agent_tier(&util_id), Some(AgentTier::Utility));
         assert_eq!(pool.total_count(), 3);
     }
 
@@ -849,40 +745,24 @@ mod tests {
     }
 
     #[test]
-    fn get_available_agent_mut_returns_agent() {
+    fn get_available_agent_id_returns_agent() {
         let mut pool = create_test_pool();
         let persona = AgentPersona::default();
         let model_config = ModelConfig::default();
 
-        pool.spawn_agent(AgentTier::Worker, persona, model_config)
-            .unwrap();
-
-        let agent = pool.get_available_agent(AgentTier::Worker);
-        assert!(agent.is_some());
-        assert!(agent.unwrap().is_available());
-    }
-
-    #[test]
-    fn get_available_agent_mut_returns_none_when_empty() {
-        let mut pool = create_test_pool();
-        assert!(pool.get_available_agent(AgentTier::Orchestrator).is_none());
-    }
-
-    #[test]
-    fn get_available_agent_mut_returns_none_when_all_busy() {
-        let mut pool = create_test_pool();
-        let persona = AgentPersona::default();
-        let model_config = ModelConfig::default();
-
-        let id = pool
+        let agent_id = pool
             .spawn_agent(AgentTier::Worker, persona, model_config)
             .unwrap();
-        pool.get_agent_mut(&id)
-            .unwrap()
-            .start_task(uuid::Uuid::new_v4())
-            .unwrap();
 
-        assert!(pool.get_available_agent(AgentTier::Worker).is_none());
+        let available = pool.get_available_agent_id(AgentTier::Worker);
+        assert!(available.is_some());
+        assert_eq!(available.unwrap(), agent_id);
+    }
+
+    #[test]
+    fn get_available_agent_id_returns_none_when_empty() {
+        let pool = create_test_pool();
+        assert!(pool.get_available_agent_id(AgentTier::Orchestrator).is_none());
     }
 
     #[test]
@@ -918,21 +798,14 @@ mod tests {
     }
 
     #[test]
-    fn shutdown_all_with_busy_agents() {
+    fn shutdown_all_with_agents() {
         let mut pool = create_test_pool();
         let persona = AgentPersona::default();
         let model_config = ModelConfig::default();
 
-        let id = pool
-            .spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone())
+        pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone())
             .unwrap();
         pool.spawn_agent(AgentTier::Utility, persona, model_config)
-            .unwrap();
-
-        // Make one busy
-        pool.get_agent_mut(&id)
-            .unwrap()
-            .start_task(uuid::Uuid::new_v4())
             .unwrap();
 
         pool.shutdown_all();
@@ -950,34 +823,21 @@ mod tests {
     }
 
     #[test]
-    fn stats_with_mixed_busy_idle() {
+    fn stats_with_multiple_agents() {
         let mut pool = create_test_pool();
         let persona = AgentPersona::default();
         let model_config = ModelConfig::default();
 
-        let id1 = pool
-            .spawn_agent(AgentTier::Utility, persona.clone(), model_config.clone())
+        pool.spawn_agent(AgentTier::Utility, persona.clone(), model_config.clone())
             .unwrap();
-        let _id2 = pool
-            .spawn_agent(AgentTier::Utility, persona.clone(), model_config.clone())
+        pool.spawn_agent(AgentTier::Utility, persona.clone(), model_config.clone())
             .unwrap();
-        let id3 = pool
-            .spawn_agent(AgentTier::Utility, persona, model_config)
-            .unwrap();
-
-        // Make two busy
-        pool.get_agent_mut(&id1)
-            .unwrap()
-            .start_task(uuid::Uuid::new_v4())
-            .unwrap();
-        pool.get_agent_mut(&id3)
-            .unwrap()
-            .start_task(uuid::Uuid::new_v4())
+        pool.spawn_agent(AgentTier::Utility, persona, model_config)
             .unwrap();
 
         let stats = pool.stats();
         assert_eq!(stats.utilities.total, 3);
-        assert_eq!(stats.utilities.available, 1);
+        assert_eq!(stats.utilities.available, 3);
         assert_eq!(stats.utilities.max, 4);
     }
 

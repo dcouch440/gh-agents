@@ -178,8 +178,8 @@ impl ModelLimits {
         Self {
             model_id: "claude-3-opus-20240229".to_string(),
             max_context_tokens: 200_000,
-            max_output_tokens: 4_096,
-            safe_input_tokens: 190_000, // Leave buffer
+            max_output_tokens: 32_768,
+            safe_input_tokens: 166_000,
         }
     }
 
@@ -187,8 +187,8 @@ impl ModelLimits {
         Self {
             model_id: "claude-sonnet".to_string(),
             max_context_tokens: 200_000,
-            max_output_tokens: 8_192,
-            safe_input_tokens: 180_000,
+            max_output_tokens: 16_384,
+            safe_input_tokens: 182_000,
         }
     }
 
@@ -196,7 +196,7 @@ impl ModelLimits {
         Self {
             model_id: "claude-haiku".to_string(),
             max_context_tokens: 200_000,
-            max_output_tokens: 4_096,
+            max_output_tokens: 8_192,
             safe_input_tokens: 190_000,
         }
     }
@@ -205,9 +205,9 @@ impl ModelLimits {
         // Conservative default for unknown models
         Self {
             model_id: model_id.to_string(),
-            max_context_tokens: 100_000,
-            max_output_tokens: 4_096,
-            safe_input_tokens: 90_000,
+            max_context_tokens: 200_000,
+            max_output_tokens: 8_192,
+            safe_input_tokens: 190_000,
         }
     }
 
@@ -1005,8 +1005,8 @@ mod tests {
         let limits = ModelLimits::for_model("claude-3-sonnet-20240229");
 
         assert_eq!(limits.max_context_tokens, 200_000);
-        assert_eq!(limits.max_output_tokens, 8_192);
-        assert_eq!(limits.safe_input_tokens, 180_000);
+        assert_eq!(limits.max_output_tokens, 16_384);
+        assert_eq!(limits.safe_input_tokens, 182_000);
     }
 
     #[test]
@@ -1014,8 +1014,8 @@ mod tests {
         let limits = ModelLimits::for_model("claude-3-opus-20240229");
 
         assert_eq!(limits.max_context_tokens, 200_000);
-        assert_eq!(limits.max_output_tokens, 4_096);
-        assert_eq!(limits.safe_input_tokens, 190_000);
+        assert_eq!(limits.max_output_tokens, 32_768);
+        assert_eq!(limits.safe_input_tokens, 166_000);
     }
 
     #[test]
@@ -1023,9 +1023,9 @@ mod tests {
         let limits = ModelLimits::for_model("unknown-model");
 
         // Should get conservative defaults
-        assert_eq!(limits.max_context_tokens, 100_000);
-        assert_eq!(limits.max_output_tokens, 4_096);
-        assert_eq!(limits.safe_input_tokens, 90_000);
+        assert_eq!(limits.max_context_tokens, 200_000);
+        assert_eq!(limits.max_output_tokens, 8_192);
+        assert_eq!(limits.safe_input_tokens, 190_000);
     }
 
     #[test]
@@ -1044,15 +1044,15 @@ mod tests {
 
         assert!(limits.is_safe(100_000, 4_000));
         assert!(!limits.is_safe(190_000, 4_000)); // Exceeds safe input
-        assert!(!limits.is_safe(180_001, 4_000)); // Just over safe input
+        assert!(!limits.is_safe(182_001, 4_000)); // Just over safe input
     }
 
     #[test]
     fn test_model_limits_remaining_safe() {
         let limits = ModelLimits::for_model("claude-sonnet");
 
-        assert_eq!(limits.remaining_safe(100_000), 80_000);
-        assert_eq!(limits.remaining_safe(180_000), 0);
+        assert_eq!(limits.remaining_safe(100_000), 82_000);
+        assert_eq!(limits.remaining_safe(182_000), 0);
         assert_eq!(limits.remaining_safe(200_000), 0);
     }
 
@@ -1060,8 +1060,8 @@ mod tests {
     fn test_model_limits_warning_threshold() {
         let limits = ModelLimits::for_model("claude-sonnet");
 
-        // 80% of 180_000 = 144_000
-        assert_eq!(limits.warning_threshold(), 144_000);
+        // 80% of 182_000 = 145_600
+        assert_eq!(limits.warning_threshold(), 145_600);
     }
 
     #[test]
@@ -1072,7 +1072,7 @@ mod tests {
         assert_eq!(sonnet.max_context_tokens, 200_000);
 
         let unknown = registry.get("unknown");
-        assert_eq!(unknown.max_context_tokens, 100_000);
+        assert_eq!(unknown.max_context_tokens, 200_000);
     }
 
     #[test]

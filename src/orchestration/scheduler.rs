@@ -341,15 +341,9 @@ impl<TQ: TaskQueueRepo, DR: DependencyRepo, SR: SchedulerRepo> TaskScheduler<TQ,
         agent_id: AgentId,
         tier: AgentTier,
     ) -> Result<(), SchedulerError> {
-        // Mark agent as working on this task
-        {
-            let mut pool = self.agent_pool.write().await;
-            if let Some(agent) = pool.get_agent_mut(&agent_id) {
-                agent
-                    .start_task(task.id.0)
-                    .map_err(|e| SchedulerError::AgentPoolError(e.to_string()))?;
-            }
-        }
+        // Agent status is now managed by the agent's own run loop.
+        // When it receives AssignTask, it transitions to Working internally.
+        let _ = (&self.agent_pool, &agent_id, &tier); // suppress unused warnings
 
         // Update task status in database via queue's dependency tracker
         {

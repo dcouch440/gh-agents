@@ -487,9 +487,9 @@ mod tests {
 
     #[test]
     fn open_browser_does_not_panic() {
-        // We can't fully test browser opening, but we can verify it doesn't panic
-        // with an invalid URL (the spawn may fail but that's an Err, not a panic)
-        let _result = GitHubAuth::open_browser("http://example.com");
+        // Verify the function signature compiles and is callable.
+        // Actually invoking it would open a real browser, so just confirm it exists.
+        let _fn_ptr: fn(&str) -> Result<(), std::io::Error> = GitHubAuth::open_browser;
     }
 
     #[tokio::test]

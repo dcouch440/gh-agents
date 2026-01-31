@@ -82,14 +82,7 @@ impl ModeRegistry {
             id: AgentModeId::new("planning"),
             name: "Planning".to_string(),
             description: "Build and refine a PRD collaboratively.".to_string(),
-            system_prompt: "You are nexor's planning agent. You help users create Product Requirements \
-                Documents (PRDs) through structured conversation. Ask clarifying questions about goals, \
-                users, constraints, and success metrics. Propose document structure, iterate on sections, \
-                and flag gaps in requirements. When the user approves, save the final PRD. \
-                Use markdown headers and bullet points for structure. Every PRD should have: \
-                Problem Statement, Goals, Non-Goals, User Stories, Technical Approach, \
-                Success Metrics, and Open Questions."
-                .to_string(),
+            system_prompt: include_str!("prompts/planning.txt").to_string(),
             tools: vec![],
             mounted_files: vec![],
             history_policy: HistoryPolicy::SessionScoped { max_messages: 30 },
@@ -99,26 +92,13 @@ impl ModeRegistry {
             id: AgentModeId::new("agent_builder"),
             name: "Agent Builder".to_string(),
             description: "Create and configure agents, assign tasks, define roles.".to_string(),
-            system_prompt: "You are nexor's Agent Builder — the workshop for designing AI agent teams. \
-                \n\nYou manage a 3-tier system:\n\
-                - **Orchestrator** (Tier 2): Plans, delegates, reviews. Max delegation depth 2.\n\
-                - **Worker** (Tier 1): Implements code, runs tests, commits. Depth 1. Can sub-delegate to Utilities.\n\
-                - **Utility** (Tier 0): Quick tasks — lint, format, summarize. Depth 0. Cannot delegate.\n\n\
-                Available roles: orchestrator, worker, utility, reviewer, summarizer, complaint-finder, risk-assessor, scope-definer.\n\n\
-                When the user describes what they want built, design the full agent system:\n\
-                1. Show a diagram of the agent architecture\n\
-                2. Create agents with descriptive names\n\
-                3. Group related agents into clusters for shared context\n\
-                4. Assign tasks with detailed descriptions (files to touch, expected behavior, tools to use)\n\
-                5. Monitor progress and report results\n\n\
-                Always explain WHY you chose specific tiers and roles. Use tool restrictions \
-                (allowed_tools) for least-privilege. Set approval_required on dangerous pipeline stages."
-                .to_string(),
+            system_prompt: include_str!("prompts/agent_builder.txt").to_string(),
             tools: vec![
                 "list_agents".to_string(),
-                "create_agent".to_string(),
-                "remove_agent".to_string(),
                 "list_roles".to_string(),
+                "create_agent".to_string(),
+                "create_agents".to_string(),
+                "remove_agent".to_string(),
                 "assign_task".to_string(),
                 "get_task_result".to_string(),
                 "list_pending_approvals".to_string(),
@@ -127,6 +107,17 @@ impl ModeRegistry {
                 "add_to_cluster".to_string(),
                 "remove_from_cluster".to_string(),
                 "list_clusters".to_string(),
+                "create_pipeline".to_string(),
+                "add_pipeline_stage".to_string(),
+                "start_pipeline".to_string(),
+                "get_pipeline_status".to_string(),
+                "create_schedule".to_string(),
+                "list_schedules".to_string(),
+                "toggle_schedule".to_string(),
+                "create_trigger".to_string(),
+                "list_triggers".to_string(),
+                "read_file".to_string(),
+                "list_files".to_string(),
             ],
             mounted_files: vec![],
             history_policy: HistoryPolicy::SessionScoped { max_messages: 20 },

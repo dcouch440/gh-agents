@@ -18,17 +18,17 @@ impl Default for TierModels {
         Self {
             orchestrator: ModelConfig {
                 model_id: "claude-opus-4-5-20251101".to_string(),
-                max_tokens: 8192,
+                max_tokens: 16384,
                 ..Default::default()
             },
             worker: ModelConfig {
                 model_id: "claude-sonnet-4-20250514".to_string(),
-                max_tokens: 4096,
+                max_tokens: 8192,
                 ..Default::default()
             },
             utility: ModelConfig {
                 model_id: "claude-sonnet-4-20250514".to_string(),
-                max_tokens: 2048,
+                max_tokens: 4096,
                 ..Default::default()
             },
         }

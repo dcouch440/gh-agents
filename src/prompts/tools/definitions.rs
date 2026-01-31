@@ -200,7 +200,7 @@ impl ToolRegistry {
     pub fn by_side_effect(&self, effect: SideEffect) -> Vec<&ToolDefinition> {
         self.tools
             .values()
-            .filter(|t| {
+            .filter(|t: &&ToolDefinition| {
                 t.side_effects
                     .iter()
                     .any(|e| std::mem::discriminant(e) == std::mem::discriminant(&effect))

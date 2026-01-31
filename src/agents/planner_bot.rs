@@ -128,7 +128,7 @@ impl<P: LLMProvider> PlannerBot<P> {
 
         let request = LLMRequest::new(&self.model_id, messages)
             .with_system(system)
-            .with_max_tokens(4096);
+            .with_max_tokens(8192);
 
         // Call LLM
         let response = self
