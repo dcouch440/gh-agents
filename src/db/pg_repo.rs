@@ -1270,8 +1270,8 @@ impl ServerRepo for PgRepo {
     }
 
     async fn list_pipeline_stages(&self, pipeline_id: Uuid) -> Result<Vec<PipelineStageRow>> {
-        let rows: Vec<(Uuid, i32, Uuid, Option<String>, bool)> = sqlx::query_as(
-            "SELECT pipeline_id, stage_number, agent_id, role, approval_required FROM pipeline_stages WHERE pipeline_id = $1 ORDER BY stage_number"
+        let rows: Vec<(Uuid, i32, Uuid, Option<String>, bool, String, serde_json::Value, String, serde_json::Value)> = sqlx::query_as(
+            "SELECT pipeline_id, stage_number, agent_id, role, approval_required, stage_name, input_definitions, output_description, output_schema FROM pipeline_stages WHERE pipeline_id = $1 ORDER BY stage_number"
         )
         .bind(pipeline_id)
         .fetch_all(&self.pool)
@@ -1280,12 +1280,16 @@ impl ServerRepo for PgRepo {
         Ok(rows
             .into_iter()
             .map(
-                |(pipeline_id, stage_number, agent_id, role, approval_required)| PipelineStageRow {
+                |(pipeline_id, stage_number, agent_id, role, approval_required, stage_name, input_definitions, output_description, output_schema)| PipelineStageRow {
                     pipeline_id,
                     stage_number,
                     agent_id,
                     role,
                     approval_required,
+                    stage_name,
+                    input_definitions,
+                    output_description,
+                    output_schema,
                 },
             )
             .collect())
@@ -1293,18 +1297,26 @@ impl ServerRepo for PgRepo {
 
     async fn upsert_pipeline_stage(&self, stage: PipelineStageRow) -> Result<()> {
         sqlx::query(r#"
-            INSERT INTO pipeline_stages (pipeline_id, stage_number, agent_id, role, approval_required)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO pipeline_stages (pipeline_id, stage_number, agent_id, role, approval_required, stage_name, input_definitions, output_description, output_schema)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             ON CONFLICT (pipeline_id, stage_number) DO UPDATE SET
                 agent_id = EXCLUDED.agent_id,
                 role = EXCLUDED.role,
-                approval_required = EXCLUDED.approval_required
+                approval_required = EXCLUDED.approval_required,
+                stage_name = EXCLUDED.stage_name,
+                input_definitions = EXCLUDED.input_definitions,
+                output_description = EXCLUDED.output_description,
+                output_schema = EXCLUDED.output_schema
         "#)
         .bind(stage.pipeline_id)
         .bind(stage.stage_number)
         .bind(stage.agent_id)
         .bind(&stage.role)
         .bind(stage.approval_required)
+        .bind(&stage.stage_name)
+        .bind(&stage.input_definitions)
+        .bind(&stage.output_description)
+        .bind(&stage.output_schema)
         .execute(&self.pool)
         .await?;
         Ok(())

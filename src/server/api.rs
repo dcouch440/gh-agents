@@ -1956,6 +1956,169 @@ pub async fn stop_indexing(State(state): State<AppState>) -> Json<serde_json::Va
 }
 
 // ============================================================================
+// Pipeline Stage Template Rendering
+// ============================================================================
+
+/// Resolve `{{stage_name.field}}` placeholders in a template string.
+///
+/// `stage_outputs` maps stage_name → JSON object of that stage's output fields.
+pub fn resolve_template(
+    template: &str,
+    stage_outputs: &std::collections::HashMap<String, serde_json::Value>,
+) -> String {
+    let mut result = template.to_string();
+    // Match {{stage_name.field}} patterns
+    let re = regex::Regex::new(r"\{\{(\w+)\.(\w+)\}\}").unwrap();
+    for cap in re.captures_iter(template) {
+        let full_match = &cap[0];
+        let stage = &cap[1];
+        let field = &cap[2];
+        let replacement = stage_outputs
+            .get(stage)
+            .and_then(|obj| obj.get(field))
+            .map(|v| match v {
+                serde_json::Value::String(s) => s.clone(),
+                other => other.to_string(),
+            })
+            .unwrap_or_else(|| full_match.to_string());
+        result = result.replace(full_match, &replacement);
+    }
+    result
+}
+
+/// Render a pipeline stage into a markdown prompt.
+///
+/// Takes the stage definition and a map of resolved input values (key → string value).
+pub fn render_stage_prompt(
+    output_description: &str,
+    resolved_inputs: &[(String, String)],
+    output_schema: &serde_json::Value,
+) -> String {
+    let mut prompt = String::new();
+
+    // Goal section
+    prompt.push_str("# Goal\n");
+    prompt.push_str(output_description);
+    prompt.push_str("\n\n");
+
+    // Input section
+    if !resolved_inputs.is_empty() {
+        prompt.push_str("# Input\n");
+        for (key, value) in resolved_inputs {
+            prompt.push_str(&format!("- {}: {}\n", key, value));
+        }
+        prompt.push('\n');
+    }
+
+    // Output schema section
+    if let Some(fields) = output_schema.get("fields").and_then(|f| f.as_array()) {
+        if !fields.is_empty() {
+            prompt.push_str("# Output Schema\nReturn a JSON object with these fields:\n");
+            for field in fields {
+                let name = field.get("name").and_then(|n| n.as_str()).unwrap_or("?");
+                let ftype = field.get("type").and_then(|t| t.as_str()).unwrap_or("string");
+                let desc = field
+                    .get("description")
+                    .and_then(|d| d.as_str())
+                    .unwrap_or("");
+                let type_str = if ftype == "enum" {
+                    if let Some(values) = field.get("values").and_then(|v| v.as_array()) {
+                        let vals: Vec<&str> =
+                            values.iter().filter_map(|v| v.as_str()).collect();
+                        format!("one of {:?}", vals)
+                    } else {
+                        "enum".to_string()
+                    }
+                } else {
+                    ftype.to_string()
+                };
+                if desc.is_empty() {
+                    prompt.push_str(&format!("- {}: {}\n", name, type_str));
+                } else {
+                    prompt.push_str(&format!("- {}: {} — {}\n", name, type_str, desc));
+                }
+            }
+        }
+    }
+
+    prompt.trim_end().to_string()
+}
+
+/// Request body for rendering a pipeline stage prompt.
+#[derive(Deserialize)]
+pub struct RenderStageRequest {
+    /// Map of stage_name → JSON output from that stage.
+    pub stage_outputs: std::collections::HashMap<String, serde_json::Value>,
+}
+
+/// Render a pipeline stage into a resolved prompt.
+pub async fn render_pipeline_stage(
+    State(state): State<AppState>,
+    _user: auth::AuthUser,
+    Path((pipeline_id, stage_number)): Path<(String, i32)>,
+    Json(body): Json<RenderStageRequest>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let Ok(pipeline_uuid) = Uuid::parse_str(&pipeline_id) else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+
+    let stages = state
+        .repo
+        .list_pipeline_stages(pipeline_uuid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let stage = stages
+        .into_iter()
+        .find(|s| s.stage_number == stage_number)
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    // Resolve input definitions
+    let mut resolved_inputs: Vec<(String, String)> = Vec::new();
+    if let Some(defs) = stage.input_definitions.as_array() {
+        for def in defs {
+            let key = def
+                .get("key")
+                .and_then(|k| k.as_str())
+                .unwrap_or("")
+                .to_string();
+            let source = def.get("source").and_then(|s| s.as_str()).unwrap_or("");
+            let value = match source {
+                "static" => def
+                    .get("value")
+                    .map(|v| match v {
+                        serde_json::Value::String(s) => s.clone(),
+                        other => other.to_string(),
+                    })
+                    .unwrap_or_default(),
+                "stage" => {
+                    let ref_str = def.get("ref").and_then(|r| r.as_str()).unwrap_or("");
+                    // ref format: "stage_name.field"
+                    let template = format!("{{{{{}}}}}", ref_str);
+                    resolve_template(&template, &body.stage_outputs)
+                }
+                _ => String::new(),
+            };
+            if !key.is_empty() {
+                resolved_inputs.push((key, value));
+            }
+        }
+    }
+
+    // Resolve output_description template
+    let resolved_description = resolve_template(&stage.output_description, &body.stage_outputs);
+
+    let prompt = render_stage_prompt(&resolved_description, &resolved_inputs, &stage.output_schema);
+
+    Ok(Json(serde_json::json!({
+        "pipeline_id": pipeline_id,
+        "stage_number": stage_number,
+        "stage_name": stage.stage_name,
+        "prompt": prompt
+    })))
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -4375,5 +4538,95 @@ mod tests {
             .unwrap();
         let messages: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert!(messages.is_empty());
+    }
+
+    // ========================================================================
+    // Pipeline stage template tests
+    // ========================================================================
+
+    #[test]
+    fn resolve_template_basic() {
+        let mut outputs = std::collections::HashMap::new();
+        outputs.insert(
+            "weather_check".to_string(),
+            serde_json::json!({"forecast": "stormy", "location": "Denver"}),
+        );
+        let result = resolve_template(
+            "The weather in {{weather_check.location}} is {{weather_check.forecast}}",
+            &outputs,
+        );
+        assert_eq!(result, "The weather in Denver is stormy");
+    }
+
+    #[test]
+    fn resolve_template_missing_ref_preserved() {
+        let outputs = std::collections::HashMap::new();
+        let result = resolve_template("Status: {{unknown.field}}", &outputs);
+        assert_eq!(result, "Status: {{unknown.field}}");
+    }
+
+    #[test]
+    fn resolve_template_numeric_value() {
+        let mut outputs = std::collections::HashMap::new();
+        outputs.insert(
+            "scorer".to_string(),
+            serde_json::json!({"confidence": 95}),
+        );
+        let result = resolve_template("Confidence: {{scorer.confidence}}%", &outputs);
+        assert_eq!(result, "Confidence: 95%");
+    }
+
+    #[test]
+    fn resolve_template_multiple_stages() {
+        let mut outputs = std::collections::HashMap::new();
+        outputs.insert(
+            "stage_a".to_string(),
+            serde_json::json!({"x": "hello"}),
+        );
+        outputs.insert(
+            "stage_b".to_string(),
+            serde_json::json!({"y": "world"}),
+        );
+        let result = resolve_template("{{stage_a.x}} {{stage_b.y}}", &outputs);
+        assert_eq!(result, "hello world");
+    }
+
+    #[test]
+    fn render_stage_prompt_full() {
+        let inputs = vec![
+            ("weather".to_string(), "stormy".to_string()),
+            ("location".to_string(), "Denver, CO".to_string()),
+        ];
+        let schema = serde_json::json!({
+            "fields": [
+                {"name": "urgency", "type": "enum", "values": ["URGENT", "NON_URGENT"], "description": "How urgent"},
+                {"name": "summary", "type": "string", "description": "One sentence summary"}
+            ]
+        });
+        let result = render_stage_prompt("Classify the weather urgency", &inputs, &schema);
+        assert!(result.contains("# Goal\nClassify the weather urgency"));
+        assert!(result.contains("- weather: stormy"));
+        assert!(result.contains("- location: Denver, CO"));
+        assert!(result.contains("- urgency: one of [\"URGENT\", \"NON_URGENT\"] — How urgent"));
+        assert!(result.contains("- summary: string — One sentence summary"));
+    }
+
+    #[test]
+    fn render_stage_prompt_no_inputs() {
+        let schema = serde_json::json!({"fields": [{"name": "result", "type": "string"}]});
+        let result = render_stage_prompt("Do something", &[], &schema);
+        assert!(!result.contains("# Input"));
+        assert!(result.contains("# Goal"));
+        assert!(result.contains("# Output Schema"));
+    }
+
+    #[test]
+    fn render_stage_prompt_empty_schema() {
+        let inputs = vec![("x".to_string(), "1".to_string())];
+        let schema = serde_json::json!({"fields": []});
+        let result = render_stage_prompt("Goal here", &inputs, &schema);
+        assert!(result.contains("# Goal"));
+        assert!(result.contains("- x: 1"));
+        assert!(!result.contains("# Output Schema"));
     }
 }

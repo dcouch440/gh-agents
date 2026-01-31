@@ -47,6 +47,10 @@ pub struct PipelineStageRow {
     pub agent_id: Uuid,
     pub role: Option<String>,
     pub approval_required: bool,
+    pub stage_name: String,
+    pub input_definitions: serde_json::Value,
+    pub output_description: String,
+    pub output_schema: serde_json::Value,
 }
 
 /// Row type for persisted schedules.

@@ -299,6 +299,23 @@ pub fn agent_tools() -> Vec<Tool> {
                     "approval_required": {
                         "type": "boolean",
                         "description": "If true, the pipeline pauses for approval before this stage's output advances"
+                    },
+                    "stage_name": {
+                        "type": "string",
+                        "description": "Unique name for this stage within the pipeline, used in {{stage_name.field}} template references"
+                    },
+                    "input_definitions": {
+                        "type": "array",
+                        "description": "Input variable definitions. Each entry: {key, source: 'static'|'stage', value?, ref?}",
+                        "items": { "type": "object" }
+                    },
+                    "output_description": {
+                        "type": "string",
+                        "description": "Template text describing the stage goal. Can contain {{stage_name.field}} refs."
+                    },
+                    "output_schema": {
+                        "type": "object",
+                        "description": "Output contract: {fields: [{name, type, values?, description}]}"
                     }
                 },
                 "required": ["pipeline_id", "agent_id"]
@@ -1353,6 +1370,22 @@ async fn execute_add_pipeline_stage(input: &Value, state: &AppState, user_id: Us
 
     let role = input["role"].as_str().map(String::from);
     let approval_required = input["approval_required"].as_bool().unwrap_or(false);
+    let stage_name = input["stage_name"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+    let input_definitions = input
+        .get("input_definitions")
+        .cloned()
+        .unwrap_or_else(|| json!([]));
+    let output_description = input["output_description"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+    let output_schema = input
+        .get("output_schema")
+        .cloned()
+        .unwrap_or_else(|| json!({"fields": []}));
 
     let mut mgr = state.pipeline_manager.write().await;
     match mgr.add_stage(
@@ -1360,6 +1393,10 @@ async fn execute_add_pipeline_stage(input: &Value, state: &AppState, user_id: Us
         crate::agents::AgentId(agent_uuid),
         role.clone(),
         approval_required,
+        stage_name.clone(),
+        input_definitions.clone(),
+        output_description.clone(),
+        output_schema.clone(),
     ) {
         Ok(stage_number) => {
             // Persist to DB
@@ -1372,6 +1409,10 @@ async fn execute_add_pipeline_stage(input: &Value, state: &AppState, user_id: Us
                     agent_id: agent_uuid,
                     role: role.clone(),
                     approval_required,
+                    stage_name: stage_name.clone(),
+                    input_definitions: input_definitions.clone(),
+                    output_description: output_description.clone(),
+                    output_schema: output_schema.clone(),
                 })
                 .await
             {
@@ -1384,7 +1425,9 @@ async fn execute_add_pipeline_stage(input: &Value, state: &AppState, user_id: Us
                 "stage_number": stage_number,
                 "agent_id": agent_str,
                 "role": role,
-                "approval_required": approval_required
+                "approval_required": approval_required,
+                "stage_name": stage_name,
+                "output_description": output_description
             })
         }
         Err(e) => json!({ "error": e.to_string() }),
