@@ -16,6 +16,7 @@ use uuid::Uuid;
 
 use super::auth;
 use super::state::{AppState, OrchestratorMessage, StreamChunk};
+use super::ws::SessionUpdate;
 use crate::types::{AgentPoolConfig, AgentTier, Priority, Task, TierModels};
 
 // ============================================================================
@@ -597,6 +598,14 @@ pub async fn create_session(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    state.broadcast_session(SessionUpdate {
+        id: session.id,
+        action: "created".to_string(),
+        title: Some(session.title.clone()),
+        mode_id: Some(session.mode_id.clone()),
+        user_id: Some(auth.user_id.0),
+    });
+
     Ok((
         StatusCode::CREATED,
         Json(SessionResponse {
@@ -685,6 +694,14 @@ pub async fn delete_session(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    state.broadcast_session(SessionUpdate {
+        id: session_id,
+        action: "deleted".to_string(),
+        title: None,
+        mode_id: None,
+        user_id: Some(auth.user_id.0),
+    });
+
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -718,6 +735,14 @@ pub async fn update_session(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    state.broadcast_session(SessionUpdate {
+        id: updated.id,
+        action: "updated".to_string(),
+        title: Some(updated.title.clone()),
+        mode_id: Some(updated.mode_id.clone()),
+        user_id: Some(auth.user_id.0),
+    });
 
     Ok(Json(SessionResponse {
         id: updated.id,

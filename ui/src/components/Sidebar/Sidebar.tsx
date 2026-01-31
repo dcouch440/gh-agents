@@ -17,8 +17,8 @@ import {
   Check,
   X,
 } from 'lucide-react';
-import { useAuthStore } from '../../store';
-import { api, type ModeInfo, type SessionResponse } from '../../api/client';
+import { useAuthStore, useSessionStore } from '../../store';
+import { api } from '../../api/client';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -36,17 +36,15 @@ const navItems = [
 export function Sidebar({ collapsed }: SidebarProps) {
   const navigate = useNavigate();
   const logout = useAuthStore((state) => state.logout);
-  const [modes, setModes] = useState<ModeInfo[]>([]);
-  const [sessions, setSessions] = useState<SessionResponse[]>([]);
+  const { sessions, modes, load, addSession, updateSession, removeSession } = useSessionStore();
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const editRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    api.modes.list().then(setModes).catch(() => {});
-    api.sessions.list().then(setSessions).catch(() => {});
-  }, []);
+    load();
+  }, [load]);
 
   useEffect(() => {
     if (editingId && editRef.current) {
@@ -63,14 +61,14 @@ export function Sidebar({ collapsed }: SidebarProps) {
   const handleCreateSession = async (modeId: string) => {
     try {
       const session = await api.sessions.create(modeId);
-      setSessions((prev) => [session, ...prev]);
+      addSession(session);
       navigate(`/chat/${session.id}`);
     } catch {
       // ignore
     }
   };
 
-  const handleStartEdit = (session: SessionResponse) => {
+  const handleStartEdit = (session: { id: string; title: string; mode_id: string }) => {
     setEditingId(session.id);
     setEditTitle(session.title || session.mode_id);
   };
@@ -79,9 +77,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
     if (!editingId || !editTitle.trim()) return;
     try {
       const updated = await api.sessions.update(editingId, editTitle.trim());
-      setSessions((prev) =>
-        prev.map((s) => (s.id === editingId ? updated : s))
-      );
+      updateSession(editingId, updated);
     } catch {
       // ignore
     }
@@ -95,7 +91,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
   const handleDelete = async (sessionId: string) => {
     try {
       await api.sessions.delete(sessionId);
-      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      removeSession(sessionId);
       navigate('/chat');
     } catch {
       // ignore

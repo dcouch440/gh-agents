@@ -3,9 +3,11 @@ import { Sidebar } from '../Sidebar';
 import { Header } from '../Header';
 import { useAppStore } from '../../store';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { useWebSocket } from '../../hooks/useWebSocket';
 
 export function Layout() {
   useKeyboardShortcuts();
+  useWebSocket();
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
   const toggleSidebar = useAppStore((state) => state.toggleSidebar);
   const location = useLocation();
