@@ -188,6 +188,32 @@ The pre-defined agents and chat views aren't working well. Too many hardcoded to
 
 **Tests:** All 1,988 tests pass.
 
+### Part 5: Context Injection System — Server (2026-01-31)
+
+**Files modified:**
+- `migrations/027_agent_context.sql` — Created `agent_context` join table (agent_id, document_id) with CASCADE deletes
+- `src/db/traits.rs` — Added `get_agent_context`, `set_agent_context` to `ServerRepo` trait
+- `src/db/pg_repo.rs` — Implemented agent context queries (JOIN + transaction pattern)
+- `src/server/api.rs` — Added `SetAgentContextRequest`, `AgentContextResponse`, get/set handlers, updated `resolve_template()` to support `{{context.ref_tag}}` patterns, updated `render_pipeline_stage` to fetch context docs from DB, added 3 unit tests
+- `src/server/mod.rs` — Added route: GET/PUT /agents/:id/context, added mock stubs
+- `src/server/orchestrator.rs` — Added mock stubs
+
+**Endpoints added:**
+- `GET /api/agents/:id/context` — Get agent's linked context documents
+- `PUT /api/agents/:id/context` — Set agent's context documents (replaces existing)
+
+**Template system update:**
+- `resolve_template()` now accepts `context_docs: &HashMap<String, String>`
+- `{{context.ref_tag}}` patterns are resolved by fetching documents from DB by ref_tag
+- `render_pipeline_stage` endpoint scans templates for `{{context.*}}` refs and fetches docs before rendering
+
+**Context model:**
+- **Agent-level**: documents linked via `agent_context` table, intended for auto-injection into system prompt (set and forget)
+- **Stage-level**: `{{context.ref_tag}}` in stage templates, resolved at render time by fetching from documents table
+- **Dynamic**: agents can write documents (via existing create_doc tool), later stages reference them with `{{context.ref_tag}}`
+
+**Tests:** All 1,991 tests pass.
+
 ## Design Notes
 
 ### Core Execution Model: Pipelines and Clusters

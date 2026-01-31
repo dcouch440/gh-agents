@@ -625,6 +625,98 @@ pub async fn set_agent_tools(
 }
 
 // ============================================================================
+// Agent Context (Document Linkage)
+// ============================================================================
+
+#[derive(Deserialize)]
+pub struct SetAgentContextRequest {
+    pub document_ids: Vec<String>,
+}
+
+#[derive(Serialize)]
+pub struct AgentContextResponse {
+    pub agent_id: String,
+    pub documents: Vec<DocumentListItem>,
+}
+
+/// Get context documents assigned to an agent
+pub async fn get_agent_context(
+    State(state): State<AppState>,
+    _auth: auth::AuthUser,
+    Path(agent_id): Path<Uuid>,
+) -> Result<Json<AgentContextResponse>, StatusCode> {
+    let rows = state
+        .repo
+        .get_agent_context(agent_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let documents = rows
+        .into_iter()
+        .map(|row| DocumentListItem {
+            id: row.id,
+            title: row.title,
+            summary: row.summary,
+            ref_tag: row.ref_tag,
+            tags: row.tags,
+            doc_type: row.doc_type,
+            updated_at: row.updated_at,
+        })
+        .collect();
+
+    Ok(Json(AgentContextResponse {
+        agent_id: agent_id.to_string(),
+        documents,
+    }))
+}
+
+/// Set context documents for an agent (replaces existing)
+pub async fn set_agent_context(
+    State(state): State<AppState>,
+    _auth: auth::AuthUser,
+    Path(agent_id): Path<Uuid>,
+    Json(request): Json<SetAgentContextRequest>,
+) -> Result<Json<AgentContextResponse>, StatusCode> {
+    let document_ids: Result<Vec<Uuid>, _> = request
+        .document_ids
+        .iter()
+        .map(|s| Uuid::parse_str(s))
+        .collect();
+
+    let document_ids = document_ids.map_err(|_| StatusCode::BAD_REQUEST)?;
+
+    state
+        .repo
+        .set_agent_context(agent_id, document_ids)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let rows = state
+        .repo
+        .get_agent_context(agent_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let documents = rows
+        .into_iter()
+        .map(|row| DocumentListItem {
+            id: row.id,
+            title: row.title,
+            summary: row.summary,
+            ref_tag: row.ref_tag,
+            tags: row.tags,
+            doc_type: row.doc_type,
+            updated_at: row.updated_at,
+        })
+        .collect();
+
+    Ok(Json(AgentContextResponse {
+        agent_id: agent_id.to_string(),
+        documents,
+    }))
+}
+
+// ============================================================================
 // Config Endpoints (Slice 10.2.5)
 // ============================================================================
 
@@ -1965,14 +2057,30 @@ pub async fn stop_indexing(State(state): State<AppState>) -> Json<serde_json::Va
 pub fn resolve_template(
     template: &str,
     stage_outputs: &std::collections::HashMap<String, serde_json::Value>,
+    context_docs: &std::collections::HashMap<String, String>,
 ) -> String {
     let mut result = template.to_string();
+    // Match {{context.ref_tag}} patterns first (so stage refs can contain context)
+    let context_re = regex::Regex::new(r"\{\{context\.(\w+)\}\}").unwrap();
+    for cap in context_re.captures_iter(template) {
+        let full_match = &cap[0];
+        let ref_tag = &cap[1];
+        let replacement = context_docs
+            .get(ref_tag)
+            .cloned()
+            .unwrap_or_else(|| full_match.to_string());
+        result = result.replace(full_match, &replacement);
+    }
     // Match {{stage_name.field}} patterns
-    let re = regex::Regex::new(r"\{\{(\w+)\.(\w+)\}\}").unwrap();
-    for cap in re.captures_iter(template) {
+    let stage_re = regex::Regex::new(r"\{\{(\w+)\.(\w+)\}\}").unwrap();
+    let snapshot = result.clone();
+    for cap in stage_re.captures_iter(&snapshot) {
         let full_match = &cap[0];
         let stage = &cap[1];
         let field = &cap[2];
+        if stage == "context" {
+            continue; // already handled
+        }
         let replacement = stage_outputs
             .get(stage)
             .and_then(|obj| obj.get(field))
@@ -2073,6 +2181,30 @@ pub async fn render_pipeline_stage(
         .find(|s| s.stage_number == stage_number)
         .ok_or(StatusCode::NOT_FOUND)?;
 
+    // Fetch context documents referenced via {{context.ref_tag}} patterns
+    let mut context_docs: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    let context_re = regex::Regex::new(r"\{\{context\.(\w+)\}\}").unwrap();
+    let mut all_text = stage.output_description.clone();
+    if let Some(defs) = stage.input_definitions.as_array() {
+        for def in defs {
+            if let Some(v) = def.get("value").and_then(|v| v.as_str()) {
+                all_text.push(' ');
+                all_text.push_str(v);
+            }
+        }
+    }
+    if let Some(doc_repo) = &state.doc_repo {
+        for cap in context_re.captures_iter(&all_text) {
+            let ref_tag = cap[1].to_string();
+            if !context_docs.contains_key(&ref_tag) {
+                if let Ok(Some(doc)) = doc_repo.get_document_by_ref_tag(&ref_tag).await {
+                    context_docs.insert(ref_tag, doc.content);
+                }
+            }
+        }
+    }
+
     // Resolve input definitions
     let mut resolved_inputs: Vec<(String, String)> = Vec::new();
     if let Some(defs) = stage.input_definitions.as_array() {
@@ -2095,7 +2227,7 @@ pub async fn render_pipeline_stage(
                     let ref_str = def.get("ref").and_then(|r| r.as_str()).unwrap_or("");
                     // ref format: "stage_name.field"
                     let template = format!("{{{{{}}}}}", ref_str);
-                    resolve_template(&template, &body.stage_outputs)
+                    resolve_template(&template, &body.stage_outputs, &context_docs)
                 }
                 _ => String::new(),
             };
@@ -2106,7 +2238,8 @@ pub async fn render_pipeline_stage(
     }
 
     // Resolve output_description template
-    let resolved_description = resolve_template(&stage.output_description, &body.stage_outputs);
+    let resolved_description =
+        resolve_template(&stage.output_description, &body.stage_outputs, &context_docs);
 
     let prompt = render_stage_prompt(&resolved_description, &resolved_inputs, &stage.output_schema);
 
@@ -2579,6 +2712,19 @@ mod tests {
             for tid in tool_ids {
                 at.push((agent_id, tid));
             }
+            Ok(())
+        }
+        async fn get_agent_context(
+            &self,
+            _agent_id: Uuid,
+        ) -> anyhow::Result<Vec<crate::db::DocumentRow>> {
+            Ok(vec![])
+        }
+        async fn set_agent_context(
+            &self,
+            _agent_id: Uuid,
+            _document_ids: Vec<Uuid>,
+        ) -> anyhow::Result<()> {
             Ok(())
         }
         async fn list_persisted_clusters(
@@ -4673,9 +4819,11 @@ mod tests {
             "weather_check".to_string(),
             serde_json::json!({"forecast": "stormy", "location": "Denver"}),
         );
+        let no_ctx = std::collections::HashMap::new();
         let result = resolve_template(
             "The weather in {{weather_check.location}} is {{weather_check.forecast}}",
             &outputs,
+            &no_ctx,
         );
         assert_eq!(result, "The weather in Denver is stormy");
     }
@@ -4683,7 +4831,8 @@ mod tests {
     #[test]
     fn resolve_template_missing_ref_preserved() {
         let outputs = std::collections::HashMap::new();
-        let result = resolve_template("Status: {{unknown.field}}", &outputs);
+        let no_ctx = std::collections::HashMap::new();
+        let result = resolve_template("Status: {{unknown.field}}", &outputs, &no_ctx);
         assert_eq!(result, "Status: {{unknown.field}}");
     }
 
@@ -4694,7 +4843,8 @@ mod tests {
             "scorer".to_string(),
             serde_json::json!({"confidence": 95}),
         );
-        let result = resolve_template("Confidence: {{scorer.confidence}}%", &outputs);
+        let no_ctx = std::collections::HashMap::new();
+        let result = resolve_template("Confidence: {{scorer.confidence}}%", &outputs, &no_ctx);
         assert_eq!(result, "Confidence: 95%");
     }
 
@@ -4709,8 +4859,43 @@ mod tests {
             "stage_b".to_string(),
             serde_json::json!({"y": "world"}),
         );
-        let result = resolve_template("{{stage_a.x}} {{stage_b.y}}", &outputs);
+        let no_ctx = std::collections::HashMap::new();
+        let result = resolve_template("{{stage_a.x}} {{stage_b.y}}", &outputs, &no_ctx);
         assert_eq!(result, "hello world");
+    }
+
+    #[test]
+    fn resolve_template_with_context() {
+        let outputs = std::collections::HashMap::new();
+        let mut ctx = std::collections::HashMap::new();
+        ctx.insert(
+            "style_guide".to_string(),
+            "Use camelCase for variables.".to_string(),
+        );
+        let result = resolve_template("Review: {{context.style_guide}}", &outputs, &ctx);
+        assert_eq!(result, "Review: Use camelCase for variables.");
+    }
+
+    #[test]
+    fn resolve_template_context_missing_preserved() {
+        let outputs = std::collections::HashMap::new();
+        let ctx = std::collections::HashMap::new();
+        let result = resolve_template("Review: {{context.missing_doc}}", &outputs, &ctx);
+        assert_eq!(result, "Review: {{context.missing_doc}}");
+    }
+
+    #[test]
+    fn resolve_template_stage_and_context() {
+        let mut outputs = std::collections::HashMap::new();
+        outputs.insert(
+            "analysis".to_string(),
+            serde_json::json!({"status": "complete"}),
+        );
+        let mut ctx = std::collections::HashMap::new();
+        ctx.insert("prd".to_string(), "Build a login feature.".to_string());
+        let result =
+            resolve_template("{{context.prd}} Status: {{analysis.status}}", &outputs, &ctx);
+        assert_eq!(result, "Build a login feature. Status: complete");
     }
 
     #[test]
