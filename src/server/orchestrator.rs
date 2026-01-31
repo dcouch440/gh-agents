@@ -13,7 +13,7 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::llm::{
-    AnthropicClient, ContentBlock, LLMProvider, LLMRequest, Message, Role,
+    AnthropicClient, ContentBlock, LLMProvider, LLMRequest, Message, RetryingProvider, Role,
     StreamAccumulator, StopReason,
     StreamChunk as LLMStreamChunk,
 };
@@ -547,7 +547,7 @@ async fn run_orchestrator(
                 "Orchestrator started with model: {}",
                 p.model_id().to_string()
             );
-            Arc::new(p)
+            Arc::new(RetryingProvider::with_defaults(p))
         }
         Err(e) => {
             error!("Failed to initialize LLM provider: {}. Chat will not work. Set ANTHROPIC_API_KEY.", e);
@@ -672,9 +672,23 @@ async fn handle_message(
     // Multi-turn tool use loop
     let mut accumulated_response = String::new();
     let max_tool_rounds = 10;
+    const MAX_CONTEXT_CHARS: usize = 480_000; // ~120K tokens at ~4 chars/token
 
     for round in 0..max_tool_rounds {
-        debug!("Tool use round {} for message {}", round, message_id);
+        // Check context budget before making another LLM call
+        let estimated_chars: usize = messages.iter().map(|m| m.estimated_chars()).sum();
+        if estimated_chars > MAX_CONTEXT_CHARS {
+            warn!(
+                "Context budget exceeded (~{}K chars, ~{}K tokens) at round {} for message {}",
+                estimated_chars / 1000,
+                estimated_chars / 4000,
+                round,
+                message_id
+            );
+            break;
+        }
+
+        debug!("Tool use round {} for message {} (~{}K chars)", round, message_id, estimated_chars / 1000);
 
         let request = LLMRequest {
             model: model_id.clone(),
@@ -790,8 +804,19 @@ async fn handle_message(
                     }
 
                     let result = tools::execute_tool(name, input, state, user_id).await;
-                    let result_str = serde_json::to_string_pretty(&result)
+                    let result_str = serde_json::to_string(&result)
                         .unwrap_or_else(|_| result.to_string());
+
+                    // Truncate oversized tool results to keep context manageable
+                    let result_str = if result_str.len() > 10_000 {
+                        format!(
+                            "{}...\n[truncated, showing first 10000 of {} chars]",
+                            &result_str[..10_000],
+                            result_str.len()
+                        )
+                    } else {
+                        result_str
+                    };
 
                     tool_results.push(ContentBlock::ToolResult {
                         tool_use_id: id.clone(),
@@ -812,6 +837,9 @@ async fn handle_message(
 
             // Add tool results as a single user message with content blocks
             messages.push(Message::tool_results(tool_results));
+
+            // Brief pause between tool rounds to avoid burst-firing LLM calls
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
             // Continue the loop for the next LLM call
             continue;

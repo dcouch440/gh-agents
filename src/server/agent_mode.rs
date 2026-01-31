@@ -126,6 +126,7 @@ impl ModeRegistry {
                 "list_triggers".to_string(),
                 "read_file".to_string(),
                 "list_files".to_string(),
+                "search_files".to_string(),
                 "think".to_string(),
                 "search_docs".to_string(),
             ],

@@ -442,13 +442,17 @@ pub fn agent_tools() -> Vec<Tool> {
         // --- Codebase exploration tools (read-only) ---
         Tool {
             name: "read_file".to_string(),
-            description: "Read the contents of a file in the project. Returns the file text. Use this to understand existing code before designing agent systems.".to_string(),
+            description: "Read a file in the project. Small files are returned directly. Large files are summarized by a fast model — use the 'focus' parameter to get relevant sections.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
                     "path": {
                         "type": "string",
                         "description": "File path relative to the project root (e.g. 'src/main.rs', 'ui/src/App.tsx')"
+                    },
+                    "focus": {
+                        "type": "string",
+                        "description": "Optional: what you're looking for in the file (e.g. 'error handling', 'the User struct', 'imports'). Helps extract relevant sections from large files."
                     }
                 },
                 "required": ["path"]
@@ -466,6 +470,28 @@ pub fn agent_tools() -> Vec<Tool> {
                     }
                 },
                 "required": ["path"]
+            }),
+        },
+        Tool {
+            name: "search_files".to_string(),
+            description: "Search for a pattern in project files. Returns matching lines with file paths and line numbers. Use this to find code references instead of reading entire files.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "Search pattern (text or regex) to find in files"
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Optional: subdirectory to search in (e.g. 'src/', 'ui/src/'). Defaults to project root."
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum number of matches to return. Defaults to 20."
+                    }
+                },
+                "required": ["pattern"]
             }),
         },
         Tool {
@@ -631,6 +657,7 @@ pub async fn execute_tool(name: &str, input: &Value, state: &AppState, user_id: 
         "list_triggers" => execute_list_triggers(state).await,
         "read_file" => execute_read_file(input).await,
         "list_files" => execute_list_files(input).await,
+        "search_files" => execute_search_files(input).await,
         "think" => execute_think(input),
         "create_doc" => execute_create_doc(input, state, user_id).await,
         "update_doc" => execute_update_doc(input, state).await,
@@ -1693,6 +1720,7 @@ async fn execute_read_file(input: &Value) -> Value {
     let Some(path_str) = input["path"].as_str() else {
         return json!({ "error": "Missing required parameter: path" });
     };
+    let focus = input["focus"].as_str();
 
     // Resolve relative to current working directory (project root)
     let cwd = std::env::current_dir().unwrap_or_default();
@@ -1706,19 +1734,56 @@ async fn execute_read_file(input: &Value) -> Value {
             }
             match tokio::fs::read_to_string(&canonical).await {
                 Ok(content) => {
-                    // Truncate very large files to avoid blowing up context
-                    let truncated = content.len() > 50_000;
-                    let text = if truncated {
-                        &content[..50_000]
-                    } else {
-                        &content
+                    let size_bytes = content.len();
+                    let line_count = content.lines().count();
+
+                    // Small files: return directly
+                    if content.len() <= 2_000 {
+                        return json!({
+                            "path": path_str,
+                            "content": content,
+                            "line_count": line_count,
+                            "size_bytes": size_bytes,
+                            "summarized": false
+                        });
+                    }
+
+                    // Large files: summarize with Haiku
+                    let truncated_for_haiku: String = content.chars().take(10_000).collect();
+                    let focus_instruction = match focus {
+                        Some(f) => format!(
+                            "Focus on: {}. Extract the most relevant code sections, function signatures, and logic related to this focus area.",
+                            f
+                        ),
+                        None => "Extract the key structures, function signatures, imports, and overall purpose of this file.".to_string(),
                     };
-                    json!({
-                        "path": path_str,
-                        "content": text,
-                        "truncated": truncated,
-                        "size_bytes": content.len()
-                    })
+
+                    let prompt = format!(
+                        "File: {} ({} lines, {} bytes)\n\n{}\n\n---\n{}",
+                        path_str, line_count, size_bytes, focus_instruction, truncated_for_haiku
+                    );
+
+                    match haiku_read_file(&prompt).await {
+                        Some(summary) => json!({
+                            "path": path_str,
+                            "summary": summary,
+                            "line_count": line_count,
+                            "size_bytes": size_bytes,
+                            "summarized": true
+                        }),
+                        None => {
+                            // Haiku failed — fall back to truncated content
+                            let fallback: String = content.chars().take(2_000).collect();
+                            json!({
+                                "path": path_str,
+                                "content": fallback,
+                                "line_count": line_count,
+                                "size_bytes": size_bytes,
+                                "summarized": false,
+                                "truncated": true
+                            })
+                        }
+                    }
                 }
                 Err(e) => json!({ "error": format!("Could not read file: {}", e) }),
             }
@@ -1775,6 +1840,76 @@ async fn execute_list_files(input: &Value) -> Value {
     }
 }
 
+async fn execute_search_files(input: &Value) -> Value {
+    let Some(pattern) = input["pattern"].as_str() else {
+        return json!({ "error": "Missing required parameter: pattern" });
+    };
+    let path_str = input["path"].as_str().unwrap_or(".");
+    let max_results = input["max_results"].as_u64().unwrap_or(20) as usize;
+
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let search_dir = if path_str.is_empty() || path_str == "." {
+        cwd.clone()
+    } else {
+        cwd.join(path_str)
+    };
+
+    // Validate path
+    match search_dir.canonicalize() {
+        Ok(canonical) => {
+            if !canonical.starts_with(&cwd) {
+                return json!({ "error": "Path is outside the project directory" });
+            }
+
+            // Use grep -rn for search
+            let output = tokio::process::Command::new("grep")
+                .args(["-rn", "--include=*.rs", "--include=*.ts", "--include=*.tsx",
+                       "--include=*.js", "--include=*.json", "--include=*.toml",
+                       "--include=*.sql", "--include=*.md", "--include=*.txt",
+                       "--include=*.css", "--include=*.html",
+                       "-m", &(max_results * 2).to_string(), // overfetch for filtering
+                       pattern])
+                .arg(&canonical)
+                .output()
+                .await;
+
+            match output {
+                Ok(out) => {
+                    let stdout = String::from_utf8_lossy(&out.stdout);
+                    let matches: Vec<Value> = stdout
+                        .lines()
+                        .take(max_results)
+                        .filter_map(|line| {
+                            // Format: /abs/path:line_num:content
+                            let rest = line.strip_prefix(canonical.to_str()?)?;
+                            let rest = rest.strip_prefix('/')?;
+                            let mut parts = rest.splitn(3, ':');
+                            let file = parts.next()?;
+                            let line_num = parts.next()?;
+                            let text = parts.next().unwrap_or("").trim();
+                            Some(json!({
+                                "file": file,
+                                "line": line_num.parse::<u64>().unwrap_or(0),
+                                "text": &text[..text.len().min(200)]
+                            }))
+                        })
+                        .collect();
+
+                    let total = stdout.lines().count();
+                    json!({
+                        "pattern": pattern,
+                        "matches": matches,
+                        "total_matches": total,
+                        "truncated": total > max_results
+                    })
+                }
+                Err(e) => json!({ "error": format!("Search failed: {}", e) }),
+            }
+        }
+        Err(e) => json!({ "error": format!("Directory not found: {}", e) }),
+    }
+}
+
 /// The think tool is a no-op — it returns the agent's reasoning back to it.
 /// This gives the model a scratchpad to reason step-by-step before acting.
 fn execute_think(input: &Value) -> Value {
@@ -1794,6 +1929,33 @@ fn title_to_ref_tag(title: &str) -> String {
         .chars()
         .filter(|c| c.is_alphanumeric() || *c == '-')
         .collect()
+}
+
+/// Call Haiku to summarize a file for the orchestrator context.
+pub async fn haiku_read_file(prompt: &str) -> Option<String> {
+    let config = AnthropicConfig::from_env().ok()?;
+    let client = AnthropicClient::new(config).ok()?;
+
+    let request = LLMRequest::new(
+        "claude-haiku-4-20250514",
+        vec![LlmMessage::user(prompt.to_string())],
+    )
+    .with_system(
+        "You are a code reader. Given a source file, extract and return the most relevant content. \
+         Include function signatures, struct/type definitions, key logic, and imports. \
+         Use the original code when possible — quote exact lines for precision. \
+         If a focus area is specified, prioritize content related to it. \
+         Be concise but preserve technical accuracy. Do not add commentary."
+    )
+    .with_max_tokens(1024);
+
+    match client.send_message(request).await {
+        Ok(resp) => Some(resp.content),
+        Err(e) => {
+            tracing::warn!("Haiku file read failed: {}", e);
+            None
+        }
+    }
 }
 
 /// Call Haiku to generate a short summary for search indexing.
@@ -2194,7 +2356,7 @@ mod tests {
     #[test]
     fn agent_tools_returns_all_tools() {
         let tools = agent_tools();
-        assert_eq!(tools.len(), 30);
+        assert_eq!(tools.len(), 31);
         assert_eq!(tools[0].name, "list_agents");
         assert_eq!(tools[1].name, "list_roles");
         assert_eq!(tools[2].name, "create_agent");
@@ -2219,11 +2381,12 @@ mod tests {
         assert_eq!(tools[21].name, "list_triggers");
         assert_eq!(tools[22].name, "read_file");
         assert_eq!(tools[23].name, "list_files");
-        assert_eq!(tools[25].name, "create_doc");
-        assert_eq!(tools[26].name, "update_doc");
-        assert_eq!(tools[27].name, "search_docs");
-        assert_eq!(tools[28].name, "submit_prd");
-        assert_eq!(tools[29].name, "submit_ticket");
+        assert_eq!(tools[24].name, "search_files");
+        assert_eq!(tools[26].name, "create_doc");
+        assert_eq!(tools[27].name, "update_doc");
+        assert_eq!(tools[28].name, "search_docs");
+        assert_eq!(tools[29].name, "submit_prd");
+        assert_eq!(tools[30].name, "submit_ticket");
     }
 
     #[test]
