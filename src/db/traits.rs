@@ -10,7 +10,8 @@ use uuid::Uuid;
 
 use crate::db::{
     AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, PipelineRow,
-    PipelineStageRow, ScheduleRow, SessionRow, ToolRow, TriggerRow, UsageSummaryRow,
+    PipelineStageRow, ScheduleRow, SessionRow, StageSideTaskRow, ToolRow, TriggerRow,
+    UsageSummaryRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::observability::{Decision, LlmCall};
@@ -399,6 +400,21 @@ pub trait ServerRepo: Send + Sync {
 
     /// Insert or update a pipeline stage.
     async fn upsert_pipeline_stage(&self, stage: PipelineStageRow) -> Result<()>;
+
+    // --- Stage side task persistence ---
+
+    /// List side tasks for a pipeline stage.
+    async fn list_stage_side_tasks(
+        &self,
+        pipeline_id: Uuid,
+        stage_number: i32,
+    ) -> Result<Vec<StageSideTaskRow>>;
+
+    /// Insert or update a stage side task.
+    async fn upsert_stage_side_task(&self, side_task: StageSideTaskRow) -> Result<()>;
+
+    /// Delete a stage side task by ID.
+    async fn delete_stage_side_task(&self, side_task_id: Uuid) -> Result<()>;
 
     // --- Schedule persistence ---
 

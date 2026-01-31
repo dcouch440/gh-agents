@@ -44,9 +44,11 @@ pub struct PipelineRow {
 pub struct PipelineStageRow {
     pub pipeline_id: Uuid,
     pub stage_number: i32,
-    pub agent_id: Uuid,
+    pub agent_id: Option<Uuid>,
+    pub cluster_id: Option<Uuid>,
     pub role: Option<String>,
     pub approval_required: bool,
+    pub fan_out: bool,
     pub stage_name: String,
     pub input_definitions: serde_json::Value,
     pub output_description: String,
@@ -99,6 +101,19 @@ pub struct ClusterRow {
     pub description: String,
     pub conventions: String,
     pub shared_files: serde_json::Value,
+}
+
+/// Row type for persisted stage side tasks.
+#[derive(Debug, Clone)]
+pub struct StageSideTaskRow {
+    pub id: Uuid,
+    pub pipeline_id: Uuid,
+    pub stage_number: i32,
+    pub agent_id: Uuid,
+    pub input_definitions: serde_json::Value,
+    pub output_name: String,
+    pub blocking: bool,
+    pub output_schema: serde_json::Value,
 }
 
 /// Row type for persisted documents.

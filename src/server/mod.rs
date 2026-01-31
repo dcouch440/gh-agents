@@ -23,7 +23,7 @@ use axum::{
     http::{header::CACHE_CONTROL, HeaderValue, Request, StatusCode},
     middleware::{self, Next},
     response::Response,
-    routing::{get, post},
+    routing::{delete, get, post},
     Router,
 };
 use sqlx::PgPool;
@@ -124,6 +124,14 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
         .route(
             "/pipelines/:id/stages/:stage_number/render",
             post(api::render_pipeline_stage),
+        )
+        .route(
+            "/pipelines/:id/stages/:stage_number/side-tasks",
+            get(api::list_stage_side_tasks).post(api::create_stage_side_task),
+        )
+        .route(
+            "/pipelines/:id/stages/:stage_number/side-tasks/:side_task_id",
+            delete(api::delete_stage_side_task),
         )
         .route("/config", get(api::get_config).patch(api::update_config))
         // Chat endpoints (Ticket 10.3)
@@ -527,6 +535,22 @@ mod tests {
             Ok(vec![])
         }
         async fn upsert_pipeline_stage(&self, _stage: PipelineStageRow) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_stage_side_tasks(
+            &self,
+            _pipeline_id: Uuid,
+            _stage_number: i32,
+        ) -> anyhow::Result<Vec<crate::db::StageSideTaskRow>> {
+            Ok(vec![])
+        }
+        async fn upsert_stage_side_task(
+            &self,
+            _side_task: crate::db::StageSideTaskRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn delete_stage_side_task(&self, _side_task_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
         async fn list_schedules(&self, _user_id: UserId) -> anyhow::Result<Vec<ScheduleRow>> {

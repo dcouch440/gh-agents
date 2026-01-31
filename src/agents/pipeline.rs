@@ -5,6 +5,7 @@ use serde_json::{self, Value};
 use uuid::Uuid;
 
 use super::agent::AgentId;
+use super::cluster::ClusterId;
 
 /// Unique identifier for a pipeline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -20,9 +21,11 @@ impl PipelineId {
 #[derive(Debug, Clone)]
 pub struct PipelineStage {
     pub stage_number: u32,
-    pub agent_id: AgentId,
+    pub agent_id: Option<AgentId>,
+    pub cluster_id: Option<ClusterId>,
     pub role: Option<String>,
     pub approval_required: bool,
+    pub fan_out: bool,
     pub stage_name: String,
     pub input_definitions: serde_json::Value,
     pub output_description: String,
@@ -98,9 +101,11 @@ impl PipelineManager {
     pub fn add_stage(
         &mut self,
         pipeline_id: PipelineId,
-        agent_id: AgentId,
+        agent_id: Option<AgentId>,
+        cluster_id: Option<ClusterId>,
         role: Option<String>,
         approval_required: bool,
+        fan_out: bool,
         stage_name: String,
         input_definitions: Value,
         output_description: String,
@@ -114,8 +119,10 @@ impl PipelineManager {
         pipeline.stages.push(PipelineStage {
             stage_number,
             agent_id,
+            cluster_id,
             role,
             approval_required,
+            fan_out,
             stage_name,
             input_definitions,
             output_description,
@@ -250,7 +257,7 @@ mod tests {
     macro_rules! add_stage {
         ($mgr:expr, $pid:expr, $agent:expr, $role:expr, $approval:expr) => {{
             let (sn, id, od, os) = default_stage_args();
-            $mgr.add_stage($pid, $agent, $role, $approval, sn, id, od, os)
+            $mgr.add_stage($pid, Some($agent), None, $role, $approval, false, sn, id, od, os)
         }};
     }
 
@@ -292,7 +299,7 @@ mod tests {
 
         let (run_id, first) = mgr.start_run(pid, "do stuff".into()).unwrap();
         assert_eq!(first.stage_number, 0);
-        assert_eq!(first.agent_id, agent(1));
+        assert_eq!(first.agent_id, Some(agent(1)));
 
         // Record first stage task
         let task1 = Uuid::new_v4();
@@ -302,12 +309,12 @@ mod tests {
         // Advance to stage 1
         let next = mgr.advance_stage(run_id).unwrap().unwrap();
         assert_eq!(next.stage_number, 1);
-        assert_eq!(next.agent_id, agent(2));
+        assert_eq!(next.agent_id, Some(agent(2)));
 
         // Advance to stage 2
         let next = mgr.advance_stage(run_id).unwrap().unwrap();
         assert_eq!(next.stage_number, 2);
-        assert_eq!(next.agent_id, agent(3));
+        assert_eq!(next.agent_id, Some(agent(3)));
 
         // Advance past last stage → completed
         let next = mgr.advance_stage(run_id).unwrap();
