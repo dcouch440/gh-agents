@@ -137,6 +137,13 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
             "/pipelines/:id/stages/:stage_number/side-tasks/:side_task_id",
             delete(api::delete_stage_side_task),
         )
+        // Pipeline run endpoints
+        .route("/pipeline-runs", get(api::list_pipeline_runs))
+        .route("/pipeline-runs/:run_id", get(api::get_pipeline_run))
+        .route(
+            "/pipeline-runs/:run_id/approve",
+            post(api::approve_pipeline_run),
+        )
         .route("/config", get(api::get_config).patch(api::update_config))
         // Chat endpoints (Ticket 10.3)
         .route("/chat", post(api::send_chat))
@@ -451,16 +458,10 @@ mod tests {
         async fn delete_persisted_agent(&self, _agent_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn list_tools(
-            &self,
-            _user_id: UserId,
-        ) -> anyhow::Result<Vec<crate::db::ToolRow>> {
+        async fn list_tools(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::ToolRow>> {
             Ok(vec![])
         }
-        async fn get_tool(
-            &self,
-            _tool_id: Uuid,
-        ) -> anyhow::Result<Option<crate::db::ToolRow>> {
+        async fn get_tool(&self, _tool_id: Uuid) -> anyhow::Result<Option<crate::db::ToolRow>> {
             Ok(None)
         }
         async fn upsert_tool(
@@ -672,6 +673,49 @@ mod tests {
         ) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> {
             Ok(vec![])
         }
+        async fn create_pipeline_run(
+            &self,
+            _run: &crate::db::PipelineRunRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn update_pipeline_run(
+            &self,
+            _run: &crate::db::PipelineRunRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn get_pipeline_run(
+            &self,
+            _run_id: Uuid,
+        ) -> anyhow::Result<Option<crate::db::PipelineRunRow>> {
+            Ok(None)
+        }
+        async fn list_pipeline_runs(
+            &self,
+            _pipeline_id: Uuid,
+        ) -> anyhow::Result<Vec<crate::db::PipelineRunRow>> {
+            Ok(vec![])
+        }
+        async fn create_stage_execution(
+            &self,
+            _exec: &crate::db::StageExecutionRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn update_stage_execution(
+            &self,
+            _exec: &crate::db::StageExecutionRow,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn list_stage_executions(
+            &self,
+            _run_id: Uuid,
+        ) -> anyhow::Result<Vec<crate::db::StageExecutionRow>> {
+            Ok(vec![])
+        }
+
         async fn insert_tool_call(
             &self,
             _session_id: Option<Uuid>,

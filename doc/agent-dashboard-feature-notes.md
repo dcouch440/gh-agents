@@ -306,6 +306,21 @@ Wired the template system into actual pipeline execution:
 
 Files modified: `src/agents/pipeline.rs`, `src/server/api.rs`, `src/server/orchestrator.rs`, `src/server/tools.rs`, `doc/agent-dashboard-feature-notes.md`
 
+## Part 7: Pipeline Run Persistence + Gate Resume + Token Tracking (Completed)
+
+Persist pipeline execution history to database. Every run, every stage, every token spent.
+
+- **Migration 028**: Two new tables — `pipeline_runs` (run history with JSONB stage_outputs, token totals) and `stage_executions` (per-stage tracking with rendered_prompt, output, user_input, tokens, duration)
+- **Row structs**: `PipelineRunRow` and `StageExecutionRow` in `db/mod.rs`
+- **7 new trait methods on ServerRepo**: CRUD for pipeline runs and stage executions
+- **Token tracking on TaskResult**: Added `input_tokens`, `output_tokens`, `duration_ms` to `channels::TaskResult`; populated from `StreamAccumulator` in `executor.rs` with cross-round accumulation
+- **Gate resume endpoint**: `POST /api/pipeline-runs/:run_id/approve` with optional `user_input` body — validates waiting status, stores user_input on stage_execution, records in stage_outputs for downstream template access, resumes pipeline by advancing and dispatching next stage
+- **Run history endpoints**: `GET /api/pipeline-runs?pipeline_id=X` and `GET /api/pipeline-runs/:run_id` (includes stage executions)
+- **Orchestrator persistence**: Creates/updates stage_execution and pipeline_run rows at each lifecycle event — stage start, completion, failure, waiting_for_approval, pipeline completion
+- **Pipeline start persistence**: `execute_start_pipeline` in tools.rs creates pipeline_run and first stage_execution rows
+
+Files modified: `migrations/028_pipeline_runs.sql`, `src/db/mod.rs`, `src/db/traits.rs`, `src/db/pg_repo.rs`, `src/agents/channels.rs`, `src/agents/executor.rs`, `src/server/api.rs`, `src/server/orchestrator.rs`, `src/server/tools.rs`, `src/server/mod.rs`
+
 ## Open Questions (remaining)
 
 1. Should teams be scoped per-project or global?

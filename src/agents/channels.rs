@@ -148,6 +148,9 @@ pub struct TaskResult {
     pub output: String,
     pub files_modified: Vec<String>,
     pub errors: Vec<String>,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub duration_ms: u64,
 }
 
 /// Request for additional context

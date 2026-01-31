@@ -667,7 +667,7 @@ pub async fn execute_tool(name: &str, input: &Value, state: &AppState, user_id: 
         "list_clusters" => execute_list_clusters(state).await,
         "create_pipeline" => execute_create_pipeline(input, state, user_id).await,
         "add_pipeline_stage" => execute_add_pipeline_stage(input, state, user_id).await,
-        "start_pipeline" => execute_start_pipeline(input, state).await,
+        "start_pipeline" => execute_start_pipeline(input, state, user_id).await,
         "get_pipeline_status" => execute_get_pipeline_status(input, state).await,
         "create_schedule" => execute_create_schedule(input, state, user_id).await,
         "list_schedules" => execute_list_schedules(state).await,
@@ -1373,10 +1373,7 @@ async fn execute_add_pipeline_stage(input: &Value, state: &AppState, user_id: Us
     let role = input["role"].as_str().map(String::from);
     let approval_required = input["approval_required"].as_bool().unwrap_or(false);
     let fan_out = input["fan_out"].as_bool().unwrap_or(false);
-    let stage_name = input["stage_name"]
-        .as_str()
-        .unwrap_or("")
-        .to_string();
+    let stage_name = input["stage_name"].as_str().unwrap_or("").to_string();
     let input_definitions = input
         .get("input_definitions")
         .cloned()
@@ -1443,7 +1440,7 @@ async fn execute_add_pipeline_stage(input: &Value, state: &AppState, user_id: Us
     }
 }
 
-async fn execute_start_pipeline(input: &Value, state: &AppState) -> Value {
+async fn execute_start_pipeline(input: &Value, state: &AppState, user_id: UserId) -> Value {
     let Some(pipeline_str) = input["pipeline_id"].as_str() else {
         return json!({ "error": "pipeline_id is required" });
     };
@@ -1474,7 +1471,14 @@ async fn execute_start_pipeline(input: &Value, state: &AppState) -> Value {
         if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
             for doc in &docs {
                 context_reading.push(crate::agents::FileContent {
-                    path: format!("context:{}", if doc.ref_tag.is_empty() { &doc.title } else { &doc.ref_tag }),
+                    path: format!(
+                        "context:{}",
+                        if doc.ref_tag.is_empty() {
+                            &doc.title
+                        } else {
+                            &doc.ref_tag
+                        }
+                    ),
                     content: doc.content.clone(),
                 });
             }
@@ -1488,7 +1492,14 @@ async fn execute_start_pipeline(input: &Value, state: &AppState) -> Value {
                     if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
                         for doc in &docs {
                             context_reading.push(crate::agents::FileContent {
-                                path: format!("context:{}", if doc.ref_tag.is_empty() { &doc.title } else { &doc.ref_tag }),
+                                path: format!(
+                                    "context:{}",
+                                    if doc.ref_tag.is_empty() {
+                                        &doc.title
+                                    } else {
+                                        &doc.ref_tag
+                                    }
+                                ),
                                 content: doc.content.clone(),
                             });
                         }
@@ -1527,6 +1538,7 @@ async fn execute_start_pipeline(input: &Value, state: &AppState) -> Value {
     let project_root = std::env::current_dir().unwrap_or_default();
     let execution_context = Some(crate::execution::ExecutionContext::new(project_root));
 
+    let rendered_prompt_copy = description.clone();
     let assignment = TaskAssignment {
         task_id: uuid::Uuid::new_v4(),
         title: format!("Pipeline stage 0: {}", task),
@@ -1556,6 +1568,42 @@ async fn execute_start_pipeline(input: &Value, state: &AppState) -> Value {
         let mut mgr = state.pipeline_manager.write().await;
         mgr.record_stage_task(run_id, 0, task_id);
     }
+
+    // Persist pipeline run and first stage execution
+    let now = chrono::Utc::now();
+    let run_row = crate::db::PipelineRunRow {
+        id: run_id,
+        pipeline_id: pipeline_uuid,
+        user_id: user_id.0,
+        status: "running".to_string(),
+        initial_task: task.to_string(),
+        stage_outputs: serde_json::json!({}),
+        current_stage: 0,
+        started_at: now,
+        completed_at: None,
+        total_input_tokens: 0,
+        total_output_tokens: 0,
+    };
+    let _ = state.repo.create_pipeline_run(&run_row).await;
+
+    let stage_exec = crate::db::StageExecutionRow {
+        id: uuid::Uuid::new_v4(),
+        run_id,
+        stage_number: 0,
+        stage_name: first_stage_clone.stage_name.clone(),
+        agent_id: Some(first_agent_id.0),
+        status: "running".to_string(),
+        rendered_prompt: Some(rendered_prompt_copy),
+        output: None,
+        structured_output: None,
+        user_input: None,
+        input_tokens: 0,
+        output_tokens: 0,
+        started_at: now,
+        completed_at: None,
+        duration_ms: 0,
+    };
+    let _ = state.repo.create_stage_execution(&stage_exec).await;
 
     let dispatcher = dispatcher.lock().await;
     match dispatcher

@@ -1,7 +1,7 @@
 //! Pipeline — chained agent workflows where one agent's output feeds the next.
 
-use std::collections::HashMap;
 use serde_json::{self, Value};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::agent::AgentId;
@@ -326,7 +326,18 @@ mod tests {
     macro_rules! add_stage {
         ($mgr:expr, $pid:expr, $agent:expr, $role:expr, $approval:expr) => {{
             let (sn, id, od, os) = default_stage_args();
-            $mgr.add_stage($pid, Some($agent), None, $role, $approval, false, sn, id, od, os)
+            $mgr.add_stage(
+                $pid,
+                Some($agent),
+                None,
+                $role,
+                $approval,
+                false,
+                sn,
+                id,
+                od,
+                os,
+            )
         }};
     }
 
