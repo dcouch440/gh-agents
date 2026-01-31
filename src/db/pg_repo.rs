@@ -1315,6 +1315,34 @@ impl ServerRepo for PgRepo {
         .await?;
         Ok(rows)
     }
+
+    async fn insert_tool_call(
+        &self,
+        session_id: Option<Uuid>,
+        message_id: Uuid,
+        round: i32,
+        tool_name: &str,
+        tool_use_id: &str,
+        input: &serde_json::Value,
+        output: &str,
+        latency_ms: i32,
+    ) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO tool_calls (id, session_id, message_id, round, tool_name, tool_use_id, input, output, latency_ms) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
+        )
+        .bind(Uuid::new_v4())
+        .bind(session_id)
+        .bind(message_id)
+        .bind(round)
+        .bind(tool_name)
+        .bind(tool_use_id)
+        .bind(input)
+        .bind(output)
+        .bind(latency_ms)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
 }
 
 // ============================================================================

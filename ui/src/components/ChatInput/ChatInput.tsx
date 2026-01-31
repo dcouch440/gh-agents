@@ -1,17 +1,17 @@
 import { useState, useRef, useCallback, forwardRef } from 'react';
 import type { KeyboardEvent, ChangeEvent } from 'react';
-import { ArrowUp } from 'lucide-react';
 import styles from './ChatInput.module.css';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
+  onCancel?: () => void;
   disabled?: boolean;
 }
 
 const MAX_ROWS = 6;
 
 export const ChatInput = forwardRef<HTMLDivElement, ChatInputProps>(
-  ({ onSend, disabled }, ref) => {
+  ({ onSend, onCancel, disabled }, ref) => {
     const [value, setValue] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -45,32 +45,27 @@ export const ChatInput = forwardRef<HTMLDivElement, ChatInputProps>(
         e.preventDefault();
         handleSubmit();
       }
+      if (e.key === 'Escape' && disabled && onCancel) {
+        e.preventDefault();
+        onCancel();
+      }
     };
-
-    const showSend = value.trim().length > 0;
 
     return (
       <div ref={ref} className={styles.container}>
-        <div className={styles.inputWrapper}>
+        <div className={`${styles.inputWrapper} ${disabled ? styles.inputWrapperDisabled : ''}`}>
           <textarea
             ref={textareaRef}
             value={value}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
+            placeholder=">"
             disabled={disabled}
-            rows={1}
+            rows={2}
             className={styles.textarea}
           />
-          {showSend && (
-            <button
-              onClick={handleSubmit}
-              disabled={disabled}
-              className={styles.sendButton}
-              aria-label="Send message"
-            >
-              <ArrowUp size={16} />
-            </button>
+          {disabled && (
+            <span className={styles.escBadge}>Esc</span>
           )}
         </div>
       </div>

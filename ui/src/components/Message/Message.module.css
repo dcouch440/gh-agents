@@ -1,68 +1,44 @@
 .turn {
-  border-top: 1px solid var(--color-border-muted);
-  padding: 1rem 0;
+  padding: 0.625rem 0;
   position: relative;
-  animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.turn:first-child {
-  border-top: none;
 }
 
 .turn:hover .actions {
   opacity: 1;
 }
 
-.header {
+.turnUser {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.375rem;
-  font-size: 0.75rem;
-  animation: fadeIn 0.3s ease-out;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
-.role {
-  font-weight: 600;
-  text-transform: lowercase;
-}
-
-.roleUser {
-  color: var(--color-text-primary);
-}
-
-.roleAssistant {
-  color: var(--color-accent);
-}
-
-.timestamp {
-  color: var(--color-text-tertiary);
+.turnAssistant {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .body {
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 .bodyUser {
-  color: var(--color-text-primary);
-  animation: fadeSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  color: var(--color-text-tertiary);
+  font-family: var(--font-family-mono);
+  font-size: 0.8125rem;
 }
 
 .bodyAssistant {
   font-family: var(--font-family-mono);
   font-size: 0.875rem;
   color: var(--color-text-primary);
+  width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
-/* Streaming state: smooth reveal effect */
-.bodyStreaming {
-  animation: textReveal 0.2s ease-out;
-}
-
-/* Finished assistant message fades in gently */
-.bodyComplete {
-  animation: fadeSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
+.bodyStreaming {}
 
 .text {
   white-space: pre-wrap;
@@ -80,81 +56,31 @@
 }
 
 .actions {
-  position: absolute;
-  top: 0.5rem;
-  right: 0;
   display: flex;
   gap: 0.25rem;
+  margin-top: 0.25rem;
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.15s;
 }
 
 .actionBtn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  background: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border);
-  border-radius: 0.375rem;
-  color: var(--color-text-secondary);
+  width: 1.5rem;
+  height: 1.5rem;
+  background: transparent;
+  border: none;
+  color: var(--color-text-tertiary);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: color 0.15s;
 }
 
 .actionBtn:hover {
-  color: var(--color-text-primary);
-  background: var(--color-bg-secondary);
-  transform: scale(1.05);
+  color: var(--color-accent);
 }
 
-.actionBtn:active {
-  transform: scale(0.95);
-}
-
-/* Smooth blinking cursor */
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
-}
-
-/* Message slide-in from below */
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Gentle fade in */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-/* Content fade + slide */
-@keyframes fadeSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Streaming text reveal */
-@keyframes textReveal {
-  from {
-    opacity: 0.7;
-  }
-  to {
-    opacity: 1;
-  }
 }

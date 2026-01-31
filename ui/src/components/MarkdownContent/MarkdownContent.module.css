@@ -1,18 +1,17 @@
 .markdown {
   max-width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .inlineCode {
-  background-color: var(--bg-tertiary);
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
-  color: var(--accent);
-  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: var(--color-accent);
+  font-family: var(--font-family-mono);
   font-size: 0.875em;
 }
 
 .paragraph {
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
 }
 
 .paragraph:last-child {
@@ -22,31 +21,30 @@
 .list {
   list-style-type: disc;
   list-style-position: inside;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
 }
 
 .orderedList {
   list-style-type: decimal;
   list-style-position: inside;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
 }
 
 .codeBlock {
-  background-color: var(--bg-tertiary);
-  border-radius: 0.375rem;
-  padding: 0.75rem 1rem;
-  margin-bottom: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.25rem;
   overflow-x: auto;
-  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-family: var(--font-family-mono);
   font-size: 0.8125rem;
   line-height: 1.5;
   white-space: pre;
   color: var(--color-text-primary);
+  border-left: 2px solid var(--color-border);
 }
 
 .tableWrapper {
   overflow-x: auto;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
 }
 
 .table {
@@ -57,13 +55,13 @@
 
 .th {
   text-align: left;
-  padding: 0.375rem 0.75rem;
-  border-bottom: 1px solid var(--border-color);
+  padding: 0.25rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
   font-weight: 600;
   color: var(--color-text-secondary);
 }
 
 .td {
-  padding: 0.375rem 0.75rem;
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 0.25rem 0.75rem;
+  border-bottom: 1px solid var(--color-border-muted);
 }
