@@ -321,6 +321,33 @@ Persist pipeline execution history to database. Every run, every stage, every to
 
 Files modified: `migrations/028_pipeline_runs.sql`, `src/db/mod.rs`, `src/db/traits.rs`, `src/db/pg_repo.rs`, `src/agents/channels.rs`, `src/agents/executor.rs`, `src/server/api.rs`, `src/server/orchestrator.rs`, `src/server/tools.rs`, `src/server/mod.rs`
 
+## Part 8: Pipelines WebSocket Channel (Completed)
+
+Added a 5th broadcast channel `pipelines` for real-time pipeline execution events.
+
+- **PipelineUpdate struct**: run_id, pipeline_id, event, stage_number, stage_name, agent_id, output, tokens, duration, user_input, timestamp, user_id
+- **8 lifecycle events**: run_started, stage_started, stage_completed, stage_failed, gate_waiting, gate_resumed, run_completed, run_failed
+- **WS integration**: New `CHANNEL_PIPELINES` constant, `ServerMessage::PipelineUpdate` variant, select arm in handle_socket, channel validation
+- **Broadcast at every lifecycle point**: orchestrator, tools (run_started), api (gate_resumed) all emit pipeline events alongside existing feed broadcasts
+
+Files modified: `src/server/ws.rs`, `src/server/state.rs`, `src/server/orchestrator.rs`, `src/server/tools.rs`, `src/server/api.rs`
+
+## Part 9: Tool Routing System (Completed)
+
+Replaced hardcoded execution tools with a DB-driven system. Tools can map to clusters. Agents in router_mode get a single `request_assistance` meta-tool.
+
+- **Migration 029**: Added `cluster_id` (FK to clusters, nullable) and `is_builtin` flag to tools table. NULL cluster_id = direct execution, non-NULL = route to cluster
+- **Migration 030**: Added `router_mode` boolean to agents table
+- **Seed function**: `builtin_tool_rows()` generates the 11 execution tools as `ToolRow` with deterministic UUIDs (v5). `seed_builtin_tools()` called on user registration. Idempotent via `ON CONFLICT DO NOTHING`
+- **Dynamic tool loading**: `TaskContext.tool_rows` carries DB-loaded tools. Executor prefers these over hardcoded list. Falls back to hardcoded when empty (backward compat)
+- **Cluster dispatch check**: Executor checks `cluster_id` on tool — direct execution for NULL, placeholder error for cluster-routed tools
+- **tool_router.rs** (new): `request_assistance_tool()` meta-tool definition, `execute_request_assistance()` dispatcher, `route_to_cluster()` placeholder
+- **Router mode**: Agents with `router_mode = true` receive only `request_assistance` as their tool. Executor detects this and routes calls through tool_router
+- **Builtin protection**: `delete_tool` SQL filters `AND is_builtin = false`
+- **uuid v5 feature**: Added to Cargo.toml for deterministic tool IDs
+
+Files modified: `Cargo.toml`, `migrations/029_tool_routing.sql`, `migrations/030_agent_router_mode.sql`, `src/db/mod.rs`, `src/db/pg_repo.rs`, `src/db/traits.rs`, `src/agents/execution_tools.rs`, `src/agents/tool_router.rs` (new), `src/agents/mod.rs`, `src/agents/executor.rs`, `src/agents/channels.rs`, `src/server/api.rs`, `src/server/tools.rs`, `src/server/orchestrator.rs`, `src/server/mod.rs`
+
 ## Open Questions (remaining)
 
 1. Should teams be scoped per-project or global?
