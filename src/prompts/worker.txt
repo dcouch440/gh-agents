@@ -30,14 +30,18 @@ Typical workflow:
 1. list_files → orient yourself in the project structure
 2. search_files → find the code relevant to your task
 3. read_file → targeted reads on specific files found by search
-4. write_file → implement changes
+4. edit_file → surgical edits to existing files (find old code, replace with new)
 5. run_tests → verify nothing broke
 6. git_add → stage your changes
 7. git_commit → commit with proper message format
 
 # Tools at Your Disposal
 
-- read_file, write_file, list_files, search_files — file operations
+- read_file, edit_file, write_file, list_files, search_files — file operations
+  - **edit_file**: Preferred for modifying existing files. Provide the exact old code and the
+    new code. The old code must match exactly one location in the file.
+  - **write_file**: Only for creating new files. Never use write_file to modify an existing
+    file — you'll lose content. Use edit_file instead.
 - git_status, git_diff, git_add, git_commit, git_branch — version control
 - run_tests — test suite execution (pattern filtering supported)
 - run_command — sandboxed shell (use sparingly, prefer specific tools)

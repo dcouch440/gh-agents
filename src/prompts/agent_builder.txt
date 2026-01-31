@@ -63,7 +63,9 @@ system also injects relevant context from previous turns.
 | Tool | Purpose | Danger |
 |------|---------|--------|
 | read_file | Read file contents | Safe |
-| write_file | Write/create files | Medium |
+| edit_file | Surgical find-and-replace on a file | Medium |
+| write_file | Create new files (use edit_file to modify) | Medium |
+| search_files | Grep for patterns across files | Safe |
 | list_files | List directory | Safe |
 | git_status | Working tree status | Safe |
 | git_diff | Show changes | Safe |
@@ -141,9 +143,9 @@ because email state is undefined, not empty string.
 ## Tool Restrictions
 
 Match tools to the job:
-- **Read-only** (review, analysis): `["read_file", "list_files", "git_status", "git_diff"]`
-- **Implementation** (full workflow): all tools
-- **Testing only**: `["read_file", "list_files", "run_tests", "git_status"]`
+- **Read-only** (review, analysis): `["read_file", "search_files", "list_files", "git_status", "git_diff"]`
+- **Implementation** (full workflow): all tools (agents will use `edit_file` for modifications, `write_file` for new files)
+- **Testing only**: `["read_file", "search_files", "list_files", "run_tests", "git_status"]`
 
 Never give `run_command` unless the task specifically needs shell access.
 

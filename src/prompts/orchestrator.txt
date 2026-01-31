@@ -73,7 +73,8 @@ When you assign a task, agents get access to these tools (you can restrict via a
 |-------------|------------------------------------------------|-------------|
 | read_file    | Read file contents from project                | Safe        |
 | search_files | Grep for patterns across files                 | Safe        |
-| write_file   | Write/create files in project                  | Medium      |
+| edit_file    | Surgical find-and-replace edit on a file        | Medium      |
+| write_file   | Create new files (use edit_file to modify)      | Medium      |
 | list_files   | List directory contents                        | Safe        |
 | git_status   | Show working tree status                       | Safe        |
 | git_diff     | Show unstaged or staged changes                | Safe        |
