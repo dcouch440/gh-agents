@@ -2,48 +2,59 @@
 
 @theme {
   /* Background colors */
-  --color-bg-primary: #0d1117;
-  --color-bg-secondary: #161b22;
-  --color-bg-tertiary: #21262d;
+  --color-bg-primary: #09090b;
+  --color-bg-secondary: #111113;
+  --color-bg-tertiary: #1a1a1f;
 
   /* Text colors */
-  --color-text-primary: #e6edf3;
-  --color-text-secondary: #8b949e;
-  --color-text-tertiary: #6e7681;
+  --color-text-primary: #fafafa;
+  --color-text-secondary: #71717a;
+  --color-text-tertiary: #52525b;
 
   /* Accent colors */
-  --color-accent: #da7756;
-  --color-accent-secondary: #58a6ff;
+  --color-accent: #22d3ee;
+  --color-accent-secondary: #a78bfa;
 
   /* Border colors */
-  --color-border: #30363d;
-  --color-border-muted: #21262d;
+  --color-border: #27272a;
+  --color-border-muted: #18181b;
 
   /* Status colors */
-  --color-status-success: #3fb950;
-  --color-status-warning: #d29922;
-  --color-status-error: #f85149;
-  --color-status-info: #58a6ff;
+  --color-status-success: #34d399;
+  --color-status-warning: #fbbf24;
+  --color-status-error: #f87171;
+  --color-status-info: #60a5fa;
 
   /* Font families */
   --font-family-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
-  --font-family-mono: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+  --font-family-mono: 'Share Tech Mono', 'IBM Plex Mono', 'Courier New', Courier, monospace;
 }
 
 :root {
   color-scheme: dark;
 
-  /* RGB values for rgba() usage in CSS modules */
-  --accent-rgb: 218, 119, 86;
-  --status-success-rgb: 63, 185, 80;
-  --status-warning-rgb: 210, 153, 34;
-  --status-error-rgb: 248, 81, 73;
+  --accent-rgb: 34, 211, 238;
+  --status-success-rgb: 52, 211, 153;
+  --status-warning-rgb: 251, 191, 36;
+  --status-error-rgb: 248, 113, 113;
 }
 
 body {
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
-  font-family: var(--font-family-sans);
+  font-family: var(--font-family-mono);
+}
+
+/* Flatten bold — terminal doesn't do bold */
+strong, b {
+  font-weight: normal;
+  color: var(--color-accent);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: normal;
+  font-size: inherit;
+  color: var(--color-accent);
 }
 
 /* Focus styles */
@@ -59,8 +70,8 @@ body {
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
@@ -68,7 +79,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: var(--color-border);
+  background-color: #27272a;
   border-radius: 9999px;
 }
 

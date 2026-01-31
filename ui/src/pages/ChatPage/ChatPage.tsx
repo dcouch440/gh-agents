@@ -89,7 +89,7 @@ function ModePicker() {
 }
 
 function ChatSession({ sessionId }: { sessionId: string }) {
-  const { messages, loading, sending, waitingForResponse, sendMessage, retryLastMessage, toolExecutions } = useChat({ sessionId });
+  const { messages, loading, sending, waitingForResponse, sendMessage, cancelRequest, retryLastMessage, toolExecutions } = useChat({ sessionId });
   const bottomRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
@@ -170,7 +170,7 @@ function ChatSession({ sessionId }: { sessionId: string }) {
         </div>
 
         <div className={styles.inputArea}>
-          <ChatInput onSend={sendMessage} disabled={sending} />
+          <ChatInput onSend={sendMessage} onCancel={cancelRequest} disabled={sending} />
         </div>
       </div>
 

@@ -803,9 +803,34 @@ async fn handle_message(
                             .await;
                     }
 
+                    let tool_start = std::time::Instant::now();
                     let result = tools::execute_tool(name, input, state, user_id).await;
+                    let tool_latency = tool_start.elapsed().as_millis() as i32;
                     let result_str = serde_json::to_string(&result)
                         .unwrap_or_else(|_| result.to_string());
+
+                    // Persist tool call to database
+                    {
+                        let repo = state.repo.clone();
+                        let session_id = msg.session_id;
+                        let tool_name = name.clone();
+                        let tool_use_id = id.clone();
+                        let tool_input = input.clone();
+                        let tool_output = result_str.clone();
+                        let tool_round = round as i32;
+                        tokio::spawn(async move {
+                            let _ = repo.insert_tool_call(
+                                session_id,
+                                message_id,
+                                tool_round,
+                                &tool_name,
+                                &tool_use_id,
+                                &tool_input,
+                                &tool_output,
+                                tool_latency,
+                            ).await;
+                        });
+                    }
 
                     // Truncate oversized tool results to keep context manageable
                     let result_str = if result_str.len() > 10_000 {
@@ -1002,6 +1027,7 @@ mod tests {
         async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> { Ok(0) }
         async fn insert_token_usage(&self, _session_id: Option<Uuid>, _agent_id: Option<Uuid>, _tier: &str, _model_id: &str, _input_tokens: i64, _output_tokens: i64) -> anyhow::Result<()> { Ok(()) }
         async fn get_usage_summary(&self, _since_hours: u32) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> { Ok(vec![]) }
+        async fn insert_tool_call(&self, _session_id: Option<Uuid>, _message_id: Uuid, _round: i32, _tool_name: &str, _tool_use_id: &str, _input: &serde_json::Value, _output: &str, _latency_ms: i32) -> anyhow::Result<()> { Ok(()) }
     }
 
     #[tokio::test]

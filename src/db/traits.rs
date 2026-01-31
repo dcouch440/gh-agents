@@ -427,6 +427,21 @@ pub trait ServerRepo: Send + Sync {
 
     /// Get aggregated usage summary for the last N hours.
     async fn get_usage_summary(&self, since_hours: u32) -> Result<Vec<UsageSummaryRow>>;
+
+    // --- Tool call logging ---
+
+    /// Insert a tool call record.
+    async fn insert_tool_call(
+        &self,
+        session_id: Option<Uuid>,
+        message_id: Uuid,
+        round: i32,
+        tool_name: &str,
+        tool_use_id: &str,
+        input: &serde_json::Value,
+        output: &str,
+        latency_ms: i32,
+    ) -> Result<()>;
 }
 
 // ============================================================================

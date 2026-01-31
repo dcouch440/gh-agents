@@ -1641,6 +1641,7 @@ mod tests {
         async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> { Ok(0) }
         async fn insert_token_usage(&self, _session_id: Option<Uuid>, _agent_id: Option<Uuid>, _tier: &str, _model_id: &str, _input_tokens: i64, _output_tokens: i64) -> anyhow::Result<()> { Ok(()) }
         async fn get_usage_summary(&self, _since_hours: u32) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> { Ok(vec![]) }
+        async fn insert_tool_call(&self, _session_id: Option<Uuid>, _message_id: Uuid, _round: i32, _tool_name: &str, _tool_use_id: &str, _input: &serde_json::Value, _output: &str, _latency_ms: i32) -> anyhow::Result<()> { Ok(()) }
     }
 
     fn create_test_token(jwt_secret: &[u8]) -> String {

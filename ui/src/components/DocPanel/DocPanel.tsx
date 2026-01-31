@@ -21,19 +21,17 @@ export function DocPanel({ isOpen, onClose, document, documents, onSelectDocumen
       </div>
 
       {documents && documents.length > 0 && (
-        <div className={styles.selector}>
-          <select
-            className={styles.select}
-            value={document?.id ?? ''}
-            onChange={(e) => onSelectDocument?.(e.target.value)}
-          >
-            <option value="">Select a document...</option>
-            {documents.map((doc) => (
-              <option key={doc.id} value={doc.id}>
-                {doc.title}
-              </option>
-            ))}
-          </select>
+        <div className={styles.cardList}>
+          {documents.map((doc) => (
+            <button
+              key={doc.id}
+              className={`${styles.card} ${document?.id === doc.id ? styles.cardActive : ''}`}
+              onClick={() => onSelectDocument?.(doc.id)}
+            >
+              <FileText size={14} className={styles.cardIcon} />
+              <span className={styles.cardTitle}>{doc.title}</span>
+            </button>
+          ))}
         </div>
       )}
 

@@ -72,6 +72,7 @@ When you assign a task, agents get access to these tools (you can restrict via a
 | Tool         | What it does                                    | Danger level |
 |-------------|------------------------------------------------|-------------|
 | read_file    | Read file contents from project                | Safe        |
+| search_files | Grep for patterns across files                 | Safe        |
 | write_file   | Write/create files in project                  | Medium      |
 | list_files   | List directory contents                        | Safe        |
 | git_status   | Show working tree status                       | Safe        |
@@ -206,6 +207,23 @@ Always include in task descriptions:
 - Monitor agent tasks — check get_task_result and intervene on failures.
 - If an agent task fails, diagnose before retrying. Don't blindly retry.
 - Remove idle agents with remove_agent to free pool capacity.
+
+# Introduction Protocol — ALWAYS do this first
+
+Before proposing any plan or creating any agents, orient yourself:
+
+1. **Map the project**: `list_files` on the project root. Understand the directory structure
+   and what exists before deciding how to change it.
+2. **Read key docs**: PROGRESS.md, ROADMAP.md, and any PRD relevant to the request.
+   Know what's done, what's in progress, and what's next.
+3. **Search before reading**: Use `search_files` to grep for keywords related to the request
+   (module names, function names, error strings). Don't read entire files — find the relevant
+   code first, then read targeted sections.
+4. **Then plan**: Only after you understand the codebase state should you propose agents,
+   pipelines, or architectural changes.
+
+**Never** propose a plan based on assumptions about what files exist. Verify first.
+**Never** assign tasks to agents without first confirming which files need to change.
 
 # Required Reading
 

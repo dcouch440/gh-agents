@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { api, type ChatMessage } from '../api/client';
 
 export interface ToolExecution {
@@ -20,6 +20,7 @@ export function useChat(options: UseChatOptions) {
   const [toolExecutions, setToolExecutions] = useState<Record<string, ToolExecution[]>>({});
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
   const [docUpdated, setDocUpdated] = useState(0);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     api.sessions.history(sessionId).then((history) => {
@@ -27,6 +28,15 @@ export function useChat(options: UseChatOptions) {
       setLoading(false);
     });
   }, [sessionId]);
+
+  const cancelRequest = useCallback(() => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    setSending(false);
+    setWaitingForResponse(false);
+  }, []);
 
   const sendMessage = useCallback(async (content: string) => {
     setSending(true);
@@ -63,10 +73,12 @@ export function useChat(options: UseChatOptions) {
       };
 
       const onDone = () => {
+        eventSourceRef.current = null;
         setSending(false);
       };
 
       const onError = () => {
+        eventSourceRef.current = null;
         setSending(false);
       };
 
@@ -94,7 +106,8 @@ export function useChat(options: UseChatOptions) {
         }));
       };
 
-      api.sessions.stream(sessionId, message_id, onToken, onDone, onError, onToolStart, onToolEnd, onDocUpdate);
+      const es = api.sessions.stream(sessionId, message_id, onToken, onDone, onError, onToolStart, onToolEnd, onDocUpdate);
+      eventSourceRef.current = es;
     } catch {
       setSending(false);
       setWaitingForResponse(false);
@@ -115,5 +128,5 @@ export function useChat(options: UseChatOptions) {
     setToolExecutions({});
   }, [sessionId]);
 
-  return { messages, loading, sending, waitingForResponse, sendMessage, clearHistory, retryLastMessage, toolExecutions, activeDocId, docUpdated };
+  return { messages, loading, sending, waitingForResponse, sendMessage, cancelRequest, clearHistory, retryLastMessage, toolExecutions, activeDocId, docUpdated };
 }
