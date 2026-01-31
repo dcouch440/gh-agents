@@ -165,15 +165,14 @@ impl AnthropicClient {
     }
 
     /// Handle API error response
-    fn handle_error_response(status: u16, body: &str) -> LLMError {
+    fn handle_error_response(status: u16, body: &str, retry_after_ms: Option<u64>) -> LLMError {
         // Try to parse as Anthropic error
         if let Ok(error) = serde_json::from_str::<AnthropicError>(body) {
             match status {
                 401 => LLMError::AuthError(error.error.message),
                 429 => {
-                    // Try to extract retry-after from headers (simplified)
                     LLMError::RateLimited {
-                        retry_after_ms: 60000,
+                        retry_after_ms: retry_after_ms.unwrap_or(60000),
                     }
                 }
                 _ => LLMError::ApiError {
@@ -187,6 +186,16 @@ impl AnthropicClient {
                 message: body.to_string(),
             }
         }
+    }
+
+    /// Extract retry-after value from response headers (in milliseconds)
+    fn parse_retry_after(response: &reqwest::Response) -> Option<u64> {
+        response
+            .headers()
+            .get("retry-after")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.parse::<f64>().ok())
+            .map(|secs| (secs * 1000.0) as u64)
     }
 
     /// Parse an SSE line into a StreamChunk
@@ -438,8 +447,9 @@ impl LLMProvider for AnthropicClient {
         let status = response.status().as_u16();
 
         if !response.status().is_success() {
+            let retry_after = Self::parse_retry_after(&response);
             let body = response.text().await.unwrap_or_default();
-            return Err(Self::handle_error_response(status, &body));
+            return Err(Self::handle_error_response(status, &body, retry_after));
         }
 
         let api_response: AnthropicResponse = response
@@ -505,8 +515,9 @@ impl LLMProvider for AnthropicClient {
         let status = response.status().as_u16();
 
         if !response.status().is_success() {
+            let retry_after = Self::parse_retry_after(&response);
             let body = response.text().await.unwrap_or_default();
-            return Err(Self::handle_error_response(status, &body));
+            return Err(Self::handle_error_response(status, &body, retry_after));
         }
 
         // Create a stream from the response bytes
@@ -716,7 +727,7 @@ mod tests {
     #[test]
     fn handle_error_401_auth_error() {
         let body = r#"{"type":"error","error":{"type":"authentication_error","message":"Invalid API key"}}"#;
-        let error = AnthropicClient::handle_error_response(401, body);
+        let error = AnthropicClient::handle_error_response(401, body, None);
         match error {
             LLMError::AuthError(msg) => assert_eq!(msg, "Invalid API key"),
             _ => panic!("Expected AuthError, got {:?}", error),
@@ -727,7 +738,7 @@ mod tests {
     fn handle_error_429_rate_limited() {
         let body =
             r#"{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}"#;
-        let error = AnthropicClient::handle_error_response(429, body);
+        let error = AnthropicClient::handle_error_response(429, body, None);
         match error {
             LLMError::RateLimited { retry_after_ms } => assert_eq!(retry_after_ms, 60000),
             _ => panic!("Expected RateLimited, got {:?}", error),
@@ -735,9 +746,20 @@ mod tests {
     }
 
     #[test]
+    fn handle_error_429_with_retry_after() {
+        let body =
+            r#"{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}"#;
+        let error = AnthropicClient::handle_error_response(429, body, Some(30000));
+        match error {
+            LLMError::RateLimited { retry_after_ms } => assert_eq!(retry_after_ms, 30000),
+            _ => panic!("Expected RateLimited, got {:?}", error),
+        }
+    }
+
+    #[test]
     fn handle_error_500_api_error() {
         let body = r#"{"type":"error","error":{"type":"server_error","message":"Internal error"}}"#;
-        let error = AnthropicClient::handle_error_response(500, body);
+        let error = AnthropicClient::handle_error_response(500, body, None);
         match error {
             LLMError::ApiError { status, message } => {
                 assert_eq!(status, 500);
@@ -749,7 +771,7 @@ mod tests {
 
     #[test]
     fn handle_error_unparseable_body() {
-        let error = AnthropicClient::handle_error_response(502, "not json at all");
+        let error = AnthropicClient::handle_error_response(502, "not json at all", None);
         match error {
             LLMError::ApiError { status, message } => {
                 assert_eq!(status, 502);
@@ -761,7 +783,7 @@ mod tests {
 
     #[test]
     fn handle_error_empty_body() {
-        let error = AnthropicClient::handle_error_response(500, "");
+        let error = AnthropicClient::handle_error_response(500, "", None);
         match error {
             LLMError::ApiError { status, message } => {
                 assert_eq!(status, 500);

@@ -132,6 +132,14 @@ impl Message {
     pub fn text(&self) -> String {
         self.content.as_text()
     }
+
+    /// Estimate the character count of this message's content.
+    pub fn estimated_chars(&self) -> usize {
+        match &self.content {
+            MessageContent::Text(s) => s.len(),
+            MessageContent::Blocks(blocks) => blocks.iter().map(|b| b.estimated_chars()).sum(),
+        }
+    }
 }
 
 /// Request to send to an LLM
@@ -248,6 +256,21 @@ pub enum ContentBlock {
         tool_use_id: String,
         content: String,
     },
+}
+
+impl ContentBlock {
+    /// Estimate the character count of this content block.
+    pub fn estimated_chars(&self) -> usize {
+        match self {
+            ContentBlock::Text { text } => text.len(),
+            ContentBlock::ToolUse { id, name, input } => {
+                id.len() + name.len() + input.to_string().len()
+            }
+            ContentBlock::ToolResult { tool_use_id, content } => {
+                tool_use_id.len() + content.len()
+            }
+        }
+    }
 }
 
 /// Reason the model stopped generating
