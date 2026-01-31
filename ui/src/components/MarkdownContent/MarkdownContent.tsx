@@ -64,14 +64,20 @@ const components: Components = {
   },
 };
 
+/** Strip <thinking>...</thinking> blocks from model output */
+function stripThinking(text: string): string {
+  return text.replace(/<thinking>[\s\S]*?<\/thinking>\s*/g, '');
+}
+
 export function MarkdownContent({ content }: MarkdownContentProps) {
+  const cleaned = stripThinking(content);
   return (
     <div className={styles.markdown}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
         components={components}
       >
-        {content}
+        {cleaned}
       </ReactMarkdown>
     </div>
   );

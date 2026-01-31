@@ -58,6 +58,17 @@ pub const RETRY_MAX_ATTEMPTS: u32 = 5;
 /// Jitter factor applied to backoff delays.
 pub const RETRY_JITTER_FACTOR: f64 = 0.25;
 
+// ── Rate Limiting ─────────────────────────────────────────────────────────
+
+/// Maximum concurrent LLM API calls across all agents.
+pub const RATE_LIMIT_MAX_CONCURRENT_CALLS: usize = 5;
+/// Maximum requests per minute to Anthropic API (0 = unlimited).
+pub const RATE_LIMIT_REQUESTS_PER_MINUTE: usize = 40;
+/// Initial global backoff delay when any agent gets rate limited.
+pub const RATE_LIMIT_GLOBAL_BACKOFF_INITIAL_MS: u64 = 2000;
+/// Maximum global backoff delay.
+pub const RATE_LIMIT_GLOBAL_BACKOFF_MAX_MS: u64 = 30000;
+
 // ── Channel Buffer Sizes ────────────────────────────────────────────────────
 
 /// Buffer size for agent command/response channels.

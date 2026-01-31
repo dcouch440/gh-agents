@@ -104,7 +104,12 @@ export const api = {
         `${API_BASE}/chat/${messageId}/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`
       );
       eventSource.addEventListener('token', (event) => {
-        onToken((event as MessageEvent).data);
+        const raw = (event as MessageEvent).data;
+        try {
+          onToken(JSON.parse(raw));
+        } catch {
+          onToken(raw);
+        }
       });
       eventSource.addEventListener('tool_start', (event) => {
         onToolStart?.(JSON.parse((event as MessageEvent).data));
@@ -175,7 +180,12 @@ export const api = {
         `${API_BASE}/sessions/${sessionId}/chat/${messageId}/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`
       );
       eventSource.addEventListener('token', (event) => {
-        onToken((event as MessageEvent).data);
+        const raw = (event as MessageEvent).data;
+        try {
+          onToken(JSON.parse(raw));
+        } catch {
+          onToken(raw);
+        }
       });
       eventSource.addEventListener('tool_start', (event) => {
         onToolStart?.(JSON.parse((event as MessageEvent).data));

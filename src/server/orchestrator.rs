@@ -13,7 +13,8 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::llm::{
-    AnthropicClient, ContentBlock, LLMProvider, LLMRequest, Message, RetryingProvider, Role,
+    AnthropicClient, ContentBlock, LLMProvider, LLMRequest, Message, RateLimitedProvider,
+    RetryingProvider, Role,
     StreamAccumulator, StopReason,
     StreamChunk as LLMStreamChunk,
 };
@@ -33,12 +34,23 @@ use super::agent_mode::HistoryPolicy;
 /// and stores them in `state.task_results` for retrieval by `get_task_result`.
 pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandle<()>> {
     let dispatcher = state.dispatcher.clone()?;
+
     Some(tokio::spawn(async move {
+        // Extract the response receiver so we can await it without holding the dispatcher lock.
+        // This prevents deadlocks when tool handlers (e.g. create_agents) need to lock the dispatcher.
+        let mut response_rx = {
+            let mut d = dispatcher.lock().await;
+            match d.take_response_rx() {
+                Some(rx) => rx,
+                None => {
+                    tracing::error!("Response receiver already taken");
+                    return;
+                }
+            }
+        };
+
         loop {
-            let response = {
-                let mut d = dispatcher.lock().await;
-                d.recv_response().await
-            };
+            let response = response_rx.recv().await;
             match response {
                 Some(resp) => {
                     let task_id = match &resp {
@@ -547,7 +559,7 @@ async fn run_orchestrator(
                 "Orchestrator started with model: {}",
                 p.model_id().to_string()
             );
-            Arc::new(RetryingProvider::with_defaults(p))
+            Arc::new(RetryingProvider::with_defaults(RateLimitedProvider::with_defaults(p)))
         }
         Err(e) => {
             error!("Failed to initialize LLM provider: {}. Chat will not work. Set ANTHROPIC_API_KEY.", e);
