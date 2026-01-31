@@ -101,10 +101,13 @@ impl GlobalBackoff {
     }
 
     fn record_rate_limit(&mut self, retry_after_ms: u64) {
-        let delay = retry_after_ms.max(self.current_delay_ms).min(self.max_delay_ms);
+        // Always respect the server's retry-after hint — never cap it below what was asked.
+        // Only cap our own escalating delay.
+        let our_delay = self.current_delay_ms.min(self.max_delay_ms);
+        let delay = retry_after_ms.max(our_delay);
         self.until = Some(Instant::now() + Duration::from_millis(delay));
-        self.current_delay_ms = (delay * 2).min(self.max_delay_ms);
-        tracing::warn!("Global rate limit backoff set for {}ms", delay);
+        self.current_delay_ms = (our_delay * 2).min(self.max_delay_ms);
+        tracing::warn!("Global rate limit backoff set for {}ms (server asked {}ms)", delay, retry_after_ms);
     }
 
     fn record_success(&mut self) {
