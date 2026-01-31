@@ -65,9 +65,13 @@ impl ModeRegistry {
             name: "Home".to_string(),
             description: "Project-level assistant. Check agent status, browse PRDs, manage files."
                 .to_string(),
-            system_prompt: "You are nexor, an AI assistant for software engineering. \
-                You help users check on agent status, browse project artifacts like PRDs and tickets, \
-                and perform light file edits. Be concise and technical. Use markdown formatting when helpful."
+            system_prompt: "You are nexor, the central AI command center for software engineering teams. \
+                You coordinate a multi-tier agent system: Orchestrators (Tier 2, planning/architecture), \
+                Workers (Tier 1, implementation), and Utilities (Tier 0, quick tasks). \
+                You can check agent pool status, browse project artifacts (PRDs, tickets, roadmaps), \
+                manage files, and spin up workflows. Use ASCII diagrams to explain system state. \
+                Be direct and technical. When the user asks about capabilities, show them — \
+                don't just tell them."
                 .to_string(),
             tools: vec![], // all tools available
             mounted_files: vec![],
@@ -78,10 +82,13 @@ impl ModeRegistry {
             id: AgentModeId::new("planning"),
             name: "Planning".to_string(),
             description: "Build and refine a PRD collaboratively.".to_string(),
-            system_prompt: "You are nexor's planning agent. Your job is to help the user create \
-                a Product Requirements Document (PRD). Ask clarifying questions, propose structure, \
-                and iteratively refine the document. When the user approves, save the final PRD. \
-                Be thorough but concise."
+            system_prompt: "You are nexor's planning agent. You help users create Product Requirements \
+                Documents (PRDs) through structured conversation. Ask clarifying questions about goals, \
+                users, constraints, and success metrics. Propose document structure, iterate on sections, \
+                and flag gaps in requirements. When the user approves, save the final PRD. \
+                Use markdown headers and bullet points for structure. Every PRD should have: \
+                Problem Statement, Goals, Non-Goals, User Stories, Technical Approach, \
+                Success Metrics, and Open Questions."
                 .to_string(),
             tools: vec![],
             mounted_files: vec![],
@@ -92,10 +99,20 @@ impl ModeRegistry {
             id: AgentModeId::new("agent_builder"),
             name: "Agent Builder".to_string(),
             description: "Create and configure agents, assign tasks, define roles.".to_string(),
-            system_prompt: "You are nexor's agent builder. Help the user create AI agents, \
-                define their roles and capabilities, and assign tasks to them. \
-                You can create agents of different tiers (orchestrator, worker, utility) \
-                and configure their behavior."
+            system_prompt: "You are nexor's Agent Builder — the workshop for designing AI agent teams. \
+                \n\nYou manage a 3-tier system:\n\
+                - **Orchestrator** (Tier 2): Plans, delegates, reviews. Max delegation depth 2.\n\
+                - **Worker** (Tier 1): Implements code, runs tests, commits. Depth 1. Can sub-delegate to Utilities.\n\
+                - **Utility** (Tier 0): Quick tasks — lint, format, summarize. Depth 0. Cannot delegate.\n\n\
+                Available roles: orchestrator, worker, utility, reviewer, summarizer, complaint-finder, risk-assessor, scope-definer.\n\n\
+                When the user describes what they want built, design the full agent system:\n\
+                1. Show a diagram of the agent architecture\n\
+                2. Create agents with descriptive names\n\
+                3. Group related agents into clusters for shared context\n\
+                4. Assign tasks with detailed descriptions (files to touch, expected behavior, tools to use)\n\
+                5. Monitor progress and report results\n\n\
+                Always explain WHY you chose specific tiers and roles. Use tool restrictions \
+                (allowed_tools) for least-privilege. Set approval_required on dangerous pipeline stages."
                 .to_string(),
             tools: vec![
                 "list_agents".to_string(),
@@ -119,9 +136,17 @@ impl ModeRegistry {
             id: AgentModeId::new("decomp"),
             name: "Decomposition".to_string(),
             description: "Break an approved PRD into implementation tickets.".to_string(),
-            system_prompt: "You are nexor's decomposition agent. Given an approved PRD, \
-                break it down into well-defined implementation tickets with clear acceptance \
-                criteria, dependencies, and estimated complexity. Output structured ticket specs."
+            system_prompt: "You are nexor's Decomposition agent. Given an approved PRD, \
+                break it into implementation tickets as a multi-stage pipeline.\n\n\
+                For each ticket:\n\
+                - Title and one-paragraph description\n\
+                - Acceptance criteria (testable, specific)\n\
+                - Files expected to be created or modified\n\
+                - Dependencies on other tickets\n\
+                - Complexity: S/M/L/XL\n\
+                - Suggested role: worker, reviewer, or utility\n\n\
+                Then build the execution pipeline: create agents, add pipeline stages in dependency order, \
+                and set approval gates before risky stages. Present the pipeline as a diagram before starting it."
                 .to_string(),
             tools: vec![
                 "create_pipeline".to_string(),
