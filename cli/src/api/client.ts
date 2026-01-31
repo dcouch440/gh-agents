@@ -5,6 +5,8 @@ import type {
   ChatSendResponse,
   HealthResponse,
   LoginResponse,
+  ModeInfo,
+  SessionResponse,
 } from './types.js';
 
 let baseUrl = 'http://127.0.0.1:3000';
@@ -99,5 +101,31 @@ export const api = {
         `/api/chat/history?limit=${limit}&offset=${offset}`,
       ),
     clear: () => fetchApi<void>('/api/chat/history', { method: 'DELETE' }),
+  },
+
+  modes: {
+    list: () => fetchApi<ModeInfo[]>('/api/modes'),
+  },
+
+  sessions: {
+    create: (modeId: string, title?: string) =>
+      fetchApi<SessionResponse>('/api/sessions', {
+        method: 'POST',
+        body: JSON.stringify({ mode_id: modeId, title: title ?? '' }),
+      }),
+    list: () => fetchApi<SessionResponse[]>('/api/sessions'),
+    get: (sessionId: string) =>
+      fetchApi<SessionResponse>(`/api/sessions/${sessionId}`),
+    delete: (sessionId: string) =>
+      fetchApi<void>(`/api/sessions/${sessionId}`, { method: 'DELETE' }),
+    send: (sessionId: string, message: string) =>
+      fetchApi<ChatSendResponse>(`/api/sessions/${sessionId}/chat`, {
+        method: 'POST',
+        body: JSON.stringify({ message }),
+      }),
+    history: (sessionId: string, limit = 50) =>
+      fetchApi<ChatMessage[]>(
+        `/api/sessions/${sessionId}/history?limit=${limit}`,
+      ),
   },
 };

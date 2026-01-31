@@ -18,6 +18,18 @@ use crate::types::{AgentPersona, AgentTier, ModelConfig, UserId};
 
 use super::state::AppState;
 
+/// Return tool definitions filtered by allowed names.
+/// If `allowed` is empty, returns all tools.
+pub fn filtered_tools(allowed: &[String]) -> Vec<Tool> {
+    let all = agent_tools();
+    if allowed.is_empty() {
+        return all;
+    }
+    all.into_iter()
+        .filter(|t| allowed.iter().any(|a| a == &t.name))
+        .collect()
+}
+
 /// Return all agent management tool definitions for the Anthropic API.
 pub fn agent_tools() -> Vec<Tool> {
     vec![

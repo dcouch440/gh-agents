@@ -3,6 +3,10 @@ import { api, getBaseUrl, getToken } from '../api/client.js';
 import { streamResponse } from '../api/stream.js';
 import type { ChatMessage } from '../api/types.js';
 
+interface UseChatOptions {
+  sessionId?: string;
+}
+
 interface UseChatResult {
   messages: ChatMessage[];
   loading: boolean;
@@ -15,7 +19,8 @@ interface UseChatResult {
 
 const FLUSH_INTERVAL_MS = 50;
 
-export function useChat(): UseChatResult {
+export function useChat(options?: UseChatOptions): UseChatResult {
+  const sessionId = options?.sessionId;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -28,8 +33,10 @@ export function useChat(): UseChatResult {
 
   useEffect(() => {
     let cancelled = false;
-    api.chat
-      .history()
+    const loadHistory = sessionId
+      ? api.sessions.history(sessionId)
+      : api.chat.history();
+    loadHistory
       .then((history) => {
         if (!cancelled) {
           setMessages(history);
@@ -45,7 +52,7 @@ export function useChat(): UseChatResult {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [sessionId]);
 
   useEffect(() => {
     return () => {
@@ -69,7 +76,9 @@ export function useChat(): UseChatResult {
     setError(null);
 
     try {
-      const response = await api.chat.send(content);
+      const response = sessionId
+        ? await api.sessions.send(sessionId, content)
+        : await api.chat.send(content);
       setSending(false);
       setIsStreaming(true);
       setStreamingContent('');
@@ -105,8 +114,10 @@ export function useChat(): UseChatResult {
             setIsStreaming(false);
             cleanupRef.current = null;
             // Reload history to get the full message with real IDs
-            api.chat
-              .history()
+            const reload = sessionId
+              ? api.sessions.history(sessionId)
+              : api.chat.history();
+            reload
               .then((history) => setMessages(history))
               .catch(() => {});
           },
@@ -122,6 +133,7 @@ export function useChat(): UseChatResult {
             cleanupRef.current = null;
           },
         },
+        sessionId,
       );
       cleanupRef.current = cleanup;
     } catch (err: unknown) {
@@ -129,7 +141,7 @@ export function useChat(): UseChatResult {
       setError(msg);
       setSending(false);
     }
-  }, []);
+  }, [sessionId]);
 
   return {
     messages,

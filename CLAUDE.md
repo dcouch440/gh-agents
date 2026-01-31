@@ -72,3 +72,4 @@ M1-M5, M7-M11: Complete. M6: Deprecated (TUI). M12: In progress. M13-M16: Planne
 - Verify with `cargo check` and `cargo test` before committing
 - For CLI: run `cd cli && npm test` to verify TypeScript tests
 - Save notes to `doc/` when requested
+= CLI is the main view, UI is for future features.

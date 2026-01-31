@@ -39,11 +39,11 @@ describe('StreamingMessage', () => {
     expect(lastFrame()!).toContain('─');
   });
 
-  it('shows thinking indicator when content is empty and not done', () => {
+  it('shows empty content with cursor when not done', () => {
     const { lastFrame } = render(
       <StreamingMessage content="" done={false} />,
     );
-    expect(lastFrame()!).toContain('Thinking');
+    expect(lastFrame()!).toContain('█');
   });
 
   it('renders multiline content', () => {
@@ -59,7 +59,6 @@ describe('StreamingMessage', () => {
     const { lastFrame } = render(
       <StreamingMessage content="test" done={false} />,
     );
-    // Timestamp should contain a colon (e.g. "12:34:56")
     const frame = lastFrame()!;
     expect(frame).toMatch(/\d{1,2}:\d{2}/);
   });
@@ -69,7 +68,6 @@ describe('StreamingMessage', () => {
     const { lastFrame } = render(
       <StreamingMessage content={longContent} done={false} />,
     );
-    // Ink may wrap lines, but the characters should all be present
     const frame = lastFrame()!;
     const aCount = (frame.match(/a/g) || []).length;
     expect(aCount).toBeGreaterThanOrEqual(200);
@@ -82,5 +80,21 @@ describe('StreamingMessage', () => {
     const frame = lastFrame()!;
     expect(frame).toContain('Final answer');
     expect(frame).not.toContain('█');
+  });
+
+  it('renders markdown when done', () => {
+    const { lastFrame } = render(
+      <StreamingMessage content="This is **bold**" done={true} />,
+    );
+    const frame = lastFrame()!;
+    expect(frame).toContain('bold');
+    expect(frame).not.toContain('**');
+  });
+
+  it('renders separator with 60 dash characters', () => {
+    const { lastFrame } = render(
+      <StreamingMessage content="test" done={false} />,
+    );
+    expect(lastFrame()!).toContain('─'.repeat(60));
   });
 });

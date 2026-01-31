@@ -267,6 +267,133 @@ pub async fn clear_chat_history(pool: &PgPool, user_id: UserId) -> Result<()> {
 }
 
 // ============================================================================
+// Session Queries
+// ============================================================================
+
+/// A chat session row
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct SessionRow {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub mode_id: String,
+    pub title: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Create a new chat session
+pub async fn create_session(
+    pool: &PgPool,
+    user_id: UserId,
+    session_id: Uuid,
+    mode_id: &str,
+    title: &str,
+) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO chat_sessions (id, user_id, mode_id, title) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(session_id)
+    .bind(user_id.0)
+    .bind(mode_id)
+    .bind(title)
+    .execute(pool)
+    .await
+    .context("Failed to create session")?;
+    Ok(())
+}
+
+/// List sessions for a user
+pub async fn list_sessions(pool: &PgPool, user_id: UserId) -> Result<Vec<SessionRow>> {
+    let rows: Vec<SessionRow> = sqlx::query_as(
+        "SELECT id, user_id, mode_id, title, created_at, updated_at FROM chat_sessions WHERE user_id = $1 ORDER BY updated_at DESC",
+    )
+    .bind(user_id.0)
+    .fetch_all(pool)
+    .await
+    .context("Failed to list sessions")?;
+    Ok(rows)
+}
+
+/// Get a session by ID
+pub async fn get_session(pool: &PgPool, session_id: Uuid) -> Result<Option<SessionRow>> {
+    let row: Option<SessionRow> = sqlx::query_as(
+        "SELECT id, user_id, mode_id, title, created_at, updated_at FROM chat_sessions WHERE id = $1",
+    )
+    .bind(session_id)
+    .fetch_optional(pool)
+    .await
+    .context("Failed to get session")?;
+    Ok(row)
+}
+
+/// Delete a session and its messages
+pub async fn delete_session(pool: &PgPool, session_id: Uuid) -> Result<()> {
+    sqlx::query("DELETE FROM chat_messages WHERE session_id = $1")
+        .bind(session_id)
+        .execute(pool)
+        .await
+        .context("Failed to delete session messages")?;
+    sqlx::query("DELETE FROM chat_sessions WHERE id = $1")
+        .bind(session_id)
+        .execute(pool)
+        .await
+        .context("Failed to delete session")?;
+    Ok(())
+}
+
+/// Insert a chat message scoped to a session
+pub async fn insert_session_message(
+    pool: &PgPool,
+    user_id: UserId,
+    session_id: Uuid,
+    id: &Uuid,
+    role: &str,
+    content: &str,
+) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO chat_messages (id, user_id, session_id, role, content, timestamp) VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(id)
+    .bind(user_id.0)
+    .bind(session_id)
+    .bind(role)
+    .bind(content)
+    .bind(Utc::now())
+    .execute(pool)
+    .await
+    .context("Failed to insert session message")?;
+    Ok(())
+}
+
+/// Get chat history for a session
+pub async fn get_session_history(
+    pool: &PgPool,
+    session_id: Uuid,
+    limit: u32,
+) -> Result<Vec<ChatMessageRow>> {
+    let limit = limit.min(1000) as i64;
+    let rows: Vec<ChatMessageRow> = sqlx::query_as(
+        "SELECT id, role, content, timestamp FROM chat_messages WHERE session_id = $1 ORDER BY timestamp ASC LIMIT $2",
+    )
+    .bind(session_id)
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+    .context("Failed to get session history")?;
+    Ok(rows)
+}
+
+/// Update session updated_at timestamp
+pub async fn touch_session(pool: &PgPool, session_id: Uuid) -> Result<()> {
+    sqlx::query("UPDATE chat_sessions SET updated_at = NOW() WHERE id = $1")
+        .bind(session_id)
+        .execute(pool)
+        .await
+        .context("Failed to touch session")?;
+    Ok(())
+}
+
+// ============================================================================
 // Auth queries
 // ============================================================================
 

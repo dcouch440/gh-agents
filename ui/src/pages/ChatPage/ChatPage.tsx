@@ -1,11 +1,15 @@
 import { useEffect, useRef } from 'react';
+import { useParams } from 'react-router-dom';
 import { useChat } from '../../hooks/useChat';
 import { Message } from '../../components/Message';
 import { ChatInput } from '../../components/ChatInput';
 import styles from './ChatPage.module.css';
 
 export function ChatPage() {
-  const { messages, loading, sending, sendMessage } = useChat();
+  const { sessionId } = useParams<{ sessionId?: string }>();
+  const { messages, loading, sending, sendMessage } = useChat(
+    sessionId ? { sessionId } : undefined
+  );
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

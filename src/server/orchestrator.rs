@@ -27,10 +27,7 @@ use super::state::{AppState, OrchestratorMessage, StreamChunk};
 use super::tools;
 use super::ws::{AgentUpdate, FeedUpdate, TaskUpdate};
 
-const SYSTEM_PROMPT: &str = "You are nexor, an AI assistant for software engineering. \
-    You help users plan, build, and manage software projects. \
-    You can create and manage AI agents to help with tasks. \
-    Be concise and technical. Use markdown formatting when helpful.";
+use super::agent_mode::HistoryPolicy;
 
 /// Spawn a background task that drains agent responses from the dispatcher
 /// and stores them in `state.task_results` for retrieval by `get_task_result`.
@@ -538,21 +535,42 @@ async fn handle_message(
     let message_id = msg.id;
     let user_id = msg.user_id;
 
-    // Load chat history for conversation context
-    let history = state
-        .repo
-        .get_chat_history(user_id, 50, 0)
-        .await
-        .unwrap_or_default();
+    // Look up agent mode configuration
+    let mode = state
+        .mode_registry
+        .get(&msg.mode_id)
+        .cloned()
+        .unwrap_or_else(|| {
+            warn!("Unknown mode '{}', falling back to home", msg.mode_id);
+            state
+                .mode_registry
+                .get(&super::agent_mode::ModeRegistry::default_mode_id())
+                .cloned()
+                .expect("home mode must exist")
+        });
 
-    // Build LLM messages from chat history
-    let mut messages: Vec<Message> = history
-        .iter()
-        .map(|row| match row.role.as_str() {
-            "assistant" => Message::assistant(&row.content),
-            _ => Message::user(&row.content),
-        })
-        .collect();
+    // Load chat history based on mode's history policy
+    let mut messages: Vec<Message> = match &mode.history_policy {
+        HistoryPolicy::None => vec![],
+        HistoryPolicy::SessionScoped { max_messages } => {
+            if let Some(session_id) = msg.session_id {
+                let history = state
+                    .repo
+                    .get_session_history(session_id, *max_messages)
+                    .await
+                    .unwrap_or_default();
+                history
+                    .iter()
+                    .map(|row| match row.role.as_str() {
+                        "assistant" => Message::assistant(&row.content),
+                        _ => Message::user(&row.content),
+                    })
+                    .collect()
+            } else {
+                vec![]
+            }
+        }
+    };
 
     // Ensure the current message is included
     if !messages
@@ -566,7 +584,7 @@ async fn handle_message(
     }
 
     let model_id = provider.model_id().to_string();
-    let tool_defs = tools::agent_tools();
+    let tool_defs = tools::filtered_tools(&mode.tools);
 
     // Multi-turn tool use loop
     let mut accumulated_response = String::new();
@@ -577,7 +595,7 @@ async fn handle_message(
 
         let request = LLMRequest {
             model: model_id.clone(),
-            system: Some(SYSTEM_PROMPT.to_string()),
+            system: Some(mode.system_prompt.clone()),
             messages: messages.clone(),
             max_tokens: 4096,
             stream: true,
@@ -693,11 +711,18 @@ async fn handle_message(
     // Save the assistant response to the database
     if !accumulated_response.is_empty() {
         let response_id = Uuid::new_v4();
-        if let Err(e) = state
-            .repo
-            .insert_chat_message(user_id, response_id, "assistant".into(), accumulated_response)
-            .await
-        {
+        let save_result = if let Some(session_id) = msg.session_id {
+            state
+                .repo
+                .insert_session_message(user_id, session_id, response_id, "assistant".into(), accumulated_response)
+                .await
+        } else {
+            state
+                .repo
+                .insert_chat_message(user_id, response_id, "assistant".into(), accumulated_response)
+                .await
+        };
+        if let Err(e) = save_result {
             error!("Failed to save assistant message: {}", e);
         }
     }
@@ -716,7 +741,7 @@ async fn handle_message(
 mod tests {
     use super::*;
     use crate::db::traits::ServerRepo;
-    use crate::db::{ChatMessageRow, PipelineRow, PipelineStageRow, ScheduleRow, TriggerRow};
+    use crate::db::{ChatMessageRow, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow};
     use crate::types::{AppConfig, UserId};
     use chrono::{DateTime, Utc};
     use std::sync::Arc;
@@ -775,6 +800,12 @@ mod tests {
         async fn list_triggers(&self, _user_id: UserId) -> anyhow::Result<Vec<TriggerRow>> { Ok(vec![]) }
         async fn upsert_trigger(&self, _user_id: UserId, _trigger: TriggerRow) -> anyhow::Result<()> { Ok(()) }
         async fn delete_trigger(&self, _trigger_id: Uuid) -> anyhow::Result<()> { Ok(()) }
+        async fn create_session(&self, _user_id: UserId, _session_id: Uuid, _mode_id: &str, _title: &str) -> anyhow::Result<()> { Ok(()) }
+        async fn list_sessions(&self, _user_id: UserId) -> anyhow::Result<Vec<SessionRow>> { Ok(vec![]) }
+        async fn get_session(&self, _session_id: Uuid) -> anyhow::Result<Option<SessionRow>> { Ok(None) }
+        async fn delete_session(&self, _session_id: Uuid) -> anyhow::Result<()> { Ok(()) }
+        async fn insert_session_message(&self, _user_id: UserId, _session_id: Uuid, _id: Uuid, _role: String, _content: String) -> anyhow::Result<()> { Ok(()) }
+        async fn get_session_history(&self, _session_id: Uuid, _limit: u32) -> anyhow::Result<Vec<ChatMessageRow>> { Ok(vec![]) }
     }
 
     #[tokio::test]
@@ -793,6 +824,8 @@ mod tests {
             .send(OrchestratorMessage {
                 id: msg_id,
                 user_id: UserId::new(),
+                session_id: None,
+                mode_id: crate::server::agent_mode::AgentModeId::new("home"),
                 content: "Hello".into(),
                 timestamp: Utc::now(),
             })

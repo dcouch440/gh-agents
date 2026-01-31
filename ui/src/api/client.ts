@@ -117,6 +117,51 @@ export const api = {
       fetchApi<void>('/chat/history', { method: 'DELETE' }),
   },
 
+  // Modes & Sessions
+  modes: {
+    list: () => fetchApi<ModeInfo[]>('/modes'),
+  },
+
+  sessions: {
+    create: (modeId: string, title?: string) =>
+      fetchApi<SessionResponse>('/sessions', {
+        method: 'POST',
+        body: JSON.stringify({ mode_id: modeId, title: title ?? '' }),
+      }),
+    list: () => fetchApi<SessionResponse[]>('/sessions'),
+    get: (sessionId: string) => fetchApi<SessionResponse>(`/sessions/${sessionId}`),
+    delete: (sessionId: string) =>
+      fetchApi<void>(`/sessions/${sessionId}`, { method: 'DELETE' }),
+    send: (sessionId: string, message: string) =>
+      fetchApi<{ message_id: string }>(`/sessions/${sessionId}/chat`, {
+        method: 'POST',
+        body: JSON.stringify({ message }),
+      }),
+    stream: (sessionId: string, messageId: string, onToken: (text: string) => void, onDone: () => void, onError: (err: string) => void) => {
+      const eventSource = new EventSource(
+        `${API_BASE}/sessions/${sessionId}/chat/${messageId}/stream`
+      );
+      eventSource.onmessage = (event) => {
+        onToken(event.data);
+      };
+      eventSource.addEventListener('done', () => {
+        eventSource.close();
+        onDone();
+      });
+      eventSource.addEventListener('error', (event) => {
+        eventSource.close();
+        onError((event as MessageEvent).data ?? 'Stream error');
+      });
+      eventSource.onerror = () => {
+        eventSource.close();
+        onError('Connection lost');
+      };
+      return eventSource;
+    },
+    history: (sessionId: string, limit?: number) =>
+      fetchApi<ChatMessage[]>(`/sessions/${sessionId}/history?limit=${limit ?? 50}`),
+  },
+
   // Config
   config: {
     get: () => fetchApi<Config>('/config'),
@@ -157,4 +202,18 @@ export interface Config {
   verbosity: string;
   models: Record<string, unknown>;
   pool: Record<string, unknown>;
+}
+
+export interface ModeInfo {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface SessionResponse {
+  id: string;
+  mode_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
 }
