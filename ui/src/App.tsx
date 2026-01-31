@@ -92,6 +92,7 @@ function App() {
         >
           <Route index element={<Navigate to="/chat" replace />} />
           <Route path="chat" element={<ChatPage />} />
+          <Route path="chat/:sessionId" element={<ChatPage />} />
           <Route path="feed" element={<FeedPage />} />
           <Route path="tasks" element={<TasksPage />} />
           <Route path="agents" element={<AgentsPage />} />

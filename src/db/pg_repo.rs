@@ -10,7 +10,7 @@ use crate::db::traits::{
     CostRepo, DependencyRepo, MergeQueueRepo, ObservabilityRepo, PlannerRepo, RefactorRepo,
     SchedulerRepo, ServerRepo, TaskQueueRepo, UserRepo,
 };
-use crate::db::{AgentRow, ChatMessageRow, ClusterRow, PipelineRow, PipelineStageRow, ScheduleRow, TriggerRow};
+use crate::db::{AgentRow, ChatMessageRow, ClusterRow, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow};
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::observability::{Decision, LlmCall};
 use crate::orchestration::DependencyError;
@@ -1223,6 +1223,32 @@ impl ServerRepo for PgRepo {
             .execute(&self.pool)
             .await?;
         Ok(())
+    }
+
+    // --- Session management ---
+
+    async fn create_session(&self, user_id: UserId, session_id: Uuid, mode_id: &str, title: &str) -> Result<()> {
+        crate::db::create_session(&self.pool, user_id, session_id, mode_id, title).await
+    }
+
+    async fn list_sessions(&self, user_id: UserId) -> Result<Vec<SessionRow>> {
+        crate::db::list_sessions(&self.pool, user_id).await
+    }
+
+    async fn get_session(&self, session_id: Uuid) -> Result<Option<SessionRow>> {
+        crate::db::get_session(&self.pool, session_id).await
+    }
+
+    async fn delete_session(&self, session_id: Uuid) -> Result<()> {
+        crate::db::delete_session(&self.pool, session_id).await
+    }
+
+    async fn insert_session_message(&self, user_id: UserId, session_id: Uuid, id: Uuid, role: String, content: String) -> Result<()> {
+        crate::db::insert_session_message(&self.pool, user_id, session_id, &id, &role, &content).await
+    }
+
+    async fn get_session_history(&self, session_id: Uuid, limit: u32) -> Result<Vec<ChatMessageRow>> {
+        crate::db::get_session_history(&self.pool, session_id, limit).await
     }
 }
 

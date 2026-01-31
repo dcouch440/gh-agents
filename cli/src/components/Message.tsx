@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import type { ChatMessage } from '../api/types.js';
-import { renderMarkdown } from '../utils/markdown.js';
+import { Markdown } from './Markdown.js';
 
 interface MessageProps {
   message: ChatMessage;
@@ -17,17 +17,17 @@ export function Message({ message }: MessageProps) {
   const label = isUser ? 'you' : 'nexor';
 
   return (
-    <Box flexDirection="column">
-      <Text dimColor>{'─'.repeat(40)}</Text>
+    <Box flexDirection="column" marginTop={1}>
+      <Text dimColor>{'─'.repeat(60)}</Text>
       <Box gap={1}>
-        <Text bold color={isUser ? undefined : 'cyan'}>
+        <Text bold color={isUser ? 'green' : 'cyan'}>
           {label}
         </Text>
         <Text dimColor>{formatTime(message.timestamp)}</Text>
       </Box>
-      <Text>
-        {isUser ? message.content : renderMarkdown(message.content)}
-      </Text>
+      <Box paddingLeft={2}>
+        {isUser ? <Text>{message.content}</Text> : <Markdown content={message.content} />}
+      </Box>
     </Box>
   );
 }

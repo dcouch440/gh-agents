@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
-import Spinner from 'ink-spinner';
-import { renderMarkdown } from '../utils/markdown.js';
+import { Markdown } from './Markdown.js';
 
 interface StreamingMessageProps {
   content: string;
@@ -20,27 +19,26 @@ export function StreamingMessage({ content, done }: StreamingMessageProps) {
   }, [done]);
 
   const time = new Date().toLocaleTimeString();
-  const isThinking = !content && !done;
 
   return (
-    <Box flexDirection="column">
-      <Text dimColor>{'─'.repeat(40)}</Text>
+    <Box flexDirection="column" marginTop={1}>
+      <Text dimColor>{'─'.repeat(60)}</Text>
       <Box gap={1}>
         <Text bold color="cyan">
           nexor
         </Text>
         <Text dimColor>{time}</Text>
       </Box>
-      {isThinking ? (
-        <Text>
-          <Spinner type="dots" /> Thinking…
-        </Text>
-      ) : (
-        <Text>
-          {content ? renderMarkdown(content) : ''}
-          {!done && cursorVisible ? '█' : ''}
-        </Text>
-      )}
+      <Box paddingLeft={2}>
+        {done ? (
+          <Markdown content={content} />
+        ) : (
+          <Text>
+            {content}
+            {cursorVisible ? '█' : ''}
+          </Text>
+        )}
+      </Box>
     </Box>
   );
 }

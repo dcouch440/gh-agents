@@ -11,8 +11,11 @@ export function streamResponse(
   messageId: string,
   token: string,
   callbacks: StreamCallbacks,
+  sessionId?: string,
 ): () => void {
-  const url = `${baseUrl}/api/chat/${messageId}/stream`;
+  const url = sessionId
+    ? `${baseUrl}/api/sessions/${sessionId}/chat/${messageId}/stream`
+    : `${baseUrl}/api/chat/${messageId}/stream`;
   const es = new EventSource(url, {
     fetch: (input, init) =>
       fetch(input, {

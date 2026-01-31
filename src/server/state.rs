@@ -15,6 +15,7 @@ use crate::llm::AnthropicClient;
 use crate::orchestration::Scheduler;
 use crate::types::{AgentPoolConfig, AppConfig, UserId};
 
+use super::agent_mode::{AgentModeId, ModeRegistry};
 use super::ws::{AgentUpdate, FeedUpdate, TaskUpdate};
 
 /// Message sent to the orchestrator
@@ -22,6 +23,8 @@ use super::ws::{AgentUpdate, FeedUpdate, TaskUpdate};
 pub struct OrchestratorMessage {
     pub id: Uuid,
     pub user_id: UserId,
+    pub session_id: Option<Uuid>,
+    pub mode_id: AgentModeId,
     pub content: String,
     pub timestamp: DateTime<Utc>,
 }
@@ -84,6 +87,8 @@ pub struct AppState {
     pub pipeline_manager: Arc<RwLock<PipelineManager>>,
     /// Schedule manager for cron-like and event-driven agent execution
     pub schedule_manager: Arc<RwLock<ScheduleManager>>,
+    /// Registry of available agent modes
+    pub mode_registry: Arc<ModeRegistry>,
 }
 
 impl AppState {
@@ -250,6 +255,7 @@ impl AppState {
                 cluster_manager: Arc::new(RwLock::new(ClusterManager::new())),
                 pipeline_manager: Arc::new(RwLock::new(PipelineManager::new())),
                 schedule_manager: Arc::new(RwLock::new(ScheduleManager::new())),
+                mode_registry: Arc::new(ModeRegistry::new()),
             },
             orchestrator_rx,
         )
@@ -385,6 +391,8 @@ mod tests {
         let msg = OrchestratorMessage {
             id: Uuid::new_v4(),
             user_id: UserId::new(),
+            session_id: None,
+            mode_id: AgentModeId::new("home"),
             content: "do stuff".into(),
             timestamp: Utc::now(),
         };

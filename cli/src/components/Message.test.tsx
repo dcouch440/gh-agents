@@ -40,7 +40,6 @@ describe('Message', () => {
 
   it('renders timestamp', () => {
     const { lastFrame } = render(<Message message={userMsg} />);
-    // Timestamp format depends on locale, just check it renders something
     const frame = lastFrame()!;
     expect(frame.length).toBeGreaterThan(0);
   });
@@ -68,8 +67,21 @@ describe('Message', () => {
     expect(frame).toContain('Line two');
   });
 
-  it('renders separator with 40 dash characters', () => {
+  it('renders separator with 60 dash characters', () => {
     const { lastFrame } = render(<Message message={userMsg} />);
-    expect(lastFrame()!).toContain('─'.repeat(40));
+    expect(lastFrame()!).toContain('─'.repeat(60));
+  });
+
+  it('renders assistant markdown without literal asterisks', () => {
+    const msg: ChatMessage = {
+      id: '4',
+      role: 'assistant',
+      content: 'This is **bold** text',
+      timestamp: '2026-01-29T12:37:00Z',
+    };
+    const { lastFrame } = render(<Message message={msg} />);
+    const frame = lastFrame()!;
+    expect(frame).toContain('bold');
+    expect(frame).not.toContain('**');
   });
 });

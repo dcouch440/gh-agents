@@ -5,6 +5,7 @@
 //! - WebSocket connections for real-time updates
 //! - Static files for the React frontend
 
+pub mod agent_mode;
 pub mod api;
 pub mod auth;
 pub mod orchestrator;
@@ -111,6 +112,13 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
             get(api::get_chat_history).delete(api::clear_chat_history),
         )
         .route("/chat/:message_id/stream", get(api::chat_stream))
+        // Mode & Session endpoints
+        .route("/modes", get(api::list_modes))
+        .route("/sessions", get(api::list_sessions).post(api::create_session))
+        .route("/sessions/:session_id", get(api::get_session).delete(api::delete_session))
+        .route("/sessions/:session_id/chat", post(api::send_session_chat))
+        .route("/sessions/:session_id/history", get(api::get_session_history))
+        .route("/sessions/:session_id/chat/:message_id/stream", get(api::chat_stream))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // Static file serving for production (Ticket 10.6)
@@ -227,7 +235,7 @@ async fn shutdown_signal() {
 mod tests {
     use super::*;
     use crate::db::traits::ServerRepo;
-    use crate::db::{ChatMessageRow, PipelineRow, PipelineStageRow, ScheduleRow, TriggerRow};
+    use crate::db::{ChatMessageRow, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow};
     use crate::types::UserId;
     use axum::{
         body::Body,
@@ -359,6 +367,12 @@ mod tests {
         async fn list_triggers(&self, _user_id: UserId) -> anyhow::Result<Vec<TriggerRow>> { Ok(vec![]) }
         async fn upsert_trigger(&self, _user_id: UserId, _trigger: TriggerRow) -> anyhow::Result<()> { Ok(()) }
         async fn delete_trigger(&self, _trigger_id: Uuid) -> anyhow::Result<()> { Ok(()) }
+        async fn create_session(&self, _user_id: UserId, _session_id: Uuid, _mode_id: &str, _title: &str) -> anyhow::Result<()> { Ok(()) }
+        async fn list_sessions(&self, _user_id: UserId) -> anyhow::Result<Vec<SessionRow>> { Ok(vec![]) }
+        async fn get_session(&self, _session_id: Uuid) -> anyhow::Result<Option<SessionRow>> { Ok(None) }
+        async fn delete_session(&self, _session_id: Uuid) -> anyhow::Result<()> { Ok(()) }
+        async fn insert_session_message(&self, _user_id: UserId, _session_id: Uuid, _id: Uuid, _role: String, _content: String) -> anyhow::Result<()> { Ok(()) }
+        async fn get_session_history(&self, _session_id: Uuid, _limit: u32) -> anyhow::Result<Vec<ChatMessageRow>> { Ok(vec![]) }
     }
 
     fn setup_mock_state() -> AppState {

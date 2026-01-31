@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use crate::db::{AgentRow, ChatMessageRow, ClusterRow, PipelineRow, PipelineStageRow, ScheduleRow, TriggerRow};
+use crate::db::{AgentRow, ChatMessageRow, ClusterRow, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow};
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::observability::{Decision, LlmCall};
 use crate::orchestration::DependencyError;
@@ -382,6 +382,26 @@ pub trait ServerRepo: Send + Sync {
 
     /// Delete a trigger by ID.
     async fn delete_trigger(&self, trigger_id: Uuid) -> Result<()>;
+
+    // --- Session management ---
+
+    /// Create a new chat session.
+    async fn create_session(&self, user_id: UserId, session_id: Uuid, mode_id: &str, title: &str) -> Result<()>;
+
+    /// List sessions for a user.
+    async fn list_sessions(&self, user_id: UserId) -> Result<Vec<SessionRow>>;
+
+    /// Get a session by ID.
+    async fn get_session(&self, session_id: Uuid) -> Result<Option<SessionRow>>;
+
+    /// Delete a session and its messages.
+    async fn delete_session(&self, session_id: Uuid) -> Result<()>;
+
+    /// Insert a chat message scoped to a session.
+    async fn insert_session_message(&self, user_id: UserId, session_id: Uuid, id: Uuid, role: String, content: String) -> Result<()>;
+
+    /// Get chat history for a session.
+    async fn get_session_history(&self, session_id: Uuid, limit: u32) -> Result<Vec<ChatMessageRow>>;
 }
 
 // ============================================================================

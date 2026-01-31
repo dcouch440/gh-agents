@@ -43,3 +43,17 @@ export interface AgentsListResponse {
     utilities: { total: number; available: number; max: number };
   };
 }
+
+export interface ModeInfo {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface SessionResponse {
+  id: string;
+  mode_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}

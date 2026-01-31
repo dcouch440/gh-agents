@@ -329,6 +329,8 @@ pub async fn send_chat(
         .send(OrchestratorMessage {
             id: message_id,
             user_id: auth.user_id,
+            session_id: None,
+            mode_id: crate::server::agent_mode::AgentModeId::new("home"),
             content: request.message,
             timestamp: Utc::now(),
         })
@@ -465,6 +467,279 @@ pub async fn clear_chat_history(
         Ok(_) => StatusCode::NO_CONTENT,
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
+}
+
+// ============================================================================
+// Mode & Session Endpoints
+// ============================================================================
+
+/// An available agent mode
+#[derive(Serialize)]
+pub struct ModeInfo {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+}
+
+/// List available agent modes
+pub async fn list_modes(
+    State(state): State<AppState>,
+    _auth: auth::AuthUser,
+) -> Json<Vec<ModeInfo>> {
+    let modes: Vec<ModeInfo> = state
+        .mode_registry
+        .list()
+        .into_iter()
+        .map(|m| ModeInfo {
+            id: m.id.0.clone(),
+            name: m.name.clone(),
+            description: m.description.clone(),
+        })
+        .collect();
+    Json(modes)
+}
+
+/// Request body for creating a session
+#[derive(Deserialize)]
+pub struct CreateSessionRequest {
+    pub mode_id: String,
+    #[serde(default)]
+    pub title: String,
+}
+
+/// Response for session creation
+#[derive(Serialize)]
+pub struct SessionResponse {
+    pub id: Uuid,
+    pub mode_id: String,
+    pub title: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Create a new chat session
+pub async fn create_session(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+    Json(request): Json<CreateSessionRequest>,
+) -> Result<(StatusCode, Json<SessionResponse>), StatusCode> {
+    // Validate mode exists
+    let mode_id = crate::server::agent_mode::AgentModeId::new(&request.mode_id);
+    if state.mode_registry.get(&mode_id).is_none() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let session_id = Uuid::new_v4();
+    let title = if request.title.is_empty() {
+        format!("New {} session", request.mode_id)
+    } else {
+        request.title
+    };
+
+    state
+        .repo
+        .create_session(auth.user_id, session_id, &request.mode_id, &title)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let session = state
+        .repo
+        .get_session(session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(SessionResponse {
+            id: session.id,
+            mode_id: session.mode_id,
+            title: session.title,
+            created_at: session.created_at,
+            updated_at: session.updated_at,
+        }),
+    ))
+}
+
+/// List sessions for the current user
+pub async fn list_sessions(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+) -> Result<Json<Vec<SessionResponse>>, StatusCode> {
+    let sessions = state
+        .repo
+        .list_sessions(auth.user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let response: Vec<SessionResponse> = sessions
+        .into_iter()
+        .map(|s| SessionResponse {
+            id: s.id,
+            mode_id: s.mode_id,
+            title: s.title,
+            created_at: s.created_at,
+            updated_at: s.updated_at,
+        })
+        .collect();
+
+    Ok(Json(response))
+}
+
+/// Get a specific session
+pub async fn get_session(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+    Path(session_id): Path<Uuid>,
+) -> Result<Json<SessionResponse>, StatusCode> {
+    let session = state
+        .repo
+        .get_session(session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    // Verify ownership
+    if session.user_id != auth.user_id.0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    Ok(Json(SessionResponse {
+        id: session.id,
+        mode_id: session.mode_id,
+        title: session.title,
+        created_at: session.created_at,
+        updated_at: session.updated_at,
+    }))
+}
+
+/// Delete a session
+pub async fn delete_session(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+    Path(session_id): Path<Uuid>,
+) -> Result<StatusCode, StatusCode> {
+    // Verify ownership
+    let session = state
+        .repo
+        .get_session(session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if session.user_id != auth.user_id.0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    state
+        .repo
+        .delete_session(session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Send a message to a session
+pub async fn send_session_chat(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+    Path(session_id): Path<Uuid>,
+    Json(request): Json<ChatRequest>,
+) -> Result<(StatusCode, Json<ChatResponse>), StatusCode> {
+    if request.message.trim().is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Verify session exists and belongs to user
+    let session = state
+        .repo
+        .get_session(session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if session.user_id != auth.user_id.0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let message_id = Uuid::new_v4();
+
+    state.ensure_response_stream(message_id).await;
+
+    // Store user message scoped to session
+    state
+        .repo
+        .insert_session_message(
+            auth.user_id,
+            session_id,
+            message_id,
+            "user".to_string(),
+            request.message.clone(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Queue to orchestrator with session context
+    state
+        .orchestrator_tx
+        .send(OrchestratorMessage {
+            id: message_id,
+            user_id: auth.user_id,
+            session_id: Some(session_id),
+            mode_id: crate::server::agent_mode::AgentModeId::new(&session.mode_id),
+            content: request.message,
+            timestamp: Utc::now(),
+        })
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(ChatResponse {
+            message_id,
+            status: "queued".to_string(),
+        }),
+    ))
+}
+
+/// Get session chat history
+pub async fn get_session_history(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+    Path(session_id): Path<Uuid>,
+    Query(query): Query<HistoryQuery>,
+) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
+    // Verify session ownership
+    let session = state
+        .repo
+        .get_session(session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if session.user_id != auth.user_id.0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let limit = query.limit.unwrap_or(50);
+    let rows = state
+        .repo
+        .get_session_history(session_id, limit)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let messages: Vec<ChatMessage> = rows
+        .into_iter()
+        .map(|row| ChatMessage {
+            id: row.id,
+            role: row.role,
+            content: row.content,
+            timestamp: row.timestamp,
+        })
+        .collect();
+
+    Ok(Json(messages))
 }
 
 // ============================================================================
@@ -931,6 +1206,12 @@ mod tests {
         async fn list_triggers(&self, _user_id: UserId) -> anyhow::Result<Vec<TriggerRow>> { Ok(vec![]) }
         async fn upsert_trigger(&self, _user_id: UserId, _trigger: TriggerRow) -> anyhow::Result<()> { Ok(()) }
         async fn delete_trigger(&self, _trigger_id: Uuid) -> anyhow::Result<()> { Ok(()) }
+        async fn create_session(&self, _user_id: UserId, _session_id: Uuid, _mode_id: &str, _title: &str) -> anyhow::Result<()> { Ok(()) }
+        async fn list_sessions(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::SessionRow>> { Ok(vec![]) }
+        async fn get_session(&self, _session_id: Uuid) -> anyhow::Result<Option<crate::db::SessionRow>> { Ok(None) }
+        async fn delete_session(&self, _session_id: Uuid) -> anyhow::Result<()> { Ok(()) }
+        async fn insert_session_message(&self, _user_id: UserId, _session_id: Uuid, _id: Uuid, _role: String, _content: String) -> anyhow::Result<()> { Ok(()) }
+        async fn get_session_history(&self, _session_id: Uuid, _limit: u32) -> anyhow::Result<Vec<ChatMessageRow>> { Ok(vec![]) }
     }
 
     fn create_test_token(jwt_secret: &[u8]) -> String {
