@@ -1460,57 +1460,69 @@ async fn execute_start_pipeline(input: &Value, state: &AppState) -> Value {
     };
 
     // Start the run and get first stage info
-    let (run_id, first_agent_id, first_role) = {
+    let (run_id, first_stage_clone) = {
         let mut mgr = state.pipeline_manager.write().await;
         match mgr.start_run(PipelineId(pipeline_uuid), task.to_string()) {
-            Ok((run_id, first_stage)) => {
-                let Some(agent_id) = first_stage.agent_id.clone() else {
-                    return json!({ "error": "First stage has no agent_id (cluster-only stages not yet supported at runtime)" });
-                };
-                let role = first_stage.role.clone();
-                (run_id, agent_id, role)
-            }
+            Ok((run_id, first_stage)) => (run_id, first_stage.clone()),
             Err(e) => return json!({ "error": e.to_string() }),
         }
     };
 
-    // Build task assignment for first stage (reusing assign_task logic)
-    let role_str = first_role.as_deref().unwrap_or("worker");
-    let role_id = RoleId::new(role_str);
-
-    let (system_prompt, style, output_format, required_reading) =
-        if let Some(rm) = &state.role_manager {
-            if let Some(role) = rm.get_role(&role_id) {
-                let vars = HashMap::new();
-                let ctx = rm.build_context_for_role(role, &vars).await;
-                let prompt = ctx.build_system_prompt();
-                let s = role.style;
-                let fmt = role.output_format.clone();
-                let files = ctx
-                    .loaded_files
-                    .into_iter()
-                    .map(|f| crate::agents::FileContent {
-                        path: f.path,
-                        content: f.content,
-                    })
-                    .collect();
-                (prompt, s, fmt, files)
-            } else {
-                (
-                    format!("You are a {} working on: {}", role_str, task),
-                    CommunicationStyle::Technical,
-                    OutputFormat::CodeAndReport,
-                    vec![],
-                )
+    // Resolve agent: prefer agent_id, fall back to cluster selection
+    let mut context_reading: Vec<crate::agents::FileContent> = Vec::new();
+    let resolved_agent_id = if let Some(aid) = &first_stage_clone.agent_id {
+        if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
+            for doc in &docs {
+                context_reading.push(crate::agents::FileContent {
+                    path: format!("context:{}", if doc.ref_tag.is_empty() { &doc.title } else { &doc.ref_tag }),
+                    content: doc.content.clone(),
+                });
             }
-        } else {
-            (
-                format!("You are a {} working on: {}", role_str, task),
-                CommunicationStyle::Technical,
-                OutputFormat::CodeAndReport,
-                vec![],
-            )
-        };
+        }
+        Some(aid.clone())
+    } else if let Some(cid) = &first_stage_clone.cluster_id {
+        match state.repo.list_cluster_members(cid.0).await {
+            Ok(member_ids) => {
+                let picked = member_ids.first().map(|mid| crate::agents::AgentId(*mid));
+                if let Some(aid) = &picked {
+                    if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
+                        for doc in &docs {
+                            context_reading.push(crate::agents::FileContent {
+                                path: format!("context:{}", if doc.ref_tag.is_empty() { &doc.title } else { &doc.ref_tag }),
+                                content: doc.content.clone(),
+                            });
+                        }
+                    }
+                }
+                picked
+            }
+            Err(_) => None,
+        }
+    } else {
+        None
+    };
+
+    let Some(first_agent_id) = resolved_agent_id else {
+        return json!({ "error": "First stage has no agent_id or cluster members" });
+    };
+
+    // Render stage prompt using template system (empty stage_outputs for first stage)
+    let stage_outputs = std::collections::HashMap::new();
+    let description = match state.repo.list_pipeline_stages(pipeline_uuid).await {
+        Ok(db_stages) => {
+            if let Some(db_stage) = db_stages.into_iter().find(|s| s.stage_number == 0) {
+                let doc_repo_ref = state.doc_repo.as_deref();
+                super::api::render_stage(doc_repo_ref, &db_stage, &stage_outputs).await
+            } else {
+                task.to_string()
+            }
+        }
+        Err(_) => task.to_string(),
+    };
+
+    let role_str = first_stage_clone.role.as_deref().unwrap_or("worker");
+    let role_id = RoleId::new(role_str);
+    let system_prompt = format!("You are a {} working on: {}", role_str, task);
 
     let project_root = std::env::current_dir().unwrap_or_default();
     let execution_context = Some(crate::execution::ExecutionContext::new(project_root));
@@ -1518,16 +1530,16 @@ async fn execute_start_pipeline(input: &Value, state: &AppState) -> Value {
     let assignment = TaskAssignment {
         task_id: uuid::Uuid::new_v4(),
         title: format!("Pipeline stage 0: {}", task),
-        description: task.to_string(),
+        description,
         context: TaskContext {
-            required_reading,
+            required_reading: context_reading,
             files: vec![],
             history: vec![],
             conventions: String::new(),
             role_context: RoleContext {
                 system_prompt,
-                style,
-                output_format,
+                style: CommunicationStyle::Technical,
+                output_format: OutputFormat::CodeAndReport,
             },
             chat_messages: vec![],
             execution_context,

@@ -213,12 +213,12 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                         AgentResponse::TaskCompleted { result, .. } => {
                             let mgr = state.pipeline_manager.read().await;
                             mgr.lookup_run_by_task(result.task_id)
-                                .map(|(run_id, _)| (run_id, result.output.clone(), true))
+                                .map(|(run_id, stage_number)| (run_id, stage_number, result.output.clone(), true))
                         }
                         AgentResponse::TaskFailed { result, .. } => {
                             let mgr = state.pipeline_manager.read().await;
                             mgr.lookup_run_by_task(result.task_id)
-                                .map(|(run_id, _)| (run_id, String::new(), false))
+                                .map(|(run_id, stage_number)| (run_id, stage_number, String::new(), false))
                         }
                         _ => None,
                     };
@@ -240,7 +240,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                     }
 
                     // Pipeline auto-advance
-                    if let Some((run_id, prev_output, succeeded)) = pipeline_advance {
+                    if let Some((run_id, completed_stage_number, prev_output, succeeded)) = pipeline_advance {
                         if !succeeded {
                             let mut mgr = state.pipeline_manager.write().await;
                             mgr.fail_run(run_id);
@@ -253,6 +253,27 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                 user_id: None,
                             });
                         } else {
+                            // Record structured output from completed stage
+                            {
+                                let mut mgr = state.pipeline_manager.write().await;
+                                let pipeline_id = mgr.get_run_pipeline_id(run_id);
+                                let stage_name = mgr.get_stage_name(run_id, completed_stage_number);
+
+                                if let (Some(pid), Some(sname)) = (pipeline_id, stage_name) {
+                                    // Get output schema from the completed stage
+                                    let output_schema = mgr
+                                        .get_pipeline(&pid)
+                                        .and_then(|p| p.stages.get(completed_stage_number as usize))
+                                        .map(|s| s.output_schema.clone())
+                                        .unwrap_or_else(|| serde_json::json!({"fields": []}));
+                                    let parsed = crate::agents::pipeline::parse_stage_output(
+                                        &prev_output,
+                                        &output_schema,
+                                    );
+                                    mgr.record_stage_output(run_id, sname, parsed);
+                                }
+                            }
+
                             // Try to advance to next stage
                             let next_stage = {
                                 let mut mgr = state.pipeline_manager.write().await;
@@ -274,9 +295,8 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         timestamp: chrono::Utc::now(),
                                         user_id: None,
                                     });
-                                    // TODO: integrate with approval gate
                                 } else {
-                                    // Auto-assign next stage
+                                    // Auto-assign next stage using template rendering
                                     let initial_task = {
                                         let mgr = state.pipeline_manager.read().await;
                                         mgr.get_run_initial_task(run_id)
@@ -284,54 +304,97 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                             .to_string()
                                     };
 
-                                    let description = format!(
-                                        "{}\n\nPrevious stage output:\n{}",
-                                        initial_task, prev_output
-                                    );
+                                    // Get stage outputs for template resolution
+                                    let stage_outputs = {
+                                        let mgr = state.pipeline_manager.read().await;
+                                        mgr.get_stage_outputs(run_id)
+                                            .cloned()
+                                            .unwrap_or_default()
+                                    };
+
+                                    // Get pipeline_id to load DB stage row
+                                    let pipeline_id = {
+                                        let mgr = state.pipeline_manager.read().await;
+                                        mgr.get_run_pipeline_id(run_id)
+                                    };
+
+                                    // Try to render the stage prompt using the template system
+                                    let rendered_prompt = if let Some(pid) = pipeline_id {
+                                        match state.repo.list_pipeline_stages(pid.0).await {
+                                            Ok(db_stages) => {
+                                                if let Some(db_stage) = db_stages.into_iter().find(|s| s.stage_number == next_stage.stage_number as i32) {
+                                                    let doc_repo_ref = state.doc_repo.as_deref();
+                                                    Some(super::api::render_stage(doc_repo_ref, &db_stage, &stage_outputs).await)
+                                                } else {
+                                                    None
+                                                }
+                                            }
+                                            Err(e) => {
+                                                warn!("Failed to load pipeline stages from DB: {}", e);
+                                                None
+                                            }
+                                        }
+                                    } else {
+                                        None
+                                    };
+
+                                    let description = rendered_prompt.unwrap_or_else(|| {
+                                        format!("{}\n\nPrevious stage output:\n{}", initial_task, prev_output)
+                                    });
+
+                                    // Load agent-level context documents
+                                    let mut context_reading: Vec<FileContent> = Vec::new();
+
+                                    // Resolve agent: prefer agent_id, fall back to cluster selection
+                                    let resolved_agent_id = if let Some(aid) = &next_stage.agent_id {
+                                        // Load context docs for this agent
+                                        if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
+                                            for doc in &docs {
+                                                context_reading.push(FileContent {
+                                                    path: format!("context:{}", if doc.ref_tag.is_empty() { &doc.title } else { &doc.ref_tag }),
+                                                    content: doc.content.clone(),
+                                                });
+                                            }
+                                        }
+                                        Some(aid.clone())
+                                    } else if let Some(cid) = &next_stage.cluster_id {
+                                        // Pick an agent from the cluster (first available member)
+                                        match state.repo.list_cluster_members(cid.0).await {
+                                            Ok(member_ids) => {
+                                                let picked = member_ids.first().map(|mid| {
+                                                    crate::agents::AgentId(*mid)
+                                                });
+                                                // Load context docs for picked agent
+                                                if let Some(aid) = &picked {
+                                                    if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
+                                                        for doc in &docs {
+                                                            context_reading.push(FileContent {
+                                                                path: format!("context:{}", if doc.ref_tag.is_empty() { &doc.title } else { &doc.ref_tag }),
+                                                                content: doc.content.clone(),
+                                                            });
+                                                        }
+                                                    }
+                                                }
+                                                picked
+                                            }
+                                            Err(e) => {
+                                                warn!("Failed to list cluster members: {}", e);
+                                                None
+                                            }
+                                        }
+                                    } else {
+                                        None
+                                    };
 
                                     let role_str = next_stage.role.as_deref().unwrap_or("worker");
                                     let role_id = RoleId::new(role_str);
 
-                                    let (system_prompt, style, output_format, required_reading) =
-                                        if let Some(rm) = &state.role_manager {
-                                            if let Some(role) = rm.get_role(&role_id) {
-                                                let vars = std::collections::HashMap::new();
-                                                let ctx =
-                                                    rm.build_context_for_role(role, &vars).await;
-                                                let prompt = ctx.build_system_prompt();
-                                                let s = role.style;
-                                                let fmt = role.output_format.clone();
-                                                let files: Vec<FileContent> = ctx
-                                                    .loaded_files
-                                                    .into_iter()
-                                                    .map(|f| FileContent {
-                                                        path: f.path,
-                                                        content: f.content,
-                                                    })
-                                                    .collect();
-                                                (prompt, s, fmt, files)
-                                            } else {
-                                                (
-                                                    format!(
-                                                        "You are a {} working on: {}",
-                                                        role_str, initial_task
-                                                    ),
-                                                    CommunicationStyle::Technical,
-                                                    OutputFormat::CodeAndReport,
-                                                    vec![],
-                                                )
-                                            }
-                                        } else {
-                                            (
-                                                format!(
-                                                    "You are a {} working on: {}",
-                                                    role_str, initial_task
-                                                ),
-                                                CommunicationStyle::Technical,
-                                                OutputFormat::CodeAndReport,
-                                                vec![],
-                                            )
-                                        };
+                                    let system_prompt = format!(
+                                        "You are a {} working on: {}",
+                                        role_str, initial_task
+                                    );
+                                    let style = CommunicationStyle::Technical;
+                                    let output_format = OutputFormat::CodeAndReport;
 
                                     let project_root = std::env::current_dir().unwrap_or_default();
                                     let execution_context =
@@ -345,7 +408,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         ),
                                         description,
                                         context: TaskContext {
-                                            required_reading,
+                                            required_reading: context_reading,
                                             files: vec![],
                                             history: vec![],
                                             conventions: String::new(),
@@ -376,31 +439,37 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         );
                                     }
 
-                                    if let (Some(disp), Some(agent_id)) = (&state.dispatcher, &next_stage.agent_id) {
-                                        let disp = disp.lock().await;
-                                        if let Err(e) = disp
-                                            .send_to_agent(
-                                                agent_id,
-                                                AgentCommand::AssignTask(assignment),
-                                            )
-                                            .await
-                                        {
-                                            error!("Pipeline auto-advance failed: {}", e);
-                                            let mut mgr = state.pipeline_manager.write().await;
-                                            mgr.fail_run(run_id);
-                                        } else {
-                                            state.broadcast_feed(FeedUpdate {
-                                                id: run_id,
-                                                agent_id: "pipeline".into(),
-                                                content: format!(
-                                                    "Pipeline advanced to stage {}",
-                                                    next_stage.stage_number
-                                                ),
-                                                item_type: "pipeline_progress".into(),
-                                                timestamp: chrono::Utc::now(),
-                                                user_id: None,
-                                            });
+                                    if let Some(agent_id) = &resolved_agent_id {
+                                        if let Some(disp) = &state.dispatcher {
+                                            let disp = disp.lock().await;
+                                            if let Err(e) = disp
+                                                .send_to_agent(
+                                                    agent_id,
+                                                    AgentCommand::AssignTask(assignment),
+                                                )
+                                                .await
+                                            {
+                                                error!("Pipeline auto-advance failed: {}", e);
+                                                let mut mgr = state.pipeline_manager.write().await;
+                                                mgr.fail_run(run_id);
+                                            } else {
+                                                state.broadcast_feed(FeedUpdate {
+                                                    id: run_id,
+                                                    agent_id: "pipeline".into(),
+                                                    content: format!(
+                                                        "Pipeline advanced to stage {}",
+                                                        next_stage.stage_number
+                                                    ),
+                                                    item_type: "pipeline_progress".into(),
+                                                    timestamp: chrono::Utc::now(),
+                                                    user_id: None,
+                                                });
+                                            }
                                         }
+                                    } else {
+                                        error!("Pipeline stage {} has no agent_id or cluster_id", next_stage.stage_number);
+                                        let mut mgr = state.pipeline_manager.write().await;
+                                        mgr.fail_run(run_id);
                                     }
                                 }
                             } else {

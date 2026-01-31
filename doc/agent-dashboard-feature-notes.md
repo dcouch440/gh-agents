@@ -292,6 +292,20 @@ This is a future feature. The current schema should accommodate it by:
 - Supporting a link between stage instances and chat sessions
 - Keeping the rendered prompt as a stored artifact (not just computed on the fly)
 
+## Part 6: Runtime Wiring (Completed)
+
+Wired the template system into actual pipeline execution:
+
+- **Stage output storage**: `PipelineRun.stage_outputs` (HashMap<String, Value>) stores parsed structured output from each completed stage, keyed by stage_name
+- **Output parser**: `parse_stage_output()` extracts JSON from LLM output (```json fences or bare objects), falls back to `{"output": "raw text"}`
+- **Reusable render_stage()**: Extracted from HTTP endpoint into standalone async fn callable from orchestrator and tools
+- **Template rendering in auto-advance**: Orchestrator now renders stage prompts via `render_stage()` with accumulated `stage_outputs` instead of raw text append
+- **Template rendering in start_pipeline**: First stage also renders via template system
+- **Cluster-based agent selection**: Stages with `cluster_id` pick first member from `cluster_members` table
+- **Agent-level context injection**: Context documents loaded via `get_agent_context()` and passed as `required_reading` FileContent entries
+
+Files modified: `src/agents/pipeline.rs`, `src/server/api.rs`, `src/server/orchestrator.rs`, `src/server/tools.rs`, `doc/agent-dashboard-feature-notes.md`
+
 ## Open Questions (remaining)
 
 1. Should teams be scoped per-project or global?
