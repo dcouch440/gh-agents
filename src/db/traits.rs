@@ -403,6 +403,9 @@ pub trait ServerRepo: Send + Sync {
     /// Get chat history for a session.
     async fn get_session_history(&self, session_id: Uuid, limit: u32) -> Result<Vec<ChatMessageRow>>;
 
+    /// Update the title for a session.
+    async fn update_session_title(&self, session_id: Uuid, title: &str) -> Result<()>;
+
     /// Update the summary for a session.
     async fn update_session_summary(&self, session_id: Uuid, summary: &str) -> Result<()>;
 

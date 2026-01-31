@@ -1818,6 +1818,31 @@ pub async fn haiku_summarize(content: &str) -> Option<String> {
     }
 }
 
+/// Call Haiku to generate a short title for a conversation.
+pub async fn haiku_summarize_title(content: &str) -> Option<String> {
+    let config = AnthropicConfig::from_env().ok()?;
+    let client = AnthropicClient::new(config).ok()?;
+
+    let truncated: String = content.chars().take(2000).collect();
+    let request = LLMRequest::new(
+        "claude-haiku-4-20250514",
+        vec![LlmMessage::user(truncated)],
+    )
+    .with_system("Generate a short title (3-6 words) for this conversation. Return ONLY the title, no quotes, no punctuation at the end.")
+    .with_max_tokens(32);
+
+    match client.send_message(request).await {
+        Ok(resp) => {
+            let title = resp.content.trim().to_string();
+            if title.is_empty() { None } else { Some(title) }
+        }
+        Err(e) => {
+            tracing::warn!("Haiku title generation failed: {}", e);
+            None
+        }
+    }
+}
+
 /// Call Haiku to extract relevant context from a conversation summary
 /// based on the user's current message.
 pub async fn haiku_extract_context(summary: &str, current_message: &str) -> Option<String> {

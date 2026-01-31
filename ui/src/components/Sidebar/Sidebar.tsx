@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   MessageSquare,
@@ -12,6 +12,10 @@ import {
   Plus,
   ChevronDown,
   ChevronRight,
+  Pencil,
+  Trash2,
+  Check,
+  X,
 } from 'lucide-react';
 import { useAuthStore } from '../../store';
 import { api, type ModeInfo, type SessionResponse } from '../../api/client';
@@ -35,11 +39,21 @@ export function Sidebar({ collapsed }: SidebarProps) {
   const [modes, setModes] = useState<ModeInfo[]>([]);
   const [sessions, setSessions] = useState<SessionResponse[]>([]);
   const [sessionsOpen, setSessionsOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const editRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     api.modes.list().then(setModes).catch(() => {});
     api.sessions.list().then(setSessions).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (editingId && editRef.current) {
+      editRef.current.focus();
+      editRef.current.select();
+    }
+  }, [editingId]);
 
   const handleLogout = () => {
     logout();
@@ -54,6 +68,43 @@ export function Sidebar({ collapsed }: SidebarProps) {
     } catch {
       // ignore
     }
+  };
+
+  const handleStartEdit = (session: SessionResponse) => {
+    setEditingId(session.id);
+    setEditTitle(session.title || session.mode_id);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingId || !editTitle.trim()) return;
+    try {
+      const updated = await api.sessions.update(editingId, editTitle.trim());
+      setSessions((prev) =>
+        prev.map((s) => (s.id === editingId ? updated : s))
+      );
+    } catch {
+      // ignore
+    }
+    setEditingId(null);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+  };
+
+  const handleDelete = async (sessionId: string) => {
+    try {
+      await api.sessions.delete(sessionId);
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      navigate('/chat');
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleSaveEdit();
+    if (e.key === 'Escape') handleCancelEdit();
   };
 
   return (
@@ -124,19 +175,68 @@ export function Sidebar({ collapsed }: SidebarProps) {
                 {sessions.length > 0 && (
                   <div className="border-t border-border mt-2 pt-2">
                     {sessions.map((session) => (
-                      <NavLink
-                        key={session.id}
-                        to={`/chat/${session.id}`}
-                        className={({ isActive }) =>
-                          `block px-3 py-1.5 text-sm rounded-lg truncate transition-colors
-                           ${isActive
-                             ? 'bg-bg-tertiary text-text-primary'
-                             : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary/50'
-                           }`
-                        }
-                      >
-                        {session.title || session.mode_id}
-                      </NavLink>
+                      <div key={session.id} className="group relative">
+                        {editingId === session.id ? (
+                          <div className="flex items-center gap-1 px-2 py-1">
+                            <input
+                              ref={editRef}
+                              value={editTitle}
+                              onChange={(e) => setEditTitle(e.target.value)}
+                              onKeyDown={handleEditKeyDown}
+                              onBlur={handleSaveEdit}
+                              className="flex-1 min-w-0 px-1.5 py-0.5 text-sm rounded
+                                         bg-bg-primary border border-border text-text-primary
+                                         outline-none focus:border-accent"
+                            />
+                            <button
+                              onClick={handleSaveEdit}
+                              className="p-0.5 text-green-400 hover:text-green-300"
+                            >
+                              <Check size={12} />
+                            </button>
+                            <button
+                              onMouseDown={(e) => { e.preventDefault(); handleCancelEdit(); }}
+                              className="p-0.5 text-text-tertiary hover:text-text-primary"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ) : (
+                          <NavLink
+                            to={`/chat/${session.id}`}
+                            className={({ isActive }) =>
+                              `block px-3 py-1.5 text-sm rounded-lg truncate transition-colors pr-14
+                               ${isActive
+                                 ? 'bg-bg-tertiary text-text-primary'
+                                 : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary/50'
+                               }`
+                            }
+                          >
+                            {session.title || session.mode_id}
+                          </NavLink>
+                        )}
+                        {editingId !== session.id && (
+                          <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-0.5
+                                          opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={(e) => { e.preventDefault(); handleStartEdit(session); }}
+                              className="p-1 rounded text-text-tertiary hover:text-text-primary
+                                         hover:bg-bg-tertiary/80 transition-colors"
+                              title="Rename"
+                            >
+                              <Pencil size={11} />
+                            </button>
+                            <button
+                              onClick={(e) => { e.preventDefault(); handleDelete(session.id); }}
+                              className="p-1 rounded text-text-tertiary hover:text-red-400
+                                         hover:bg-bg-tertiary/80 transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
                 )}

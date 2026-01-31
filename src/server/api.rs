@@ -549,6 +549,12 @@ pub struct CreateSessionRequest {
     pub title: String,
 }
 
+/// Request body for updating a session
+#[derive(Deserialize)]
+pub struct UpdateSessionRequest {
+    pub title: String,
+}
+
 /// Response for session creation
 #[derive(Serialize)]
 pub struct SessionResponse {
@@ -680,6 +686,46 @@ pub async fn delete_session(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Update a session (rename)
+pub async fn update_session(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+    Path(session_id): Path<Uuid>,
+    Json(request): Json<UpdateSessionRequest>,
+) -> Result<Json<SessionResponse>, StatusCode> {
+    let session = state
+        .repo
+        .get_session(session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if session.user_id != auth.user_id.0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    state
+        .repo
+        .update_session_title(session_id, &request.title)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let updated = state
+        .repo
+        .get_session(session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(SessionResponse {
+        id: updated.id,
+        mode_id: updated.mode_id,
+        title: updated.title,
+        created_at: updated.created_at,
+        updated_at: updated.updated_at,
+    }))
 }
 
 /// Send a message to a session
@@ -1565,6 +1611,7 @@ mod tests {
         async fn delete_session(&self, _session_id: Uuid) -> anyhow::Result<()> { Ok(()) }
         async fn insert_session_message(&self, _user_id: UserId, _session_id: Uuid, _id: Uuid, _role: String, _content: String) -> anyhow::Result<()> { Ok(()) }
         async fn get_session_history(&self, _session_id: Uuid, _limit: u32) -> anyhow::Result<Vec<ChatMessageRow>> { Ok(vec![]) }
+        async fn update_session_title(&self, _session_id: Uuid, _title: &str) -> anyhow::Result<()> { Ok(()) }
         async fn update_session_summary(&self, _session_id: Uuid, _summary: &str) -> anyhow::Result<()> { Ok(()) }
         async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> { Ok(0) }
         async fn insert_token_usage(&self, _session_id: Option<Uuid>, _agent_id: Option<Uuid>, _tier: &str, _model_id: &str, _input_tokens: i64, _output_tokens: i64) -> anyhow::Result<()> { Ok(()) }

@@ -27,6 +27,13 @@ export function Message({ message, streaming, isLast, onRetry, toolExecutions }:
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const bodyClasses = [
+    styles.body,
+    isUser ? styles.bodyUser : styles.bodyAssistant,
+    !isUser && streaming ? styles.bodyStreaming : '',
+    !isUser && !streaming && message.content ? styles.bodyComplete : '',
+  ].filter(Boolean).join(' ');
+
   return (
     <div className={styles.turn}>
       <div className={styles.header}>
@@ -37,7 +44,7 @@ export function Message({ message, streaming, isLast, onRetry, toolExecutions }:
           {new Date(message.timestamp).toLocaleTimeString()}
         </span>
       </div>
-      <div className={`${styles.body} ${isUser ? styles.bodyUser : styles.bodyAssistant}`}>
+      <div className={bodyClasses}>
         {isUser ? (
           <p className={styles.text}>{message.content}</p>
         ) : (

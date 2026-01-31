@@ -844,6 +844,23 @@ async fn handle_message(
             error!("Failed to save assistant message: {}", e);
         }
 
+        // Auto-name session after first exchange
+        if let Some(session_id) = msg.session_id {
+            let state2 = state.clone();
+            let user_msg = msg.content.clone();
+            tokio::spawn(async move {
+                // Only auto-name if title starts with "New " (default)
+                if let Ok(Some(session)) = state2.repo.get_session(session_id).await {
+                    if session.title.starts_with("New ") {
+                        let prompt = format!("Conversation opener: {}", &user_msg[..user_msg.len().min(500)]);
+                        if let Some(title) = tools::haiku_summarize_title(&prompt).await {
+                            let _ = state2.repo.update_session_title(session_id, &title).await;
+                        }
+                    }
+                }
+            });
+        }
+
         // Phase 1: Spawn background compaction if session has > 20 messages
         if let Some(session_id) = msg.session_id {
             let state = state.clone();
@@ -945,6 +962,7 @@ mod tests {
         async fn delete_session(&self, _session_id: Uuid) -> anyhow::Result<()> { Ok(()) }
         async fn insert_session_message(&self, _user_id: UserId, _session_id: Uuid, _id: Uuid, _role: String, _content: String) -> anyhow::Result<()> { Ok(()) }
         async fn get_session_history(&self, _session_id: Uuid, _limit: u32) -> anyhow::Result<Vec<ChatMessageRow>> { Ok(vec![]) }
+        async fn update_session_title(&self, _session_id: Uuid, _title: &str) -> anyhow::Result<()> { Ok(()) }
         async fn update_session_summary(&self, _session_id: Uuid, _summary: &str) -> anyhow::Result<()> { Ok(()) }
         async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> { Ok(0) }
         async fn insert_token_usage(&self, _session_id: Option<Uuid>, _agent_id: Option<Uuid>, _tier: &str, _model_id: &str, _input_tokens: i64, _output_tokens: i64) -> anyhow::Result<()> { Ok(()) }
