@@ -123,6 +123,9 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
         .route("/documents", get(api::list_documents).post(api::create_document))
         .route("/documents/search", get(api::search_documents))
         .route("/documents/:id", get(api::get_document).patch(api::update_document).delete(api::delete_document))
+        .route("/stats", get(api::get_usage_stats))
+        // Context response endpoint (F6)
+        .route("/context-response", post(api::submit_context_response))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // Static file serving for production (Ticket 10.6)
@@ -388,6 +391,10 @@ mod tests {
         async fn delete_session(&self, _session_id: Uuid) -> anyhow::Result<()> { Ok(()) }
         async fn insert_session_message(&self, _user_id: UserId, _session_id: Uuid, _id: Uuid, _role: String, _content: String) -> anyhow::Result<()> { Ok(()) }
         async fn get_session_history(&self, _session_id: Uuid, _limit: u32) -> anyhow::Result<Vec<ChatMessageRow>> { Ok(vec![]) }
+        async fn update_session_summary(&self, _session_id: Uuid, _summary: &str) -> anyhow::Result<()> { Ok(()) }
+        async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> { Ok(0) }
+        async fn insert_token_usage(&self, _session_id: Option<Uuid>, _agent_id: Option<Uuid>, _tier: &str, _model_id: &str, _input_tokens: i64, _output_tokens: i64) -> anyhow::Result<()> { Ok(()) }
+        async fn get_usage_summary(&self, _since_hours: u32) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> { Ok(vec![]) }
     }
 
     fn setup_mock_state() -> AppState {

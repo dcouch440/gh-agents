@@ -1222,6 +1222,81 @@ pub async fn delete_document(
 }
 
 // ============================================================================
+// Context Response Endpoint (F6)
+// ============================================================================
+
+/// Request body for submitting a context response to an agent
+#[derive(Deserialize)]
+pub struct ContextResponseRequest {
+    pub agent_id: Uuid,
+    pub task_id: Uuid,
+    pub context: String,
+    pub files: Vec<FilePathContent>,
+}
+
+/// A file with path and content for context responses
+#[derive(Deserialize)]
+pub struct FilePathContent {
+    pub path: String,
+    pub content: String,
+}
+
+/// POST /api/context-response - Submit a human context response to an agent
+pub async fn submit_context_response(
+    State(state): State<AppState>,
+    _auth: auth::AuthUser,
+    Json(request): Json<ContextResponseRequest>,
+) -> Result<StatusCode, StatusCode> {
+    use crate::agents::{AgentCommand, AgentId, ContextResponse, FileContent};
+
+    let agent_id = AgentId(request.agent_id);
+
+    let files: Vec<FileContent> = request
+        .files
+        .into_iter()
+        .map(|f| FileContent {
+            path: f.path,
+            content: f.content,
+        })
+        .collect();
+
+    let answers = if request.context.is_empty() {
+        vec![]
+    } else {
+        vec![request.context]
+    };
+
+    let dispatcher = state.dispatcher.as_ref().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let disp = dispatcher.lock().await;
+    disp.send_to_agent(
+        &agent_id,
+        AgentCommand::ProvideContext(ContextResponse {
+            task_id: request.task_id,
+            files,
+            answers,
+        }),
+    )
+    .await
+    .map_err(|_| StatusCode::NOT_FOUND)?;
+
+    Ok(StatusCode::OK)
+}
+
+// ============================================================================
+// Usage Stats Endpoint (F5 - Cost Dashboard)
+// ============================================================================
+
+/// Get token usage summary for the last 24 hours.
+pub async fn get_usage_stats(
+    State(state): State<AppState>,
+    _auth: auth::AuthUser,
+) -> Result<Json<Vec<crate::db::UsageSummaryRow>>, StatusCode> {
+    let stats = state.repo.get_usage_summary(24).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(stats))
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -1490,6 +1565,10 @@ mod tests {
         async fn delete_session(&self, _session_id: Uuid) -> anyhow::Result<()> { Ok(()) }
         async fn insert_session_message(&self, _user_id: UserId, _session_id: Uuid, _id: Uuid, _role: String, _content: String) -> anyhow::Result<()> { Ok(()) }
         async fn get_session_history(&self, _session_id: Uuid, _limit: u32) -> anyhow::Result<Vec<ChatMessageRow>> { Ok(vec![]) }
+        async fn update_session_summary(&self, _session_id: Uuid, _summary: &str) -> anyhow::Result<()> { Ok(()) }
+        async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> { Ok(0) }
+        async fn insert_token_usage(&self, _session_id: Option<Uuid>, _agent_id: Option<Uuid>, _tier: &str, _model_id: &str, _input_tokens: i64, _output_tokens: i64) -> anyhow::Result<()> { Ok(()) }
+        async fn get_usage_summary(&self, _since_hours: u32) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> { Ok(vec![]) }
     }
 
     fn create_test_token(jwt_secret: &[u8]) -> String {

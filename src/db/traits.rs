@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use crate::db::{AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow};
+use crate::db::{AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow, UsageSummaryRow};
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::observability::{Decision, LlmCall};
 use crate::orchestration::DependencyError;
@@ -402,6 +402,28 @@ pub trait ServerRepo: Send + Sync {
 
     /// Get chat history for a session.
     async fn get_session_history(&self, session_id: Uuid, limit: u32) -> Result<Vec<ChatMessageRow>>;
+
+    /// Update the summary for a session.
+    async fn update_session_summary(&self, session_id: Uuid, summary: &str) -> Result<()>;
+
+    /// Count messages in a session.
+    async fn count_session_messages(&self, session_id: Uuid) -> Result<u32>;
+
+    // --- Token usage tracking ---
+
+    /// Insert a token usage record.
+    async fn insert_token_usage(
+        &self,
+        session_id: Option<Uuid>,
+        agent_id: Option<Uuid>,
+        tier: &str,
+        model_id: &str,
+        input_tokens: i64,
+        output_tokens: i64,
+    ) -> Result<()>;
+
+    /// Get aggregated usage summary for the last N hours.
+    async fn get_usage_summary(&self, since_hours: u32) -> Result<Vec<UsageSummaryRow>>;
 }
 
 // ============================================================================

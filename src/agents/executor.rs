@@ -13,10 +13,74 @@ use super::channels::{
 use super::execution_tools;
 use super::roles::{CommunicationStyle, OutputFormat};
 use crate::llm::{
-    ContentBlock, LLMRequest, LLMResponse, Message, StreamAccumulator, StopReason,
-    StreamChunk as LLMStreamChunk,
+    AnthropicClient, AnthropicConfig, ContentBlock, LLMProvider, LLMRequest, LLMResponse, Message,
+    StreamAccumulator, StopReason, StreamChunk as LLMStreamChunk,
 };
 use crate::types::{AgentStatus, TaskStatus};
+
+/// Verify completed work using a cheap Haiku call.
+///
+/// Returns `Some(issues)` if the reviewer found problems, `None` if work looks good
+/// or if verification could not be performed (e.g. missing API key).
+async fn verify_work(
+    task_title: &str,
+    accumulated_response: &str,
+    files_modified: &[String],
+) -> Option<Vec<String>> {
+    let verification_prompt = format!(
+        "You are reviewing work completed by an AI agent.\n\n\
+        Task: {}\n\n\
+        Agent's response:\n{}\n\n\
+        Files modified: {:?}\n\n\
+        Check for:\n\
+        - Missing implementation (did the agent skip anything?)\n\
+        - Obvious bugs or errors in the described work\n\
+        - Incomplete changes (started something but didn't finish)\n\n\
+        Respond with JSON only:\n\
+        {{\"issues_found\": false}}\n\
+        or\n\
+        {{\"issues_found\": true, \"issues\": [\"issue 1\", \"issue 2\"]}}",
+        task_title,
+        &accumulated_response[..accumulated_response.len().min(4000)],
+        files_modified,
+    );
+
+    let api_key = std::env::var("ANTHROPIC_API_KEY").ok()?;
+    let config = AnthropicConfig::new(api_key);
+    let client = AnthropicClient::new(config).ok()?;
+
+    let request = LLMRequest {
+        model: "claude-haiku-4-20250514".to_string(),
+        system: None,
+        messages: vec![Message::user(&verification_prompt)],
+        max_tokens: 512,
+        temperature: 0.0,
+        ..Default::default()
+    };
+
+    let response = client.send_message(request).await.ok()?;
+
+    // Parse JSON from response text
+    if let Some(text) = response.content_blocks.first().and_then(|b| match b {
+        ContentBlock::Text { text } => Some(text.as_str()),
+        _ => None,
+    }) {
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(text) {
+            if parsed["issues_found"].as_bool() == Some(true) {
+                if let Some(issues) = parsed["issues"].as_array() {
+                    return Some(
+                        issues
+                            .iter()
+                            .filter_map(|i| i.as_str().map(String::from))
+                            .collect(),
+                    );
+                }
+            }
+        }
+    }
+
+    None // No issues found or couldn't parse
+}
 
 impl Agent {
     /// Run the agent's main execution loop
@@ -522,6 +586,108 @@ impl Agent {
 
             // EndTurn or MaxTokens — done
             break;
+        }
+
+        // Verify work with Haiku (cheap quality check)
+        if !accumulated_response.is_empty() {
+            if let Some(issues) =
+                verify_work(&assignment.title, &accumulated_response, &files_modified).await
+            {
+                info!(
+                    "Haiku found {} issues, running correction round",
+                    issues.len()
+                );
+
+                let issue_text = format!(
+                    "A reviewer found these issues with your work:\n{}\n\nPlease fix these issues.",
+                    issues
+                        .iter()
+                        .enumerate()
+                        .map(|(i, s)| format!("{}. {}", i + 1, s))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                );
+                messages.push(Message::user(&issue_text));
+
+                // Run ONE more round with the agent's own model
+                let fix_request = LLMRequest {
+                    model: self.model_config.model_id.clone(),
+                    system: Some(system_prompt.clone()),
+                    messages: messages.clone(),
+                    max_tokens: self.model_config.max_tokens,
+                    temperature,
+                    stream: true,
+                    tools: tool_defs.clone(),
+                    ..Default::default()
+                };
+
+                let mut fix_stream = self
+                    .llm_provider()
+                    .send_message_stream(fix_request)
+                    .await
+                    .map_err(|e| AgentError::LLMError(format!("Fix round error: {}", e)))?;
+
+                let mut fix_accumulator = StreamAccumulator::new();
+                while let Some(chunk_result) = fix_stream.next().await {
+                    match chunk_result {
+                        Ok(ref chunk @ LLMStreamChunk::ContentDelta { ref text, .. }) => {
+                            accumulated_response.push_str(text);
+                            self.emit_progress(task_id, text, None).await?;
+                            fix_accumulator.apply(chunk);
+                        }
+                        Ok(ref chunk) => {
+                            fix_accumulator.apply(chunk);
+                        }
+                        Err(e) => {
+                            warn!("Fix round stream error: {}", e);
+                            break;
+                        }
+                    }
+                }
+
+                // Handle any tool calls from the fix round
+                if let Some(fix_response) = fix_accumulator.build() {
+                    if fix_response.stop_reason == StopReason::ToolUse {
+                        if let Some(exec_ctx) = &assignment.context.execution_context {
+                            messages.push(Message::assistant_with_blocks(
+                                fix_response.content_blocks.clone(),
+                            ));
+                            let mut tool_results = Vec::new();
+                            for block in &fix_response.content_blocks {
+                                if let ContentBlock::ToolUse { id, name, input } = block {
+                                    let result = execution_tools::execute_execution_tool(
+                                        name,
+                                        input,
+                                        exec_ctx,
+                                        allowed_tools,
+                                    )
+                                    .await;
+
+                                    if name == "write_file" {
+                                        if let Some(path) = input["path"].as_str() {
+                                            files_modified.push(path.to_string());
+                                        }
+                                    } else if name == "git_commit" {
+                                        if let Some(path) = result["sha"].as_str() {
+                                            files_modified
+                                                .push(format!("commit:{}", path));
+                                        }
+                                    }
+
+                                    let result_str = serde_json::to_string_pretty(&result)
+                                        .unwrap_or_else(|_| result.to_string());
+
+                                    tool_results.push(ContentBlock::ToolResult {
+                                        tool_use_id: id.clone(),
+                                        content: result_str,
+                                    });
+                                }
+                            }
+                            messages.push(Message::tool_results(tool_results));
+                        }
+                    }
+                }
+            }
         }
 
         self.emit_progress(task_id, "Task complete", Some(100))

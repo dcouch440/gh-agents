@@ -10,7 +10,7 @@ use crate::db::traits::{
     CostRepo, DependencyRepo, DocumentRepo, MergeQueueRepo, ObservabilityRepo, PlannerRepo,
     RefactorRepo, SchedulerRepo, ServerRepo, TaskQueueRepo, UserRepo,
 };
-use crate::db::{AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow};
+use crate::db::{AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow, UsageSummaryRow};
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::observability::{Decision, LlmCall};
 use crate::orchestration::DependencyError;
@@ -1249,6 +1249,67 @@ impl ServerRepo for PgRepo {
 
     async fn get_session_history(&self, session_id: Uuid, limit: u32) -> Result<Vec<ChatMessageRow>> {
         crate::db::get_session_history(&self.pool, session_id, limit).await
+    }
+
+    async fn update_session_summary(&self, session_id: Uuid, summary: &str) -> Result<()> {
+        sqlx::query("UPDATE chat_sessions SET summary = $1 WHERE id = $2")
+            .bind(summary)
+            .bind(session_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn count_session_messages(&self, session_id: Uuid) -> Result<u32> {
+        let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM chat_messages WHERE session_id = $1")
+            .bind(session_id)
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(row.0 as u32)
+    }
+
+    // --- Token usage tracking ---
+
+    async fn insert_token_usage(
+        &self,
+        session_id: Option<Uuid>,
+        agent_id: Option<Uuid>,
+        tier: &str,
+        model_id: &str,
+        input_tokens: i64,
+        output_tokens: i64,
+    ) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO token_usage (session_id, agent_id, tier, model_id, input_tokens, output_tokens) VALUES ($1, $2, $3, $4, $5, $6)"
+        )
+        .bind(session_id)
+        .bind(agent_id)
+        .bind(tier)
+        .bind(model_id)
+        .bind(input_tokens)
+        .bind(output_tokens)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn get_usage_summary(&self, since_hours: u32) -> Result<Vec<UsageSummaryRow>> {
+        let rows = sqlx::query_as::<_, UsageSummaryRow>(
+            r#"
+            SELECT tier, model_id,
+                   COALESCE(SUM(input_tokens), 0) AS total_input,
+                   COALESCE(SUM(output_tokens), 0) AS total_output,
+                   COUNT(*) AS call_count
+            FROM token_usage
+            WHERE created_at > NOW() - make_interval(hours => $1::int)
+            GROUP BY tier, model_id
+            ORDER BY SUM(input_tokens + output_tokens) DESC
+            "#
+        )
+        .bind(since_hours as i32)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
     }
 }
 

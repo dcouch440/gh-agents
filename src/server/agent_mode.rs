@@ -83,7 +83,13 @@ impl ModeRegistry {
             name: "Planning".to_string(),
             description: "Build and refine a PRD collaboratively.".to_string(),
             system_prompt: include_str!("prompts/planning.txt").to_string(),
-            tools: vec![],
+            tools: vec![
+                "create_doc".to_string(),
+                "update_doc".to_string(),
+                "search_docs".to_string(),
+                "think".to_string(),
+                "submit_prd".to_string(),
+            ],
             mounted_files: vec![],
             history_policy: HistoryPolicy::SessionScoped { max_messages: 30 },
         };
@@ -119,6 +125,7 @@ impl ModeRegistry {
                 "read_file".to_string(),
                 "list_files".to_string(),
                 "think".to_string(),
+                "search_docs".to_string(),
             ],
             mounted_files: vec![],
             history_policy: HistoryPolicy::SessionScoped { max_messages: 20 },
@@ -138,7 +145,10 @@ impl ModeRegistry {
                 - Complexity: S/M/L/XL\n\
                 - Suggested role: worker, reviewer, or utility\n\n\
                 Then build the execution pipeline: create agents, add pipeline stages in dependency order, \
-                and set approval gates before risky stages. Present the pipeline as a diagram before starting it."
+                and set approval gates before risky stages. Present the pipeline as a diagram before starting it.\n\n\
+                When you see @doc:name in content, it refers to an architecture document. \
+                Use search_docs to find related documents. Include @doc:name references in ticket \
+                descriptions so worker agents receive relevant document context automatically."
                 .to_string(),
             tools: vec![
                 "create_pipeline".to_string(),
@@ -148,6 +158,10 @@ impl ModeRegistry {
                 "list_agents".to_string(),
                 "assign_task".to_string(),
                 "think".to_string(),
+                "create_doc".to_string(),
+                "update_doc".to_string(),
+                "search_docs".to_string(),
+                "submit_ticket".to_string(),
             ],
             mounted_files: vec![],
             history_policy: HistoryPolicy::None,

@@ -550,6 +550,55 @@ pub fn agent_tools() -> Vec<Tool> {
                 "required": ["query"]
             }),
         },
+        // --- Structured output validation tools ---
+        Tool {
+            name: "submit_prd".to_string(),
+            description: "Submit a finalized PRD as structured JSON. Validates all fields and stores the PRD as a document. Returns validation errors if any fields are missing or invalid.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "title": { "type": "string", "description": "PRD title" },
+                    "problem_statement": { "type": "string", "description": "What problem this solves" },
+                    "goals": { "type": "array", "items": { "type": "string" }, "description": "Measurable goals (min 1)" },
+                    "non_goals": { "type": "array", "items": { "type": "string" }, "description": "Explicit scope boundaries (min 1)" },
+                    "user_stories": { "type": "array", "items": { "type": "string" }, "description": "User stories (min 1)" },
+                    "technical_approach": { "type": "string", "description": "Technical approach and architecture" },
+                    "milestones": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": { "type": "string" },
+                                "deliverables": { "type": "array", "items": { "type": "string" } }
+                            },
+                            "required": ["name", "deliverables"]
+                        },
+                        "description": "Implementation milestones (min 1)"
+                    },
+                    "complexity": { "type": "string", "enum": ["S", "M", "L", "XL"], "description": "Complexity estimate" },
+                    "success_metrics": { "type": "array", "items": { "type": "string" }, "description": "Optional success metrics" },
+                    "risks": { "type": "array", "items": { "type": "string" }, "description": "Optional risks" }
+                },
+                "required": ["title", "problem_statement", "goals", "non_goals", "user_stories", "technical_approach", "milestones", "complexity"]
+            }),
+        },
+        Tool {
+            name: "submit_ticket".to_string(),
+            description: "Submit a decomposition ticket as structured JSON. Validates all fields and returns the validated ticket. Does not store the ticket — it flows through the pipeline system.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "title": { "type": "string", "description": "Ticket title" },
+                    "description": { "type": "string", "description": "Detailed description" },
+                    "acceptance_criteria": { "type": "array", "items": { "type": "string" }, "description": "Acceptance criteria (min 1)" },
+                    "files_to_modify": { "type": "array", "items": { "type": "string" }, "description": "Files to create or modify (min 1)" },
+                    "complexity": { "type": "string", "enum": ["S", "M", "L", "XL"], "description": "Complexity estimate" },
+                    "role": { "type": "string", "enum": ["worker", "reviewer", "utility"], "description": "Suggested agent role" },
+                    "dependencies": { "type": "array", "items": { "type": "string" }, "description": "Optional ticket title dependencies" }
+                },
+                "required": ["title", "description", "acceptance_criteria", "files_to_modify", "complexity", "role"]
+            }),
+        },
     ]
 }
 
@@ -586,6 +635,8 @@ pub async fn execute_tool(name: &str, input: &Value, state: &AppState, user_id: 
         "create_doc" => execute_create_doc(input, state, user_id).await,
         "update_doc" => execute_update_doc(input, state).await,
         "search_docs" => execute_search_docs(input, state, user_id).await,
+        "submit_prd" => execute_submit_prd(input, state, user_id).await,
+        "submit_ticket" => execute_submit_ticket(input).await,
         _ => json!({ "error": format!("Unknown tool: {}", name) }),
     }
 }
@@ -838,6 +889,32 @@ async fn execute_assign_task(input: &Value, state: &AppState) -> Value {
             )
         };
 
+    // Resolve @doc:ref-tag references in the description
+    let description = {
+        let mut desc = description.to_string();
+        if let Some(doc_repo) = &state.doc_repo {
+            let re = regex::Regex::new(r"@doc:([\w-]+)").unwrap();
+            let mut doc_sections = Vec::new();
+            for cap in re.captures_iter(&desc) {
+                let ref_tag = &cap[1];
+                match doc_repo.get_document_by_ref_tag(ref_tag).await {
+                    Ok(Some(row)) if !row.summary.is_empty() => {
+                        doc_sections.push(format!("### @doc:{}\n{}", ref_tag, row.summary));
+                    }
+                    _ => {
+                        tracing::debug!("Document ref @doc:{} not found or has no summary", ref_tag);
+                    }
+                }
+            }
+            if !doc_sections.is_empty() {
+                desc.push_str("\n\n---\n## Referenced Documents\n\n");
+                desc.push_str(&doc_sections.join("\n\n"));
+                desc.push('\n');
+            }
+        }
+        desc
+    };
+
     let agent_id = crate::agents::AgentId(uuid);
 
     // Look up cluster context for this agent
@@ -868,7 +945,7 @@ async fn execute_assign_task(input: &Value, state: &AppState) -> Value {
     let assignment = TaskAssignment {
         task_id: uuid::Uuid::new_v4(),
         title: title.to_string(),
-        description: description.to_string(),
+        description,
         context: TaskContext {
             required_reading,
             files: cluster_files,
@@ -1696,7 +1773,7 @@ fn title_to_ref_tag(title: &str) -> String {
 }
 
 /// Call Haiku to generate a short summary for search indexing.
-async fn haiku_summarize(content: &str) -> Option<String> {
+pub async fn haiku_summarize(content: &str) -> Option<String> {
     let config = AnthropicConfig::from_env().ok()?;
     let client = AnthropicClient::new(config).ok()?;
 
@@ -1712,6 +1789,29 @@ async fn haiku_summarize(content: &str) -> Option<String> {
         Ok(resp) => Some(resp.content),
         Err(e) => {
             tracing::warn!("Haiku summarization failed: {}", e);
+            None
+        }
+    }
+}
+
+/// Call Haiku to extract relevant context from a conversation summary
+/// based on the user's current message.
+pub async fn haiku_extract_context(summary: &str, current_message: &str) -> Option<String> {
+    let config = AnthropicConfig::from_env().ok()?;
+    let client = AnthropicClient::new(config).ok()?;
+
+    let user_text = format!("Summary:\n{}\n\nCurrent message:\n{}", summary, current_message);
+    let request = LLMRequest::new(
+        "claude-haiku-4-20250514",
+        vec![LlmMessage::user(user_text)],
+    )
+    .with_system("You extract relevant context from a conversation summary based on the user's current message. Return 2-4 sentences of context that are directly relevant to what the user is asking about now. If nothing is relevant, return 'No prior context needed.'")
+    .with_max_tokens(256);
+
+    match client.send_message(request).await {
+        Ok(resp) => Some(resp.content),
+        Err(e) => {
+            tracing::warn!("Haiku context extraction failed: {}", e);
             None
         }
     }
@@ -1836,6 +1936,208 @@ async fn execute_search_docs(input: &Value, state: &AppState, user_id: UserId) -
     }
 }
 
+// --- Structured output validation tool handlers ---
+
+async fn execute_submit_prd(input: &Value, state: &AppState, user_id: UserId) -> Value {
+    let mut errors = Vec::new();
+
+    // Validate required string fields
+    let title = input["title"].as_str().unwrap_or("");
+    if title.is_empty() {
+        errors.push("Missing field: title".to_string());
+    }
+    let problem_statement = input["problem_statement"].as_str().unwrap_or("");
+    if problem_statement.is_empty() {
+        errors.push("Missing field: problem_statement".to_string());
+    }
+    let technical_approach = input["technical_approach"].as_str().unwrap_or("");
+    if technical_approach.is_empty() {
+        errors.push("Missing field: technical_approach".to_string());
+    }
+
+    // Validate required array fields
+    let goals = input["goals"].as_array();
+    if goals.map_or(true, |a| a.is_empty()) {
+        errors.push("goals must have at least 1 entry".to_string());
+    }
+    let non_goals = input["non_goals"].as_array();
+    if non_goals.map_or(true, |a| a.is_empty()) {
+        errors.push("non_goals must have at least 1 entry".to_string());
+    }
+    let user_stories = input["user_stories"].as_array();
+    if user_stories.map_or(true, |a| a.is_empty()) {
+        errors.push("user_stories must have at least 1 entry".to_string());
+    }
+
+    // Validate milestones
+    let milestones = input["milestones"].as_array();
+    if milestones.map_or(true, |a| a.is_empty()) {
+        errors.push("milestones must have at least 1 entry".to_string());
+    } else if let Some(ms) = milestones {
+        for (i, m) in ms.iter().enumerate() {
+            if m["name"].as_str().unwrap_or("").is_empty() {
+                errors.push(format!("milestones[{}] missing name", i));
+            }
+            if m["deliverables"].as_array().map_or(true, |a| a.is_empty()) {
+                errors.push(format!("milestones[{}] must have at least 1 deliverable", i));
+            }
+        }
+    }
+
+    // Validate complexity
+    let complexity = input["complexity"].as_str().unwrap_or("");
+    if !matches!(complexity, "S" | "M" | "L" | "XL") {
+        errors.push("complexity must be one of: S, M, L, XL".to_string());
+    }
+
+    if !errors.is_empty() {
+        return json!({ "valid": false, "errors": errors });
+    }
+
+    // Format PRD as markdown
+    let goals_arr = goals.unwrap();
+    let non_goals_arr = non_goals.unwrap();
+    let user_stories_arr = user_stories.unwrap();
+    let milestones_arr = milestones.unwrap();
+
+    let mut md = format!("# PRD: {}\n\n## Status: APPROVED\n\n", title);
+    md.push_str(&format!("## Problem Statement\n\n{}\n\n", problem_statement));
+
+    md.push_str("## Goals\n\n");
+    for g in goals_arr {
+        md.push_str(&format!("- {}\n", g.as_str().unwrap_or("")));
+    }
+
+    md.push_str("\n## Non-Goals\n\n");
+    for ng in non_goals_arr {
+        md.push_str(&format!("- {}\n", ng.as_str().unwrap_or("")));
+    }
+
+    md.push_str("\n## User Stories\n\n");
+    for us in user_stories_arr {
+        md.push_str(&format!("- {}\n", us.as_str().unwrap_or("")));
+    }
+
+    md.push_str(&format!("\n## Technical Approach\n\n{}\n\n", technical_approach));
+
+    md.push_str("## Milestones\n\n");
+    for m in milestones_arr {
+        md.push_str(&format!("### {}\n\n", m["name"].as_str().unwrap_or("")));
+        if let Some(deliverables) = m["deliverables"].as_array() {
+            for d in deliverables {
+                md.push_str(&format!("- {}\n", d.as_str().unwrap_or("")));
+            }
+        }
+        md.push('\n');
+    }
+
+    md.push_str(&format!("## Complexity: {}\n\n", complexity));
+
+    if let Some(metrics) = input["success_metrics"].as_array() {
+        if !metrics.is_empty() {
+            md.push_str("## Success Metrics\n\n");
+            for m in metrics {
+                md.push_str(&format!("- {}\n", m.as_str().unwrap_or("")));
+            }
+            md.push('\n');
+        }
+    }
+
+    if let Some(risks) = input["risks"].as_array() {
+        if !risks.is_empty() {
+            md.push_str("## Risks\n\n");
+            for r in risks {
+                md.push_str(&format!("- {}\n", r.as_str().unwrap_or("")));
+            }
+            md.push('\n');
+        }
+    }
+
+    // Store as document
+    let Some(doc_repo) = &state.doc_repo else {
+        return json!({ "error": "Document repository not initialized" });
+    };
+
+    let ref_tag = title_to_ref_tag(title);
+
+    match doc_repo
+        .create_document(
+            user_id.0,
+            None,
+            title.to_string(),
+            md.clone(),
+            "prd".to_string(),
+            ref_tag.clone(),
+            vec!["prd".to_string()],
+        )
+        .await
+    {
+        Ok(row) => {
+            spawn_summary_task(Arc::clone(doc_repo), row.id, md);
+            json!({
+                "valid": true,
+                "doc_id": row.id.to_string(),
+                "ref_tag": ref_tag
+            })
+        }
+        Err(e) => json!({ "error": e.to_string() }),
+    }
+}
+
+async fn execute_submit_ticket(input: &Value) -> Value {
+    let mut errors = Vec::new();
+
+    let title = input["title"].as_str().unwrap_or("");
+    if title.is_empty() {
+        errors.push("Missing field: title".to_string());
+    }
+    let description = input["description"].as_str().unwrap_or("");
+    if description.is_empty() {
+        errors.push("Missing field: description".to_string());
+    }
+
+    let acceptance_criteria = input["acceptance_criteria"].as_array();
+    if acceptance_criteria.map_or(true, |a| a.is_empty()) {
+        errors.push("acceptance_criteria must have at least 1 entry".to_string());
+    }
+    let files_to_modify = input["files_to_modify"].as_array();
+    if files_to_modify.map_or(true, |a| a.is_empty()) {
+        errors.push("files_to_modify must have at least 1 entry".to_string());
+    }
+
+    let complexity = input["complexity"].as_str().unwrap_or("");
+    if !matches!(complexity, "S" | "M" | "L" | "XL") {
+        errors.push("complexity must be one of: S, M, L, XL".to_string());
+    }
+
+    let role = input["role"].as_str().unwrap_or("");
+    if !matches!(role, "worker" | "reviewer" | "utility") {
+        errors.push("role must be one of: worker, reviewer, utility".to_string());
+    }
+
+    if !errors.is_empty() {
+        return json!({ "valid": false, "errors": errors });
+    }
+
+    let dependencies: Vec<String> = input["dependencies"]
+        .as_array()
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+
+    json!({
+        "valid": true,
+        "ticket": {
+            "title": title,
+            "description": description,
+            "acceptance_criteria": acceptance_criteria.unwrap(),
+            "files_to_modify": files_to_modify.unwrap(),
+            "complexity": complexity,
+            "role": role,
+            "dependencies": dependencies
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1843,7 +2145,7 @@ mod tests {
     #[test]
     fn agent_tools_returns_all_tools() {
         let tools = agent_tools();
-        assert_eq!(tools.len(), 25);
+        assert_eq!(tools.len(), 30);
         assert_eq!(tools[0].name, "list_agents");
         assert_eq!(tools[1].name, "list_roles");
         assert_eq!(tools[2].name, "create_agent");
@@ -1868,6 +2170,11 @@ mod tests {
         assert_eq!(tools[21].name, "list_triggers");
         assert_eq!(tools[22].name, "read_file");
         assert_eq!(tools[23].name, "list_files");
+        assert_eq!(tools[25].name, "create_doc");
+        assert_eq!(tools[26].name, "update_doc");
+        assert_eq!(tools[27].name, "search_docs");
+        assert_eq!(tools[28].name, "submit_prd");
+        assert_eq!(tools[29].name, "submit_ticket");
     }
 
     #[test]
