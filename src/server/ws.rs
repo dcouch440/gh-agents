@@ -174,19 +174,24 @@ pub struct WsQuery {
 /// WebSocket upgrade handler
 ///
 /// Upgrades an HTTP connection to a WebSocket connection for real-time updates.
-/// Optionally authenticates via a JWT token in query params.
+/// Requires a valid JWT token in query params.
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
     Query(query): Query<WsQuery>,
-) -> Response {
-    let user_id = query
+) -> Result<Response, axum::http::StatusCode> {
+    let token = query
         .token
-        .and_then(|token| super::auth::verify_token(&token, &state.jwt_secret).ok())
-        .and_then(|claims| uuid::Uuid::parse_str(&claims.sub).ok())
-        .map(UserId);
+        .ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
 
-    ws.on_upgrade(move |socket| handle_socket(socket, state, user_id))
+    let claims = super::auth::verify_token(&token, &state.jwt_secret)
+        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+
+    let user_id = uuid::Uuid::parse_str(&claims.sub)
+        .map(UserId)
+        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+
+    Ok(ws.on_upgrade(move |socket| handle_socket(socket, state, Some(user_id))))
 }
 
 /// Handle a WebSocket connection

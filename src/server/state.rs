@@ -271,9 +271,25 @@ impl AppState {
         let (pipeline_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
         let (routing_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST_HIGH);
 
-        // Generate a random JWT secret
-        // In production, this should be persisted or configured via environment variable
-        let jwt_secret = rand::random::<[u8; 32]>().to_vec();
+        // JWT secret: require via env var, fall back to random for dev only
+        let jwt_secret = match std::env::var("JWT_SECRET") {
+            Ok(s) if !s.is_empty() => {
+                tracing::info!("JWT_SECRET loaded from environment");
+                s.into_bytes()
+            }
+            _ => {
+                let is_production = std::env::var("RUST_ENV")
+                    .map(|v| v.eq_ignore_ascii_case("production"))
+                    .unwrap_or(false);
+                if is_production {
+                    panic!("JWT_SECRET must be set in production (RUST_ENV=production)");
+                }
+                tracing::warn!(
+                    "JWT_SECRET not set — using random secret. Tokens will not survive restarts."
+                );
+                rand::random::<[u8; 32]>().to_vec()
+            }
+        };
 
         (
             Self {
