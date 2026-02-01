@@ -57,6 +57,8 @@ function AgentActivityDemo() {
   const [userMessage] = useState('find the auth module and update the middleware')
   const [assistantText, setAssistantText] = useState('')
   const [showCursor, setShowCursor] = useState(false)
+  const [paused, setPaused] = useState(false)
+  const pausedRef = useRef(false)
   const cycleRef = useRef(0)
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
@@ -152,8 +154,23 @@ function AgentActivityDemo() {
     return clearTimers
   }, [runCycle, clearTimers])
 
+  const togglePause = useCallback(() => {
+    const next = !pausedRef.current
+    pausedRef.current = next
+    setPaused(next)
+    if (next) {
+      clearTimers()
+    } else {
+      cycleRef.current++
+      runCycle()
+    }
+  }, [clearTimers, runCycle])
+
   return (
     <div className="activity-demo">
+      <button className="demo-pause-btn" onClick={togglePause} type="button">
+        {paused ? '[>]' : '[||]'}
+      </button>
       <div className="activity-demo__prompt">&gt; {userMessage}</div>
 
       <AgentActivityModule
@@ -163,12 +180,10 @@ function AgentActivityDemo() {
         toolCallCount={toolCallCount}
       />
 
-      {assistantText.length > 0 ? (
-        <div className="activity-demo__response">
-          {assistantText}
-          {showCursor ? <span className="activity-demo__cursor" /> : null}
-        </div>
-      ) : null}
+      <div className="activity-demo__response" style={{ visibility: assistantText.length > 0 ? 'visible' : 'hidden' }}>
+        {assistantText || '\u00A0'}
+        {showCursor ? <span className="activity-demo__cursor" /> : null}
+      </div>
     </div>
   )
 }

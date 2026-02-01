@@ -259,6 +259,7 @@
 .activity-module {
   font-size: var(--text-xs);
   line-height: 1.4;
+  height: 2.8em;
 }
 
 .activity-module__agents {
@@ -301,6 +302,7 @@
 
 .activity-module__tree {
   margin-top: 2px;
+  height: 7em;
 }
 
 .activity-module__feed {
@@ -442,6 +444,32 @@
   justify-content: flex-end;
   gap: var(--space-xs);
   height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.chat-demo {
+  position: relative;
+}
+
+.demo-pause-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-family: 'VT323', monospace;
+  font-size: var(--text-xs);
+  padding: 0 4px;
+  cursor: pointer;
+  line-height: 1.4;
+  z-index: 1;
+}
+
+.demo-pause-btn:hover {
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
 }
 
 .activity-demo__prompt {
@@ -454,6 +482,8 @@
   font-size: var(--text-sm);
   color: var(--color-text);
   line-height: 1.6;
+  height: 4.8em;
+  overflow: hidden;
 }
 
 .activity-demo__cursor {
@@ -757,7 +787,7 @@
   flex-direction: column;
   justify-content: flex-end;
   gap: 0;
-  max-height: 12em;
+  height: 12em;
   overflow: hidden;
   mask-image: linear-gradient(to bottom, transparent 0%, black 30%);
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 30%);
