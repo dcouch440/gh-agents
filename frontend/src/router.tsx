@@ -1,14 +1,14 @@
 import { createBrowserRouter } from 'react-router-dom'
 import { ROUTES } from './constants'
 import { AppLayout } from './components/layout/AppLayout'
-import { ChatPage } from './pages/Chat/ChatPage'
-import { ChatSessionPage } from './pages/Chat/ChatSessionPage'
 import { DocumentsPage } from './pages/Documents/DocumentsPage'
 import { SettingsPage } from './pages/Settings/SettingsPage'
 import {
   DashboardWithProviders,
   AgentsWithProvider,
   AgentDetailWithProvider,
+  ChatWithProvider,
+  ChatSessionWithProvider,
   PipelinesWithProvider,
   PipelineDetailWithProvider,
   PipelineRunWithProvider,
@@ -20,8 +20,8 @@ export const router = createBrowserRouter([
     element: <AppLayout />,
     children: [
       { path: ROUTES.DASHBOARD, element: <DashboardWithProviders /> },
-      { path: ROUTES.CHAT, element: <ChatPage /> },
-      { path: ROUTES.CHAT_SESSION, element: <ChatSessionPage /> },
+      { path: ROUTES.CHAT, element: <ChatWithProvider /> },
+      { path: ROUTES.CHAT_SESSION, element: <ChatSessionWithProvider /> },
       { path: ROUTES.AGENTS, element: <AgentsWithProvider /> },
       { path: ROUTES.AGENT_DETAIL, element: <AgentDetailWithProvider /> },
       { path: ROUTES.PIPELINES, element: <PipelinesWithProvider /> },
