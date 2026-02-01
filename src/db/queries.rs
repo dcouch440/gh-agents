@@ -402,6 +402,7 @@ pub async fn get_password(pool: &PgPool) -> Result<Option<String>> {
 
 /// Insert a new routing event (when a tool call is routed to a cluster).
 /// Captures user, session, task context and the raw parameters for analytics.
+#[allow(clippy::too_many_arguments)]
 pub async fn insert_routing_event(
     pool: &PgPool,
     id: Uuid,
@@ -437,6 +438,7 @@ pub async fn insert_routing_event(
 }
 
 /// Complete a routing event with result, cost, and timing data.
+#[allow(clippy::too_many_arguments)]
 pub async fn complete_routing_event(
     pool: &PgPool,
     id: Uuid,

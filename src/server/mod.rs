@@ -148,25 +148,6 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         .layer(middleware::from_fn_with_state(state.clone(), require_auth))
 }
 
-/// Create the application router with a specific static directory (no rate limiting — used by tests)
-fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
-    let cors = build_cors_layer();
-    let public_routes = build_public_routes();
-    let protected_routes = build_protected_routes(state.clone());
-
-    let serve_dir = ServeDir::new(static_dir).not_found_service(ServeFile::new(format!("{}/index.html", static_dir)));
-
-    Router::new()
-        .nest("/api", public_routes.merge(protected_routes))
-        .route(routes::WS, get(ws::ws_handler))
-        .fallback_service(serve_dir)
-        .layer(middleware::from_fn(request_id_middleware))
-        .layer(middleware::from_fn(cache_control_middleware))
-        .layer(cors)
-        .layer(TraceLayer::new_for_http())
-        .with_state(state)
-}
-
 /// Build CORS layer from CORS_ORIGINS env var.
 ///
 /// - If `CORS_ORIGINS` is set, parse comma-separated origins.
@@ -560,17 +541,7 @@ mod tests {
             Ok(vec![])
         }
 
-        async fn insert_tool_call(
-            &self,
-            _session_id: Option<Uuid>,
-            _message_id: Uuid,
-            _round: i32,
-            _tool_name: &str,
-            _tool_use_id: &str,
-            _input: &serde_json::Value,
-            _output: &str,
-            _latency_ms: i32,
-        ) -> anyhow::Result<()> {
+        async fn insert_tool_call(&self, _call: crate::db::traits::ToolCallInput) -> anyhow::Result<()> {
             Ok(())
         }
     }
@@ -586,6 +557,24 @@ mod tests {
     fn create_test_token(state: &AppState) -> String {
         use crate::types::UserId;
         auth::create_token(&state.jwt_secret, 24, UserId::new(), "test@test.com").unwrap()
+    }
+
+    fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
+        let cors = build_cors_layer();
+        let public_routes = build_public_routes();
+        let protected_routes = build_protected_routes(state.clone());
+
+        let serve_dir = ServeDir::new(static_dir).not_found_service(ServeFile::new(format!("{}/index.html", static_dir)));
+
+        Router::new()
+            .nest("/api", public_routes.merge(protected_routes))
+            .route(routes::WS, get(ws::ws_handler))
+            .fallback_service(serve_dir)
+            .layer(middleware::from_fn(request_id_middleware))
+            .layer(middleware::from_fn(cache_control_middleware))
+            .layer(cors)
+            .layer(TraceLayer::new_for_http())
+            .with_state(state)
     }
 
     fn setup_test_app() -> (Router, AppState) {

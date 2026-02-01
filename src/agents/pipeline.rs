@@ -102,6 +102,7 @@ impl PipelineManager {
     }
 
     /// Append a stage to a pipeline.
+    #[allow(clippy::too_many_arguments)]
     pub fn add_stage(
         &mut self,
         pipeline_id: PipelineId,

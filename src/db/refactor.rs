@@ -23,7 +23,7 @@ pub async fn get_production_mode(pool: &PgPool) -> Result<ProductionMode> {
         .await
         .context("Failed to fetch production mode")?;
 
-    Ok(row.map(|(v,)| ProductionMode::from_str(&v)).unwrap_or_default())
+    Ok(row.map(|(v,)| ProductionMode::from_db_str(&v)).unwrap_or_default())
 }
 
 /// Set the production mode
@@ -338,7 +338,7 @@ impl RefactorChangeRow {
             "rename" => ChangeType::Rename,
             _ => ChangeType::Modify,
         };
-        let status = ChangeStatus::from_str(&self.status);
+        let status = ChangeStatus::from_db_str(&self.status);
 
         RefactorChange {
             id: ChangeId(self.id),

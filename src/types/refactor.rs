@@ -67,7 +67,7 @@ impl ProductionMode {
     }
 
     /// Parse from database string
-    pub fn from_str(s: &str) -> Self {
+    pub fn from_db_str(s: &str) -> Self {
         match s {
             "running" => ProductionMode::Running,
             "refactor_mode" => ProductionMode::RefactorMode,
@@ -145,7 +145,7 @@ impl ChangeStatus {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
+    pub fn from_db_str(s: &str) -> Self {
         match s {
             "proposed" => ChangeStatus::Proposed,
             "approved" => ChangeStatus::Approved,

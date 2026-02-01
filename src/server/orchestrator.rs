@@ -1028,7 +1028,16 @@ async fn handle_message(state: &AppState, provider: Arc<dyn LLMProvider + Send +
                         let tool_round = round;
                         tokio::spawn(async move {
                             let _ = repo
-                                .insert_tool_call(session_id, message_id, tool_round, &tool_name, &tool_use_id, &tool_input, &tool_output, tool_latency)
+                                .insert_tool_call(crate::db::traits::ToolCallInput {
+                                    session_id,
+                                    message_id,
+                                    round: tool_round,
+                                    tool_name,
+                                    tool_use_id,
+                                    input: tool_input,
+                                    output: tool_output,
+                                    latency_ms: tool_latency,
+                                })
                                 .await;
                         });
                     }
@@ -1376,17 +1385,7 @@ mod tests {
             Ok(vec![])
         }
 
-        async fn insert_tool_call(
-            &self,
-            _session_id: Option<Uuid>,
-            _message_id: Uuid,
-            _round: i32,
-            _tool_name: &str,
-            _tool_use_id: &str,
-            _input: &serde_json::Value,
-            _output: &str,
-            _latency_ms: i32,
-        ) -> anyhow::Result<()> {
+        async fn insert_tool_call(&self, _call: crate::db::traits::ToolCallInput) -> anyhow::Result<()> {
             Ok(())
         }
     }

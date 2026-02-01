@@ -99,6 +99,7 @@ impl ToolClusterIndex {
 /// 3. Picks an available utility agent from the pool
 /// 4. Dispatches the task and waits for the result
 /// 5. Returns the agent's output as a JSON value
+#[allow(clippy::too_many_arguments)]
 pub async fn route_to_cluster_agent(
     cluster: &ClusterEntry,
     tool_name: &str,

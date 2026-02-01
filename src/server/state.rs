@@ -232,7 +232,7 @@ impl AppState {
             if let Ok(trigger_rows) = state.repo.list_triggers(legacy_user).await {
                 let mut mgr = state.schedule_manager.write().await;
                 for row in trigger_rows {
-                    if let Some(event_type) = crate::agents::TriggerEvent::from_str(&row.event_type) {
+                    if let Some(event_type) = crate::agents::TriggerEvent::from_db_str(&row.event_type) {
                         let tid = crate::agents::TriggerId(row.id);
                         mgr.create_trigger_with_id(
                             tid,

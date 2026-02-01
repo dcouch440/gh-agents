@@ -18,6 +18,23 @@ use crate::orchestration::QueueError as TaskQueueError;
 use crate::types::{ChangeId, ChangeStatus, CostRecord, ProductionMode, RefactorChange, RefactorSession, Task, TaskId, TaskStatus, User, UserId};
 
 // ============================================================================
+// Input Types
+// ============================================================================
+
+/// Input parameters for a tool call record.
+#[derive(Debug, Clone)]
+pub struct ToolCallInput {
+    pub session_id: Option<Uuid>,
+    pub message_id: Uuid,
+    pub round: i32,
+    pub tool_name: String,
+    pub tool_use_id: String,
+    pub input: serde_json::Value,
+    pub output: String,
+    pub latency_ms: i32,
+}
+
+// ============================================================================
 // Merge Queue Repository
 // ============================================================================
 
@@ -379,17 +396,7 @@ pub trait ServerRepo: Send + Sync {
     // --- Tool call logging ---
 
     /// Insert a tool call record.
-    async fn insert_tool_call(
-        &self,
-        session_id: Option<Uuid>,
-        message_id: Uuid,
-        round: i32,
-        tool_name: &str,
-        tool_use_id: &str,
-        input: &serde_json::Value,
-        output: &str,
-        latency_ms: i32,
-    ) -> Result<()>;
+    async fn insert_tool_call(&self, call: ToolCallInput) -> Result<()>;
 }
 
 // ============================================================================
@@ -423,6 +430,7 @@ pub trait UserRepo: Send + Sync {
 #[async_trait]
 pub trait DocumentRepo: Send + Sync {
     /// Create a new document.
+    #[allow(clippy::too_many_arguments)]
     async fn create_document(
         &self,
         user_id: Uuid,

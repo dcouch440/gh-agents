@@ -378,7 +378,7 @@ impl SchedulerRepo for PgRepo {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to fetch production mode: {}", e))?;
 
-        Ok(row.map(|(v,)| ProductionMode::from_str(&v)).unwrap_or_default())
+        Ok(row.map(|(v,)| ProductionMode::from_db_str(&v)).unwrap_or_default())
     }
 
     async fn set_production_mode(&self, mode: ProductionMode) -> Result<(), anyhow::Error> {
@@ -1409,27 +1409,17 @@ impl ServerRepo for PgRepo {
             .collect())
     }
 
-    async fn insert_tool_call(
-        &self,
-        session_id: Option<Uuid>,
-        message_id: Uuid,
-        round: i32,
-        tool_name: &str,
-        tool_use_id: &str,
-        input: &serde_json::Value,
-        output: &str,
-        latency_ms: i32,
-    ) -> Result<()> {
+    async fn insert_tool_call(&self, call: crate::db::traits::ToolCallInput) -> Result<()> {
         sqlx::query("INSERT INTO tool_calls (id, session_id, message_id, round, tool_name, tool_use_id, input, output, latency_ms) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
             .bind(Uuid::new_v4())
-            .bind(session_id)
-            .bind(message_id)
-            .bind(round)
-            .bind(tool_name)
-            .bind(tool_use_id)
-            .bind(input)
-            .bind(output)
-            .bind(latency_ms)
+            .bind(call.session_id)
+            .bind(call.message_id)
+            .bind(call.round)
+            .bind(&call.tool_name)
+            .bind(&call.tool_use_id)
+            .bind(&call.input)
+            .bind(&call.output)
+            .bind(call.latency_ms)
             .execute(&self.pool)
             .await?;
         Ok(())

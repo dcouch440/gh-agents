@@ -68,7 +68,7 @@ impl TriggerEvent {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_db_str(s: &str) -> Option<Self> {
         match s {
             "task_completed" => Some(TriggerEvent::TaskCompleted),
             "task_failed" => Some(TriggerEvent::TaskFailed),
@@ -124,6 +124,7 @@ impl ScheduleManager {
     }
 
     /// Create a schedule with a specific ID (for DB reconstruction).
+    #[allow(clippy::too_many_arguments)]
     pub fn create_schedule_with_id(
         &mut self,
         id: ScheduleId,
@@ -221,6 +222,7 @@ impl ScheduleManager {
     }
 
     /// Create a trigger with a specific ID (for DB reconstruction).
+    #[allow(clippy::too_many_arguments)]
     pub fn create_trigger_with_id(
         &mut self,
         id: TriggerId,
@@ -396,9 +398,9 @@ mod tests {
 
     #[test]
     fn trigger_event_roundtrip() {
-        assert_eq!(TriggerEvent::from_str(TriggerEvent::TaskCompleted.as_str()), Some(TriggerEvent::TaskCompleted));
-        assert_eq!(TriggerEvent::from_str(TriggerEvent::TaskFailed.as_str()), Some(TriggerEvent::TaskFailed));
-        assert_eq!(TriggerEvent::from_str("bogus"), None);
+        assert_eq!(TriggerEvent::from_db_str(TriggerEvent::TaskCompleted.as_str()), Some(TriggerEvent::TaskCompleted));
+        assert_eq!(TriggerEvent::from_db_str(TriggerEvent::TaskFailed.as_str()), Some(TriggerEvent::TaskFailed));
+        assert_eq!(TriggerEvent::from_db_str("bogus"), None);
     }
 
     #[test]

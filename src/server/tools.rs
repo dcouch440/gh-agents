@@ -1804,7 +1804,7 @@ async fn execute_create_trigger(input: &Value, state: &AppState, user_id: UserId
         return json!({ "error": "task_description is required" });
     };
 
-    let Some(event_type) = TriggerEvent::from_str(event_str) else {
+    let Some(event_type) = TriggerEvent::from_db_str(event_str) else {
         return json!({ "error": format!("Invalid event_type: {}. Use 'task_completed' or 'task_failed'", event_str) });
     };
     let Ok(agent_uuid) = uuid::Uuid::parse_str(agent_str) else {
