@@ -1239,68 +1239,19 @@ impl ServerRepo for PgRepo {
     }
 
     async fn get_pipeline_run(&self, run_id: Uuid) -> Result<Option<PipelineRunRow>> {
-        let row: Option<(
-            Uuid,
-            Uuid,
-            Uuid,
-            String,
-            String,
-            serde_json::Value,
-            i32,
-            chrono::DateTime<chrono::Utc>,
-            Option<chrono::DateTime<chrono::Utc>>,
-            i64,
-            i64,
-        )> = sqlx::query_as(
-            "SELECT id, pipeline_id, user_id, status, initial_task, stage_outputs, current_stage, started_at, completed_at, total_input_tokens, total_output_tokens FROM pipeline_runs WHERE id = $1",
-        )
-        .bind(run_id)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        Ok(row.map(
-            |(id, pipeline_id, user_id, status, initial_task, stage_outputs, current_stage, started_at, completed_at, total_input_tokens, total_output_tokens)| PipelineRunRow {
-                id,
-                pipeline_id,
-                user_id,
-                status,
-                initial_task,
-                stage_outputs,
-                current_stage,
-                started_at,
-                completed_at,
-                total_input_tokens,
-                total_output_tokens,
-            },
-        ))
+        let row = sqlx::query_as::<_, PipelineRunRow>("SELECT * FROM pipeline_runs WHERE id = $1")
+            .bind(run_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row)
     }
 
     async fn list_pipeline_runs(&self, pipeline_id: Uuid) -> Result<Vec<PipelineRunRow>> {
-        let rows: Vec<(Uuid, Uuid, Uuid, String, String, serde_json::Value, i32, chrono::DateTime<chrono::Utc>, Option<chrono::DateTime<chrono::Utc>>, i64, i64)> = sqlx::query_as(
-            "SELECT id, pipeline_id, user_id, status, initial_task, stage_outputs, current_stage, started_at, completed_at, total_input_tokens, total_output_tokens FROM pipeline_runs WHERE pipeline_id = $1 ORDER BY started_at DESC"
-        )
-        .bind(pipeline_id)
-        .fetch_all(&self.pool)
-        .await?;
-
-        Ok(rows
-            .into_iter()
-            .map(
-                |(id, pipeline_id, user_id, status, initial_task, stage_outputs, current_stage, started_at, completed_at, total_input_tokens, total_output_tokens)| PipelineRunRow {
-                    id,
-                    pipeline_id,
-                    user_id,
-                    status,
-                    initial_task,
-                    stage_outputs,
-                    current_stage,
-                    started_at,
-                    completed_at,
-                    total_input_tokens,
-                    total_output_tokens,
-                },
-            )
-            .collect())
+        let rows = sqlx::query_as::<_, PipelineRunRow>("SELECT * FROM pipeline_runs WHERE pipeline_id = $1 ORDER BY started_at DESC")
+            .bind(pipeline_id)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows)
     }
 
     async fn create_stage_execution(&self, exec: &StageExecutionRow) -> Result<()> {

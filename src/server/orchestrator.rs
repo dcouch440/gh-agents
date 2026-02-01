@@ -240,8 +240,8 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                             }
                             // Update run token totals
                             if let Ok(Some(mut run_row)) = state.repo.get_pipeline_run(run_id).await {
-                                run_row.total_input_tokens += stage_input_tokens as i64;
-                                run_row.total_output_tokens += stage_output_tokens as i64;
+                                *run_row.total_input_tokens.get_or_insert(0) += stage_input_tokens as i64;
+                                *run_row.total_output_tokens.get_or_insert(0) += stage_output_tokens as i64;
                                 run_row.current_stage = completed_stage_number as i32;
                                 if !succeeded {
                                     run_row.status = "failed".to_string();
@@ -250,7 +250,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                 // Update stage_outputs from in-memory
                                 let mgr = state.pipeline_manager.read().await;
                                 if let Some(outputs) = mgr.get_stage_outputs(run_id) {
-                                    run_row.stage_outputs = serde_json::to_value(outputs).unwrap_or_default();
+                                    run_row.stage_outputs = Some(serde_json::to_value(outputs).unwrap_or_default());
                                 }
                                 drop(mgr);
                                 let _ = state.repo.update_pipeline_run(&run_row).await;

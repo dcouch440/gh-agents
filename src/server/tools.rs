@@ -1512,12 +1512,12 @@ async fn execute_start_pipeline(input: &Value, state: &AppState, user_id: UserId
         user_id: user_id.0,
         status: "running".to_string(),
         initial_task: task.to_string(),
-        stage_outputs: serde_json::json!({}),
+        stage_outputs: Some(serde_json::json!({})),
         current_stage: 0,
         started_at: now,
         completed_at: None,
-        total_input_tokens: 0,
-        total_output_tokens: 0,
+        total_input_tokens: Some(0),
+        total_output_tokens: Some(0),
     };
     let _ = state.repo.create_pipeline_run(&run_row).await;
 
