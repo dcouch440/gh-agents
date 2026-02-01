@@ -74,7 +74,7 @@ function AgentProvider({ children }: { children: ReactNode }) {
   // Initial fetch
   useEffect(() => {
     mountedRef.current = true
-    load()
+    void load()
     return () => { mountedRef.current = false }
   }, [load])
 
@@ -90,7 +90,7 @@ function AgentProvider({ children }: { children: ReactNode }) {
   }, [subscribe])
 
   return (
-    <AgentContext.Provider value={{ ...state, reload: load }}>
+    <AgentContext.Provider value={{ ...state, reload: () => { void load() } }}>
       {children}
     </AgentContext.Provider>
   )

@@ -32,7 +32,7 @@ const useFeed = () => {
       await load()
       if (cancelled) return
     }
-    run()
+    void run()
     return () => { cancelled = true }
   }, [load])
 

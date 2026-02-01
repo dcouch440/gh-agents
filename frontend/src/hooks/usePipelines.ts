@@ -30,7 +30,7 @@ const usePipelines = () => {
       await load()
       if (cancelled) return
     }
-    run()
+    void run()
     return () => { cancelled = true }
   }, [load])
 
@@ -63,7 +63,7 @@ const usePipelineRuns = (pipelineId?: string) => {
       await load()
       if (cancelled) return
     }
-    run()
+    void run()
     return () => { cancelled = true }
   }, [load])
 
@@ -112,7 +112,7 @@ const usePipelineRun = (id: string | null) => {
         if (!cancelled) setLoading(false)
       }
     }
-    load()
+    void load()
     return () => { cancelled = true }
   }, [id])
 
