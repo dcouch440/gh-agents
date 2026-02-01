@@ -115,6 +115,17 @@ pub const TRUNCATE_TOOL_RESULT: usize = 10_000;
 /// Error message truncation for logging.
 pub const TRUNCATE_ERROR_LOG: usize = 200;
 
+// ── Input Validation Limits ─────────────────────────────────────────────
+
+/// Maximum length for title fields (tasks, documents, sessions).
+pub const MAX_TITLE_LENGTH: usize = 200;
+/// Maximum length for description / content fields.
+pub const MAX_DESCRIPTION_LENGTH: usize = 10_000;
+/// Maximum length for chat messages.
+pub const MAX_CHAT_MESSAGE_LENGTH: usize = 5_000;
+/// Maximum length for persona prompts.
+pub const MAX_PROMPT_LENGTH: usize = 20_000;
+
 // ── Query / Pagination ──────────────────────────────────────────────────────
 
 /// Default number of results when no limit is specified.
@@ -150,6 +161,74 @@ pub const COMPLEXITY_MEDIUM_DESC_LEN: usize = 200;
 // ── Delegation ──────────────────────────────────────────────────────────────
 
 pub const DEFAULT_MAX_DELEGATION_DEPTH: u8 = 2;
+
+// ── API Route Paths ────────────────────────────────────────────────────
+// All paths relative to the /api nest. Used in server/mod.rs route definitions.
+
+pub mod routes {
+    // Auth
+    pub const HEALTH: &str = "/health";
+    pub const AUTH_SETUP: &str = "/auth/setup";
+    pub const AUTH_LOGIN: &str = "/auth/login";
+    pub const AUTH_REGISTER: &str = "/auth/register";
+    pub const AUTH_ME: &str = "/auth/me";
+
+    // Tasks
+    pub const TASKS: &str = "/tasks";
+    pub const TASK: &str = "/tasks/:id";
+
+    // Agents
+    pub const AGENTS: &str = "/agents";
+    pub const AGENT: &str = "/agents/:id";
+    pub const AGENT_TOOLS: &str = "/agents/:id/tools";
+    pub const AGENT_CONTEXT: &str = "/agents/:id/context";
+
+    // Tools
+    pub const TOOLS: &str = "/tools";
+    pub const TOOL: &str = "/tools/:id";
+
+    // Pipeline stages
+    pub const PIPELINE_STAGE_RENDER: &str = "/pipelines/:id/stages/:stage_number/render";
+    pub const PIPELINE_STAGE_SIDE_TASKS: &str = "/pipelines/:id/stages/:stage_number/side-tasks";
+    pub const PIPELINE_STAGE_SIDE_TASK: &str = "/pipelines/:id/stages/:stage_number/side-tasks/:side_task_id";
+
+    // Pipeline runs
+    pub const PIPELINE_RUNS: &str = "/pipeline-runs";
+    pub const PIPELINE_RUN: &str = "/pipeline-runs/:run_id";
+    pub const PIPELINE_RUN_APPROVE: &str = "/pipeline-runs/:run_id/approve";
+
+    // Config
+    pub const CONFIG: &str = "/config";
+
+    // Chat
+    pub const CHAT: &str = "/chat";
+    pub const CHAT_HISTORY: &str = "/chat/history";
+    pub const CHAT_STREAM: &str = "/chat/:message_id/stream";
+
+    // Modes
+    pub const MODES: &str = "/modes";
+
+    // Sessions
+    pub const SESSIONS: &str = "/sessions";
+    pub const SESSION: &str = "/sessions/:session_id";
+    pub const SESSION_CHAT: &str = "/sessions/:session_id/chat";
+    pub const SESSION_HISTORY: &str = "/sessions/:session_id/history";
+    pub const SESSION_CHAT_STREAM: &str = "/sessions/:session_id/chat/:message_id/stream";
+
+    // Documents
+    pub const DOCUMENTS: &str = "/documents";
+    pub const DOCUMENTS_SEARCH: &str = "/documents/search";
+    pub const DOCUMENT: &str = "/documents/:id";
+
+    // Stats
+    pub const STATS: &str = "/stats";
+
+    // Context response
+    pub const CONTEXT_RESPONSE: &str = "/context-response";
+
+    // WebSocket
+    pub const WS: &str = "/ws";
+}
 
 // ── Sandbox Defaults ────────────────────────────────────────────────────────
 

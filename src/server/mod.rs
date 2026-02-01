@@ -20,7 +20,7 @@ use anyhow::Result;
 use axum::{
     body::Body,
     extract::State,
-    http::{header::CACHE_CONTROL, HeaderValue, Request, StatusCode},
+    http::{header::CACHE_CONTROL, HeaderName, HeaderValue, Request, StatusCode},
     middleware::{self, Next},
     response::Response,
     routing::{delete, get, post},
@@ -35,6 +35,7 @@ use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 
+use crate::constants::routes;
 use crate::orchestration::Scheduler;
 use crate::types::AppConfig;
 
@@ -48,12 +49,7 @@ pub use state::AppState;
 /// - CORS configuration for development
 /// - Request tracing middleware
 /// - Graceful shutdown handling
-pub async fn start_server(
-    db: PgPool,
-    scheduler: Arc<RwLock<Scheduler>>,
-    config: AppConfig,
-    addr: SocketAddr,
-) -> Result<()> {
+pub async fn start_server(db: PgPool, scheduler: Arc<RwLock<Scheduler>>, config: AppConfig, addr: SocketAddr) -> Result<()> {
     let (state, orchestrator_rx) = AppState::new(db, scheduler, config).await;
 
     // Spawn the orchestrator consumer to process chat messages via LLM
@@ -70,9 +66,7 @@ pub async fn start_server(
     info!("Server listening on http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    axum::serve(listener, app).with_graceful_shutdown(shutdown_signal()).await?;
 
     info!("Server shutdown complete");
     Ok(())
@@ -84,18 +78,10 @@ fn create_router(state: AppState) -> Router {
     let cors = build_cors_layer();
 
     // Rate limiter for auth routes: 10 requests per 60 seconds per IP
-    let auth_rate_limit = GovernorConfigBuilder::default()
-        .per_second(6)
-        .burst_size(10)
-        .finish()
-        .expect("valid governor config");
+    let auth_rate_limit = GovernorConfigBuilder::default().per_second(6).burst_size(10).finish().expect("valid governor config");
 
     // Rate limiter for general API routes: ~100 requests per minute per IP
-    let api_rate_limit = GovernorConfigBuilder::default()
-        .per_second(2)
-        .burst_size(50)
-        .finish()
-        .expect("valid governor config");
+    let api_rate_limit = GovernorConfigBuilder::default().per_second(2).burst_size(50).finish().expect("valid governor config");
 
     let public_routes = build_public_routes().layer(GovernorLayer {
         config: std::sync::Arc::new(auth_rate_limit),
@@ -104,13 +90,13 @@ fn create_router(state: AppState) -> Router {
         config: std::sync::Arc::new(api_rate_limit),
     });
 
-    let serve_dir = ServeDir::new(&static_dir)
-        .not_found_service(ServeFile::new(format!("{}/index.html", static_dir)));
+    let serve_dir = ServeDir::new(&static_dir).not_found_service(ServeFile::new(format!("{}/index.html", static_dir)));
 
     Router::new()
         .nest("/api", public_routes.merge(protected_routes))
-        .route("/ws", get(ws::ws_handler))
+        .route(routes::WS, get(ws::ws_handler))
         .fallback_service(serve_dir)
+        .layer(middleware::from_fn(request_id_middleware))
         .layer(middleware::from_fn(cache_control_middleware))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
@@ -120,98 +106,45 @@ fn create_router(state: AppState) -> Router {
 /// Build the public route group (no auth required).
 fn build_public_routes() -> Router<AppState> {
     Router::new()
-        .route("/health", get(api::health_check))
-        .route("/auth/setup", post(api::auth_setup))
-        .route("/auth/login", post(api::auth_login))
-        .route("/auth/register", post(api::auth_register))
+        .route(routes::HEALTH, get(api::health_check))
+        .route(routes::AUTH_SETUP, post(api::auth_setup))
+        .route(routes::AUTH_LOGIN, post(api::auth_login))
+        .route(routes::AUTH_REGISTER, post(api::auth_register))
 }
 
 /// Build the protected route group (auth required).
 fn build_protected_routes(state: AppState) -> Router<AppState> {
     Router::new()
-        .route("/auth/me", get(api::auth_me))
-        .route("/tasks", get(api::list_tasks).post(api::create_task))
-        .route("/tasks/:id", get(api::get_task))
-        .route("/agents", get(api::list_agents).post(api::create_agent))
-        .route(
-            "/agents/:id",
-            get(api::get_agent)
-                .patch(api::update_agent)
-                .delete(api::delete_agent),
-        )
-        .route(
-            "/agents/:id/tools",
-            get(api::get_agent_tools).put(api::set_agent_tools),
-        )
-        .route(
-            "/agents/:id/context",
-            get(api::get_agent_context).put(api::set_agent_context),
-        )
-        .route("/tools", get(api::list_tools).post(api::create_tool))
-        .route(
-            "/tools/:id",
-            get(api::get_tool)
-                .patch(api::update_tool)
-                .delete(api::delete_tool),
-        )
-        .route(
-            "/pipelines/:id/stages/:stage_number/render",
-            post(api::render_pipeline_stage),
-        )
-        .route(
-            "/pipelines/:id/stages/:stage_number/side-tasks",
-            get(api::list_stage_side_tasks).post(api::create_stage_side_task),
-        )
-        .route(
-            "/pipelines/:id/stages/:stage_number/side-tasks/:side_task_id",
-            delete(api::delete_stage_side_task),
-        )
-        .route("/pipeline-runs", get(api::list_pipeline_runs))
-        .route("/pipeline-runs/:run_id", get(api::get_pipeline_run))
-        .route(
-            "/pipeline-runs/:run_id/approve",
-            post(api::approve_pipeline_run),
-        )
-        .route("/config", get(api::get_config).patch(api::update_config))
-        .route("/chat", post(api::send_chat))
-        .route(
-            "/chat/history",
-            get(api::get_chat_history).delete(api::clear_chat_history),
-        )
-        .route("/chat/:message_id/stream", get(api::chat_stream))
-        .route("/modes", get(api::list_modes))
-        .route(
-            "/sessions",
-            get(api::list_sessions).post(api::create_session),
-        )
-        .route(
-            "/sessions/:session_id",
-            get(api::get_session)
-                .patch(api::update_session)
-                .delete(api::delete_session),
-        )
-        .route("/sessions/:session_id/chat", post(api::send_session_chat))
-        .route(
-            "/sessions/:session_id/history",
-            get(api::get_session_history),
-        )
-        .route(
-            "/sessions/:session_id/chat/:message_id/stream",
-            get(api::session_chat_stream),
-        )
-        .route(
-            "/documents",
-            get(api::list_documents).post(api::create_document),
-        )
-        .route("/documents/search", get(api::search_documents))
-        .route(
-            "/documents/:id",
-            get(api::get_document)
-                .patch(api::update_document)
-                .delete(api::delete_document),
-        )
-        .route("/stats", get(api::get_usage_stats))
-        .route("/context-response", post(api::submit_context_response))
+        .route(routes::AUTH_ME, get(api::auth_me))
+        .route(routes::TASKS, get(api::list_tasks).post(api::create_task))
+        .route(routes::TASK, get(api::get_task))
+        .route(routes::AGENTS, get(api::list_agents).post(api::create_agent))
+        .route(routes::AGENT, get(api::get_agent).patch(api::update_agent).delete(api::delete_agent))
+        .route(routes::AGENT_TOOLS, get(api::get_agent_tools).put(api::set_agent_tools))
+        .route(routes::AGENT_CONTEXT, get(api::get_agent_context).put(api::set_agent_context))
+        .route(routes::TOOLS, get(api::list_tools).post(api::create_tool))
+        .route(routes::TOOL, get(api::get_tool).patch(api::update_tool).delete(api::delete_tool))
+        .route(routes::PIPELINE_STAGE_RENDER, post(api::render_pipeline_stage))
+        .route(routes::PIPELINE_STAGE_SIDE_TASKS, get(api::list_stage_side_tasks).post(api::create_stage_side_task))
+        .route(routes::PIPELINE_STAGE_SIDE_TASK, delete(api::delete_stage_side_task))
+        .route(routes::PIPELINE_RUNS, get(api::list_pipeline_runs))
+        .route(routes::PIPELINE_RUN, get(api::get_pipeline_run))
+        .route(routes::PIPELINE_RUN_APPROVE, post(api::approve_pipeline_run))
+        .route(routes::CONFIG, get(api::get_config).patch(api::update_config))
+        .route(routes::CHAT, post(api::send_chat))
+        .route(routes::CHAT_HISTORY, get(api::get_chat_history).delete(api::clear_chat_history))
+        .route(routes::CHAT_STREAM, get(api::chat_stream))
+        .route(routes::MODES, get(api::list_modes))
+        .route(routes::SESSIONS, get(api::list_sessions).post(api::create_session))
+        .route(routes::SESSION, get(api::get_session).patch(api::update_session).delete(api::delete_session))
+        .route(routes::SESSION_CHAT, post(api::send_session_chat))
+        .route(routes::SESSION_HISTORY, get(api::get_session_history))
+        .route(routes::SESSION_CHAT_STREAM, get(api::session_chat_stream))
+        .route(routes::DOCUMENTS, get(api::list_documents).post(api::create_document))
+        .route(routes::DOCUMENTS_SEARCH, get(api::search_documents))
+        .route(routes::DOCUMENT, get(api::get_document).patch(api::update_document).delete(api::delete_document))
+        .route(routes::STATS, get(api::get_usage_stats))
+        .route(routes::CONTEXT_RESPONSE, post(api::submit_context_response))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth))
 }
 
@@ -221,13 +154,13 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
     let public_routes = build_public_routes();
     let protected_routes = build_protected_routes(state.clone());
 
-    let serve_dir = ServeDir::new(static_dir)
-        .not_found_service(ServeFile::new(format!("{}/index.html", static_dir)));
+    let serve_dir = ServeDir::new(static_dir).not_found_service(ServeFile::new(format!("{}/index.html", static_dir)));
 
     Router::new()
         .nest("/api", public_routes.merge(protected_routes))
-        .route("/ws", get(ws::ws_handler))
+        .route(routes::WS, get(ws::ws_handler))
         .fallback_service(serve_dir)
+        .layer(middleware::from_fn(request_id_middleware))
         .layer(middleware::from_fn(cache_control_middleware))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
@@ -245,17 +178,12 @@ fn build_cors_layer() -> CorsLayer {
                 .split(',')
                 .filter_map(|o| {
                     let trimmed = o.trim();
-                    HeaderValue::from_str(trimmed)
-                        .map_err(|e| warn!("Invalid CORS origin '{}': {}", trimmed, e))
-                        .ok()
+                    HeaderValue::from_str(trimmed).map_err(|e| warn!("Invalid CORS origin '{}': {}", trimmed, e)).ok()
                 })
                 .collect();
             if parsed.is_empty() {
                 warn!("CORS_ORIGINS set but no valid origins parsed, falling back to permissive");
-                CorsLayer::new()
-                    .allow_origin(Any)
-                    .allow_methods(Any)
-                    .allow_headers(Any)
+                CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any)
             } else {
                 info!("CORS restricted to {} origin(s)", parsed.len());
                 CorsLayer::new()
@@ -267,21 +195,14 @@ fn build_cors_layer() -> CorsLayer {
         }
         _ => {
             warn!("CORS_ORIGINS not set — allowing all origins (dev mode). Set CORS_ORIGINS for production.");
-            CorsLayer::new()
-                .allow_origin(Any)
-                .allow_methods(Any)
-                .allow_headers(Any)
+            CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any)
         }
     }
 }
 
 /// Middleware to require valid JWT on protected routes.
 /// Defense-in-depth: handlers also extract AuthUser, but this catches any handler that forgets.
-async fn require_auth(
-    State(state): State<AppState>,
-    request: axum::http::Request<Body>,
-    next: Next,
-) -> Result<Response, StatusCode> {
+async fn require_auth(State(state): State<AppState>, request: axum::http::Request<Body>, next: Next) -> Result<Response, StatusCode> {
     // Try Authorization header first, then fall back to ?token= query param
     // (needed for EventSource/SSE which cannot set custom headers)
     let token = request
@@ -291,10 +212,10 @@ async fn require_auth(
         .and_then(|s| s.strip_prefix("Bearer "))
         .map(|s| s.to_string())
         .or_else(|| {
-            request.uri().query().and_then(|q| {
-                q.split('&')
-                    .find_map(|pair| pair.strip_prefix("token=").map(|v| v.to_string()))
-            })
+            request
+                .uri()
+                .query()
+                .and_then(|q| q.split('&').find_map(|pair| pair.strip_prefix("token=").map(|v| v.to_string())))
         })
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
@@ -319,20 +240,33 @@ async fn cache_control_middleware(request: Request<Body>, next: Next) -> Respons
 
     // Long cache for hashed assets (typically in /assets/ with hash in filename)
     if path.contains("/assets/") && (path.ends_with(".js") || path.ends_with(".css")) {
-        response.headers_mut().insert(
-            CACHE_CONTROL,
-            HeaderValue::from_static("public, max-age=31536000, immutable"),
-        );
+        response
+            .headers_mut()
+            .insert(CACHE_CONTROL, HeaderValue::from_static("public, max-age=31536000, immutable"));
     }
     // No cache for HTML files (ensures fresh version on deployment)
     // Check both path and content-type to handle SPA fallback routes
     else if path == "/" || path.ends_with(".html") || is_html_response(&response) {
-        response.headers_mut().insert(
-            CACHE_CONTROL,
-            HeaderValue::from_static("no-cache, no-store, must-revalidate"),
-        );
+        response
+            .headers_mut()
+            .insert(CACHE_CONTROL, HeaderValue::from_static("no-cache, no-store, must-revalidate"));
     }
 
+    response
+}
+
+/// Middleware to assign a unique request ID to each request.
+///
+/// Generates a UUID, attaches it to the response as `X-Request-Id`, and logs it.
+async fn request_id_middleware(request: Request<Body>, next: Next) -> Response {
+    let request_id = uuid::Uuid::new_v4().to_string();
+    let span = tracing::info_span!("request", id = %request_id, method = %request.method(), path = %request.uri().path());
+    let _enter = span.enter();
+
+    let mut response = next.run(request).await;
+    if let Ok(value) = HeaderValue::from_str(&request_id) {
+        response.headers_mut().insert(HeaderName::from_static("x-request-id"), value);
+    }
     response
 }
 
@@ -353,9 +287,7 @@ fn is_html_response(response: &Response) -> bool {
 /// Handles both Ctrl+C (SIGINT) and SIGTERM for graceful shutdown.
 async fn shutdown_signal() {
     let ctrl_c = async {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("Failed to install Ctrl+C handler");
+        tokio::signal::ctrl_c().await.expect("Failed to install Ctrl+C handler");
     };
 
     #[cfg(unix)]
@@ -379,9 +311,7 @@ async fn shutdown_signal() {
 mod tests {
     use super::*;
     use crate::db::traits::ServerRepo;
-    use crate::db::{
-        ChatMessageRow, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow,
-    };
+    use crate::db::{ChatMessageRow, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow};
     use crate::types::UserId;
     use axum::{
         body::Body,
@@ -414,16 +344,9 @@ mod tests {
         async fn health_check(&self) -> bool {
             true
         }
-        async fn list_tasks(
-            &self,
-            _user_id: UserId,
-            status: Option<String>,
-            limit: Option<u32>,
-        ) -> anyhow::Result<Vec<crate::types::Task>> {
+        async fn list_tasks(&self, _user_id: UserId, status: Option<String>, limit: Option<u32>) -> anyhow::Result<Vec<crate::types::Task>> {
             let tasks = self.tasks.lock().unwrap();
-            let limit = limit
-                .unwrap_or(crate::constants::DEFAULT_QUERY_LIMIT as u32)
-                .min(crate::constants::MAX_QUERY_LIMIT as u32) as usize;
+            let limit = limit.unwrap_or(crate::constants::DEFAULT_QUERY_LIMIT as u32).min(crate::constants::MAX_QUERY_LIMIT as u32) as usize;
             Ok(tasks
                 .iter()
                 .filter(|t| {
@@ -438,34 +361,14 @@ mod tests {
                 .cloned()
                 .collect())
         }
-        async fn get_task_by_uuid(
-            &self,
-            _user_id: UserId,
-            id: Uuid,
-        ) -> anyhow::Result<Option<crate::types::Task>> {
-            Ok(self
-                .tasks
-                .lock()
-                .unwrap()
-                .iter()
-                .find(|t| t.id.0 == id)
-                .cloned())
+        async fn get_task_by_uuid(&self, _user_id: UserId, id: Uuid) -> anyhow::Result<Option<crate::types::Task>> {
+            Ok(self.tasks.lock().unwrap().iter().find(|t| t.id.0 == id).cloned())
         }
-        async fn insert_task(
-            &self,
-            _user_id: UserId,
-            task: crate::types::Task,
-        ) -> anyhow::Result<()> {
+        async fn insert_task(&self, _user_id: UserId, task: crate::types::Task) -> anyhow::Result<()> {
             self.tasks.lock().unwrap().push(task);
             Ok(())
         }
-        async fn insert_chat_message(
-            &self,
-            _user_id: UserId,
-            id: Uuid,
-            role: String,
-            content: String,
-        ) -> anyhow::Result<()> {
+        async fn insert_chat_message(&self, _user_id: UserId, id: Uuid, role: String, content: String) -> anyhow::Result<()> {
             self.chat_messages.lock().unwrap().push(ChatMessageRow {
                 id,
                 role,
@@ -474,19 +377,9 @@ mod tests {
             });
             Ok(())
         }
-        async fn get_chat_history(
-            &self,
-            _user_id: UserId,
-            limit: u32,
-            offset: u32,
-        ) -> anyhow::Result<Vec<ChatMessageRow>> {
+        async fn get_chat_history(&self, _user_id: UserId, limit: u32, offset: u32) -> anyhow::Result<Vec<ChatMessageRow>> {
             let msgs = self.chat_messages.lock().unwrap();
-            Ok(msgs
-                .iter()
-                .skip(offset as usize)
-                .take(limit.min(1000) as usize)
-                .cloned()
-                .collect())
+            Ok(msgs.iter().skip(offset as usize).take(limit.min(1000) as usize).cloned().collect())
         }
         async fn clear_chat_history(&self, _user_id: UserId) -> anyhow::Result<()> {
             self.chat_messages.lock().unwrap().clear();
@@ -502,23 +395,13 @@ mod tests {
         async fn get_password(&self) -> anyhow::Result<Option<String>> {
             Ok(self.password_hash.lock().unwrap().clone())
         }
-        async fn list_persisted_agents(
-            &self,
-            _user_id: UserId,
-        ) -> anyhow::Result<Vec<crate::db::AgentRow>> {
+        async fn list_persisted_agents(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::AgentRow>> {
             Ok(vec![])
         }
-        async fn get_persisted_agent(
-            &self,
-            _agent_id: Uuid,
-        ) -> anyhow::Result<Option<crate::db::AgentRow>> {
+        async fn get_persisted_agent(&self, _agent_id: Uuid) -> anyhow::Result<Option<crate::db::AgentRow>> {
             Ok(None)
         }
-        async fn upsert_agent(
-            &self,
-            _user_id: UserId,
-            _agent: crate::db::AgentRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_agent(&self, _user_id: UserId, _agent: crate::db::AgentRow) -> anyhow::Result<()> {
             Ok(())
         }
         async fn delete_persisted_agent(&self, _agent_id: Uuid) -> anyhow::Result<()> {
@@ -530,56 +413,31 @@ mod tests {
         async fn get_tool(&self, _tool_id: Uuid) -> anyhow::Result<Option<crate::db::ToolRow>> {
             Ok(None)
         }
-        async fn upsert_tool(
-            &self,
-            _user_id: UserId,
-            _tool: crate::db::ToolRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_tool(&self, _user_id: UserId, _tool: crate::db::ToolRow) -> anyhow::Result<()> {
             Ok(())
         }
         async fn delete_tool(&self, _tool_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn get_agent_tools(
-            &self,
-            _agent_id: Uuid,
-        ) -> anyhow::Result<Vec<crate::db::ToolRow>> {
+        async fn get_agent_tools(&self, _agent_id: Uuid) -> anyhow::Result<Vec<crate::db::ToolRow>> {
             Ok(vec![])
         }
-        async fn set_agent_tools(
-            &self,
-            _agent_id: Uuid,
-            _tool_ids: Vec<Uuid>,
-        ) -> anyhow::Result<()> {
+        async fn set_agent_tools(&self, _agent_id: Uuid, _tool_ids: Vec<Uuid>) -> anyhow::Result<()> {
             Ok(())
         }
         async fn seed_builtin_tools(&self, _user_id: UserId) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn get_agent_context(
-            &self,
-            _agent_id: Uuid,
-        ) -> anyhow::Result<Vec<crate::db::DocumentRow>> {
+        async fn get_agent_context(&self, _agent_id: Uuid) -> anyhow::Result<Vec<crate::db::DocumentRow>> {
             Ok(vec![])
         }
-        async fn set_agent_context(
-            &self,
-            _agent_id: Uuid,
-            _document_ids: Vec<Uuid>,
-        ) -> anyhow::Result<()> {
+        async fn set_agent_context(&self, _agent_id: Uuid, _document_ids: Vec<Uuid>) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn list_persisted_clusters(
-            &self,
-            _user_id: UserId,
-        ) -> anyhow::Result<Vec<crate::db::ClusterRow>> {
+        async fn list_persisted_clusters(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::ClusterRow>> {
             Ok(vec![])
         }
-        async fn upsert_cluster(
-            &self,
-            _user_id: UserId,
-            _cluster: crate::db::ClusterRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_cluster(&self, _user_id: UserId, _cluster: crate::db::ClusterRow) -> anyhow::Result<()> {
             Ok(())
         }
         async fn delete_cluster(&self, _cluster_id: Uuid) -> anyhow::Result<()> {
@@ -588,53 +446,31 @@ mod tests {
         async fn list_cluster_members(&self, _cluster_id: Uuid) -> anyhow::Result<Vec<Uuid>> {
             Ok(vec![])
         }
-        async fn add_cluster_member(
-            &self,
-            _cluster_id: Uuid,
-            _agent_id: Uuid,
-        ) -> anyhow::Result<()> {
+        async fn add_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn remove_cluster_member(
-            &self,
-            _cluster_id: Uuid,
-            _agent_id: Uuid,
-        ) -> anyhow::Result<()> {
+        async fn remove_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
         async fn list_pipelines(&self, _user_id: UserId) -> anyhow::Result<Vec<PipelineRow>> {
             Ok(vec![])
         }
-        async fn upsert_pipeline(
-            &self,
-            _user_id: UserId,
-            _pipeline: PipelineRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_pipeline(&self, _user_id: UserId, _pipeline: PipelineRow) -> anyhow::Result<()> {
             Ok(())
         }
         async fn delete_pipeline(&self, _pipeline_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn list_pipeline_stages(
-            &self,
-            _pipeline_id: Uuid,
-        ) -> anyhow::Result<Vec<PipelineStageRow>> {
+        async fn list_pipeline_stages(&self, _pipeline_id: Uuid) -> anyhow::Result<Vec<PipelineStageRow>> {
             Ok(vec![])
         }
         async fn upsert_pipeline_stage(&self, _stage: PipelineStageRow) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn list_stage_side_tasks(
-            &self,
-            _pipeline_id: Uuid,
-            _stage_number: i32,
-        ) -> anyhow::Result<Vec<crate::db::StageSideTaskRow>> {
+        async fn list_stage_side_tasks(&self, _pipeline_id: Uuid, _stage_number: i32) -> anyhow::Result<Vec<crate::db::StageSideTaskRow>> {
             Ok(vec![])
         }
-        async fn upsert_stage_side_task(
-            &self,
-            _side_task: crate::db::StageSideTaskRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_stage_side_task(&self, _side_task: crate::db::StageSideTaskRow) -> anyhow::Result<()> {
             Ok(())
         }
         async fn delete_stage_side_task(&self, _side_task_id: Uuid) -> anyhow::Result<()> {
@@ -643,43 +479,25 @@ mod tests {
         async fn list_schedules(&self, _user_id: UserId) -> anyhow::Result<Vec<ScheduleRow>> {
             Ok(vec![])
         }
-        async fn upsert_schedule(
-            &self,
-            _user_id: UserId,
-            _schedule: ScheduleRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_schedule(&self, _user_id: UserId, _schedule: ScheduleRow) -> anyhow::Result<()> {
             Ok(())
         }
         async fn delete_schedule(&self, _schedule_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn update_schedule_last_run(
-            &self,
-            _schedule_id: Uuid,
-            _last_run_at: DateTime<Utc>,
-        ) -> anyhow::Result<()> {
+        async fn update_schedule_last_run(&self, _schedule_id: Uuid, _last_run_at: DateTime<Utc>) -> anyhow::Result<()> {
             Ok(())
         }
         async fn list_triggers(&self, _user_id: UserId) -> anyhow::Result<Vec<TriggerRow>> {
             Ok(vec![])
         }
-        async fn upsert_trigger(
-            &self,
-            _user_id: UserId,
-            _trigger: TriggerRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_trigger(&self, _user_id: UserId, _trigger: TriggerRow) -> anyhow::Result<()> {
             Ok(())
         }
         async fn delete_trigger(&self, _trigger_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn create_session(
-            &self,
-            _user_id: UserId,
-            _session_id: Uuid,
-            _mode_id: &str,
-            _title: &str,
-        ) -> anyhow::Result<()> {
+        async fn create_session(&self, _user_id: UserId, _session_id: Uuid, _mode_id: &str, _title: &str) -> anyhow::Result<()> {
             Ok(())
         }
         async fn list_sessions(&self, _user_id: UserId) -> anyhow::Result<Vec<SessionRow>> {
@@ -691,35 +509,16 @@ mod tests {
         async fn delete_session(&self, _session_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn insert_session_message(
-            &self,
-            _user_id: UserId,
-            _session_id: Uuid,
-            _id: Uuid,
-            _role: String,
-            _content: String,
-        ) -> anyhow::Result<()> {
+        async fn insert_session_message(&self, _user_id: UserId, _session_id: Uuid, _id: Uuid, _role: String, _content: String) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn get_session_history(
-            &self,
-            _session_id: Uuid,
-            _limit: u32,
-        ) -> anyhow::Result<Vec<ChatMessageRow>> {
+        async fn get_session_history(&self, _session_id: Uuid, _limit: u32) -> anyhow::Result<Vec<ChatMessageRow>> {
             Ok(vec![])
         }
-        async fn update_session_title(
-            &self,
-            _session_id: Uuid,
-            _title: &str,
-        ) -> anyhow::Result<()> {
+        async fn update_session_title(&self, _session_id: Uuid, _title: &str) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn update_session_summary(
-            &self,
-            _session_id: Uuid,
-            _summary: &str,
-        ) -> anyhow::Result<()> {
+        async fn update_session_summary(&self, _session_id: Uuid, _summary: &str) -> anyhow::Result<()> {
             Ok(())
         }
         async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> {
@@ -736,52 +535,28 @@ mod tests {
         ) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn get_usage_summary(
-            &self,
-            _since_hours: u32,
-        ) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> {
+        async fn get_usage_summary(&self, _since_hours: u32) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> {
             Ok(vec![])
         }
-        async fn create_pipeline_run(
-            &self,
-            _run: &crate::db::PipelineRunRow,
-        ) -> anyhow::Result<()> {
+        async fn create_pipeline_run(&self, _run: &crate::db::PipelineRunRow) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn update_pipeline_run(
-            &self,
-            _run: &crate::db::PipelineRunRow,
-        ) -> anyhow::Result<()> {
+        async fn update_pipeline_run(&self, _run: &crate::db::PipelineRunRow) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn get_pipeline_run(
-            &self,
-            _run_id: Uuid,
-        ) -> anyhow::Result<Option<crate::db::PipelineRunRow>> {
+        async fn get_pipeline_run(&self, _run_id: Uuid) -> anyhow::Result<Option<crate::db::PipelineRunRow>> {
             Ok(None)
         }
-        async fn list_pipeline_runs(
-            &self,
-            _pipeline_id: Uuid,
-        ) -> anyhow::Result<Vec<crate::db::PipelineRunRow>> {
+        async fn list_pipeline_runs(&self, _pipeline_id: Uuid) -> anyhow::Result<Vec<crate::db::PipelineRunRow>> {
             Ok(vec![])
         }
-        async fn create_stage_execution(
-            &self,
-            _exec: &crate::db::StageExecutionRow,
-        ) -> anyhow::Result<()> {
+        async fn create_stage_execution(&self, _exec: &crate::db::StageExecutionRow) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn update_stage_execution(
-            &self,
-            _exec: &crate::db::StageExecutionRow,
-        ) -> anyhow::Result<()> {
+        async fn update_stage_execution(&self, _exec: &crate::db::StageExecutionRow) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn list_stage_executions(
-            &self,
-            _run_id: Uuid,
-        ) -> anyhow::Result<Vec<crate::db::StageExecutionRow>> {
+        async fn list_stage_executions(&self, _run_id: Uuid) -> anyhow::Result<Vec<crate::db::StageExecutionRow>> {
             Ok(vec![])
         }
 
@@ -822,15 +597,7 @@ mod tests {
     #[tokio::test]
     async fn health_endpoint_returns_json() {
         let (app, _state) = setup_test_app();
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/api/health")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = app.oneshot(Request::builder().uri("/api/health").body(Body::empty()).unwrap()).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
     }
 
@@ -841,10 +608,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/tasks")
-                    .header(
-                        "authorization",
-                        format!("Bearer {}", create_test_token(&state)),
-                    )
+                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -860,10 +624,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/agents")
-                    .header(
-                        "authorization",
-                        format!("Bearer {}", create_test_token(&state)),
-                    )
+                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -879,10 +640,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/config")
-                    .header(
-                        "authorization",
-                        format!("Bearer {}", create_test_token(&state)),
-                    )
+                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -898,10 +656,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/tasks/00000000-0000-0000-0000-000000000000")
-                    .header(
-                        "authorization",
-                        format!("Bearer {}", create_test_token(&state)),
-                    )
+                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -919,10 +674,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/chat")
                     .header("content-type", "application/json")
-                    .header(
-                        "authorization",
-                        format!("Bearer {}", create_test_token(&state)),
-                    )
+                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
                     .body(Body::from(r#"{"message": "Hello!"}"#))
                     .unwrap(),
             )
@@ -940,10 +692,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/chat")
                     .header("content-type", "application/json")
-                    .header(
-                        "authorization",
-                        format!("Bearer {}", create_test_token(&state)),
-                    )
+                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
                     .body(Body::from(r#"{"message": "   "}"#))
                     .unwrap(),
             )
@@ -959,10 +708,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/chat/history")
-                    .header(
-                        "authorization",
-                        format!("Bearer {}", create_test_token(&state)),
-                    )
+                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -979,10 +725,7 @@ mod tests {
                 Request::builder()
                     .method("DELETE")
                     .uri("/api/chat/history")
-                    .header(
-                        "authorization",
-                        format!("Bearer {}", create_test_token(&state)),
-                    )
+                    .header("authorization", format!("Bearer {}", create_test_token(&state)))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -998,21 +741,9 @@ mod tests {
         let static_dir = temp_dir.path().join("ui/dist");
         std::fs::create_dir_all(&static_dir).unwrap();
         std::fs::create_dir_all(static_dir.join("assets")).unwrap();
-        std::fs::write(
-            static_dir.join("index.html"),
-            "<!DOCTYPE html><html><head></head><body>React App</body></html>",
-        )
-        .unwrap();
-        std::fs::write(
-            static_dir.join("assets/main.abc123.css"),
-            "body { color: blue; }",
-        )
-        .unwrap();
-        std::fs::write(
-            static_dir.join("assets/main.def456.js"),
-            "console.log('hello');",
-        )
-        .unwrap();
+        std::fs::write(static_dir.join("index.html"), "<!DOCTYPE html><html><head></head><body>React App</body></html>").unwrap();
+        std::fs::write(static_dir.join("assets/main.abc123.css"), "body { color: blue; }").unwrap();
+        std::fs::write(static_dir.join("assets/main.def456.js"), "console.log('hello');").unwrap();
 
         let state = setup_mock_state();
         let router = create_router_with_static_dir(state, static_dir.to_str().unwrap());
@@ -1022,108 +753,53 @@ mod tests {
     #[tokio::test]
     async fn static_index_html_served_at_root() {
         let (app, _temp_dir) = setup_test_app_with_static_dir();
-        let response = app
-            .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
-            .await
-            .unwrap();
+        let response = app.oneshot(Request::builder().uri("/").body(Body::empty()).unwrap()).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let cache_control = response.headers().get(CACHE_CONTROL);
         assert!(cache_control.is_some());
-        assert_eq!(
-            cache_control.unwrap(),
-            "no-cache, no-store, must-revalidate"
-        );
+        assert_eq!(cache_control.unwrap(), "no-cache, no-store, must-revalidate");
     }
 
     #[tokio::test]
     async fn static_css_asset_served_with_long_cache() {
         let (app, _temp_dir) = setup_test_app_with_static_dir();
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/assets/main.abc123.css")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = app.oneshot(Request::builder().uri("/assets/main.abc123.css").body(Body::empty()).unwrap()).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let cache_control = response.headers().get(CACHE_CONTROL);
         assert!(cache_control.is_some());
-        assert_eq!(
-            cache_control.unwrap(),
-            "public, max-age=31536000, immutable"
-        );
+        assert_eq!(cache_control.unwrap(), "public, max-age=31536000, immutable");
     }
 
     #[tokio::test]
     async fn static_js_asset_served_with_long_cache() {
         let (app, _temp_dir) = setup_test_app_with_static_dir();
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/assets/main.def456.js")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = app.oneshot(Request::builder().uri("/assets/main.def456.js").body(Body::empty()).unwrap()).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let cache_control = response.headers().get(CACHE_CONTROL);
         assert!(cache_control.is_some());
-        assert_eq!(
-            cache_control.unwrap(),
-            "public, max-age=31536000, immutable"
-        );
+        assert_eq!(cache_control.unwrap(), "public, max-age=31536000, immutable");
     }
 
     #[tokio::test]
     async fn spa_route_falls_back_to_index_html() {
         let (app, _temp_dir) = setup_test_app_with_static_dir();
-        let response = app
-            .oneshot(Request::builder().uri("/chat").body(Body::empty()).unwrap())
-            .await
-            .unwrap();
+        let response = app.oneshot(Request::builder().uri("/chat").body(Body::empty()).unwrap()).await.unwrap();
         let status = response.status();
-        assert!(
-            status == StatusCode::OK || status == StatusCode::NOT_FOUND,
-            "Expected OK or NOT_FOUND, got: {:?}",
-            status
-        );
+        assert!(status == StatusCode::OK || status == StatusCode::NOT_FOUND, "Expected OK or NOT_FOUND, got: {:?}", status);
     }
 
     #[tokio::test]
     async fn api_routes_not_affected_by_static_fallback() {
         let (app, _temp_dir) = setup_test_app_with_static_dir();
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/api/health")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = app.oneshot(Request::builder().uri("/api/health").body(Body::empty()).unwrap()).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
     }
 
     #[tokio::test]
     async fn nested_spa_route_falls_back_to_index_html() {
         let (app, _temp_dir) = setup_test_app_with_static_dir();
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/tasks/123/details")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = app.oneshot(Request::builder().uri("/tasks/123/details").body(Body::empty()).unwrap()).await.unwrap();
         let status = response.status();
-        assert!(
-            status == StatusCode::OK || status == StatusCode::NOT_FOUND,
-            "Expected OK or NOT_FOUND, got: {:?}",
-            status
-        );
+        assert!(status == StatusCode::OK || status == StatusCode::NOT_FOUND, "Expected OK or NOT_FOUND, got: {:?}", status);
     }
 }
