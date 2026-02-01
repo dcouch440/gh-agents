@@ -67,7 +67,6 @@ function ToolActivityDemo() {
             startedAt: Date.now(),
             completedAt: null,
             detail: step.detail,
-            progress: 0,
             scriptIndex: i,
           },
         ])
@@ -76,27 +75,12 @@ function ToolActivityDemo() {
       }, step.startDelay)
       timersRef.current.push(startTimer)
 
-      // Animate progress ticks
-      const TICK_INTERVAL = 50
-      const ticks = Math.floor(step.duration / TICK_INTERVAL)
-      for (let tick = 1; tick <= ticks; tick++) {
-        const progressTimer = setTimeout(() => {
-          const pct = Math.min(100, Math.round((tick / ticks) * 100))
-          setEvents((prev) =>
-            prev.map((e) =>
-              e.id === id ? { ...e, progress: pct } : e,
-            ),
-          )
-        }, step.startDelay + tick * TICK_INTERVAL)
-        timersRef.current.push(progressTimer)
-      }
-
       // Complete the tool
       const completeTimer = setTimeout(() => {
         setEvents((prev) =>
           prev.map((e) =>
             e.id === id
-              ? { ...e, status: 'completed' as ToolStatus, completedAt: Date.now(), progress: 100 }
+              ? { ...e, status: 'completed' as ToolStatus, completedAt: Date.now() }
               : e,
           ),
         )

@@ -12,7 +12,7 @@ describe('ToolActivityBox', () => {
     const { container } = render(
       <ToolActivityBox toolName="read_file" status="completed" durationMs={1200} />,
     )
-    expect(container.querySelector('.tool-box--completed')).toBeInTheDocument()
+    expect(container.querySelector('.tool-tile--completed')).toBeInTheDocument()
   })
 
   it('shows duration when provided', () => {
@@ -39,31 +39,24 @@ describe('ToolActivityBox', () => {
     expect(screen.queryByText('done')).not.toBeInTheDocument()
   })
 
-  it('renders progress bar when not completed', () => {
+  it('renders circle element', () => {
     const { container } = render(
-      <ToolActivityBox toolName="test" status="running" durationMs={null} progress={50} />,
+      <ToolActivityBox toolName="test" status="running" durationMs={null} />,
     )
-    const bar = container.querySelector('.tool-box__progress-bar')
-    expect(bar).toBeInTheDocument()
-    expect(bar).toHaveStyle({ width: '50%' })
+    expect(container.querySelector('.tool-tile__circle')).toBeInTheDocument()
   })
 
-  it('hides progress bar when completed', () => {
+  it('shows checkmark when completed', () => {
     const { container } = render(
       <ToolActivityBox toolName="test" status="completed" durationMs={1000} />,
     )
-    expect(container.querySelector('.tool-box__progress')).not.toBeInTheDocument()
+    expect(container.querySelector('.tool-tile__circle')?.textContent).toBe('\u2713')
   })
 
-  it('shows correct prefix per status', () => {
-    const { container: running } = render(
-      <ToolActivityBox toolName="t" status="running" durationMs={null} />,
+  it('shows X when error', () => {
+    const { container } = render(
+      <ToolActivityBox toolName="test" status="error" durationMs={1000} />,
     )
-    expect(running.querySelector('.tool-box__prefix')?.textContent).toBe('>')
-
-    const { container: completed } = render(
-      <ToolActivityBox toolName="t" status="completed" durationMs={100} />,
-    )
-    expect(completed.querySelector('.tool-box__prefix')?.textContent).toBe('\u2713')
+    expect(container.querySelector('.tool-tile__circle')?.textContent).toBe('\u2717')
   })
 })

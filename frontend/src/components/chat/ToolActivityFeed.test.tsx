@@ -29,6 +29,6 @@ describe('ToolActivityFeed', () => {
 
   it('renders empty when no events', () => {
     const { container } = render(<ToolActivityFeed events={[]} now={now} />)
-    expect(container.querySelector('.tool-box')).not.toBeInTheDocument()
+    expect(container.querySelector('.tool-tile')).not.toBeInTheDocument()
   })
 })

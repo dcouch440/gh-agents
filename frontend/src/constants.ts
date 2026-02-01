@@ -38,6 +38,7 @@ export const ROUTES = {
   TASKS: '/tasks',
   DOCUMENTS: '/documents',
   SETTINGS: '/settings',
+  SHOWCASE: '/showcase',
 } as const
 
 // Reducer Action Types

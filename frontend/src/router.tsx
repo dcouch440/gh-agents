@@ -3,6 +3,7 @@ import { ROUTES } from './constants'
 import { AppLayout } from './components/layout/AppLayout'
 import { DocumentsPage } from './pages/Documents/DocumentsPage'
 import { SettingsPage } from './pages/Settings/SettingsPage'
+import { ShowcasePage } from './pages/Showcase/ShowcasePage'
 import {
   DashboardWithProviders,
   AgentsWithProvider,
@@ -30,6 +31,7 @@ export const router = createBrowserRouter([
       { path: ROUTES.TASKS, element: <TasksWithProvider /> },
       { path: ROUTES.DOCUMENTS, element: <DocumentsPage /> },
       { path: ROUTES.SETTINGS, element: <SettingsPage /> },
+      { path: ROUTES.SHOWCASE, element: <ShowcasePage /> },
     ],
   },
 ])
