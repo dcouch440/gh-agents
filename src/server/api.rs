@@ -2021,6 +2021,28 @@ pub async fn list_execution_messages(State(state): State<AppState>, _auth: auth:
 }
 
 // ============================================================================
+// Cost Endpoints
+// ============================================================================
+
+#[derive(Deserialize)]
+pub struct CostQuery {
+    pub since: Option<DateTime<Utc>>,
+}
+
+#[derive(Serialize)]
+pub struct CostResponse {
+    pub total_spend: f64,
+    pub models: Vec<crate::db::traits::ModelSpendRow>,
+}
+
+pub async fn get_costs(State(state): State<AppState>, auth: auth::AuthUser, Query(q): Query<CostQuery>) -> Result<Json<CostResponse>, StatusCode> {
+    let repo = state.token_ledger_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let total_spend = repo.get_user_spend(auth.user_id.0, q.since).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let models = repo.get_model_breakdown(auth.user_id.0, q.since).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(CostResponse { total_spend, models }))
+}
+
+// ============================================================================
 // Workflows Endpoints
 // ============================================================================
 
