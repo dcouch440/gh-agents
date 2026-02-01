@@ -647,13 +647,13 @@ pub fn agent_tools() -> Vec<Tool> {
 /// Execute a tool by name with the given JSON input.
 ///
 /// Returns a JSON value describing the result.
-pub async fn execute_tool(name: &str, input: &Value, state: &AppState, user_id: UserId) -> Value {
+pub async fn execute_tool(name: &str, input: &Value, state: &AppState, user_id: UserId, session_id: Option<uuid::Uuid>) -> Value {
     match name {
         "list_agents" => execute_list_agents(state).await,
         "list_roles" => execute_list_roles(state).await,
         "create_agent" => execute_create_agent(input, state, user_id).await,
         "create_agents" => execute_create_agents(input, state, user_id).await,
-        "assign_task" => execute_assign_task(input, state).await,
+        "assign_task" => execute_assign_task(input, state, session_id).await,
         "get_task_result" => execute_get_task_result(input, state).await,
         "list_pending_approvals" => execute_list_pending_approvals(state).await,
         "respond_to_approval" => execute_respond_to_approval(input, state).await,
@@ -886,7 +886,7 @@ async fn execute_create_agents(input: &Value, state: &AppState, user_id: UserId)
     })
 }
 
-async fn execute_assign_task(input: &Value, state: &AppState) -> Value {
+async fn execute_assign_task(input: &Value, state: &AppState, session_id: Option<uuid::Uuid>) -> Value {
     let Some(dispatcher) = &state.dispatcher else {
         return json!({ "error": "Dispatcher not initialized" });
     };
@@ -983,6 +983,34 @@ async fn execute_assign_task(input: &Value, state: &AppState) -> Value {
 
     let conventions = cluster_conventions;
 
+    // Load session chat history for the True Context distiller
+    let chat_messages: Vec<crate::llm::Message> = if let Some(sid) = session_id {
+        match state.repo.get_session_history(sid, crate::constants::DISTILLER_MAX_MESSAGES as u32).await {
+            Ok(rows) => rows
+                .iter()
+                .map(|row| match row.role.as_str() {
+                    "assistant" => crate::llm::Message::assistant(&row.content),
+                    _ => crate::llm::Message::user(&row.content),
+                })
+                .collect(),
+            Err(e) => {
+                tracing::debug!("Failed to load session history for distiller: {}", e);
+                vec![]
+            }
+        }
+    } else {
+        vec![]
+    };
+
+    // Load agent context documents (includes distiller templates)
+    let context_docs: Vec<crate::db::DocumentRow> = match state.repo.get_agent_context(uuid).await {
+        Ok(docs) => docs,
+        Err(e) => {
+            tracing::debug!("Failed to load agent context docs: {}", e);
+            vec![]
+        }
+    };
+
     // Parse allowed_tools if provided
     let allowed_tools = input["allowed_tools"]
         .as_array()
@@ -1007,12 +1035,12 @@ async fn execute_assign_task(input: &Value, state: &AppState) -> Value {
                 style,
                 output_format,
             },
-            chat_messages: vec![],
+            chat_messages,
             execution_context,
             tool_rows: vec![],
             router_mode: false,
             cluster_routing: None,
-            context_docs: vec![],
+            context_docs,
         },
         constraints,
         timeout: Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),

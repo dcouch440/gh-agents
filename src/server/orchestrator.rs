@@ -1009,7 +1009,7 @@ async fn handle_message(state: &AppState, provider: Arc<dyn LLMProvider + Send +
                     }
 
                     let tool_start = std::time::Instant::now();
-                    let result = tools::execute_tool(name, input, state, user_id).await;
+                    let result = tools::execute_tool(name, input, state, user_id, msg.session_id).await;
                     let tool_latency = tool_start.elapsed().as_millis() as i32;
                     let result_str = serde_json::to_string(&result).unwrap_or_else(|_| result.to_string());
 
