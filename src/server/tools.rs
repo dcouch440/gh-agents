@@ -1537,6 +1537,8 @@ async fn execute_start_pipeline(input: &Value, state: &AppState, user_id: UserId
         started_at: now,
         completed_at: None,
         duration_ms: 0,
+        stage_member_id: None,
+        pipeline_id: None,
     };
     let _ = state.repo.create_stage_execution(&stage_exec).await;
 
