@@ -7,22 +7,16 @@ mod sandbox;
 mod test_runner;
 
 pub use approval::{
-    approval_channel, ApprovalContext, ApprovalError, ApprovalGate, ApprovalGatesConfig,
-    ApprovalRequest, ApprovalRequestReceiver, ApprovalRequestSender, ApprovalResponse,
+    approval_channel, ApprovalContext, ApprovalError, ApprovalGate, ApprovalGatesConfig, ApprovalRequest, ApprovalRequestReceiver, ApprovalRequestSender, ApprovalResponse,
     AutoApprovalGate, AutonomyLevel, DangerLevel, DangerousOperation, InteractiveApprovalGate,
 };
 pub use files::{FileError, FileOps};
 pub use git::{
-    BranchInfo, ChangeType, CommitInfo, ConflictInfo, ConflictRegion, ConflictResolution,
-    DiffOptions, FetchResult, FileChange, GitError, GitOps, GitStatus, MergeResult, PushOptions,
-    PushResult,
+    BranchInfo, ChangeType, CommitInfo, ConflictInfo, ConflictRegion, ConflictResolution, DiffOptions, FetchResult, FileChange, GitError, GitOps, GitStatus, MergeResult,
+    PushOptions, PushResult,
 };
-pub use sandbox::{
-    MountSpec, Sandbox, SandboxConfig, SandboxConfigBuilder, SandboxError, SandboxResult,
-};
-pub use test_runner::{
-    TestError, TestFailure, TestFramework, TestOutputEvent, TestResult, TestRunner,
-};
+pub use sandbox::{MountSpec, Sandbox, SandboxConfig, SandboxConfigBuilder, SandboxError, SandboxResult};
+pub use test_runner::{TestError, TestFailure, TestFramework, TestOutputEvent, TestResult, TestRunner};
 
 use std::path::PathBuf;
 use thiserror::Error;
@@ -39,10 +33,7 @@ pub struct ExecutionContext {
 
 impl ExecutionContext {
     pub fn new(project_root: PathBuf) -> Self {
-        Self {
-            project_root,
-            sandboxed: true,
-        }
+        Self { project_root, sandboxed: true }
     }
 
     /// Check if a path is within the project root
@@ -70,11 +61,7 @@ impl ExecutionContext {
     }
 
     /// Validate a path that doesn't exist yet by checking its logical location
-    fn validate_hypothetical_path(
-        &self,
-        path: &std::path::Path,
-        _canonical_root: &std::path::Path,
-    ) -> PathBuf {
+    fn validate_hypothetical_path(&self, path: &std::path::Path, _canonical_root: &std::path::Path) -> PathBuf {
         // Walk up until we find an existing ancestor
         let mut current = path.to_path_buf();
         let mut to_append: Vec<std::ffi::OsString> = Vec::new();
@@ -119,11 +106,7 @@ pub enum PathValidationError {
     EscapeAttempt { path: PathBuf },
 
     #[error("path outside project: {path} resolved to {resolved}, project root is {project_root}")]
-    OutsideProject {
-        path: PathBuf,
-        resolved: PathBuf,
-        project_root: PathBuf,
-    },
+    OutsideProject { path: PathBuf, resolved: PathBuf, project_root: PathBuf },
 
     #[error("path has no parent: {path}")]
     NoParent { path: PathBuf },

@@ -11,9 +11,7 @@ use crate::execution::{ExecutionContext, FileOps, GitOps, Sandbox, TestRunner};
 use crate::llm::Tool;
 
 /// Namespace UUID for generating deterministic builtin tool IDs.
-const TOOLS_NS: Uuid = Uuid::from_bytes([
-    0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8,
-]);
+const TOOLS_NS: Uuid = Uuid::from_bytes([0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8]);
 
 /// Return the 11 built-in execution tools as DB rows for seeding.
 ///
@@ -171,12 +169,7 @@ pub fn execution_tools() -> Vec<Tool> {
 /// Execute an execution tool by name. Returns JSON result.
 ///
 /// If `allowed_tools` is Some, only tools in the list are permitted.
-pub async fn execute_execution_tool(
-    name: &str,
-    input: &Value,
-    ctx: &ExecutionContext,
-    allowed_tools: Option<&[String]>,
-) -> Value {
+pub async fn execute_execution_tool(name: &str, input: &Value, ctx: &ExecutionContext, allowed_tools: Option<&[String]>) -> Value {
     if let Some(allowed) = allowed_tools {
         if !allowed.iter().any(|t| t == name) {
             return json!({ "error": format!("Tool '{}' is not allowed for this agent", name) });
@@ -289,12 +282,7 @@ async fn exec_edit_file(input: &Value, ctx: &ExecutionContext) -> Value {
 
     // Exactly one match — perform the replacement
     let byte_offset = matches[0].0;
-    let new_content = format!(
-        "{}{}{}",
-        &content[..byte_offset],
-        new_string,
-        &content[byte_offset + old_string.len()..]
-    );
+    let new_content = format!("{}{}{}", &content[..byte_offset], new_string, &content[byte_offset + old_string.len()..]);
 
     match file_ops.write_file(&full_path, &new_content).await {
         Ok(()) => {
@@ -332,11 +320,7 @@ async fn exec_list_files(input: &Value, ctx: &ExecutionContext) -> Value {
         Ok(entries) => {
             let names: Vec<String> = entries
                 .iter()
-                .filter_map(|p| {
-                    p.strip_prefix(&ctx.project_root)
-                        .ok()
-                        .map(|rel| rel.to_string_lossy().to_string())
-                })
+                .filter_map(|p| p.strip_prefix(&ctx.project_root).ok().map(|rel| rel.to_string_lossy().to_string()))
                 .collect();
             json!({ "files": names })
         }
@@ -368,11 +352,7 @@ fn exec_git_status(ctx: &ExecutionContext) -> Value {
 fn exec_git_diff(input: &Value, ctx: &ExecutionContext) -> Value {
     let git = GitOps::new(ctx.clone());
     let staged = input["staged"].as_bool().unwrap_or(false);
-    let result = if staged {
-        git.diff_staged()
-    } else {
-        git.diff()
-    };
+    let result = if staged { git.diff_staged() } else { git.diff() };
     match result {
         Ok(diff) => json!({ "diff": diff }),
         Err(e) => json!({ "error": e.to_string() }),
@@ -534,8 +514,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         std::fs::write(tmp.path().join("test.txt"), "hello world").unwrap();
         let ctx = ExecutionContext::new(tmp.path().to_path_buf());
-        let result =
-            execute_execution_tool("read_file", &json!({ "path": "test.txt" }), &ctx, None).await;
+        let result = execute_execution_tool("read_file", &json!({ "path": "test.txt" }), &ctx, None).await;
         assert_eq!(result["content"], "hello world");
     }
 
@@ -543,13 +522,7 @@ mod tests {
     async fn write_file_tool_works() {
         let tmp = TempDir::new().unwrap();
         let ctx = ExecutionContext::new(tmp.path().to_path_buf());
-        let result = execute_execution_tool(
-            "write_file",
-            &json!({ "path": "out.txt", "content": "written" }),
-            &ctx,
-            None,
-        )
-        .await;
+        let result = execute_execution_tool("write_file", &json!({ "path": "out.txt", "content": "written" }), &ctx, None).await;
         assert_eq!(result["success"], true);
         let content = std::fs::read_to_string(tmp.path().join("out.txt")).unwrap();
         assert_eq!(content, "written");
@@ -561,8 +534,7 @@ mod tests {
         std::fs::write(tmp.path().join("a.txt"), "").unwrap();
         std::fs::write(tmp.path().join("b.txt"), "").unwrap();
         let ctx = ExecutionContext::new(tmp.path().to_path_buf());
-        let result =
-            execute_execution_tool("list_files", &json!({ "path": "." }), &ctx, None).await;
+        let result = execute_execution_tool("list_files", &json!({ "path": "." }), &ctx, None).await;
         let files = result["files"].as_array().unwrap();
         assert_eq!(files.len(), 2);
     }
@@ -572,24 +544,14 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let ctx = ExecutionContext::new(tmp.path().to_path_buf());
         let allowed = vec!["read_file".to_string()];
-        let result = execute_execution_tool(
-            "write_file",
-            &json!({ "path": "x.txt", "content": "no" }),
-            &ctx,
-            Some(&allowed),
-        )
-        .await;
+        let result = execute_execution_tool("write_file", &json!({ "path": "x.txt", "content": "no" }), &ctx, Some(&allowed)).await;
         assert!(result["error"].as_str().unwrap().contains("not allowed"));
     }
 
     #[tokio::test]
     async fn edit_file_replaces_unique_match() {
         let tmp = TempDir::new().unwrap();
-        std::fs::write(
-            tmp.path().join("code.rs"),
-            "fn main() {\n    println!(\"old\");\n}\n",
-        )
-        .unwrap();
+        std::fs::write(tmp.path().join("code.rs"), "fn main() {\n    println!(\"old\");\n}\n").unwrap();
         let ctx = ExecutionContext::new(tmp.path().to_path_buf());
         let result = execute_execution_tool(
             "edit_file",
@@ -632,10 +594,7 @@ mod tests {
             None,
         )
         .await;
-        assert!(result["error"]
-            .as_str()
-            .unwrap()
-            .contains("matches 2 locations"));
+        assert!(result["error"].as_str().unwrap().contains("matches 2 locations"));
     }
 
     #[tokio::test]
@@ -643,13 +602,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         std::fs::write(tmp.path().join("code.rs"), "line1\n").unwrap();
         let ctx = ExecutionContext::new(tmp.path().to_path_buf());
-        let result = execute_execution_tool(
-            "edit_file",
-            &json!({ "path": "code.rs", "old_string": "", "new_string": "line2\n" }),
-            &ctx,
-            None,
-        )
-        .await;
+        let result = execute_execution_tool("edit_file", &json!({ "path": "code.rs", "old_string": "", "new_string": "line2\n" }), &ctx, None).await;
         assert_eq!(result["success"], true);
         let content = std::fs::read_to_string(tmp.path().join("code.rs")).unwrap();
         assert_eq!(content, "line1\nline2\n");

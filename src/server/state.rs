@@ -8,10 +8,7 @@ use sqlx::PgPool;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use uuid::Uuid;
 
-use crate::agents::{
-    AgentPool, AgentResponse, ClusterManager, Dispatcher, PipelineManager, RoleManager,
-    ScheduleManager,
-};
+use crate::agents::{AgentPool, AgentResponse, ClusterManager, Dispatcher, PipelineManager, RoleManager, ScheduleManager};
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::{DocumentRepo, ServerRepo, UserRepo};
 use crate::llm::AnthropicClient;
@@ -19,9 +16,7 @@ use crate::orchestration::Scheduler;
 use crate::types::{AgentPoolConfig, AppConfig, UserId};
 
 use super::agent_mode::{AgentModeId, ModeRegistry};
-use super::ws::{
-    AgentUpdate, FeedUpdate, PipelineUpdate, RoutingUpdate, SessionUpdate, TaskUpdate,
-};
+use super::ws::{AgentUpdate, FeedUpdate, PipelineUpdate, RoutingUpdate, SessionUpdate, TaskUpdate};
 
 /// Message sent to the orchestrator
 #[derive(Debug, Clone)]
@@ -115,11 +110,7 @@ impl AppState {
     /// so it can be passed to the orchestrator consumer task.
     ///
     /// Loads persisted agents and clusters from the database on startup.
-    pub async fn new(
-        db: PgPool,
-        scheduler: Arc<RwLock<Scheduler>>,
-        config: AppConfig,
-    ) -> (Self, mpsc::Receiver<OrchestratorMessage>) {
+    pub async fn new(db: PgPool, scheduler: Arc<RwLock<Scheduler>>, config: AppConfig) -> (Self, mpsc::Receiver<OrchestratorMessage>) {
         let repo: Arc<dyn ServerRepo> = Arc::new(PgRepo::new(db.clone()));
         let user_repo: Arc<dyn UserRepo> = Arc::new(PgRepo::new(db.clone()));
         let doc_repo: Arc<dyn DocumentRepo> = Arc::new(PgRepo::new(db.clone()));
@@ -138,8 +129,7 @@ impl AppState {
             let mut dispatcher = Dispatcher::new(64);
 
             // Reconstruct agents from DB
-            let legacy_user =
-                UserId(uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap());
+            let legacy_user = UserId(uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap());
             if let Ok(agent_rows) = state.repo.list_persisted_agents(legacy_user).await {
                 for row in agent_rows {
                     let tier = match row.tier.as_str() {
@@ -151,12 +141,7 @@ impl AppState {
                         name: row.persona_name.clone(),
                         ..Default::default()
                     };
-                    match pool.spawn_agent_with_dispatcher(
-                        tier,
-                        persona,
-                        crate::types::ModelConfig::default(),
-                        &mut dispatcher,
-                    ) {
+                    match pool.spawn_agent_with_dispatcher(tier, persona, crate::types::ModelConfig::default(), &mut dispatcher) {
                         Ok(id) => tracing::info!("Restored agent {} ({})", row.persona_name, id.0),
                         Err(e) => {
                             tracing::warn!("Failed to restore agent {}: {}", row.persona_name, e)
@@ -233,8 +218,7 @@ impl AppState {
             if let Ok(trigger_rows) = state.repo.list_triggers(legacy_user).await {
                 let mut mgr = state.schedule_manager.write().await;
                 for row in trigger_rows {
-                    if let Some(event_type) = crate::agents::TriggerEvent::from_str(&row.event_type)
-                    {
+                    if let Some(event_type) = crate::agents::TriggerEvent::from_str(&row.event_type) {
                         let tid = crate::agents::TriggerId(row.id);
                         mgr.create_trigger_with_id(
                             tid,
@@ -256,14 +240,8 @@ impl AppState {
 
     /// Create application state with a custom repo (for testing).
     /// Returns the state and the orchestrator message receiver.
-    pub fn with_repo(
-        db: Option<PgPool>,
-        repo: Arc<dyn ServerRepo>,
-        scheduler: Option<Arc<RwLock<Scheduler>>>,
-        config: AppConfig,
-    ) -> (Self, mpsc::Receiver<OrchestratorMessage>) {
-        let (orchestrator_tx, orchestrator_rx) =
-            mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
+    pub fn with_repo(db: Option<PgPool>, repo: Arc<dyn ServerRepo>, scheduler: Option<Arc<RwLock<Scheduler>>>, config: AppConfig) -> (Self, mpsc::Receiver<OrchestratorMessage>) {
+        let (orchestrator_tx, orchestrator_rx) = mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
         let (feed_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST_HIGH);
         let (task_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
         let (agent_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST_LOW);
@@ -278,15 +256,11 @@ impl AppState {
                 s.into_bytes()
             }
             _ => {
-                let is_production = std::env::var("RUST_ENV")
-                    .map(|v| v.eq_ignore_ascii_case("production"))
-                    .unwrap_or(false);
+                let is_production = std::env::var("RUST_ENV").map(|v| v.eq_ignore_ascii_case("production")).unwrap_or(false);
                 if is_production {
                     panic!("JWT_SECRET must be set in production (RUST_ENV=production)");
                 }
-                tracing::warn!(
-                    "JWT_SECRET not set — using random secret. Tokens will not survive restarts."
-                );
+                tracing::warn!("JWT_SECRET not set — using random secret. Tokens will not survive restarts.");
                 rand::random::<[u8; 32]>().to_vec()
             }
         };
@@ -402,10 +376,7 @@ impl AppState {
     /// The caller should replay the buffer first, then listen on the receiver.
     /// Holding the inner read lock while snapshotting + subscribing guarantees
     /// no chunks are missed or duplicated.
-    pub async fn get_response_stream(
-        &self,
-        message_id: Uuid,
-    ) -> (Vec<StreamChunk>, broadcast::Receiver<StreamChunk>, bool) {
+    pub async fn get_response_stream(&self, message_id: Uuid) -> (Vec<StreamChunk>, broadcast::Receiver<StreamChunk>, bool) {
         let mut streams = self.response_streams.write().await;
         let entry = streams.entry(message_id).or_insert_with(|| {
             let (tx, _) = broadcast::channel(100);
@@ -568,9 +539,7 @@ mod tests {
     #[tokio::test]
     async fn send_stream_chunk_no_stream() {
         let state = make_state();
-        let result = state
-            .send_stream_chunk(Uuid::new_v4(), StreamChunk::Token("hi".into()))
-            .await;
+        let result = state.send_stream_chunk(Uuid::new_v4(), StreamChunk::Token("hi".into())).await;
         assert!(!result);
     }
 
@@ -579,9 +548,7 @@ mod tests {
         let state = make_state();
         let msg_id = Uuid::new_v4();
         state.ensure_response_stream(msg_id).await;
-        let result = state
-            .send_stream_chunk(msg_id, StreamChunk::Token("hi".into()))
-            .await;
+        let result = state.send_stream_chunk(msg_id, StreamChunk::Token("hi".into())).await;
         assert!(result);
     }
 
@@ -592,12 +559,8 @@ mod tests {
         state.ensure_response_stream(msg_id).await;
 
         // Send chunks with no SSE client connected
-        state
-            .send_stream_chunk(msg_id, StreamChunk::Token("hello ".into()))
-            .await;
-        state
-            .send_stream_chunk(msg_id, StreamChunk::Token("world".into()))
-            .await;
+        state.send_stream_chunk(msg_id, StreamChunk::Token("hello ".into())).await;
+        state.send_stream_chunk(msg_id, StreamChunk::Token("world".into())).await;
         state.send_stream_chunk(msg_id, StreamChunk::Done).await;
 
         // Late subscriber gets the full buffer

@@ -14,11 +14,7 @@ pub async fn insert_task(pool: &PgPool, user_id: UserId, task: &Task) -> Result<
     let status = format!("{:?}", task.status).to_lowercase();
     let priority = format!("{:?}", task.priority).to_lowercase();
     let context_files = serde_json::to_value(&task.context_files)?;
-    let metadata = task
-        .metadata
-        .as_ref()
-        .map(serde_json::to_value)
-        .transpose()?;
+    let metadata = task.metadata.as_ref().map(serde_json::to_value).transpose()?;
 
     sqlx::query(
         r#"
@@ -94,15 +90,8 @@ pub async fn list_tasks_by_status(pool: &PgPool, status: TaskStatus) -> Result<V
 }
 
 /// List all tasks with optional status filter and limit
-pub async fn list_tasks(
-    pool: &PgPool,
-    user_id: UserId,
-    status: Option<&str>,
-    limit: Option<u32>,
-) -> Result<Vec<Task>> {
-    let limit = limit
-        .unwrap_or(crate::constants::DEFAULT_QUERY_LIMIT as u32)
-        .min(crate::constants::MAX_QUERY_LIMIT as u32) as i64;
+pub async fn list_tasks(pool: &PgPool, user_id: UserId, status: Option<&str>, limit: Option<u32>) -> Result<Vec<Task>> {
+    let limit = limit.unwrap_or(crate::constants::DEFAULT_QUERY_LIMIT as u32).min(crate::constants::MAX_QUERY_LIMIT as u32) as i64;
 
     let rows: Vec<TaskRow> = if let Some(status_filter) = status {
         sqlx::query_as(
@@ -180,10 +169,8 @@ impl TaskRow {
             _ => Priority::Normal,
         };
 
-        let context_files: Vec<std::path::PathBuf> =
-            serde_json::from_value(self.context_files).unwrap_or_default();
-        let metadata: Option<std::collections::HashMap<String, String>> =
-            self.metadata.and_then(|m| serde_json::from_value(m).ok());
+        let context_files: Vec<std::path::PathBuf> = serde_json::from_value(self.context_files).unwrap_or_default();
+        let metadata: Option<std::collections::HashMap<String, String>> = self.metadata.and_then(|m| serde_json::from_value(m).ok());
 
         Task {
             id: TaskId(self.id),
@@ -220,13 +207,7 @@ pub struct ChatMessageRow {
 }
 
 /// Insert a new chat message
-pub async fn insert_chat_message(
-    pool: &PgPool,
-    user_id: UserId,
-    id: &Uuid,
-    role: &str,
-    content: &str,
-) -> Result<()> {
+pub async fn insert_chat_message(pool: &PgPool, user_id: UserId, id: &Uuid, role: &str, content: &str) -> Result<()> {
     sqlx::query("INSERT INTO chat_messages (id, user_id, role, content, timestamp) VALUES ($1, $2, $3, $4, $5)")
         .bind(id)
         .bind(user_id.0)
@@ -241,24 +222,17 @@ pub async fn insert_chat_message(
 }
 
 /// Get chat history with pagination
-pub async fn get_chat_history(
-    pool: &PgPool,
-    user_id: UserId,
-    limit: u32,
-    offset: u32,
-) -> Result<Vec<ChatMessageRow>> {
+pub async fn get_chat_history(pool: &PgPool, user_id: UserId, limit: u32, offset: u32) -> Result<Vec<ChatMessageRow>> {
     let limit = limit.min(1000) as i64;
     let offset = offset as i64;
 
-    let rows: Vec<ChatMessageRow> = sqlx::query_as(
-        "SELECT id, role, content, timestamp FROM chat_messages WHERE user_id = $1 ORDER BY timestamp ASC LIMIT $2 OFFSET $3",
-    )
-    .bind(user_id.0)
-    .bind(limit)
-    .bind(offset)
-    .fetch_all(pool)
-    .await
-    .context("Failed to get chat history")?;
+    let rows: Vec<ChatMessageRow> = sqlx::query_as("SELECT id, role, content, timestamp FROM chat_messages WHERE user_id = $1 ORDER BY timestamp ASC LIMIT $2 OFFSET $3")
+        .bind(user_id.0)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(pool)
+        .await
+        .context("Failed to get chat history")?;
 
     Ok(rows)
 }
@@ -291,13 +265,7 @@ pub struct SessionRow {
 }
 
 /// Create a new chat session
-pub async fn create_session(
-    pool: &PgPool,
-    user_id: UserId,
-    session_id: Uuid,
-    mode_id: &str,
-    title: &str,
-) -> Result<()> {
+pub async fn create_session(pool: &PgPool, user_id: UserId, session_id: Uuid, mode_id: &str, title: &str) -> Result<()> {
     sqlx::query("INSERT INTO chat_sessions (id, user_id, mode_id, title) VALUES ($1, $2, $3, $4)")
         .bind(session_id)
         .bind(user_id.0)
@@ -311,25 +279,22 @@ pub async fn create_session(
 
 /// List sessions for a user
 pub async fn list_sessions(pool: &PgPool, user_id: UserId) -> Result<Vec<SessionRow>> {
-    let rows: Vec<SessionRow> = sqlx::query_as(
-        "SELECT id, user_id, mode_id, title, summary, created_at, updated_at FROM chat_sessions WHERE user_id = $1 ORDER BY updated_at DESC",
-    )
-    .bind(user_id.0)
-    .fetch_all(pool)
-    .await
-    .context("Failed to list sessions")?;
+    let rows: Vec<SessionRow> =
+        sqlx::query_as("SELECT id, user_id, mode_id, title, summary, created_at, updated_at FROM chat_sessions WHERE user_id = $1 ORDER BY updated_at DESC")
+            .bind(user_id.0)
+            .fetch_all(pool)
+            .await
+            .context("Failed to list sessions")?;
     Ok(rows)
 }
 
 /// Get a session by ID
 pub async fn get_session(pool: &PgPool, session_id: Uuid) -> Result<Option<SessionRow>> {
-    let row: Option<SessionRow> = sqlx::query_as(
-        "SELECT id, user_id, mode_id, title, summary, created_at, updated_at FROM chat_sessions WHERE id = $1",
-    )
-    .bind(session_id)
-    .fetch_optional(pool)
-    .await
-    .context("Failed to get session")?;
+    let row: Option<SessionRow> = sqlx::query_as("SELECT id, user_id, mode_id, title, summary, created_at, updated_at FROM chat_sessions WHERE id = $1")
+        .bind(session_id)
+        .fetch_optional(pool)
+        .await
+        .context("Failed to get session")?;
     Ok(row)
 }
 
@@ -349,44 +314,29 @@ pub async fn delete_session(pool: &PgPool, session_id: Uuid) -> Result<()> {
 }
 
 /// Insert a chat message scoped to a session
-pub async fn insert_session_message(
-    pool: &PgPool,
-    user_id: UserId,
-    session_id: Uuid,
-    id: &Uuid,
-    role: &str,
-    content: &str,
-) -> Result<()> {
-    sqlx::query(
-        "INSERT INTO chat_messages (id, user_id, session_id, role, content, timestamp) VALUES ($1, $2, $3, $4, $5, $6)",
-    )
-    .bind(id)
-    .bind(user_id.0)
-    .bind(session_id)
-    .bind(role)
-    .bind(content)
-    .bind(Utc::now())
-    .execute(pool)
-    .await
-    .context("Failed to insert session message")?;
+pub async fn insert_session_message(pool: &PgPool, user_id: UserId, session_id: Uuid, id: &Uuid, role: &str, content: &str) -> Result<()> {
+    sqlx::query("INSERT INTO chat_messages (id, user_id, session_id, role, content, timestamp) VALUES ($1, $2, $3, $4, $5, $6)")
+        .bind(id)
+        .bind(user_id.0)
+        .bind(session_id)
+        .bind(role)
+        .bind(content)
+        .bind(Utc::now())
+        .execute(pool)
+        .await
+        .context("Failed to insert session message")?;
     Ok(())
 }
 
 /// Get chat history for a session
-pub async fn get_session_history(
-    pool: &PgPool,
-    session_id: Uuid,
-    limit: u32,
-) -> Result<Vec<ChatMessageRow>> {
+pub async fn get_session_history(pool: &PgPool, session_id: Uuid, limit: u32) -> Result<Vec<ChatMessageRow>> {
     let limit = limit.min(1000) as i64;
-    let rows: Vec<ChatMessageRow> = sqlx::query_as(
-        "SELECT id, role, content, timestamp FROM chat_messages WHERE session_id = $1 ORDER BY timestamp ASC LIMIT $2",
-    )
-    .bind(session_id)
-    .bind(limit)
-    .fetch_all(pool)
-    .await
-    .context("Failed to get session history")?;
+    let rows: Vec<ChatMessageRow> = sqlx::query_as("SELECT id, role, content, timestamp FROM chat_messages WHERE session_id = $1 ORDER BY timestamp ASC LIMIT $2")
+        .bind(session_id)
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+        .context("Failed to get session history")?;
     Ok(rows)
 }
 
@@ -438,11 +388,10 @@ pub async fn set_password(pool: &PgPool, password_hash: &str) -> Result<()> {
 
 /// Get the stored password hash
 pub async fn get_password(pool: &PgPool) -> Result<Option<String>> {
-    let row: Option<(String,)> =
-        sqlx::query_as("SELECT password_hash FROM auth_config WHERE id = 1")
-            .fetch_optional(pool)
-            .await
-            .context("Failed to get password")?;
+    let row: Option<(String,)> = sqlx::query_as("SELECT password_hash FROM auth_config WHERE id = 1")
+        .fetch_optional(pool)
+        .await
+        .context("Failed to get password")?;
 
     Ok(row.map(|r| r.0))
 }
@@ -565,14 +514,11 @@ struct ToolRowDb {
 }
 
 /// List all clusters with their tools (for building the ToolClusterIndex)
-pub async fn list_clusters_with_tools(
-    pool: &PgPool,
-) -> Result<Vec<(super::ClusterRow, Vec<super::ToolRow>)>> {
-    let cluster_rows: Vec<ClusterRowDb> =
-        sqlx::query_as("SELECT id, name, description, conventions, shared_files FROM clusters")
-            .fetch_all(pool)
-            .await
-            .context("Failed to list clusters")?;
+pub async fn list_clusters_with_tools(pool: &PgPool) -> Result<Vec<(super::ClusterRow, Vec<super::ToolRow>)>> {
+    let cluster_rows: Vec<ClusterRowDb> = sqlx::query_as("SELECT id, name, description, conventions, shared_files FROM clusters")
+        .fetch_all(pool)
+        .await
+        .context("Failed to list clusters")?;
 
     let mut results = Vec::new();
     for cr in cluster_rows {
@@ -653,14 +599,9 @@ mod tests {
         let task = create_test_task();
 
         insert_task(&db.pool, test_user_id(), &task).await.unwrap();
-        update_task_status(&db.pool, &task.id, TaskStatus::InProgress)
-            .await
-            .unwrap();
+        update_task_status(&db.pool, &task.id, TaskStatus::InProgress).await.unwrap();
 
-        let retrieved = get_task(&db.pool, test_user_id(), &task.id)
-            .await
-            .unwrap()
-            .unwrap();
+        let retrieved = get_task(&db.pool, test_user_id(), &task.id).await.unwrap().unwrap();
         assert_eq!(retrieved.status, TaskStatus::InProgress);
 
         db.cleanup().await;
@@ -677,9 +618,7 @@ mod tests {
         insert_task(&db.pool, test_user_id(), &task1).await.unwrap();
         insert_task(&db.pool, test_user_id(), &task2).await.unwrap();
 
-        let pending = list_tasks_by_status(&db.pool, TaskStatus::Pending)
-            .await
-            .unwrap();
+        let pending = list_tasks_by_status(&db.pool, TaskStatus::Pending).await.unwrap();
         assert!(pending.len() >= 2);
 
         db.cleanup().await;
@@ -693,13 +632,9 @@ mod tests {
         let db = TestDb::new().await;
         let id = Uuid::new_v4();
 
-        insert_chat_message(&db.pool, test_user_id(), &id, "user", "Hello, world!")
-            .await
-            .unwrap();
+        insert_chat_message(&db.pool, test_user_id(), &id, "user", "Hello, world!").await.unwrap();
 
-        let history = get_chat_history(&db.pool, test_user_id(), 50, 0)
-            .await
-            .unwrap();
+        let history = get_chat_history(&db.pool, test_user_id(), 50, 0).await.unwrap();
         assert!(history.len() >= 1);
 
         db.cleanup().await;
@@ -713,21 +648,11 @@ mod tests {
         // Insert 5 messages
         for i in 0..5 {
             let id = Uuid::new_v4();
-            insert_chat_message(
-                &db.pool,
-                test_user_id(),
-                &id,
-                "user",
-                &format!("Message {}", i),
-            )
-            .await
-            .unwrap();
+            insert_chat_message(&db.pool, test_user_id(), &id, "user", &format!("Message {}", i)).await.unwrap();
         }
 
         // Get first 2
-        let history = get_chat_history(&db.pool, test_user_id(), 2, 0)
-            .await
-            .unwrap();
+        let history = get_chat_history(&db.pool, test_user_id(), 2, 0).await.unwrap();
         assert_eq!(history.len(), 2);
 
         db.cleanup().await;
@@ -740,21 +665,15 @@ mod tests {
 
         for _ in 0..3 {
             let id = Uuid::new_v4();
-            insert_chat_message(&db.pool, test_user_id(), &id, "user", "Test message")
-                .await
-                .unwrap();
+            insert_chat_message(&db.pool, test_user_id(), &id, "user", "Test message").await.unwrap();
         }
 
-        let history = get_chat_history(&db.pool, test_user_id(), 50, 0)
-            .await
-            .unwrap();
+        let history = get_chat_history(&db.pool, test_user_id(), 50, 0).await.unwrap();
         assert!(history.len() >= 3);
 
         clear_chat_history(&db.pool, test_user_id()).await.unwrap();
 
-        let history = get_chat_history(&db.pool, test_user_id(), 50, 0)
-            .await
-            .unwrap();
+        let history = get_chat_history(&db.pool, test_user_id(), 50, 0).await.unwrap();
         assert_eq!(history.len(), 0);
 
         db.cleanup().await;

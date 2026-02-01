@@ -57,17 +57,12 @@ impl ToolClusterIndex {
             });
         }
 
-        Self {
-            clusters,
-            tool_to_cluster,
-        }
+        Self { clusters, tool_to_cluster }
     }
 
     /// Find the cluster that owns a given tool.
     pub fn find_cluster(&self, tool_name: &str) -> Option<&ClusterEntry> {
-        self.tool_to_cluster
-            .get(tool_name)
-            .and_then(|&idx| self.clusters.get(idx))
+        self.tool_to_cluster.get(tool_name).and_then(|&idx| self.clusters.get(idx))
     }
 
     /// Build a summary of all clusters and their tools for the router agent's
@@ -184,13 +179,7 @@ pub async fn route_to_cluster_agent(
     // Send the task to the agent
     {
         let d = dispatcher.lock().await;
-        if let Err(e) = d
-            .send_to_agent(
-                &agent_id,
-                super::channels::AgentCommand::AssignTask(Box::new(assignment)),
-            )
-            .await
-        {
+        if let Err(e) = d.send_to_agent(&agent_id, super::channels::AgentCommand::AssignTask(Box::new(assignment))).await {
             warn!(error = %e, "Failed to dispatch routed task");
             return json!({ "error": format!("Failed to dispatch: {}", e) });
         }

@@ -13,14 +13,10 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::llm::{
-    AnthropicClient, ContentBlock, LLMProvider, LLMRequest, Message, RateLimitedProvider,
-    RetryingProvider, Role, StopReason, StreamAccumulator, StreamChunk as LLMStreamChunk,
+    AnthropicClient, ContentBlock, LLMProvider, LLMRequest, Message, RateLimitedProvider, RetryingProvider, Role, StopReason, StreamAccumulator, StreamChunk as LLMStreamChunk,
 };
 
-use crate::agents::{
-    AgentCommand, AgentResponse, CommunicationStyle, FileContent, OutputFormat, RoleContext,
-    RoleId, TaskAssignment, TaskConstraints, TaskContext, TriggerEvent,
-};
+use crate::agents::{AgentCommand, AgentResponse, CommunicationStyle, FileContent, OutputFormat, RoleContext, RoleId, TaskAssignment, TaskConstraints, TaskContext, TriggerEvent};
 
 use super::state::{AppState, OrchestratorMessage, StreamChunk};
 use super::tools;
@@ -130,10 +126,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                             state.broadcast_feed(FeedUpdate {
                                 id: request.task_id,
                                 agent_id: agent_id.0.to_string(),
-                                content: format!(
-                                    "Approval needed: {} — {}",
-                                    request.action, request.details
-                                ),
+                                content: format!("Approval needed: {} — {}", request.action, request.details),
                                 item_type: "approval_request".into(),
                                 timestamp: chrono::Utc::now(),
                                 user_id: None,
@@ -152,11 +145,8 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                             let mut resolved_files = Vec::new();
                             for path in &request.files_needed {
                                 if let Ok(content) = tokio::fs::read_to_string(path).await {
-                                    let truncated = if content.len()
-                                        > crate::constants::TRUNCATE_CONTEXT_FILE
-                                    {
-                                        content[..crate::constants::TRUNCATE_CONTEXT_FILE]
-                                            .to_string()
+                                    let truncated = if content.len() > crate::constants::TRUNCATE_CONTEXT_FILE {
+                                        content[..crate::constants::TRUNCATE_CONTEXT_FILE].to_string()
                                     } else {
                                         content
                                     };
@@ -174,13 +164,11 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                     let _ = disp
                                         .send_to_agent(
                                             agent_id,
-                                            AgentCommand::ProvideContext(
-                                                crate::agents::ContextResponse {
-                                                    task_id: request.task_id,
-                                                    files: resolved_files,
-                                                    answers: vec![],
-                                                },
-                                            ),
+                                            AgentCommand::ProvideContext(crate::agents::ContextResponse {
+                                                task_id: request.task_id,
+                                                files: resolved_files,
+                                                answers: vec![],
+                                            }),
                                         )
                                         .await;
                                 }
@@ -190,10 +178,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                             state.broadcast_feed(FeedUpdate {
                                 id: request.task_id,
                                 agent_id: agent_id.0.to_string(),
-                                content: format!(
-                                    "Context request — questions: {:?}, files: {:?}",
-                                    request.questions, request.files_needed
-                                ),
+                                content: format!("Context request — questions: {:?}, files: {:?}", request.questions, request.files_needed),
                                 item_type: "context_request".into(),
                                 timestamp: chrono::Utc::now(),
                                 user_id: None,
@@ -213,33 +198,22 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                     let pipeline_advance = match &resp {
                         AgentResponse::TaskCompleted { result, .. } => {
                             let mgr = state.pipeline_manager.read().await;
-                            mgr.lookup_run_by_task(result.task_id)
-                                .map(|(run_id, stage_number)| {
-                                    (
-                                        run_id,
-                                        stage_number,
-                                        result.output.clone(),
-                                        true,
-                                        result.input_tokens,
-                                        result.output_tokens,
-                                        result.duration_ms,
-                                    )
-                                })
+                            mgr.lookup_run_by_task(result.task_id).map(|(run_id, stage_number)| {
+                                (
+                                    run_id,
+                                    stage_number,
+                                    result.output.clone(),
+                                    true,
+                                    result.input_tokens,
+                                    result.output_tokens,
+                                    result.duration_ms,
+                                )
+                            })
                         }
                         AgentResponse::TaskFailed { result, .. } => {
                             let mgr = state.pipeline_manager.read().await;
                             mgr.lookup_run_by_task(result.task_id)
-                                .map(|(run_id, stage_number)| {
-                                    (
-                                        run_id,
-                                        stage_number,
-                                        String::new(),
-                                        false,
-                                        result.input_tokens,
-                                        result.output_tokens,
-                                        result.duration_ms,
-                                    )
-                                })
+                                .map(|(run_id, stage_number)| (run_id, stage_number, String::new(), false, result.input_tokens, result.output_tokens, result.duration_ms))
                         }
                         _ => None,
                     };
@@ -252,45 +226,21 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                     };
 
                     if let Some(id) = task_id {
-                        debug!(
-                            "Response consumer received {:?} for task {}",
-                            std::mem::discriminant(&resp),
-                            id
-                        );
+                        debug!("Response consumer received {:?} for task {}", std::mem::discriminant(&resp), id);
                         state.task_results.write().await.insert(id, resp);
                     }
 
                     // Pipeline auto-advance
-                    if let Some((
-                        run_id,
-                        completed_stage_number,
-                        prev_output,
-                        succeeded,
-                        stage_input_tokens,
-                        stage_output_tokens,
-                        stage_duration_ms,
-                    )) = pipeline_advance
-                    {
+                    if let Some((run_id, completed_stage_number, prev_output, succeeded, stage_input_tokens, stage_output_tokens, stage_duration_ms)) = pipeline_advance {
                         // Persist stage execution completion/failure
                         {
                             let now = chrono::Utc::now();
                             // Try to find existing stage execution by listing and matching
                             if let Ok(execs) = state.repo.list_stage_executions(run_id).await {
-                                if let Some(exec) = execs
-                                    .into_iter()
-                                    .find(|e| e.stage_number == completed_stage_number as i32)
-                                {
+                                if let Some(exec) = execs.into_iter().find(|e| e.stage_number == completed_stage_number as i32) {
                                     let mut updated = exec;
-                                    updated.status = if succeeded {
-                                        "completed".to_string()
-                                    } else {
-                                        "failed".to_string()
-                                    };
-                                    updated.output = if succeeded {
-                                        Some(prev_output.clone())
-                                    } else {
-                                        None
-                                    };
+                                    updated.status = if succeeded { "completed".to_string() } else { "failed".to_string() };
+                                    updated.output = if succeeded { Some(prev_output.clone()) } else { None };
                                     updated.input_tokens = stage_input_tokens as i64;
                                     updated.output_tokens = stage_output_tokens as i64;
                                     updated.duration_ms = stage_duration_ms as i64;
@@ -299,8 +249,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                 }
                             }
                             // Update run token totals
-                            if let Ok(Some(mut run_row)) = state.repo.get_pipeline_run(run_id).await
-                            {
+                            if let Ok(Some(mut run_row)) = state.repo.get_pipeline_run(run_id).await {
                                 run_row.total_input_tokens += stage_input_tokens as i64;
                                 run_row.total_output_tokens += stage_output_tokens as i64;
                                 run_row.current_stage = completed_stage_number as i32;
@@ -311,8 +260,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                 // Update stage_outputs from in-memory
                                 let mgr = state.pipeline_manager.read().await;
                                 if let Some(outputs) = mgr.get_stage_outputs(run_id) {
-                                    run_row.stage_outputs =
-                                        serde_json::to_value(outputs).unwrap_or_default();
+                                    run_row.stage_outputs = serde_json::to_value(outputs).unwrap_or_default();
                                 }
                                 drop(mgr);
                                 let _ = state.repo.update_pipeline_run(&run_row).await;
@@ -323,26 +271,16 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                         {
                             let pipeline_id = {
                                 let mgr = state.pipeline_manager.read().await;
-                                mgr.get_run_pipeline_id(run_id)
-                                    .map(|p| p.0)
-                                    .unwrap_or(run_id)
+                                mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
                             };
                             state.broadcast_pipeline(PipelineUpdate {
                                 run_id,
                                 pipeline_id,
-                                event: if succeeded {
-                                    "stage_completed".into()
-                                } else {
-                                    "stage_failed".into()
-                                },
+                                event: if succeeded { "stage_completed".into() } else { "stage_failed".into() },
                                 stage_number: Some(completed_stage_number as i32),
                                 stage_name: None,
                                 agent_id: None,
-                                output: if succeeded {
-                                    Some(prev_output.clone())
-                                } else {
-                                    None
-                                },
+                                output: if succeeded { Some(prev_output.clone()) } else { None },
                                 input_tokens: Some(stage_input_tokens),
                                 output_tokens: Some(stage_output_tokens),
                                 duration_ms: Some(stage_duration_ms),
@@ -367,9 +305,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                             {
                                 let pipeline_id = {
                                     let mgr = state.pipeline_manager.read().await;
-                                    mgr.get_run_pipeline_id(run_id)
-                                        .map(|p| p.0)
-                                        .unwrap_or(run_id)
+                                    mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
                                 };
                                 state.broadcast_pipeline(PipelineUpdate {
                                     run_id,
@@ -401,10 +337,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         .and_then(|p| p.stages.get(completed_stage_number as usize))
                                         .map(|s| s.output_schema.clone())
                                         .unwrap_or_else(|| serde_json::json!({"fields": []}));
-                                    let parsed = crate::agents::pipeline::parse_stage_output(
-                                        &prev_output,
-                                        &output_schema,
-                                    );
+                                    let parsed = crate::agents::pipeline::parse_stage_output(&prev_output, &output_schema);
                                     mgr.record_stage_output(run_id, sname, parsed);
                                 }
                             }
@@ -420,9 +353,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                     let mut mgr = state.pipeline_manager.write().await;
                                     mgr.set_waiting_for_approval(run_id);
                                     // Persist waiting status
-                                    if let Ok(Some(mut run_row)) =
-                                        state.repo.get_pipeline_run(run_id).await
-                                    {
+                                    if let Ok(Some(mut run_row)) = state.repo.get_pipeline_run(run_id).await {
                                         run_row.status = "waiting_for_approval".to_string();
                                         let _ = state.repo.update_pipeline_run(&run_row).await;
                                     }
@@ -448,10 +379,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                     state.broadcast_feed(FeedUpdate {
                                         id: run_id,
                                         agent_id: "pipeline".into(),
-                                        content: format!(
-                                            "Pipeline waiting for approval at stage {}",
-                                            next_stage.stage_number
-                                        ),
+                                        content: format!("Pipeline waiting for approval at stage {}", next_stage.stage_number),
                                         item_type: "pipeline_approval".into(),
                                         timestamp: chrono::Utc::now(),
                                         user_id: None,
@@ -460,9 +388,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                     {
                                         let pipeline_id = {
                                             let mgr = state.pipeline_manager.read().await;
-                                            mgr.get_run_pipeline_id(run_id)
-                                                .map(|p| p.0)
-                                                .unwrap_or(run_id)
+                                            mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
                                         };
                                         state.broadcast_pipeline(PipelineUpdate {
                                             run_id,
@@ -470,10 +396,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                             event: "gate_waiting".into(),
                                             stage_number: Some(next_stage.stage_number as i32),
                                             stage_name: Some(next_stage.stage_name.clone()),
-                                            agent_id: next_stage
-                                                .agent_id
-                                                .as_ref()
-                                                .map(|a| a.0.to_string()),
+                                            agent_id: next_stage.agent_id.as_ref().map(|a| a.0.to_string()),
                                             output: None,
                                             input_tokens: None,
                                             output_tokens: None,
@@ -487,9 +410,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                     // Auto-assign next stage using template rendering
                                     let initial_task = {
                                         let mgr = state.pipeline_manager.read().await;
-                                        mgr.get_run_initial_task(run_id)
-                                            .unwrap_or_default()
-                                            .to_string()
+                                        mgr.get_run_initial_task(run_id).unwrap_or_default().to_string()
                                     };
 
                                     // Get stage outputs for template resolution
@@ -508,30 +429,15 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                     let rendered_prompt = if let Some(pid) = pipeline_id {
                                         match state.repo.list_pipeline_stages(pid.0).await {
                                             Ok(db_stages) => {
-                                                if let Some(db_stage) =
-                                                    db_stages.into_iter().find(|s| {
-                                                        s.stage_number
-                                                            == next_stage.stage_number as i32
-                                                    })
-                                                {
+                                                if let Some(db_stage) = db_stages.into_iter().find(|s| s.stage_number == next_stage.stage_number as i32) {
                                                     let doc_repo_ref = state.doc_repo.as_deref();
-                                                    Some(
-                                                        super::api::render_stage(
-                                                            doc_repo_ref,
-                                                            &db_stage,
-                                                            &stage_outputs,
-                                                        )
-                                                        .await,
-                                                    )
+                                                    Some(super::api::render_stage(doc_repo_ref, &db_stage, &stage_outputs).await)
                                                 } else {
                                                     None
                                                 }
                                             }
                                             Err(e) => {
-                                                warn!(
-                                                    "Failed to load pipeline stages from DB: {}",
-                                                    e
-                                                );
+                                                warn!("Failed to load pipeline stages from DB: {}", e);
                                                 None
                                             }
                                         }
@@ -539,33 +445,19 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         None
                                     };
 
-                                    let description = rendered_prompt.unwrap_or_else(|| {
-                                        format!(
-                                            "{}\n\nPrevious stage output:\n{}",
-                                            initial_task, prev_output
-                                        )
-                                    });
+                                    let description = rendered_prompt.unwrap_or_else(|| format!("{}\n\nPrevious stage output:\n{}", initial_task, prev_output));
                                     let rendered_prompt_copy = description.clone();
 
                                     // Load agent-level context documents
                                     let mut context_reading: Vec<FileContent> = Vec::new();
 
                                     // Resolve agent: prefer agent_id, fall back to cluster selection
-                                    let resolved_agent_id = if let Some(aid) = &next_stage.agent_id
-                                    {
+                                    let resolved_agent_id = if let Some(aid) = &next_stage.agent_id {
                                         // Load context docs for this agent
-                                        if let Ok(docs) = state.repo.get_agent_context(aid.0).await
-                                        {
+                                        if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
                                             for doc in &docs {
                                                 context_reading.push(FileContent {
-                                                    path: format!(
-                                                        "context:{}",
-                                                        if doc.ref_tag.is_empty() {
-                                                            &doc.title
-                                                        } else {
-                                                            &doc.ref_tag
-                                                        }
-                                                    ),
+                                                    path: format!("context:{}", if doc.ref_tag.is_empty() { &doc.title } else { &doc.ref_tag }),
                                                     content: doc.content.clone(),
                                                 });
                                             }
@@ -575,24 +467,13 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         // Pick an agent from the cluster (first available member)
                                         match state.repo.list_cluster_members(cid.0).await {
                                             Ok(member_ids) => {
-                                                let picked = member_ids
-                                                    .first()
-                                                    .map(|mid| crate::agents::AgentId(*mid));
+                                                let picked = member_ids.first().map(|mid| crate::agents::AgentId(*mid));
                                                 // Load context docs for picked agent
                                                 if let Some(aid) = &picked {
-                                                    if let Ok(docs) =
-                                                        state.repo.get_agent_context(aid.0).await
-                                                    {
+                                                    if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
                                                         for doc in &docs {
                                                             context_reading.push(FileContent {
-                                                                path: format!(
-                                                                    "context:{}",
-                                                                    if doc.ref_tag.is_empty() {
-                                                                        &doc.title
-                                                                    } else {
-                                                                        &doc.ref_tag
-                                                                    }
-                                                                ),
+                                                                path: format!("context:{}", if doc.ref_tag.is_empty() { &doc.title } else { &doc.ref_tag }),
                                                                 content: doc.content.clone(),
                                                             });
                                                         }
@@ -612,23 +493,16 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                     let role_str = next_stage.role.as_deref().unwrap_or("worker");
                                     let role_id = RoleId::new(role_str);
 
-                                    let system_prompt = format!(
-                                        "You are a {} working on: {}",
-                                        role_str, initial_task
-                                    );
+                                    let system_prompt = format!("You are a {} working on: {}", role_str, initial_task);
                                     let style = CommunicationStyle::Technical;
                                     let output_format = OutputFormat::CodeAndReport;
 
                                     let project_root = std::env::current_dir().unwrap_or_default();
-                                    let execution_context =
-                                        Some(crate::execution::ExecutionContext::new(project_root));
+                                    let execution_context = Some(crate::execution::ExecutionContext::new(project_root));
 
                                     let assignment = TaskAssignment {
                                         task_id: Uuid::new_v4(),
-                                        title: format!(
-                                            "Pipeline stage {}: {}",
-                                            next_stage.stage_number, initial_task
-                                        ),
+                                        title: format!("Pipeline stage {}: {}", next_stage.stage_number, initial_task),
                                         description,
                                         context: TaskContext {
                                             required_reading: context_reading,
@@ -646,9 +520,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                             router_mode: false,
                                         },
                                         constraints: TaskConstraints::default(),
-                                        timeout: std::time::Duration::from_secs(
-                                            crate::constants::DEFAULT_TIMEOUT_SECS,
-                                        ),
+                                        timeout: std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),
                                         role_id,
                                     };
 
@@ -657,11 +529,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                     // Record in pipeline manager
                                     {
                                         let mut mgr = state.pipeline_manager.write().await;
-                                        mgr.record_stage_task(
-                                            run_id,
-                                            next_stage.stage_number,
-                                            new_task_id,
-                                        );
+                                        mgr.record_stage_task(run_id, next_stage.stage_number, new_task_id);
                                     }
 
                                     // Persist new stage execution
@@ -687,13 +555,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                     if let Some(agent_id) = &resolved_agent_id {
                                         if let Some(disp) = &state.dispatcher {
                                             let disp = disp.lock().await;
-                                            if let Err(e) = disp
-                                                .send_to_agent(
-                                                    agent_id,
-                                                    AgentCommand::AssignTask(Box::new(assignment)),
-                                                )
-                                                .await
-                                            {
+                                            if let Err(e) = disp.send_to_agent(agent_id, AgentCommand::AssignTask(Box::new(assignment))).await {
                                                 error!("Pipeline auto-advance failed: {}", e);
                                                 let mut mgr = state.pipeline_manager.write().await;
                                                 let _ = mgr.fail_run(run_id, &e.to_string());
@@ -701,10 +563,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                                 state.broadcast_feed(FeedUpdate {
                                                     id: run_id,
                                                     agent_id: "pipeline".into(),
-                                                    content: format!(
-                                                        "Pipeline advanced to stage {}",
-                                                        next_stage.stage_number
-                                                    ),
+                                                    content: format!("Pipeline advanced to stage {}", next_stage.stage_number),
                                                     item_type: "pipeline_progress".into(),
                                                     timestamp: chrono::Utc::now(),
                                                     user_id: None,
@@ -712,25 +571,16 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                                 // Broadcast stage_started
                                                 {
                                                     let pipeline_id = {
-                                                        let mgr =
-                                                            state.pipeline_manager.read().await;
-                                                        mgr.get_run_pipeline_id(run_id)
-                                                            .map(|p| p.0)
-                                                            .unwrap_or(run_id)
+                                                        let mgr = state.pipeline_manager.read().await;
+                                                        mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
                                                     };
                                                     state.broadcast_pipeline(PipelineUpdate {
                                                         run_id,
                                                         pipeline_id,
                                                         event: "stage_started".into(),
-                                                        stage_number: Some(
-                                                            next_stage.stage_number as i32,
-                                                        ),
-                                                        stage_name: Some(
-                                                            next_stage.stage_name.clone(),
-                                                        ),
-                                                        agent_id: resolved_agent_id
-                                                            .as_ref()
-                                                            .map(|a| a.0.to_string()),
+                                                        stage_number: Some(next_stage.stage_number as i32),
+                                                        stage_name: Some(next_stage.stage_name.clone()),
+                                                        agent_id: resolved_agent_id.as_ref().map(|a| a.0.to_string()),
                                                         output: None,
                                                         input_tokens: None,
                                                         output_tokens: None,
@@ -743,10 +593,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                             }
                                         }
                                     } else {
-                                        let reason = format!(
-                                            "Pipeline stage {} has no agent_id or cluster_id",
-                                            next_stage.stage_number
-                                        );
+                                        let reason = format!("Pipeline stage {} has no agent_id or cluster_id", next_stage.stage_number);
                                         error!("{}", reason);
                                         let mut mgr = state.pipeline_manager.write().await;
                                         let _ = mgr.fail_run(run_id, &reason);
@@ -754,9 +601,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                 }
                             } else {
                                 // Pipeline completed — persist
-                                if let Ok(Some(mut run_row)) =
-                                    state.repo.get_pipeline_run(run_id).await
-                                {
+                                if let Ok(Some(mut run_row)) = state.repo.get_pipeline_run(run_id).await {
                                     run_row.status = "completed".to_string();
                                     run_row.completed_at = Some(chrono::Utc::now());
                                     let _ = state.repo.update_pipeline_run(&run_row).await;
@@ -773,9 +618,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                 {
                                     let pipeline_id = {
                                         let mgr = state.pipeline_manager.read().await;
-                                        mgr.get_run_pipeline_id(run_id)
-                                            .map(|p| p.0)
-                                            .unwrap_or(run_id)
+                                        mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
                                     };
                                     state.broadcast_pipeline(PipelineUpdate {
                                         run_id,
@@ -800,10 +643,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                     if let Some(event) = trigger_event {
                         let triggers = {
                             let mgr = state.schedule_manager.read().await;
-                            mgr.get_triggers_for_event(event)
-                                .into_iter()
-                                .cloned()
-                                .collect::<Vec<_>>()
+                            mgr.get_triggers_for_event(event).into_iter().cloned().collect::<Vec<_>>()
                         };
 
                         for trigger in triggers {
@@ -821,48 +661,28 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         history: vec![],
                                         conventions: String::new(),
                                         role_context: RoleContext {
-                                            system_prompt: format!(
-                                                "You are a {} triggered by event: {}",
-                                                role_str,
-                                                event.as_str()
-                                            ),
+                                            system_prompt: format!("You are a {} triggered by event: {}", role_str, event.as_str()),
                                             style: CommunicationStyle::Technical,
                                             output_format: OutputFormat::CodeAndReport,
                                         },
                                         chat_messages: vec![],
-                                        execution_context: Some(
-                                            crate::execution::ExecutionContext::new(
-                                                std::env::current_dir().unwrap_or_default(),
-                                            ),
-                                        ),
+                                        execution_context: Some(crate::execution::ExecutionContext::new(std::env::current_dir().unwrap_or_default())),
                                         tool_rows: vec![],
                                         router_mode: false,
                                     },
                                     constraints: TaskConstraints::default(),
-                                    timeout: std::time::Duration::from_secs(
-                                        crate::constants::DEFAULT_TIMEOUT_SECS,
-                                    ),
+                                    timeout: std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),
                                     role_id,
                                 };
 
                                 let disp = disp.lock().await;
-                                if let Err(e) = disp
-                                    .send_to_agent(
-                                        &trigger.agent_id,
-                                        AgentCommand::AssignTask(Box::new(assignment)),
-                                    )
-                                    .await
-                                {
+                                if let Err(e) = disp.send_to_agent(&trigger.agent_id, AgentCommand::AssignTask(Box::new(assignment))).await {
                                     error!("Trigger {} failed to assign task: {}", trigger.name, e);
                                 } else {
                                     state.broadcast_feed(FeedUpdate {
                                         id: Uuid::new_v4(),
                                         agent_id: "trigger".into(),
-                                        content: format!(
-                                            "Trigger '{}' fired on {}",
-                                            trigger.name,
-                                            event.as_str()
-                                        ),
+                                        content: format!("Trigger '{}' fired on {}", trigger.name, event.as_str()),
                                         item_type: "trigger_fired".into(),
                                         timestamp: chrono::Utc::now(),
                                         user_id: None,
@@ -892,10 +712,7 @@ pub fn spawn_schedule_runner(state: AppState) -> Option<tokio::task::JoinHandle<
 
             let due_schedules = {
                 let mgr = state.schedule_manager.read().await;
-                mgr.get_due_schedules(chrono::Utc::now())
-                    .into_iter()
-                    .cloned()
-                    .collect::<Vec<_>>()
+                mgr.get_due_schedules(chrono::Utc::now()).into_iter().cloned().collect::<Vec<_>>()
             };
 
             for schedule in due_schedules {
@@ -912,17 +729,12 @@ pub fn spawn_schedule_runner(state: AppState) -> Option<tokio::task::JoinHandle<
                         history: vec![],
                         conventions: String::new(),
                         role_context: RoleContext {
-                            system_prompt: format!(
-                                "You are a {} running on schedule: {}",
-                                role_str, schedule.name
-                            ),
+                            system_prompt: format!("You are a {} running on schedule: {}", role_str, schedule.name),
                             style: CommunicationStyle::Technical,
                             output_format: OutputFormat::CodeAndReport,
                         },
                         chat_messages: vec![],
-                        execution_context: Some(crate::execution::ExecutionContext::new(
-                            std::env::current_dir().unwrap_or_default(),
-                        )),
+                        execution_context: Some(crate::execution::ExecutionContext::new(std::env::current_dir().unwrap_or_default())),
                         tool_rows: vec![],
                         router_mode: false,
                     },
@@ -932,19 +744,10 @@ pub fn spawn_schedule_runner(state: AppState) -> Option<tokio::task::JoinHandle<
                 };
 
                 let disp = dispatcher.lock().await;
-                if let Err(e) = disp
-                    .send_to_agent(
-                        &schedule.agent_id,
-                        AgentCommand::AssignTask(Box::new(assignment)),
-                    )
-                    .await
-                {
+                if let Err(e) = disp.send_to_agent(&schedule.agent_id, AgentCommand::AssignTask(Box::new(assignment))).await {
                     error!("Schedule {} failed to assign task: {}", schedule.name, e);
                 } else {
-                    info!(
-                        "Schedule '{}' fired, assigned task to agent {}",
-                        schedule.name, schedule.agent_id.0
-                    );
+                    info!("Schedule '{}' fired, assigned task to agent {}", schedule.name, schedule.agent_id.0);
                     state.broadcast_feed(FeedUpdate {
                         id: Uuid::new_v4(),
                         agent_id: "scheduler".into(),
@@ -962,11 +765,7 @@ pub fn spawn_schedule_runner(state: AppState) -> Option<tokio::task::JoinHandle<
                     let mut mgr = state.schedule_manager.write().await;
                     mgr.mark_run(schedule.id, now);
                 }
-                if let Err(e) = state
-                    .repo
-                    .update_schedule_last_run(schedule.id.0, now)
-                    .await
-                {
+                if let Err(e) = state.repo.update_schedule_last_run(schedule.id.0, now).await {
                     error!("Failed to persist schedule last_run_at: {}", e);
                 }
             }
@@ -975,40 +774,21 @@ pub fn spawn_schedule_runner(state: AppState) -> Option<tokio::task::JoinHandle<
 }
 
 /// Spawn the orchestrator consumer as a background task.
-pub fn spawn_orchestrator(
-    state: AppState,
-    orchestrator_rx: mpsc::Receiver<OrchestratorMessage>,
-) -> tokio::task::JoinHandle<()> {
+pub fn spawn_orchestrator(state: AppState, orchestrator_rx: mpsc::Receiver<OrchestratorMessage>) -> tokio::task::JoinHandle<()> {
     tokio::spawn(run_orchestrator(state, orchestrator_rx))
 }
 
-async fn run_orchestrator(
-    state: AppState,
-    mut orchestrator_rx: mpsc::Receiver<OrchestratorMessage>,
-) {
+async fn run_orchestrator(state: AppState, mut orchestrator_rx: mpsc::Receiver<OrchestratorMessage>) {
     let provider: Arc<dyn LLMProvider + Send + Sync> = match AnthropicClient::from_env() {
         Ok(p) => {
-            info!(
-                "Orchestrator started with model: {}",
-                p.model_id().to_string()
-            );
-            Arc::new(RetryingProvider::with_defaults(
-                RateLimitedProvider::with_defaults(p),
-            ))
+            info!("Orchestrator started with model: {}", p.model_id().to_string());
+            Arc::new(RetryingProvider::with_defaults(RateLimitedProvider::with_defaults(p)))
         }
         Err(e) => {
-            error!(
-                "Failed to initialize LLM provider: {}. Chat will not work. Set ANTHROPIC_API_KEY.",
-                e
-            );
+            error!("Failed to initialize LLM provider: {}. Chat will not work. Set ANTHROPIC_API_KEY.", e);
             while let Some(msg) = orchestrator_rx.recv().await {
                 state
-                    .send_stream_chunk(
-                        msg.id,
-                        StreamChunk::Error(
-                            "LLM provider not configured. Set ANTHROPIC_API_KEY.".into(),
-                        ),
-                    )
+                    .send_stream_chunk(msg.id, StreamChunk::Error("LLM provider not configured. Set ANTHROPIC_API_KEY.".into()))
                     .await;
                 let cleanup_state = state.clone();
                 let mid = msg.id;
@@ -1028,12 +808,7 @@ async fn run_orchestrator(
         tokio::spawn(async move {
             if let Err(e) = handle_message(&state, provider, msg).await {
                 warn!("Orchestrator message handling failed: {}", e);
-                state
-                    .send_stream_chunk(
-                        message_id,
-                        StreamChunk::Error(format!("Orchestrator error: {}", e)),
-                    )
-                    .await;
+                state.send_stream_chunk(message_id, StreamChunk::Error(format!("Orchestrator error: {}", e))).await;
                 let cleanup_state = state.clone();
                 tokio::spawn(async move {
                     tokio::time::sleep(std::time::Duration::from_secs(120)).await;
@@ -1046,11 +821,7 @@ async fn run_orchestrator(
     info!("Orchestrator consumer shutting down (channel closed)");
 }
 
-async fn handle_message(
-    state: &AppState,
-    provider: Arc<dyn LLMProvider + Send + Sync>,
-    msg: OrchestratorMessage,
-) -> anyhow::Result<()> {
+async fn handle_message(state: &AppState, provider: Arc<dyn LLMProvider + Send + Sync>, msg: OrchestratorMessage) -> anyhow::Result<()> {
     let message_id = msg.id;
     let user_id = msg.user_id;
 
@@ -1059,11 +830,7 @@ async fn handle_message(
         Some(m) => m,
         None => {
             warn!("Unknown mode '{}', falling back to home", msg.mode_id);
-            match state
-                .mode_registry
-                .get(&super::agent_mode::ModeRegistry::default_mode_id())
-                .cloned()
-            {
+            match state.mode_registry.get(&super::agent_mode::ModeRegistry::default_mode_id()).cloned() {
                 Some(m) => m,
                 None => {
                     error!("Default home mode missing from registry");
@@ -1078,11 +845,7 @@ async fn handle_message(
         HistoryPolicy::None => vec![],
         HistoryPolicy::SessionScoped { max_messages } => {
             if let Some(session_id) = msg.session_id {
-                let history = state
-                    .repo
-                    .get_session_history(session_id, *max_messages)
-                    .await
-                    .unwrap_or_default();
+                let history = state.repo.get_session_history(session_id, *max_messages).await.unwrap_or_default();
                 let mut hist_messages: Vec<Message> = history
                     .iter()
                     .map(|row| match row.role.as_str() {
@@ -1094,18 +857,10 @@ async fn handle_message(
                 // Phase 2: Targeted injection from session summary
                 if let Ok(Some(session)) = state.repo.get_session(session_id).await {
                     if !session.summary.is_empty() {
-                        if let Some(targeted) =
-                            tools::haiku_extract_context(&session.summary, &msg.content).await
-                        {
+                        if let Some(targeted) = tools::haiku_extract_context(&session.summary, &msg.content).await {
                             if !targeted.contains("No prior context needed") {
-                                hist_messages.insert(
-                                    0,
-                                    Message::user(format!("[Prior context] {}", targeted)),
-                                );
-                                hist_messages.insert(
-                                    1,
-                                    Message::assistant("Understood, I have the relevant context."),
-                                );
+                                hist_messages.insert(0, Message::user(format!("[Prior context] {}", targeted)));
+                                hist_messages.insert(1, Message::assistant("Understood, I have the relevant context."));
                             }
                         }
                     }
@@ -1119,10 +874,7 @@ async fn handle_message(
     };
 
     // Ensure the current message is included
-    if !messages
-        .iter()
-        .any(|m| m.role == Role::User && m.text() == msg.content)
-    {
+    if !messages.iter().any(|m| m.role == Role::User && m.text() == msg.content) {
         messages.push(Message::user(&msg.content));
     }
     if messages.is_empty() {
@@ -1151,12 +903,7 @@ async fn handle_message(
             break;
         }
 
-        debug!(
-            "Tool use round {} for message {} (~{}K chars)",
-            round,
-            message_id,
-            estimated_chars / 1000
-        );
+        debug!("Tool use round {} for message {} (~{}K chars)", round, message_id, estimated_chars / 1000);
 
         let request = LLMRequest {
             model: model_id.clone(),
@@ -1169,10 +916,7 @@ async fn handle_message(
         };
 
         // Stream the response
-        let mut stream = provider
-            .send_message_stream(request)
-            .await
-            .map_err(|e| anyhow::anyhow!("LLM stream error: {}", e))?;
+        let mut stream = provider.send_message_stream(request).await.map_err(|e| anyhow::anyhow!("LLM stream error: {}", e))?;
 
         let mut accumulator = StreamAccumulator::new();
 
@@ -1180,9 +924,7 @@ async fn handle_message(
             match chunk_result {
                 Ok(ref chunk @ LLMStreamChunk::ContentDelta { ref text, .. }) => {
                     accumulated_response.push_str(text);
-                    state
-                        .send_stream_chunk(message_id, StreamChunk::Token(text.clone()))
-                        .await;
+                    state.send_stream_chunk(message_id, StreamChunk::Token(text.clone())).await;
                     accumulator.apply(chunk);
                 }
                 Ok(ref chunk) => {
@@ -1190,12 +932,7 @@ async fn handle_message(
                 }
                 Err(e) => {
                     error!("Stream error for message {}: {}", message_id, e);
-                    state
-                        .send_stream_chunk(
-                            message_id,
-                            StreamChunk::Error(format!("Stream error: {}", e)),
-                        )
-                        .await;
+                    state.send_stream_chunk(message_id, StreamChunk::Error(format!("Stream error: {}", e))).await;
                     // Don't remove immediately — the SSE client may not have connected yet.
                     // Schedule cleanup after a delay to allow the client to replay the buffer.
                     let cleanup_state = state.clone();
@@ -1212,12 +949,7 @@ async fn handle_message(
             Some(r) => r,
             None => {
                 error!("Incomplete LLM response for message {}", message_id);
-                state
-                    .send_stream_chunk(
-                        message_id,
-                        StreamChunk::Error("Incomplete response from LLM".into()),
-                    )
-                    .await;
+                state.send_stream_chunk(message_id, StreamChunk::Error("Incomplete response from LLM".into())).await;
                 // Don't remove immediately — the SSE client may not have connected yet.
                 // Schedule cleanup after a delay to allow the client to replay the buffer.
                 let cleanup_state = state.clone();
@@ -1237,25 +969,14 @@ async fn handle_message(
             let input_tokens = response.usage.input_tokens as i64;
             let output_tokens = response.usage.output_tokens as i64;
             tokio::spawn(async move {
-                let _ = repo
-                    .insert_token_usage(
-                        session_id,
-                        None,
-                        "orchestrator",
-                        &model,
-                        input_tokens,
-                        output_tokens,
-                    )
-                    .await;
+                let _ = repo.insert_token_usage(session_id, None, "orchestrator", &model, input_tokens, output_tokens).await;
             });
         }
 
         // Check if we need to execute tools
         if response.stop_reason == StopReason::ToolUse {
             // Add assistant message with all content blocks (text + tool_use)
-            messages.push(Message::assistant_with_blocks(
-                response.content_blocks.clone(),
-            ));
+            messages.push(Message::assistant_with_blocks(response.content_blocks.clone()));
 
             // Execute each tool call and collect results
             let mut tool_results = Vec::new();
@@ -1281,8 +1002,7 @@ async fn handle_message(
                     let tool_start = std::time::Instant::now();
                     let result = tools::execute_tool(name, input, state, user_id).await;
                     let tool_latency = tool_start.elapsed().as_millis() as i32;
-                    let result_str =
-                        serde_json::to_string(&result).unwrap_or_else(|_| result.to_string());
+                    let result_str = serde_json::to_string(&result).unwrap_or_else(|_| result.to_string());
 
                     // Persist tool call to database
                     {
@@ -1295,16 +1015,7 @@ async fn handle_message(
                         let tool_round = round;
                         tokio::spawn(async move {
                             let _ = repo
-                                .insert_tool_call(
-                                    session_id,
-                                    message_id,
-                                    tool_round,
-                                    &tool_name,
-                                    &tool_use_id,
-                                    &tool_input,
-                                    &tool_output,
-                                    tool_latency,
-                                )
+                                .insert_tool_call(session_id, message_id, tool_round, &tool_name, &tool_use_id, &tool_input, &tool_output, tool_latency)
                                 .await;
                         });
                     }
@@ -1364,24 +1075,10 @@ async fn handle_message(
         let save_result = if let Some(session_id) = msg.session_id {
             state
                 .repo
-                .insert_session_message(
-                    user_id,
-                    session_id,
-                    response_id,
-                    "assistant".into(),
-                    accumulated_response,
-                )
+                .insert_session_message(user_id, session_id, response_id, "assistant".into(), accumulated_response)
                 .await
         } else {
-            state
-                .repo
-                .insert_chat_message(
-                    user_id,
-                    response_id,
-                    "assistant".into(),
-                    accumulated_response,
-                )
-                .await
+            state.repo.insert_chat_message(user_id, response_id, "assistant".into(), accumulated_response).await
         };
         if let Err(e) = save_result {
             error!("Failed to save assistant message: {}", e);
@@ -1395,10 +1092,7 @@ async fn handle_message(
                 // Only auto-name if title starts with "New " (default)
                 if let Ok(Some(session)) = state2.repo.get_session(session_id).await {
                     if session.title.starts_with("New ") {
-                        let prompt = format!(
-                            "Conversation opener: {}",
-                            &user_msg[..user_msg.len().min(500)]
-                        );
+                        let prompt = format!("Conversation opener: {}", &user_msg[..user_msg.len().min(500)]);
                         if let Some(title) = tools::haiku_summarize_title(&prompt).await {
                             let _ = state2.repo.update_session_title(session_id, &title).await;
                             state2.broadcast_session(super::ws::SessionUpdate {
@@ -1418,37 +1112,14 @@ async fn handle_message(
         if let Some(session_id) = msg.session_id {
             let state = state.clone();
             tokio::spawn(async move {
-                let count = state
-                    .repo
-                    .count_session_messages(session_id)
-                    .await
-                    .unwrap_or(0);
+                let count = state.repo.count_session_messages(session_id).await.unwrap_or(0);
                 if count > crate::constants::SUMMARIZE_THRESHOLD as u32 {
-                    let history = state
-                        .repo
-                        .get_session_history(session_id, count)
-                        .await
-                        .unwrap_or_default();
-                    let older_messages: Vec<_> = history
-                        .iter()
-                        .take(
-                            (count as usize)
-                                .saturating_sub(crate::constants::SUMMARIZE_KEEP_RECENT),
-                        )
-                        .collect();
+                    let history = state.repo.get_session_history(session_id, count).await.unwrap_or_default();
+                    let older_messages: Vec<_> = history.iter().take((count as usize).saturating_sub(crate::constants::SUMMARIZE_KEEP_RECENT)).collect();
                     if !older_messages.is_empty() {
-                        let conversation_text = older_messages
-                            .iter()
-                            .map(|m| format!("{}: {}", m.role, m.content))
-                            .collect::<Vec<_>>()
-                            .join("\n");
-                        if let Some(summary) =
-                            crate::server::tools::haiku_summarize(&conversation_text).await
-                        {
-                            let _ = state
-                                .repo
-                                .update_session_summary(session_id, &summary)
-                                .await;
+                        let conversation_text = older_messages.iter().map(|m| format!("{}: {}", m.role, m.content)).collect::<Vec<_>>().join("\n");
+                        if let Some(summary) = crate::server::tools::haiku_summarize(&conversation_text).await {
+                            let _ = state.repo.update_session_summary(session_id, &summary).await;
                         }
                     }
                 }
@@ -1470,9 +1141,7 @@ async fn handle_message(
 mod tests {
     use super::*;
     use crate::db::traits::ServerRepo;
-    use crate::db::{
-        ChatMessageRow, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow,
-    };
+    use crate::db::{ChatMessageRow, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow};
     use crate::types::{AppConfig, UserId};
     use chrono::{DateTime, Utc};
     use std::sync::Arc;
@@ -1495,31 +1164,16 @@ mod tests {
         async fn health_check(&self) -> bool {
             true
         }
-        async fn list_tasks(
-            &self,
-            _user_id: UserId,
-            _: Option<String>,
-            _: Option<u32>,
-        ) -> anyhow::Result<Vec<crate::types::Task>> {
+        async fn list_tasks(&self, _user_id: UserId, _: Option<String>, _: Option<u32>) -> anyhow::Result<Vec<crate::types::Task>> {
             Ok(vec![])
         }
-        async fn get_task_by_uuid(
-            &self,
-            _user_id: UserId,
-            _: Uuid,
-        ) -> anyhow::Result<Option<crate::types::Task>> {
+        async fn get_task_by_uuid(&self, _user_id: UserId, _: Uuid) -> anyhow::Result<Option<crate::types::Task>> {
             Ok(None)
         }
         async fn insert_task(&self, _user_id: UserId, _: crate::types::Task) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn insert_chat_message(
-            &self,
-            _user_id: UserId,
-            id: Uuid,
-            role: String,
-            content: String,
-        ) -> anyhow::Result<()> {
+        async fn insert_chat_message(&self, _user_id: UserId, id: Uuid, role: String, content: String) -> anyhow::Result<()> {
             self.messages.lock().unwrap().push(ChatMessageRow {
                 id,
                 role,
@@ -1528,19 +1182,9 @@ mod tests {
             });
             Ok(())
         }
-        async fn get_chat_history(
-            &self,
-            _user_id: UserId,
-            limit: u32,
-            offset: u32,
-        ) -> anyhow::Result<Vec<ChatMessageRow>> {
+        async fn get_chat_history(&self, _user_id: UserId, limit: u32, offset: u32) -> anyhow::Result<Vec<ChatMessageRow>> {
             let msgs = self.messages.lock().unwrap();
-            Ok(msgs
-                .iter()
-                .skip(offset as usize)
-                .take(limit as usize)
-                .cloned()
-                .collect())
+            Ok(msgs.iter().skip(offset as usize).take(limit as usize).cloned().collect())
         }
         async fn clear_chat_history(&self, _user_id: UserId) -> anyhow::Result<()> {
             Ok(())
@@ -1554,23 +1198,13 @@ mod tests {
         async fn get_password(&self) -> anyhow::Result<Option<String>> {
             Ok(None)
         }
-        async fn list_persisted_agents(
-            &self,
-            _user_id: UserId,
-        ) -> anyhow::Result<Vec<crate::db::AgentRow>> {
+        async fn list_persisted_agents(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::AgentRow>> {
             Ok(vec![])
         }
-        async fn get_persisted_agent(
-            &self,
-            _agent_id: Uuid,
-        ) -> anyhow::Result<Option<crate::db::AgentRow>> {
+        async fn get_persisted_agent(&self, _agent_id: Uuid) -> anyhow::Result<Option<crate::db::AgentRow>> {
             Ok(None)
         }
-        async fn upsert_agent(
-            &self,
-            _user_id: UserId,
-            _agent: crate::db::AgentRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_agent(&self, _user_id: UserId, _agent: crate::db::AgentRow) -> anyhow::Result<()> {
             Ok(())
         }
         async fn delete_persisted_agent(&self, _agent_id: Uuid) -> anyhow::Result<()> {
@@ -1582,56 +1216,31 @@ mod tests {
         async fn get_tool(&self, _tool_id: Uuid) -> anyhow::Result<Option<crate::db::ToolRow>> {
             Ok(None)
         }
-        async fn upsert_tool(
-            &self,
-            _user_id: UserId,
-            _tool: crate::db::ToolRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_tool(&self, _user_id: UserId, _tool: crate::db::ToolRow) -> anyhow::Result<()> {
             Ok(())
         }
         async fn delete_tool(&self, _tool_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn get_agent_tools(
-            &self,
-            _agent_id: Uuid,
-        ) -> anyhow::Result<Vec<crate::db::ToolRow>> {
+        async fn get_agent_tools(&self, _agent_id: Uuid) -> anyhow::Result<Vec<crate::db::ToolRow>> {
             Ok(vec![])
         }
         async fn seed_builtin_tools(&self, _user_id: UserId) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn set_agent_tools(
-            &self,
-            _agent_id: Uuid,
-            _tool_ids: Vec<Uuid>,
-        ) -> anyhow::Result<()> {
+        async fn set_agent_tools(&self, _agent_id: Uuid, _tool_ids: Vec<Uuid>) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn get_agent_context(
-            &self,
-            _agent_id: Uuid,
-        ) -> anyhow::Result<Vec<crate::db::DocumentRow>> {
+        async fn get_agent_context(&self, _agent_id: Uuid) -> anyhow::Result<Vec<crate::db::DocumentRow>> {
             Ok(vec![])
         }
-        async fn set_agent_context(
-            &self,
-            _agent_id: Uuid,
-            _document_ids: Vec<Uuid>,
-        ) -> anyhow::Result<()> {
+        async fn set_agent_context(&self, _agent_id: Uuid, _document_ids: Vec<Uuid>) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn list_persisted_clusters(
-            &self,
-            _user_id: UserId,
-        ) -> anyhow::Result<Vec<crate::db::ClusterRow>> {
+        async fn list_persisted_clusters(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::ClusterRow>> {
             Ok(vec![])
         }
-        async fn upsert_cluster(
-            &self,
-            _user_id: UserId,
-            _cluster: crate::db::ClusterRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_cluster(&self, _user_id: UserId, _cluster: crate::db::ClusterRow) -> anyhow::Result<()> {
             Ok(())
         }
         async fn delete_cluster(&self, _cluster_id: Uuid) -> anyhow::Result<()> {
@@ -1640,53 +1249,31 @@ mod tests {
         async fn list_cluster_members(&self, _cluster_id: Uuid) -> anyhow::Result<Vec<Uuid>> {
             Ok(vec![])
         }
-        async fn add_cluster_member(
-            &self,
-            _cluster_id: Uuid,
-            _agent_id: Uuid,
-        ) -> anyhow::Result<()> {
+        async fn add_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn remove_cluster_member(
-            &self,
-            _cluster_id: Uuid,
-            _agent_id: Uuid,
-        ) -> anyhow::Result<()> {
+        async fn remove_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
         async fn list_pipelines(&self, _user_id: UserId) -> anyhow::Result<Vec<PipelineRow>> {
             Ok(vec![])
         }
-        async fn upsert_pipeline(
-            &self,
-            _user_id: UserId,
-            _pipeline: PipelineRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_pipeline(&self, _user_id: UserId, _pipeline: PipelineRow) -> anyhow::Result<()> {
             Ok(())
         }
         async fn delete_pipeline(&self, _pipeline_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn list_pipeline_stages(
-            &self,
-            _pipeline_id: Uuid,
-        ) -> anyhow::Result<Vec<PipelineStageRow>> {
+        async fn list_pipeline_stages(&self, _pipeline_id: Uuid) -> anyhow::Result<Vec<PipelineStageRow>> {
             Ok(vec![])
         }
         async fn upsert_pipeline_stage(&self, _stage: PipelineStageRow) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn list_stage_side_tasks(
-            &self,
-            _pipeline_id: Uuid,
-            _stage_number: i32,
-        ) -> anyhow::Result<Vec<crate::db::StageSideTaskRow>> {
+        async fn list_stage_side_tasks(&self, _pipeline_id: Uuid, _stage_number: i32) -> anyhow::Result<Vec<crate::db::StageSideTaskRow>> {
             Ok(vec![])
         }
-        async fn upsert_stage_side_task(
-            &self,
-            _side_task: crate::db::StageSideTaskRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_stage_side_task(&self, _side_task: crate::db::StageSideTaskRow) -> anyhow::Result<()> {
             Ok(())
         }
         async fn delete_stage_side_task(&self, _side_task_id: Uuid) -> anyhow::Result<()> {
@@ -1695,43 +1282,25 @@ mod tests {
         async fn list_schedules(&self, _user_id: UserId) -> anyhow::Result<Vec<ScheduleRow>> {
             Ok(vec![])
         }
-        async fn upsert_schedule(
-            &self,
-            _user_id: UserId,
-            _schedule: ScheduleRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_schedule(&self, _user_id: UserId, _schedule: ScheduleRow) -> anyhow::Result<()> {
             Ok(())
         }
         async fn delete_schedule(&self, _schedule_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn update_schedule_last_run(
-            &self,
-            _schedule_id: Uuid,
-            _last_run_at: DateTime<Utc>,
-        ) -> anyhow::Result<()> {
+        async fn update_schedule_last_run(&self, _schedule_id: Uuid, _last_run_at: DateTime<Utc>) -> anyhow::Result<()> {
             Ok(())
         }
         async fn list_triggers(&self, _user_id: UserId) -> anyhow::Result<Vec<TriggerRow>> {
             Ok(vec![])
         }
-        async fn upsert_trigger(
-            &self,
-            _user_id: UserId,
-            _trigger: TriggerRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_trigger(&self, _user_id: UserId, _trigger: TriggerRow) -> anyhow::Result<()> {
             Ok(())
         }
         async fn delete_trigger(&self, _trigger_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn create_session(
-            &self,
-            _user_id: UserId,
-            _session_id: Uuid,
-            _mode_id: &str,
-            _title: &str,
-        ) -> anyhow::Result<()> {
+        async fn create_session(&self, _user_id: UserId, _session_id: Uuid, _mode_id: &str, _title: &str) -> anyhow::Result<()> {
             Ok(())
         }
         async fn list_sessions(&self, _user_id: UserId) -> anyhow::Result<Vec<SessionRow>> {
@@ -1743,35 +1312,16 @@ mod tests {
         async fn delete_session(&self, _session_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn insert_session_message(
-            &self,
-            _user_id: UserId,
-            _session_id: Uuid,
-            _id: Uuid,
-            _role: String,
-            _content: String,
-        ) -> anyhow::Result<()> {
+        async fn insert_session_message(&self, _user_id: UserId, _session_id: Uuid, _id: Uuid, _role: String, _content: String) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn get_session_history(
-            &self,
-            _session_id: Uuid,
-            _limit: u32,
-        ) -> anyhow::Result<Vec<ChatMessageRow>> {
+        async fn get_session_history(&self, _session_id: Uuid, _limit: u32) -> anyhow::Result<Vec<ChatMessageRow>> {
             Ok(vec![])
         }
-        async fn update_session_title(
-            &self,
-            _session_id: Uuid,
-            _title: &str,
-        ) -> anyhow::Result<()> {
+        async fn update_session_title(&self, _session_id: Uuid, _title: &str) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn update_session_summary(
-            &self,
-            _session_id: Uuid,
-            _summary: &str,
-        ) -> anyhow::Result<()> {
+        async fn update_session_summary(&self, _session_id: Uuid, _summary: &str) -> anyhow::Result<()> {
             Ok(())
         }
         async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> {
@@ -1788,52 +1338,28 @@ mod tests {
         ) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn get_usage_summary(
-            &self,
-            _since_hours: u32,
-        ) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> {
+        async fn get_usage_summary(&self, _since_hours: u32) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> {
             Ok(vec![])
         }
-        async fn create_pipeline_run(
-            &self,
-            _run: &crate::db::PipelineRunRow,
-        ) -> anyhow::Result<()> {
+        async fn create_pipeline_run(&self, _run: &crate::db::PipelineRunRow) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn update_pipeline_run(
-            &self,
-            _run: &crate::db::PipelineRunRow,
-        ) -> anyhow::Result<()> {
+        async fn update_pipeline_run(&self, _run: &crate::db::PipelineRunRow) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn get_pipeline_run(
-            &self,
-            _run_id: Uuid,
-        ) -> anyhow::Result<Option<crate::db::PipelineRunRow>> {
+        async fn get_pipeline_run(&self, _run_id: Uuid) -> anyhow::Result<Option<crate::db::PipelineRunRow>> {
             Ok(None)
         }
-        async fn list_pipeline_runs(
-            &self,
-            _pipeline_id: Uuid,
-        ) -> anyhow::Result<Vec<crate::db::PipelineRunRow>> {
+        async fn list_pipeline_runs(&self, _pipeline_id: Uuid) -> anyhow::Result<Vec<crate::db::PipelineRunRow>> {
             Ok(vec![])
         }
-        async fn create_stage_execution(
-            &self,
-            _exec: &crate::db::StageExecutionRow,
-        ) -> anyhow::Result<()> {
+        async fn create_stage_execution(&self, _exec: &crate::db::StageExecutionRow) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn update_stage_execution(
-            &self,
-            _exec: &crate::db::StageExecutionRow,
-        ) -> anyhow::Result<()> {
+        async fn update_stage_execution(&self, _exec: &crate::db::StageExecutionRow) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn list_stage_executions(
-            &self,
-            _run_id: Uuid,
-        ) -> anyhow::Result<Vec<crate::db::StageExecutionRow>> {
+        async fn list_stage_executions(&self, _run_id: Uuid) -> anyhow::Result<Vec<crate::db::StageExecutionRow>> {
             Ok(vec![])
         }
 

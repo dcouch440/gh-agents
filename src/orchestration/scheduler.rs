@@ -180,11 +180,7 @@ pub struct PreemptionAction {
 /// - Router: Determines which agent tier handles each task
 /// - AgentPool: Provides available agents
 /// - Scheduler (refactor mode): Respects pause/resume state
-pub struct TaskScheduler<
-    TQ: TaskQueueRepo = PgRepo,
-    DR: DependencyRepo = PgRepo,
-    SR: SchedulerRepo = PgRepo,
-> {
+pub struct TaskScheduler<TQ: TaskQueueRepo = PgRepo, DR: DependencyRepo = PgRepo, SR: SchedulerRepo = PgRepo> {
     queue: Arc<RwLock<DependencyAwareQueue<TQ, DR>>>,
     router: Router,
     agent_pool: Arc<RwLock<AgentPool>>,
@@ -328,21 +324,14 @@ impl<TQ: TaskQueueRepo, DR: DependencyRepo, SR: SchedulerRepo> TaskScheduler<TQ,
             None => {
                 // Put task back and report no agents
                 let mut queue = self.queue.write().await;
-                queue
-                    .requeue(task, RequeuePolicy::SamePriority, None)
-                    .await?;
+                queue.requeue(task, RequeuePolicy::SamePriority, None).await?;
                 Ok(AssignResult::NoAgents(tier))
             }
         }
     }
 
     /// Assign a task to an agent
-    async fn assign_task(
-        &self,
-        task: Task,
-        agent_id: AgentId,
-        tier: AgentTier,
-    ) -> Result<(), SchedulerError> {
+    async fn assign_task(&self, task: Task, agent_id: AgentId, tier: AgentTier) -> Result<(), SchedulerError> {
         // Agent status is now managed by the agent's own run loop.
         // When it receives AssignTask, it transitions to Working internally.
         let _ = (&self.agent_pool, &agent_id, &tier); // suppress unused warnings
@@ -391,10 +380,7 @@ impl<TQ: TaskQueueRepo, DR: DependencyRepo, SR: SchedulerRepo> TaskScheduler<TQ,
         // Check if there's an urgent task waiting
         let has_urgent = {
             let queue = self.queue.read().await;
-            queue
-                .peek()
-                .map(|t| t.priority == Priority::Urgent)
-                .unwrap_or(false)
+            queue.peek().map(|t| t.priority == Priority::Urgent).unwrap_or(false)
         };
 
         if !has_urgent {
@@ -485,9 +471,7 @@ mod tests {
 
     fn make_mock_running() -> MockSchedulerRepo {
         let mut mock = MockSchedulerRepo::new();
-        mock.expect_get_production_mode()
-            .times(1)
-            .returning(|| Ok(ProductionMode::Running));
+        mock.expect_get_production_mode().times(1).returning(|| Ok(ProductionMode::Running));
         mock
     }
 
@@ -500,10 +484,7 @@ mod tests {
     async fn scheduler_starts_in_running_mode() {
         let scheduler = setup_scheduler().await;
 
-        assert_eq!(
-            scheduler.get_production_mode().await,
-            ProductionMode::Running
-        );
+        assert_eq!(scheduler.get_production_mode().await, ProductionMode::Running);
         assert!(scheduler.should_assign().await);
         assert!(!scheduler.is_paused().await);
     }
@@ -511,9 +492,7 @@ mod tests {
     #[tokio::test]
     async fn enter_refactor_mode_stops_assignment() {
         let mut mock = MockSchedulerRepo::new();
-        mock.expect_get_production_mode()
-            .times(1)
-            .returning(|| Ok(ProductionMode::Running));
+        mock.expect_get_production_mode().times(1).returning(|| Ok(ProductionMode::Running));
         mock.expect_set_production_mode()
             .withf(|m| *m == ProductionMode::RefactorMode)
             .times(1)
@@ -522,10 +501,7 @@ mod tests {
         let scheduler = Scheduler::with_repo(mock).await.unwrap();
         scheduler.enter_refactor_mode().await.unwrap();
 
-        assert_eq!(
-            scheduler.get_production_mode().await,
-            ProductionMode::RefactorMode
-        );
+        assert_eq!(scheduler.get_production_mode().await, ProductionMode::RefactorMode);
         assert!(!scheduler.should_assign().await);
         assert!(scheduler.is_paused().await);
     }
@@ -533,21 +509,13 @@ mod tests {
     #[tokio::test]
     async fn pause_for_refactor() {
         let mut mock = MockSchedulerRepo::new();
-        mock.expect_get_production_mode()
-            .times(1)
-            .returning(|| Ok(ProductionMode::Running));
-        mock.expect_set_production_mode()
-            .withf(|m| *m == ProductionMode::Paused)
-            .times(1)
-            .returning(|_| Ok(()));
+        mock.expect_get_production_mode().times(1).returning(|| Ok(ProductionMode::Running));
+        mock.expect_set_production_mode().withf(|m| *m == ProductionMode::Paused).times(1).returning(|_| Ok(()));
 
         let scheduler = Scheduler::with_repo(mock).await.unwrap();
         scheduler.pause_for_refactor().await.unwrap();
 
-        assert_eq!(
-            scheduler.get_production_mode().await,
-            ProductionMode::Paused
-        );
+        assert_eq!(scheduler.get_production_mode().await, ProductionMode::Paused);
         assert!(!scheduler.should_assign().await);
         assert!(scheduler.is_paused().await);
     }
@@ -556,71 +524,46 @@ mod tests {
     async fn resume_after_refactor() {
         let mut mock = MockSchedulerRepo::new();
         // Initial load
-        mock.expect_get_production_mode()
-            .times(1)
-            .returning(|| Ok(ProductionMode::Running));
+        mock.expect_get_production_mode().times(1).returning(|| Ok(ProductionMode::Running));
         // enter_refactor_mode sets RefactorMode
         mock.expect_set_production_mode()
             .withf(|m| *m == ProductionMode::RefactorMode)
             .times(1)
             .returning(|_| Ok(()));
         // begin_resume sets Resuming
-        mock.expect_set_production_mode()
-            .withf(|m| *m == ProductionMode::Resuming)
-            .times(1)
-            .returning(|_| Ok(()));
+        mock.expect_set_production_mode().withf(|m| *m == ProductionMode::Resuming).times(1).returning(|_| Ok(()));
         // resume sets Running
-        mock.expect_set_production_mode()
-            .withf(|m| *m == ProductionMode::Running)
-            .times(1)
-            .returning(|_| Ok(()));
+        mock.expect_set_production_mode().withf(|m| *m == ProductionMode::Running).times(1).returning(|_| Ok(()));
 
         let scheduler = Scheduler::with_repo(mock).await.unwrap();
 
         scheduler.enter_refactor_mode().await.unwrap();
         scheduler.begin_resume().await.unwrap();
 
-        assert_eq!(
-            scheduler.get_production_mode().await,
-            ProductionMode::Resuming
-        );
+        assert_eq!(scheduler.get_production_mode().await, ProductionMode::Resuming);
         assert!(!scheduler.should_assign().await);
 
         scheduler.resume().await.unwrap();
 
-        assert_eq!(
-            scheduler.get_production_mode().await,
-            ProductionMode::Running
-        );
+        assert_eq!(scheduler.get_production_mode().await, ProductionMode::Running);
         assert!(scheduler.should_assign().await);
     }
 
     #[tokio::test]
     async fn full_refactor_cycle() {
         let mut mock = MockSchedulerRepo::new();
-        mock.expect_get_production_mode()
-            .times(1)
-            .returning(|| Ok(ProductionMode::Running));
+        mock.expect_get_production_mode().times(1).returning(|| Ok(ProductionMode::Running));
         // enter_refactor_mode
         mock.expect_set_production_mode()
             .withf(|m| *m == ProductionMode::RefactorMode)
             .times(1)
             .returning(|_| Ok(()));
         // pause_for_refactor
-        mock.expect_set_production_mode()
-            .withf(|m| *m == ProductionMode::Paused)
-            .times(1)
-            .returning(|_| Ok(()));
+        mock.expect_set_production_mode().withf(|m| *m == ProductionMode::Paused).times(1).returning(|_| Ok(()));
         // begin_resume
-        mock.expect_set_production_mode()
-            .withf(|m| *m == ProductionMode::Resuming)
-            .times(1)
-            .returning(|_| Ok(()));
+        mock.expect_set_production_mode().withf(|m| *m == ProductionMode::Resuming).times(1).returning(|_| Ok(()));
         // resume
-        mock.expect_set_production_mode()
-            .withf(|m| *m == ProductionMode::Running)
-            .times(1)
-            .returning(|_| Ok(()));
+        mock.expect_set_production_mode().withf(|m| *m == ProductionMode::Running).times(1).returning(|_| Ok(()));
 
         let scheduler = Scheduler::with_repo(mock).await.unwrap();
 
@@ -633,10 +576,7 @@ mod tests {
         assert!(scheduler.is_paused().await);
 
         scheduler.begin_resume().await.unwrap();
-        assert_eq!(
-            scheduler.get_production_mode().await,
-            ProductionMode::Resuming
-        );
+        assert_eq!(scheduler.get_production_mode().await, ProductionMode::Resuming);
 
         scheduler.resume().await.unwrap();
         assert!(scheduler.should_assign().await);
@@ -649,55 +589,33 @@ mod tests {
 
         // In running mode, begin_resume does nothing (no set_production_mode call expected)
         scheduler.begin_resume().await.unwrap();
-        assert_eq!(
-            scheduler.get_production_mode().await,
-            ProductionMode::Running
-        );
+        assert_eq!(scheduler.get_production_mode().await, ProductionMode::Running);
     }
 
     #[tokio::test]
     async fn enter_refactor_mode_noop_when_not_running() {
         let mut mock = MockSchedulerRepo::new();
-        mock.expect_get_production_mode()
-            .times(1)
-            .returning(|| Ok(ProductionMode::Running));
+        mock.expect_get_production_mode().times(1).returning(|| Ok(ProductionMode::Running));
         // pause_for_refactor sets Paused
-        mock.expect_set_production_mode()
-            .withf(|m| *m == ProductionMode::Paused)
-            .times(1)
-            .returning(|_| Ok(()));
+        mock.expect_set_production_mode().withf(|m| *m == ProductionMode::Paused).times(1).returning(|_| Ok(()));
         // enter_refactor_mode should NOT call set because current != Running
 
         let scheduler = Scheduler::with_repo(mock).await.unwrap();
 
         scheduler.pause_for_refactor().await.unwrap();
-        assert_eq!(
-            scheduler.get_production_mode().await,
-            ProductionMode::Paused
-        );
+        assert_eq!(scheduler.get_production_mode().await, ProductionMode::Paused);
 
         scheduler.enter_refactor_mode().await.unwrap();
         // Should still be Paused, not RefactorMode
-        assert_eq!(
-            scheduler.get_production_mode().await,
-            ProductionMode::Paused
-        );
+        assert_eq!(scheduler.get_production_mode().await, ProductionMode::Paused);
     }
 
     #[tokio::test]
     async fn begin_resume_works_from_paused() {
         let mut mock = MockSchedulerRepo::new();
-        mock.expect_get_production_mode()
-            .times(1)
-            .returning(|| Ok(ProductionMode::Running));
-        mock.expect_set_production_mode()
-            .withf(|m| *m == ProductionMode::Paused)
-            .times(1)
-            .returning(|_| Ok(()));
-        mock.expect_set_production_mode()
-            .withf(|m| *m == ProductionMode::Resuming)
-            .times(1)
-            .returning(|_| Ok(()));
+        mock.expect_get_production_mode().times(1).returning(|| Ok(ProductionMode::Running));
+        mock.expect_set_production_mode().withf(|m| *m == ProductionMode::Paused).times(1).returning(|_| Ok(()));
+        mock.expect_set_production_mode().withf(|m| *m == ProductionMode::Resuming).times(1).returning(|_| Ok(()));
 
         let scheduler = Scheduler::with_repo(mock).await.unwrap();
 
@@ -705,82 +623,53 @@ mod tests {
         assert!(scheduler.is_paused().await);
 
         scheduler.begin_resume().await.unwrap();
-        assert_eq!(
-            scheduler.get_production_mode().await,
-            ProductionMode::Resuming
-        );
+        assert_eq!(scheduler.get_production_mode().await, ProductionMode::Resuming);
     }
 
     #[tokio::test]
     async fn begin_resume_noop_from_resuming() {
         let mut mock = MockSchedulerRepo::new();
-        mock.expect_get_production_mode()
-            .times(1)
-            .returning(|| Ok(ProductionMode::Running));
+        mock.expect_get_production_mode().times(1).returning(|| Ok(ProductionMode::Running));
         mock.expect_set_production_mode()
             .withf(|m| *m == ProductionMode::RefactorMode)
             .times(1)
             .returning(|_| Ok(()));
-        mock.expect_set_production_mode()
-            .withf(|m| *m == ProductionMode::Resuming)
-            .times(1)
-            .returning(|_| Ok(()));
+        mock.expect_set_production_mode().withf(|m| *m == ProductionMode::Resuming).times(1).returning(|_| Ok(()));
 
         let scheduler = Scheduler::with_repo(mock).await.unwrap();
 
         scheduler.enter_refactor_mode().await.unwrap();
         scheduler.begin_resume().await.unwrap();
-        assert_eq!(
-            scheduler.get_production_mode().await,
-            ProductionMode::Resuming
-        );
+        assert_eq!(scheduler.get_production_mode().await, ProductionMode::Resuming);
 
         // Resuming.is_refactoring() is false, so begin_resume should be a no-op
         scheduler.begin_resume().await.unwrap();
-        assert_eq!(
-            scheduler.get_production_mode().await,
-            ProductionMode::Resuming
-        );
+        assert_eq!(scheduler.get_production_mode().await, ProductionMode::Resuming);
     }
 
     #[tokio::test]
     async fn refresh_mode_syncs_from_db() {
         let mut mock = MockSchedulerRepo::new();
         // Initial load returns Running
-        mock.expect_get_production_mode()
-            .times(1)
-            .returning(|| Ok(ProductionMode::Running));
+        mock.expect_get_production_mode().times(1).returning(|| Ok(ProductionMode::Running));
         // refresh_mode returns Paused
-        mock.expect_get_production_mode()
-            .times(1)
-            .returning(|| Ok(ProductionMode::Paused));
+        mock.expect_get_production_mode().times(1).returning(|| Ok(ProductionMode::Paused));
 
         let scheduler = Scheduler::with_repo(mock).await.unwrap();
 
         // Cache says Running
-        assert_eq!(
-            scheduler.get_production_mode().await,
-            ProductionMode::Running
-        );
+        assert_eq!(scheduler.get_production_mode().await, ProductionMode::Running);
 
         // After refresh, cache matches "DB"
         scheduler.refresh_mode().await.unwrap();
-        assert_eq!(
-            scheduler.get_production_mode().await,
-            ProductionMode::Paused
-        );
+        assert_eq!(scheduler.get_production_mode().await, ProductionMode::Paused);
     }
 
     #[tokio::test]
     async fn should_assign_false_when_paused() {
         let mut mock = MockSchedulerRepo::new();
-        mock.expect_get_production_mode()
-            .times(1)
-            .returning(|| Ok(ProductionMode::Running));
-        mock.expect_set_production_mode()
-            .withf(|m| *m == ProductionMode::Paused)
-            .times(1)
-            .returning(|_| Ok(()));
+        mock.expect_get_production_mode().times(1).returning(|| Ok(ProductionMode::Running));
+        mock.expect_set_production_mode().withf(|m| *m == ProductionMode::Paused).times(1).returning(|_| Ok(()));
 
         let scheduler = Scheduler::with_repo(mock).await.unwrap();
 
@@ -791,17 +680,12 @@ mod tests {
     #[tokio::test]
     async fn should_assign_false_when_resuming() {
         let mut mock = MockSchedulerRepo::new();
-        mock.expect_get_production_mode()
-            .times(1)
-            .returning(|| Ok(ProductionMode::Running));
+        mock.expect_get_production_mode().times(1).returning(|| Ok(ProductionMode::Running));
         mock.expect_set_production_mode()
             .withf(|m| *m == ProductionMode::RefactorMode)
             .times(1)
             .returning(|_| Ok(()));
-        mock.expect_set_production_mode()
-            .withf(|m| *m == ProductionMode::Resuming)
-            .times(1)
-            .returning(|_| Ok(()));
+        mock.expect_set_production_mode().withf(|m| *m == ProductionMode::Resuming).times(1).returning(|_| Ok(()));
 
         let scheduler = Scheduler::with_repo(mock).await.unwrap();
 
@@ -813,17 +697,12 @@ mod tests {
     #[tokio::test]
     async fn is_paused_false_when_resuming() {
         let mut mock = MockSchedulerRepo::new();
-        mock.expect_get_production_mode()
-            .times(1)
-            .returning(|| Ok(ProductionMode::Running));
+        mock.expect_get_production_mode().times(1).returning(|| Ok(ProductionMode::Running));
         mock.expect_set_production_mode()
             .withf(|m| *m == ProductionMode::RefactorMode)
             .times(1)
             .returning(|_| Ok(()));
-        mock.expect_set_production_mode()
-            .withf(|m| *m == ProductionMode::Resuming)
-            .times(1)
-            .returning(|_| Ok(()));
+        mock.expect_set_production_mode().withf(|m| *m == ProductionMode::Resuming).times(1).returning(|_| Ok(()));
 
         let scheduler = Scheduler::with_repo(mock).await.unwrap();
 
@@ -835,39 +714,22 @@ mod tests {
     #[tokio::test]
     async fn resume_from_any_state() {
         let mut mock = MockSchedulerRepo::new();
-        mock.expect_get_production_mode()
-            .times(1)
-            .returning(|| Ok(ProductionMode::Running));
+        mock.expect_get_production_mode().times(1).returning(|| Ok(ProductionMode::Running));
         // resume (Running -> Running)
-        mock.expect_set_production_mode()
-            .withf(|m| *m == ProductionMode::Running)
-            .times(1)
-            .returning(|_| Ok(()));
+        mock.expect_set_production_mode().withf(|m| *m == ProductionMode::Running).times(1).returning(|_| Ok(()));
         // pause_for_refactor
-        mock.expect_set_production_mode()
-            .withf(|m| *m == ProductionMode::Paused)
-            .times(1)
-            .returning(|_| Ok(()));
+        mock.expect_set_production_mode().withf(|m| *m == ProductionMode::Paused).times(1).returning(|_| Ok(()));
         // resume from Paused
-        mock.expect_set_production_mode()
-            .withf(|m| *m == ProductionMode::Running)
-            .times(1)
-            .returning(|_| Ok(()));
+        mock.expect_set_production_mode().withf(|m| *m == ProductionMode::Running).times(1).returning(|_| Ok(()));
 
         let scheduler = Scheduler::with_repo(mock).await.unwrap();
 
         scheduler.resume().await.unwrap();
-        assert_eq!(
-            scheduler.get_production_mode().await,
-            ProductionMode::Running
-        );
+        assert_eq!(scheduler.get_production_mode().await, ProductionMode::Running);
 
         scheduler.pause_for_refactor().await.unwrap();
         scheduler.resume().await.unwrap();
-        assert_eq!(
-            scheduler.get_production_mode().await,
-            ProductionMode::Running
-        );
+        assert_eq!(scheduler.get_production_mode().await, ProductionMode::Running);
     }
 }
 
@@ -879,17 +741,14 @@ mod task_scheduler_integration_tests {
     use crate::llm::{LLMError, LLMRequest, LLMResponse, StopReason, StreamChunk, TokenUsage};
     use crate::orchestration::queue::DependencyAwareQueue;
     use crate::orchestration::router::{Router, RouterConfig};
-    use crate::types::{
-        AgentPersona, AgentPoolConfig, AgentTier, ModelConfig, Priority, Task, TaskId, TaskStatus,
-    };
+    use crate::types::{AgentPersona, AgentPoolConfig, AgentTier, ModelConfig, Priority, Task, TaskId, TaskStatus};
     use async_trait::async_trait;
     use chrono::Utc;
     use futures::Stream;
     use std::pin::Pin;
 
     type TestQueue = DependencyAwareQueue<MockTaskQueueRepo, MockDependencyRepo>;
-    type TestTaskScheduler =
-        TaskScheduler<MockTaskQueueRepo, MockDependencyRepo, MockSchedulerRepo>;
+    type TestTaskScheduler = TaskScheduler<MockTaskQueueRepo, MockDependencyRepo, MockSchedulerRepo>;
 
     struct MockLLMProvider;
 
@@ -907,11 +766,7 @@ mod task_scheduler_integration_tests {
                 },
             })
         }
-        async fn send_message_stream(
-            &self,
-            _request: LLMRequest,
-        ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError>
-        {
+        async fn send_message_stream(&self, _request: LLMRequest) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError> {
             unimplemented!()
         }
         fn provider_name(&self) -> &'static str {
@@ -943,11 +798,7 @@ mod task_scheduler_integration_tests {
         }
     }
 
-    async fn setup_full() -> (
-        Arc<TestTaskScheduler>,
-        Arc<RwLock<TestQueue>>,
-        Arc<RwLock<AgentPool>>,
-    ) {
+    async fn setup_full() -> (Arc<TestTaskScheduler>, Arc<RwLock<TestQueue>>, Arc<RwLock<AgentPool>>) {
         let queue = Arc::new(RwLock::new(DependencyAwareQueue::in_memory().await));
         let router = Router::new(RouterConfig::default());
         let agent_pool_config = AgentPoolConfig {
@@ -959,8 +810,7 @@ mod task_scheduler_integration_tests {
         let agent_pool = Arc::new(RwLock::new(AgentPool::new(agent_pool_config, llm)));
 
         let mut mock = MockSchedulerRepo::new();
-        mock.expect_get_production_mode()
-            .returning(|| Ok(ProductionMode::Running));
+        mock.expect_get_production_mode().returning(|| Ok(ProductionMode::Running));
         mock.expect_set_production_mode().returning(|_| Ok(()));
 
         let refactor_scheduler = Arc::new(Scheduler::with_repo(mock).await.unwrap());
@@ -970,13 +820,7 @@ mod task_scheduler_integration_tests {
             agent_wait_timeout_ms: 10,
         };
 
-        let scheduler = Arc::new(TaskScheduler::new(
-            queue.clone(),
-            router,
-            agent_pool.clone(),
-            refactor_scheduler,
-            config,
-        ));
+        let scheduler = Arc::new(TaskScheduler::new(queue.clone(), router, agent_pool.clone(), refactor_scheduler, config));
 
         (scheduler, queue, agent_pool)
     }
@@ -1049,12 +893,7 @@ mod task_scheduler_integration_tests {
         // Spawn a free agent
         {
             let mut pool = agent_pool.write().await;
-            pool.spawn_agent(
-                AgentTier::Worker,
-                AgentPersona::default(),
-                ModelConfig::default(),
-            )
-            .unwrap();
+            pool.spawn_agent(AgentTier::Worker, AgentPersona::default(), ModelConfig::default()).unwrap();
         }
 
         let result = scheduler.check_preemption().await.unwrap();
@@ -1081,8 +920,7 @@ mod task_scheduler_integration_tests {
     #[tokio::test]
     async fn scheduler_run_paused_skips_assignment() {
         // Create a scheduler where refactor mode starts paused
-        let queue: Arc<RwLock<TestQueue>> =
-            Arc::new(RwLock::new(DependencyAwareQueue::in_memory().await));
+        let queue: Arc<RwLock<TestQueue>> = Arc::new(RwLock::new(DependencyAwareQueue::in_memory().await));
         let router = Router::new(RouterConfig::default());
         let agent_pool_config = AgentPoolConfig {
             max_orchestrators: 2,
@@ -1093,8 +931,7 @@ mod task_scheduler_integration_tests {
         let agent_pool = Arc::new(RwLock::new(AgentPool::new(agent_pool_config, llm)));
 
         let mut mock = MockSchedulerRepo::new();
-        mock.expect_get_production_mode()
-            .returning(|| Ok(ProductionMode::Paused));
+        mock.expect_get_production_mode().returning(|| Ok(ProductionMode::Paused));
         mock.expect_set_production_mode().returning(|_| Ok(()));
 
         let refactor_scheduler = Arc::new(Scheduler::with_repo(mock).await.unwrap());
@@ -1104,13 +941,7 @@ mod task_scheduler_integration_tests {
             agent_wait_timeout_ms: 10,
         };
 
-        let scheduler: Arc<TestTaskScheduler> = Arc::new(TaskScheduler::new(
-            queue.clone(),
-            router,
-            agent_pool,
-            refactor_scheduler,
-            config,
-        ));
+        let scheduler: Arc<TestTaskScheduler> = Arc::new(TaskScheduler::new(queue.clone(), router, agent_pool, refactor_scheduler, config));
 
         // Add a task
         {

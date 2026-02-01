@@ -12,8 +12,6 @@ mod router;
 mod scheduler;
 
 pub use dependency::{DependencyError, DependencyTracker};
-pub use queue::{
-    DependencyAwareQueue, PersistentTaskQueue, QueueError, QueueStats, RequeuePolicy, TaskQueue,
-};
+pub use queue::{DependencyAwareQueue, PersistentTaskQueue, QueueError, QueueStats, RequeuePolicy, TaskQueue};
 pub use router::{Router, RouterConfig, RoutingRule, RuleMatcher};
 pub use scheduler::{PreemptionAction, Scheduler, SchedulerConfig, SchedulerError, TaskScheduler};

@@ -47,12 +47,7 @@ pub struct TaskAssignment {
 
 impl TaskAssignment {
     /// Create a new task assignment
-    pub fn new(
-        task_id: Uuid,
-        title: impl Into<String>,
-        description: impl Into<String>,
-        target_tier: AgentTier,
-    ) -> Self {
+    pub fn new(task_id: Uuid, title: impl Into<String>, description: impl Into<String>, target_tier: AgentTier) -> Self {
         Self {
             version: PROTOCOL_VERSION.to_string(),
             task_id,
@@ -227,11 +222,7 @@ impl DelegationContext {
     }
 
     /// Create context for delegated task
-    pub fn delegated_from(
-        parent_agent: AgentId,
-        parent_role: RoleId,
-        current_context: &DelegationContext,
-    ) -> Self {
+    pub fn delegated_from(parent_agent: AgentId, parent_role: RoleId, current_context: &DelegationContext) -> Self {
         let mut chain = current_context.delegation_chain.clone();
         chain.push(DelegationHop {
             agent_id: parent_agent.clone(),
@@ -794,15 +785,13 @@ impl ProgressUpdate {
     }
 
     pub fn milestone(task_id: Uuid, message: impl Into<String>) -> Self {
-        Self::new(task_id, message)
-            .with_activity(ActivityType::Milestone)
-            .with_verbosity(VerbosityLevel::Quiet) // Always show milestones
+        Self::new(task_id, message).with_activity(ActivityType::Milestone).with_verbosity(VerbosityLevel::Quiet)
+        // Always show milestones
     }
 
     pub fn error(task_id: Uuid, message: impl Into<String>) -> Self {
-        Self::new(task_id, message)
-            .with_activity(ActivityType::Error)
-            .with_verbosity(VerbosityLevel::Quiet) // Always show errors
+        Self::new(task_id, message).with_activity(ActivityType::Error).with_verbosity(VerbosityLevel::Quiet)
+        // Always show errors
     }
 
     pub fn with_progress(mut self, percent: u8) -> Self {
@@ -946,10 +935,7 @@ impl Validatable for TaskAssignment {
 
         // Version check
         if self.version != PROTOCOL_VERSION {
-            errors.push(ValidationError::version_mismatch(
-                PROTOCOL_VERSION,
-                &self.version,
-            ));
+            errors.push(ValidationError::version_mismatch(PROTOCOL_VERSION, &self.version));
         }
 
         // Required fields
@@ -963,37 +949,25 @@ impl Validatable for TaskAssignment {
 
         // Timeout sanity check
         if self.timeout_secs == 0 {
-            errors.push(ValidationError::invalid(
-                "timeout_secs",
-                "timeout must be greater than 0",
-            ));
+            errors.push(ValidationError::invalid("timeout_secs", "timeout must be greater than 0"));
         }
 
         if self.timeout_secs > 3600 * 24 {
-            errors.push(ValidationError::invalid(
-                "timeout_secs",
-                "timeout cannot exceed 24 hours",
-            ));
+            errors.push(ValidationError::invalid("timeout_secs", "timeout cannot exceed 24 hours"));
         }
 
         // Delegation depth check
         if self.delegation.depth > self.delegation.max_depth {
             errors.push(ValidationError::invalid(
                 "delegation.depth",
-                format!(
-                    "delegation depth {} exceeds max_depth {}",
-                    self.delegation.depth, self.delegation.max_depth
-                ),
+                format!("delegation depth {} exceeds max_depth {}", self.delegation.depth, self.delegation.max_depth),
             ));
         }
 
         // Context validation
         for (i, file) in self.context.files.iter().enumerate() {
             if file.path.trim().is_empty() {
-                errors.push(ValidationError::invalid(
-                    &format!("context.files[{}].path", i),
-                    "file path cannot be empty",
-                ));
+                errors.push(ValidationError::invalid(&format!("context.files[{}].path", i), "file path cannot be empty"));
             }
         }
 
@@ -1012,27 +986,18 @@ impl Validatable for TaskResult {
 
         // Version check
         if self.version != PROTOCOL_VERSION {
-            errors.push(ValidationError::version_mismatch(
-                PROTOCOL_VERSION,
-                &self.version,
-            ));
+            errors.push(ValidationError::version_mismatch(PROTOCOL_VERSION, &self.version));
         }
 
         // Failed results should have errors
         if matches!(self.status, TaskStatus::Failed) && self.errors.is_empty() {
-            errors.push(ValidationError::invalid(
-                "errors",
-                "failed status requires at least one error",
-            ));
+            errors.push(ValidationError::invalid("errors", "failed status requires at least one error"));
         }
 
         // File modifications should have valid paths
         for (i, mod_) in self.files_modified.iter().enumerate() {
             if mod_.path.trim().is_empty() {
-                errors.push(ValidationError::invalid(
-                    &format!("files_modified[{}].path", i),
-                    "file path cannot be empty",
-                ));
+                errors.push(ValidationError::invalid(&format!("files_modified[{}].path", i), "file path cannot be empty"));
             }
         }
 
@@ -1051,10 +1016,7 @@ impl Validatable for ContextRequest {
 
         // Version check
         if self.version != PROTOCOL_VERSION {
-            errors.push(ValidationError::version_mismatch(
-                PROTOCOL_VERSION,
-                &self.version,
-            ));
+            errors.push(ValidationError::version_mismatch(PROTOCOL_VERSION, &self.version));
         }
 
         // Must have at least one file or question
@@ -1068,20 +1030,14 @@ impl Validatable for ContextRequest {
         // Validate file paths
         for (i, file) in self.files_needed.iter().enumerate() {
             if file.path.trim().is_empty() {
-                errors.push(ValidationError::invalid(
-                    &format!("files_needed[{}].path", i),
-                    "file path cannot be empty",
-                ));
+                errors.push(ValidationError::invalid(&format!("files_needed[{}].path", i), "file path cannot be empty"));
             }
         }
 
         // Validate questions
         for (i, question) in self.questions.iter().enumerate() {
             if question.text.trim().is_empty() {
-                errors.push(ValidationError::invalid(
-                    &format!("questions[{}].text", i),
-                    "question text cannot be empty",
-                ));
+                errors.push(ValidationError::invalid(&format!("questions[{}].text", i), "question text cannot be empty"));
             }
         }
 
@@ -1100,19 +1056,13 @@ impl Validatable for ContextResponse {
 
         // Version check
         if self.version != PROTOCOL_VERSION {
-            errors.push(ValidationError::version_mismatch(
-                PROTOCOL_VERSION,
-                &self.version,
-            ));
+            errors.push(ValidationError::version_mismatch(PROTOCOL_VERSION, &self.version));
         }
 
         // Validate file paths
         for (i, file) in self.files.iter().enumerate() {
             if file.path.trim().is_empty() {
-                errors.push(ValidationError::invalid(
-                    &format!("files[{}].path", i),
-                    "file path cannot be empty",
-                ));
+                errors.push(ValidationError::invalid(&format!("files[{}].path", i), "file path cannot be empty"));
             }
         }
 
@@ -1130,10 +1080,7 @@ impl Validatable for ProgressUpdate {
 
         // Version check
         if self.version != PROTOCOL_VERSION {
-            errors.push(ValidationError::version_mismatch(
-                PROTOCOL_VERSION,
-                &self.version,
-            ));
+            errors.push(ValidationError::version_mismatch(PROTOCOL_VERSION, &self.version));
         }
 
         // Message required
@@ -1144,10 +1091,7 @@ impl Validatable for ProgressUpdate {
         // Progress percentage range
         if let Some(percent) = self.progress_percent {
             if percent > 100 {
-                errors.push(ValidationError::invalid(
-                    "progress_percent",
-                    "progress must be 0-100",
-                ));
+                errors.push(ValidationError::invalid("progress_percent", "progress must be 0-100"));
             }
         }
 
@@ -1171,12 +1115,7 @@ mod tests {
     // Slice 3.7.1 tests
     #[test]
     fn task_assignment_serialization() {
-        let assignment = TaskAssignment::new(
-            Uuid::new_v4(),
-            "Implement feature",
-            "Add a new button to the UI",
-            AgentTier::Worker,
-        );
+        let assignment = TaskAssignment::new(Uuid::new_v4(), "Implement feature", "Add a new button to the UI", AgentTier::Worker);
 
         // Serialize to JSON
         let json = serde_json::to_string(&assignment).unwrap();
@@ -1197,8 +1136,7 @@ mod tests {
 
         let agent1 = AgentId::new();
         let role1 = RoleId::new("orchestrator");
-        let delegated1 =
-            DelegationContext::delegated_from(agent1.clone(), role1.clone(), &user_ctx);
+        let delegated1 = DelegationContext::delegated_from(agent1.clone(), role1.clone(), &user_ctx);
 
         assert_eq!(delegated1.depth, 1);
         assert!(delegated1.can_delegate());
@@ -1216,8 +1154,7 @@ mod tests {
     // Slice 3.7.2 tests
     #[test]
     fn task_result_success_serialization() {
-        let result = TaskResult::success(Uuid::new_v4(), "Task completed successfully")
-            .with_file_modified(FileModification::modified("src/main.rs", 10, 2));
+        let result = TaskResult::success(Uuid::new_v4(), "Task completed successfully").with_file_modified(FileModification::modified("src/main.rs", 10, 2));
 
         let json = serde_json::to_string(&result).unwrap();
         let parsed: TaskResult = serde_json::from_str(&json).unwrap();
@@ -1249,9 +1186,7 @@ mod tests {
         let task_id = Uuid::new_v4();
 
         // Create request
-        let request = ContextRequest::new(task_id)
-            .with_file("src/main.rs")
-            .with_question("What testing framework should I use?");
+        let request = ContextRequest::new(task_id).with_file("src/main.rs").with_question("What testing framework should I use?");
 
         let request_json = serde_json::to_string(&request).unwrap();
         let parsed_request: ContextRequest = serde_json::from_str(&request_json).unwrap();
@@ -1259,10 +1194,7 @@ mod tests {
         // Create response
         let response = ContextResponse::new(parsed_request.request_id, task_id)
             .with_file(FileContent::new("src/main.rs", "fn main() {}"))
-            .with_answer(Answer::from_orchestrator(
-                "What testing framework should I use?",
-                "Use the built-in Rust test framework",
-            ));
+            .with_answer(Answer::from_orchestrator("What testing framework should I use?", "Use the built-in Rust test framework"));
 
         let response_json = serde_json::to_string(&response).unwrap();
         let parsed_response: ContextResponse = serde_json::from_str(&response_json).unwrap();
@@ -1272,8 +1204,7 @@ mod tests {
 
     #[test]
     fn file_request_with_range() {
-        let request =
-            FileRequest::range("src/lib.rs", 10, 50).with_reason("Need function definition");
+        let request = FileRequest::range("src/lib.rs", 10, 50).with_reason("Need function definition");
 
         assert_eq!(request.line_range, Some((10, 50)));
         assert!(request.reason.is_some());
@@ -1311,20 +1242,14 @@ mod tests {
     // Slice 3.7.5 tests
     #[test]
     fn valid_task_assignment_passes() {
-        let assignment = TaskAssignment::new(
-            Uuid::new_v4(),
-            "Valid title",
-            "Valid description",
-            AgentTier::Worker,
-        );
+        let assignment = TaskAssignment::new(Uuid::new_v4(), "Valid title", "Valid description", AgentTier::Worker);
 
         assert!(assignment.validate().is_ok());
     }
 
     #[test]
     fn empty_title_fails_validation() {
-        let assignment =
-            TaskAssignment::new(Uuid::new_v4(), "", "Valid description", AgentTier::Worker);
+        let assignment = TaskAssignment::new(Uuid::new_v4(), "", "Valid description", AgentTier::Worker);
 
         let errors = assignment.validate().unwrap_err();
         assert!(errors.iter().any(|e| e.field == "title"));
@@ -1332,8 +1257,7 @@ mod tests {
 
     #[test]
     fn zero_timeout_fails_validation() {
-        let mut assignment =
-            TaskAssignment::new(Uuid::new_v4(), "Title", "Description", AgentTier::Worker);
+        let mut assignment = TaskAssignment::new(Uuid::new_v4(), "Title", "Description", AgentTier::Worker);
         assignment.timeout_secs = 0;
 
         let errors = assignment.validate().unwrap_err();
@@ -1342,8 +1266,7 @@ mod tests {
 
     #[test]
     fn exceeded_delegation_depth_fails_validation() {
-        let mut assignment =
-            TaskAssignment::new(Uuid::new_v4(), "Title", "Description", AgentTier::Worker);
+        let mut assignment = TaskAssignment::new(Uuid::new_v4(), "Title", "Description", AgentTier::Worker);
         assignment.delegation.depth = 5;
         assignment.delegation.max_depth = 2;
 
@@ -1427,8 +1350,7 @@ mod tests {
             require_review: false,
             extra: HashMap::new(),
         };
-        let a =
-            TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker).with_constraints(c);
+        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker).with_constraints(c);
         assert_eq!(a.constraints.max_files_modified, Some(5));
         assert!(a.constraints.require_tests);
         assert!(!a.constraints.require_review);
@@ -1436,16 +1358,14 @@ mod tests {
 
     #[test]
     fn task_assignment_with_timeout() {
-        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker)
-            .with_timeout(Duration::from_secs(600));
+        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker).with_timeout(Duration::from_secs(600));
         assert_eq!(a.timeout_secs, 600);
         assert_eq!(a.timeout(), Duration::from_secs(600));
     }
 
     #[test]
     fn task_assignment_with_role() {
-        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker)
-            .with_role(RoleId::new("reviewer"));
+        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker).with_role(RoleId::new("reviewer"));
         assert_eq!(a.role_id, RoleId::new("reviewer"));
     }
 
@@ -1456,8 +1376,7 @@ mod tests {
         let parent = DelegationContext::from_user();
         let del = DelegationContext::delegated_from(agent.clone(), role, &parent);
 
-        let a =
-            TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker).with_delegation(del);
+        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker).with_delegation(del);
         assert_eq!(a.delegation.depth, 1);
         assert_eq!(a.delegation.parent_agent, Some(agent));
     }
@@ -1468,20 +1387,13 @@ mod tests {
             .with_file_modified(FileModification::created("new.rs"))
             .with_file_modified(FileModification::deleted("old.rs"));
         assert_eq!(r.files_modified.len(), 2);
-        assert_eq!(
-            r.files_modified[0].modification_type,
-            ModificationType::Created
-        );
-        assert_eq!(
-            r.files_modified[1].modification_type,
-            ModificationType::Deleted
-        );
+        assert_eq!(r.files_modified[0].modification_type, ModificationType::Created);
+        assert_eq!(r.files_modified[1].modification_type, ModificationType::Deleted);
     }
 
     #[test]
     fn task_result_with_error() {
-        let r = TaskResult::success(Uuid::new_v4(), "partial")
-            .with_error(TaskError::new("warn", "something"));
+        let r = TaskResult::success(Uuid::new_v4(), "partial").with_error(TaskError::new("warn", "something"));
         assert_eq!(r.errors.len(), 1);
         assert_eq!(r.errors[0].code, "warn");
         assert!(r.errors[0].recoverable);
@@ -1489,8 +1401,7 @@ mod tests {
 
     #[test]
     fn task_result_with_token_usage() {
-        let r = TaskResult::success(Uuid::new_v4(), "done")
-            .with_token_usage(TokenUsage::new("gpt-4", 200, 100));
+        let r = TaskResult::success(Uuid::new_v4(), "done").with_token_usage(TokenUsage::new("gpt-4", 200, 100));
         let usage = r.token_usage.unwrap();
         assert_eq!(usage.model_id, "gpt-4");
         assert_eq!(usage.input_tokens, 200);
@@ -1660,8 +1571,7 @@ mod tests {
 
     #[test]
     fn progress_update_with_verbosity() {
-        let u =
-            ProgressUpdate::new(Uuid::new_v4(), "working").with_verbosity(VerbosityLevel::Verbose);
+        let u = ProgressUpdate::new(Uuid::new_v4(), "working").with_verbosity(VerbosityLevel::Verbose);
         assert_eq!(u.verbosity, VerbosityLevel::Verbose);
     }
 
@@ -1793,8 +1703,7 @@ mod tests {
 
     #[test]
     fn context_response_empty_file_path_fails() {
-        let resp = ContextResponse::new(Uuid::new_v4(), Uuid::new_v4())
-            .with_file(FileContent::new("", "x"));
+        let resp = ContextResponse::new(Uuid::new_v4(), Uuid::new_v4()).with_file(FileContent::new("", "x"));
         let errs = resp.validate().unwrap_err();
         assert!(errs.iter().any(|e| e.field.contains("files")));
     }
@@ -1809,8 +1718,7 @@ mod tests {
 
     #[test]
     fn task_result_empty_file_path_fails() {
-        let r = TaskResult::success(Uuid::new_v4(), "ok")
-            .with_file_modified(FileModification::created(""));
+        let r = TaskResult::success(Uuid::new_v4(), "ok").with_file_modified(FileModification::created(""));
         let errs = r.validate().unwrap_err();
         assert!(errs.iter().any(|e| e.field.contains("files_modified")));
     }

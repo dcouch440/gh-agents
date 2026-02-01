@@ -13,9 +13,9 @@ use axum::{
 };
 use futures::{sink::SinkExt, stream::StreamExt};
 use serde::{Deserialize, Serialize};
+use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::Mutex;
 use tokio::time::interval;
-use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
@@ -175,21 +175,12 @@ pub struct WsQuery {
 ///
 /// Upgrades an HTTP connection to a WebSocket connection for real-time updates.
 /// Requires a valid JWT token in query params.
-pub async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<AppState>,
-    Query(query): Query<WsQuery>,
-) -> Result<Response, axum::http::StatusCode> {
-    let token = query
-        .token
-        .ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
+pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>, Query(query): Query<WsQuery>) -> Result<Response, axum::http::StatusCode> {
+    let token = query.token.ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
 
-    let claims = super::auth::verify_token(&token, &state.jwt_secret)
-        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+    let claims = super::auth::verify_token(&token, &state.jwt_secret).map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
 
-    let user_id = uuid::Uuid::parse_str(&claims.sub)
-        .map(UserId)
-        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+    let user_id = uuid::Uuid::parse_str(&claims.sub).map(UserId).map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
 
     Ok(ws.on_upgrade(move |socket| handle_socket(socket, state, Some(user_id))))
 }
@@ -433,27 +424,18 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
 
     // Clean up subscriptions on disconnect
     let subs = subscriptions.lock().await;
-    info!(
-        "WebSocket connection closed, cleaning up {} subscription(s)",
-        subs.len()
-    );
+    info!("WebSocket connection closed, cleaning up {} subscription(s)", subs.len());
     // Resources are automatically cleaned up when the function exits:
     // - broadcast receivers are dropped
     // - subscriptions HashSet is dropped
 }
 
 /// Handle a client message and return optional response
-async fn handle_client_message(
-    msg: ClientMessage,
-    subscriptions: &Subscriptions,
-) -> Option<ServerMessage> {
+async fn handle_client_message(msg: ClientMessage, subscriptions: &Subscriptions) -> Option<ServerMessage> {
     match msg {
         ClientMessage::Subscribe { channels } => {
             let mut subs = subscriptions.lock().await;
-            let valid_channels: Vec<String> = channels
-                .into_iter()
-                .filter(|c| is_valid_channel(c))
-                .collect();
+            let valid_channels: Vec<String> = channels.into_iter().filter(|c| is_valid_channel(c)).collect();
 
             for channel in &valid_channels {
                 subs.insert(channel.clone());
@@ -481,12 +463,7 @@ async fn handle_client_message(
 fn is_valid_channel(channel: &str) -> bool {
     matches!(
         channel,
-        CHANNEL_FEED
-            | CHANNEL_TASKS
-            | CHANNEL_AGENTS
-            | CHANNEL_SESSIONS
-            | CHANNEL_PIPELINES
-            | CHANNEL_ROUTING
+        CHANNEL_FEED | CHANNEL_TASKS | CHANNEL_AGENTS | CHANNEL_SESSIONS | CHANNEL_PIPELINES | CHANNEL_ROUTING
     )
 }
 
@@ -805,11 +782,7 @@ mod tests {
     async fn subscribe_all_valid_channels() {
         let subscriptions: Subscriptions = Arc::new(Mutex::new(HashSet::new()));
         let msg = ClientMessage::Subscribe {
-            channels: vec![
-                "feed".to_string(),
-                "tasks".to_string(),
-                "agents".to_string(),
-            ],
+            channels: vec!["feed".to_string(), "tasks".to_string(), "agents".to_string()],
         };
         let response = handle_client_message(msg, &subscriptions).await;
         if let Some(ServerMessage::Subscribed { channels }) = response {
@@ -1008,9 +981,7 @@ mod tests {
 
     #[test]
     fn server_message_debug_format() {
-        let msg = ServerMessage::Error {
-            message: "test".to_string(),
-        };
+        let msg = ServerMessage::Error { message: "test".to_string() };
         let debug = format!("{:?}", msg);
         assert!(debug.contains("Error"));
         assert!(debug.contains("test"));
@@ -1032,9 +1003,7 @@ mod tests {
 
     #[test]
     fn server_message_clone() {
-        let msg = ServerMessage::Error {
-            message: "err".to_string(),
-        };
+        let msg = ServerMessage::Error { message: "err".to_string() };
         let cloned = msg.clone();
         match cloned {
             ServerMessage::Error { message } => assert_eq!(message, "err"),

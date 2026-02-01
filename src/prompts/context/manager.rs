@@ -54,22 +54,10 @@ impl ContextBudget {
     /// Create with default budget allocation
     pub fn new(total_tokens: usize) -> Self {
         let mut category_budgets = HashMap::new();
-        category_budgets.insert(
-            ContextCategory::FilesToModify,
-            (total_tokens as f64 * 0.40) as usize,
-        );
-        category_budgets.insert(
-            ContextCategory::ReferenceFiles,
-            (total_tokens as f64 * 0.25) as usize,
-        );
-        category_budgets.insert(
-            ContextCategory::TaskAndHistory,
-            (total_tokens as f64 * 0.20) as usize,
-        );
-        category_budgets.insert(
-            ContextCategory::Conventions,
-            (total_tokens as f64 * 0.15) as usize,
-        );
+        category_budgets.insert(ContextCategory::FilesToModify, (total_tokens as f64 * 0.40) as usize);
+        category_budgets.insert(ContextCategory::ReferenceFiles, (total_tokens as f64 * 0.25) as usize);
+        category_budgets.insert(ContextCategory::TaskAndHistory, (total_tokens as f64 * 0.20) as usize);
+        category_budgets.insert(ContextCategory::Conventions, (total_tokens as f64 * 0.15) as usize);
 
         Self {
             total_tokens,
@@ -81,22 +69,10 @@ impl ContextBudget {
     /// Create with custom budget allocation
     pub fn with_allocation(total_tokens: usize, allocation: BudgetAllocation) -> Self {
         let mut category_budgets = HashMap::new();
-        category_budgets.insert(
-            ContextCategory::FilesToModify,
-            (total_tokens as f64 * allocation.files_to_modify) as usize,
-        );
-        category_budgets.insert(
-            ContextCategory::ReferenceFiles,
-            (total_tokens as f64 * allocation.reference_files) as usize,
-        );
-        category_budgets.insert(
-            ContextCategory::TaskAndHistory,
-            (total_tokens as f64 * allocation.task_and_history) as usize,
-        );
-        category_budgets.insert(
-            ContextCategory::Conventions,
-            (total_tokens as f64 * allocation.conventions) as usize,
-        );
+        category_budgets.insert(ContextCategory::FilesToModify, (total_tokens as f64 * allocation.files_to_modify) as usize);
+        category_budgets.insert(ContextCategory::ReferenceFiles, (total_tokens as f64 * allocation.reference_files) as usize);
+        category_budgets.insert(ContextCategory::TaskAndHistory, (total_tokens as f64 * allocation.task_and_history) as usize);
+        category_budgets.insert(ContextCategory::Conventions, (total_tokens as f64 * allocation.conventions) as usize);
 
         Self {
             total_tokens,
@@ -113,11 +89,7 @@ impl ContextBudget {
     }
 
     /// Try to allocate tokens from a category budget
-    pub fn allocate(
-        &mut self,
-        category: ContextCategory,
-        tokens: usize,
-    ) -> Result<(), BudgetError> {
+    pub fn allocate(&mut self, category: ContextCategory, tokens: usize) -> Result<(), BudgetError> {
         if !self.has_budget(category, tokens) {
             return Err(BudgetError::CategoryExceeded {
                 category,
@@ -235,11 +207,7 @@ impl std::fmt::Display for BudgetError {
                 requested,
                 used,
             } => {
-                write!(
-                    f,
-                    "{:?} budget exceeded: {} used + {} requested > {} budget",
-                    category, used, requested, budget
-                )
+                write!(f, "{:?} budget exceeded: {} used + {} requested > {} budget", category, used, requested, budget)
             }
         }
     }
@@ -259,9 +227,7 @@ pub struct FileSelector {
 
 impl FileSelector {
     pub fn new(base_path: impl Into<std::path::PathBuf>) -> Self {
-        Self {
-            base_path: base_path.into(),
-        }
+        Self { base_path: base_path.into() }
     }
 
     /// Get the base path.
@@ -272,25 +238,13 @@ impl FileSelector {
     /// Score and rank files by relevance to a task.
     ///
     /// Returns files sorted by relevance (highest first).
-    pub fn select_relevant(
-        &self,
-        task_description: &str,
-        available_files: &[FileInfo],
-        max_files: usize,
-    ) -> Vec<ScoredFile> {
+    pub fn select_relevant(&self, task_description: &str, available_files: &[FileInfo], max_files: usize) -> Vec<ScoredFile> {
         let keywords = self.extract_keywords(task_description);
 
-        let mut scored: Vec<ScoredFile> = available_files
-            .iter()
-            .map(|file| self.score_file(file, &keywords))
-            .collect();
+        let mut scored: Vec<ScoredFile> = available_files.iter().map(|file| self.score_file(file, &keywords)).collect();
 
         // Sort by score descending
-        scored.sort_by(|a, b| {
-            b.score
-                .partial_cmp(&a.score)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
 
         // Take top N
         scored.truncate(max_files);
@@ -350,10 +304,7 @@ impl FileSelector {
     }
 
     fn explain_relevance(&self, path: &str, score: f64, keywords: &[String]) -> String {
-        let matching: Vec<_> = keywords
-            .iter()
-            .filter(|kw| path.to_lowercase().contains(&kw.to_lowercase()))
-            .collect();
+        let matching: Vec<_> = keywords.iter().filter(|kw| path.to_lowercase().contains(&kw.to_lowercase())).collect();
 
         if matching.is_empty() {
             format!("Relevance score: {:.1}", score)
@@ -364,9 +315,8 @@ impl FileSelector {
 }
 
 const STOP_WORDS: &[&str] = &[
-    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by",
-    "from", "this", "that", "these", "those", "is", "are", "was", "were", "be", "been", "being",
-    "have", "has", "had", "do", "does", "did", "will", "would", "could", "should", "may", "might",
+    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by", "from", "this", "that", "these", "those", "is", "are", "was", "were", "be", "been",
+    "being", "have", "has", "had", "do", "does", "did", "will", "would", "could", "should", "may", "might",
 ];
 
 /// Information about a file for selection
@@ -431,11 +381,7 @@ impl ContextRequestHandler {
         fulfilled
     }
 
-    fn fulfill_request(
-        &self,
-        request: &ContextRequest,
-        available_files: &[FileInfo],
-    ) -> FulfilledRequest {
+    fn fulfill_request(&self, request: &ContextRequest, available_files: &[FileInfo]) -> FulfilledRequest {
         match &request.request_type {
             ContextRequestType::SpecificFile(path) => {
                 if let Some(file) = available_files.iter().find(|f| f.path == *path) {
@@ -467,10 +413,7 @@ impl ContextRequestHandler {
                 }
             }
             ContextRequestType::FilesMatching(pattern) => {
-                let matching: Vec<_> = available_files
-                    .iter()
-                    .filter(|f| f.path.contains(pattern))
-                    .collect();
+                let matching: Vec<_> = available_files.iter().filter(|f| f.path.contains(pattern)).collect();
 
                 if matching.is_empty() {
                     FulfilledRequest {
@@ -484,12 +427,7 @@ impl ContextRequestHandler {
                     FulfilledRequest {
                         original_request: request.clone(),
                         status: FulfillmentStatus::Fulfilled,
-                        content: Some(format!(
-                            "Found {} files matching '{}':\n{}",
-                            matching.len(),
-                            pattern,
-                            paths.join("\n")
-                        )),
+                        content: Some(format!("Found {} files matching '{}':\n{}", matching.len(), pattern, paths.join("\n"))),
                         alternatives: vec![],
                     }
                 }
@@ -497,19 +435,14 @@ impl ContextRequestHandler {
             ContextRequestType::FunctionDefinition { name, file_hint } => {
                 // Search for function in files
                 let search_files: Vec<_> = if let Some(hint) = file_hint {
-                    available_files
-                        .iter()
-                        .filter(|f| f.path.contains(hint))
-                        .collect()
+                    available_files.iter().filter(|f| f.path.contains(hint)).collect()
                 } else {
                     available_files.iter().collect()
                 };
 
                 for file in search_files {
                     if let Some(ref content) = file.content_preview {
-                        if content.contains(&format!("fn {}", name))
-                            || content.contains(&format!("def {}", name))
-                        {
+                        if content.contains(&format!("fn {}", name)) || content.contains(&format!("def {}", name)) {
                             return FulfilledRequest {
                                 original_request: request.clone(),
                                 status: FulfillmentStatus::Fulfilled,
@@ -559,10 +492,7 @@ pub enum ContextRequestType {
     /// Request files matching a pattern
     FilesMatching(String),
     /// Request a function definition
-    FunctionDefinition {
-        name: String,
-        file_hint: Option<String>,
-    },
+    FunctionDefinition { name: String, file_hint: Option<String> },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -692,21 +622,9 @@ impl HistoryManager {
         let content_lower = entry.content.to_lowercase();
 
         // Mark as important if contains decision indicators
-        let decision_keywords = [
-            "decided",
-            "agreed",
-            "confirmed",
-            "approved",
-            "rejected",
-            "error",
-            "failed",
-            "bug",
-            "issue",
-        ];
+        let decision_keywords = ["decided", "agreed", "confirmed", "approved", "rejected", "error", "failed", "bug", "issue"];
 
-        decision_keywords
-            .iter()
-            .any(|kw| content_lower.contains(kw))
+        decision_keywords.iter().any(|kw| content_lower.contains(kw))
     }
 }
 
@@ -760,21 +678,15 @@ mod tests {
         let mut budget = ContextBudget::new(10000);
 
         // Should succeed
-        assert!(budget
-            .allocate(ContextCategory::FilesToModify, 1000)
-            .is_ok());
+        assert!(budget.allocate(ContextCategory::FilesToModify, 1000).is_ok());
         assert_eq!(budget.remaining(ContextCategory::FilesToModify), 3000);
 
         // Should succeed again
-        assert!(budget
-            .allocate(ContextCategory::FilesToModify, 2000)
-            .is_ok());
+        assert!(budget.allocate(ContextCategory::FilesToModify, 2000).is_ok());
         assert_eq!(budget.remaining(ContextCategory::FilesToModify), 1000);
 
         // Should fail - exceeds remaining
-        assert!(budget
-            .allocate(ContextCategory::FilesToModify, 2000)
-            .is_err());
+        assert!(budget.allocate(ContextCategory::FilesToModify, 2000).is_err());
     }
 
     #[test]
@@ -784,9 +696,7 @@ mod tests {
         assert!(budget.has_budget(ContextCategory::FilesToModify, 4000));
         assert!(!budget.has_budget(ContextCategory::FilesToModify, 4001));
 
-        budget
-            .allocate(ContextCategory::FilesToModify, 3000)
-            .unwrap();
+        budget.allocate(ContextCategory::FilesToModify, 3000).unwrap();
         assert!(budget.has_budget(ContextCategory::FilesToModify, 1000));
         assert!(!budget.has_budget(ContextCategory::FilesToModify, 1001));
     }
@@ -795,15 +705,9 @@ mod tests {
     fn test_context_budget_total_used() {
         let mut budget = ContextBudget::new(10000);
 
-        budget
-            .allocate(ContextCategory::FilesToModify, 1000)
-            .unwrap();
-        budget
-            .allocate(ContextCategory::ReferenceFiles, 500)
-            .unwrap();
-        budget
-            .allocate(ContextCategory::TaskAndHistory, 200)
-            .unwrap();
+        budget.allocate(ContextCategory::FilesToModify, 1000).unwrap();
+        budget.allocate(ContextCategory::ReferenceFiles, 500).unwrap();
+        budget.allocate(ContextCategory::TaskAndHistory, 200).unwrap();
 
         assert_eq!(budget.total_used(), 1700);
         assert_eq!(budget.total_remaining(), 8300);
@@ -829,18 +733,13 @@ mod tests {
     #[test]
     fn test_budget_summary() {
         let mut budget = ContextBudget::new(10000);
-        budget
-            .allocate(ContextCategory::FilesToModify, 1000)
-            .unwrap();
+        budget.allocate(ContextCategory::FilesToModify, 1000).unwrap();
 
         let summary = budget.summary();
         assert_eq!(summary.total_budget, 10000);
         assert_eq!(summary.total_used, 1000);
 
-        let files_usage = summary
-            .by_category
-            .get(&ContextCategory::FilesToModify)
-            .unwrap();
+        let files_usage = summary.by_category.get(&ContextCategory::FilesToModify).unwrap();
         assert_eq!(files_usage.budget, 4000);
         assert_eq!(files_usage.used, 1000);
         assert_eq!(files_usage.remaining(), 3000);
@@ -849,10 +748,7 @@ mod tests {
 
     #[test]
     fn test_context_category_budget_totals_100() {
-        let total: f32 = ContextCategory::all()
-            .iter()
-            .map(|c| c.budget_percent())
-            .sum();
+        let total: f32 = ContextCategory::all().iter().map(|c| c.budget_percent()).sum();
         assert!((total - 1.0).abs() < 0.001);
     }
 
@@ -1063,9 +959,7 @@ mod tests {
         let files = vec![FileInfo {
             path: "src/utils.rs".to_string(),
             size_bytes: 100,
-            content_preview: Some(
-                "pub fn calculate_total(items: &[i32]) -> i32 { items.iter().sum() }".to_string(),
-            ),
+            content_preview: Some("pub fn calculate_total(items: &[i32]) -> i32 { items.iter().sum() }".to_string()),
         }];
 
         handler.add_request(ContextRequest {
@@ -1081,11 +975,7 @@ mod tests {
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].status, FulfillmentStatus::Fulfilled);
-        assert!(results[0]
-            .content
-            .as_ref()
-            .unwrap()
-            .contains("calculate_total"));
+        assert!(results[0].content.as_ref().unwrap().contains("calculate_total"));
     }
 
     #[test]
@@ -1241,10 +1131,7 @@ mod tests {
 
         assert_eq!(summary.total_entries, 10);
         assert!(summary.entries_truncated > 0);
-        assert_eq!(
-            summary.entries_kept + summary.entries_truncated,
-            summary.total_entries
-        );
+        assert_eq!(summary.entries_kept + summary.entries_truncated, summary.total_entries);
     }
 
     #[test]

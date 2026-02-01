@@ -63,8 +63,7 @@ impl ModeRegistry {
         let home = AgentMode {
             id: AgentModeId::new("home"),
             name: "Home".to_string(),
-            description: "Project-level assistant. Check agent status, browse PRDs, manage files."
-                .to_string(),
+            description: "Project-level assistant. Check agent status, browse PRDs, manage files.".to_string(),
             system_prompt: "You are nexor, the central AI command center for software engineering teams. \
                 You coordinate a multi-tier agent system: Orchestrators (Tier 2, Opus), \
                 Workers (Tier 1, Sonnet), and Utilities (Tier 0, Haiku). \
@@ -235,10 +234,7 @@ mod tests {
     fn planning_mode_has_session_history() {
         let registry = ModeRegistry::new();
         let planning = registry.get(&AgentModeId::new("planning")).unwrap();
-        assert!(matches!(
-            planning.history_policy,
-            HistoryPolicy::SessionScoped { max_messages: 30 }
-        ));
+        assert!(matches!(planning.history_policy, HistoryPolicy::SessionScoped { max_messages: 30 }));
     }
 
     #[test]

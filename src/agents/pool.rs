@@ -100,12 +100,7 @@ impl AgentPool {
     /// The agent is NOT started as a tokio task. Use `spawn_agent_with_dispatcher`
     /// for production agents that need to process commands.
     #[cfg(test)]
-    pub fn spawn_agent(
-        &mut self,
-        tier: AgentTier,
-        persona: AgentPersona,
-        model_config: ModelConfig,
-    ) -> Result<AgentId, PoolError> {
+    pub fn spawn_agent(&mut self, tier: AgentTier, persona: AgentPersona, model_config: ModelConfig) -> Result<AgentId, PoolError> {
         // Check pool limit
         let max = self.max_for_tier(tier);
         if self.count(tier) >= max as usize {
@@ -117,14 +112,7 @@ impl AgentPool {
         let (response_tx, _response_rx) = tokio::sync::mpsc::channel(32);
 
         // Create the agent
-        let agent = Agent::new(
-            tier,
-            persona,
-            model_config,
-            Arc::clone(&self.llm_provider),
-            command_rx,
-            response_tx,
-        );
+        let agent = Agent::new(tier, persona, model_config, Arc::clone(&self.llm_provider), command_rx, response_tx);
         let agent_id = agent.id.clone();
         let shared_status = agent.shared_status();
 
@@ -143,10 +131,7 @@ impl AgentPool {
                 _join_handle: None,
             },
         );
-        self.by_tier
-            .entry(tier)
-            .or_insert_with(Vec::new)
-            .push(agent_id.clone());
+        self.by_tier.entry(tier).or_insert_with(Vec::new).push(agent_id.clone());
 
         Ok(agent_id)
     }
@@ -155,13 +140,7 @@ impl AgentPool {
     ///
     /// The agent's `run()` loop is started as a tokio task immediately,
     /// so it can receive and process commands.
-    pub fn spawn_agent_with_dispatcher(
-        &mut self,
-        tier: AgentTier,
-        persona: AgentPersona,
-        model_config: ModelConfig,
-        dispatcher: &mut Dispatcher,
-    ) -> Result<AgentId, PoolError> {
+    pub fn spawn_agent_with_dispatcher(&mut self, tier: AgentTier, persona: AgentPersona, model_config: ModelConfig, dispatcher: &mut Dispatcher) -> Result<AgentId, PoolError> {
         // Check pool limit
         let max = self.max_for_tier(tier);
         if self.count(tier) >= max as usize {
@@ -173,14 +152,7 @@ impl AgentPool {
         let response_tx = dispatcher.response_sender();
 
         // Create the agent
-        let agent = Agent::new(
-            tier,
-            persona,
-            model_config,
-            Arc::clone(&self.llm_provider),
-            command_rx,
-            response_tx,
-        );
+        let agent = Agent::new(tier, persona, model_config, Arc::clone(&self.llm_provider), command_rx, response_tx);
         let agent_id = agent.id.clone();
         let shared_status = agent.shared_status();
 
@@ -235,11 +207,7 @@ impl AgentPool {
 
     /// Check if a specific agent is available (idle)
     pub fn is_agent_available(&self, id: &AgentId) -> bool {
-        self.agents
-            .get(id)
-            .and_then(|e| e.status.try_lock().ok())
-            .map(|s| *s == AgentStatus::Idle)
-            .unwrap_or(false)
+        self.agents.get(id).and_then(|e| e.status.try_lock().ok()).map(|s| *s == AgentStatus::Idle).unwrap_or(false)
     }
 
     /// Check if an agent exists in the pool
@@ -256,10 +224,7 @@ impl AgentPool {
     ///
     /// The agent's tokio task will be aborted.
     pub fn remove_agent(&mut self, id: &AgentId) -> Result<(), PoolError> {
-        let entry = self
-            .agents
-            .remove(id)
-            .ok_or_else(|| PoolError::AgentNotFound(id.clone()))?;
+        let entry = self.agents.remove(id).ok_or_else(|| PoolError::AgentNotFound(id.clone()))?;
 
         let tier = entry.tier;
 
@@ -389,11 +354,7 @@ mod tests {
             })
         }
 
-        async fn send_message_stream(
-            &self,
-            _request: LLMRequest,
-        ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError>
-        {
+        async fn send_message_stream(&self, _request: LLMRequest) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError> {
             unimplemented!("not needed for these tests")
         }
 
@@ -456,11 +417,7 @@ mod tests {
 
         // Verify the agent is tracked
         assert!(pool.has_agent(&agent_id));
-        assert!(pool
-            .by_tier
-            .get(&AgentTier::Worker)
-            .unwrap()
-            .contains(&agent_id));
+        assert!(pool.by_tier.get(&AgentTier::Worker).unwrap().contains(&agent_id));
     }
 
     #[test]
@@ -470,18 +427,8 @@ mod tests {
         let model_config = ModelConfig::default();
 
         // Spawn up to limit (max_orchestrators = 2)
-        pool.spawn_agent(
-            AgentTier::Orchestrator,
-            persona.clone(),
-            model_config.clone(),
-        )
-        .unwrap();
-        pool.spawn_agent(
-            AgentTier::Orchestrator,
-            persona.clone(),
-            model_config.clone(),
-        )
-        .unwrap();
+        pool.spawn_agent(AgentTier::Orchestrator, persona.clone(), model_config.clone()).unwrap();
+        pool.spawn_agent(AgentTier::Orchestrator, persona.clone(), model_config.clone()).unwrap();
 
         assert_eq!(pool.count(AgentTier::Orchestrator), 2);
         assert!(!pool.can_spawn(AgentTier::Orchestrator));
@@ -506,18 +453,8 @@ mod tests {
         let model_config = ModelConfig::default();
 
         // Fill orchestrators
-        pool.spawn_agent(
-            AgentTier::Orchestrator,
-            persona.clone(),
-            model_config.clone(),
-        )
-        .unwrap();
-        pool.spawn_agent(
-            AgentTier::Orchestrator,
-            persona.clone(),
-            model_config.clone(),
-        )
-        .unwrap();
+        pool.spawn_agent(AgentTier::Orchestrator, persona.clone(), model_config.clone()).unwrap();
+        pool.spawn_agent(AgentTier::Orchestrator, persona.clone(), model_config.clone()).unwrap();
 
         // Can still spawn workers
         assert!(pool.can_spawn(AgentTier::Worker));
@@ -533,9 +470,7 @@ mod tests {
         let model_config = ModelConfig::default();
 
         // Spawn an agent
-        let agent_id = pool
-            .spawn_agent(AgentTier::Worker, persona, model_config)
-            .unwrap();
+        let agent_id = pool.spawn_agent(AgentTier::Worker, persona, model_config).unwrap();
 
         // Should find the available agent
         let available_id = pool.get_available_agent_id(AgentTier::Worker);
@@ -561,9 +496,7 @@ mod tests {
         let persona = AgentPersona::default();
         let model_config = ModelConfig::default();
 
-        let agent_id = pool
-            .spawn_agent(AgentTier::Worker, persona, model_config)
-            .unwrap();
+        let agent_id = pool.spawn_agent(AgentTier::Worker, persona, model_config).unwrap();
 
         // Has agent should work
         assert!(pool.has_agent(&agent_id));
@@ -581,9 +514,7 @@ mod tests {
         let persona = AgentPersona::default();
         let model_config = ModelConfig::default();
 
-        let agent_id = pool
-            .spawn_agent(AgentTier::Worker, persona, model_config)
-            .unwrap();
+        let agent_id = pool.spawn_agent(AgentTier::Worker, persona, model_config).unwrap();
 
         assert_eq!(pool.count(AgentTier::Worker), 1);
         assert_eq!(pool.total_count(), 1);
@@ -620,12 +551,9 @@ mod tests {
         let model_config = ModelConfig::default();
 
         // Spawn multiple agents
-        pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone())
-            .unwrap();
-        pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone())
-            .unwrap();
-        pool.spawn_agent(AgentTier::Orchestrator, persona, model_config)
-            .unwrap();
+        pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone()).unwrap();
+        pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone()).unwrap();
+        pool.spawn_agent(AgentTier::Orchestrator, persona, model_config).unwrap();
 
         assert_eq!(pool.total_count(), 3);
 
@@ -651,10 +579,8 @@ mod tests {
         assert_eq!(stats.workers.max, 3);
 
         // Spawn some agents (in test mode, agents start Idle)
-        pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone())
-            .unwrap();
-        pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone())
-            .unwrap();
+        pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone()).unwrap();
+        pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone()).unwrap();
 
         let stats = pool.stats();
         assert_eq!(stats.workers.total, 2);
@@ -663,10 +589,7 @@ mod tests {
 
     #[test]
     fn pool_error_display_messages() {
-        let e1 = PoolError::PoolLimitReached {
-            tier: AgentTier::Worker,
-            max: 3,
-        };
+        let e1 = PoolError::PoolLimitReached { tier: AgentTier::Worker, max: 3 };
         assert!(e1.to_string().contains("pool limit reached"));
         assert!(e1.to_string().contains("Worker"));
 
@@ -683,19 +606,9 @@ mod tests {
         let persona = AgentPersona::default();
         let model_config = ModelConfig::default();
 
-        let orch_id = pool
-            .spawn_agent(
-                AgentTier::Orchestrator,
-                persona.clone(),
-                model_config.clone(),
-            )
-            .unwrap();
-        let worker_id = pool
-            .spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone())
-            .unwrap();
-        let util_id = pool
-            .spawn_agent(AgentTier::Utility, persona, model_config)
-            .unwrap();
+        let orch_id = pool.spawn_agent(AgentTier::Orchestrator, persona.clone(), model_config.clone()).unwrap();
+        let worker_id = pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone()).unwrap();
+        let util_id = pool.spawn_agent(AgentTier::Utility, persona, model_config).unwrap();
 
         assert_eq!(pool.agent_tier(&orch_id), Some(AgentTier::Orchestrator));
         assert_eq!(pool.agent_tier(&worker_id), Some(AgentTier::Worker));
@@ -711,8 +624,7 @@ mod tests {
 
         // max_workers = 3
         for _ in 0..3 {
-            pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone())
-                .unwrap();
+            pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone()).unwrap();
         }
         assert!(!pool.can_spawn(AgentTier::Worker));
         let result = pool.spawn_agent(AgentTier::Worker, persona, model_config);
@@ -733,8 +645,7 @@ mod tests {
 
         // max_utilities = 4
         for _ in 0..4 {
-            pool.spawn_agent(AgentTier::Utility, persona.clone(), model_config.clone())
-                .unwrap();
+            pool.spawn_agent(AgentTier::Utility, persona.clone(), model_config.clone()).unwrap();
         }
         assert!(!pool.can_spawn(AgentTier::Utility));
         let result = pool.spawn_agent(AgentTier::Utility, persona, model_config);
@@ -747,9 +658,7 @@ mod tests {
         let persona = AgentPersona::default();
         let model_config = ModelConfig::default();
 
-        let agent_id = pool
-            .spawn_agent(AgentTier::Worker, persona, model_config)
-            .unwrap();
+        let agent_id = pool.spawn_agent(AgentTier::Worker, persona, model_config).unwrap();
 
         let available = pool.get_available_agent_id(AgentTier::Worker);
         assert!(available.is_some());
@@ -759,9 +668,7 @@ mod tests {
     #[test]
     fn get_available_agent_id_returns_none_when_empty() {
         let pool = create_test_pool();
-        assert!(pool
-            .get_available_agent_id(AgentTier::Orchestrator)
-            .is_none());
+        assert!(pool.get_available_agent_id(AgentTier::Orchestrator).is_none());
     }
 
     #[test]
@@ -771,19 +678,8 @@ mod tests {
         let model_config = ModelConfig::default();
 
         // Fill orchestrators (max=2)
-        let id1 = pool
-            .spawn_agent(
-                AgentTier::Orchestrator,
-                persona.clone(),
-                model_config.clone(),
-            )
-            .unwrap();
-        pool.spawn_agent(
-            AgentTier::Orchestrator,
-            persona.clone(),
-            model_config.clone(),
-        )
-        .unwrap();
+        let id1 = pool.spawn_agent(AgentTier::Orchestrator, persona.clone(), model_config.clone()).unwrap();
+        pool.spawn_agent(AgentTier::Orchestrator, persona.clone(), model_config.clone()).unwrap();
         assert!(!pool.can_spawn(AgentTier::Orchestrator));
 
         // Remove one
@@ -791,8 +687,7 @@ mod tests {
         assert!(pool.can_spawn(AgentTier::Orchestrator));
 
         // Can spawn again
-        pool.spawn_agent(AgentTier::Orchestrator, persona, model_config)
-            .unwrap();
+        pool.spawn_agent(AgentTier::Orchestrator, persona, model_config).unwrap();
         assert_eq!(pool.count(AgentTier::Orchestrator), 2);
     }
 
@@ -802,10 +697,8 @@ mod tests {
         let persona = AgentPersona::default();
         let model_config = ModelConfig::default();
 
-        pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone())
-            .unwrap();
-        pool.spawn_agent(AgentTier::Utility, persona, model_config)
-            .unwrap();
+        pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone()).unwrap();
+        pool.spawn_agent(AgentTier::Utility, persona, model_config).unwrap();
 
         pool.shutdown_all();
         assert_eq!(pool.total_count(), 0);
@@ -827,12 +720,9 @@ mod tests {
         let persona = AgentPersona::default();
         let model_config = ModelConfig::default();
 
-        pool.spawn_agent(AgentTier::Utility, persona.clone(), model_config.clone())
-            .unwrap();
-        pool.spawn_agent(AgentTier::Utility, persona.clone(), model_config.clone())
-            .unwrap();
-        pool.spawn_agent(AgentTier::Utility, persona, model_config)
-            .unwrap();
+        pool.spawn_agent(AgentTier::Utility, persona.clone(), model_config.clone()).unwrap();
+        pool.spawn_agent(AgentTier::Utility, persona.clone(), model_config.clone()).unwrap();
+        pool.spawn_agent(AgentTier::Utility, persona, model_config).unwrap();
 
         let stats = pool.stats();
         assert_eq!(stats.utilities.total, 3);
@@ -846,18 +736,10 @@ mod tests {
         let persona = AgentPersona::default();
         let model_config = ModelConfig::default();
 
-        pool.spawn_agent(
-            AgentTier::Orchestrator,
-            persona.clone(),
-            model_config.clone(),
-        )
-        .unwrap();
-        pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone())
-            .unwrap();
-        pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone())
-            .unwrap();
-        pool.spawn_agent(AgentTier::Utility, persona, model_config)
-            .unwrap();
+        pool.spawn_agent(AgentTier::Orchestrator, persona.clone(), model_config.clone()).unwrap();
+        pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone()).unwrap();
+        pool.spawn_agent(AgentTier::Worker, persona.clone(), model_config.clone()).unwrap();
+        pool.spawn_agent(AgentTier::Utility, persona, model_config).unwrap();
 
         let stats = pool.stats();
         assert_eq!(stats.orchestrators.total, 1);
@@ -912,10 +794,7 @@ mod tests {
             ..Default::default()
         };
         let mut metadata = std::collections::HashMap::new();
-        metadata.insert(
-            "model_override".to_string(),
-            "claude-opus-4-5-20251101".to_string(),
-        );
+        metadata.insert("model_override".to_string(), "claude-opus-4-5-20251101".to_string());
         let task = make_task_for_model(Some(metadata));
 
         let resolved = resolve_model_for_task(tier_model, &task);

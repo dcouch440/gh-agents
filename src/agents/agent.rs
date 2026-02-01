@@ -13,10 +13,7 @@ use crate::types::{AgentPersona, AgentStatus, AgentTier, ModelConfig};
 #[derive(Error, Debug)]
 pub enum AgentError {
     #[error("invalid state transition: cannot {action} while in {current_status:?} state")]
-    InvalidStateTransition {
-        action: String,
-        current_status: AgentStatus,
-    },
+    InvalidStateTransition { action: String, current_status: AgentStatus },
     #[error("agent has no current task")]
     NoCurrentTask,
     #[error("response channel closed")]
@@ -24,10 +21,7 @@ pub enum AgentError {
     #[error("LLM error: {0}")]
     LLMError(String),
     #[error("task {task_id} timed out after {timeout:?}")]
-    TaskTimeout {
-        task_id: uuid::Uuid,
-        timeout: std::time::Duration,
-    },
+    TaskTimeout { task_id: uuid::Uuid, timeout: std::time::Duration },
 }
 
 /// Unique identifier for an agent
@@ -255,10 +249,7 @@ impl Agent {
 
     /// Send a response to the dispatcher
     pub async fn send_response(&self, response: AgentResponse) -> Result<(), AgentError> {
-        self.response_tx
-            .send(response)
-            .await
-            .map_err(|_| AgentError::ResponseChannelClosed)
+        self.response_tx.send(response).await.map_err(|_| AgentError::ResponseChannelClosed)
     }
 
     /// Get a clone of the response sender (for spawned tasks)
@@ -297,10 +288,7 @@ mod tests {
 
     #[async_trait]
     impl LLMProvider for MockLLMProvider {
-        async fn send_message(
-            &self,
-            _request: LLMRequest,
-        ) -> Result<LLMResponse, crate::llm::LLMError> {
+        async fn send_message(&self, _request: LLMRequest) -> Result<LLMResponse, crate::llm::LLMError> {
             Ok(LLMResponse {
                 content: "test response".to_string(),
                 content_blocks: vec![],
@@ -313,13 +301,7 @@ mod tests {
             })
         }
 
-        async fn send_message_stream(
-            &self,
-            _request: LLMRequest,
-        ) -> Result<
-            Pin<Box<dyn Stream<Item = Result<StreamChunk, crate::llm::LLMError>> + Send>>,
-            crate::llm::LLMError,
-        > {
+        async fn send_message_stream(&self, _request: LLMRequest) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, crate::llm::LLMError>> + Send>>, crate::llm::LLMError> {
             unimplemented!("not needed for these tests")
         }
 
@@ -336,14 +318,7 @@ mod tests {
         let provider = Arc::new(MockLLMProvider);
         let (_command_tx, command_rx) = mpsc::channel(32);
         let (response_tx, _response_rx) = mpsc::channel(32);
-        Agent::new(
-            AgentTier::Worker,
-            AgentPersona::default(),
-            ModelConfig::default(),
-            provider,
-            command_rx,
-            response_tx,
-        )
+        Agent::new(AgentTier::Worker, AgentPersona::default(), ModelConfig::default(), provider, command_rx, response_tx)
     }
 
     #[test]

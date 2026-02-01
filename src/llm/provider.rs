@@ -16,10 +16,7 @@ pub trait LLMProvider: Send + Sync {
     async fn send_message(&self, request: LLMRequest) -> LLMResult<LLMResponse>;
 
     /// Send a message and receive streaming response
-    async fn send_message_stream(
-        &self,
-        request: LLMRequest,
-    ) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>>;
+    async fn send_message_stream(&self, request: LLMRequest) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>>;
 
     /// Get the provider name for logging/debugging
     fn provider_name(&self) -> &'static str;
@@ -63,22 +60,13 @@ mod tests {
             })
         }
 
-        async fn send_message_stream(
-            &self,
-            _request: LLMRequest,
-        ) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
+        async fn send_message_stream(&self, _request: LLMRequest) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
             let content = self.response_content.clone();
             let model = self.model.clone();
 
             let stream = futures::stream::iter(vec![
-                Ok(StreamChunk::MessageStart {
-                    model,
-                    input_tokens: 10,
-                }),
-                Ok(StreamChunk::ContentDelta {
-                    text: content,
-                    index: 0,
-                }),
+                Ok(StreamChunk::MessageStart { model, input_tokens: 10 }),
+                Ok(StreamChunk::ContentDelta { text: content, index: 0 }),
                 Ok(StreamChunk::MessageDelta {
                     stop_reason: Some(super::super::types::StopReason::EndTurn),
                     output_tokens: Some(20),
@@ -101,10 +89,7 @@ mod tests {
     #[tokio::test]
     async fn mock_provider_send_message() {
         let provider = MockProvider::new("test-model", "Hello, world!");
-        let request = super::super::types::LLMRequest::new(
-            "test-model",
-            vec![super::super::types::Message::user("Hi")],
-        );
+        let request = super::super::types::LLMRequest::new("test-model", vec![super::super::types::Message::user("Hi")]);
 
         let response = provider.send_message(request).await.unwrap();
         assert_eq!(response.content, "Hello, world!");
@@ -114,10 +99,7 @@ mod tests {
     #[tokio::test]
     async fn mock_provider_stream() {
         let provider = MockProvider::new("test-model", "Streamed content");
-        let request = super::super::types::LLMRequest::new(
-            "test-model",
-            vec![super::super::types::Message::user("Hi")],
-        );
+        let request = super::super::types::LLMRequest::new("test-model", vec![super::super::types::Message::user("Hi")]);
 
         let mut stream = provider.send_message_stream(request).await.unwrap();
         let mut chunks = Vec::new();

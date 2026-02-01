@@ -107,11 +107,7 @@ impl GlobalBackoff {
         let delay = retry_after_ms.max(our_delay);
         self.until = Some(Instant::now() + Duration::from_millis(delay));
         self.current_delay_ms = (our_delay * 2).min(self.max_delay_ms);
-        tracing::warn!(
-            "Global rate limit backoff set for {}ms (server asked {}ms)",
-            delay,
-            retry_after_ms
-        );
+        tracing::warn!("Global rate limit backoff set for {}ms (server asked {}ms)", delay, retry_after_ms);
     }
 
     fn record_success(&mut self) {
@@ -146,9 +142,7 @@ pub struct RateLimitedProvider<P: LLMProvider> {
 impl<P: LLMProvider + 'static> RateLimitedProvider<P> {
     pub fn new(provider: P, config: RateLimitConfig) -> Self {
         let token_bucket = if config.requests_per_minute > 0 {
-            Some(Arc::new(Mutex::new(TokenBucket::new(
-                config.requests_per_minute,
-            ))))
+            Some(Arc::new(Mutex::new(TokenBucket::new(config.requests_per_minute))))
         } else {
             None
         };
@@ -157,10 +151,7 @@ impl<P: LLMProvider + 'static> RateLimitedProvider<P> {
             inner: Arc::new(provider),
             semaphore: Arc::new(Semaphore::new(config.max_concurrent_calls)),
             token_bucket,
-            global_backoff: Arc::new(RwLock::new(GlobalBackoff::new(
-                config.global_backoff_initial_ms,
-                config.global_backoff_max_ms,
-            ))),
+            global_backoff: Arc::new(RwLock::new(GlobalBackoff::new(config.global_backoff_initial_ms, config.global_backoff_max_ms))),
         }
     }
 
@@ -183,10 +174,7 @@ impl<P: LLMProvider + 'static> RateLimitedProvider<P> {
     }
 
     async fn on_rate_limited(&self, retry_after_ms: u64) {
-        self.global_backoff
-            .write()
-            .await
-            .record_rate_limit(retry_after_ms);
+        self.global_backoff.write().await.record_rate_limit(retry_after_ms);
     }
 
     async fn on_success(&self) {
@@ -214,10 +202,7 @@ impl<P: LLMProvider + 'static> LLMProvider for RateLimitedProvider<P> {
         }
     }
 
-    async fn send_message_stream(
-        &self,
-        request: LLMRequest,
-    ) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
+    async fn send_message_stream(&self, request: LLMRequest) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
         self.wait_for_backoff().await;
         let _permit = self.semaphore.acquire().await.expect("semaphore closed");
         self.acquire_rpm_token().await;
@@ -257,10 +242,7 @@ mod tests {
 
     impl MockProvider {
         fn new(call_count: Arc<AtomicU32>, fail_until: u32) -> Self {
-            Self {
-                call_count,
-                fail_until,
-            }
+            Self { call_count, fail_until }
         }
 
         fn always_ok(call_count: Arc<AtomicU32>) -> Self {
@@ -287,17 +269,12 @@ mod tests {
             })
         }
 
-        async fn send_message_stream(
-            &self,
-            _request: LLMRequest,
-        ) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
+        async fn send_message_stream(&self, _request: LLMRequest) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
             let n = self.call_count.fetch_add(1, Ordering::SeqCst);
             if n < self.fail_until {
                 return Err(LLMError::RateLimited { retry_after_ms: 10 });
             }
-            Ok(Box::pin(futures::stream::iter(vec![Ok(
-                StreamChunk::MessageStop,
-            )])))
+            Ok(Box::pin(futures::stream::iter(vec![Ok(StreamChunk::MessageStop)])))
         }
 
         fn provider_name(&self) -> &'static str {
@@ -349,10 +326,7 @@ mod tests {
                     },
                 })
             }
-            async fn send_message_stream(
-                &self,
-                _req: LLMRequest,
-            ) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
+            async fn send_message_stream(&self, _req: LLMRequest) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
                 Ok(Box::pin(futures::stream::empty()))
             }
             fn provider_name(&self) -> &'static str {
@@ -455,8 +429,7 @@ mod tests {
     #[tokio::test]
     async fn test_streaming_respects_rate_limit() {
         let count = Arc::new(AtomicU32::new(0));
-        let provider =
-            RateLimitedProvider::new(MockProvider::new(count.clone(), 1), test_config(10, 0));
+        let provider = RateLimitedProvider::new(MockProvider::new(count.clone(), 1), test_config(10, 0));
 
         // First stream call triggers 429
         let result = provider.send_message_stream(dummy_request()).await;
@@ -475,10 +448,7 @@ mod tests {
             async fn send_message(&self, _req: LLMRequest) -> LLMResult<LLMResponse> {
                 Err(LLMError::AuthError("bad key".into()))
             }
-            async fn send_message_stream(
-                &self,
-                _req: LLMRequest,
-            ) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
+            async fn send_message_stream(&self, _req: LLMRequest) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
                 Err(LLMError::AuthError("bad key".into()))
             }
             fn provider_name(&self) -> &'static str {

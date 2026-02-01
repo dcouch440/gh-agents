@@ -12,10 +12,7 @@ pub enum AuthError {
     RequestFailed(#[from] reqwest::Error),
 
     #[error("device flow error: {error} - {error_description}")]
-    DeviceFlowError {
-        error: String,
-        error_description: String,
-    },
+    DeviceFlowError { error: String, error_description: String },
 
     #[error("authorization timed out - user did not complete flow")]
     Timeout,
@@ -111,10 +108,7 @@ impl GitHubAuth {
             .client
             .post("https://github.com/login/device/code")
             .header("Accept", "application/json")
-            .form(&[
-                ("client_id", &self.client_id),
-                ("scope", &SCOPES.to_string()),
-            ])
+            .form(&[("client_id", &self.client_id), ("scope", &SCOPES.to_string())])
             .send()
             .await?;
 
@@ -139,10 +133,7 @@ impl GitHubAuth {
     }
 
     /// Step 2: Poll for access token until user completes auth
-    pub async fn poll_for_token(
-        &self,
-        device_code: &DeviceCodeResponse,
-    ) -> Result<String, AuthError> {
+    pub async fn poll_for_token(&self, device_code: &DeviceCodeResponse) -> Result<String, AuthError> {
         let mut interval = Duration::from_secs(device_code.interval);
         let deadline = std::time::Instant::now() + Duration::from_secs(device_code.expires_in);
 
@@ -163,10 +154,7 @@ impl GitHubAuth {
                 .form(&[
                     ("client_id", &self.client_id),
                     ("device_code", &device_code.device_code),
-                    (
-                        "grant_type",
-                        &"urn:ietf:params:oauth:grant-type:device_code".to_string(),
-                    ),
+                    ("grant_type", &"urn:ietf:params:oauth:grant-type:device_code".to_string()),
                 ])
                 .send()
                 .await?;
@@ -178,10 +166,7 @@ impl GitHubAuth {
                     tracing::info!("Successfully authenticated with GitHub");
                     return Ok(access_token);
                 }
-                TokenResponse::Error {
-                    error,
-                    error_description,
-                } => match error.as_str() {
+                TokenResponse::Error { error, error_description } => match error.as_str() {
                     "authorization_pending" => {
                         // User hasn't completed auth yet, keep polling
                         tracing::debug!("Authorization pending, continuing to poll...");
@@ -238,21 +223,13 @@ impl GitHubAuth {
 
         // Set the credential helper for github.com only
         let output = Command::new("git")
-            .args([
-                "config",
-                "--global",
-                "credential.https://github.com.helper",
-                &helper_command,
-            ])
+            .args(["config", "--global", "credential.https://github.com.helper", &helper_command])
             .output()
             .map_err(|e| AuthError::StorageError(e.to_string()))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(AuthError::StorageError(format!(
-                "Failed to configure git credentials: {}",
-                stderr
-            )));
+            return Err(AuthError::StorageError(format!("Failed to configure git credentials: {}", stderr)));
         }
 
         tracing::info!("Configured git credentials for github.com");
@@ -261,14 +238,7 @@ impl GitHubAuth {
 
     /// Remove git credential configuration
     pub fn remove_git_credentials() -> Result<(), AuthError> {
-        let _ = Command::new("git")
-            .args([
-                "config",
-                "--global",
-                "--unset",
-                "credential.https://github.com.helper",
-            ])
-            .output();
+        let _ = Command::new("git").args(["config", "--global", "--unset", "credential.https://github.com.helper"]).output();
 
         tracing::info!("Removed git credentials for github.com");
         Ok(())
@@ -369,8 +339,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let auth =
-            GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
+        let auth = GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
 
         let user = auth.verify_token("fake-token").await.unwrap();
         assert_eq!(user.login, "testuser");
@@ -392,14 +361,10 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let auth =
-            GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
+        let auth = GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
 
         let err = auth.verify_token("bad-token").await.unwrap_err();
-        assert!(
-            matches!(err, AuthError::TokenExpired),
-            "Expected TokenExpired, got: {err:?}"
-        );
+        assert!(matches!(err, AuthError::TokenExpired), "Expected TokenExpired, got: {err:?}");
     }
 
     #[tokio::test]
@@ -415,15 +380,11 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let auth =
-            GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
+        let auth = GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
 
         let err = auth.verify_token("fake-token").await.unwrap_err();
         match err {
-            AuthError::DeviceFlowError {
-                error,
-                error_description,
-            } => {
+            AuthError::DeviceFlowError { error, error_description } => {
                 assert_eq!(error, "verification_failed");
                 assert_eq!(error_description, "internal error");
             }
@@ -440,18 +401,14 @@ mod tests {
 
     #[test]
     fn with_api_base_url_overrides_default() {
-        let auth = GitHubAuth::with_client_id("id".to_string())
-            .with_api_base_url("http://localhost:9999".to_string());
+        let auth = GitHubAuth::with_client_id("id".to_string()).with_api_base_url("http://localhost:9999".to_string());
         assert_eq!(auth.api_base_url, "http://localhost:9999");
     }
 
     #[test]
     fn auth_error_display_messages() {
         let err = AuthError::Timeout;
-        assert_eq!(
-            err.to_string(),
-            "authorization timed out - user did not complete flow"
-        );
+        assert_eq!(err.to_string(), "authorization timed out - user did not complete flow");
 
         let err = AuthError::AccessDenied;
         assert_eq!(err.to_string(), "authorization denied by user");
@@ -463,19 +420,13 @@ mod tests {
         assert_eq!(err.to_string(), "failed to store credentials: disk full");
 
         let err = AuthError::NotAuthenticated;
-        assert_eq!(
-            err.to_string(),
-            "no credentials found - run 'nexor auth login' first"
-        );
+        assert_eq!(err.to_string(), "no credentials found - run 'nexor auth login' first");
 
         let err = AuthError::DeviceFlowError {
             error: "bad_code".to_string(),
             error_description: "invalid device code".to_string(),
         };
-        assert_eq!(
-            err.to_string(),
-            "device flow error: bad_code - invalid device code"
-        );
+        assert_eq!(err.to_string(), "device flow error: bad_code - invalid device code");
     }
 
     #[test]
@@ -510,8 +461,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let auth =
-            GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
+        let auth = GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
 
         let user = auth.verify_token("token").await.unwrap();
         assert_eq!(user.login, "minimaluser");
@@ -533,8 +483,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let auth =
-            GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
+        let auth = GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
 
         let err = auth.verify_token("token").await;
         assert!(err.is_err());
@@ -560,8 +509,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let auth =
-            GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
+        let auth = GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
 
         let user = auth.verify_token("my-secret-token").await.unwrap();
         assert_eq!(user.login, "headeruser");
@@ -584,10 +532,7 @@ mod tests {
         let json = r#"{"error":"authorization_pending","error_description":"waiting"}"#;
         let resp: TokenResponse = serde_json::from_str(json).unwrap();
         match resp {
-            TokenResponse::Error {
-                error,
-                error_description,
-            } => {
+            TokenResponse::Error { error, error_description } => {
                 assert_eq!(error, "authorization_pending");
                 assert_eq!(error_description, Some("waiting".to_string()));
             }
@@ -600,10 +545,7 @@ mod tests {
         let json = r#"{"error":"access_denied"}"#;
         let resp: TokenResponse = serde_json::from_str(json).unwrap();
         match resp {
-            TokenResponse::Error {
-                error,
-                error_description,
-            } => {
+            TokenResponse::Error { error, error_description } => {
                 assert_eq!(error, "access_denied");
                 assert!(error_description.is_none());
             }
@@ -676,15 +618,11 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let auth =
-            GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
+        let auth = GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
 
         let err = auth.verify_token("token").await.unwrap_err();
         match err {
-            AuthError::DeviceFlowError {
-                error,
-                error_description,
-            } => {
+            AuthError::DeviceFlowError { error, error_description } => {
                 assert_eq!(error, "verification_failed");
                 assert_eq!(error_description, "forbidden");
             }
@@ -711,8 +649,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let auth =
-            GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
+        let auth = GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
 
         let user = auth.verify_token("tok").await.unwrap();
         assert_eq!(user.login, "uauser");
@@ -734,11 +671,7 @@ mod tests {
         let json = r#"{"access_token":"gho_xyz","token_type":"bearer","scope":"repo read:org"}"#;
         let resp: TokenResponse = serde_json::from_str(json).unwrap();
         match resp {
-            TokenResponse::Success {
-                access_token,
-                token_type,
-                scope,
-            } => {
+            TokenResponse::Success { access_token, token_type, scope } => {
                 assert_eq!(access_token, "gho_xyz");
                 assert_eq!(token_type, "bearer");
                 assert_eq!(scope, "repo read:org");
@@ -752,10 +685,7 @@ mod tests {
         let json = r#"{"error":"slow_down","error_description":""}"#;
         let resp: TokenResponse = serde_json::from_str(json).unwrap();
         match resp {
-            TokenResponse::Error {
-                error,
-                error_description,
-            } => {
+            TokenResponse::Error { error, error_description } => {
                 assert_eq!(error, "slow_down");
                 assert_eq!(error_description, Some("".to_string()));
             }

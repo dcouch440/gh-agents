@@ -27,12 +27,7 @@ pub enum RoleCategory {
 impl RoleCategory {
     /// Get all categories
     pub fn all() -> &'static [RoleCategory] {
-        &[
-            RoleCategory::Analysis,
-            RoleCategory::Planning,
-            RoleCategory::Implementation,
-            RoleCategory::Communication,
-        ]
+        &[RoleCategory::Analysis, RoleCategory::Planning, RoleCategory::Implementation, RoleCategory::Communication]
     }
 
     /// Display name for UI
@@ -261,11 +256,7 @@ impl RoleLibrary {
             description: "Decomposes work into actionable tickets".to_string(),
             system_prompt: include_str!("config/orchestrator.md").to_string(),
             style: CommunicationStyle::Formal,
-            required_reading: vec![
-                "PRD.md".to_string(),
-                "ROADMAP.md".to_string(),
-                "PROGRESS.md".to_string(),
-            ],
+            required_reading: vec!["PRD.md".to_string(), "ROADMAP.md".to_string(), "PROGRESS.md".to_string()],
             can_delegate_to: vec![RoleId::new("worker"), RoleId::new("utility")],
             output_format: OutputFormat::Plan,
             max_delegation_depth: 2,
@@ -296,10 +287,7 @@ impl RoleLibrary {
             description: "Writes code to spec".to_string(),
             system_prompt: include_str!("config/worker.md").to_string(),
             style: CommunicationStyle::Technical,
-            required_reading: vec![
-                "decomp/{ticket}.md".to_string(),
-                "CONVENTIONS.md".to_string(),
-            ],
+            required_reading: vec!["decomp/{ticket}.md".to_string(), "CONVENTIONS.md".to_string()],
             can_delegate_to: vec![RoleId::new("utility")],
             output_format: OutputFormat::CodeAndReport,
             max_delegation_depth: 1,
@@ -382,10 +370,7 @@ impl RoleLibrary {
 
     /// Get roles grouped by category (for UI)
     pub fn grouped_by_category(&self) -> Vec<(RoleCategory, Vec<&Role>)> {
-        RoleCategory::all()
-            .iter()
-            .map(|cat| (*cat, self.list_by_category(*cat)))
-            .collect()
+        RoleCategory::all().iter().map(|cat| (*cat, self.list_by_category(*cat))).collect()
     }
 
     /// Add a custom role created by user
@@ -435,11 +420,7 @@ impl RequiredReadingLoader {
     }
 
     /// Load all required reading files for a role
-    pub async fn load_for_role(
-        &self,
-        role: &Role,
-        vars: &HashMap<String, String>,
-    ) -> Vec<LoadedFile> {
+    pub async fn load_for_role(&self, role: &Role, vars: &HashMap<String, String>) -> Vec<LoadedFile> {
         let paths = role.resolve_required_reading(vars);
         let mut loaded = Vec::new();
 
@@ -500,11 +481,7 @@ impl RoleManager {
     }
 
     /// Build complete context for a role
-    pub async fn build_context_for_role(
-        &self,
-        role: &Role,
-        vars: &HashMap<String, String>,
-    ) -> RoleContext {
+    pub async fn build_context_for_role(&self, role: &Role, vars: &HashMap<String, String>) -> RoleContext {
         let files = self.loader.load_for_role(role, vars).await;
 
         RoleContext {
@@ -538,10 +515,7 @@ impl RoleContext {
         if !self.loaded_files.is_empty() {
             prompt.push_str("\n\n---\n\n## Required Reading\n\n");
             for file in &self.loaded_files {
-                prompt.push_str(&format!(
-                    "### {}\n\n```\n{}\n```\n\n",
-                    file.path, file.content
-                ));
+                prompt.push_str(&format!("### {}\n\n```\n{}\n```\n\n", file.path, file.content));
             }
         }
 
@@ -568,10 +542,7 @@ mod tests {
             description: "Implements tickets".to_string(),
             system_prompt: "You are a worker.".to_string(),
             style: CommunicationStyle::Technical,
-            required_reading: vec![
-                "decomp/{ticket}.md".to_string(),
-                "CONVENTIONS.md".to_string(),
-            ],
+            required_reading: vec!["decomp/{ticket}.md".to_string(), "CONVENTIONS.md".to_string()],
             can_delegate_to: vec![RoleId::new("utility")],
             output_format: OutputFormat::CodeAndReport,
             max_delegation_depth: 1,
@@ -679,9 +650,7 @@ mod tests {
 
         // Create a test file
         let conventions_path = dir.path().join("CONVENTIONS.md");
-        fs::write(&conventions_path, "# Conventions\nUse snake_case")
-            .await
-            .unwrap();
+        fs::write(&conventions_path, "# Conventions\nUse snake_case").await.unwrap();
 
         let loader = RequiredReadingLoader::new(dir.path().to_path_buf());
 
@@ -743,10 +712,7 @@ mod tests {
     fn role_category_display_names() {
         assert_eq!(RoleCategory::Analysis.display_name(), "Analysis");
         assert_eq!(RoleCategory::Planning.display_name(), "Planning");
-        assert_eq!(
-            RoleCategory::Implementation.display_name(),
-            "Implementation"
-        );
+        assert_eq!(RoleCategory::Implementation.display_name(), "Implementation");
         assert_eq!(RoleCategory::Communication.display_name(), "Communication");
     }
 
@@ -800,10 +766,7 @@ mod tests {
             description: "Test".to_string(),
             system_prompt: "Test".to_string(),
             style: CommunicationStyle::Technical,
-            required_reading: vec![
-                "decomp/{milestone}/{ticket}.md".to_string(),
-                "{domain}/README.md".to_string(),
-            ],
+            required_reading: vec!["decomp/{milestone}/{ticket}.md".to_string(), "{domain}/README.md".to_string()],
             can_delegate_to: vec![],
             output_format: OutputFormat::Result,
             max_delegation_depth: 0,
@@ -921,15 +884,9 @@ mod tests {
     #[tokio::test]
     async fn role_manager_default_role_for_tier() {
         let manager = RoleManager::new(PathBuf::from("."));
-        assert!(manager
-            .default_role_for_tier(crate::types::AgentTier::Orchestrator)
-            .is_some());
-        assert!(manager
-            .default_role_for_tier(crate::types::AgentTier::Worker)
-            .is_some());
-        assert!(manager
-            .default_role_for_tier(crate::types::AgentTier::Utility)
-            .is_some());
+        assert!(manager.default_role_for_tier(crate::types::AgentTier::Orchestrator).is_some());
+        assert!(manager.default_role_for_tier(crate::types::AgentTier::Worker).is_some());
+        assert!(manager.default_role_for_tier(crate::types::AgentTier::Utility).is_some());
     }
 
     #[tokio::test]
@@ -945,9 +902,7 @@ mod tests {
 
         let dir = tempdir().unwrap();
         let conv_path = dir.path().join("CONVENTIONS.md");
-        fs::write(&conv_path, "# Conventions\nTest content")
-            .await
-            .unwrap();
+        fs::write(&conv_path, "# Conventions\nTest content").await.unwrap();
 
         let manager = RoleManager::new(dir.path().to_path_buf());
         let role = Role {
@@ -987,10 +942,7 @@ mod tests {
             is_custom: false,
         };
 
-        let context = RoleContext {
-            role,
-            loaded_files: vec![],
-        };
+        let context = RoleContext { role, loaded_files: vec![] };
 
         let prompt = context.build_system_prompt();
         assert_eq!(prompt, "Base prompt.");

@@ -58,32 +58,19 @@ impl Default for RouterConfig {
                 // Utility tier: simple tasks
                 RoutingRule {
                     name: "formatting_tasks".to_string(),
-                    matcher: RuleMatcher::TitleContains(vec![
-                        "format".to_string(),
-                        "lint".to_string(),
-                        "style".to_string(),
-                    ]),
+                    matcher: RuleMatcher::TitleContains(vec!["format".to_string(), "lint".to_string(), "style".to_string()]),
                     target_tier: AgentTier::Utility,
                     priority: 80,
                 },
                 RoutingRule {
                     name: "documentation_tasks".to_string(),
-                    matcher: RuleMatcher::TitleContains(vec![
-                        "docs".to_string(),
-                        "documentation".to_string(),
-                        "readme".to_string(),
-                        "comment".to_string(),
-                    ]),
+                    matcher: RuleMatcher::TitleContains(vec!["docs".to_string(), "documentation".to_string(), "readme".to_string(), "comment".to_string()]),
                     target_tier: AgentTier::Utility,
                     priority: 80,
                 },
                 RoutingRule {
                     name: "boilerplate_tasks".to_string(),
-                    matcher: RuleMatcher::TitleContains(vec![
-                        "boilerplate".to_string(),
-                        "scaffold".to_string(),
-                        "template".to_string(),
-                    ]),
+                    matcher: RuleMatcher::TitleContains(vec!["boilerplate".to_string(), "scaffold".to_string(), "template".to_string()]),
                     target_tier: AgentTier::Utility,
                     priority: 80,
                 },
@@ -109,19 +96,13 @@ impl Default for RouterConfig {
                 // Difficulty-based routing
                 RoutingRule {
                     name: "simple_difficulty".to_string(),
-                    matcher: RuleMatcher::MetadataEquals(
-                        "difficulty".to_string(),
-                        "simple".to_string(),
-                    ),
+                    matcher: RuleMatcher::MetadataEquals("difficulty".to_string(), "simple".to_string()),
                     target_tier: AgentTier::Utility,
                     priority: 75,
                 },
                 RoutingRule {
                     name: "complex_difficulty".to_string(),
-                    matcher: RuleMatcher::MetadataEquals(
-                        "difficulty".to_string(),
-                        "complex".to_string(),
-                    ),
+                    matcher: RuleMatcher::MetadataEquals("difficulty".to_string(), "complex".to_string()),
                     target_tier: AgentTier::Orchestrator,
                     priority: 65,
                 },
@@ -195,10 +176,7 @@ impl Router {
 
             RuleMatcher::TitleContains(keywords) => {
                 let title_lower = task.title.to_lowercase();
-                if keywords
-                    .iter()
-                    .any(|k| title_lower.contains(&k.to_lowercase()))
-                {
+                if keywords.iter().any(|k| title_lower.contains(&k.to_lowercase())) {
                     Some(rule.target_tier)
                 } else {
                     None
@@ -253,10 +231,7 @@ impl Router {
     }
 
     fn has_metadata(&self, task: &Task, key: &str) -> bool {
-        task.metadata
-            .as_ref()
-            .map(|m| m.contains_key(key))
-            .unwrap_or(false)
+        task.metadata.as_ref().map(|m| m.contains_key(key)).unwrap_or(false)
     }
 
     fn get_metadata(&self, task: &Task, key: &str) -> Option<String> {
@@ -291,13 +266,9 @@ impl Router {
         let file_count = task.context_files.len();
         let desc_len = task.description.len();
 
-        let inferred = if file_count > crate::constants::COMPLEXITY_HIGH_FILES
-            || desc_len > crate::constants::COMPLEXITY_HIGH_DESC_LEN
-        {
+        let inferred = if file_count > crate::constants::COMPLEXITY_HIGH_FILES || desc_len > crate::constants::COMPLEXITY_HIGH_DESC_LEN {
             3 // high
-        } else if file_count > crate::constants::COMPLEXITY_MEDIUM_FILES
-            || desc_len > crate::constants::COMPLEXITY_MEDIUM_DESC_LEN
-        {
+        } else if file_count > crate::constants::COMPLEXITY_MEDIUM_FILES || desc_len > crate::constants::COMPLEXITY_MEDIUM_DESC_LEN {
             2 // medium
         } else {
             1 // low
@@ -366,9 +337,7 @@ mod tests {
             assigned_agent: None,
             status: TaskStatus::Pending,
             priority: Priority::Normal,
-            context_files: (0..file_count)
-                .map(|i| format!("file{}.rs", i).into())
-                .collect(),
+            context_files: (0..file_count).map(|i| format!("file{}.rs", i).into()).collect(),
             metadata: None,
             depends_on: vec![],
             retry_count: 0,
@@ -594,18 +563,9 @@ mod tests {
     fn default_config_has_all_tiers() {
         let config = RouterConfig::default();
 
-        let has_orchestrator = config
-            .rules
-            .iter()
-            .any(|r| r.target_tier == AgentTier::Orchestrator);
-        let has_worker = config
-            .rules
-            .iter()
-            .any(|r| r.target_tier == AgentTier::Worker);
-        let has_utility = config
-            .rules
-            .iter()
-            .any(|r| r.target_tier == AgentTier::Utility);
+        let has_orchestrator = config.rules.iter().any(|r| r.target_tier == AgentTier::Orchestrator);
+        let has_worker = config.rules.iter().any(|r| r.target_tier == AgentTier::Worker);
+        let has_utility = config.rules.iter().any(|r| r.target_tier == AgentTier::Utility);
 
         assert!(has_orchestrator, "Should have orchestrator rules");
         assert!(has_worker, "Should have worker rules");
@@ -617,16 +577,8 @@ mod tests {
         let config = RouterConfig::default();
 
         // The explicit_override rule should have highest priority
-        let explicit_rule = config
-            .rules
-            .iter()
-            .find(|r| r.name == "explicit_override")
-            .unwrap();
-        let default_rule = config
-            .rules
-            .iter()
-            .find(|r| r.name == "default_to_worker")
-            .unwrap();
+        let explicit_rule = config.rules.iter().find(|r| r.name == "explicit_override").unwrap();
+        let default_rule = config.rules.iter().find(|r| r.name == "default_to_worker").unwrap();
 
         assert!(explicit_rule.priority > default_rule.priority);
     }

@@ -47,10 +47,7 @@ impl CredentialsStore {
     }
 
     fn default_path() -> PathBuf {
-        dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("nexor")
-            .join("credentials.json")
+        dirs::config_dir().unwrap_or_else(|| PathBuf::from(".")).join("nexor").join("credentials.json")
     }
 
     /// Save credentials to disk
@@ -61,8 +58,7 @@ impl CredentialsStore {
         }
 
         // Serialize
-        let json = serde_json::to_string_pretty(credentials)
-            .map_err(|e| CredentialsError::WriteError(e.to_string()))?;
+        let json = serde_json::to_string_pretty(credentials).map_err(|e| CredentialsError::WriteError(e.to_string()))?;
 
         // Write file
         fs::write(&self.path, &json).map_err(|e| CredentialsError::WriteError(e.to_string()))?;
@@ -71,12 +67,9 @@ impl CredentialsStore {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(&self.path)
-                .map_err(|e| CredentialsError::WriteError(e.to_string()))?
-                .permissions();
+            let mut perms = fs::metadata(&self.path).map_err(|e| CredentialsError::WriteError(e.to_string()))?.permissions();
             perms.set_mode(0o600); // Owner read/write only
-            fs::set_permissions(&self.path, perms)
-                .map_err(|e| CredentialsError::WriteError(e.to_string()))?;
+            fs::set_permissions(&self.path, perms).map_err(|e| CredentialsError::WriteError(e.to_string()))?;
         }
 
         tracing::debug!(path = %self.path.display(), "Credentials saved");
@@ -89,11 +82,9 @@ impl CredentialsStore {
             return Err(CredentialsError::NotFound);
         }
 
-        let json = fs::read_to_string(&self.path)
-            .map_err(|e| CredentialsError::ReadError(e.to_string()))?;
+        let json = fs::read_to_string(&self.path).map_err(|e| CredentialsError::ReadError(e.to_string()))?;
 
-        let credentials: StoredCredentials =
-            serde_json::from_str(&json).map_err(|e| CredentialsError::ParseError(e.to_string()))?;
+        let credentials: StoredCredentials = serde_json::from_str(&json).map_err(|e| CredentialsError::ParseError(e.to_string()))?;
 
         Ok(credentials)
     }

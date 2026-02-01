@@ -4,9 +4,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 
-use crate::types::{
-    DataModelSketch, MilestoneSpec, PRDDocument, PRDId, PRDStatus, TechnicalDecision,
-};
+use crate::types::{DataModelSketch, MilestoneSpec, PRDDocument, PRDId, PRDStatus, TechnicalDecision};
 
 /// Save a PRD to the database (insert or update on conflict)
 pub async fn save_prd(pool: &PgPool, prd: &PRDDocument) -> Result<()> {
@@ -109,14 +107,10 @@ impl PrdRow {
     fn into_prd(self) -> PRDDocument {
         let status: PRDStatus = self.status.parse().unwrap_or(PRDStatus::Draft);
 
-        let success_criteria: Vec<String> =
-            serde_json::from_value(self.success_criteria).unwrap_or_default();
-        let technical_decisions: Vec<TechnicalDecision> =
-            serde_json::from_value(self.technical_decisions).unwrap_or_default();
-        let data_models: Vec<DataModelSketch> =
-            serde_json::from_value(self.data_models).unwrap_or_default();
-        let milestones: Vec<MilestoneSpec> =
-            serde_json::from_value(self.milestones).unwrap_or_default();
+        let success_criteria: Vec<String> = serde_json::from_value(self.success_criteria).unwrap_or_default();
+        let technical_decisions: Vec<TechnicalDecision> = serde_json::from_value(self.technical_decisions).unwrap_or_default();
+        let data_models: Vec<DataModelSketch> = serde_json::from_value(self.data_models).unwrap_or_default();
+        let milestones: Vec<MilestoneSpec> = serde_json::from_value(self.milestones).unwrap_or_default();
 
         PRDDocument {
             id: PRDId(self.id),
@@ -196,15 +190,11 @@ mod tests {
         prd2.status = PRDStatus::Approved;
         save_prd(&db.pool, &prd2).await.unwrap();
 
-        let drafts = list_prds_by_status(&db.pool, PRDStatus::Draft)
-            .await
-            .unwrap();
+        let drafts = list_prds_by_status(&db.pool, PRDStatus::Draft).await.unwrap();
         assert_eq!(drafts.len(), 1);
         assert_eq!(drafts[0].title, "Draft PRD");
 
-        let approved = list_prds_by_status(&db.pool, PRDStatus::Approved)
-            .await
-            .unwrap();
+        let approved = list_prds_by_status(&db.pool, PRDStatus::Approved).await.unwrap();
         assert_eq!(approved.len(), 1);
         assert_eq!(approved[0].title, "Approved PRD");
 

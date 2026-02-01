@@ -11,14 +11,12 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 
 use crate::agents::{
-    AgentCommand, AgentResponse, ClusterId, CommunicationStyle, OutputFormat, PipelineId,
-    RoleContext, RoleId, ScheduleId, TaskAssignment, TaskConstraints, TaskContext, TriggerEvent,
+    AgentCommand, AgentResponse, ClusterId, CommunicationStyle, OutputFormat, PipelineId, RoleContext, RoleId, ScheduleId, TaskAssignment, TaskConstraints, TaskContext,
+    TriggerEvent,
 };
 use crate::db::traits::DocumentRepo;
 use crate::db::{AgentRow, ClusterRow, PipelineRow, PipelineStageRow, ScheduleRow, TriggerRow};
-use crate::llm::{
-    AnthropicClient, AnthropicConfig, LLMProvider, LLMRequest, Message as LlmMessage, Tool,
-};
+use crate::llm::{AnthropicClient, AnthropicConfig, LLMProvider, LLMRequest, Message as LlmMessage, Tool};
 use crate::types::{AgentPersona, AgentTier, ModelConfig, UserId};
 
 use super::state::AppState;
@@ -31,9 +29,7 @@ pub fn filtered_tools(allowed: &[String]) -> Vec<Tool> {
     if allowed.is_empty() {
         return all;
     }
-    all.into_iter()
-        .filter(|t| allowed.iter().any(|a| a == &t.name))
-        .collect()
+    all.into_iter().filter(|t| allowed.iter().any(|a| a == &t.name)).collect()
 }
 
 /// Return all agent management tool definitions for the Anthropic API.
@@ -846,8 +842,7 @@ async fn execute_create_agents(input: &Value, state: &AppState, user_id: UserId)
 
         let model_config = ModelConfig::default();
 
-        match pool.spawn_agent_with_dispatcher(tier, persona, model_config.clone(), &mut dispatcher)
-        {
+        match pool.spawn_agent_with_dispatcher(tier, persona, model_config.clone(), &mut dispatcher) {
             Ok(agent_id) => {
                 if let Err(e) = state
                     .repo
@@ -914,40 +909,36 @@ async fn execute_assign_task(input: &Value, state: &AppState) -> Value {
     let role_id = RoleId::new(role_str);
 
     // Build role-aware context if RoleManager is available
-    let (system_prompt, style, output_format, required_reading) =
-        if let Some(rm) = &state.role_manager {
-            if let Some(role) = rm.get_role(&role_id) {
-                let vars = HashMap::new();
-                let ctx = rm.build_context_for_role(role, &vars).await;
-                let prompt = ctx.build_system_prompt();
-                let s = role.style;
-                let fmt = role.output_format.clone();
-                let files = ctx
-                    .loaded_files
-                    .into_iter()
-                    .map(|f| crate::agents::FileContent {
-                        path: f.path,
-                        content: f.content,
-                    })
-                    .collect();
-                (prompt, s, fmt, files)
-            } else {
-                // Unknown role, fall back to defaults
-                (
-                    format!("You are a {} working on: {}", role_str, title),
-                    CommunicationStyle::Technical,
-                    OutputFormat::CodeAndReport,
-                    vec![],
-                )
-            }
+    let (system_prompt, style, output_format, required_reading) = if let Some(rm) = &state.role_manager {
+        if let Some(role) = rm.get_role(&role_id) {
+            let vars = HashMap::new();
+            let ctx = rm.build_context_for_role(role, &vars).await;
+            let prompt = ctx.build_system_prompt();
+            let s = role.style;
+            let fmt = role.output_format.clone();
+            let files = ctx
+                .loaded_files
+                .into_iter()
+                .map(|f| crate::agents::FileContent { path: f.path, content: f.content })
+                .collect();
+            (prompt, s, fmt, files)
         } else {
+            // Unknown role, fall back to defaults
             (
                 format!("You are a {} working on: {}", role_str, title),
                 CommunicationStyle::Technical,
                 OutputFormat::CodeAndReport,
                 vec![],
             )
-        };
+        }
+    } else {
+        (
+            format!("You are a {} working on: {}", role_str, title),
+            CommunicationStyle::Technical,
+            OutputFormat::CodeAndReport,
+            vec![],
+        )
+    };
 
     // Resolve @doc:ref-tag references in the description
     let description = {
@@ -962,10 +953,7 @@ async fn execute_assign_task(input: &Value, state: &AppState) -> Value {
                         doc_sections.push(format!("### @doc:{}\n{}", ref_tag, row.summary));
                     }
                     _ => {
-                        tracing::debug!(
-                            "Document ref @doc:{} not found or has no summary",
-                            ref_tag
-                        );
+                        tracing::debug!("Document ref @doc:{} not found or has no summary", ref_tag);
                     }
                 }
             }
@@ -982,31 +970,23 @@ async fn execute_assign_task(input: &Value, state: &AppState) -> Value {
 
     // Look up cluster context for this agent
     let cluster_mgr = state.cluster_manager.read().await;
-    let (cluster_conventions, cluster_files) =
-        if let Some(cluster) = cluster_mgr.get_agent_cluster(&agent_id) {
-            (
-                cluster.shared_context.conventions.clone(),
-                cluster.shared_context.shared_files.clone(),
-            )
-        } else {
-            (String::new(), vec![])
-        };
+    let (cluster_conventions, cluster_files) = if let Some(cluster) = cluster_mgr.get_agent_cluster(&agent_id) {
+        (cluster.shared_context.conventions.clone(), cluster.shared_context.shared_files.clone())
+    } else {
+        (String::new(), vec![])
+    };
     drop(cluster_mgr);
 
     // Build execution context from project root
     let project_root = std::env::current_dir().unwrap_or_default();
-    let execution_context = Some(crate::execution::ExecutionContext::new(
-        project_root.clone(),
-    ));
+    let execution_context = Some(crate::execution::ExecutionContext::new(project_root.clone()));
 
     let conventions = cluster_conventions;
 
     // Parse allowed_tools if provided
-    let allowed_tools = input["allowed_tools"].as_array().map(|arr| {
-        arr.iter()
-            .filter_map(|v| v.as_str().map(String::from))
-            .collect()
-    });
+    let allowed_tools = input["allowed_tools"]
+        .as_array()
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
 
     let constraints = TaskConstraints {
         allowed_tools,
@@ -1039,10 +1019,7 @@ async fn execute_assign_task(input: &Value, state: &AppState) -> Value {
 
     let task_id = assignment.task_id;
     let dispatcher = dispatcher.lock().await;
-    match dispatcher
-        .send_to_agent(&agent_id, AgentCommand::AssignTask(Box::new(assignment)))
-        .await
-    {
+    match dispatcher.send_to_agent(&agent_id, AgentCommand::AssignTask(Box::new(assignment))).await {
         Ok(()) => json!({
             "status": "assigned",
             "task_id": task_id.to_string(),
@@ -1139,10 +1116,7 @@ async fn execute_respond_to_approval(input: &Value, state: &AppState) -> Value {
     let command = if approved {
         AgentCommand::GrantApproval
     } else {
-        let reason = input["reason"]
-            .as_str()
-            .unwrap_or("Denied by orchestrator")
-            .to_string();
+        let reason = input["reason"].as_str().unwrap_or("Denied by orchestrator").to_string();
         AgentCommand::DenyApproval { reason }
     };
 
@@ -1208,11 +1182,7 @@ async fn execute_add_to_cluster(input: &Value, state: &AppState) -> Value {
     let mut mgr = state.cluster_manager.write().await;
     match mgr.add_agent(ClusterId(cluster_uuid), crate::agents::AgentId(agent_uuid)) {
         Ok(()) => {
-            if let Err(e) = state
-                .repo
-                .add_cluster_member(cluster_uuid, agent_uuid)
-                .await
-            {
+            if let Err(e) = state.repo.add_cluster_member(cluster_uuid, agent_uuid).await {
                 tracing::error!("Failed to persist cluster member: {}", e);
             }
             json!({
@@ -1243,11 +1213,7 @@ async fn execute_remove_from_cluster(input: &Value, state: &AppState) -> Value {
     let mut mgr = state.cluster_manager.write().await;
     match mgr.remove_agent(ClusterId(cluster_uuid), crate::agents::AgentId(agent_uuid)) {
         Ok(()) => {
-            if let Err(e) = state
-                .repo
-                .remove_cluster_member(cluster_uuid, agent_uuid)
-                .await
-            {
+            if let Err(e) = state.repo.remove_cluster_member(cluster_uuid, agent_uuid).await {
                 tracing::error!("Failed to persist cluster member removal: {}", e);
             }
             json!({
@@ -1318,17 +1284,7 @@ async fn execute_create_pipeline(input: &Value, state: &AppState, user_id: UserI
     let id = mgr.create_pipeline(name.to_string());
 
     // Persist to DB
-    if let Err(e) = state
-        .repo
-        .upsert_pipeline(
-            user_id,
-            PipelineRow {
-                id: id.0,
-                name: name.to_string(),
-            },
-        )
-        .await
-    {
+    if let Err(e) = state.repo.upsert_pipeline(user_id, PipelineRow { id: id.0, name: name.to_string() }).await {
         tracing::error!("Failed to persist pipeline: {}", e);
     }
 
@@ -1349,29 +1305,16 @@ async fn execute_add_pipeline_stage(input: &Value, state: &AppState, user_id: Us
     };
 
     // agent_id and cluster_id are both optional, but at least one should be provided
-    let agent_uuid = input["agent_id"]
-        .as_str()
-        .and_then(|s| uuid::Uuid::parse_str(s).ok());
-    let cluster_uuid = input["cluster_id"]
-        .as_str()
-        .and_then(|s| uuid::Uuid::parse_str(s).ok());
+    let agent_uuid = input["agent_id"].as_str().and_then(|s| uuid::Uuid::parse_str(s).ok());
+    let cluster_uuid = input["cluster_id"].as_str().and_then(|s| uuid::Uuid::parse_str(s).ok());
 
     let role = input["role"].as_str().map(String::from);
     let approval_required = input["approval_required"].as_bool().unwrap_or(false);
     let fan_out = input["fan_out"].as_bool().unwrap_or(false);
     let stage_name = input["stage_name"].as_str().unwrap_or("").to_string();
-    let input_definitions = input
-        .get("input_definitions")
-        .cloned()
-        .unwrap_or_else(|| json!([]));
-    let output_description = input["output_description"]
-        .as_str()
-        .unwrap_or("")
-        .to_string();
-    let output_schema = input
-        .get("output_schema")
-        .cloned()
-        .unwrap_or_else(|| json!({"fields": []}));
+    let input_definitions = input.get("input_definitions").cloned().unwrap_or_else(|| json!([]));
+    let output_description = input["output_description"].as_str().unwrap_or("").to_string();
+    let output_schema = input.get("output_schema").cloned().unwrap_or_else(|| json!({"fields": []}));
 
     let mut mgr = state.pipeline_manager.write().await;
     match mgr.add_stage(
@@ -1457,14 +1400,7 @@ async fn execute_start_pipeline(input: &Value, state: &AppState, user_id: UserId
         if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
             for doc in &docs {
                 context_reading.push(crate::agents::FileContent {
-                    path: format!(
-                        "context:{}",
-                        if doc.ref_tag.is_empty() {
-                            &doc.title
-                        } else {
-                            &doc.ref_tag
-                        }
-                    ),
+                    path: format!("context:{}", if doc.ref_tag.is_empty() { &doc.title } else { &doc.ref_tag }),
                     content: doc.content.clone(),
                 });
             }
@@ -1478,14 +1414,7 @@ async fn execute_start_pipeline(input: &Value, state: &AppState, user_id: UserId
                     if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
                         for doc in &docs {
                             context_reading.push(crate::agents::FileContent {
-                                path: format!(
-                                    "context:{}",
-                                    if doc.ref_tag.is_empty() {
-                                        &doc.title
-                                    } else {
-                                        &doc.ref_tag
-                                    }
-                                ),
+                                path: format!("context:{}", if doc.ref_tag.is_empty() { &doc.title } else { &doc.ref_tag }),
                                 content: doc.content.clone(),
                             });
                         }
@@ -1626,13 +1555,7 @@ async fn execute_start_pipeline(input: &Value, state: &AppState, user_id: UserId
     });
 
     let dispatcher = dispatcher.lock().await;
-    match dispatcher
-        .send_to_agent(
-            &first_agent_id,
-            AgentCommand::AssignTask(Box::new(assignment)),
-        )
-        .await
-    {
+    match dispatcher.send_to_agent(&first_agent_id, AgentCommand::AssignTask(Box::new(assignment))).await {
         Ok(()) => json!({
             "status": "started",
             "run_id": run_id.to_string(),
@@ -1952,10 +1875,7 @@ async fn execute_read_file(input: &Value) -> Value {
                     }
 
                     // Large files: summarize with Haiku
-                    let truncated_for_haiku: String = content
-                        .chars()
-                        .take(crate::constants::TRUNCATE_SUMMARIZE_INPUT)
-                        .collect();
+                    let truncated_for_haiku: String = content.chars().take(crate::constants::TRUNCATE_SUMMARIZE_INPUT).collect();
                     let focus_instruction = match focus {
                         Some(f) => format!(
                             "Focus on: {}. Extract the most relevant code sections, function signatures, and logic related to this focus area.",
@@ -1979,10 +1899,7 @@ async fn execute_read_file(input: &Value) -> Value {
                         }),
                         None => {
                             // Haiku failed — fall back to truncated content
-                            let fallback: String = content
-                                .chars()
-                                .take(crate::constants::TRUNCATE_SMALL_FILE)
-                                .collect();
+                            let fallback: String = content.chars().take(crate::constants::TRUNCATE_SMALL_FILE).collect();
                             json!({
                                 "path": path_str,
                                 "content": fallback,
@@ -2005,11 +1922,7 @@ async fn execute_list_files(input: &Value) -> Value {
     let path_str = input["path"].as_str().unwrap_or(".");
 
     let cwd = std::env::current_dir().unwrap_or_default();
-    let dir_path = if path_str.is_empty() || path_str == "." {
-        cwd.clone()
-    } else {
-        cwd.join(path_str)
-    };
+    let dir_path = if path_str.is_empty() || path_str == "." { cwd.clone() } else { cwd.join(path_str) };
 
     match dir_path.canonicalize() {
         Ok(canonical) => {
@@ -2054,16 +1967,10 @@ async fn execute_search_files(input: &Value) -> Value {
         return json!({ "error": "Missing required parameter: pattern" });
     };
     let path_str = input["path"].as_str().unwrap_or(".");
-    let max_results = input["max_results"]
-        .as_u64()
-        .unwrap_or(crate::constants::DEFAULT_SEARCH_RESULTS as u64) as usize;
+    let max_results = input["max_results"].as_u64().unwrap_or(crate::constants::DEFAULT_SEARCH_RESULTS as u64) as usize;
 
     let cwd = std::env::current_dir().unwrap_or_default();
-    let search_dir = if path_str.is_empty() || path_str == "." {
-        cwd.clone()
-    } else {
-        cwd.join(path_str)
-    };
+    let search_dir = if path_str.is_empty() || path_str == "." { cwd.clone() } else { cwd.join(path_str) };
 
     // Validate path
     match search_dir.canonicalize() {
@@ -2158,18 +2065,15 @@ pub async fn haiku_read_file(prompt: &str) -> Option<String> {
     let config = AnthropicConfig::from_env().ok()?;
     let client = AnthropicClient::new(config).ok()?;
 
-    let request = LLMRequest::new(
-        crate::constants::MODEL_HAIKU,
-        vec![LlmMessage::user(prompt.to_string())],
-    )
-    .with_system(
-        "You are a code reader. Given a source file, extract and return the most relevant content. \
+    let request = LLMRequest::new(crate::constants::MODEL_HAIKU, vec![LlmMessage::user(prompt.to_string())])
+        .with_system(
+            "You are a code reader. Given a source file, extract and return the most relevant content. \
          Include function signatures, struct/type definitions, key logic, and imports. \
          Use the original code when possible — quote exact lines for precision. \
          If a focus area is specified, prioritize content related to it. \
-         Be concise but preserve technical accuracy. Do not add commentary."
-    )
-    .with_max_tokens(crate::constants::MAX_TOKENS_FILE_READ);
+         Be concise but preserve technical accuracy. Do not add commentary.",
+        )
+        .with_max_tokens(crate::constants::MAX_TOKENS_FILE_READ);
 
     match client.send_message(request).await {
         Ok(resp) => Some(resp.content),
@@ -2185,16 +2089,10 @@ pub async fn haiku_summarize(content: &str) -> Option<String> {
     let config = AnthropicConfig::from_env().ok()?;
     let client = AnthropicClient::new(config).ok()?;
 
-    let truncated: String = content
-        .chars()
-        .take(crate::constants::TRUNCATE_SUMMARY_INPUT)
-        .collect();
-    let request = LLMRequest::new(
-        crate::constants::MODEL_HAIKU,
-        vec![LlmMessage::user(truncated)],
-    )
-    .with_system("Summarize this document in 2-3 sentences for search indexing. Be concise.")
-    .with_max_tokens(crate::constants::MAX_TOKENS_SUMMARIZE);
+    let truncated: String = content.chars().take(crate::constants::TRUNCATE_SUMMARY_INPUT).collect();
+    let request = LLMRequest::new(crate::constants::MODEL_HAIKU, vec![LlmMessage::user(truncated)])
+        .with_system("Summarize this document in 2-3 sentences for search indexing. Be concise.")
+        .with_max_tokens(crate::constants::MAX_TOKENS_SUMMARIZE);
 
     match client.send_message(request).await {
         Ok(resp) => Some(resp.content),
@@ -2210,16 +2108,10 @@ pub async fn haiku_summarize_title(content: &str) -> Option<String> {
     let config = AnthropicConfig::from_env().ok()?;
     let client = AnthropicClient::new(config).ok()?;
 
-    let truncated: String = content
-        .chars()
-        .take(crate::constants::TRUNCATE_TITLE_INPUT)
-        .collect();
-    let request = LLMRequest::new(
-        crate::constants::MODEL_HAIKU,
-        vec![LlmMessage::user(truncated)],
-    )
-    .with_system("Generate a short title (3-6 words) for this conversation. Return ONLY the title, no quotes, no punctuation at the end.")
-    .with_max_tokens(crate::constants::MAX_TOKENS_TITLE);
+    let truncated: String = content.chars().take(crate::constants::TRUNCATE_TITLE_INPUT).collect();
+    let request = LLMRequest::new(crate::constants::MODEL_HAIKU, vec![LlmMessage::user(truncated)])
+        .with_system("Generate a short title (3-6 words) for this conversation. Return ONLY the title, no quotes, no punctuation at the end.")
+        .with_max_tokens(crate::constants::MAX_TOKENS_TITLE);
 
     match client.send_message(request).await {
         Ok(resp) => {
@@ -2243,10 +2135,7 @@ pub async fn haiku_extract_context(summary: &str, current_message: &str) -> Opti
     let config = AnthropicConfig::from_env().ok()?;
     let client = AnthropicClient::new(config).ok()?;
 
-    let user_text = format!(
-        "Summary:\n{}\n\nCurrent message:\n{}",
-        summary, current_message
-    );
+    let user_text = format!("Summary:\n{}\n\nCurrent message:\n{}", summary, current_message);
     let request = LLMRequest::new(
         crate::constants::MODEL_HAIKU,
         vec![LlmMessage::user(user_text)],
@@ -2288,11 +2177,7 @@ async fn execute_create_doc(input: &Value, state: &AppState, user_id: UserId) ->
 
     let tags: Vec<String> = input["tags"]
         .as_array()
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str().map(String::from))
-                .collect()
-        })
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
         .unwrap_or_default();
 
     let ref_tag = title_to_ref_tag(title);
@@ -2337,16 +2222,9 @@ async fn execute_update_doc(input: &Value, state: &AppState) -> Value {
 
     let content = input["content"].as_str().map(String::from);
     let title = input["title"].as_str().map(String::from);
-    let tags: Option<Vec<String>> = input["tags"].as_array().map(|arr| {
-        arr.iter()
-            .filter_map(|v| v.as_str().map(String::from))
-            .collect()
-    });
+    let tags: Option<Vec<String>> = input["tags"].as_array().map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
 
-    match doc_repo
-        .update_document(doc_id, content.clone(), title.clone(), tags)
-        .await
-    {
+    match doc_repo.update_document(doc_id, content.clone(), title.clone(), tags).await {
         Ok(row) => {
             // Spawn background summary regeneration using updated content
             let summary_content = content.unwrap_or(row.content.clone());
@@ -2434,10 +2312,7 @@ async fn execute_submit_prd(input: &Value, state: &AppState, user_id: UserId) ->
                 errors.push(format!("milestones[{}] missing name", i));
             }
             if m["deliverables"].as_array().is_none_or(|a| a.is_empty()) {
-                errors.push(format!(
-                    "milestones[{}] must have at least 1 deliverable",
-                    i
-                ));
+                errors.push(format!("milestones[{}] must have at least 1 deliverable", i));
             }
         }
     }
@@ -2459,10 +2334,7 @@ async fn execute_submit_prd(input: &Value, state: &AppState, user_id: UserId) ->
     let milestones_arr = milestones.unwrap();
 
     let mut md = format!("# PRD: {}\n\n## Status: APPROVED\n\n", title);
-    md.push_str(&format!(
-        "## Problem Statement\n\n{}\n\n",
-        problem_statement
-    ));
+    md.push_str(&format!("## Problem Statement\n\n{}\n\n", problem_statement));
 
     md.push_str("## Goals\n\n");
     for g in goals_arr {
@@ -2479,10 +2351,7 @@ async fn execute_submit_prd(input: &Value, state: &AppState, user_id: UserId) ->
         md.push_str(&format!("- {}\n", us.as_str().unwrap_or("")));
     }
 
-    md.push_str(&format!(
-        "\n## Technical Approach\n\n{}\n\n",
-        technical_approach
-    ));
+    md.push_str(&format!("\n## Technical Approach\n\n{}\n\n", technical_approach));
 
     md.push_str("## Milestones\n\n");
     for m in milestones_arr {
@@ -2525,15 +2394,7 @@ async fn execute_submit_prd(input: &Value, state: &AppState, user_id: UserId) ->
     let ref_tag = title_to_ref_tag(title);
 
     match doc_repo
-        .create_document(
-            user_id.0,
-            None,
-            title.to_string(),
-            md.clone(),
-            "prd".to_string(),
-            ref_tag.clone(),
-            vec!["prd".to_string()],
-        )
+        .create_document(user_id.0, None, title.to_string(), md.clone(), "prd".to_string(), ref_tag.clone(), vec!["prd".to_string()])
         .await
     {
         Ok(row) => {
@@ -2585,11 +2446,7 @@ async fn execute_submit_ticket(input: &Value) -> Value {
 
     let dependencies: Vec<String> = input["dependencies"]
         .as_array()
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str().map(String::from))
-                .collect()
-        })
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
         .unwrap_or_default();
 
     json!({

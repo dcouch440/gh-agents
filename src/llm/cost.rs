@@ -50,14 +50,8 @@ static MODEL_PRICING: Lazy<HashMap<&'static str, ModelPricing>> = Lazy::new(|| {
 
     // Claude 3.5 Sonnet
     map.insert("claude-sonnet-4-20250514", ModelPricing::new(0.003, 0.015));
-    map.insert(
-        "claude-3-5-sonnet-20241022",
-        ModelPricing::new(0.003, 0.015),
-    );
-    map.insert(
-        "claude-3-5-sonnet-20240620",
-        ModelPricing::new(0.003, 0.015),
-    );
+    map.insert("claude-3-5-sonnet-20241022", ModelPricing::new(0.003, 0.015));
+    map.insert("claude-3-5-sonnet-20240620", ModelPricing::new(0.003, 0.015));
 
     // Claude 3.5 Haiku
     map.insert("claude-3-5-haiku-20241022", ModelPricing::new(0.001, 0.005));
@@ -69,10 +63,7 @@ static MODEL_PRICING: Lazy<HashMap<&'static str, ModelPricing>> = Lazy::new(|| {
     map.insert("claude-3-sonnet-20240229", ModelPricing::new(0.003, 0.015));
 
     // Claude 3 Haiku
-    map.insert(
-        "claude-3-haiku-20240307",
-        ModelPricing::new(0.00025, 0.00125),
-    );
+    map.insert("claude-3-haiku-20240307", ModelPricing::new(0.00025, 0.00125));
 
     // Shorthand aliases
     map.insert("claude-3-opus", ModelPricing::new(0.015, 0.075));
@@ -168,10 +159,7 @@ mod tests {
     fn get_pricing_unknown_returns_default() {
         let pricing = get_pricing("totally-unknown-model");
         assert_eq!(pricing.input_cost_per_1k, DEFAULT_PRICING.input_cost_per_1k);
-        assert_eq!(
-            pricing.output_cost_per_1k,
-            DEFAULT_PRICING.output_cost_per_1k
-        );
+        assert_eq!(pricing.output_cost_per_1k, DEFAULT_PRICING.output_cost_per_1k);
     }
 
     #[test]
@@ -231,14 +219,7 @@ impl<R: CostRepo> CostTracker<R> {
     }
 
     /// Record an API call
-    pub async fn record_call(
-        &self,
-        agent_id: AgentId,
-        agent_tier: AgentTier,
-        task_id: Option<TaskId>,
-        model_id: &str,
-        usage: TokenUsage,
-    ) -> Result<CostRecord, CostTrackerError> {
+    pub async fn record_call(&self, agent_id: AgentId, agent_tier: AgentTier, task_id: Option<TaskId>, model_id: &str, usage: TokenUsage) -> Result<CostRecord, CostTrackerError> {
         let pricing = get_pricing(model_id);
         let cost_usd = pricing.calculate_cost(usage.input_tokens, usage.output_tokens);
 
@@ -262,9 +243,7 @@ impl<R: CostRepo> CostTracker<R> {
 
         // Persist to database if available
         if let Some(repo) = &self.repo {
-            repo.persist_cost_record(record.clone())
-                .await
-                .map_err(CostTrackerError::DatabaseError)?;
+            repo.persist_cost_record(record.clone()).await.map_err(CostTrackerError::DatabaseError)?;
         }
 
         tracing::debug!(
@@ -295,19 +274,13 @@ impl<R: CostRepo> CostTracker<R> {
     }
 
     /// Get summary from database (all time or filtered)
-    pub async fn get_historical_summary(
-        &self,
-        since: Option<chrono::DateTime<Utc>>,
-    ) -> Result<CostSummary, CostTrackerError> {
+    pub async fn get_historical_summary(&self, since: Option<chrono::DateTime<Utc>>) -> Result<CostSummary, CostTrackerError> {
         let Some(repo) = &self.repo else {
             // No database, return session summary
             return Ok(self.get_summary().await);
         };
 
-        let cost_records = repo
-            .get_cost_records(since)
-            .await
-            .map_err(CostTrackerError::DatabaseError)?;
+        let cost_records = repo.get_cost_records(since).await.map_err(CostTrackerError::DatabaseError)?;
 
         Ok(Self::summarize_records(&cost_records))
     }
@@ -349,13 +322,7 @@ impl<R: CostRepo> CostTracker<R> {
 
     /// Get costs for a specific task
     pub async fn cost_for_task(&self, task_id: &TaskId) -> f64 {
-        self.records
-            .read()
-            .await
-            .iter()
-            .filter(|r| r.task_id.as_ref() == Some(task_id))
-            .map(|r| r.cost_usd)
-            .sum()
+        self.records.read().await.iter().filter(|r| r.task_id.as_ref() == Some(task_id)).map(|r| r.cost_usd).sum()
     }
 
     /// Format cost as a human-readable string
@@ -573,9 +540,7 @@ mod db_tests {
     #[tokio::test]
     async fn record_call_persists_to_repo() {
         let mut mock = MockCostRepo::new();
-        mock.expect_persist_cost_record()
-            .times(1)
-            .returning(|_| Ok(()));
+        mock.expect_persist_cost_record().times(1).returning(|_| Ok(()));
 
         let task_id = TaskId::new();
         let agent_id = AgentId::new();
@@ -613,9 +578,7 @@ mod db_tests {
     async fn get_historical_summary_without_since() {
         let mut mock = MockCostRepo::new();
         // First call: persist_cost_record
-        mock.expect_persist_cost_record()
-            .times(1)
-            .returning(|_| Ok(()));
+        mock.expect_persist_cost_record().times(1).returning(|_| Ok(()));
         // Second call: get_cost_records for historical summary
         mock.expect_get_cost_records().times(1).returning(|_| {
             Ok(vec![CostRecord {
@@ -656,9 +619,7 @@ mod db_tests {
     #[tokio::test]
     async fn get_historical_summary_with_since() {
         let mut mock = MockCostRepo::new();
-        mock.expect_persist_cost_record()
-            .times(1)
-            .returning(|_| Ok(()));
+        mock.expect_persist_cost_record().times(1).returning(|_| Ok(()));
         // First get_cost_records call: returns records (since = before)
         mock.expect_get_cost_records().times(1).returning(|_| {
             Ok(vec![CostRecord {
@@ -674,9 +635,7 @@ mod db_tests {
             }])
         });
         // Second get_cost_records call: returns empty (since = future)
-        mock.expect_get_cost_records()
-            .times(1)
-            .returning(|_| Ok(vec![]));
+        mock.expect_get_cost_records().times(1).returning(|_| Ok(vec![]));
 
         let agent_id = AgentId::new();
         let tracker = CostTracker::with_repo(mock);

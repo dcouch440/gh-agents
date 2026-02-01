@@ -159,11 +159,7 @@ pub enum MergeError {
     NotMergeable { number: u32, reason: String },
 
     #[error("PR #{number} was updated (expected {expected}, got {actual})")]
-    HeadChanged {
-        number: u32,
-        expected: String,
-        actual: String,
-    },
+    HeadChanged { number: u32, expected: String, actual: String },
 
     #[error("PR #{number} is already merged")]
     AlreadyMerged { number: u32 },
@@ -196,10 +192,7 @@ pub enum MergeError {
 impl MergeError {
     /// Whether this error is retryable
     pub fn is_retryable(&self) -> bool {
-        matches!(
-            self,
-            MergeError::RateLimited { .. } | MergeError::Network(_)
-        )
+        matches!(self, MergeError::RateLimited { .. } | MergeError::Network(_))
     }
 
     /// Whether this error requires conflict resolution
@@ -226,9 +219,7 @@ mod tests {
 
     #[test]
     fn merge_request_serializes() {
-        let req = MergePrRequest::new(MergeMethod::Squash)
-            .with_sha("abc123")
-            .with_message("Merge PR #1", "Description here");
+        let req = MergePrRequest::new(MergeMethod::Squash).with_sha("abc123").with_message("Merge PR #1", "Description here");
 
         let json = serde_json::to_string(&req).unwrap();
         assert!(json.contains("\"merge_method\":\"squash\""));
@@ -260,10 +251,7 @@ mod tests {
     fn mergeable_status_checks() {
         assert!(MergeableStatus::Mergeable.is_mergeable());
         assert!(!MergeableStatus::HasConflicts.is_mergeable());
-        assert!(!MergeableStatus::Blocked {
-            reason: "test".to_string()
-        }
-        .is_mergeable());
+        assert!(!MergeableStatus::Blocked { reason: "test".to_string() }.is_mergeable());
     }
 
     #[test]
