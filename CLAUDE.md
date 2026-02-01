@@ -108,3 +108,41 @@ docker exec -it gh-agents-postgres-1 psql -U nexor -d nexor              # Inter
 - **Constants file for app-wide values:** API base URL, WS URL, app name, route paths, WS channel names, polling intervals, localStorage keys. No magic strings or numbers scattered in components. All in `src/constants.ts`.
 
 - **ESLint rules are strict (React 19):** No setState directly in effect bodies, no ref access during render, no mixing component and non-component exports in the same file (react-refresh). Fix the code, don't suppress with eslint-disable.
+
+## Frontend Testing (frontend/)
+
+**Runner:** Vitest + @testing-library/react + jsdom. Config in `vite.config.ts` under `test`.
+
+```bash
+# Run from frontend/
+npx vitest run                              # All tests
+npx vitest run src/contexts/                # Context tests only
+npx vitest run src/hooks/                   # Hook tests only
+npx vitest                                  # Watch mode
+```
+
+**Strategy:** Unit + integration. Reducers tested through providers, hooks tested with `renderHook`.
+
+**File structure:**
+```
+frontend/src/
+├── test/
+│   ├── setup.ts              # jest-dom matchers
+│   └── fixtures.ts           # Shared mock data (mockAgent, mockTask, etc.)
+├── contexts/
+│   ├── AgentContext.tsx
+│   ├── AgentContext.test.tsx  # Colocated test
+│   └── ...
+└── hooks/
+    ├── useAgents.ts
+    ├── useAgents.test.ts     # Colocated test
+    └── ...
+```
+
+**Conventions:**
+- **Colocated tests** — `Foo.test.tsx` next to `Foo.tsx`
+- **Nested `describe`/`it`** blocks grouped by unit (reducer, provider, hook variant)
+- **Shared fixtures** in `src/test/fixtures.ts` — reusable typed mock objects
+- **`vi.hoisted()` + inline `vi.mock()`** — hoisted fn refs for mock setup, module mocking per file
+- **`vi.clearAllMocks()`** in `beforeEach`, mock return values set per test or per describe
+- Mock the API (`../api`), constants (`USE_MOCK_DATA: false`), and WS (`useWebSocket`) as needed

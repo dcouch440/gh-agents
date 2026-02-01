@@ -153,6 +153,7 @@ pub async fn route_to_cluster_agent(
             execution_context,
             tool_rows: cluster_tools,
             router_mode: false,
+            cluster_routing: None,
         },
         constraints: TaskConstraints {
             allowed_tools: Some(allowed_tool_names),
