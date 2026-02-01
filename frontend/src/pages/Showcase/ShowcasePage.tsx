@@ -1,5 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { AgentActivityDemo } from '@/components/chat'
+import { TreeCanvas } from '@/lib/tree-renderer'
+import { pipelineToTree } from '@/lib/tree-renderer/adapters/pipelineAdapter'
+import { tasksToTree } from '@/lib/tree-renderer/adapters/taskAdapter'
+import { agentHierarchyToTree } from '@/lib/tree-renderer/adapters/agentAdapter'
 import {
   AgentPoolStatus,
   TaskQueueStatus,
@@ -216,6 +220,58 @@ const TIMELINE: TimelineEvent[] = [
 
 const CYCLE_DURATION = 16000
 
+// ── Tree Renderer Showcase ────────────────────────
+
+type TreeRendererShowcaseProps = {
+  pipeline: Pipeline
+  run: PipelineRun | null
+  stages: StageExecution[]
+  tasks: Task[]
+  agents: Agent[]
+}
+
+function TreeRendererShowcase({ pipeline, run, stages, tasks, agents }: TreeRendererShowcaseProps) {
+  const pipelineTree = useMemo(
+    () => pipelineToTree(pipeline, run, stages),
+    [pipeline, run, stages],
+  )
+
+  const taskTree = useMemo(() => tasksToTree(tasks), [tasks])
+
+  const agentTree = useMemo(() => agentHierarchyToTree(agents), [agents])
+
+  return (
+    <>
+      <div className="showcase__section showcase__section--wide">
+        <div className="showcase__title">TREE: PIPELINE (horizontal)</div>
+        <TreeCanvas
+          data={pipelineTree}
+          orientation="horizontal"
+          layoutOptions={{ nodeWidth: 140, nodeHeight: 40, horizontalGap: 24, verticalGap: 40 }}
+        />
+      </div>
+
+      <div className="showcase__section">
+        <div className="showcase__title">TREE: TASK DEPS (vertical)</div>
+        <TreeCanvas
+          data={taskTree}
+          orientation="vertical"
+          layoutOptions={{ nodeWidth: 150, nodeHeight: 36, horizontalGap: 20, verticalGap: 36 }}
+        />
+      </div>
+
+      <div className="showcase__section">
+        <div className="showcase__title">TREE: AGENT HIERARCHY</div>
+        <TreeCanvas
+          data={agentTree}
+          orientation="vertical"
+          layoutOptions={{ nodeWidth: 130, nodeHeight: 36, horizontalGap: 16, verticalGap: 36 }}
+        />
+      </div>
+    </>
+  )
+}
+
 // ── Showcase Page ─────────────────────────────────
 
 function ShowcasePage() {
@@ -301,6 +357,8 @@ function ShowcasePage() {
           <div className="showcase__title">CHAT ACTIVITY</div>
           <AgentActivityDemo />
         </div>
+
+        <TreeRendererShowcase pipeline={PIPELINE} run={state.run} stages={state.stages} tasks={state.tasks} agents={state.agents} />
       </div>
     </div>
   )
