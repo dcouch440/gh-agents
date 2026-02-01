@@ -1,10 +1,13 @@
 import type { Agent } from '../types/agent'
 import type { Task } from '../types/task'
-import type { Pipeline, PipelineRun } from '../types/pipeline'
+import type { Pipeline, PipelineRun, StageExecution } from '../types/pipeline'
 import type { FeedItem } from '../types/feed'
 import type { UsageSummary } from '../types/stats'
-import type { ChatMessage } from '../types/session'
+import type { ChatMessage, Session, Mode } from '../types/session'
 import type { RoutingEvent } from '../types/routing'
+import type { Document } from '../types/document'
+import type { Tool } from '../types/tool'
+import type { Config } from '../types/config'
 
 export const mockAgent: Agent = {
   id: 'agent-001',
@@ -124,4 +127,79 @@ export const mockRoutingEventCompleted: RoutingEvent = {
   output_tokens: 50,
   duration_ms: 1200,
   completed_at: '2025-01-01T00:00:01Z',
+}
+
+export const mockSession: Session = {
+  id: 'session-001',
+  user_id: 'user-001',
+  mode_id: 'home',
+  title: 'Test session',
+  summary: 'A test session',
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
+}
+
+export const mockMode: Mode = {
+  id: 'home',
+  name: 'Home',
+  description: 'Default mode',
+}
+
+export const mockDocument: Document = {
+  id: 'doc-001',
+  user_id: 'user-001',
+  session_id: null,
+  title: 'Test document',
+  content: 'Document content here',
+  summary: 'A test doc',
+  doc_type: 'note',
+  ref_tag: 'test-doc',
+  tags: ['test'],
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
+}
+
+export const mockTool: Tool = {
+  id: 'tool-001',
+  name: 'search_files',
+  description: 'Search for files in the codebase',
+  category: 'codebase',
+  parameter_schema: {},
+  output_schema: {},
+  enabled: true,
+  cluster_id: null,
+  is_builtin: true,
+}
+
+export const mockStageExecution: StageExecution = {
+  id: 'exec-001',
+  run_id: 'run-001',
+  stage_number: 1,
+  stage_name: 'Planning',
+  agent_id: 'agent-001',
+  status: 'completed',
+  rendered_prompt: 'Plan the task',
+  output: 'Here is the plan',
+  structured_output: null,
+  user_input: null,
+  input_tokens: 500,
+  output_tokens: 200,
+  started_at: '2025-01-01T00:00:00Z',
+  completed_at: '2025-01-01T00:00:01Z',
+  duration_ms: 1000,
+}
+
+const mockModelConfig = { provider: 'anthropic', model_id: 'claude-sonnet-4-20250514', max_tokens: 8192, temperature: 0.7 }
+
+export const mockConfig: Config = {
+  verbosity: 'normal',
+  models: {
+    orchestrator: { ...mockModelConfig, model_id: 'claude-opus-4-5-20251101', max_tokens: 16384 },
+    worker: mockModelConfig,
+    utility: { ...mockModelConfig, model_id: 'claude-3-5-haiku-20241022', max_tokens: 4096 },
+  },
+  pool: { max_orchestrators: 1, max_workers: 3, max_utilities: 2 },
+  autonomy: 'supervised',
+  git_strategy: 'branch',
+  sandbox_mode: 'docker',
 }
