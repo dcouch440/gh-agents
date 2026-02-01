@@ -64,8 +64,7 @@ impl<'de> Deserialize<'de> for MessageContent {
         match value {
             serde_json::Value::String(s) => Ok(MessageContent::Text(s)),
             serde_json::Value::Array(_) => {
-                let blocks: Vec<ContentBlock> =
-                    serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                let blocks: Vec<ContentBlock> = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
                 Ok(MessageContent::Blocks(blocks))
             }
             _ => Err(serde::de::Error::custom("expected string or array")),
@@ -246,16 +245,9 @@ pub enum ContentBlock {
     /// Text content
     Text { text: String },
     /// Tool use request from the model
-    ToolUse {
-        id: String,
-        name: String,
-        input: serde_json::Value,
-    },
+    ToolUse { id: String, name: String, input: serde_json::Value },
     /// Tool result sent back to the model
-    ToolResult {
-        tool_use_id: String,
-        content: String,
-    },
+    ToolResult { tool_use_id: String, content: String },
 }
 
 impl ContentBlock {
@@ -263,13 +255,8 @@ impl ContentBlock {
     pub fn estimated_chars(&self) -> usize {
         match self {
             ContentBlock::Text { text } => text.len(),
-            ContentBlock::ToolUse { id, name, input } => {
-                id.len() + name.len() + input.to_string().len()
-            }
-            ContentBlock::ToolResult {
-                tool_use_id,
-                content,
-            } => tool_use_id.len() + content.len(),
+            ContentBlock::ToolUse { id, name, input } => id.len() + name.len() + input.to_string().len(),
+            ContentBlock::ToolResult { tool_use_id, content } => tool_use_id.len() + content.len(),
         }
     }
 }
@@ -429,17 +416,11 @@ impl StreamAccumulator {
             StreamChunk::ContentDelta { text, .. } => {
                 self.content.push_str(text);
             }
-            StreamChunk::MessageStart {
-                model,
-                input_tokens,
-            } => {
+            StreamChunk::MessageStart { model, input_tokens } => {
                 self.model = Some(model.clone());
                 self.input_tokens = Some(*input_tokens);
             }
-            StreamChunk::MessageDelta {
-                stop_reason,
-                output_tokens,
-            } => {
+            StreamChunk::MessageDelta { stop_reason, output_tokens } => {
                 if let Some(reason) = stop_reason {
                     self.stop_reason = Some(*reason);
                 }
@@ -462,8 +443,7 @@ impl StreamAccumulator {
             StreamChunk::ContentBlockStop { .. } => {
                 // Finalize any in-progress tool use block
                 if let Some(tool) = self.current_tool_use.take() {
-                    let input = serde_json::from_str(&tool.input_json)
-                        .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+                    let input = serde_json::from_str(&tool.input_json).unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
                     self.content_blocks.push(ContentBlock::ToolUse {
                         id: tool.id,
                         name: tool.name,
@@ -480,12 +460,7 @@ impl StreamAccumulator {
         // Add any accumulated text as a content block
         let mut blocks = self.content_blocks;
         if !self.content.is_empty() {
-            blocks.insert(
-                0,
-                ContentBlock::Text {
-                    text: self.content.clone(),
-                },
-            );
+            blocks.insert(0, ContentBlock::Text { text: self.content.clone() });
         }
 
         Some(LLMResponse {
@@ -595,8 +570,7 @@ mod tests {
 
     #[test]
     fn request_serialization_works() {
-        let request =
-            LLMRequest::new("claude-3", vec![Message::user("Hi")]).with_system("Be helpful");
+        let request = LLMRequest::new("claude-3", vec![Message::user("Hi")]).with_system("Be helpful");
 
         let json = serde_json::to_string(&request).unwrap();
         let parsed: LLMRequest = serde_json::from_str(&json).unwrap();

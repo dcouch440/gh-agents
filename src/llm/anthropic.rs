@@ -11,9 +11,7 @@ use std::pin::Pin;
 use std::time::Duration;
 
 use super::provider::{LLMProvider, LLMResult};
-use super::types::{
-    LLMError, LLMRequest, LLMResponse, Message, Role, StopReason, StreamChunk, TokenUsage,
-};
+use super::types::{LLMError, LLMRequest, LLMResponse, Message, Role, StopReason, StreamChunk, TokenUsage};
 
 /// Anthropic API version header value
 const ANTHROPIC_VERSION: &str = "2023-06-01";
@@ -43,11 +41,9 @@ pub struct AnthropicConfig {
 impl AnthropicConfig {
     /// Create config from environment
     pub fn from_env() -> Result<Self, LLMError> {
-        let api_key = std::env::var("ANTHROPIC_API_KEY")
-            .map_err(|_| LLMError::AuthError("ANTHROPIC_API_KEY not set".to_string()))?;
+        let api_key = std::env::var("ANTHROPIC_API_KEY").map_err(|_| LLMError::AuthError("ANTHROPIC_API_KEY not set".to_string()))?;
 
-        let model = std::env::var("ANTHROPIC_MODEL")
-            .unwrap_or_else(|_| crate::constants::DEFAULT_MODEL.to_string());
+        let model = std::env::var("ANTHROPIC_MODEL").unwrap_or_else(|_| crate::constants::DEFAULT_MODEL.to_string());
 
         Ok(Self {
             api_key,
@@ -102,13 +98,9 @@ impl AnthropicClient {
         let mut headers = HeaderMap::new();
         headers.insert(
             "x-api-key",
-            HeaderValue::from_str(&config.api_key)
-                .map_err(|_| LLMError::AuthError("Invalid API key format".to_string()))?,
+            HeaderValue::from_str(&config.api_key).map_err(|_| LLMError::AuthError("Invalid API key format".to_string()))?,
         );
-        headers.insert(
-            "anthropic-version",
-            HeaderValue::from_static(ANTHROPIC_VERSION),
-        );
+        headers.insert("anthropic-version", HeaderValue::from_static(ANTHROPIC_VERSION));
         headers.insert("content-type", HeaderValue::from_static("application/json"));
 
         // Build HTTP client
@@ -140,11 +132,7 @@ impl AnthropicClient {
     /// Convert LLMRequest to Anthropic API format
     fn build_request(&self, request: &LLMRequest) -> AnthropicRequest {
         AnthropicRequest {
-            model: if request.model.is_empty() {
-                self.config.model.clone()
-            } else {
-                request.model.clone()
-            },
+            model: if request.model.is_empty() { self.config.model.clone() } else { request.model.clone() },
             messages: request.messages.iter().map(|m| m.into()).collect(),
             max_tokens: request.max_tokens,
             system: request.system.clone(),
@@ -218,10 +206,7 @@ impl AnthropicClient {
                         model: message.model,
                         input_tokens: message.usage.input_tokens,
                     },
-                    SSEData::ContentBlockStart {
-                        index,
-                        content_block,
-                    } => {
+                    SSEData::ContentBlockStart { index, content_block } => {
                         // Check if this is a tool_use content block
                         if let Some(ref cb) = content_block {
                             if cb.block_type == "tool_use" {
@@ -240,10 +225,7 @@ impl AnthropicClient {
                         if let Some(text) = delta.text {
                             StreamChunk::ContentDelta { text, index }
                         } else if let Some(partial_json) = delta.partial_json {
-                            StreamChunk::InputJsonDelta {
-                                index,
-                                partial_json,
-                            }
+                            StreamChunk::InputJsonDelta { index, partial_json }
                         } else {
                             return None;
                         }
@@ -299,9 +281,7 @@ impl From<&Message> for AnthropicMessage {
     fn from(msg: &Message) -> Self {
         let content = match &msg.content {
             super::types::MessageContent::Text(s) => serde_json::Value::String(s.clone()),
-            super::types::MessageContent::Blocks(blocks) => {
-                serde_json::to_value(blocks).unwrap_or(serde_json::Value::Array(vec![]))
-            }
+            super::types::MessageContent::Blocks(blocks) => serde_json::to_value(blocks).unwrap_or(serde_json::Value::Array(vec![])),
         };
         Self {
             role: match msg.role {
@@ -365,10 +345,7 @@ enum SSEData {
     MessageStart { message: MessageStartData },
 
     #[serde(rename = "content_block_start")]
-    ContentBlockStart {
-        index: usize,
-        content_block: Option<ContentBlockStartData>,
-    },
+    ContentBlockStart { index: usize, content_block: Option<ContentBlockStartData> },
 
     #[serde(rename = "content_block_delta")]
     ContentBlockDelta { index: usize, delta: DeltaData },
@@ -377,10 +354,7 @@ enum SSEData {
     ContentBlockStop { index: usize },
 
     #[serde(rename = "message_delta")]
-    MessageDelta {
-        delta: MessageDeltaData,
-        usage: Option<DeltaUsage>,
-    },
+    MessageDelta { delta: MessageDeltaData, usage: Option<DeltaUsage> },
 
     #[serde(rename = "message_stop")]
     MessageStop,
@@ -435,12 +409,7 @@ impl LLMProvider for AnthropicClient {
     async fn send_message(&self, request: LLMRequest) -> LLMResult<LLMResponse> {
         let api_request = self.build_request(&request);
 
-        let response = self
-            .client
-            .post(self.messages_url())
-            .json(&api_request)
-            .send()
-            .await?;
+        let response = self.client.post(self.messages_url()).json(&api_request).send().await?;
 
         let status = response.status().as_u16();
 
@@ -450,10 +419,7 @@ impl LLMProvider for AnthropicClient {
             return Err(Self::handle_error_response(status, &body, retry_after));
         }
 
-        let api_response: AnthropicResponse = response
-            .json()
-            .await
-            .map_err(|e| LLMError::ParseError(e.to_string()))?;
+        let api_response: AnthropicResponse = response.json().await.map_err(|e| LLMError::ParseError(e.to_string()))?;
 
         // Build content blocks and extract text
         let mut text_parts = Vec::new();
@@ -464,14 +430,11 @@ impl LLMProvider for AnthropicClient {
                 "text" => {
                     if let Some(text) = &block.text {
                         text_parts.push(text.clone());
-                        content_blocks
-                            .push(super::types::ContentBlock::Text { text: text.clone() });
+                        content_blocks.push(super::types::ContentBlock::Text { text: text.clone() });
                     }
                 }
                 "tool_use" => {
-                    if let (Some(id), Some(name), Some(input)) =
-                        (&block.id, &block.name, &block.input)
-                    {
+                    if let (Some(id), Some(name), Some(input)) = (&block.id, &block.name, &block.input) {
                         content_blocks.push(super::types::ContentBlock::ToolUse {
                             id: id.clone(),
                             name: name.clone(),
@@ -495,19 +458,11 @@ impl LLMProvider for AnthropicClient {
         })
     }
 
-    async fn send_message_stream(
-        &self,
-        request: LLMRequest,
-    ) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
+    async fn send_message_stream(&self, request: LLMRequest) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
         let mut api_request = self.build_request(&request);
         api_request.stream = true;
 
-        let response = self
-            .client
-            .post(self.messages_url())
-            .json(&api_request)
-            .send()
-            .await?;
+        let response = self.client.post(self.messages_url()).json(&api_request).send().await?;
 
         let status = response.status().as_u16();
 
@@ -596,10 +551,7 @@ mod tests {
     fn messages_url_correct() {
         let config = AnthropicConfig::new("test-key");
         let client = AnthropicClient::new(config).unwrap();
-        assert_eq!(
-            client.messages_url(),
-            "https://api.anthropic.com/v1/messages"
-        );
+        assert_eq!(client.messages_url(), "https://api.anthropic.com/v1/messages");
     }
 
     #[test]
@@ -611,26 +563,11 @@ mod tests {
 
     #[test]
     fn parse_stop_reasons() {
-        assert_eq!(
-            AnthropicClient::parse_stop_reason("end_turn"),
-            StopReason::EndTurn
-        );
-        assert_eq!(
-            AnthropicClient::parse_stop_reason("max_tokens"),
-            StopReason::MaxTokens
-        );
-        assert_eq!(
-            AnthropicClient::parse_stop_reason("stop_sequence"),
-            StopReason::StopSequence
-        );
-        assert_eq!(
-            AnthropicClient::parse_stop_reason("tool_use"),
-            StopReason::ToolUse
-        );
-        assert_eq!(
-            AnthropicClient::parse_stop_reason("unknown"),
-            StopReason::EndTurn
-        );
+        assert_eq!(AnthropicClient::parse_stop_reason("end_turn"), StopReason::EndTurn);
+        assert_eq!(AnthropicClient::parse_stop_reason("max_tokens"), StopReason::MaxTokens);
+        assert_eq!(AnthropicClient::parse_stop_reason("stop_sequence"), StopReason::StopSequence);
+        assert_eq!(AnthropicClient::parse_stop_reason("tool_use"), StopReason::ToolUse);
+        assert_eq!(AnthropicClient::parse_stop_reason("unknown"), StopReason::EndTurn);
     }
 
     #[test]
@@ -663,10 +600,7 @@ mod tests {
         assert!(result.is_some());
         let chunk = result.unwrap().unwrap();
         match chunk {
-            StreamChunk::MessageStart {
-                model,
-                input_tokens,
-            } => {
+            StreamChunk::MessageStart { model, input_tokens } => {
                 assert_eq!(model, "claude-3");
                 assert_eq!(input_tokens, 10);
             }
@@ -733,8 +667,7 @@ mod tests {
 
     #[test]
     fn handle_error_429_rate_limited() {
-        let body =
-            r#"{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}"#;
+        let body = r#"{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}"#;
         let error = AnthropicClient::handle_error_response(429, body, None);
         match error {
             LLMError::RateLimited { retry_after_ms } => assert_eq!(retry_after_ms, 60000),
@@ -744,8 +677,7 @@ mod tests {
 
     #[test]
     fn handle_error_429_with_retry_after() {
-        let body =
-            r#"{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}"#;
+        let body = r#"{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}"#;
         let error = AnthropicClient::handle_error_response(429, body, Some(30000));
         match error {
             LLMError::RateLimited { retry_after_ms } => assert_eq!(retry_after_ms, 30000),
@@ -821,10 +753,7 @@ mod tests {
         assert!(result.is_some());
         let chunk = result.unwrap().unwrap();
         match chunk {
-            StreamChunk::MessageDelta {
-                stop_reason,
-                output_tokens,
-            } => {
+            StreamChunk::MessageDelta { stop_reason, output_tokens } => {
                 assert_eq!(stop_reason, Some(StopReason::EndTurn));
                 assert_eq!(output_tokens, Some(42));
             }
@@ -839,10 +768,7 @@ mod tests {
         assert!(result.is_some());
         let chunk = result.unwrap().unwrap();
         match chunk {
-            StreamChunk::MessageDelta {
-                stop_reason,
-                output_tokens,
-            } => {
+            StreamChunk::MessageDelta { stop_reason, output_tokens } => {
                 assert_eq!(stop_reason, Some(StopReason::MaxTokens));
                 assert_eq!(output_tokens, None);
             }
@@ -857,10 +783,7 @@ mod tests {
         assert!(result.is_some());
         let chunk = result.unwrap().unwrap();
         match chunk {
-            StreamChunk::MessageDelta {
-                stop_reason,
-                output_tokens,
-            } => {
+            StreamChunk::MessageDelta { stop_reason, output_tokens } => {
                 assert_eq!(stop_reason, None);
                 assert_eq!(output_tokens, Some(10));
             }
@@ -879,8 +802,7 @@ mod tests {
 
     #[test]
     fn parse_sse_error_event() {
-        let line =
-            r#"data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#;
+        let line = r#"data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#;
         let result = AnthropicClient::parse_sse_line(line);
         assert!(result.is_some());
         let err = result.unwrap().unwrap_err();
@@ -902,8 +824,7 @@ mod tests {
 
     #[test]
     fn parse_sse_content_delta_no_text_returns_none() {
-        let line =
-            r#"data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta"}}"#;
+        let line = r#"data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta"}}"#;
         let result = AnthropicClient::parse_sse_line(line);
         assert!(result.is_none());
     }
@@ -998,14 +919,7 @@ mod tests {
         let config = AnthropicConfig::new("test-key");
         let client = AnthropicClient::new(config).unwrap();
 
-        let request = LLMRequest::new(
-            "model",
-            vec![
-                Message::user("Hello"),
-                Message::assistant("Hi"),
-                Message::user("How are you?"),
-            ],
-        );
+        let request = LLMRequest::new("model", vec![Message::user("Hello"), Message::assistant("Hi"), Message::user("How are you?")]);
         let api_req = client.build_request(&request);
 
         assert_eq!(api_req.messages.len(), 3);
@@ -1088,8 +1002,7 @@ mod tests {
 
         let mock_server = MockServer::start().await;
 
-        let error_body =
-            r#"{"type":"error","error":{"type":"server_error","message":"Internal error"}}"#;
+        let error_body = r#"{"type":"error","error":{"type":"server_error","message":"Internal error"}}"#;
 
         Mock::given(method("POST"))
             .and(path("/v1/messages"))
@@ -1147,8 +1060,7 @@ mod tests {
 
         let mock_server = MockServer::start().await;
 
-        let error_body =
-            r#"{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}"#;
+        let error_body = r#"{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}"#;
 
         Mock::given(method("POST"))
             .and(path("/v1/messages"))

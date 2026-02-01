@@ -52,18 +52,13 @@ impl IssueRef {
 
     fn parse_github_url(url: &str) -> Result<Self, IssueSyncError> {
         // Remove protocol and host prefix
-        let path = url
-            .trim_start_matches("https://")
-            .trim_start_matches("http://")
-            .trim_start_matches("github.com/");
+        let path = url.trim_start_matches("https://").trim_start_matches("http://").trim_start_matches("github.com/");
 
         // Expected: owner/repo/issues/123
         let parts: Vec<&str> = path.split('/').collect();
 
         if parts.len() >= 4 && parts[2] == "issues" {
-            let number = parts[3]
-                .parse::<u32>()
-                .map_err(|_| IssueSyncError::InvalidNumber(parts[3].to_string()))?;
+            let number = parts[3].parse::<u32>().map_err(|_| IssueSyncError::InvalidNumber(parts[3].to_string()))?;
 
             return Ok(Self {
                 owner: parts[0].to_string(),
@@ -87,9 +82,7 @@ impl IssueRef {
             return Err(IssueSyncError::InvalidUrl(url.to_string()));
         }
 
-        let number = parts[1]
-            .parse::<u32>()
-            .map_err(|_| IssueSyncError::InvalidNumber(parts[1].to_string()))?;
+        let number = parts[1].parse::<u32>().map_err(|_| IssueSyncError::InvalidNumber(parts[1].to_string()))?;
 
         Ok(Self {
             owner: repo_parts[0].to_string(),
@@ -100,10 +93,7 @@ impl IssueRef {
 
     /// Convert to a full GitHub URL
     pub fn to_url(&self) -> String {
-        format!(
-            "https://github.com/{}/{}/issues/{}",
-            self.owner, self.repo, self.number
-        )
+        format!("https://github.com/{}/{}/issues/{}", self.owner, self.repo, self.number)
     }
 }
 
@@ -164,10 +154,7 @@ impl IssueSync {
 
     /// Fetch and convert a GitHub issue to a Ticket
     pub async fn fetch_issue(&self, issue_ref: &IssueRef) -> Result<Ticket, IssueSyncError> {
-        let github_issue = self
-            .client
-            .get_issue(&issue_ref.owner, &issue_ref.repo, issue_ref.number)
-            .await?;
+        let github_issue = self.client.get_issue(&issue_ref.owner, &issue_ref.repo, issue_ref.number).await?;
 
         let ticket = convert_issue_to_ticket(github_issue, &issue_ref.owner, &issue_ref.repo);
 
@@ -239,10 +226,7 @@ mod tests {
     #[test]
     fn issue_ref_to_url() {
         let issue_ref = IssueRef::new("owner", "repo", 42);
-        assert_eq!(
-            issue_ref.to_url(),
-            "https://github.com/owner/repo/issues/42"
-        );
+        assert_eq!(issue_ref.to_url(), "https://github.com/owner/repo/issues/42");
     }
 
     #[test]
@@ -274,13 +258,7 @@ mod tests {
         assert_eq!(ticket.title, "Test issue");
         assert_eq!(ticket.description, "Issue description");
         assert_eq!(ticket.labels, vec!["bug"]);
-        assert!(matches!(
-            ticket.source,
-            TicketSource::GitHub {
-                issue_number: 42,
-                ..
-            }
-        ));
+        assert!(matches!(ticket.source, TicketSource::GitHub { issue_number: 42, .. }));
         assert_eq!(ticket.status, TicketStatus::New);
         assert!(ticket.slices.is_empty());
     }
@@ -476,11 +454,7 @@ mod tests {
         };
         let ticket = convert_issue_to_ticket(issue, "myowner", "myrepo");
         match &ticket.source {
-            TicketSource::GitHub {
-                owner,
-                repo,
-                issue_number,
-            } => {
+            TicketSource::GitHub { owner, repo, issue_number } => {
                 assert_eq!(owner, "myowner");
                 assert_eq!(repo, "myrepo");
                 assert_eq!(*issue_number, 1);

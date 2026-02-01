@@ -27,11 +27,9 @@ pub fn load_global_config() -> Result<GlobalConfig> {
         return Ok(GlobalConfig::default());
     }
 
-    let content = std::fs::read_to_string(&path)
-        .with_context(|| format!("Failed to read global config from {:?}", path))?;
+    let content = std::fs::read_to_string(&path).with_context(|| format!("Failed to read global config from {:?}", path))?;
 
-    let config: GlobalConfig = toml::from_str(&content)
-        .with_context(|| format!("Failed to parse global config from {:?}", path))?;
+    let config: GlobalConfig = toml::from_str(&content).with_context(|| format!("Failed to parse global config from {:?}", path))?;
 
     tracing::info!("Loaded global config from {:?}", path);
     Ok(config)

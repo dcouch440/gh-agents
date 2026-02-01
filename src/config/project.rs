@@ -23,11 +23,9 @@ pub fn load_project_config() -> Result<Option<ProjectConfig>> {
         return Ok(None);
     }
 
-    let content = std::fs::read_to_string(&path)
-        .with_context(|| format!("Failed to read project config from {:?}", path))?;
+    let content = std::fs::read_to_string(&path).with_context(|| format!("Failed to read project config from {:?}", path))?;
 
-    let config: ProjectConfig = toml::from_str(&content)
-        .with_context(|| format!("Failed to parse project config from {:?}", path))?;
+    let config: ProjectConfig = toml::from_str(&content).with_context(|| format!("Failed to parse project config from {:?}", path))?;
 
     tracing::info!("Loaded project config from {:?}", path);
     Ok(Some(config))
@@ -69,10 +67,7 @@ mod tests {
         let config: ProjectConfig = toml::from_str(&content).unwrap();
 
         assert_eq!(config.autonomy, crate::types::AutonomyLevel::FullAuto);
-        assert_eq!(
-            config.git_strategy,
-            crate::types::GitStrategy::BranchPerTicket
-        );
+        assert_eq!(config.git_strategy, crate::types::GitStrategy::BranchPerTicket);
         assert!(config.approval_gates.before_commit);
     }
 

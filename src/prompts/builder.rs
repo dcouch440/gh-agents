@@ -52,17 +52,11 @@ pub struct HistoryEntry {
 #[derive(Debug, Clone)]
 pub enum OutputFormat {
     /// Expect JSON matching a schema
-    Json {
-        schema: String,
-        example: Option<String>,
-    },
+    Json { schema: String, example: Option<String> },
     /// Expect natural language
     Text { guidelines: Option<String> },
     /// Expect code
-    Code {
-        language: String,
-        guidelines: Option<String>,
-    },
+    Code { language: String, guidelines: Option<String> },
 }
 
 #[derive(Debug, Clone)]
@@ -145,11 +139,7 @@ impl PromptBuilder {
     }
 
     /// Set expected output format as JSON with schema and example
-    pub fn output_json_with_example(
-        mut self,
-        schema: impl Into<String>,
-        example: impl Into<String>,
-    ) -> Self {
+    pub fn output_json_with_example(mut self, schema: impl Into<String>, example: impl Into<String>) -> Self {
         self.template.output_format = OutputFormat::Json {
             schema: schema.into(),
             example: Some(example.into()),
@@ -183,12 +173,7 @@ impl PromptBuilder {
     }
 
     /// Add a few-shot example with explanation
-    pub fn example_with_explanation(
-        mut self,
-        input: impl Into<String>,
-        output: impl Into<String>,
-        explanation: impl Into<String>,
-    ) -> Self {
+    pub fn example_with_explanation(mut self, input: impl Into<String>, output: impl Into<String>, explanation: impl Into<String>) -> Self {
         self.template.examples.push(Example {
             input: input.into(),
             output: output.into(),
@@ -255,13 +240,7 @@ impl PromptBuilder {
 
         // Constraints section
         if !self.template.constraints.is_empty() {
-            let constraints = self
-                .template
-                .constraints
-                .iter()
-                .map(|c| format!("- {}", c))
-                .collect::<Vec<_>>()
-                .join("\n");
+            let constraints = self.template.constraints.iter().map(|c| format!("- {}", c)).collect::<Vec<_>>().join("\n");
             sections.push(format!("## Constraints\n\n{}", constraints));
         }
 
@@ -338,22 +317,14 @@ impl PromptBuilder {
     fn render_output_format(&self) -> String {
         match &self.template.output_format {
             OutputFormat::Json { schema, example } => {
-                let mut s = format!(
-                    "Respond with valid JSON matching this schema:\n\n```json\n{}\n```",
-                    schema
-                );
+                let mut s = format!("Respond with valid JSON matching this schema:\n\n```json\n{}\n```", schema);
                 if let Some(ex) = example {
                     s.push_str(&format!("\n\nExample:\n```json\n{}\n```", ex));
                 }
                 s
             }
-            OutputFormat::Text { guidelines } => guidelines
-                .clone()
-                .unwrap_or_else(|| "Respond in natural language.".to_string()),
-            OutputFormat::Code {
-                language,
-                guidelines,
-            } => {
+            OutputFormat::Text { guidelines } => guidelines.clone().unwrap_or_else(|| "Respond in natural language.".to_string()),
+            OutputFormat::Code { language, guidelines } => {
                 let mut s = format!("Respond with {} code.", language);
                 if let Some(g) = guidelines {
                     s.push_str(&format!("\n\n{}", g));
@@ -369,12 +340,7 @@ impl PromptBuilder {
             .iter()
             .enumerate()
             .map(|(i, ex)| {
-                let mut s = format!(
-                    "### Example {}\n\n**Input:**\n{}\n\n**Output:**\n{}",
-                    i + 1,
-                    ex.input,
-                    ex.output
-                );
+                let mut s = format!("### Example {}\n\n**Input:**\n{}\n\n**Output:**\n{}", i + 1, ex.input, ex.output);
                 if let Some(ref explanation) = ex.explanation {
                     s.push_str(&format!("\n\n**Why:** {}", explanation));
                 }
@@ -468,10 +434,7 @@ mod tests {
 
     #[test]
     fn test_prompt_builder_with_conventions() {
-        let prompt = PromptBuilder::new()
-            .task("Do work")
-            .conventions("Use snake_case everywhere")
-            .build();
+        let prompt = PromptBuilder::new().task("Do work").conventions("Use snake_case everywhere").build();
 
         assert!(prompt.text.contains("### Project Conventions"));
         assert!(prompt.text.contains("Use snake_case everywhere"));
@@ -479,10 +442,7 @@ mod tests {
 
     #[test]
     fn test_prompt_builder_with_task_context() {
-        let prompt = PromptBuilder::new()
-            .task("Implement feature")
-            .task_context("This is part of milestone M3")
-            .build();
+        let prompt = PromptBuilder::new().task("Implement feature").task_context("This is part of milestone M3").build();
 
         assert!(prompt.text.contains("### Task Context"));
         assert!(prompt.text.contains("milestone M3"));
@@ -516,10 +476,7 @@ mod tests {
 
     #[test]
     fn test_prompt_builder_output_text_with_guidelines() {
-        let prompt = PromptBuilder::new()
-            .task("Summarize")
-            .output_text(Some("Keep it under 100 words".to_string()))
-            .build();
+        let prompt = PromptBuilder::new().task("Summarize").output_text(Some("Keep it under 100 words".to_string())).build();
 
         assert!(prompt.text.contains("## Output Format"));
         assert!(prompt.text.contains("Keep it under 100 words"));
@@ -527,20 +484,14 @@ mod tests {
 
     #[test]
     fn test_prompt_builder_output_text_no_guidelines() {
-        let prompt = PromptBuilder::new()
-            .task("Summarize")
-            .output_text(None)
-            .build();
+        let prompt = PromptBuilder::new().task("Summarize").output_text(None).build();
 
         assert!(prompt.text.contains("Respond in natural language."));
     }
 
     #[test]
     fn test_prompt_builder_output_code() {
-        let prompt = PromptBuilder::new()
-            .task("Write code")
-            .output_code("rust", Some("Follow clippy lints".to_string()))
-            .build();
+        let prompt = PromptBuilder::new().task("Write code").output_code("rust", Some("Follow clippy lints".to_string())).build();
 
         assert!(prompt.text.contains("Respond with rust code."));
         assert!(prompt.text.contains("Follow clippy lints"));
@@ -548,10 +499,7 @@ mod tests {
 
     #[test]
     fn test_prompt_builder_output_code_no_guidelines() {
-        let prompt = PromptBuilder::new()
-            .task("Write code")
-            .output_code("python", None)
-            .build();
+        let prompt = PromptBuilder::new().task("Write code").output_code("python", None).build();
 
         assert!(prompt.text.contains("Respond with python code."));
         assert!(!prompt.text.contains("\n\n\n")); // no extra blank from missing guidelines
@@ -560,10 +508,7 @@ mod tests {
     #[test]
     fn test_prompt_builder_with_version() {
         let version = PromptVersion::new("test", 1, 0, 0);
-        let prompt = PromptBuilder::new()
-            .task("Do something")
-            .version(version.clone())
-            .build();
+        let prompt = PromptBuilder::new().task("Do something").version(version.clone()).build();
 
         assert!(prompt.version.is_some());
         assert_eq!(prompt.version.unwrap().semver(), "1.0.0");
@@ -589,11 +534,7 @@ mod tests {
             .constraint("Use async/await")
             .output_code("rust", Some("Include tests".to_string()))
             .example("Simple OAuth", "fn oauth() -> Result<Token>")
-            .example_with_explanation(
-                "Error handling",
-                "fn handle() -> Result<(), AuthError>",
-                "Shows proper error types",
-            )
+            .example_with_explanation("Error handling", "fn handle() -> Result<(), AuthError>", "Shows proper error types")
             .version(PromptVersion::new("implementation", 2, 0, 0))
             .build();
 
@@ -634,11 +575,7 @@ mod tests {
 
     #[test]
     fn test_built_prompt_template_preserved() {
-        let prompt = PromptBuilder::new()
-            .role("tester")
-            .task("test things")
-            .constraint("be thorough")
-            .build();
+        let prompt = PromptBuilder::new().role("tester").task("test things").constraint("be thorough").build();
 
         assert_eq!(prompt.template.role, "tester");
         assert_eq!(prompt.template.task, "test things");

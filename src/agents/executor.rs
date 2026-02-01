@@ -6,27 +6,17 @@ use tracing::{error, info, instrument, warn};
 use uuid::Uuid;
 
 use super::agent::{Agent, AgentError};
-use super::channels::{
-    AgentCommand, AgentResponse, ApprovalRequest, ContextRequest, ContextResponse, ProgressUpdate,
-    RoleContext, TaskAssignment, TaskResult,
-};
+use super::channels::{AgentCommand, AgentResponse, ApprovalRequest, ContextRequest, ContextResponse, ProgressUpdate, RoleContext, TaskAssignment, TaskResult};
 use super::execution_tools;
 use super::roles::{CommunicationStyle, OutputFormat};
-use crate::llm::{
-    AnthropicClient, AnthropicConfig, ContentBlock, LLMProvider, LLMRequest, LLMResponse, Message,
-    StopReason, StreamAccumulator, StreamChunk as LLMStreamChunk,
-};
+use crate::llm::{AnthropicClient, AnthropicConfig, ContentBlock, LLMProvider, LLMRequest, LLMResponse, Message, StopReason, StreamAccumulator, StreamChunk as LLMStreamChunk};
 use crate::types::{AgentStatus, TaskStatus};
 
 /// Verify completed work using a cheap Haiku call.
 ///
 /// Returns `Some(issues)` if the reviewer found problems, `None` if work looks good
 /// or if verification could not be performed (e.g. missing API key).
-async fn verify_work(
-    task_title: &str,
-    accumulated_response: &str,
-    files_modified: &[String],
-) -> Option<Vec<String>> {
+async fn verify_work(task_title: &str, accumulated_response: &str, files_modified: &[String]) -> Option<Vec<String>> {
     let verification_prompt = format!(
         "You are reviewing work completed by an AI agent.\n\n\
         Task: {}\n\n\
@@ -87,12 +77,7 @@ async fn verify_work(
             Ok(parsed) => {
                 if parsed["issues_found"].as_bool() == Some(true) {
                     if let Some(issues) = parsed["issues"].as_array() {
-                        return Some(
-                            issues
-                                .iter()
-                                .filter_map(|i| i.as_str().map(String::from))
-                                .collect(),
-                        );
+                        return Some(issues.iter().filter_map(|i| i.as_str().map(String::from)).collect());
                     }
                 }
             }
@@ -194,19 +179,13 @@ impl Agent {
         self.shutdown()?;
 
         // Send shutdown complete
-        self.send_response(AgentResponse::ShutdownComplete {
-            agent_id: self.id.clone(),
-        })
-        .await?;
+        self.send_response(AgentResponse::ShutdownComplete { agent_id: self.id.clone() }).await?;
 
         Ok(())
     }
 
     /// Handle a task assignment
-    async fn handle_task_assignment(
-        &mut self,
-        assignment: TaskAssignment,
-    ) -> Result<(), AgentError> {
+    async fn handle_task_assignment(&mut self, assignment: TaskAssignment) -> Result<(), AgentError> {
         let task_id = assignment.task_id;
 
         // Transition to working state
@@ -270,10 +249,7 @@ impl Agent {
         let request = LLMRequest {
             model: self.model_config.model_id.clone(),
             system: Some(system_prompt),
-            messages: vec![Message::user(format!(
-                "Please complete this task:\n\n{}\n\n{}",
-                assignment.title, assignment.description
-            ))],
+            messages: vec![Message::user(format!("Please complete this task:\n\n{}\n\n{}", assignment.title, assignment.description))],
             max_tokens: self.model_config.max_tokens,
             temperature,
             stream: false,
@@ -281,22 +257,14 @@ impl Agent {
         };
 
         // Call the LLM
-        let response = self
-            .llm_provider()
-            .send_message(request)
-            .await
-            .map_err(|e| AgentError::LLMError(e.to_string()))?;
+        let response = self.llm_provider().send_message(request).await.map_err(|e| AgentError::LLMError(e.to_string()))?;
 
         // Parse the response based on role's expected output_format
         self.parse_llm_response(assignment.task_id, response, &role_context.output_format)
     }
 
     /// Build system prompt with role context and required reading
-    fn build_role_aware_prompt(
-        &self,
-        assignment: &TaskAssignment,
-        role_context: &RoleContext,
-    ) -> String {
+    fn build_role_aware_prompt(&self, assignment: &TaskAssignment, role_context: &RoleContext) -> String {
         let mut prompt = role_context.system_prompt.clone();
 
         // Add conventions
@@ -310,10 +278,7 @@ impl Agent {
             prompt.push_str("\n\n## Required Reading\n");
             prompt.push_str("The following files are essential context for your role:\n\n");
             for file in &assignment.context.required_reading {
-                prompt.push_str(&format!(
-                    "### {}\n```\n{}\n```\n\n",
-                    file.path, file.content
-                ));
+                prompt.push_str(&format!("### {}\n```\n{}\n```\n\n", file.path, file.content));
             }
         }
 
@@ -321,10 +286,7 @@ impl Agent {
         if !assignment.context.files.is_empty() {
             prompt.push_str("\n\n## Task-Specific Files\n");
             for file in &assignment.context.files {
-                prompt.push_str(&format!(
-                    "### {}\n```\n{}\n```\n\n",
-                    file.path, file.content
-                ));
+                prompt.push_str(&format!("### {}\n```\n{}\n```\n\n", file.path, file.content));
             }
         }
 
@@ -347,18 +309,10 @@ impl Agent {
     /// Generate output format instructions based on role's expected format
     fn output_format_instructions(&self, format: &OutputFormat) -> String {
         match format {
-            OutputFormat::CodeAndReport => {
-                "\n\n## Output Format\nProvide code with clear comments. Include only necessary explanations.".to_string()
-            }
-            OutputFormat::Plan => {
-                "\n\n## Output Format\nProvide a structured plan with numbered steps and clear dependencies.".to_string()
-            }
-            OutputFormat::Summary => {
-                "\n\n## Output Format\nProvide a detailed summary with sections, findings, and recommendations.".to_string()
-            }
-            OutputFormat::Result => {
-                "\n\n## Output Format\nProvide a concise result with the key outcome clearly stated.".to_string()
-            }
+            OutputFormat::CodeAndReport => "\n\n## Output Format\nProvide code with clear comments. Include only necessary explanations.".to_string(),
+            OutputFormat::Plan => "\n\n## Output Format\nProvide a structured plan with numbered steps and clear dependencies.".to_string(),
+            OutputFormat::Summary => "\n\n## Output Format\nProvide a detailed summary with sections, findings, and recommendations.".to_string(),
+            OutputFormat::Result => "\n\n## Output Format\nProvide a concise result with the key outcome clearly stated.".to_string(),
             OutputFormat::Custom(format) => {
                 format!("\n\n## Output Format\n{}", format)
             }
@@ -366,12 +320,7 @@ impl Agent {
     }
 
     /// Parse LLM response based on expected output format
-    fn parse_llm_response(
-        &self,
-        task_id: Uuid,
-        response: LLMResponse,
-        output_format: &OutputFormat,
-    ) -> Result<TaskResult, AgentError> {
+    fn parse_llm_response(&self, task_id: Uuid, response: LLMResponse, output_format: &OutputFormat) -> Result<TaskResult, AgentError> {
         // Parse based on expected format
         // For now, treat the entire response as output
         // Structured output parsing will be improved in M4
@@ -408,12 +357,7 @@ impl Agent {
     }
 
     /// Send a progress update to the feed
-    async fn emit_progress(
-        &self,
-        task_id: Uuid,
-        message: &str,
-        progress_percent: Option<u8>,
-    ) -> Result<(), AgentError> {
+    async fn emit_progress(&self, task_id: Uuid, message: &str, progress_percent: Option<u8>) -> Result<(), AgentError> {
         self.send_response(AgentResponse::ProgressUpdate {
             agent_id: self.id.clone(),
             update: ProgressUpdate {
@@ -430,10 +374,7 @@ impl Agent {
     /// When `assignment.context.chat_messages` is non-empty, operates in chat mode:
     /// uses the chat messages directly and streams every token via ProgressUpdate.
     /// Otherwise, operates in standard task mode with milestone progress updates.
-    async fn execute_task_with_progress(
-        &self,
-        assignment: &TaskAssignment,
-    ) -> Result<TaskResult, AgentError> {
+    async fn execute_task_with_progress(&self, assignment: &TaskAssignment) -> Result<TaskResult, AgentError> {
         let is_chat = !assignment.context.chat_messages.is_empty();
 
         if is_chat {
@@ -444,10 +385,7 @@ impl Agent {
     }
 
     /// Execute a chat-mode task: stream every token via ProgressUpdate.
-    async fn execute_chat_streaming(
-        &self,
-        assignment: &TaskAssignment,
-    ) -> Result<TaskResult, AgentError> {
+    async fn execute_chat_streaming(&self, assignment: &TaskAssignment) -> Result<TaskResult, AgentError> {
         let task_id = assignment.task_id;
         let role_context = &assignment.context.role_context;
 
@@ -461,11 +399,7 @@ impl Agent {
             ..Default::default()
         };
 
-        let mut stream = self
-            .llm_provider()
-            .send_message_stream(request)
-            .await
-            .map_err(|e| AgentError::LLMError(e.to_string()))?;
+        let mut stream = self.llm_provider().send_message_stream(request).await.map_err(|e| AgentError::LLMError(e.to_string()))?;
 
         let mut accumulated = String::new();
 
@@ -498,18 +432,10 @@ impl Agent {
     ///
     /// The agent streams LLM responses and can call execution tools (file ops,
     /// git, tests, sandbox) autonomously, looping until the LLM returns EndTurn.
-    async fn execute_task_standard(
-        &self,
-        assignment: &TaskAssignment,
-    ) -> Result<TaskResult, AgentError> {
+    async fn execute_task_standard(&self, assignment: &TaskAssignment) -> Result<TaskResult, AgentError> {
         let task_id = assignment.task_id;
 
-        self.emit_progress(
-            task_id,
-            &format!("Starting work on: {}", assignment.title),
-            Some(0),
-        )
-        .await?;
+        self.emit_progress(task_id, &format!("Starting work on: {}", assignment.title), Some(0)).await?;
 
         let role_context = &assignment.context.role_context;
         let system_prompt = self.build_role_aware_prompt(assignment, role_context);
@@ -539,10 +465,7 @@ impl Agent {
 
         let allowed_tools = assignment.constraints.allowed_tools.as_deref();
 
-        let mut messages = vec![Message::user(format!(
-            "Please complete this task:\n\n{}\n\n{}",
-            assignment.title, assignment.description
-        ))];
+        let mut messages = vec![Message::user(format!("Please complete this task:\n\n{}\n\n{}", assignment.title, assignment.description))];
 
         let mut accumulated_response = String::new();
         let mut files_modified = Vec::new();
@@ -554,12 +477,7 @@ impl Agent {
 
         for round in 0..max_tool_rounds {
             let progress = 10 + (round as u8 * 5).min(70);
-            self.emit_progress(
-                task_id,
-                &format!("Working... (round {})", round + 1),
-                Some(progress),
-            )
-            .await?;
+            self.emit_progress(task_id, &format!("Working... (round {})", round + 1), Some(progress)).await?;
 
             let request = LLMRequest {
                 model: self.model_config.model_id.clone(),
@@ -571,11 +489,7 @@ impl Agent {
                 tools: tool_defs.clone(),
             };
 
-            let mut stream = self
-                .llm_provider()
-                .send_message_stream(request)
-                .await
-                .map_err(|e| AgentError::LLMError(e.to_string()))?;
+            let mut stream = self.llm_provider().send_message_stream(request).await.map_err(|e| AgentError::LLMError(e.to_string()))?;
 
             let mut accumulator = StreamAccumulator::new();
 
@@ -604,9 +518,7 @@ impl Agent {
             if response.stop_reason == StopReason::ToolUse {
                 if let Some(exec_ctx) = &assignment.context.execution_context {
                     // Add assistant message with content blocks
-                    messages.push(Message::assistant_with_blocks(
-                        response.content_blocks.clone(),
-                    ));
+                    messages.push(Message::assistant_with_blocks(response.content_blocks.clone()));
 
                     // Execute each tool call
                     let mut tool_results = Vec::new();
@@ -631,25 +543,14 @@ impl Agent {
                                 .await
                             } else {
                                 // Check if tool routes to a cluster
-                                let tool_cluster = assignment
-                                    .context
-                                    .tool_rows
-                                    .iter()
-                                    .find(|t| t.name == *name)
-                                    .and_then(|t| t.cluster_id);
+                                let tool_cluster = assignment.context.tool_rows.iter().find(|t| t.name == *name).and_then(|t| t.cluster_id);
 
                                 if tool_cluster.is_some() {
                                     serde_json::json!({
                                         "error": "Cluster routing not yet implemented for this tool"
                                     })
                                 } else {
-                                    execution_tools::execute_execution_tool(
-                                        name,
-                                        input,
-                                        exec_ctx,
-                                        allowed_tools,
-                                    )
-                                    .await
+                                    execution_tools::execute_execution_tool(name, input, exec_ctx, allowed_tools).await
                                 }
                             };
 
@@ -679,8 +580,7 @@ impl Agent {
                                 }
                             }
 
-                            let result_str = serde_json::to_string_pretty(&result)
-                                .unwrap_or_else(|_| result.to_string());
+                            let result_str = serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string());
 
                             tool_results.push(ContentBlock::ToolResult {
                                 tool_use_id: id.clone(),
@@ -692,8 +592,7 @@ impl Agent {
                     messages.push(Message::tool_results(tool_results));
 
                     // Bail out if too many consecutive tool errors
-                    if consecutive_tool_errors >= crate::constants::TASK_MAX_CONSECUTIVE_TOOL_ERRORS
-                    {
+                    if consecutive_tool_errors >= crate::constants::TASK_MAX_CONSECUTIVE_TOOL_ERRORS {
                         warn!(
                             task_id = %task_id,
                             consecutive_errors = consecutive_tool_errors,
@@ -712,22 +611,12 @@ impl Agent {
 
         // Verify work with Haiku (cheap quality check)
         if !accumulated_response.is_empty() {
-            if let Some(issues) =
-                verify_work(&assignment.title, &accumulated_response, &files_modified).await
-            {
-                info!(
-                    "Haiku found {} issues, running correction round",
-                    issues.len()
-                );
+            if let Some(issues) = verify_work(&assignment.title, &accumulated_response, &files_modified).await {
+                info!("Haiku found {} issues, running correction round", issues.len());
 
                 let issue_text = format!(
                     "A reviewer found these issues with your work:\n{}\n\nPlease fix these issues.",
-                    issues
-                        .iter()
-                        .enumerate()
-                        .map(|(i, s)| format!("{}. {}", i + 1, s))
-                        .collect::<Vec<_>>()
-                        .join("\n")
+                    issues.iter().enumerate().map(|(i, s)| format!("{}. {}", i + 1, s)).collect::<Vec<_>>().join("\n")
                 );
                 messages.push(Message::user(&issue_text));
 
@@ -772,9 +661,7 @@ impl Agent {
                     total_output_tokens += fix_response.usage.output_tokens as u64;
                     if fix_response.stop_reason == StopReason::ToolUse {
                         if let Some(exec_ctx) = &assignment.context.execution_context {
-                            messages.push(Message::assistant_with_blocks(
-                                fix_response.content_blocks.clone(),
-                            ));
+                            messages.push(Message::assistant_with_blocks(fix_response.content_blocks.clone()));
                             let mut tool_results = Vec::new();
                             for block in &fix_response.content_blocks {
                                 if let ContentBlock::ToolUse { id, name, input } = block {
@@ -788,25 +675,14 @@ impl Agent {
                                         )
                                         .await
                                     } else {
-                                        let fix_cluster = assignment
-                                            .context
-                                            .tool_rows
-                                            .iter()
-                                            .find(|t| t.name == *name)
-                                            .and_then(|t| t.cluster_id);
+                                        let fix_cluster = assignment.context.tool_rows.iter().find(|t| t.name == *name).and_then(|t| t.cluster_id);
 
                                         if fix_cluster.is_some() {
                                             serde_json::json!({
                                                 "error": "Cluster routing not yet implemented for this tool"
                                             })
                                         } else {
-                                            execution_tools::execute_execution_tool(
-                                                name,
-                                                input,
-                                                exec_ctx,
-                                                allowed_tools,
-                                            )
-                                            .await
+                                            execution_tools::execute_execution_tool(name, input, exec_ctx, allowed_tools).await
                                         }
                                     };
 
@@ -820,8 +696,7 @@ impl Agent {
                                         }
                                     }
 
-                                    let result_str = serde_json::to_string_pretty(&result)
-                                        .unwrap_or_else(|_| result.to_string());
+                                    let result_str = serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string());
 
                                     tool_results.push(ContentBlock::ToolResult {
                                         tool_use_id: id.clone(),
@@ -836,8 +711,7 @@ impl Agent {
             }
         }
 
-        self.emit_progress(task_id, "Task complete", Some(100))
-            .await?;
+        self.emit_progress(task_id, "Task complete", Some(100)).await?;
 
         info!(
             task_id = %task_id,
@@ -861,10 +735,7 @@ impl Agent {
     }
 
     /// Execute task with timeout
-    async fn execute_task_with_timeout(
-        &self,
-        assignment: &TaskAssignment,
-    ) -> Result<TaskResult, AgentError> {
+    async fn execute_task_with_timeout(&self, assignment: &TaskAssignment) -> Result<TaskResult, AgentError> {
         let task_timeout = assignment.timeout;
 
         match timeout(task_timeout, self.execute_task_with_progress(assignment)).await {
@@ -877,10 +748,7 @@ impl Agent {
     }
 
     /// Handle context received while waiting
-    async fn handle_context_received(
-        &mut self,
-        context: ContextResponse,
-    ) -> Result<(), AgentError> {
+    async fn handle_context_received(&mut self, context: ContextResponse) -> Result<(), AgentError> {
         // Verify we were waiting for context
         if !matches!(self.status, AgentStatus::WaitingForContext) {
             warn!("Received context but not waiting for it");
@@ -891,12 +759,7 @@ impl Agent {
         // In practice, this would continue the paused task
         self.resume()?;
 
-        self.emit_progress(
-            context.task_id,
-            "Received additional context, resuming...",
-            None,
-        )
-        .await?;
+        self.emit_progress(context.task_id, "Received additional context, resuming...", None).await?;
 
         // Continue task execution would happen here
         // For now, just acknowledge
@@ -913,8 +776,7 @@ impl Agent {
         self.resume()?;
 
         if let Some(task_id) = self.current_task {
-            self.emit_progress(task_id, "Approval granted, proceeding...", None)
-                .await?;
+            self.emit_progress(task_id, "Approval granted, proceeding...", None).await?;
         }
 
         Ok(())
@@ -949,21 +811,12 @@ impl Agent {
 
     /// Request additional context from dispatcher
     #[allow(dead_code)]
-    async fn request_context(
-        &mut self,
-        task_id: Uuid,
-        files_needed: Vec<String>,
-        questions: Vec<String>,
-    ) -> Result<(), AgentError> {
+    async fn request_context(&mut self, task_id: Uuid, files_needed: Vec<String>, questions: Vec<String>) -> Result<(), AgentError> {
         self.wait_for_context()?;
 
         self.send_response(AgentResponse::ContextRequest {
             agent_id: self.id.clone(),
-            request: ContextRequest {
-                task_id,
-                files_needed,
-                questions,
-            },
+            request: ContextRequest { task_id, files_needed, questions },
         })
         .await?;
 
@@ -972,12 +825,7 @@ impl Agent {
 
     /// Request approval before proceeding
     #[allow(dead_code)]
-    async fn request_approval(
-        &mut self,
-        task_id: Uuid,
-        action: &str,
-        details: &str,
-    ) -> Result<(), AgentError> {
+    async fn request_approval(&mut self, task_id: Uuid, action: &str, details: &str) -> Result<(), AgentError> {
         self.wait_for_approval()?;
 
         self.send_response(AgentResponse::ApprovalRequest {
@@ -1013,10 +861,7 @@ mod tests {
 
     #[async_trait]
     impl LLMProvider for MockLLMProvider {
-        async fn send_message(
-            &self,
-            _request: LLMRequest,
-        ) -> Result<LLMResponse, crate::llm::LLMError> {
+        async fn send_message(&self, _request: LLMRequest) -> Result<LLMResponse, crate::llm::LLMError> {
             Ok(LLMResponse {
                 content: "test response".to_string(),
                 content_blocks: vec![],
@@ -1029,13 +874,7 @@ mod tests {
             })
         }
 
-        async fn send_message_stream(
-            &self,
-            _request: LLMRequest,
-        ) -> Result<
-            Pin<Box<dyn Stream<Item = Result<StreamChunk, crate::llm::LLMError>> + Send>>,
-            crate::llm::LLMError,
-        > {
+        async fn send_message_stream(&self, _request: LLMRequest) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, crate::llm::LLMError>> + Send>>, crate::llm::LLMError> {
             let chunks = vec![
                 Ok(StreamChunk::MessageStart {
                     model: "test-model".to_string(),
@@ -1068,23 +907,14 @@ mod tests {
 
     #[async_trait]
     impl LLMProvider for FailingLLMProvider {
-        async fn send_message(
-            &self,
-            _request: LLMRequest,
-        ) -> Result<LLMResponse, crate::llm::LLMError> {
+        async fn send_message(&self, _request: LLMRequest) -> Result<LLMResponse, crate::llm::LLMError> {
             Err(crate::llm::LLMError::ApiError {
                 status: 500,
                 message: "mock error".to_string(),
             })
         }
 
-        async fn send_message_stream(
-            &self,
-            _request: LLMRequest,
-        ) -> Result<
-            Pin<Box<dyn Stream<Item = Result<StreamChunk, crate::llm::LLMError>> + Send>>,
-            crate::llm::LLMError,
-        > {
+        async fn send_message_stream(&self, _request: LLMRequest) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, crate::llm::LLMError>> + Send>>, crate::llm::LLMError> {
             Err(crate::llm::LLMError::ApiError {
                 status: 500,
                 message: "mock error".to_string(),
@@ -1105,10 +935,7 @@ mod tests {
 
     #[async_trait]
     impl LLMProvider for SlowLLMProvider {
-        async fn send_message(
-            &self,
-            _request: LLMRequest,
-        ) -> Result<LLMResponse, crate::llm::LLMError> {
+        async fn send_message(&self, _request: LLMRequest) -> Result<LLMResponse, crate::llm::LLMError> {
             tokio::time::sleep(Duration::from_secs(10)).await;
             Ok(LLMResponse {
                 content: "too slow".to_string(),
@@ -1122,13 +949,7 @@ mod tests {
             })
         }
 
-        async fn send_message_stream(
-            &self,
-            _request: LLMRequest,
-        ) -> Result<
-            Pin<Box<dyn Stream<Item = Result<StreamChunk, crate::llm::LLMError>> + Send>>,
-            crate::llm::LLMError,
-        > {
+        async fn send_message_stream(&self, _request: LLMRequest) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, crate::llm::LLMError>> + Send>>, crate::llm::LLMError> {
             tokio::time::sleep(Duration::from_secs(10)).await;
             unreachable!()
         }
@@ -1142,23 +963,10 @@ mod tests {
         }
     }
 
-    fn create_test_agent_with_channels(
-        provider: Arc<dyn LLMProvider + Send + Sync>,
-    ) -> (
-        Agent,
-        mpsc::Sender<AgentCommand>,
-        mpsc::Receiver<AgentResponse>,
-    ) {
+    fn create_test_agent_with_channels(provider: Arc<dyn LLMProvider + Send + Sync>) -> (Agent, mpsc::Sender<AgentCommand>, mpsc::Receiver<AgentResponse>) {
         let (command_tx, command_rx) = mpsc::channel(32);
         let (response_tx, response_rx) = mpsc::channel(32);
-        let agent = Agent::new(
-            AgentTier::Worker,
-            AgentPersona::default(),
-            ModelConfig::default(),
-            provider,
-            command_rx,
-            response_tx,
-        );
+        let agent = Agent::new(AgentTier::Worker, AgentPersona::default(), ModelConfig::default(), provider, command_rx, response_tx);
         (agent, command_tx, response_rx)
     }
 
@@ -1202,22 +1010,10 @@ mod tests {
     #[test]
     fn temperature_for_style_values() {
         let agent = create_test_agent();
-        assert_eq!(
-            agent.temperature_for_style(&CommunicationStyle::Technical),
-            0.3
-        );
-        assert_eq!(
-            agent.temperature_for_style(&CommunicationStyle::Casual),
-            0.7
-        );
-        assert_eq!(
-            agent.temperature_for_style(&CommunicationStyle::Formal),
-            0.4
-        );
-        assert_eq!(
-            agent.temperature_for_style(&CommunicationStyle::Friendly),
-            0.6
-        );
+        assert_eq!(agent.temperature_for_style(&CommunicationStyle::Technical), 0.3);
+        assert_eq!(agent.temperature_for_style(&CommunicationStyle::Casual), 0.7);
+        assert_eq!(agent.temperature_for_style(&CommunicationStyle::Formal), 0.4);
+        assert_eq!(agent.temperature_for_style(&CommunicationStyle::Friendly), 0.6);
     }
 
     #[test]
@@ -1236,8 +1032,7 @@ mod tests {
         let result = agent.output_format_instructions(&OutputFormat::Result);
         assert!(result.contains("result"));
 
-        let custom =
-            agent.output_format_instructions(&OutputFormat::Custom("Use YAML".to_string()));
+        let custom = agent.output_format_instructions(&OutputFormat::Custom("Use YAML".to_string()));
         assert!(custom.contains("Use YAML"));
     }
 
@@ -1272,9 +1067,7 @@ mod tests {
             },
         };
 
-        let result = agent
-            .parse_llm_response(task_id, response, &OutputFormat::CodeAndReport)
-            .unwrap();
+        let result = agent.parse_llm_response(task_id, response, &OutputFormat::CodeAndReport).unwrap();
         assert_eq!(result.task_id, task_id);
         assert_eq!(result.status, TaskStatus::Completed);
         assert_eq!(result.files_modified, vec!["src/lib.rs"]);
@@ -1297,9 +1090,7 @@ mod tests {
         };
 
         // Plan format should not extract files
-        let result = agent
-            .parse_llm_response(task_id, response, &OutputFormat::Plan)
-            .unwrap();
+        let result = agent.parse_llm_response(task_id, response, &OutputFormat::Plan).unwrap();
         assert!(result.files_modified.is_empty());
     }
 
@@ -1365,8 +1156,7 @@ mod tests {
 
     #[tokio::test]
     async fn handle_shutdown_idle_sends_shutdown_complete() {
-        let (mut agent, _cmd_tx, mut resp_rx) =
-            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+        let (mut agent, _cmd_tx, mut resp_rx) = create_test_agent_with_channels(Arc::new(MockLLMProvider));
 
         agent.handle_shutdown().await.unwrap();
         assert!(agent.is_shutdown());
@@ -1380,8 +1170,7 @@ mod tests {
 
     #[tokio::test]
     async fn handle_shutdown_working_fails_task_then_shuts_down() {
-        let (mut agent, _cmd_tx, mut resp_rx) =
-            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+        let (mut agent, _cmd_tx, mut resp_rx) = create_test_agent_with_channels(Arc::new(MockLLMProvider));
 
         let task_id = Uuid::new_v4();
         agent.start_task(task_id).unwrap();
@@ -1408,8 +1197,7 @@ mod tests {
 
     #[tokio::test]
     async fn handle_task_assignment_success() {
-        let (mut agent, _cmd_tx, mut resp_rx) =
-            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+        let (mut agent, _cmd_tx, mut resp_rx) = create_test_agent_with_channels(Arc::new(MockLLMProvider));
 
         let assignment = make_assignment();
         let task_id = assignment.task_id;
@@ -1438,8 +1226,7 @@ mod tests {
 
     #[tokio::test]
     async fn handle_task_assignment_llm_failure() {
-        let (mut agent, _cmd_tx, mut resp_rx) =
-            create_test_agent_with_channels(Arc::new(FailingLLMProvider));
+        let (mut agent, _cmd_tx, mut resp_rx) = create_test_agent_with_channels(Arc::new(FailingLLMProvider));
 
         let assignment = make_assignment();
         let task_id = assignment.task_id;
@@ -1465,8 +1252,7 @@ mod tests {
 
     #[tokio::test]
     async fn handle_task_assignment_timeout() {
-        let (mut agent, _cmd_tx, mut resp_rx) =
-            create_test_agent_with_channels(Arc::new(SlowLLMProvider));
+        let (mut agent, _cmd_tx, mut resp_rx) = create_test_agent_with_channels(Arc::new(SlowLLMProvider));
 
         let mut assignment = make_assignment();
         assignment.timeout = Duration::from_millis(50); // very short timeout
@@ -1489,8 +1275,7 @@ mod tests {
 
     #[tokio::test]
     async fn handle_context_received_not_waiting_is_noop() {
-        let (mut agent, _cmd_tx, _resp_rx) =
-            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+        let (mut agent, _cmd_tx, _resp_rx) = create_test_agent_with_channels(Arc::new(MockLLMProvider));
 
         // Agent is Idle, not WaitingForContext
         let context = ContextResponse {
@@ -1504,8 +1289,7 @@ mod tests {
 
     #[tokio::test]
     async fn handle_context_received_resumes() {
-        let (mut agent, _cmd_tx, mut _resp_rx) =
-            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+        let (mut agent, _cmd_tx, mut _resp_rx) = create_test_agent_with_channels(Arc::new(MockLLMProvider));
 
         let task_id = Uuid::new_v4();
         agent.start_task(task_id).unwrap();
@@ -1523,8 +1307,7 @@ mod tests {
 
     #[tokio::test]
     async fn handle_approval_granted_not_waiting_is_noop() {
-        let (mut agent, _cmd_tx, _resp_rx) =
-            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+        let (mut agent, _cmd_tx, _resp_rx) = create_test_agent_with_channels(Arc::new(MockLLMProvider));
 
         agent.handle_approval_granted().await.unwrap();
         assert_eq!(agent.status(), AgentStatus::Idle);
@@ -1532,8 +1315,7 @@ mod tests {
 
     #[tokio::test]
     async fn handle_approval_granted_resumes() {
-        let (mut agent, _cmd_tx, _resp_rx) =
-            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+        let (mut agent, _cmd_tx, _resp_rx) = create_test_agent_with_channels(Arc::new(MockLLMProvider));
 
         let task_id = Uuid::new_v4();
         agent.start_task(task_id).unwrap();
@@ -1545,8 +1327,7 @@ mod tests {
 
     #[tokio::test]
     async fn handle_approval_denied_not_waiting_is_noop() {
-        let (mut agent, _cmd_tx, _resp_rx) =
-            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+        let (mut agent, _cmd_tx, _resp_rx) = create_test_agent_with_channels(Arc::new(MockLLMProvider));
 
         agent.handle_approval_denied("nope").await.unwrap();
         assert_eq!(agent.status(), AgentStatus::Idle);
@@ -1554,8 +1335,7 @@ mod tests {
 
     #[tokio::test]
     async fn handle_approval_denied_fails_task() {
-        let (mut agent, _cmd_tx, mut resp_rx) =
-            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+        let (mut agent, _cmd_tx, mut resp_rx) = create_test_agent_with_channels(Arc::new(MockLLMProvider));
 
         let task_id = Uuid::new_v4();
         agent.start_task(task_id).unwrap();
@@ -1576,8 +1356,7 @@ mod tests {
 
     #[tokio::test]
     async fn run_loop_shutdown_command() {
-        let (agent, cmd_tx, mut resp_rx) =
-            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+        let (agent, cmd_tx, mut resp_rx) = create_test_agent_with_channels(Arc::new(MockLLMProvider));
 
         let handle = tokio::spawn(agent.run());
 
@@ -1601,14 +1380,10 @@ mod tests {
 
     #[tokio::test]
     async fn emit_progress_sends_update() {
-        let (agent, _cmd_tx, mut resp_rx) =
-            create_test_agent_with_channels(Arc::new(MockLLMProvider));
+        let (agent, _cmd_tx, mut resp_rx) = create_test_agent_with_channels(Arc::new(MockLLMProvider));
 
         let task_id = Uuid::new_v4();
-        agent
-            .emit_progress(task_id, "working...", Some(50))
-            .await
-            .unwrap();
+        agent.emit_progress(task_id, "working...", Some(50)).await.unwrap();
 
         let resp = resp_rx.recv().await.unwrap();
         match resp {

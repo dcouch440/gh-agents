@@ -35,17 +35,10 @@ pub fn verify_password(password: &str, hash: &str) -> bool {
         Ok(h) => h,
         Err(_) => return false,
     };
-    Argon2::default()
-        .verify_password(password.as_bytes(), &parsed_hash)
-        .is_ok()
+    Argon2::default().verify_password(password.as_bytes(), &parsed_hash).is_ok()
 }
 
-pub fn create_token(
-    secret: &[u8],
-    duration_hours: u64,
-    user_id: UserId,
-    email: &str,
-) -> Result<String, jsonwebtoken::errors::Error> {
+pub fn create_token(secret: &[u8], duration_hours: u64, user_id: UserId, email: &str) -> Result<String, jsonwebtoken::errors::Error> {
     let now = chrono::Utc::now();
     let exp = (now + chrono::Duration::hours(duration_hours as i64)).timestamp() as usize;
 
@@ -56,19 +49,11 @@ pub fn create_token(
         iat: now.timestamp() as usize,
     };
 
-    encode(
-        &Header::default(),
-        &claims,
-        &EncodingKey::from_secret(secret),
-    )
+    encode(&Header::default(), &claims, &EncodingKey::from_secret(secret))
 }
 
 pub fn verify_token(token: &str, secret: &[u8]) -> Result<Claims, jsonwebtoken::errors::Error> {
-    let token_data = decode::<Claims>(
-        token,
-        &DecodingKey::from_secret(secret),
-        &Validation::default(),
-    )?;
+    let token_data = decode::<Claims>(token, &DecodingKey::from_secret(secret), &Validation::default())?;
     Ok(token_data.claims)
 }
 
@@ -85,10 +70,7 @@ pub struct AuthUser {
 impl FromRequestParts<AppState> for AuthUser {
     type Rejection = StatusCode;
 
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &AppState,
-    ) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
         // Try Authorization header first, then fall back to ?token= query param
         // (needed for EventSource/SSE which cannot set custom headers)
         let token = parts
@@ -98,22 +80,17 @@ impl FromRequestParts<AppState> for AuthUser {
             .and_then(|s| s.strip_prefix("Bearer "))
             .map(|s| s.to_string())
             .or_else(|| {
-                parts.uri.query().and_then(|q| {
-                    q.split('&')
-                        .find_map(|pair| pair.strip_prefix("token=").map(|v| v.to_string()))
-                })
+                parts
+                    .uri
+                    .query()
+                    .and_then(|q| q.split('&').find_map(|pair| pair.strip_prefix("token=").map(|v| v.to_string())))
             })
             .ok_or(StatusCode::UNAUTHORIZED)?;
         let token = &token;
 
-        let claims =
-            verify_token(token, &state.jwt_secret).map_err(|_| StatusCode::UNAUTHORIZED)?;
+        let claims = verify_token(token, &state.jwt_secret).map_err(|_| StatusCode::UNAUTHORIZED)?;
 
-        let user_id = claims
-            .sub
-            .parse::<Uuid>()
-            .map(UserId)
-            .map_err(|_| StatusCode::UNAUTHORIZED)?;
+        let user_id = claims.sub.parse::<Uuid>().map(UserId).map_err(|_| StatusCode::UNAUTHORIZED)?;
 
         Ok(AuthUser { user_id, claims })
     }
@@ -136,8 +113,7 @@ mod tests {
     fn test_create_and_verify_token() {
         let secret = b"test_secret_key_123";
         let user_id = UserId::new();
-        let token =
-            create_token(secret, 24, user_id, "test@example.com").expect("Failed to create token");
+        let token = create_token(secret, 24, user_id, "test@example.com").expect("Failed to create token");
 
         let claims = verify_token(&token, secret).expect("Failed to verify token");
         assert!(uuid::Uuid::parse_str(&claims.sub).is_ok());
@@ -150,8 +126,7 @@ mod tests {
         let secret = b"test_secret_key_123";
         let wrong_secret = b"wrong_secret_key";
         let user_id = UserId::new();
-        let token =
-            create_token(secret, 24, user_id, "test@example.com").expect("Failed to create token");
+        let token = create_token(secret, 24, user_id, "test@example.com").expect("Failed to create token");
 
         assert!(verify_token(&token, wrong_secret).is_err());
     }

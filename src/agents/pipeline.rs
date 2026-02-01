@@ -90,22 +90,14 @@ impl PipelineManager {
     /// Create a new pipeline, returning its ID.
     pub fn create_pipeline(&mut self, name: String) -> PipelineId {
         let id = PipelineId::new();
-        let pipeline = Pipeline {
-            id,
-            name,
-            stages: Vec::new(),
-        };
+        let pipeline = Pipeline { id, name, stages: Vec::new() };
         self.pipelines.insert(id, pipeline);
         id
     }
 
     /// Create a pipeline with a specific ID (for reconstruction from DB).
     pub fn create_pipeline_with_id(&mut self, id: PipelineId, name: String) {
-        let pipeline = Pipeline {
-            id,
-            name,
-            stages: Vec::new(),
-        };
+        let pipeline = Pipeline { id, name, stages: Vec::new() };
         self.pipelines.insert(id, pipeline);
     }
 
@@ -123,10 +115,7 @@ impl PipelineManager {
         output_description: String,
         output_schema: Value,
     ) -> Result<u32, PipelineError> {
-        let pipeline = self
-            .pipelines
-            .get_mut(&pipeline_id)
-            .ok_or(PipelineError::NotFound(pipeline_id))?;
+        let pipeline = self.pipelines.get_mut(&pipeline_id).ok_or(PipelineError::NotFound(pipeline_id))?;
         let stage_number = pipeline.stages.len() as u32;
         pipeline.stages.push(PipelineStage {
             stage_number,
@@ -145,15 +134,8 @@ impl PipelineManager {
 
     /// Start a new run of a pipeline. Returns the run_id and first stage.
     /// Caller is responsible for assigning the first stage's task.
-    pub fn start_run(
-        &mut self,
-        pipeline_id: PipelineId,
-        task_description: String,
-    ) -> Result<(Uuid, &PipelineStage), PipelineError> {
-        let pipeline = self
-            .pipelines
-            .get(&pipeline_id)
-            .ok_or(PipelineError::NotFound(pipeline_id))?;
+    pub fn start_run(&mut self, pipeline_id: PipelineId, task_description: String) -> Result<(Uuid, &PipelineStage), PipelineError> {
+        let pipeline = self.pipelines.get(&pipeline_id).ok_or(PipelineError::NotFound(pipeline_id))?;
         if pipeline.stages.is_empty() {
             return Err(PipelineError::NoStages(pipeline_id));
         }
@@ -189,14 +171,8 @@ impl PipelineManager {
 
     /// Advance to the next stage. Returns the next stage, or None if pipeline is complete.
     pub fn advance_stage(&mut self, run_id: Uuid) -> Result<Option<PipelineStage>, PipelineError> {
-        let run = self
-            .runs
-            .get_mut(&run_id)
-            .ok_or(PipelineError::RunNotFound(run_id))?;
-        let pipeline = self
-            .pipelines
-            .get(&run.pipeline_id)
-            .ok_or(PipelineError::NotFound(run.pipeline_id))?;
+        let run = self.runs.get_mut(&run_id).ok_or(PipelineError::RunNotFound(run_id))?;
+        let pipeline = self.pipelines.get(&run.pipeline_id).ok_or(PipelineError::NotFound(run.pipeline_id))?;
 
         let next = run.current_stage + 1;
         if next >= pipeline.stages.len() as u32 {
@@ -218,19 +194,13 @@ impl PipelineManager {
     /// Retry the current stage. Returns the stage to re-execute, or fails the run
     /// if max retries are exceeded.
     pub fn retry_stage(&mut self, run_id: Uuid) -> Result<Option<PipelineStage>, PipelineError> {
-        let run = self
-            .runs
-            .get_mut(&run_id)
-            .ok_or(PipelineError::RunNotFound(run_id))?;
+        let run = self.runs.get_mut(&run_id).ok_or(PipelineError::RunNotFound(run_id))?;
         if run.stage_retries >= run.max_stage_retries {
             run.status = PipelineRunStatus::Failed;
             return Err(PipelineError::MaxRetriesExceeded(run_id));
         }
         run.stage_retries += 1;
-        let pipeline = self
-            .pipelines
-            .get(&run.pipeline_id)
-            .ok_or(PipelineError::NotFound(run.pipeline_id))?;
+        let pipeline = self.pipelines.get(&run.pipeline_id).ok_or(PipelineError::NotFound(run.pipeline_id))?;
         tracing::info!(
             run_id = %run_id,
             stage = run.current_stage,
@@ -243,10 +213,7 @@ impl PipelineManager {
 
     /// Mark a run as failed with a reason.
     pub fn fail_run(&mut self, run_id: Uuid, reason: &str) -> Result<(), PipelineError> {
-        let run = self
-            .runs
-            .get_mut(&run_id)
-            .ok_or(PipelineError::RunNotFound(run_id))?;
+        let run = self.runs.get_mut(&run_id).ok_or(PipelineError::RunNotFound(run_id))?;
         run.status = PipelineRunStatus::Failed;
         tracing::warn!(
             run_id = %run_id,
@@ -293,10 +260,7 @@ impl PipelineManager {
     pub fn get_stage_name(&self, run_id: Uuid, stage_number: u32) -> Option<String> {
         let run = self.runs.get(&run_id)?;
         let pipeline = self.pipelines.get(&run.pipeline_id)?;
-        pipeline
-            .stages
-            .get(stage_number as usize)
-            .map(|s| s.stage_name.clone())
+        pipeline.stages.get(stage_number as usize).map(|s| s.stage_name.clone())
     }
 
     /// List all pipelines.
@@ -310,10 +274,7 @@ impl PipelineManager {
 /// Tries to extract a JSON object from the output (fenced ```json blocks or bare `{...}`).
 /// Falls back to wrapping the raw text as `{"output": "..."}`.
 pub fn parse_stage_output(raw: &str, output_schema: &Value) -> Value {
-    let has_fields = output_schema
-        .get("fields")
-        .and_then(|f| f.as_array())
-        .is_some_and(|a| !a.is_empty());
+    let has_fields = output_schema.get("fields").and_then(|f| f.as_array()).is_some_and(|a| !a.is_empty());
 
     if has_fields {
         // Try ```json ... ``` fenced block
@@ -365,29 +326,13 @@ mod tests {
     }
 
     fn default_stage_args() -> (String, Value, String, Value) {
-        (
-            String::new(),
-            serde_json::json!([]),
-            String::new(),
-            serde_json::json!({"fields": []}),
-        )
+        (String::new(), serde_json::json!([]), String::new(), serde_json::json!({"fields": []}))
     }
 
     macro_rules! add_stage {
         ($mgr:expr, $pid:expr, $agent:expr, $role:expr, $approval:expr) => {{
             let (sn, id, od, os) = default_stage_args();
-            $mgr.add_stage(
-                $pid,
-                Some($agent),
-                None,
-                $role,
-                $approval,
-                false,
-                sn,
-                id,
-                od,
-                os,
-            )
+            $mgr.add_stage($pid, Some($agent), None, $role, $approval, false, sn, id, od, os)
         }};
     }
 
@@ -449,10 +394,7 @@ mod tests {
         // Advance past last stage → completed
         let next = mgr.advance_stage(run_id).unwrap();
         assert!(next.is_none());
-        assert_eq!(
-            mgr.get_run(run_id).unwrap().status,
-            PipelineRunStatus::Completed
-        );
+        assert_eq!(mgr.get_run(run_id).unwrap().status, PipelineRunStatus::Completed);
     }
 
     #[test]
@@ -469,10 +411,7 @@ mod tests {
         add_stage!(mgr, pid, agent(1), None, false).unwrap();
         let (run_id, _) = mgr.start_run(pid, "task".into()).unwrap();
         mgr.fail_run(run_id, "test failure").unwrap();
-        assert_eq!(
-            mgr.get_run(run_id).unwrap().status,
-            PipelineRunStatus::Failed
-        );
+        assert_eq!(mgr.get_run(run_id).unwrap().status, PipelineRunStatus::Failed);
     }
 
     #[test]
@@ -546,10 +485,7 @@ mod tests {
         // Second retry exceeds max
         let result = mgr.retry_stage(run_id);
         assert!(matches!(result, Err(PipelineError::MaxRetriesExceeded(_))));
-        assert_eq!(
-            mgr.get_run(run_id).unwrap().status,
-            PipelineRunStatus::Failed
-        );
+        assert_eq!(mgr.get_run(run_id).unwrap().status, PipelineRunStatus::Failed);
     }
 
     #[test]

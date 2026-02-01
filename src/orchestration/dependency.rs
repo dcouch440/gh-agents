@@ -105,10 +105,7 @@ impl<R: DependencyRepo> DependencyTracker<R> {
     }
 
     /// Get the dependencies of a task from the database
-    pub async fn get_task_dependencies(
-        &self,
-        task_id: &TaskId,
-    ) -> Result<Vec<TaskId>, DependencyError> {
+    pub async fn get_task_dependencies(&self, task_id: &TaskId) -> Result<Vec<TaskId>, DependencyError> {
         self.repo.get_task_dependencies(task_id.clone()).await
     }
 
@@ -119,11 +116,7 @@ impl<R: DependencyRepo> DependencyTracker<R> {
     }
 
     /// Check for circular dependencies when adding a new dependency
-    pub async fn would_create_cycle(
-        &self,
-        task_id: &TaskId,
-        new_dep_id: &TaskId,
-    ) -> Result<bool, DependencyError> {
+    pub async fn would_create_cycle(&self, task_id: &TaskId, new_dep_id: &TaskId) -> Result<bool, DependencyError> {
         // DFS to check if new_dep_id can reach task_id through the dependency graph
         let mut visited = HashSet::new();
         let mut stack = vec![new_dep_id.clone()];
@@ -151,50 +144,30 @@ impl<R: DependencyRepo> DependencyTracker<R> {
         for dep_id in &task.depends_on {
             // Check for cycle first
             if self.would_create_cycle(&task.id, dep_id).await? {
-                return Err(DependencyError::CircularDependency(format!(
-                    "{} -> {}",
-                    task.id, dep_id
-                )));
+                return Err(DependencyError::CircularDependency(format!("{} -> {}", task.id, dep_id)));
             }
 
             let now = chrono::Utc::now();
-            self.repo
-                .save_dependency(task.id.clone(), dep_id.clone(), now)
-                .await?;
+            self.repo.save_dependency(task.id.clone(), dep_id.clone(), now).await?;
         }
 
         Ok(())
     }
 
     /// Add a single dependency
-    pub async fn add_dependency(
-        &self,
-        task_id: &TaskId,
-        depends_on: &TaskId,
-    ) -> Result<(), DependencyError> {
+    pub async fn add_dependency(&self, task_id: &TaskId, depends_on: &TaskId) -> Result<(), DependencyError> {
         // Check for cycle first
         if self.would_create_cycle(task_id, depends_on).await? {
-            return Err(DependencyError::CircularDependency(format!(
-                "{} -> {}",
-                task_id, depends_on
-            )));
+            return Err(DependencyError::CircularDependency(format!("{} -> {}", task_id, depends_on)));
         }
 
         let now = chrono::Utc::now();
-        self.repo
-            .save_dependency(task_id.clone(), depends_on.clone(), now)
-            .await
+        self.repo.save_dependency(task_id.clone(), depends_on.clone(), now).await
     }
 
     /// Remove a dependency
-    pub async fn remove_dependency(
-        &self,
-        task_id: &TaskId,
-        depends_on: &TaskId,
-    ) -> Result<(), DependencyError> {
-        self.repo
-            .remove_dependency(task_id.clone(), depends_on.clone())
-            .await
+    pub async fn remove_dependency(&self, task_id: &TaskId, depends_on: &TaskId) -> Result<(), DependencyError> {
+        self.repo.remove_dependency(task_id.clone(), depends_on.clone()).await
     }
 
     /// Get all tasks that are ready to execute (no blocking dependencies)
@@ -247,9 +220,7 @@ mod tests {
         let dep_task = make_task("Dependency");
         let dep_id = dep_task.id.clone();
 
-        mock.expect_get_task_status()
-            .withf(move |id| *id == dep_id)
-            .returning(|_| Ok(Some(TaskStatus::Pending)));
+        mock.expect_get_task_status().withf(move |id| *id == dep_id).returning(|_| Ok(Some(TaskStatus::Pending)));
 
         let tracker = DependencyTracker::new(mock);
 
@@ -266,9 +237,7 @@ mod tests {
         let dep_task = make_task("Dependency");
         let dep_id = dep_task.id.clone();
 
-        mock.expect_get_task_status()
-            .withf(move |id| *id == dep_id)
-            .returning(|_| Ok(Some(TaskStatus::Completed)));
+        mock.expect_get_task_status().withf(move |id| *id == dep_id).returning(|_| Ok(Some(TaskStatus::Completed)));
 
         let tracker = DependencyTracker::new(mock);
 
@@ -290,13 +259,8 @@ mod tests {
 
         // save_dependencies calls would_create_cycle which calls get_task_dependencies
         // then calls save_dependency
-        mock.expect_get_task_dependencies().returning(move |id| {
-            if id == task_b_id {
-                Ok(vec![task_a_id_ret.clone()])
-            } else {
-                Ok(vec![])
-            }
-        });
+        mock.expect_get_task_dependencies()
+            .returning(move |id| if id == task_b_id { Ok(vec![task_a_id_ret.clone()]) } else { Ok(vec![]) });
 
         mock.expect_save_dependency().returning(|_, _, _| Ok(()));
 
@@ -327,30 +291,19 @@ mod tests {
         //   but B reaches A which == task_id (A), so cycle detected
         let a_id_for_closure = task_a_id.clone();
         let b_id_for_closure = task_b_id.clone();
-        mock.expect_get_task_dependencies().returning(move |id| {
-            if id == b_id_for_closure {
-                Ok(vec![a_id_for_closure.clone()])
-            } else {
-                Ok(vec![])
-            }
-        });
+        mock.expect_get_task_dependencies()
+            .returning(move |id| if id == b_id_for_closure { Ok(vec![a_id_for_closure.clone()]) } else { Ok(vec![]) });
 
         mock.expect_save_dependency().returning(|_, _, _| Ok(()));
 
         let tracker = DependencyTracker::new(mock);
 
         // B depends on A - should succeed
-        tracker
-            .add_dependency(&task_b.id, &task_a.id)
-            .await
-            .unwrap();
+        tracker.add_dependency(&task_b.id, &task_a.id).await.unwrap();
 
         // A depends on B - should detect cycle
         let result = tracker.add_dependency(&task_a.id, &task_b.id).await;
-        assert!(matches!(
-            result,
-            Err(DependencyError::CircularDependency(_))
-        ));
+        assert!(matches!(result, Err(DependencyError::CircularDependency(_))));
     }
 
     #[tokio::test]
@@ -363,8 +316,7 @@ mod tests {
         let b_id = task_b.id.clone();
         let c_id = task_c.id.clone();
 
-        mock.expect_get_blocked_by()
-            .returning(move |_| Ok(vec![b_id.clone(), c_id.clone()]));
+        mock.expect_get_blocked_by().returning(move |_| Ok(vec![b_id.clone(), c_id.clone()]));
 
         let tracker = DependencyTracker::new(mock);
 
@@ -459,8 +411,7 @@ mod tests {
         let task_a = make_task("Task A");
         let a_id = task_a.id.clone();
 
-        mock.expect_get_ready_task_ids()
-            .returning(move || Ok(vec![a_id.clone()]));
+        mock.expect_get_ready_task_ids().returning(move || Ok(vec![a_id.clone()]));
 
         let tracker = DependencyTracker::new(mock);
 
@@ -506,18 +457,12 @@ mod tests {
         let tracker = DependencyTracker::new(mock);
 
         // Add dependency
-        tracker
-            .add_dependency(&task_b.id, &task_a.id)
-            .await
-            .unwrap();
+        tracker.add_dependency(&task_b.id, &task_a.id).await.unwrap();
         let deps = tracker.get_task_dependencies(&task_b.id).await.unwrap();
         assert_eq!(deps.len(), 1);
 
         // Remove dependency
-        tracker
-            .remove_dependency(&task_b.id, &task_a.id)
-            .await
-            .unwrap();
+        tracker.remove_dependency(&task_b.id, &task_a.id).await.unwrap();
         let deps = tracker.get_task_dependencies(&task_b.id).await.unwrap();
         assert_eq!(deps.len(), 0);
     }

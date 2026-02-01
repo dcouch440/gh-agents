@@ -85,9 +85,7 @@ pub struct TaskQueue {
 
 impl TaskQueue {
     pub fn new() -> Self {
-        Self {
-            heap: BinaryHeap::new(),
-        }
+        Self { heap: BinaryHeap::new() }
     }
 
     pub fn len(&self) -> usize {
@@ -209,10 +207,7 @@ impl PersistentTaskQueue<PgRepo> {
 impl<R: TaskQueueRepo> PersistentTaskQueue<R> {
     /// Create a new persistent queue and load pending tasks from database.
     pub async fn new(repo: R) -> Result<Self, QueueError> {
-        let mut queue = Self {
-            inner: TaskQueue::new(),
-            repo,
-        };
+        let mut queue = Self { inner: TaskQueue::new(), repo };
         queue.load_from_db().await?;
         Ok(queue)
     }
@@ -225,10 +220,7 @@ impl<R: TaskQueueRepo> PersistentTaskQueue<R> {
             self.inner.enqueue(task);
         }
 
-        tracing::info!(
-            count = self.inner.len(),
-            "Loaded pending tasks from database"
-        );
+        tracing::info!(count = self.inner.len(), "Loaded pending tasks from database");
         Ok(())
     }
 
@@ -239,9 +231,7 @@ impl<R: TaskQueueRepo> PersistentTaskQueue<R> {
 
     /// Enqueue and update task status in database.
     pub async fn enqueue_and_persist(&mut self, task: Task) -> Result<(), QueueError> {
-        self.repo
-            .update_task_status(task.id.clone(), TaskStatus::Pending)
-            .await?;
+        self.repo.update_task_status(task.id.clone(), TaskStatus::Pending).await?;
 
         self.inner.enqueue(task);
         Ok(())
@@ -251,9 +241,7 @@ impl<R: TaskQueueRepo> PersistentTaskQueue<R> {
     pub async fn dequeue(&mut self) -> Result<Option<Task>, QueueError> {
         match self.inner.dequeue() {
             Some(task) => {
-                self.repo
-                    .update_task_status(task.id.clone(), TaskStatus::InProgress)
-                    .await?;
+                self.repo.update_task_status(task.id.clone(), TaskStatus::InProgress).await?;
 
                 Ok(Some(task))
             }
@@ -299,12 +287,7 @@ impl<R: TaskQueueRepo> PersistentTaskQueue<R> {
     ///
     /// Increments `retry_count` and checks against `max_retries`.
     /// Returns `QueueError::MaxRetriesExceeded` if the task has exhausted its retries.
-    pub async fn requeue(
-        &mut self,
-        mut task: Task,
-        policy: RequeuePolicy,
-        error_reason: Option<&str>,
-    ) -> Result<(), QueueError> {
+    pub async fn requeue(&mut self, mut task: Task, policy: RequeuePolicy, error_reason: Option<&str>) -> Result<(), QueueError> {
         // Track retry count and last error
         task.retry_count += 1;
         if let Some(reason) = error_reason {
@@ -336,15 +319,10 @@ impl<R: TaskQueueRepo> PersistentTaskQueue<R> {
 
         // Persist changes
         let priority_str = format!("{:?}", task.priority).to_lowercase();
-        let policy_description = format!(
-            "Requeued with policy {:?} (attempt {}/{})",
-            policy, task.retry_count, task.max_retries
-        );
+        let policy_description = format!("Requeued with policy {:?} (attempt {}/{})", policy, task.retry_count, task.max_retries);
         let now = Utc::now();
 
-        self.repo
-            .update_task_for_requeue(task.id.clone(), priority_str, policy_description, now)
-            .await?;
+        self.repo.update_task_for_requeue(task.id.clone(), priority_str, policy_description, now).await?;
 
         tracing::info!(
             task_id = %task.id.0,
@@ -410,10 +388,7 @@ impl DependencyAwareQueue {
         let queue = PersistentTaskQueue::from_pool(pool.clone()).await?;
         let dependency_tracker = DependencyTracker::new(PgRepo::new(pool));
 
-        Ok(Self {
-            queue,
-            dependency_tracker,
-        })
+        Ok(Self { queue, dependency_tracker })
     }
 }
 
@@ -422,31 +397,18 @@ impl DependencyAwareQueue {
 /// Uses mock repos that return empty results. Tasks should be added
 /// via `enqueue_in_memory`.
 #[cfg(test)]
-impl
-    DependencyAwareQueue<
-        crate::db::traits::MockTaskQueueRepo,
-        crate::db::traits::MockDependencyRepo,
-    >
-{
+impl DependencyAwareQueue<crate::db::traits::MockTaskQueueRepo, crate::db::traits::MockDependencyRepo> {
     pub async fn in_memory() -> Self {
         use crate::db::traits::{MockDependencyRepo, MockTaskQueueRepo};
 
         let mut task_mock = MockTaskQueueRepo::new();
-        task_mock
-            .expect_list_tasks_by_status()
-            .returning(|_| Ok(vec![]));
-        task_mock
-            .expect_update_task_status()
-            .returning(|_, _| Ok(()));
-        task_mock
-            .expect_update_task_for_requeue()
-            .returning(|_, _, _, _| Ok(()));
+        task_mock.expect_list_tasks_by_status().returning(|_| Ok(vec![]));
+        task_mock.expect_update_task_status().returning(|_, _| Ok(()));
+        task_mock.expect_update_task_for_requeue().returning(|_, _, _, _| Ok(()));
 
         let mut dep_mock = MockDependencyRepo::new();
         dep_mock.expect_get_blocked_by().returning(|_| Ok(vec![]));
-        dep_mock
-            .expect_get_task_dependencies()
-            .returning(|_| Ok(vec![]));
+        dep_mock.expect_get_task_dependencies().returning(|_| Ok(vec![]));
         dep_mock.expect_get_task_status().returning(|_| Ok(None));
 
         let queue = PersistentTaskQueue::new(task_mock).await.unwrap();
@@ -488,11 +450,7 @@ impl<TQ: TaskQueueRepo, DR: DependencyRepo> DependencyAwareQueue<TQ, DR> {
                         .await
                         .map_err(|e| QueueError::DatabaseError(e.to_string()))?;
 
-                    let is_blocked = self
-                        .dependency_tracker
-                        .is_blocked(&task)
-                        .await
-                        .map_err(|e| QueueError::DatabaseError(e.to_string()))?;
+                    let is_blocked = self.dependency_tracker.is_blocked(&task).await.map_err(|e| QueueError::DatabaseError(e.to_string()))?;
 
                     if is_blocked {
                         tracing::debug!(
@@ -530,11 +488,7 @@ impl<TQ: TaskQueueRepo, DR: DependencyRepo> DependencyAwareQueue<TQ, DR> {
         let mut unblocked = 0;
 
         for task in self.queue.all_tasks() {
-            let is_blocked = self
-                .dependency_tracker
-                .is_blocked(task)
-                .await
-                .map_err(|e| QueueError::DatabaseError(e.to_string()))?;
+            let is_blocked = self.dependency_tracker.is_blocked(task).await.map_err(|e| QueueError::DatabaseError(e.to_string()))?;
 
             if is_blocked {
                 blocked += 1;
@@ -576,12 +530,7 @@ impl<TQ: TaskQueueRepo, DR: DependencyRepo> DependencyAwareQueue<TQ, DR> {
     }
 
     /// Requeue a failed task
-    pub async fn requeue(
-        &mut self,
-        task: Task,
-        policy: RequeuePolicy,
-        error_reason: Option<&str>,
-    ) -> Result<(), QueueError> {
+    pub async fn requeue(&mut self, task: Task, policy: RequeuePolicy, error_reason: Option<&str>) -> Result<(), QueueError> {
         self.queue.requeue(task, policy, error_reason).await
     }
 
@@ -942,9 +891,7 @@ mod tests {
     fn prioritized_task_equality() {
         let task1 = make_task(Priority::Low);
         let task2 = make_task(Priority::High);
-        let pt1 = PrioritizedTask {
-            task: task1.clone(),
-        };
+        let pt1 = PrioritizedTask { task: task1.clone() };
         let pt2 = PrioritizedTask { task: task2 };
 
         // Different tasks are not equal
@@ -962,9 +909,7 @@ mod tests {
         let urgent = PrioritizedTask {
             task: make_task(Priority::Urgent),
         };
-        let low = PrioritizedTask {
-            task: make_task(Priority::Low),
-        };
+        let low = PrioritizedTask { task: make_task(Priority::Low) };
 
         // Urgent > Low in ordering
         assert!(urgent > low);
@@ -1050,8 +995,7 @@ mod persistent_queue_tests {
 
     fn mock_repo_with_tasks(tasks: Vec<Task>) -> MockTaskQueueRepo {
         let mut mock = MockTaskQueueRepo::new();
-        mock.expect_list_tasks_by_status()
-            .returning(move |_| Ok(tasks.clone()));
+        mock.expect_list_tasks_by_status().returning(move |_| Ok(tasks.clone()));
         mock
     }
 
@@ -1100,10 +1044,7 @@ mod persistent_queue_tests {
         let task = queue.dequeue().await.unwrap().unwrap();
         assert!(queue.is_empty());
 
-        queue
-            .requeue(task, RequeuePolicy::EscalatePriority, None)
-            .await
-            .unwrap();
+        queue.requeue(task, RequeuePolicy::EscalatePriority, None).await.unwrap();
 
         assert_eq!(queue.len(), 1);
         assert_eq!(queue.peek().unwrap().priority, Priority::High);
@@ -1114,16 +1055,12 @@ mod persistent_queue_tests {
         let task = make_task(Priority::Low);
         let mut mock = mock_repo_with_tasks(vec![task]);
         mock.expect_update_task_status().returning(|_, _| Ok(()));
-        mock.expect_update_task_for_requeue()
-            .returning(|_, _, _, _| Ok(()));
+        mock.expect_update_task_for_requeue().returning(|_, _, _, _| Ok(()));
 
         let mut queue = PersistentTaskQueue::new(mock).await.unwrap();
         let task = queue.dequeue().await.unwrap().unwrap();
 
-        queue
-            .requeue(task, RequeuePolicy::SetPriority(Priority::Urgent), None)
-            .await
-            .unwrap();
+        queue.requeue(task, RequeuePolicy::SetPriority(Priority::Urgent), None).await.unwrap();
 
         assert_eq!(queue.peek().unwrap().priority, Priority::Urgent);
     }
@@ -1140,10 +1077,7 @@ mod persistent_queue_tests {
 
         let mut queue = PersistentTaskQueue::new(mock).await.unwrap();
         let task = queue.dequeue().await.unwrap().unwrap();
-        queue
-            .requeue(task, RequeuePolicy::SamePriority, None)
-            .await
-            .unwrap();
+        queue.requeue(task, RequeuePolicy::SamePriority, None).await.unwrap();
     }
 
     #[tokio::test]
@@ -1238,31 +1172,19 @@ mod persistent_queue_tests {
         let task = make_task(Priority::High);
         let mut mock = mock_repo_with_tasks(vec![task]);
         mock.expect_update_task_status().returning(|_, _| Ok(()));
-        mock.expect_update_task_for_requeue()
-            .returning(|_, _, _, _| Ok(()));
+        mock.expect_update_task_for_requeue().returning(|_, _, _, _| Ok(()));
 
         let mut queue = PersistentTaskQueue::new(mock).await.unwrap();
         let task = queue.dequeue().await.unwrap().unwrap();
 
-        queue
-            .requeue(task, RequeuePolicy::SamePriority, None)
-            .await
-            .unwrap();
+        queue.requeue(task, RequeuePolicy::SamePriority, None).await.unwrap();
 
         assert_eq!(queue.peek().unwrap().priority, Priority::High);
     }
 
     #[tokio::test]
     async fn persistent_queue_loads_multiple_pending() {
-        let tasks: Vec<Task> = [
-            Priority::Low,
-            Priority::Normal,
-            Priority::High,
-            Priority::Urgent,
-        ]
-        .into_iter()
-        .map(make_task)
-        .collect();
+        let tasks: Vec<Task> = [Priority::Low, Priority::Normal, Priority::High, Priority::Urgent].into_iter().map(make_task).collect();
         let mock = mock_repo_with_tasks(tasks);
 
         let queue = PersistentTaskQueue::new(mock).await.unwrap();
@@ -1290,17 +1212,13 @@ mod persistent_queue_tests {
         let task = make_task(Priority::Normal);
         let mut mock = mock_repo_with_tasks(vec![task]);
         mock.expect_update_task_status().returning(|_, _| Ok(()));
-        mock.expect_update_task_for_requeue()
-            .returning(|_, _, _, _| Ok(()));
+        mock.expect_update_task_for_requeue().returning(|_, _, _, _| Ok(()));
 
         let mut queue = PersistentTaskQueue::new(mock).await.unwrap();
         let task = queue.dequeue().await.unwrap().unwrap();
         assert_eq!(task.retry_count, 0);
 
-        queue
-            .requeue(task, RequeuePolicy::SamePriority, Some("test error"))
-            .await
-            .unwrap();
+        queue.requeue(task, RequeuePolicy::SamePriority, Some("test error")).await.unwrap();
 
         let task = queue.peek().unwrap();
         assert_eq!(task.retry_count, 1);
@@ -1318,9 +1236,7 @@ mod persistent_queue_tests {
         let mut queue = PersistentTaskQueue::new(mock).await.unwrap();
         let task = queue.dequeue().await.unwrap().unwrap();
 
-        let result = queue
-            .requeue(task, RequeuePolicy::SamePriority, Some("failed again"))
-            .await;
+        let result = queue.requeue(task, RequeuePolicy::SamePriority, Some("failed again")).await;
 
         assert!(matches!(result, Err(QueueError::MaxRetriesExceeded(_))));
         assert!(queue.is_empty());
@@ -1331,16 +1247,12 @@ mod persistent_queue_tests {
         let task = make_task(Priority::Normal);
         let mut mock = mock_repo_with_tasks(vec![task]);
         mock.expect_update_task_status().returning(|_, _| Ok(()));
-        mock.expect_update_task_for_requeue()
-            .returning(|_, _, _, _| Ok(()));
+        mock.expect_update_task_for_requeue().returning(|_, _, _, _| Ok(()));
 
         let mut queue = PersistentTaskQueue::new(mock).await.unwrap();
         let task = queue.dequeue().await.unwrap().unwrap();
 
-        queue
-            .requeue(task, RequeuePolicy::SamePriority, Some("LLM timeout"))
-            .await
-            .unwrap();
+        queue.requeue(task, RequeuePolicy::SamePriority, Some("LLM timeout")).await.unwrap();
 
         let task = queue.peek().unwrap();
         assert_eq!(task.last_error.as_deref(), Some("LLM timeout"));

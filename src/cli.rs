@@ -64,37 +64,9 @@ mod tests {
 
     #[test]
     fn log_level_increases_with_verbosity() {
-        assert_eq!(
-            Args {
-                verbose: 0,
-                ..Default::default()
-            }
-            .log_level(),
-            tracing::Level::INFO
-        );
-        assert_eq!(
-            Args {
-                verbose: 1,
-                ..Default::default()
-            }
-            .log_level(),
-            tracing::Level::DEBUG
-        );
-        assert_eq!(
-            Args {
-                verbose: 2,
-                ..Default::default()
-            }
-            .log_level(),
-            tracing::Level::TRACE
-        );
-        assert_eq!(
-            Args {
-                verbose: 3,
-                ..Default::default()
-            }
-            .log_level(),
-            tracing::Level::TRACE
-        );
+        assert_eq!(Args { verbose: 0, ..Default::default() }.log_level(), tracing::Level::INFO);
+        assert_eq!(Args { verbose: 1, ..Default::default() }.log_level(), tracing::Level::DEBUG);
+        assert_eq!(Args { verbose: 2, ..Default::default() }.log_level(), tracing::Level::TRACE);
+        assert_eq!(Args { verbose: 3, ..Default::default() }.log_level(), tracing::Level::TRACE);
     }
 }

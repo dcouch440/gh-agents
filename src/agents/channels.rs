@@ -30,30 +30,15 @@ pub enum AgentResponse {
     /// Agent has started working on a task
     TaskStarted { agent_id: AgentId, task_id: Uuid },
     /// Agent completed a task successfully
-    TaskCompleted {
-        agent_id: AgentId,
-        result: TaskResult,
-    },
+    TaskCompleted { agent_id: AgentId, result: TaskResult },
     /// Agent failed to complete a task
-    TaskFailed {
-        agent_id: AgentId,
-        result: TaskResult,
-    },
+    TaskFailed { agent_id: AgentId, result: TaskResult },
     /// Agent needs additional context
-    ContextRequest {
-        agent_id: AgentId,
-        request: ContextRequest,
-    },
+    ContextRequest { agent_id: AgentId, request: ContextRequest },
     /// Agent needs approval before proceeding
-    ApprovalRequest {
-        agent_id: AgentId,
-        request: ApprovalRequest,
-    },
+    ApprovalRequest { agent_id: AgentId, request: ApprovalRequest },
     /// Progress update for display in feed
-    ProgressUpdate {
-        agent_id: AgentId,
-        update: ProgressUpdate,
-    },
+    ProgressUpdate { agent_id: AgentId, update: ProgressUpdate },
     /// Agent has shut down
     ShutdownComplete { agent_id: AgentId },
 }
@@ -201,33 +186,21 @@ pub struct AgentHandle {
 
 impl AgentHandle {
     pub fn new(agent_id: AgentId, tier: AgentTier, command_tx: mpsc::Sender<AgentCommand>) -> Self {
-        Self {
-            agent_id,
-            tier,
-            command_tx,
-        }
+        Self { agent_id, tier, command_tx }
     }
 
     /// Send a command to the agent
-    pub async fn send(
-        &self,
-        command: AgentCommand,
-    ) -> Result<(), mpsc::error::SendError<AgentCommand>> {
+    pub async fn send(&self, command: AgentCommand) -> Result<(), mpsc::error::SendError<AgentCommand>> {
         self.command_tx.send(command).await
     }
 
     /// Try to send without blocking
-    pub fn try_send(
-        &self,
-        command: AgentCommand,
-    ) -> Result<(), mpsc::error::TrySendError<AgentCommand>> {
+    pub fn try_send(&self, command: AgentCommand) -> Result<(), mpsc::error::TrySendError<AgentCommand>> {
         self.command_tx.try_send(command)
     }
 }
 
 /// Create an agent channel pair
-pub fn create_agent_channel(
-    buffer_size: usize,
-) -> (mpsc::Sender<AgentCommand>, mpsc::Receiver<AgentCommand>) {
+pub fn create_agent_channel(buffer_size: usize) -> (mpsc::Sender<AgentCommand>, mpsc::Receiver<AgentCommand>) {
     mpsc::channel(buffer_size)
 }

@@ -104,15 +104,7 @@ impl ScheduleManager {
     // --- Schedules ---
 
     /// Create a new schedule, returning its ID.
-    pub fn create_schedule(
-        &mut self,
-        name: String,
-        agent_id: AgentId,
-        interval_seconds: u64,
-        task_title: String,
-        task_description: String,
-        role: Option<String>,
-    ) -> ScheduleId {
+    pub fn create_schedule(&mut self, name: String, agent_id: AgentId, interval_seconds: u64, task_title: String, task_description: String, role: Option<String>) -> ScheduleId {
         let id = ScheduleId::new();
         self.schedules.insert(
             id,
@@ -162,18 +154,12 @@ impl ScheduleManager {
 
     /// Delete a schedule.
     pub fn delete_schedule(&mut self, id: ScheduleId) -> Result<(), ScheduleError> {
-        self.schedules
-            .remove(&id)
-            .map(|_| ())
-            .ok_or(ScheduleError::ScheduleNotFound(id))
+        self.schedules.remove(&id).map(|_| ()).ok_or(ScheduleError::ScheduleNotFound(id))
     }
 
     /// Enable or disable a schedule.
     pub fn set_enabled(&mut self, id: ScheduleId, enabled: bool) -> Result<(), ScheduleError> {
-        let schedule = self
-            .schedules
-            .get_mut(&id)
-            .ok_or(ScheduleError::ScheduleNotFound(id))?;
+        let schedule = self.schedules.get_mut(&id).ok_or(ScheduleError::ScheduleNotFound(id))?;
         schedule.enabled = enabled;
         Ok(())
     }
@@ -217,15 +203,7 @@ impl ScheduleManager {
     // --- Triggers ---
 
     /// Create a new trigger, returning its ID.
-    pub fn create_trigger(
-        &mut self,
-        name: String,
-        event_type: TriggerEvent,
-        agent_id: AgentId,
-        task_title: String,
-        task_description: String,
-        role: Option<String>,
-    ) -> TriggerId {
+    pub fn create_trigger(&mut self, name: String, event_type: TriggerEvent, agent_id: AgentId, task_title: String, task_description: String, role: Option<String>) -> TriggerId {
         let id = TriggerId::new();
         self.triggers.insert(
             id,
@@ -269,10 +247,7 @@ impl ScheduleManager {
 
     /// Delete a trigger.
     pub fn delete_trigger(&mut self, id: TriggerId) -> Result<(), ScheduleError> {
-        self.triggers
-            .remove(&id)
-            .map(|_| ())
-            .ok_or(ScheduleError::TriggerNotFound(id))
+        self.triggers.remove(&id).map(|_| ()).ok_or(ScheduleError::TriggerNotFound(id))
     }
 
     /// List all triggers.
@@ -282,10 +257,7 @@ impl ScheduleManager {
 
     /// Get triggers that match a specific event type.
     pub fn get_triggers_for_event(&self, event_type: TriggerEvent) -> Vec<&Trigger> {
-        self.triggers
-            .values()
-            .filter(|t| t.event_type == event_type)
-            .collect()
+        self.triggers.values().filter(|t| t.event_type == event_type).collect()
     }
 }
 
@@ -308,14 +280,7 @@ mod tests {
     #[test]
     fn create_and_list_schedules() {
         let mut mgr = ScheduleManager::new();
-        let id = mgr.create_schedule(
-            "hourly-tests".into(),
-            agent(1),
-            3600,
-            "Run tests".into(),
-            "Run the full test suite".into(),
-            None,
-        );
+        let id = mgr.create_schedule("hourly-tests".into(), agent(1), 3600, "Run tests".into(), "Run the full test suite".into(), None);
         let schedules = mgr.list_schedules();
         assert_eq!(schedules.len(), 1);
         assert_eq!(schedules[0].name, "hourly-tests");
@@ -410,30 +375,9 @@ mod tests {
     #[test]
     fn get_triggers_for_event() {
         let mut mgr = ScheduleManager::new();
-        mgr.create_trigger(
-            "t1".into(),
-            TriggerEvent::TaskCompleted,
-            agent(1),
-            "t".into(),
-            "d".into(),
-            None,
-        );
-        mgr.create_trigger(
-            "t2".into(),
-            TriggerEvent::TaskFailed,
-            agent(2),
-            "t".into(),
-            "d".into(),
-            None,
-        );
-        mgr.create_trigger(
-            "t3".into(),
-            TriggerEvent::TaskCompleted,
-            agent(3),
-            "t".into(),
-            "d".into(),
-            None,
-        );
+        mgr.create_trigger("t1".into(), TriggerEvent::TaskCompleted, agent(1), "t".into(), "d".into(), None);
+        mgr.create_trigger("t2".into(), TriggerEvent::TaskFailed, agent(2), "t".into(), "d".into(), None);
+        mgr.create_trigger("t3".into(), TriggerEvent::TaskCompleted, agent(3), "t".into(), "d".into(), None);
 
         let completed = mgr.get_triggers_for_event(TriggerEvent::TaskCompleted);
         assert_eq!(completed.len(), 2);
@@ -445,28 +389,15 @@ mod tests {
     #[test]
     fn delete_trigger() {
         let mut mgr = ScheduleManager::new();
-        let id = mgr.create_trigger(
-            "t".into(),
-            TriggerEvent::TaskCompleted,
-            agent(1),
-            "t".into(),
-            "d".into(),
-            None,
-        );
+        let id = mgr.create_trigger("t".into(), TriggerEvent::TaskCompleted, agent(1), "t".into(), "d".into(), None);
         mgr.delete_trigger(id).unwrap();
         assert!(mgr.list_triggers().is_empty());
     }
 
     #[test]
     fn trigger_event_roundtrip() {
-        assert_eq!(
-            TriggerEvent::from_str(TriggerEvent::TaskCompleted.as_str()),
-            Some(TriggerEvent::TaskCompleted)
-        );
-        assert_eq!(
-            TriggerEvent::from_str(TriggerEvent::TaskFailed.as_str()),
-            Some(TriggerEvent::TaskFailed)
-        );
+        assert_eq!(TriggerEvent::from_str(TriggerEvent::TaskCompleted.as_str()), Some(TriggerEvent::TaskCompleted));
+        assert_eq!(TriggerEvent::from_str(TriggerEvent::TaskFailed.as_str()), Some(TriggerEvent::TaskFailed));
         assert_eq!(TriggerEvent::from_str("bogus"), None);
     }
 
@@ -474,17 +405,7 @@ mod tests {
     fn create_schedule_with_id() {
         let mut mgr = ScheduleManager::new();
         let id = ScheduleId::new();
-        mgr.create_schedule_with_id(
-            id,
-            "restored".into(),
-            agent(1),
-            3600,
-            "t".into(),
-            "d".into(),
-            None,
-            true,
-            None,
-        );
+        mgr.create_schedule_with_id(id, "restored".into(), agent(1), 3600, "t".into(), "d".into(), None, true, None);
         assert_eq!(mgr.get_schedule(&id).unwrap().name, "restored");
     }
 }

@@ -97,18 +97,12 @@ pub enum RefactorIntent {
 impl RefactorIntent {
     /// Returns true if this intent should halt production
     pub fn should_halt(&self) -> bool {
-        matches!(
-            self,
-            RefactorIntent::HaltNow | RefactorIntent::RefactorNeeded
-        )
+        matches!(self, RefactorIntent::HaltNow | RefactorIntent::RefactorNeeded)
     }
 
     /// Returns true if this is a conversational intent (no action needed)
     pub fn is_conversational(&self) -> bool {
-        matches!(
-            self,
-            RefactorIntent::Clarifying | RefactorIntent::JustChatting
-        )
+        matches!(self, RefactorIntent::Clarifying | RefactorIntent::JustChatting)
     }
 }
 
@@ -209,14 +203,7 @@ pub struct RefactorChange {
 
 impl RefactorChange {
     /// Create a new proposed change
-    pub fn new(
-        session_id: RefactorId,
-        file_path: String,
-        change_type: ChangeType,
-        before_content: Option<String>,
-        after_content: Option<String>,
-        reason: String,
-    ) -> Self {
+    pub fn new(session_id: RefactorId, file_path: String, change_type: ChangeType, before_content: Option<String>, after_content: Option<String>, reason: String) -> Self {
         Self {
             id: ChangeId::new(),
             session_id,
@@ -231,55 +218,18 @@ impl RefactorChange {
     }
 
     /// Create a modification change
-    pub fn modify(
-        session_id: RefactorId,
-        file_path: String,
-        before: String,
-        after: String,
-        reason: String,
-    ) -> Self {
-        Self::new(
-            session_id,
-            file_path,
-            ChangeType::Modify,
-            Some(before),
-            Some(after),
-            reason,
-        )
+    pub fn modify(session_id: RefactorId, file_path: String, before: String, after: String, reason: String) -> Self {
+        Self::new(session_id, file_path, ChangeType::Modify, Some(before), Some(after), reason)
     }
 
     /// Create a new file change
-    pub fn create(
-        session_id: RefactorId,
-        file_path: String,
-        content: String,
-        reason: String,
-    ) -> Self {
-        Self::new(
-            session_id,
-            file_path,
-            ChangeType::Create,
-            None,
-            Some(content),
-            reason,
-        )
+    pub fn create(session_id: RefactorId, file_path: String, content: String, reason: String) -> Self {
+        Self::new(session_id, file_path, ChangeType::Create, None, Some(content), reason)
     }
 
     /// Create a delete change
-    pub fn delete(
-        session_id: RefactorId,
-        file_path: String,
-        original_content: String,
-        reason: String,
-    ) -> Self {
-        Self::new(
-            session_id,
-            file_path,
-            ChangeType::Delete,
-            Some(original_content),
-            None,
-            reason,
-        )
+    pub fn delete(session_id: RefactorId, file_path: String, original_content: String, reason: String) -> Self {
+        Self::new(session_id, file_path, ChangeType::Delete, Some(original_content), None, reason)
     }
 }
 
@@ -335,18 +285,12 @@ impl RefactorSession {
 
     /// Get pending (proposed) changes
     pub fn pending_changes(&self) -> Vec<&RefactorChange> {
-        self.proposed_changes
-            .iter()
-            .filter(|c| c.status == ChangeStatus::Proposed)
-            .collect()
+        self.proposed_changes.iter().filter(|c| c.status == ChangeStatus::Proposed).collect()
     }
 
     /// Get approved changes
     pub fn approved_changes(&self) -> Vec<&RefactorChange> {
-        self.proposed_changes
-            .iter()
-            .filter(|c| c.status == ChangeStatus::Approved)
-            .collect()
+        self.proposed_changes.iter().filter(|c| c.status == ChangeStatus::Approved).collect()
     }
 
     /// Mark changes as applied
@@ -381,11 +325,7 @@ impl RefactorContext {
             production_mode,
             session: None,
             in_progress_work: Vec::new(),
-            modifiable_files: vec![
-                "PROGRESS.md".to_string(),
-                "ROADMAP.md".to_string(),
-                "decomp/".to_string(),
-            ],
+            modifiable_files: vec!["PROGRESS.md".to_string(), "ROADMAP.md".to_string(), "decomp/".to_string()],
         }
     }
 
@@ -436,12 +376,7 @@ mod tests {
 
     #[test]
     fn production_mode_roundtrip() {
-        for mode in [
-            ProductionMode::Running,
-            ProductionMode::RefactorMode,
-            ProductionMode::Paused,
-            ProductionMode::Resuming,
-        ] {
+        for mode in [ProductionMode::Running, ProductionMode::RefactorMode, ProductionMode::Paused, ProductionMode::Resuming] {
             let s = mode.as_str();
             let parsed = ProductionMode::from_str(s);
             assert_eq!(mode, parsed);
@@ -468,12 +403,7 @@ mod tests {
 
     #[test]
     fn change_status_roundtrip() {
-        for status in [
-            ChangeStatus::Proposed,
-            ChangeStatus::Approved,
-            ChangeStatus::Rejected,
-            ChangeStatus::Applied,
-        ] {
+        for status in [ChangeStatus::Proposed, ChangeStatus::Approved, ChangeStatus::Rejected, ChangeStatus::Applied] {
             let s = status.as_str();
             let parsed = ChangeStatus::from_str(s);
             assert_eq!(status, parsed);
@@ -538,12 +468,7 @@ mod tests {
         session.halt_production();
         assert!(session.production_halted);
 
-        let change = RefactorChange::create(
-            session.id.clone(),
-            "test.md".to_string(),
-            "content".to_string(),
-            "test".to_string(),
-        );
+        let change = RefactorChange::create(session.id.clone(), "test.md".to_string(), "content".to_string(), "test".to_string());
         session.add_change(change);
         assert_eq!(session.pending_changes().len(), 1);
 

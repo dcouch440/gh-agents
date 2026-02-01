@@ -288,9 +288,7 @@ mod tests {
         injector.add_file_to_modify("src/main.rs", "fn main() {}");
         injector.add_conventions("Use Rust best practices");
 
-        let builder = PromptBuilder::new()
-            .role("You are a developer")
-            .task("Add logging");
+        let builder = PromptBuilder::new().role("You are a developer").task("Add logging");
 
         let builder = injector.inject(builder);
         let prompt = builder.build();

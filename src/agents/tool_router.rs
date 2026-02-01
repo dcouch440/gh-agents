@@ -25,7 +25,8 @@ const CLUSTER_ROUTING_TIMEOUT: Duration = Duration::from_secs(120);
 pub fn request_assistance_tool() -> Tool {
     Tool {
         name: "request_assistance".into(),
-        description: "Request help from a specialized agent cluster. Provide the tool name and describe what you need. The request will be routed to the appropriate specialist.".into(),
+        description: "Request help from a specialized agent cluster. Provide the tool name and describe what you need. The request will be routed to the appropriate specialist."
+            .into(),
         input_schema: json!({
             "type": "object",
             "properties": {
@@ -85,15 +86,7 @@ pub async fn execute_request_assistance(
                     // Direct execution tool — use existing dispatcher
                     let params = input.get("parameters").unwrap_or(&json!({})).clone();
                     match exec_ctx {
-                        Some(ctx) => {
-                            super::execution_tools::execute_execution_tool(
-                                tool_name,
-                                &params,
-                                ctx,
-                                allowed_tools,
-                            )
-                            .await
-                        }
+                        Some(ctx) => super::execution_tools::execute_execution_tool(tool_name, &params, ctx, allowed_tools).await,
                         None => json!({ "error": "No execution context available" }),
                     }
                 }
@@ -107,12 +100,7 @@ pub async fn execute_request_assistance(
 }
 
 /// Route a tool call to a cluster agent.
-async fn route_to_cluster(
-    cluster_id: Uuid,
-    tool_name: &str,
-    input: &Value,
-    cluster_ctx: Option<&ClusterRoutingContext>,
-) -> Value {
+async fn route_to_cluster(cluster_id: Uuid, tool_name: &str, input: &Value, cluster_ctx: Option<&ClusterRoutingContext>) -> Value {
     let ctx = match cluster_ctx {
         Some(ctx) => ctx,
         None => {
@@ -177,14 +165,7 @@ mod tests {
 
     #[tokio::test]
     async fn unknown_tool_returns_error() {
-        let result = execute_request_assistance(
-            &json!({"tool_name": "nonexistent", "request": "help"}),
-            &[],
-            None,
-            None,
-            None,
-        )
-        .await;
+        let result = execute_request_assistance(&json!({"tool_name": "nonexistent", "request": "help"}), &[], None, None, None).await;
         assert!(result["error"].as_str().unwrap().contains("Unknown tool"));
     }
 
@@ -201,14 +182,7 @@ mod tests {
             cluster_id: None,
             is_builtin: false,
         };
-        let result = execute_request_assistance(
-            &json!({"tool_name": "my_tool", "request": "help"}),
-            &[row],
-            None,
-            None,
-            None,
-        )
-        .await;
+        let result = execute_request_assistance(&json!({"tool_name": "my_tool", "request": "help"}), &[row], None, None, None).await;
         assert!(result["error"].as_str().unwrap().contains("disabled"));
     }
 
@@ -226,14 +200,7 @@ mod tests {
             cluster_id: Some(cid),
             is_builtin: false,
         };
-        let result = execute_request_assistance(
-            &json!({"tool_name": "cluster_tool", "request": "help"}),
-            &[row],
-            None,
-            None,
-            None,
-        )
-        .await;
+        let result = execute_request_assistance(&json!({"tool_name": "cluster_tool", "request": "help"}), &[row], None, None, None).await;
         let err = result["error"].as_str().unwrap();
         assert!(err.contains("not available"));
     }
@@ -259,9 +226,6 @@ mod tests {
             None,
         )
         .await;
-        assert!(result["error"]
-            .as_str()
-            .unwrap()
-            .contains("execution context"));
+        assert!(result["error"].as_str().unwrap().contains("execution context"));
     }
 }

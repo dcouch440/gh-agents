@@ -196,9 +196,7 @@ impl Sandbox {
             .map_err(|e| SandboxError::DockerNotAvailable(e.to_string()))?;
 
         if !output.status.success() {
-            return Err(SandboxError::DockerNotAvailable(
-                String::from_utf8_lossy(&output.stderr).to_string(),
-            ));
+            return Err(SandboxError::DockerNotAvailable(String::from_utf8_lossy(&output.stderr).to_string()));
         }
 
         tracing::debug!(
@@ -255,11 +253,7 @@ impl Sandbox {
         // Execute with timeout
         let output = tokio::time::timeout(
             std::time::Duration::from_secs(self.config.timeout_secs),
-            Command::new("docker")
-                .args(&docker_args)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .output(),
+            Command::new("docker").args(&docker_args).stdout(Stdio::piped()).stderr(Stdio::piped()).output(),
         )
         .await;
 
@@ -278,11 +272,7 @@ impl Sandbox {
                 };
 
                 if result.success {
-                    tracing::info!(
-                        exit_code = result.exit_code,
-                        duration_ms = result.duration_ms,
-                        "Sandbox command succeeded"
-                    );
+                    tracing::info!(exit_code = result.exit_code, duration_ms = result.duration_ms, "Sandbox command succeeded");
                 } else {
                     tracing::warn!(
                         exit_code = result.exit_code,
@@ -296,10 +286,7 @@ impl Sandbox {
             Ok(Err(e)) => Err(SandboxError::ExecutionError(e)),
             Err(_) => {
                 // Timeout - kill container
-                let _ = Command::new("docker")
-                    .args(["kill", &container_name])
-                    .output()
-                    .await;
+                let _ = Command::new("docker").args(["kill", &container_name]).output().await;
 
                 Err(SandboxError::Timeout {
                     timeout_secs: self.config.timeout_secs,
@@ -314,11 +301,7 @@ impl Sandbox {
     }
 
     /// Execute with explicit mount options
-    pub async fn exec_with_mounts(
-        &self,
-        command: &[&str],
-        mounts: &[MountSpec],
-    ) -> Result<SandboxResult, SandboxError> {
+    pub async fn exec_with_mounts(&self, command: &[&str], mounts: &[MountSpec]) -> Result<SandboxResult, SandboxError> {
         self.check_docker().await?;
 
         let container_name = format!("nexor-sandbox-{}", Uuid::new_v4());
@@ -336,21 +319,13 @@ impl Sandbox {
         // Add mounts
         for mount in mounts {
             let mode = if mount.read_only { "ro" } else { "rw" };
-            docker_args.push(format!(
-                "--volume={}:{}:{}",
-                mount.host_path.display(),
-                mount.container_path,
-                mode
-            ));
+            docker_args.push(format!("--volume={}:{}:{}", mount.host_path.display(), mount.container_path, mode));
         }
 
         // Default: always mount project dir if not in mounts
         let has_workspace = mounts.iter().any(|m| m.container_path == "/workspace");
         if !has_workspace {
-            docker_args.push(format!(
-                "--volume={}:/workspace:rw",
-                self.ctx.project_root.display()
-            ));
+            docker_args.push(format!("--volume={}:/workspace:rw", self.ctx.project_root.display()));
         }
 
         docker_args.push("--workdir=/workspace".to_string());
@@ -362,11 +337,7 @@ impl Sandbox {
         docker_args.push(self.config.image.clone());
         docker_args.extend(command.iter().map(|s| s.to_string()));
 
-        let output = tokio::time::timeout(
-            std::time::Duration::from_secs(self.config.timeout_secs),
-            Command::new("docker").args(&docker_args).output(),
-        )
-        .await;
+        let output = tokio::time::timeout(std::time::Duration::from_secs(self.config.timeout_secs), Command::new("docker").args(&docker_args).output()).await;
 
         let duration_ms = start.elapsed().as_millis() as u64;
 
@@ -381,10 +352,7 @@ impl Sandbox {
             }),
             Ok(Err(e)) => Err(SandboxError::ExecutionError(e)),
             Err(_) => {
-                let _ = Command::new("docker")
-                    .args(["kill", &container_name])
-                    .output()
-                    .await;
+                let _ = Command::new("docker").args(["kill", &container_name]).output().await;
                 Err(SandboxError::Timeout {
                     timeout_secs: self.config.timeout_secs,
                 })
@@ -469,11 +437,7 @@ mod tests {
 
     #[test]
     fn builder_accumulates_env_vars() {
-        let config = SandboxConfig::builder()
-            .env("A", "1")
-            .env("B", "2")
-            .env("C", "3")
-            .build();
+        let config = SandboxConfig::builder().env("A", "1").env("B", "2").env("C", "3").build();
         assert_eq!(config.env_vars.len(), 3);
         assert_eq!(config.env_vars[0], ("A".to_string(), "1".to_string()));
         assert_eq!(config.env_vars[2], ("C".to_string(), "3".to_string()));
@@ -515,9 +479,7 @@ mod tests {
         let e1 = SandboxError::DockerNotAvailable("not found".into());
         assert!(e1.to_string().contains("not found"));
 
-        let e2 = SandboxError::ImageNotFound {
-            image: "foo:bar".into(),
-        };
+        let e2 = SandboxError::ImageNotFound { image: "foo:bar".into() };
         assert!(e2.to_string().contains("foo:bar"));
 
         let e3 = SandboxError::CommandFailed {
@@ -590,10 +552,7 @@ mod tests {
 
     #[test]
     fn builder_overrides_image_twice() {
-        let config = SandboxConfig::builder()
-            .image("node:16")
-            .image("node:20")
-            .build();
+        let config = SandboxConfig::builder().image("node:16").image("node:20").build();
         assert_eq!(config.image, "node:20");
     }
 
@@ -703,9 +662,7 @@ mod tests {
         let debug = format!("{:?}", e);
         assert!(debug.contains("42"));
 
-        let e2 = SandboxError::ImageNotFound {
-            image: "test:img".into(),
-        };
+        let e2 = SandboxError::ImageNotFound { image: "test:img".into() };
         let debug2 = format!("{:?}", e2);
         assert!(debug2.contains("test:img"));
     }
@@ -728,10 +685,7 @@ mod tests {
 
     #[test]
     fn sandbox_config_clone() {
-        let config = SandboxConfig::builder()
-            .image("python:3.11")
-            .env("X", "Y")
-            .build();
+        let config = SandboxConfig::builder().image("python:3.11").env("X", "Y").build();
         let cloned = config.clone();
         assert_eq!(cloned.image, "python:3.11");
         assert_eq!(cloned.env_vars, config.env_vars);
@@ -771,11 +725,7 @@ mod tests {
 
     #[test]
     fn builder_env_preserves_order() {
-        let config = SandboxConfig::builder()
-            .env("Z", "last")
-            .env("A", "first")
-            .env("M", "middle")
-            .build();
+        let config = SandboxConfig::builder().env("Z", "last").env("A", "first").env("M", "middle").build();
         assert_eq!(config.env_vars[0].0, "Z");
         assert_eq!(config.env_vars[1].0, "A");
         assert_eq!(config.env_vars[2].0, "M");
@@ -803,10 +753,7 @@ mod tests {
         // Use a config with a very short timeout and a nonsense image
         // to exercise the exec code path
         let ctx = ExecutionContext::new("/tmp".into());
-        let config = SandboxConfig::builder()
-            .image("nonexistent-image-xxxxx:latest")
-            .timeout(5)
-            .build();
+        let config = SandboxConfig::builder().image("nonexistent-image-xxxxx:latest").timeout(5).build();
         let sandbox = Sandbox::new(ctx, config);
         let result = sandbox.exec(&["echo", "hello"]).await;
         // Without docker: DockerNotAvailable
@@ -883,10 +830,7 @@ mod tests {
     #[tokio::test]
     async fn exec_with_env_vars() {
         let ctx = ExecutionContext::new("/tmp".into());
-        let config = SandboxConfig::builder()
-            .env("MY_VAR", "my_value")
-            .env("OTHER", "stuff")
-            .build();
+        let config = SandboxConfig::builder().env("MY_VAR", "my_value").env("OTHER", "stuff").build();
         let sandbox = Sandbox::new(ctx, config);
         let result = sandbox.exec(&["env"]).await;
         match result {

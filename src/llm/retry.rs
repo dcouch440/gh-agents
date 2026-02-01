@@ -227,11 +227,7 @@ pub struct RetryContext {
 }
 
 /// Execute an async operation with retry logic
-pub async fn with_retry<T, F, Fut>(
-    config: BackoffConfig,
-    policy: RetryPolicy,
-    operation: F,
-) -> Result<T, LLMError>
+pub async fn with_retry<T, F, Fut>(config: BackoffConfig, policy: RetryPolicy, operation: F) -> Result<T, LLMError>
 where
     F: Fn() -> Fut,
     Fut: Future<Output = Result<T, LLMError>>,
@@ -258,19 +254,11 @@ where
 
         // Check for rate limit with specific delay
         let actual_delay = match &last_error {
-            LLMError::RateLimited { retry_after_ms } => {
-                Duration::from_millis(*retry_after_ms).max(delay)
-            }
+            LLMError::RateLimited { retry_after_ms } => Duration::from_millis(*retry_after_ms).max(delay),
             _ => delay,
         };
 
-        tracing::warn!(
-            "Retry {}/{}: {} (waiting {:?})",
-            attempt,
-            max_retries,
-            last_error,
-            actual_delay
-        );
+        tracing::warn!("Retry {}/{}: {} (waiting {:?})", attempt, max_retries, last_error, actual_delay);
 
         sleep(actual_delay).await;
 
@@ -355,10 +343,7 @@ impl<P: LLMProvider + 'static> LLMProvider for RetryingProvider<P> {
         .await
     }
 
-    async fn send_message_stream(
-        &self,
-        request: LLMRequest,
-    ) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
+    async fn send_message_stream(&self, request: LLMRequest) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
         // For streaming, we retry the connection but not individual chunks
         let inner = self.inner.clone();
         let req = request.clone();
@@ -471,9 +456,7 @@ mod tests {
         let call_count = Arc::new(AtomicU32::new(0));
         let count = call_count.clone();
 
-        let config = BackoffConfig::new()
-            .with_initial_delay(Duration::from_millis(10))
-            .with_max_retries(3);
+        let config = BackoffConfig::new().with_initial_delay(Duration::from_millis(10)).with_max_retries(3);
 
         let result = with_retry(config, RetryPolicy::Default, || {
             let c = count.clone();
@@ -521,9 +504,7 @@ mod tests {
         let call_count = Arc::new(AtomicU32::new(0));
         let count = call_count.clone();
 
-        let config = BackoffConfig::new()
-            .with_initial_delay(Duration::from_millis(1))
-            .with_max_retries(2);
+        let config = BackoffConfig::new().with_initial_delay(Duration::from_millis(1)).with_max_retries(2);
 
         let result = with_retry(config, RetryPolicy::Default, || {
             let c = count.clone();
@@ -547,9 +528,7 @@ mod tests {
         let call_count = Arc::new(AtomicU32::new(0));
         let count = call_count.clone();
 
-        let config = BackoffConfig::new()
-            .with_initial_delay(Duration::from_millis(1))
-            .with_max_retries(3);
+        let config = BackoffConfig::new().with_initial_delay(Duration::from_millis(1)).with_max_retries(3);
 
         let result = with_retry(config, RetryPolicy::Default, || {
             let c = count.clone();
@@ -573,9 +552,7 @@ mod tests {
 
     #[test]
     fn test_retry_policy_never() {
-        let error = LLMError::RateLimited {
-            retry_after_ms: 100,
-        };
+        let error = LLMError::RateLimited { retry_after_ms: 100 };
         assert!(!RetryPolicy::Never.should_retry(&error));
     }
 
@@ -683,10 +660,7 @@ mod tests {
 
     #[test]
     fn test_backoff_with_jitter_varies() {
-        let config = BackoffConfig::new()
-            .with_initial_delay(Duration::from_millis(1000))
-            .with_jitter(1.0)
-            .with_max_retries(1);
+        let config = BackoffConfig::new().with_initial_delay(Duration::from_millis(1000)).with_jitter(1.0).with_max_retries(1);
 
         // Run multiple times - with full jitter, delays should vary
         let mut backoff = ExponentialBackoff::new(config);
@@ -797,9 +771,7 @@ mod tests {
     #[test]
     fn test_retry_policy_never_rejects_all() {
         let errors = vec![
-            LLMError::RateLimited {
-                retry_after_ms: 100,
-            },
+            LLMError::RateLimited { retry_after_ms: 100 },
             LLMError::Timeout(5000),
             LLMError::ApiError {
                 status: 500,
@@ -839,9 +811,7 @@ mod tests {
         let call_count = Arc::new(AtomicU32::new(0));
         let count = call_count.clone();
 
-        let config = BackoffConfig::new()
-            .with_initial_delay(Duration::from_millis(1))
-            .with_max_retries(5);
+        let config = BackoffConfig::new().with_initial_delay(Duration::from_millis(1)).with_max_retries(5);
 
         let result = with_retry(config, RetryPolicy::Never, || {
             let c = count.clone();
@@ -864,9 +834,7 @@ mod tests {
         let call_count = Arc::new(AtomicU32::new(0));
         let count = call_count.clone();
 
-        let config = BackoffConfig::new()
-            .with_initial_delay(Duration::from_millis(1))
-            .with_max_retries(2);
+        let config = BackoffConfig::new().with_initial_delay(Duration::from_millis(1)).with_max_retries(2);
 
         let result = with_retry(config, RetryPolicy::Always, || {
             let c = count.clone();
@@ -893,9 +861,7 @@ mod tests {
         let call_count = Arc::new(AtomicU32::new(0));
         let count = call_count.clone();
 
-        let config = BackoffConfig::new()
-            .with_initial_delay(Duration::from_millis(1))
-            .with_max_retries(5);
+        let config = BackoffConfig::new().with_initial_delay(Duration::from_millis(1)).with_max_retries(5);
 
         let result = with_retry(config, RetryPolicy::Default, || {
             let c = count.clone();
@@ -923,9 +889,7 @@ mod tests {
         let call_count = Arc::new(AtomicU32::new(0));
         let count = call_count.clone();
 
-        let config = BackoffConfig::new()
-            .with_initial_delay(Duration::from_millis(1))
-            .with_max_retries(1);
+        let config = BackoffConfig::new().with_initial_delay(Duration::from_millis(1)).with_max_retries(1);
 
         let start = std::time::Instant::now();
         let result = with_retry(config, RetryPolicy::Default, || {
@@ -962,10 +926,7 @@ mod tests {
 
     #[test]
     fn test_backoff_reset_restores_initial_delay() {
-        let config = BackoffConfig::new()
-            .with_initial_delay(Duration::from_millis(100))
-            .with_jitter(0.0)
-            .with_max_retries(3);
+        let config = BackoffConfig::new().with_initial_delay(Duration::from_millis(100)).with_jitter(0.0).with_max_retries(3);
 
         let mut backoff = ExponentialBackoff::new(config);
 

@@ -73,11 +73,7 @@ fn validate_model_config(config: &AppConfig) -> Result<(), ConfigValidationError
 
 fn validate_consistency(config: &AppConfig) -> Result<(), ConfigValidationError> {
     // FullAuto mode should not have approval gates that would block
-    if config.autonomy == crate::types::AutonomyLevel::FullAuto
-        && (config.approval_gates.before_commit
-            || config.approval_gates.before_pr
-            || config.approval_gates.before_merge)
-    {
+    if config.autonomy == crate::types::AutonomyLevel::FullAuto && (config.approval_gates.before_commit || config.approval_gates.before_pr || config.approval_gates.before_merge) {
         return Err(ConfigValidationError::Conflict {
             reason: "FullAuto autonomy conflicts with enabled approval gates".to_string(),
         });
@@ -106,10 +102,7 @@ mod tests {
         let mut config = default_config();
         config.pool.max_orchestrators = 0;
         let result = validate_config(&config);
-        assert!(matches!(
-            result,
-            Err(ConfigValidationError::InvalidPool { .. })
-        ));
+        assert!(matches!(result, Err(ConfigValidationError::InvalidPool { .. })));
     }
 
     #[test]
@@ -117,10 +110,7 @@ mod tests {
         let mut config = default_config();
         config.pool.max_workers = 0;
         let result = validate_config(&config);
-        assert!(matches!(
-            result,
-            Err(ConfigValidationError::InvalidPool { .. })
-        ));
+        assert!(matches!(result, Err(ConfigValidationError::InvalidPool { .. })));
     }
 
     #[test]
@@ -128,10 +118,7 @@ mod tests {
         let mut config = default_config();
         config.models.orchestrator.model_id = String::new();
         let result = validate_config(&config);
-        assert!(matches!(
-            result,
-            Err(ConfigValidationError::InvalidModel { .. })
-        ));
+        assert!(matches!(result, Err(ConfigValidationError::InvalidModel { .. })));
     }
 
     #[test]
@@ -140,9 +127,6 @@ mod tests {
         config.autonomy = crate::types::AutonomyLevel::FullAuto;
         config.approval_gates.before_pr = true;
         let result = validate_config(&config);
-        assert!(matches!(
-            result,
-            Err(ConfigValidationError::Conflict { .. })
-        ));
+        assert!(matches!(result, Err(ConfigValidationError::Conflict { .. })));
     }
 }

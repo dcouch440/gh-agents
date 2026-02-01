@@ -9,17 +9,13 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::db::{
-    AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, PipelineRow,
-    PipelineRunRow, PipelineStageRow, ScheduleRow, SessionRow, StageExecutionRow, StageSideTaskRow,
-    ToolRow, TriggerRow, UsageSummaryRow,
+    AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, PipelineRow, PipelineRunRow, PipelineStageRow, ScheduleRow, SessionRow, StageExecutionRow,
+    StageSideTaskRow, ToolRow, TriggerRow, UsageSummaryRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::orchestration::DependencyError;
 use crate::orchestration::QueueError as TaskQueueError;
-use crate::types::{
-    ChangeId, ChangeStatus, CostRecord, ProductionMode, RefactorChange, RefactorSession, Task,
-    TaskId, TaskStatus, User, UserId,
-};
+use crate::types::{ChangeId, ChangeStatus, CostRecord, ProductionMode, RefactorChange, RefactorSession, Task, TaskId, TaskStatus, User, UserId};
 
 // ============================================================================
 // Merge Queue Repository
@@ -30,33 +26,16 @@ use crate::types::{
 #[async_trait]
 pub trait MergeQueueRepo: Send + Sync {
     /// Insert or update a queue entry (upsert).
-    async fn insert_queue_entry(
-        &self,
-        id: Uuid,
-        owner: String,
-        repo: String,
-        pr_number: u32,
-        position: u32,
-        now: DateTime<Utc>,
-    ) -> Result<(), MergeQueueError>;
+    async fn insert_queue_entry(&self, id: Uuid, owner: String, repo: String, pr_number: u32, position: u32, now: DateTime<Utc>) -> Result<(), MergeQueueError>;
 
     /// Get the next queue position for a repo.
     async fn get_next_position(&self, owner: String, repo: String) -> Result<u32, MergeQueueError>;
 
     /// Delete a queue entry. Returns true if a row was deleted.
-    async fn delete_queue_entry(
-        &self,
-        owner: String,
-        repo: String,
-        pr_number: u32,
-    ) -> Result<bool, MergeQueueError>;
+    async fn delete_queue_entry(&self, owner: String, repo: String, pr_number: u32) -> Result<bool, MergeQueueError>;
 
     /// Get all queue entries for a repo, ordered by position.
-    async fn get_queue_entries(
-        &self,
-        owner: String,
-        repo: String,
-    ) -> Result<Vec<PrQueueEntry>, MergeQueueError>;
+    async fn get_queue_entries(&self, owner: String, repo: String) -> Result<Vec<PrQueueEntry>, MergeQueueError>;
 
     /// Update the status (and optional error message) of a queue entry.
     async fn update_entry_status(
@@ -70,38 +49,16 @@ pub trait MergeQueueRepo: Send + Sync {
     ) -> Result<bool, MergeQueueError>;
 
     /// Set conflict info on a queue entry.
-    async fn set_entry_conflict(
-        &self,
-        owner: String,
-        repo: String,
-        pr_number: u32,
-        conflict_json: String,
-        now: DateTime<Utc>,
-    ) -> Result<bool, MergeQueueError>;
+    async fn set_entry_conflict(&self, owner: String, repo: String, pr_number: u32, conflict_json: String, now: DateTime<Utc>) -> Result<bool, MergeQueueError>;
 
     /// Update the position of a queue entry by ID.
-    async fn update_entry_position(
-        &self,
-        id: Uuid,
-        position: u32,
-        now: DateTime<Utc>,
-    ) -> Result<(), MergeQueueError>;
+    async fn update_entry_position(&self, id: Uuid, position: u32, now: DateTime<Utc>) -> Result<(), MergeQueueError>;
 
     /// Reset in_progress entries back to pending.
-    async fn reset_interrupted(
-        &self,
-        owner: String,
-        repo: String,
-        now: DateTime<Utc>,
-    ) -> Result<u32, MergeQueueError>;
+    async fn reset_interrupted(&self, owner: String, repo: String, now: DateTime<Utc>) -> Result<u32, MergeQueueError>;
 
     /// Delete merged/skipped entries older than cutoff.
-    async fn cleanup_old(
-        &self,
-        owner: String,
-        repo: String,
-        cutoff: DateTime<Utc>,
-    ) -> Result<u32, MergeQueueError>;
+    async fn cleanup_old(&self, owner: String, repo: String, cutoff: DateTime<Utc>) -> Result<u32, MergeQueueError>;
 }
 
 // ============================================================================
@@ -122,19 +79,10 @@ pub trait DependencyRepo: Send + Sync {
     async fn get_task_dependencies(&self, task_id: TaskId) -> Result<Vec<TaskId>, DependencyError>;
 
     /// Save a single dependency.
-    async fn save_dependency(
-        &self,
-        task_id: TaskId,
-        depends_on: TaskId,
-        now: DateTime<Utc>,
-    ) -> Result<(), DependencyError>;
+    async fn save_dependency(&self, task_id: TaskId, depends_on: TaskId, now: DateTime<Utc>) -> Result<(), DependencyError>;
 
     /// Remove a dependency.
-    async fn remove_dependency(
-        &self,
-        task_id: TaskId,
-        depends_on: TaskId,
-    ) -> Result<(), DependencyError>;
+    async fn remove_dependency(&self, task_id: TaskId, depends_on: TaskId) -> Result<(), DependencyError>;
 
     /// Get all pending task IDs whose dependencies are all completed.
     async fn get_ready_task_ids(&self) -> Result<Vec<TaskId>, DependencyError>;
@@ -152,20 +100,10 @@ pub trait TaskQueueRepo: Send + Sync {
     async fn list_tasks_by_status(&self, status: TaskStatus) -> Result<Vec<Task>, TaskQueueError>;
 
     /// Update a task's status.
-    async fn update_task_status(
-        &self,
-        id: TaskId,
-        status: TaskStatus,
-    ) -> Result<(), TaskQueueError>;
+    async fn update_task_status(&self, id: TaskId, status: TaskStatus) -> Result<(), TaskQueueError>;
 
     /// Update a task for requeue (status, priority, updated_at) and log a task event.
-    async fn update_task_for_requeue(
-        &self,
-        task_id: TaskId,
-        priority_str: String,
-        policy_description: String,
-        now: DateTime<Utc>,
-    ) -> Result<(), TaskQueueError>;
+    async fn update_task_for_requeue(&self, task_id: TaskId, priority_str: String, policy_description: String, now: DateTime<Utc>) -> Result<(), TaskQueueError>;
 }
 
 // ============================================================================
@@ -180,10 +118,7 @@ pub trait CostRepo: Send + Sync {
     async fn persist_cost_record(&self, record: CostRecord) -> Result<(), String>;
 
     /// Get all cost records, optionally filtered by timestamp.
-    async fn get_cost_records(
-        &self,
-        since: Option<DateTime<Utc>>,
-    ) -> Result<Vec<CostRecord>, String>;
+    async fn get_cost_records(&self, since: Option<DateTime<Utc>>) -> Result<Vec<CostRecord>, String>;
 }
 
 // ============================================================================
@@ -237,12 +172,7 @@ pub trait ServerRepo: Send + Sync {
     async fn health_check(&self) -> bool;
 
     /// List tasks with optional status filter and limit.
-    async fn list_tasks(
-        &self,
-        user_id: UserId,
-        status: Option<String>,
-        limit: Option<u32>,
-    ) -> Result<Vec<Task>>;
+    async fn list_tasks(&self, user_id: UserId, status: Option<String>, limit: Option<u32>) -> Result<Vec<Task>>;
 
     /// Get a single task by UUID.
     async fn get_task_by_uuid(&self, user_id: UserId, id: Uuid) -> Result<Option<Task>>;
@@ -251,21 +181,10 @@ pub trait ServerRepo: Send + Sync {
     async fn insert_task(&self, user_id: UserId, task: Task) -> Result<()>;
 
     /// Insert a chat message.
-    async fn insert_chat_message(
-        &self,
-        user_id: UserId,
-        id: Uuid,
-        role: String,
-        content: String,
-    ) -> Result<()>;
+    async fn insert_chat_message(&self, user_id: UserId, id: Uuid, role: String, content: String) -> Result<()>;
 
     /// Get chat history with pagination.
-    async fn get_chat_history(
-        &self,
-        user_id: UserId,
-        limit: u32,
-        offset: u32,
-    ) -> Result<Vec<ChatMessageRow>>;
+    async fn get_chat_history(&self, user_id: UserId, limit: u32, offset: u32) -> Result<Vec<ChatMessageRow>>;
 
     /// Clear all chat history.
     async fn clear_chat_history(&self, user_id: UserId) -> Result<()>;
@@ -364,11 +283,7 @@ pub trait ServerRepo: Send + Sync {
     // --- Stage side task persistence ---
 
     /// List side tasks for a pipeline stage.
-    async fn list_stage_side_tasks(
-        &self,
-        pipeline_id: Uuid,
-        stage_number: i32,
-    ) -> Result<Vec<StageSideTaskRow>>;
+    async fn list_stage_side_tasks(&self, pipeline_id: Uuid, stage_number: i32) -> Result<Vec<StageSideTaskRow>>;
 
     /// Insert or update a stage side task.
     async fn upsert_stage_side_task(&self, side_task: StageSideTaskRow) -> Result<()>;
@@ -388,11 +303,7 @@ pub trait ServerRepo: Send + Sync {
     async fn delete_schedule(&self, schedule_id: Uuid) -> Result<()>;
 
     /// Update last_run_at for a schedule.
-    async fn update_schedule_last_run(
-        &self,
-        schedule_id: Uuid,
-        last_run_at: DateTime<Utc>,
-    ) -> Result<()>;
+    async fn update_schedule_last_run(&self, schedule_id: Uuid, last_run_at: DateTime<Utc>) -> Result<()>;
 
     // --- Trigger persistence ---
 
@@ -408,13 +319,7 @@ pub trait ServerRepo: Send + Sync {
     // --- Session management ---
 
     /// Create a new chat session.
-    async fn create_session(
-        &self,
-        user_id: UserId,
-        session_id: Uuid,
-        mode_id: &str,
-        title: &str,
-    ) -> Result<()>;
+    async fn create_session(&self, user_id: UserId, session_id: Uuid, mode_id: &str, title: &str) -> Result<()>;
 
     /// List sessions for a user.
     async fn list_sessions(&self, user_id: UserId) -> Result<Vec<SessionRow>>;
@@ -426,21 +331,10 @@ pub trait ServerRepo: Send + Sync {
     async fn delete_session(&self, session_id: Uuid) -> Result<()>;
 
     /// Insert a chat message scoped to a session.
-    async fn insert_session_message(
-        &self,
-        user_id: UserId,
-        session_id: Uuid,
-        id: Uuid,
-        role: String,
-        content: String,
-    ) -> Result<()>;
+    async fn insert_session_message(&self, user_id: UserId, session_id: Uuid, id: Uuid, role: String, content: String) -> Result<()>;
 
     /// Get chat history for a session.
-    async fn get_session_history(
-        &self,
-        session_id: Uuid,
-        limit: u32,
-    ) -> Result<Vec<ChatMessageRow>>;
+    async fn get_session_history(&self, session_id: Uuid, limit: u32) -> Result<Vec<ChatMessageRow>>;
 
     /// Update the title for a session.
     async fn update_session_title(&self, session_id: Uuid, title: &str) -> Result<()>;
@@ -454,15 +348,7 @@ pub trait ServerRepo: Send + Sync {
     // --- Token usage tracking ---
 
     /// Insert a token usage record.
-    async fn insert_token_usage(
-        &self,
-        session_id: Option<Uuid>,
-        agent_id: Option<Uuid>,
-        tier: &str,
-        model_id: &str,
-        input_tokens: i64,
-        output_tokens: i64,
-    ) -> Result<()>;
+    async fn insert_token_usage(&self, session_id: Option<Uuid>, agent_id: Option<Uuid>, tier: &str, model_id: &str, input_tokens: i64, output_tokens: i64) -> Result<()>;
 
     /// Get aggregated usage summary for the last N hours.
     async fn get_usage_summary(&self, since_hours: u32) -> Result<Vec<UsageSummaryRow>>;
@@ -523,21 +409,9 @@ pub trait UserRepo: Send + Sync {
     /// Get a user by GitHub ID.
     async fn get_user_by_github_id(&self, github_id: i64) -> Result<Option<User>>;
     /// Link GitHub account to existing user.
-    async fn link_github(
-        &self,
-        user_id: UserId,
-        github_id: i64,
-        github_login: &str,
-        token_encrypted: &str,
-    ) -> Result<()>;
+    async fn link_github(&self, user_id: UserId, github_id: i64, github_login: &str, token_encrypted: &str) -> Result<()>;
     /// Create a new user from GitHub OAuth.
-    async fn create_github_user(
-        &self,
-        email: &str,
-        github_id: i64,
-        github_login: &str,
-        token_encrypted: &str,
-    ) -> Result<User>;
+    async fn create_github_user(&self, email: &str, github_id: i64, github_login: &str, token_encrypted: &str) -> Result<User>;
 }
 
 // ============================================================================
@@ -561,13 +435,7 @@ pub trait DocumentRepo: Send + Sync {
     ) -> Result<DocumentRow>;
 
     /// Update a document's content, title, and tags.
-    async fn update_document(
-        &self,
-        doc_id: Uuid,
-        content: Option<String>,
-        title: Option<String>,
-        tags: Option<Vec<String>>,
-    ) -> Result<DocumentRow>;
+    async fn update_document(&self, doc_id: Uuid, content: Option<String>, title: Option<String>, tags: Option<Vec<String>>) -> Result<DocumentRow>;
 
     /// Update a document's summary.
     async fn update_document_summary(&self, doc_id: Uuid, summary: String) -> Result<()>;
@@ -585,11 +453,7 @@ pub trait DocumentRepo: Send + Sync {
     async fn list_session_documents(&self, session_id: Uuid) -> Result<Vec<DocumentRow>>;
 
     /// Full-text search documents for a user.
-    async fn search_documents(
-        &self,
-        user_id: Uuid,
-        query: &str,
-    ) -> Result<Vec<DocumentSearchResult>>;
+    async fn search_documents(&self, user_id: Uuid, query: &str) -> Result<Vec<DocumentSearchResult>>;
 
     /// Delete a document by ID.
     async fn delete_document(&self, doc_id: Uuid) -> Result<()>;

@@ -21,11 +21,7 @@ impl RecoveryPrompts {
     /// * `original_output` - The output that couldn't be parsed
     /// * `parse_error` - The specific error message
     /// * `expected_schema` - The schema the output should match
-    pub fn parse_error_recovery(
-        original_output: &str,
-        parse_error: &str,
-        expected_schema: &str,
-    ) -> PromptBuilder {
+    pub fn parse_error_recovery(original_output: &str, parse_error: &str, expected_schema: &str) -> PromptBuilder {
         // Truncate original output if too long
         let truncated_output = if original_output.len() > 2000 {
             format!("{}...[truncated]", &original_output[..2000])
@@ -76,12 +72,7 @@ Please regenerate your response with valid JSON matching the schema."#,
     /// * `test_output` - The test output/error
     /// * `test_code` - The test code itself
     /// * `implementation_code` - The code being tested
-    pub fn test_failure_analysis(
-        test_name: &str,
-        test_output: &str,
-        test_code: &str,
-        implementation_code: &str,
-    ) -> PromptBuilder {
+    pub fn test_failure_analysis(test_name: &str, test_output: &str, test_code: &str, implementation_code: &str) -> PromptBuilder {
         PromptBuilder::new()
             .version(Self::test_failure_version())
             .role(RECOVERY_ROLE)
@@ -127,11 +118,7 @@ Determine whether the bug is in the test or the implementation, then explain the
     /// * `original_submission` - The code that was submitted
     /// * `review_feedback` - The feedback from the reviewer
     /// * `original_requirements` - The original task requirements
-    pub fn review_rejection_recovery(
-        original_submission: &str,
-        review_feedback: &ReviewFeedback,
-        original_requirements: &str,
-    ) -> PromptBuilder {
+    pub fn review_rejection_recovery(original_submission: &str, review_feedback: &ReviewFeedback, original_requirements: &str) -> PromptBuilder {
         let issues_text = review_feedback
             .issues
             .iter()
@@ -191,11 +178,7 @@ Revise your code to address ALL blocking issues."#,
     /// * `task_description` - What was being attempted
     /// * `attempts` - List of previous attempts and their results
     /// * `pattern_description` - Description of the repetitive pattern
-    pub fn stuck_loop_breakout(
-        task_description: &str,
-        attempts: &[AttemptRecord],
-        pattern_description: &str,
-    ) -> PromptBuilder {
+    pub fn stuck_loop_breakout(task_description: &str, attempts: &[AttemptRecord], pattern_description: &str) -> PromptBuilder {
         let attempts_text = attempts
             .iter()
             .enumerate()
@@ -245,22 +228,11 @@ Step back and consider a different approach."#,
     /// # Arguments
     /// * `requirements` - The original requirements
     /// * `conflicts_found` - Specific conflicts identified
-    pub fn conflicting_requirements(
-        requirements: &str,
-        conflicts_found: &[RequirementConflict],
-    ) -> PromptBuilder {
+    pub fn conflicting_requirements(requirements: &str, conflicts_found: &[RequirementConflict]) -> PromptBuilder {
         let conflicts_text = conflicts_found
             .iter()
             .enumerate()
-            .map(|(i, c)| {
-                format!(
-                    "{}. **{}** vs **{}**\n   Issue: {}",
-                    i + 1,
-                    c.requirement_a,
-                    c.requirement_b,
-                    c.conflict_description
-                )
-            })
+            .map(|(i, c)| format!("{}. **{}** vs **{}**\n   Issue: {}", i + 1, c.requirement_a, c.requirement_b, c.conflict_description))
             .collect::<Vec<_>>()
             .join("\n\n");
 
@@ -377,11 +349,7 @@ pub struct RequirementConflict {
 }
 
 impl RequirementConflict {
-    pub fn new(
-        requirement_a: impl Into<String>,
-        requirement_b: impl Into<String>,
-        conflict_description: impl Into<String>,
-    ) -> Self {
+    pub fn new(requirement_a: impl Into<String>, requirement_b: impl Into<String>, conflict_description: impl Into<String>) -> Self {
         Self {
             requirement_a: requirement_a.into(),
             requirement_b: requirement_b.into(),
@@ -577,11 +545,7 @@ mod tests {
 
     #[test]
     fn test_parse_error_recovery_includes_output() {
-        let prompt = RecoveryPrompts::parse_error_recovery(
-            r#"{"incomplete": true"#,
-            "unexpected end of input",
-            r#"{"complete": "boolean"}"#,
-        );
+        let prompt = RecoveryPrompts::parse_error_recovery(r#"{"incomplete": true"#, "unexpected end of input", r#"{"complete": "boolean"}"#);
 
         let built = prompt.build();
         assert!(built.text.contains("incomplete"));
@@ -590,11 +554,7 @@ mod tests {
 
     #[test]
     fn test_parse_error_recovery_includes_schema() {
-        let prompt = RecoveryPrompts::parse_error_recovery(
-            "bad output",
-            "error",
-            r#"{"expected": "schema"}"#,
-        );
+        let prompt = RecoveryPrompts::parse_error_recovery("bad output", "error", r#"{"expected": "schema"}"#);
 
         let built = prompt.build();
         assert!(built.text.contains("expected"));
@@ -604,8 +564,7 @@ mod tests {
     #[test]
     fn test_parse_error_recovery_truncates_long_output() {
         let long_output = "x".repeat(3000);
-        let prompt =
-            RecoveryPrompts::parse_error_recovery(&long_output, "error", r#"{"test": "schema"}"#);
+        let prompt = RecoveryPrompts::parse_error_recovery(&long_output, "error", r#"{"test": "schema"}"#);
 
         let built = prompt.build();
         assert!(built.text.contains("...[truncated]"));
@@ -647,12 +606,7 @@ mod tests {
 
     #[test]
     fn test_test_failure_analysis_includes_code() {
-        let prompt = RecoveryPrompts::test_failure_analysis(
-            "test",
-            "error",
-            "test code here",
-            "impl code here",
-        );
+        let prompt = RecoveryPrompts::test_failure_analysis("test", "error", "test code here", "impl code here");
 
         let built = prompt.build();
         assert!(built.text.contains("test code here"));
@@ -690,14 +644,8 @@ mod tests {
     #[test]
     fn test_review_feedback_builder() {
         let feedback = ReviewFeedback::new("changes_requested", "Needs work")
-            .with_issue(ReviewIssue::blocking(
-                "Missing error handling",
-                "Add try/catch",
-            ))
-            .with_issue(
-                ReviewIssue::suggestion("Could be more concise", "Simplify logic")
-                    .at_location("line 42"),
-            );
+            .with_issue(ReviewIssue::blocking("Missing error handling", "Add try/catch"))
+            .with_issue(ReviewIssue::suggestion("Could be more concise", "Simplify logic").at_location("line 42"));
 
         assert_eq!(feedback.verdict, "changes_requested");
         assert_eq!(feedback.issues.len(), 2);
@@ -706,14 +654,9 @@ mod tests {
 
     #[test]
     fn test_review_rejection_recovery_includes_feedback() {
-        let feedback = ReviewFeedback::new("changes_requested", "Missing tests")
-            .with_issue(ReviewIssue::blocking("No unit tests", "Add tests"));
+        let feedback = ReviewFeedback::new("changes_requested", "Missing tests").with_issue(ReviewIssue::blocking("No unit tests", "Add tests"));
 
-        let prompt = RecoveryPrompts::review_rejection_recovery(
-            "fn add(a: i32, b: i32) -> i32 { a + b }",
-            &feedback,
-            "Create an add function with tests",
-        );
+        let prompt = RecoveryPrompts::review_rejection_recovery("fn add(a: i32, b: i32) -> i32 { a + b }", &feedback, "Create an add function with tests");
 
         let built = prompt.build();
         assert!(built.text.contains("Missing tests"));
@@ -724,11 +667,7 @@ mod tests {
     #[test]
     fn test_review_rejection_recovery_includes_requirements() {
         let feedback = ReviewFeedback::new("rejected", "summary");
-        let prompt = RecoveryPrompts::review_rejection_recovery(
-            "code",
-            &feedback,
-            "Original requirements here",
-        );
+        let prompt = RecoveryPrompts::review_rejection_recovery("code", &feedback, "Original requirements here");
 
         let built = prompt.build();
         assert!(built.text.contains("Original requirements here"));
@@ -771,11 +710,7 @@ mod tests {
             AttemptRecord::new("Try 3", "Failed").with_error("error 3"),
         ];
 
-        let prompt = RecoveryPrompts::stuck_loop_breakout(
-            "Fix the compile error",
-            &attempts,
-            "Same error repeated 3 times",
-        );
+        let prompt = RecoveryPrompts::stuck_loop_breakout("Fix the compile error", &attempts, "Same error repeated 3 times");
 
         let built = prompt.build();
         assert!(built.text.contains("Try 1"));
@@ -823,11 +758,7 @@ mod tests {
 
     #[test]
     fn test_requirement_conflict_builder() {
-        let conflict = RequirementConflict::new(
-            "Must be fast",
-            "Must check all items",
-            "Speed vs thoroughness tradeoff",
-        );
+        let conflict = RequirementConflict::new("Must be fast", "Must check all items", "Speed vs thoroughness tradeoff");
 
         assert_eq!(conflict.requirement_a, "Must be fast");
         assert_eq!(conflict.requirement_b, "Must check all items");
@@ -835,11 +766,7 @@ mod tests {
 
     #[test]
     fn test_conflicting_requirements_includes_conflicts() {
-        let conflicts = vec![RequirementConflict::new(
-            "Real-time updates",
-            "Batch processing",
-            "Can't be both real-time and batched",
-        )];
+        let conflicts = vec![RequirementConflict::new("Real-time updates", "Batch processing", "Can't be both real-time and batched")];
 
         let prompt = RecoveryPrompts::conflicting_requirements("Build a data pipeline", &conflicts);
 
@@ -886,40 +813,22 @@ mod tests {
         let prompts = vec![
             RecoveryPrompts::parse_error_recovery("out", "err", "{}").build(),
             RecoveryPrompts::test_failure_analysis("test", "out", "code", "impl").build(),
-            RecoveryPrompts::review_rejection_recovery(
-                "code",
-                &ReviewFeedback::new("rejected", "summary"),
-                "requirements",
-            )
-            .build(),
+            RecoveryPrompts::review_rejection_recovery("code", &ReviewFeedback::new("rejected", "summary"), "requirements").build(),
             RecoveryPrompts::stuck_loop_breakout("task", &[], "pattern").build(),
             RecoveryPrompts::conflicting_requirements("requirements", &[]).build(),
         ];
 
         for prompt in prompts {
-            assert!(
-                prompt.text.contains("correcting a previous response"),
-                "Prompt should include recovery role"
-            );
+            assert!(prompt.text.contains("correcting a previous response"), "Prompt should include recovery role");
         }
     }
 
     #[test]
     fn test_all_prompts_have_versions() {
-        assert!(RecoveryPrompts::parse_error_version()
-            .family
-            .starts_with("recovery-"));
-        assert!(RecoveryPrompts::test_failure_version()
-            .family
-            .starts_with("recovery-"));
-        assert!(RecoveryPrompts::review_rejection_version()
-            .family
-            .starts_with("recovery-"));
-        assert!(RecoveryPrompts::stuck_loop_version()
-            .family
-            .starts_with("recovery-"));
-        assert!(RecoveryPrompts::conflict_version()
-            .family
-            .starts_with("recovery-"));
+        assert!(RecoveryPrompts::parse_error_version().family.starts_with("recovery-"));
+        assert!(RecoveryPrompts::test_failure_version().family.starts_with("recovery-"));
+        assert!(RecoveryPrompts::review_rejection_version().family.starts_with("recovery-"));
+        assert!(RecoveryPrompts::stuck_loop_version().family.starts_with("recovery-"));
+        assert!(RecoveryPrompts::conflict_version().family.starts_with("recovery-"));
     }
 }

@@ -240,8 +240,7 @@ mod tests {
     #[test]
     fn task_with_dependency() {
         let dep = TaskId::new();
-        let task =
-            Task::new("t", super::super::agent::AgentTier::Worker).with_dependency(dep.clone());
+        let task = Task::new("t", super::super::agent::AgentTier::Worker).with_dependency(dep.clone());
         assert_eq!(task.depends_on.len(), 1);
         assert_eq!(task.depends_on[0], dep);
     }
@@ -259,13 +258,7 @@ mod tests {
 
     #[test]
     fn task_status_serde_roundtrip() {
-        let variants = [
-            TaskStatus::Pending,
-            TaskStatus::InProgress,
-            TaskStatus::Review,
-            TaskStatus::Completed,
-            TaskStatus::Failed,
-        ];
+        let variants = [TaskStatus::Pending, TaskStatus::InProgress, TaskStatus::Review, TaskStatus::Completed, TaskStatus::Failed];
         for v in &variants {
             let json = serde_json::to_string(v).unwrap();
             let parsed: TaskStatus = serde_json::from_str(&json).unwrap();
@@ -275,12 +268,7 @@ mod tests {
 
     #[test]
     fn priority_serde_roundtrip() {
-        let variants = [
-            Priority::Low,
-            Priority::Normal,
-            Priority::High,
-            Priority::Urgent,
-        ];
+        let variants = [Priority::Low, Priority::Normal, Priority::High, Priority::Urgent];
         for v in &variants {
             let json = serde_json::to_string(v).unwrap();
             let parsed: Priority = serde_json::from_str(&json).unwrap();

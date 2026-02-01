@@ -15,10 +15,7 @@ pub struct FileSummarizer {
 
 impl FileSummarizer {
     pub fn new(threshold_tokens: usize, target_tokens: usize) -> Self {
-        Self {
-            threshold_tokens,
-            target_tokens,
-        }
+        Self { threshold_tokens, target_tokens }
     }
 
     /// Get the threshold tokens.
@@ -91,11 +88,7 @@ impl FileSummarizer {
             }
 
             // Keep struct/enum definitions
-            if trimmed.starts_with("pub struct ")
-                || trimmed.starts_with("struct ")
-                || trimmed.starts_with("pub enum ")
-                || trimmed.starts_with("enum ")
-            {
+            if trimmed.starts_with("pub struct ") || trimmed.starts_with("struct ") || trimmed.starts_with("pub enum ") || trimmed.starts_with("enum ") {
                 summary_lines.push(line.to_string());
                 continue;
             }
@@ -114,12 +107,7 @@ impl FileSummarizer {
             }
 
             // Keep function signatures in impl blocks
-            if in_impl_block
-                && (trimmed.starts_with("pub fn ")
-                    || trimmed.starts_with("fn ")
-                    || trimmed.starts_with("pub async fn ")
-                    || trimmed.starts_with("async fn "))
-            {
+            if in_impl_block && (trimmed.starts_with("pub fn ") || trimmed.starts_with("fn ") || trimmed.starts_with("pub async fn ") || trimmed.starts_with("async fn ")) {
                 // Extract just the signature, not the body
                 if let Some(sig) = self.extract_fn_signature(line) {
                     summary_lines.push(format!("{}  // ...", sig));
@@ -140,11 +128,7 @@ impl FileSummarizer {
         if estimate_tokens(&summary) > self.target_tokens {
             self.truncate_with_notice(&summary, self.target_tokens)
         } else {
-            format!(
-                "// SUMMARIZED (original: {} lines)\n{}",
-                content.lines().count(),
-                summary
-            )
+            format!("// SUMMARIZED (original: {} lines)\n{}", content.lines().count(), summary)
         }
     }
 
@@ -179,11 +163,7 @@ impl FileSummarizer {
             }
         }
 
-        format!(
-            "# SUMMARIZED (original: {} lines)\n{}",
-            content.lines().count(),
-            summary_lines.join("\n")
-        )
+        format!("# SUMMARIZED (original: {} lines)\n{}", content.lines().count(), summary_lines.join("\n"))
     }
 
     fn summarize_javascript(&self, content: &str) -> String {
@@ -193,9 +173,7 @@ impl FileSummarizer {
             let trimmed = line.trim();
 
             // Keep imports
-            if trimmed.starts_with("import ")
-                || (trimmed.starts_with("const ") && trimmed.contains(" require("))
-            {
+            if trimmed.starts_with("import ") || (trimmed.starts_with("const ") && trimmed.contains(" require(")) {
                 summary_lines.push(line.to_string());
                 continue;
             }
@@ -212,10 +190,7 @@ impl FileSummarizer {
 
             // Keep function declarations
             if trimmed.starts_with("function ") || trimmed.starts_with("async function ") {
-                summary_lines.push(format!(
-                    "{}  // ...",
-                    line.split('{').next().unwrap_or(line)
-                ));
+                summary_lines.push(format!("{}  // ...", line.split('{').next().unwrap_or(line)));
                 continue;
             }
 
@@ -226,11 +201,7 @@ impl FileSummarizer {
             }
         }
 
-        format!(
-            "// SUMMARIZED (original: {} lines)\n{}",
-            content.lines().count(),
-            summary_lines.join("\n")
-        )
+        format!("// SUMMARIZED (original: {} lines)\n{}", content.lines().count(), summary_lines.join("\n"))
     }
 
     fn summarize_generic(&self, content: &str) -> String {
@@ -266,8 +237,7 @@ impl FileSummarizer {
     }
 
     fn extract_js_export_signature(&self, line: &str) -> Option<String> {
-        line.find('{')
-            .map(|brace_pos| line[..brace_pos].trim().to_string())
+        line.find('{').map(|brace_pos| line[..brace_pos].trim().to_string())
     }
 
     fn truncate_with_notice(&self, content: &str, max_tokens: usize) -> String {
@@ -402,10 +372,7 @@ class Helper {
         let summarizer = FileSummarizer::new(10, 100);
 
         // Create content with many lines
-        let content: String = (0..100)
-            .map(|i| format!("Line {}", i))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let content: String = (0..100).map(|i| format!("Line {}", i)).collect::<Vec<_>>().join("\n");
 
         let result = summarizer.summarize_if_needed(&content, "txt");
 
@@ -529,10 +496,7 @@ class Helper {
     fn test_generic_short_content_returned_as_is() {
         let summarizer = FileSummarizer::new(10, 500);
         // 30 lines < 50, so returned as-is
-        let content: String = (0..30)
-            .map(|i| format!("line {}", i))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let content: String = (0..30).map(|i| format!("line {}", i)).collect::<Vec<_>>().join("\n");
         let result = summarizer.summarize_if_needed(&content, "txt");
         assert!(result.was_summarized);
         assert_eq!(result.content, content);
@@ -578,9 +542,7 @@ class Helper {
     fn test_rust_summarize_triggers_truncation() {
         // Very low target so the summary itself is too long
         let summarizer = FileSummarizer::new(5, 1);
-        let content: String = (0..200)
-            .map(|i| format!("use crate::module{};\n", i))
-            .collect();
+        let content: String = (0..200).map(|i| format!("use crate::module{};\n", i)).collect();
         let result = summarizer.summarize_if_needed(&content, "rs");
         assert!(result.was_summarized);
         assert!(result.content.contains("truncated"));
