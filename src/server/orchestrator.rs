@@ -236,6 +236,41 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                     updated.duration_ms = stage_duration_ms as i64;
                                     updated.completed_at = Some(now);
                                     let _ = state.repo.update_stage_execution(&updated).await;
+
+                                    // Dual-write: update agent_execution + write token_ledger
+                                    if let Some(ae_repo) = &state.agent_execution_repo {
+                                        if let Ok(ae_rows) = ae_repo.list_agent_executions_by_stage(updated.id).await {
+                                            if let Some(ae) = ae_rows.first() {
+                                                let status = if succeeded { "completed" } else { "failed" };
+                                                let output = if succeeded { Some(prev_output.clone()) } else { None };
+                                                let _ = ae_repo
+                                                    .update_agent_execution_status(ae.id, status, output, None, stage_input_tokens as i64, stage_output_tokens as i64, 0.0)
+                                                    .await;
+
+                                                // Write token_ledger entry
+                                                if let Some(tl_repo) = &state.token_ledger_repo {
+                                                    // Get user_id and model_id from the run/agent
+                                                    if let Ok(Some(run_row)) = state.repo.get_pipeline_run(run_id).await {
+                                                        let model_id = if let Some(agent_id) = updated.agent_id {
+                                                            state
+                                                                .repo
+                                                                .get_persisted_agent(agent_id)
+                                                                .await
+                                                                .ok()
+                                                                .flatten()
+                                                                .map(|a| a.model_id)
+                                                                .unwrap_or_else(|| "unknown".to_string())
+                                                        } else {
+                                                            "unknown".to_string()
+                                                        };
+                                                        let _ = tl_repo
+                                                            .insert_ledger_entry(run_row.user_id, ae.id, &model_id, stage_input_tokens as i64, stage_output_tokens as i64, 0.0)
+                                                            .await;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             // Update run token totals
@@ -368,6 +403,12 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         pipeline_id: None,
                                     };
                                     let _ = state.repo.create_stage_execution(&gate_exec).await;
+                                    // Dual-write: create agent_execution for gate stage
+                                    if let Some(ae_repo) = &state.agent_execution_repo {
+                                        if let Some(aid) = gate_exec.agent_id {
+                                            let _ = ae_repo.create_agent_execution(gate_exec.id, aid, None, false, None, "", "").await;
+                                        }
+                                    }
                                     state.broadcast_feed(FeedUpdate {
                                         id: run_id,
                                         agent_id: "pipeline".into(),
@@ -547,6 +588,13 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         pipeline_id: None,
                                     };
                                     let _ = state.repo.create_stage_execution(&stage_exec).await;
+                                    // Dual-write: create agent_execution for next stage
+                                    if let Some(ae_repo) = &state.agent_execution_repo {
+                                        if let Some(aid) = &resolved_agent_id {
+                                            let rendered = stage_exec.rendered_prompt.as_deref().unwrap_or("");
+                                            let _ = ae_repo.create_agent_execution(stage_exec.id, aid.0, None, false, None, &initial_task, rendered).await;
+                                        }
+                                    }
 
                                     if let Some(agent_id) = &resolved_agent_id {
                                         if let Some(disp) = &state.dispatcher {

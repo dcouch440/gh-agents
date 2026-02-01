@@ -1542,6 +1542,14 @@ async fn execute_start_pipeline(input: &Value, state: &AppState, user_id: UserId
     };
     let _ = state.repo.create_stage_execution(&stage_exec).await;
 
+    // Dual-write: create agent_execution for the new execution tables
+    if let Some(ae_repo) = &state.agent_execution_repo {
+        let rendered = stage_exec.rendered_prompt.as_deref().unwrap_or("");
+        let _ = ae_repo
+            .create_agent_execution(stage_exec.id, first_agent_id.0, None, false, None, &run_row.initial_task, rendered)
+            .await;
+    }
+
     // Broadcast run_started + stage_started
     state.broadcast_pipeline(PipelineUpdate {
         run_id,
