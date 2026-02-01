@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { UsageSummary } from '../types/stats'
-import { USE_MOCK_DATA, STATS_POLL_INTERVAL_MS } from '../constants'
-import { mock } from '../mock'
-import { api } from '../api'
+import type { UsageSummary } from '@/types/stats'
+import { USE_MOCK_DATA, STATS_POLL_INTERVAL_MS } from '@/constants'
+import { mock } from '@/mock'
+import { api } from '@/api'
 
 const useStats = () => {
   const [stats, setStats] = useState<UsageSummary[]>([])

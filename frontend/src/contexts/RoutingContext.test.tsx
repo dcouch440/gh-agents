@@ -1,13 +1,13 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { RoutingProvider } from './RoutingContext'
-import { useRoutingContext } from '../hooks/useRoutingContext'
-import { mockRoutingEvent, mockRoutingEventCompleted } from '../test/fixtures'
+import { useRoutingContext } from '@/hooks/useRoutingContext'
+import { mockRoutingEvent, mockRoutingEventCompleted } from '@/test/fixtures'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
 let wsHandler: ((data: unknown) => void) | null = null
 
-vi.mock('../hooks/useWebSocket', () => ({
+vi.mock('@/hooks/useWebSocket', () => ({
   useWebSocket: () => ({
     status: 'connected' as const,
     subscribe: (_channel: string, handler: (data: unknown) => void) => {

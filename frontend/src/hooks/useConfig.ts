@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Config } from '../types/config'
-import { USE_MOCK_DATA } from '../constants'
-import { mock } from '../mock'
-import { api } from '../api'
+import type { Config } from '@/types/config'
+import { USE_MOCK_DATA } from '@/constants'
+import { mock } from '@/mock'
+import { api } from '@/api'
 
 const useConfig = () => {
   const [config, setConfig] = useState<Config | null>(null)

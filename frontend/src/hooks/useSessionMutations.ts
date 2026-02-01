@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
-import { api } from '../api'
-import type { Session, CreateSessionRequest, UpdateSessionRequest } from '../types'
+import { api } from '@/api'
+import type { Session, CreateSessionRequest, UpdateSessionRequest } from '@/types'
 
 const useCreateSession = () => {
   const [loading, setLoading] = useState(false)

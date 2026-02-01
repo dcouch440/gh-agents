@@ -1,9 +1,9 @@
 import { createContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react'
-import { useWebSocket } from '../hooks/useWebSocket'
-import { ACTION, WS_CHANNEL, USE_MOCK_DATA } from '../constants'
-import { api } from '../api'
-import { mock } from '../mock'
-import type { Pipeline, PipelineRun } from '../types/pipeline'
+import { useWebSocket } from '@/hooks/useWebSocket'
+import { ACTION, WS_CHANNEL, USE_MOCK_DATA } from '@/constants'
+import { api } from '@/api'
+import { mock } from '@/mock'
+import type { Pipeline, PipelineRun } from '@/types/pipeline'
 
 // ── State ────────────────────────────────────────────────────────────────────
 

@@ -1,13 +1,13 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { FeedProvider } from './FeedContext'
-import { useFeedContext } from '../hooks/useFeedContext'
-import { mockFeedItem } from '../test/fixtures'
+import { useFeedContext } from '@/hooks/useFeedContext'
+import { mockFeedItem } from '@/test/fixtures'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
 let wsHandler: ((data: unknown) => void) | null = null
 
-vi.mock('../hooks/useWebSocket', () => ({
+vi.mock('@/hooks/useWebSocket', () => ({
   useWebSocket: () => ({
     status: 'connected' as const,
     subscribe: (_channel: string, handler: (data: unknown) => void) => {

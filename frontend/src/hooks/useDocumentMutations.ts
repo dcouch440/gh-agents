@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
-import { api } from '../api'
-import type { Document, DocumentSearchResult, CreateDocumentRequest, UpdateDocumentRequest } from '../types'
+import { api } from '@/api'
+import type { Document, DocumentSearchResult, CreateDocumentRequest, UpdateDocumentRequest } from '@/types'
 
 const useCreateDocument = () => {
   const [loading, setLoading] = useState(false)

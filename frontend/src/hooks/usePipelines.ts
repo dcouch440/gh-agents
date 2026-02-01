@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Pipeline, PipelineRun, StageExecution } from '../types/pipeline'
-import { USE_MOCK_DATA } from '../constants'
-import { mock } from '../mock'
-import { api } from '../api'
+import type { Pipeline, PipelineRun, StageExecution } from '@/types/pipeline'
+import { USE_MOCK_DATA } from '@/constants'
+import { mock } from '@/mock'
+import { api } from '@/api'
 
 const usePipelines = () => {
   const [pipelines, setPipelines] = useState<Pipeline[]>([])

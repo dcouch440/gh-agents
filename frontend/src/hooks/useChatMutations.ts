@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
-import { api, createSSEStream } from '../api'
-import type { SendMessageRequest } from '../types'
+import { api, createSSEStream } from '@/api'
+import type { SendMessageRequest } from '@/types'
 
 type SendMessageResponse = {
   message_id: string

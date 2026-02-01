@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Tool } from '../types/tool'
-import { USE_MOCK_DATA } from '../constants'
-import { mock } from '../mock'
-import { api } from '../api'
+import type { Tool } from '@/types/tool'
+import { USE_MOCK_DATA } from '@/constants'
+import { mock } from '@/mock'
+import { api } from '@/api'
 
 const useTools = () => {
   const [tools, setTools] = useState<Tool[]>([])

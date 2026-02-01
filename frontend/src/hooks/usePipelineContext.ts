@@ -1,5 +1,5 @@
 import { useContext } from 'react'
-import { PipelineContext } from '../contexts/PipelineContext'
+import { PipelineContext } from '@/contexts/PipelineContext'
 
 const usePipelineContext = () => {
   const ctx = useContext(PipelineContext)

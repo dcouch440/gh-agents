@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Task, TaskStatus } from '../types/task'
-import { USE_MOCK_DATA } from '../constants'
-import { mock } from '../mock'
-import { api } from '../api'
+import type { Task, TaskStatus } from '@/types/task'
+import { USE_MOCK_DATA } from '@/constants'
+import { mock } from '@/mock'
+import { api } from '@/api'
 
 const useTasks = (statusFilter?: TaskStatus) => {
   const [tasks, setTasks] = useState<Task[]>([])

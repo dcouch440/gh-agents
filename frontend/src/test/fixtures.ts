@@ -1,13 +1,13 @@
-import type { Agent } from '../types/agent'
-import type { Task } from '../types/task'
-import type { Pipeline, PipelineRun, StageExecution } from '../types/pipeline'
-import type { FeedItem } from '../types/feed'
-import type { UsageSummary } from '../types/stats'
-import type { ChatMessage, Session, Mode } from '../types/session'
-import type { RoutingEvent } from '../types/routing'
-import type { Document } from '../types/document'
-import type { Tool } from '../types/tool'
-import type { Config } from '../types/config'
+import type { Agent } from '@/types/agent'
+import type { Task } from '@/types/task'
+import type { Pipeline, PipelineRun, StageExecution } from '@/types/pipeline'
+import type { FeedItem } from '@/types/feed'
+import type { UsageSummary } from '@/types/stats'
+import type { ChatMessage, Session, Mode } from '@/types/session'
+import type { RoutingEvent } from '@/types/routing'
+import type { Document } from '@/types/document'
+import type { Tool } from '@/types/tool'
+import type { Config } from '@/types/config'
 
 export const mockAgent: Agent = {
   id: 'agent-001',

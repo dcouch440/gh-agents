@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
-import { api } from '../api'
-import type { Agent, CreateAgentRequest, UpdateAgentRequest, Tool, Document } from '../types'
+import { api } from '@/api'
+import type { Agent, CreateAgentRequest, UpdateAgentRequest, Tool, Document } from '@/types'
 
 const useCreateAgent = () => {
   const [loading, setLoading] = useState(false)

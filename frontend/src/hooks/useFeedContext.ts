@@ -1,5 +1,5 @@
 import { useContext } from 'react'
-import { FeedContext } from '../contexts/FeedContext'
+import { FeedContext } from '@/contexts/FeedContext'
 
 const useFeedContext = () => {
   const ctx = useContext(FeedContext)

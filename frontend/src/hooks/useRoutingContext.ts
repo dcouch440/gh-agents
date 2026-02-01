@@ -1,5 +1,5 @@
 import { useContext } from 'react'
-import { RoutingContext } from '../contexts/RoutingContext'
+import { RoutingContext } from '@/contexts/RoutingContext'
 
 const useRoutingContext = () => {
   const ctx = useContext(RoutingContext)

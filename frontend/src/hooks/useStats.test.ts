@@ -1,12 +1,12 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { useStats } from './useStats'
-import { mockUsageSummary } from '../test/fixtures'
+import { mockUsageSummary } from '@/test/fixtures'
 
 const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }))
 
-vi.mock('../api', () => ({ api: { get: mockGet } }))
-vi.mock('../constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('../constants')
+vi.mock('@/api', () => ({ api: { get: mockGet } }))
+vi.mock('@/constants', async () => {
+  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
   return { ...actual, USE_MOCK_DATA: false, STATS_POLL_INTERVAL_MS: 100_000 }
 })
 

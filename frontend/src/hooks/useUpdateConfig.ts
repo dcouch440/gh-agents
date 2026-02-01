@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
-import { api } from '../api'
-import type { Config, UpdateConfigRequest } from '../types'
+import { api } from '@/api'
+import type { Config, UpdateConfigRequest } from '@/types'
 
 const useUpdateConfig = () => {
   const [loading, setLoading] = useState(false)
