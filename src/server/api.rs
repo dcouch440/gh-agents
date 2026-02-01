@@ -2645,8 +2645,11 @@ pub async fn render_stage(doc_repo: Option<&dyn crate::db::traits::DocumentRepo>
     // Fetch context documents referenced via {{context.ref_tag}} patterns
     let mut context_docs: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     let context_re = regex::Regex::new(r"\{\{context\.(\w+)\}\}").unwrap();
-    let mut all_text = stage.output_description.clone();
-    if let Some(defs) = stage.input_definitions.as_array() {
+    let output_desc = stage.output_description.clone().unwrap_or_default();
+    let input_defs = stage.input_definitions.clone().unwrap_or_else(|| serde_json::json!([]));
+    let out_schema = stage.output_schema.clone().unwrap_or_else(|| serde_json::json!({"fields": []}));
+    let mut all_text = output_desc.clone();
+    if let Some(defs) = input_defs.as_array() {
         for def in defs {
             if let Some(v) = def.get("value").and_then(|v| v.as_str()) {
                 all_text.push(' ');
@@ -2667,7 +2670,7 @@ pub async fn render_stage(doc_repo: Option<&dyn crate::db::traits::DocumentRepo>
 
     // Resolve input definitions
     let mut resolved_inputs: Vec<(String, String)> = Vec::new();
-    if let Some(defs) = stage.input_definitions.as_array() {
+    if let Some(defs) = input_defs.as_array() {
         for def in defs {
             let key = def.get("key").and_then(|k| k.as_str()).unwrap_or("").to_string();
             let source = def.get("source").and_then(|s| s.as_str()).unwrap_or("");
@@ -2693,9 +2696,9 @@ pub async fn render_stage(doc_repo: Option<&dyn crate::db::traits::DocumentRepo>
     }
 
     // Resolve output_description template
-    let resolved_description = resolve_template(&stage.output_description, stage_outputs, &context_docs);
+    let resolved_description = resolve_template(&output_desc, stage_outputs, &context_docs);
 
-    render_stage_prompt(&resolved_description, &resolved_inputs, &stage.output_schema)
+    render_stage_prompt(&resolved_description, &resolved_inputs, &out_schema)
 }
 
 /// Request body for rendering a pipeline stage prompt.
