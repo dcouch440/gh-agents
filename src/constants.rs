@@ -1,5 +1,19 @@
 //! App-wide constants for nexor.
 
+// ── Environment Variable Keys ─────────────────────────────────────────────
+
+pub const ENV_ANTHROPIC_API_KEY: &str = "ANTHROPIC_API_KEY";
+pub const ENV_ANTHROPIC_MODEL: &str = "ANTHROPIC_MODEL";
+pub const ENV_XAI_API_KEY: &str = "XAI_API_KEY";
+pub const ENV_XAI_MODEL: &str = "XAI_MODEL";
+pub const ENV_GITHUB_TOKEN: &str = "GITHUB_TOKEN";
+pub const ENV_DATABASE_URL: &str = "DATABASE_URL";
+pub const ENV_DB_MAX_CONNECTIONS: &str = "DB_MAX_CONNECTIONS";
+pub const ENV_JWT_SECRET: &str = "JWT_SECRET";
+pub const ENV_RUST_ENV: &str = "RUST_ENV";
+pub const ENV_CORS_ORIGINS: &str = "CORS_ORIGINS";
+pub const ENV_NEXOR_STATIC_DIR: &str = "NEXOR_STATIC_DIR";
+
 // ── Model IDs ──────────────────────────────────────────────────────────────
 // Anthropic Claude model identifiers. Update these when migrating to new
 // model versions — every runtime reference should use these constants.

@@ -38,9 +38,9 @@ impl GrokConfig {
     ///
     /// Reads `XAI_API_KEY` (required) and `XAI_MODEL` (optional).
     pub fn from_env() -> Result<Self, LLMError> {
-        let api_key = std::env::var("XAI_API_KEY").map_err(|_| LLMError::AuthError("XAI_API_KEY not set".to_string()))?;
+        let api_key = std::env::var(constants::ENV_XAI_API_KEY).map_err(|_| LLMError::AuthError(format!("{} not set", constants::ENV_XAI_API_KEY)))?;
 
-        let model = std::env::var("XAI_MODEL").unwrap_or_else(|_| constants::XAI_RESEARCH_MODEL.to_string());
+        let model = std::env::var(constants::ENV_XAI_MODEL).unwrap_or_else(|_| constants::XAI_RESEARCH_MODEL.to_string());
 
         Ok(Self {
             api_key,

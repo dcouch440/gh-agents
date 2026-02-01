@@ -549,7 +549,7 @@ mod tests {
     #[test]
     fn client_requires_token() {
         // Clear any existing token from env
-        std::env::remove_var("GITHUB_TOKEN");
+        std::env::remove_var(crate::constants::ENV_GITHUB_TOKEN);
 
         // Creating client without token should fail
         let result = GitHubClient::new();

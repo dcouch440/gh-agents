@@ -10,7 +10,7 @@ use tokio::sync::{OnceCell, OwnedSemaphorePermit, Semaphore};
 use uuid::Uuid;
 
 fn admin_url() -> String {
-    std::env::var("DATABASE_URL").unwrap_or_else(|_| "postgres://nexor:nexor@localhost:5432/nexor".to_string())
+    std::env::var(crate::constants::ENV_DATABASE_URL).unwrap_or_else(|_| "postgres://nexor:nexor@localhost:5432/nexor".to_string())
 }
 
 /// Shared admin pool across all tests to avoid connection exhaustion.

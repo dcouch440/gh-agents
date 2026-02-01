@@ -218,13 +218,13 @@ pub type DbPool = PgPool;
 
 /// Initialize the database using DATABASE_URL from environment
 pub async fn init_db() -> Result<PgPool> {
-    let database_url = std::env::var("DATABASE_URL").context("DATABASE_URL environment variable not set")?;
+    let database_url = std::env::var(crate::constants::ENV_DATABASE_URL).context(format!("{} environment variable not set", crate::constants::ENV_DATABASE_URL))?;
     init_db_with_url(&database_url).await
 }
 
 /// Initialize the database with an explicit URL
 pub async fn init_db_with_url(database_url: &str) -> Result<PgPool> {
-    let max_connections: u32 = std::env::var("DB_MAX_CONNECTIONS").ok().and_then(|s| s.parse().ok()).unwrap_or(10);
+    let max_connections: u32 = std::env::var(crate::constants::ENV_DB_MAX_CONNECTIONS).ok().and_then(|s| s.parse().ok()).unwrap_or(10);
     tracing::info!("DB pool max_connections = {}", max_connections);
 
     let pool = PgPoolOptions::new()

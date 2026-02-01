@@ -35,10 +35,10 @@ async fn verify_work(task_title: &str, accumulated_response: &str, files_modifie
         files_modified,
     );
 
-    let api_key = match std::env::var("ANTHROPIC_API_KEY") {
+    let api_key = match std::env::var(crate::constants::ENV_ANTHROPIC_API_KEY) {
         Ok(key) => key,
         Err(_) => {
-            warn!("verify_work: ANTHROPIC_API_KEY not set, skipping verification");
+            warn!("verify_work: {} not set, skipping verification", crate::constants::ENV_ANTHROPIC_API_KEY);
             return None;
         }
     };

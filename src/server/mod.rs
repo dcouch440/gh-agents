@@ -74,7 +74,7 @@ pub async fn start_server(db: PgPool, scheduler: Arc<RwLock<Scheduler>>, config:
 
 /// Create the application router with all routes, middleware, and rate limiting
 fn create_router(state: AppState) -> Router {
-    let static_dir = std::env::var("NEXOR_STATIC_DIR").unwrap_or_else(|_| "ui/dist".to_string());
+    let static_dir = std::env::var(crate::constants::ENV_NEXOR_STATIC_DIR).unwrap_or_else(|_| "ui/dist".to_string());
     let cors = build_cors_layer();
 
     // Rate limiter for auth routes: 10 requests per 60 seconds per IP
@@ -172,7 +172,7 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
 /// - If `CORS_ORIGINS` is set, parse comma-separated origins.
 /// - If unset, default to permissive (dev mode) with a warning.
 fn build_cors_layer() -> CorsLayer {
-    match std::env::var("CORS_ORIGINS") {
+    match std::env::var(crate::constants::ENV_CORS_ORIGINS) {
         Ok(origins) if !origins.is_empty() => {
             let parsed: Vec<HeaderValue> = origins
                 .split(',')
