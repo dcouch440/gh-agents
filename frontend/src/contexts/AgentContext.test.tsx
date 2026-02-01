@@ -38,7 +38,7 @@ function TestConsumer() {
     <div>
       {agents.map((a) => (
         <div key={a.id} data-testid={`agent-${a.id}`}>
-          {a.persona.name}:{a.status}
+          {a.persona_name}:{a.status}
         </div>
       ))}
     </div>
@@ -103,7 +103,7 @@ describe('AgentContext', () => {
         expect(screen.getByTestId('agent-agent-001')).toBeInTheDocument()
       })
 
-      const newAgent = { ...mockAgent, id: 'agent-002', persona: { ...mockAgent.persona, name: 'NewBot' } }
+      const newAgent = { ...mockAgent, id: 'agent-002', persona_name: 'NewBot' }
       wsHandler?.({ agent: newAgent })
 
       await waitFor(() => {

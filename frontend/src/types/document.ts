@@ -30,4 +30,14 @@ type CreateDocumentRequest = {
 
 type UpdateDocumentRequest = Partial<CreateDocumentRequest>
 
-export type { Document, DocumentSearchResult, CreateDocumentRequest, UpdateDocumentRequest }
+type DocumentListItem = {
+  id: string
+  title: string
+  summary: string
+  ref_tag: string
+  tags: string[]
+  doc_type: string
+  updated_at: string
+}
+
+export type { Document, DocumentSearchResult, DocumentListItem, CreateDocumentRequest, UpdateDocumentRequest }

@@ -22,6 +22,31 @@ type Config = {
   sandbox_mode: string
 }
 
-type UpdateConfigRequest = Partial<Config>
+type UpdateModelConfig = {
+  model_id?: string
+  max_tokens?: number
+  temperature?: number
+}
 
-export type { Config, UpdateConfigRequest }
+type UpdateModelsRequest = {
+  orchestrator?: UpdateModelConfig
+  worker?: UpdateModelConfig
+  utility?: UpdateModelConfig
+}
+
+type UpdatePoolRequest = {
+  max_orchestrators?: number
+  max_workers?: number
+  max_utilities?: number
+}
+
+type UpdateConfigRequest = {
+  verbosity?: string
+  models?: UpdateModelsRequest
+  pool?: UpdatePoolRequest
+  autonomy?: string
+  git_strategy?: string
+  sandbox_mode?: string
+}
+
+export type { ModelConfig, Config, UpdateConfigRequest }

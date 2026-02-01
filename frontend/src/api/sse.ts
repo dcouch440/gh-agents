@@ -1,7 +1,12 @@
 import { API_BASE, LS_AUTH_TOKEN } from '@/constants'
 
+type SSEEvent = {
+  event: string
+  data: string
+}
+
 type SSECallbacks = {
-  onMessage: (data: string) => void
+  onEvent: (event: SSEEvent) => void
   onDone: () => void
   onError: (error: Error) => void
 }
@@ -35,6 +40,7 @@ const createSSEStream = (path: string, callbacks: SSECallbacks): (() => void) =>
 
       const decoder = new TextDecoder()
       let buffer = ''
+      let currentEvent = 'message'
 
       for (;;) {
         const { done, value } = await reader.read()
@@ -48,13 +54,18 @@ const createSSEStream = (path: string, callbacks: SSECallbacks): (() => void) =>
         buffer = lines.pop() ?? ''
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim()
+          } else if (line.startsWith('data: ')) {
             const data = line.slice(6)
-            if (data === '[DONE]') {
+            if (currentEvent === 'done' || data === '[DONE]') {
               callbacks.onDone()
               return
             }
-            callbacks.onMessage(data)
+            callbacks.onEvent({ event: currentEvent, data })
+            currentEvent = 'message'
+          } else if (line === '') {
+            currentEvent = 'message'
           }
         }
       }
@@ -68,4 +79,4 @@ const createSSEStream = (path: string, callbacks: SSECallbacks): (() => void) =>
 }
 
 export { createSSEStream }
-export type { SSECallbacks }
+export type { SSECallbacks, SSEEvent }

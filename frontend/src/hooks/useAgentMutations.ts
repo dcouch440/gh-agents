@@ -1,7 +1,9 @@
 import { useState, useCallback } from 'react'
 import { api } from '@/api'
 import { API } from '@/constants'
-import type { Agent, CreateAgentRequest, UpdateAgentRequest, Tool, Document } from '@/types'
+import type { Agent, CreateAgentRequest, UpdateAgentRequest, AgentToolsResponse, AgentContextResponse } from '@/types'
+import type { Tool } from '@/types'
+import type { DocumentListItem } from '@/types'
 
 const useCreateAgent = () => {
   const [loading, setLoading] = useState(false)
@@ -75,9 +77,9 @@ const useAgentTools = () => {
     setLoading(true)
     setError(null)
     try {
-      const data = await api.get<Tool[]>(API.AGENT_TOOLS(agentId))
-      setTools(data)
-      return data
+      const res = await api.get<AgentToolsResponse>(API.AGENT_TOOLS(agentId))
+      setTools(res.tools)
+      return res.tools
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to load agent tools'
       setError(msg)
@@ -105,17 +107,17 @@ const useAgentTools = () => {
 }
 
 const useAgentContextDocs = () => {
-  const [docs, setDocs] = useState<Document[]>([])
+  const [docs, setDocs] = useState<DocumentListItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const load = useCallback(async (agentId: string): Promise<Document[]> => {
+  const load = useCallback(async (agentId: string): Promise<DocumentListItem[]> => {
     setLoading(true)
     setError(null)
     try {
-      const data = await api.get<Document[]>(API.AGENT_CONTEXT(agentId))
-      setDocs(data)
-      return data
+      const res = await api.get<AgentContextResponse>(API.AGENT_CONTEXT(agentId))
+      setDocs(res.documents)
+      return res.documents
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to load agent context'
       setError(msg)

@@ -1,13 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Agent } from '@/types/agent'
+import type { Agent, AgentsResponse } from '@/types/agent'
 import { API, USE_MOCK_DATA } from '@/constants'
 import { mock } from '@/mock'
 import { api } from '@/api'
-
-type AgentsResponse = {
-  stats: { orchestrators: number; workers: number; utilities: number }
-  agents: Agent[]
-}
 
 const useAgents = () => {
   const [agents, setAgents] = useState<Agent[]>([])

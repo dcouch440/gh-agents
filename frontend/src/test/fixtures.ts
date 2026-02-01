@@ -12,17 +12,19 @@ import type { Config } from '@/types/config'
 export const mockAgent: Agent = {
   id: 'agent-001',
   tier: 'worker',
-  persona: { name: 'TestBot', system_prompt: 'You are a test agent.', style: 'concise' },
-  model_config: { provider: 'anthropic', model_id: 'claude-sonnet-4-20250514', max_tokens: 8192, temperature: 0.7 },
+  persona_name: 'TestBot',
+  persona_prompt: 'You are a test agent.',
+  persona_style: 'concise',
+  model_provider: 'anthropic',
+  model_id: 'claude-sonnet-4-20250514',
+  model_max_tokens: 8192,
+  model_temperature: 0.7,
   status: 'idle',
-  current_task: null,
-  router_mode: false,
 }
 
 export const mockAgentUpdated: Agent = {
   ...mockAgent,
   status: 'working',
-  current_task: 'task-001',
 }
 
 export const mockTask: Task = {
@@ -103,9 +105,12 @@ export const mockAssistantMessage: ChatMessage = {
 
 export const mockRoutingEvent: RoutingEvent = {
   id: 'route-001',
+  user_id: 'user-001',
   session_id: 'session-001',
+  task_id: null,
   router_agent_id: 'agent-001',
   cluster_agent_id: 'agent-002',
+  cluster_id: null,
   cluster_name: 'codebase',
   tool_name: 'search_files',
   request: 'Find the auth module',
@@ -113,6 +118,8 @@ export const mockRoutingEvent: RoutingEvent = {
   response: null,
   error: null,
   status: 'pending',
+  agent_tier: 'worker',
+  model_id: 'claude-sonnet-4-20250514',
   input_tokens: 100,
   output_tokens: 0,
   duration_ms: null,
