@@ -2850,12 +2850,12 @@ impl PipelineRunResponse {
             pipeline_id: row.pipeline_id.to_string(),
             status: row.status,
             initial_task: row.initial_task,
-            stage_outputs: row.stage_outputs,
+            stage_outputs: row.stage_outputs.unwrap_or_else(|| serde_json::json!({})),
             current_stage: row.current_stage,
             started_at: row.started_at.to_rfc3339(),
             completed_at: row.completed_at.map(|t| t.to_rfc3339()),
-            total_input_tokens: row.total_input_tokens,
-            total_output_tokens: row.total_output_tokens,
+            total_input_tokens: row.total_input_tokens.unwrap_or(0),
+            total_output_tokens: row.total_output_tokens.unwrap_or(0),
         }
     }
 }

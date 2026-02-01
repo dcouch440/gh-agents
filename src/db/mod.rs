@@ -284,18 +284,19 @@ pub struct UsageSummaryRow {
     pub call_count: i64,
 }
 
+#[derive(Debug, Clone, sqlx::FromRow)]
 pub struct PipelineRunRow {
     pub id: Uuid,
     pub pipeline_id: Uuid,
     pub user_id: Uuid,
     pub status: String,
     pub initial_task: String,
-    pub stage_outputs: serde_json::Value,
+    pub stage_outputs: Option<serde_json::Value>,
     pub current_stage: i32,
     pub started_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
-    pub total_input_tokens: i64,
-    pub total_output_tokens: i64,
+    pub total_input_tokens: Option<i64>,
+    pub total_output_tokens: Option<i64>,
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]
