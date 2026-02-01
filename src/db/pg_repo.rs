@@ -872,7 +872,7 @@ impl ServerRepo for PgRepo {
     }
 
     async fn list_pipeline_stages(&self, pipeline_id: Uuid) -> Result<Vec<PipelineStageRow>> {
-        let rows: Vec<(Uuid, i32, Option<Uuid>, Option<Uuid>, Option<String>, bool, bool, String, serde_json::Value, String, serde_json::Value)> = sqlx::query_as(
+        let rows: Vec<(Uuid, i32, Option<Uuid>, Option<Uuid>, Option<String>, Option<bool>, Option<bool>, String, Option<serde_json::Value>, Option<String>, Option<serde_json::Value>)> = sqlx::query_as(
             "SELECT pipeline_id, stage_number, agent_id, cluster_id, role, approval_required, fan_out, stage_name, input_definitions, output_description, output_schema FROM pipeline_stages WHERE pipeline_id = $1 ORDER BY stage_number"
         )
         .bind(pipeline_id)

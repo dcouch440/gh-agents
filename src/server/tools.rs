@@ -1355,12 +1355,12 @@ async fn execute_add_pipeline_stage(input: &Value, state: &AppState, user_id: Us
                     agent_id: agent_uuid,
                     cluster_id: cluster_uuid,
                     role: role.clone(),
-                    approval_required,
-                    fan_out,
+                    approval_required: Some(approval_required),
+                    fan_out: Some(fan_out),
                     stage_name: stage_name.clone(),
-                    input_definitions: input_definitions.clone(),
-                    output_description: output_description.clone(),
-                    output_schema: output_schema.clone(),
+                    input_definitions: Some(input_definitions.clone()),
+                    output_description: Some(output_description.clone()),
+                    output_schema: Some(output_schema.clone()),
                 })
                 .await
             {

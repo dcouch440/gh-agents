@@ -221,12 +221,12 @@ impl AppState {
                                 stage.agent_id.map(crate::agents::AgentId),
                                 stage.cluster_id.map(crate::agents::ClusterId),
                                 stage.role,
-                                stage.approval_required,
-                                stage.fan_out,
+                                stage.approval_required.unwrap_or(false),
+                                stage.fan_out.unwrap_or(false),
                                 stage.stage_name,
-                                stage.input_definitions,
-                                stage.output_description,
-                                stage.output_schema,
+                                stage.input_definitions.unwrap_or_else(|| serde_json::json!([])),
+                                stage.output_description.unwrap_or_default(),
+                                stage.output_schema.unwrap_or_else(|| serde_json::json!({"fields": []})),
                             );
                         }
                     }
