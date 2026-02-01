@@ -438,8 +438,29 @@ impl Agent {
         self.emit_progress(task_id, &format!("Starting work on: {}", assignment.title), Some(0)).await?;
 
         let role_context = &assignment.context.role_context;
-        let system_prompt = self.build_role_aware_prompt(assignment, role_context);
+        let mut system_prompt = self.build_role_aware_prompt(assignment, role_context);
         let temperature = self.temperature_for_style(&role_context.style);
+
+        // Distill true context — cheap pre-pass that summarises intent & vibe.
+        // Only fires when there are chat messages to distill or the task
+        // description is complex enough to benefit from context analysis.
+        let true_context = if !assignment.context.chat_messages.is_empty() || assignment.description.len() > 200 {
+            crate::prompts::distill_true_context(
+                &assignment.context.chat_messages,
+                &assignment.title,
+                &assignment.description,
+                &assignment.context.context_docs,
+            )
+            .await
+        } else {
+            None
+        };
+
+        if let Some(ref ctx) = true_context {
+            system_prompt.push_str("\n\n## True Context\n\n");
+            system_prompt.push_str(&format!("<ctx_scop>{}</ctx_scop>\n", ctx.scope));
+            system_prompt.push_str(&format!("<ctx_vibe>{}</ctx_vibe>\n", ctx.vibe));
+        }
 
         // Build tool definitions: router_mode gets only request_assistance,
         // otherwise prefer DB-loaded tool_rows, fall back to hardcoded
@@ -1026,6 +1047,7 @@ mod tests {
                 tool_rows: vec![],
                 router_mode: false,
                 cluster_routing: None,
+                context_docs: vec![],
             },
             constraints: TaskConstraints::default(),
             timeout: Duration::from_secs(30),

@@ -450,6 +450,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
 
                                     // Load agent-level context documents
                                     let mut context_reading: Vec<FileContent> = Vec::new();
+                                    let mut context_docs: Vec<crate::db::DocumentRow> = Vec::new();
 
                                     // Resolve agent: prefer agent_id, fall back to cluster selection
                                     let resolved_agent_id = if let Some(aid) = &next_stage.agent_id {
@@ -461,6 +462,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                                     content: doc.content.clone(),
                                                 });
                                             }
+                                            context_docs = docs;
                                         }
                                         Some(aid.clone())
                                     } else if let Some(cid) = &next_stage.cluster_id {
@@ -477,6 +479,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                                                 content: doc.content.clone(),
                                                             });
                                                         }
+                                                        context_docs = docs;
                                                     }
                                                 }
                                                 picked
@@ -519,6 +522,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                             tool_rows: vec![],
                                             router_mode: false,
                                             cluster_routing: None,
+                                            context_docs,
                                         },
                                         constraints: TaskConstraints::default(),
                                         timeout: std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),
@@ -671,6 +675,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         tool_rows: vec![],
                                         router_mode: false,
                                         cluster_routing: None,
+                                        context_docs: vec![],
                                     },
                                     constraints: TaskConstraints::default(),
                                     timeout: std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),
@@ -740,6 +745,7 @@ pub fn spawn_schedule_runner(state: AppState) -> Option<tokio::task::JoinHandle<
                         tool_rows: vec![],
                         router_mode: false,
                         cluster_routing: None,
+                        context_docs: vec![],
                     },
                     constraints: TaskConstraints::default(),
                     timeout: std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),

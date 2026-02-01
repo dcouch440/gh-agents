@@ -84,6 +84,9 @@ pub struct TaskContext {
     /// Cluster routing context for dispatching tool calls to cluster agents.
     /// Required when `router_mode` is true and tools have `cluster_id` set.
     pub cluster_routing: Option<super::tool_router::ClusterRoutingContext>,
+    /// Raw context documents loaded from the agent_context junction table.
+    /// Used by the True Context distiller to find `doc_type = "distiller"` templates.
+    pub context_docs: Vec<crate::db::DocumentRow>,
 }
 
 /// Role-specific context for prompt building

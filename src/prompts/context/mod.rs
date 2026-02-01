@@ -12,11 +12,13 @@
 //! - `ContextTruncator` - Automatic truncation to fit limits
 //! - `ContextPressureWarning` - Warning system for context pressure
 
+mod distiller;
 mod injector;
 mod manager;
 mod summarizer;
 mod validator;
 
+pub use distiller::*;
 pub use injector::*;
 pub use manager::*;
 pub use summarizer::*;

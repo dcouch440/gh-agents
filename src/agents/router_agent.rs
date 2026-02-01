@@ -154,6 +154,7 @@ pub async fn route_to_cluster_agent(
             tool_rows: cluster_tools,
             router_mode: false,
             cluster_routing: None,
+            context_docs: vec![],
         },
         constraints: TaskConstraints {
             allowed_tools: Some(allowed_tool_names),

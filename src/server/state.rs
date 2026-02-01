@@ -272,7 +272,11 @@ impl AppState {
             _ => {
                 let is_production = std::env::var(crate::constants::ENV_RUST_ENV).map(|v| v.eq_ignore_ascii_case("production")).unwrap_or(false);
                 if is_production {
-                    panic!("{} must be set in production ({}=production)", crate::constants::ENV_JWT_SECRET, crate::constants::ENV_RUST_ENV);
+                    panic!(
+                        "{} must be set in production ({}=production)",
+                        crate::constants::ENV_JWT_SECRET,
+                        crate::constants::ENV_RUST_ENV
+                    );
                 }
                 tracing::warn!("{} not set — using random secret. Tokens will not survive restarts.", crate::constants::ENV_JWT_SECRET);
                 rand::random::<[u8; 32]>().to_vec()
