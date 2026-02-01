@@ -1713,6 +1713,7 @@ pub async fn submit_context_response(State(state): State<AppState>, _auth: auth:
             task_id: request.task_id,
             files,
             answers,
+            true_context: None,
         }),
     )
     .await
@@ -2287,6 +2288,7 @@ pub async fn approve_pipeline_run(
                                 router_mode: false,
                                 cluster_routing: None,
                                 context_docs: vec![],
+                                distiller_mode: crate::agents::DistillerMode::Background,
                             },
                             constraints: TaskConstraints::default(),
                             timeout: std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),

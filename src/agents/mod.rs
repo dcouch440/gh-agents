@@ -16,8 +16,8 @@ pub mod tool_router;
 
 pub use agent::{Agent, AgentError, AgentId};
 pub use channels::{
-    create_agent_channel, AgentCommand, AgentHandle, AgentResponse, ApprovalRequest, ContextRequest, ContextResponse, FileContent, HistoryEntry, ProgressUpdate, RoleContext,
-    TaskAssignment, TaskConstraints, TaskContext, TaskResult,
+    create_agent_channel, AgentCommand, AgentHandle, AgentResponse, ApprovalRequest, ContextRequest, ContextResponse, DistillerMode, FileContent, HistoryEntry, ProgressUpdate,
+    RoleContext, TaskAssignment, TaskConstraints, TaskContext, TaskResult,
 };
 pub use cluster::{Cluster, ClusterContext, ClusterError, ClusterId, ClusterManager};
 pub use dispatcher::{DispatchError, Dispatcher};

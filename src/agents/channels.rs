@@ -87,6 +87,24 @@ pub struct TaskContext {
     /// Raw context documents loaded from the agent_context junction table.
     /// Used by the True Context distiller to find `doc_type = "distiller"` templates.
     pub context_docs: Vec<crate::db::DocumentRow>,
+    /// Controls how the True Context distiller runs for this task.
+    pub distiller_mode: DistillerMode,
+}
+
+/// Controls whether the True Context distiller blocks or runs in the background.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DistillerMode {
+    /// Skip distillation entirely.
+    Off,
+    /// Run distiller in the background (non-blocking). The agent starts work
+    /// immediately and context is injected between tool-use rounds when ready.
+    /// Best for chat and interactive sessions.
+    #[default]
+    Background,
+    /// Run distiller synchronously before the agent starts work. Guarantees
+    /// context is available from the first LLM call. Best for pipelines and
+    /// programmatic task assignments.
+    Blocking,
 }
 
 /// Role-specific context for prompt building
@@ -164,6 +182,8 @@ pub struct ContextResponse {
     pub task_id: Uuid,
     pub files: Vec<FileContent>,
     pub answers: Vec<String>,
+    /// True context fields from background distiller (for future concurrent injection)
+    pub true_context: Option<crate::prompts::TrueContext>,
 }
 
 /// Request for user approval

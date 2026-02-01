@@ -155,6 +155,7 @@ pub async fn route_to_cluster_agent(
             router_mode: false,
             cluster_routing: None,
             context_docs: vec![],
+            distiller_mode: crate::agents::channels::DistillerMode::Off,
         },
         constraints: TaskConstraints {
             allowed_tools: Some(allowed_tool_names),
