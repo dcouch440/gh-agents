@@ -253,3 +253,194 @@
 .btn--secondary:hover {
   background: var(--color-bg-sunken);
 }
+
+/* ── Tool Activity Box (retro terminal) ───────────── */
+
+.tool-box {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  transition: all 300ms ease;
+  overflow: hidden;
+}
+
+.tool-box--pending {
+  opacity: 0.5;
+  border-color: #30363d;
+}
+
+.tool-box--running {
+  border-color: #39d353;
+  box-shadow: 0 0 8px rgba(57, 211, 83, 0.15), inset 0 0 12px rgba(57, 211, 83, 0.03);
+  animation: tool-glow 2s ease-in-out infinite;
+}
+
+.tool-box--completed {
+  opacity: 0.6;
+  border-color: #238636;
+  padding: var(--space-xs) var(--space-md);
+}
+
+.tool-box--error {
+  border-color: #f85149;
+  box-shadow: 0 0 8px rgba(248, 81, 73, 0.2);
+}
+
+.tool-box__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.tool-box__name {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: #e6edf3;
+  letter-spacing: 0.02em;
+}
+
+.tool-box__prefix {
+  color: #39d353;
+  margin-right: var(--space-xs);
+}
+
+.tool-box--completed .tool-box__prefix {
+  color: #238636;
+}
+
+.tool-box--error .tool-box__prefix {
+  color: #f85149;
+}
+
+.tool-box__duration {
+  font-size: var(--text-xs);
+  color: #8b949e;
+  font-variant-numeric: tabular-nums;
+}
+
+.tool-box__progress {
+  height: 2px;
+  background: #21262d;
+  border-radius: 1px;
+  margin-top: var(--space-xs);
+  overflow: hidden;
+}
+
+.tool-box--completed .tool-box__progress {
+  display: none;
+}
+
+.tool-box__progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #238636, #39d353);
+  border-radius: 1px;
+  transition: width 200ms linear;
+}
+
+.tool-box--error .tool-box__progress-bar {
+  background: linear-gradient(90deg, #da3633, #f85149);
+}
+
+.tool-box__detail {
+  font-size: 0.6875rem;
+  color: #8b949e;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tool-box--completed .tool-box__detail {
+  display: none;
+}
+
+/* ── Tool Activity Feed ───────────────────────────── */
+
+.tool-feed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: var(--space-sm) 0;
+  padding-left: var(--space-lg);
+}
+
+.tool-feed__hint {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 0.6875rem;
+  color: #484f58;
+  padding: var(--space-xs) 0;
+  transition: opacity 400ms ease;
+  letter-spacing: 0.01em;
+}
+
+/* ── Chat Demo Layout ─────────────────────────────── */
+
+.chat-demo {
+  max-width: 640px;
+  margin: var(--space-2xl) auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.chat-bubble {
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  max-width: 85%;
+  animation: bubble-in 300ms ease;
+}
+
+.chat-bubble--user {
+  align-self: flex-end;
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+}
+
+.chat-bubble--assistant {
+  align-self: flex-start;
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.chat-bubble--assistant .chat-bubble__cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--color-text);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: cursor-blink 800ms step-end infinite;
+}
+
+/* ── Keyframes ────────────────────────────────────── */
+
+@keyframes tool-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(57, 211, 83, 0.15), inset 0 0 12px rgba(57, 211, 83, 0.03);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(57, 211, 83, 0.25), inset 0 0 16px rgba(57, 211, 83, 0.06);
+  }
+}
+
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
