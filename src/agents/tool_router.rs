@@ -5,11 +5,21 @@
 //! resolves the request to a specific tool, finds the associated cluster,
 //! picks an agent, dispatches a sub-task, and returns the result.
 
+use std::sync::Arc;
+use std::time::Duration;
+
 use serde_json::{json, Value};
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
+use super::dispatcher::Dispatcher;
+use super::pool::AgentPool;
+use super::router_agent::{self, ToolClusterIndex};
 use crate::db::ToolRow;
 use crate::llm::Tool;
+
+/// Default timeout for cluster-routed tool calls.
+const CLUSTER_ROUTING_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// Return the `request_assistance` meta-tool definition for router-mode agents.
 pub fn request_assistance_tool() -> Tool {
@@ -37,6 +47,14 @@ pub fn request_assistance_tool() -> Tool {
     }
 }
 
+/// Context needed for cluster routing, passed from the executor.
+pub struct ClusterRoutingContext {
+    pub cluster_index: Arc<ToolClusterIndex>,
+    pub pool: Arc<Mutex<AgentPool>>,
+    pub dispatcher: Arc<Mutex<Dispatcher>>,
+    pub execution_context: Option<crate::execution::ExecutionContext>,
+}
+
 /// Execute a `request_assistance` tool call by routing to the appropriate tool/cluster.
 ///
 /// For direct execution tools (cluster_id = None), delegates to `execute_execution_tool`.
@@ -46,6 +64,7 @@ pub async fn execute_request_assistance(
     tool_rows: &[ToolRow],
     exec_ctx: Option<&crate::execution::ExecutionContext>,
     allowed_tools: Option<&[String]>,
+    cluster_ctx: Option<&ClusterRoutingContext>,
 ) -> Value {
     let tool_name = match input["tool_name"].as_str() {
         Some(name) => name,
@@ -80,24 +99,60 @@ pub async fn execute_request_assistance(
                 }
                 Some(cluster_id) => {
                     // Cluster-routed tool — dispatch to cluster agent
-                    route_to_cluster(cluster_id, tool_name, input).await
+                    route_to_cluster(cluster_id, tool_name, input, cluster_ctx).await
                 }
             }
         }
     }
 }
 
-/// Route a tool call to a cluster agent. Currently a placeholder that will be
-/// wired to the dispatcher + oneshot channel pattern in a future iteration.
-async fn route_to_cluster(cluster_id: Uuid, tool_name: &str, _input: &Value) -> Value {
-    // TODO: Look up cluster members, pick an agent, create a sub-task,
-    // dispatch via the existing dispatcher, and wait for the result.
-    json!({
-        "error": format!(
-            "Cluster routing not yet fully implemented. Tool '{}' is mapped to cluster {}",
-            tool_name, cluster_id
-        )
-    })
+/// Route a tool call to a cluster agent.
+async fn route_to_cluster(
+    cluster_id: Uuid,
+    tool_name: &str,
+    input: &Value,
+    cluster_ctx: Option<&ClusterRoutingContext>,
+) -> Value {
+    let ctx = match cluster_ctx {
+        Some(ctx) => ctx,
+        None => {
+            return json!({
+                "error": format!(
+                    "Cluster routing not available. Tool '{}' is mapped to cluster {} but no routing context was provided.",
+                    tool_name, cluster_id
+                )
+            });
+        }
+    };
+
+    // Look up the cluster in the index
+    let cluster_entry = match ctx.cluster_index.find_cluster(tool_name) {
+        Some(entry) => entry,
+        None => {
+            return json!({
+                "error": format!(
+                    "Tool '{}' has cluster_id {} but no cluster found in the index.",
+                    tool_name, cluster_id
+                )
+            });
+        }
+    };
+
+    let request = input["request"].as_str().unwrap_or("");
+    let empty_params = json!({});
+    let parameters = input.get("parameters").unwrap_or(&empty_params);
+
+    router_agent::route_to_cluster_agent(
+        cluster_entry,
+        tool_name,
+        request,
+        parameters,
+        &ctx.pool,
+        &ctx.dispatcher,
+        ctx.execution_context.clone(),
+        CLUSTER_ROUTING_TIMEOUT,
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -116,7 +171,7 @@ mod tests {
 
     #[tokio::test]
     async fn missing_tool_name_returns_error() {
-        let result = execute_request_assistance(&json!({}), &[], None, None).await;
+        let result = execute_request_assistance(&json!({}), &[], None, None, None).await;
         assert!(result["error"].as_str().unwrap().contains("tool_name"));
     }
 
@@ -125,6 +180,7 @@ mod tests {
         let result = execute_request_assistance(
             &json!({"tool_name": "nonexistent", "request": "help"}),
             &[],
+            None,
             None,
             None,
         )
@@ -150,13 +206,14 @@ mod tests {
             &[row],
             None,
             None,
+            None,
         )
         .await;
         assert!(result["error"].as_str().unwrap().contains("disabled"));
     }
 
     #[tokio::test]
-    async fn cluster_routed_tool_returns_placeholder() {
+    async fn cluster_routed_tool_without_context_returns_error() {
         let cid = Uuid::new_v4();
         let row = ToolRow {
             id: Uuid::new_v4(),
@@ -174,11 +231,11 @@ mod tests {
             &[row],
             None,
             None,
+            None,
         )
         .await;
         let err = result["error"].as_str().unwrap();
-        assert!(err.contains("Cluster routing"));
-        assert!(err.contains(&cid.to_string()));
+        assert!(err.contains("not available"));
     }
 
     #[tokio::test]
@@ -197,6 +254,7 @@ mod tests {
         let result = execute_request_assistance(
             &json!({"tool_name": "read_file", "request": "read it", "parameters": {"path": "foo.txt"}}),
             &[row],
+            None,
             None,
             None,
         )

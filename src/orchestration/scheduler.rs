@@ -328,7 +328,9 @@ impl<TQ: TaskQueueRepo, DR: DependencyRepo, SR: SchedulerRepo> TaskScheduler<TQ,
             None => {
                 // Put task back and report no agents
                 let mut queue = self.queue.write().await;
-                queue.requeue(task, RequeuePolicy::SamePriority, None).await?;
+                queue
+                    .requeue(task, RequeuePolicy::SamePriority, None)
+                    .await?;
                 Ok(AssignResult::NoAgents(tier))
             }
         }

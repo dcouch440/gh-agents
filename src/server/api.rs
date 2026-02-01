@@ -2152,7 +2152,9 @@ pub async fn render_stage(
     if let Some(doc_repo) = doc_repo {
         for cap in context_re.captures_iter(&all_text) {
             let ref_tag_str = cap[1].to_string();
-            if let std::collections::hash_map::Entry::Vacant(e) = context_docs.entry(ref_tag_str.clone()) {
+            if let std::collections::hash_map::Entry::Vacant(e) =
+                context_docs.entry(ref_tag_str.clone())
+            {
                 if let Ok(Some(doc)) = doc_repo.get_document_by_ref_tag(&ref_tag_str).await {
                     e.insert(doc.content);
                 }
@@ -2715,7 +2717,10 @@ pub async fn approve_pipeline_run(
                             if let Some(disp) = &state.dispatcher {
                                 let disp = disp.lock().await;
                                 if let Err(e) = disp
-                                    .send_to_agent(agent_id, AgentCommand::AssignTask(Box::new(assignment)))
+                                    .send_to_agent(
+                                        agent_id,
+                                        AgentCommand::AssignTask(Box::new(assignment)),
+                                    )
                                     .await
                                 {
                                     tracing::error!("Gate resume dispatch failed: {}", e);

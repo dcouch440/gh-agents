@@ -77,11 +77,11 @@ fn validate_consistency(config: &AppConfig) -> Result<(), ConfigValidationError>
         && (config.approval_gates.before_commit
             || config.approval_gates.before_pr
             || config.approval_gates.before_merge)
-        {
-            return Err(ConfigValidationError::Conflict {
-                reason: "FullAuto autonomy conflicts with enabled approval gates".to_string(),
-            });
-        }
+    {
+        return Err(ConfigValidationError::Conflict {
+            reason: "FullAuto autonomy conflicts with enabled approval gates".to_string(),
+        });
+    }
 
     Ok(())
 }

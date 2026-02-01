@@ -30,6 +30,7 @@ pub const CHANNEL_TASKS: &str = "tasks";
 pub const CHANNEL_AGENTS: &str = "agents";
 pub const CHANNEL_SESSIONS: &str = "sessions";
 pub const CHANNEL_PIPELINES: &str = "pipelines";
+pub const CHANNEL_ROUTING: &str = "routing";
 
 /// Message sent from client to server
 #[derive(Debug, Clone, Deserialize)]
@@ -65,6 +66,9 @@ pub enum ServerMessage {
     /// Pipeline execution update
     #[serde(rename = "pipeline_update")]
     PipelineUpdate { data: PipelineUpdate },
+    /// Tool routing update
+    #[serde(rename = "routing_update")]
+    RoutingUpdate { data: RoutingUpdate },
     /// Error message
     #[serde(rename = "error")]
     Error { message: String },
@@ -133,6 +137,19 @@ pub struct PipelineUpdate {
     pub user_id: Option<Uuid>,
 }
 
+/// Tool routing event broadcast to subscribers
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoutingUpdate {
+    pub request_id: Uuid,
+    pub tool_name: String,
+    pub cluster_name: String,
+    pub status: String,
+    pub duration_ms: Option<u64>,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    #[serde(default)]
+    pub user_id: Option<Uuid>,
+}
+
 /// Shared subscriptions state for a client
 type Subscriptions = Arc<Mutex<HashSet<String>>>;
 
@@ -171,6 +188,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
     let mut agent_rx = state.subscribe_agents();
     let mut session_rx = state.subscribe_sessions();
     let mut pipeline_rx = state.subscribe_pipelines();
+    let mut routing_rx = state.subscribe_routing();
 
     // Ping interval for keeping connection alive
     let mut ping_interval = interval(PING_INTERVAL);
@@ -331,6 +349,24 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
                     }
                 }
             }
+
+            // Handle routing updates
+            routing = routing_rx.recv() => {
+                if let Ok(update) = routing {
+                    let subs = subscriptions.lock().await;
+                    if subs.contains(CHANNEL_ROUTING) {
+                        let should_send = update.user_id.is_none()
+                            || user_id.map(|u| Some(u.0) == update.user_id).unwrap_or(false);
+                        if should_send {
+                            let msg = ServerMessage::RoutingUpdate { data: update };
+                            let json = serde_json::to_string(&msg).unwrap();
+                            if sender.send(Message::Text(json)).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -384,7 +420,12 @@ async fn handle_client_message(
 fn is_valid_channel(channel: &str) -> bool {
     matches!(
         channel,
-        CHANNEL_FEED | CHANNEL_TASKS | CHANNEL_AGENTS | CHANNEL_SESSIONS | CHANNEL_PIPELINES
+        CHANNEL_FEED
+            | CHANNEL_TASKS
+            | CHANNEL_AGENTS
+            | CHANNEL_SESSIONS
+            | CHANNEL_PIPELINES
+            | CHANNEL_ROUTING
     )
 }
 

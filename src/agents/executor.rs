@@ -626,6 +626,7 @@ impl Agent {
                                     &assignment.context.tool_rows,
                                     assignment.context.execution_context.as_ref(),
                                     allowed_tools,
+                                    None, // TODO: wire ClusterRoutingContext from AppState
                                 )
                                 .await
                             } else {
@@ -691,7 +692,8 @@ impl Agent {
                     messages.push(Message::tool_results(tool_results));
 
                     // Bail out if too many consecutive tool errors
-                    if consecutive_tool_errors >= crate::constants::TASK_MAX_CONSECUTIVE_TOOL_ERRORS {
+                    if consecutive_tool_errors >= crate::constants::TASK_MAX_CONSECUTIVE_TOOL_ERRORS
+                    {
                         warn!(
                             task_id = %task_id,
                             consecutive_errors = consecutive_tool_errors,
@@ -782,6 +784,7 @@ impl Agent {
                                             &assignment.context.tool_rows,
                                             assignment.context.execution_context.as_ref(),
                                             allowed_tools,
+                                            None, // TODO: wire ClusterRoutingContext from AppState
                                         )
                                         .await
                                     } else {

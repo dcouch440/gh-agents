@@ -1008,7 +1008,10 @@ async fn execute_assign_task(input: &Value, state: &AppState) -> Value {
             .collect()
     });
 
-    let constraints = TaskConstraints { allowed_tools, ..Default::default() };
+    let constraints = TaskConstraints {
+        allowed_tools,
+        ..Default::default()
+    };
 
     let assignment = TaskAssignment {
         task_id: uuid::Uuid::new_v4(),
@@ -1624,7 +1627,10 @@ async fn execute_start_pipeline(input: &Value, state: &AppState, user_id: UserId
 
     let dispatcher = dispatcher.lock().await;
     match dispatcher
-        .send_to_agent(&first_agent_id, AgentCommand::AssignTask(Box::new(assignment)))
+        .send_to_agent(
+            &first_agent_id,
+            AgentCommand::AssignTask(Box::new(assignment)),
+        )
         .await
     {
         Ok(()) => json!({

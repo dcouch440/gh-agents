@@ -71,8 +71,7 @@ pub struct CommitInfo {
     pub message: String,
 }
 
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct DiffOptions {
     /// Only show diff for these paths
     pub paths: Vec<String>,
@@ -83,7 +82,6 @@ pub struct DiffOptions {
     /// Context lines around changes
     pub context_lines: Option<u32>,
 }
-
 
 #[derive(Debug, Clone)]
 pub struct PushResult {
@@ -783,8 +781,7 @@ impl GitOps {
         self.ensure_git_repo()?;
 
         let full_path = self.ctx.project_root.join(path);
-        let content =
-            std::fs::read_to_string(&full_path).map_err(GitError::ExecutionError)?;
+        let content = std::fs::read_to_string(&full_path).map_err(GitError::ExecutionError)?;
 
         let regions = self.parse_conflict_markers(&content)?;
 

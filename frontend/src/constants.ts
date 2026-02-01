@@ -13,6 +13,7 @@ export const WS_CHANNEL = {
   AGENTS: 'agents',
   SESSIONS: 'sessions',
   PIPELINES: 'pipelines',
+  ROUTING: 'routing',
 } as const
 
 export type WsChannel = (typeof WS_CHANNEL)[keyof typeof WS_CHANNEL]

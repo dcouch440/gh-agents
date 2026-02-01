@@ -209,10 +209,7 @@ impl AgentPool {
                 _join_handle: Some(join_handle),
             },
         );
-        self.by_tier
-            .entry(tier)
-            .or_default()
-            .push(agent_id.clone());
+        self.by_tier.entry(tier).or_default().push(agent_id.clone());
 
         info!(agent_id = ?agent_id, tier = ?tier, "Spawned agent with dispatcher (run loop started)");
 
