@@ -257,6 +257,20 @@ pub const XAI_RESEARCH_MAX_TOKENS: u32 = 4096;
 /// Max agentic search turns Grok can take per request.
 pub const XAI_RESEARCH_MAX_SEARCH_TURNS: u32 = 10;
 
+// ── True Context Distiller ────────────────────────────────────────────────
+
+/// Model used for the True Context distiller pre-pass.
+/// Swap to XAI_RESEARCH_MODEL or any model ID to change the distiller backend.
+pub const DISTILLER_MODEL: &str = MODEL_HAIKU;
+/// Max output tokens for the distiller response.
+pub const DISTILLER_MAX_TOKENS: u32 = 256;
+/// Max input characters from chat history fed to the distiller.
+pub const DISTILLER_MAX_INPUT_CHARS: usize = 4_000;
+/// Max recent messages to feed the distiller.
+pub const DISTILLER_MAX_MESSAGES: usize = 15;
+/// Temperature for distiller (low — factual summarization).
+pub const DISTILLER_TEMPERATURE: f32 = 0.2;
+
 // ── Sandbox Defaults ────────────────────────────────────────────────────────
 
 pub const SANDBOX_DEFAULT_IMAGE: &str = "alpine:latest";

@@ -2286,6 +2286,7 @@ pub async fn approve_pipeline_run(
                                 tool_rows: vec![],
                                 router_mode: false,
                                 cluster_routing: None,
+                                context_docs: vec![],
                             },
                             constraints: TaskConstraints::default(),
                             timeout: std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),
