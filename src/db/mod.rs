@@ -127,10 +127,10 @@ pub struct DocumentRow {
     pub session_id: Option<Uuid>,
     pub title: String,
     pub content: String,
-    pub summary: String,
-    pub doc_type: String,
-    pub ref_tag: String,
-    pub tags: Vec<String>,
+    pub summary: Option<String>,
+    pub doc_type: Option<String>,
+    pub ref_tag: Option<String>,
+    pub tags: Option<Vec<String>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -140,8 +140,8 @@ pub struct DocumentRow {
 pub struct DocumentSearchResult {
     pub id: Uuid,
     pub title: String,
-    pub summary: String,
-    pub ref_tag: String,
+    pub summary: Option<String>,
+    pub ref_tag: Option<String>,
     pub snippet: String,
 }
 

@@ -126,7 +126,7 @@ pub async fn distill_true_context(messages: &[Message], task_title: &str, task_d
 /// with a `tags:` field, those tag names are used. Otherwise falls back to
 /// `DEFAULT_TAGS`.
 fn find_distiller_template_with_tags(docs: &[DocumentRow]) -> (String, Vec<String>) {
-    match docs.iter().find(|d| d.doc_type == DISTILLER_DOC_TYPE) {
+    match docs.iter().find(|d| d.doc_type.as_deref() == Some(DISTILLER_DOC_TYPE)) {
         Some(doc) => {
             let tag_names = parse_front_matter(&doc.content).unwrap_or_else(|| DEFAULT_TAGS.iter().map(|s| (*s).to_string()).collect());
             let body = strip_front_matter(&doc.content);
@@ -342,10 +342,10 @@ mod tests {
             session_id: None,
             title: "test".to_string(),
             content: content.to_string(),
-            summary: String::new(),
-            doc_type: doc_type.to_string(),
-            ref_tag: String::new(),
-            tags: vec![],
+            summary: None,
+            doc_type: Some(doc_type.to_string()),
+            ref_tag: None,
+            tags: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         }

@@ -2596,7 +2596,7 @@ mod tests {
         // Get by ref_tag
         let fetched_by_ref = repo.get_document_by_ref_tag(&ref_tag).await.unwrap();
         assert!(fetched_by_ref.is_some());
-        assert_eq!(fetched_by_ref.unwrap().ref_tag, ref_tag);
+        assert_eq!(fetched_by_ref.unwrap().ref_tag.unwrap_or_default(), ref_tag);
 
         db.cleanup().await;
     }
