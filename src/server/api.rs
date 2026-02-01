@@ -2043,6 +2043,242 @@ pub async fn get_costs(State(state): State<AppState>, auth: auth::AuthUser, Quer
 }
 
 // ============================================================================
+// Execution Tree Endpoint
+// ============================================================================
+
+#[derive(Serialize)]
+pub struct TreeRunInfo {
+    pub id: Uuid,
+    pub pipeline_id: Uuid,
+    pub pipeline_name: String,
+    pub status: String,
+    pub initial_input: String,
+    pub current_stage: i32,
+    pub started_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub total_input_tokens: i64,
+    pub total_output_tokens: i64,
+    pub total_cost_usd: f64,
+}
+
+#[derive(Serialize)]
+pub struct TreeStage {
+    pub stage_number: i32,
+    pub stage_name: String,
+    pub status: String,
+    pub stage_executions: Vec<TreeStageExecution>,
+}
+
+#[derive(Serialize)]
+pub struct TreeStageExecution {
+    pub id: Uuid,
+    pub workflow_name: String,
+    pub status: String,
+    pub agent_executions: Vec<TreeAgentExecution>,
+}
+
+#[derive(Serialize)]
+pub struct TreeAgentExecution {
+    pub id: Uuid,
+    pub agent_name: String,
+    pub workflow_step_id: Option<Uuid>,
+    pub is_interactive: bool,
+    pub status: String,
+    pub structured_output: Option<serde_json::Value>,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub cost_usd: f32,
+    pub started_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub for_each_index: Option<i32>,
+    pub for_each_label: Option<String>,
+    pub interactive_review: Option<Box<TreeAgentExecution>>,
+}
+
+#[derive(Serialize)]
+pub struct TreeResponse {
+    pub run: TreeRunInfo,
+    pub stages: Vec<TreeStage>,
+}
+
+/// GET /api/pipeline-runs/:run_id/tree
+///
+/// Returns the full execution tree for a pipeline run, joining stage_executions → agent_executions.
+pub async fn get_pipeline_run_tree(State(state): State<AppState>, _auth: auth::AuthUser, Path(run_id): Path<Uuid>) -> Result<Json<TreeResponse>, StatusCode> {
+    let ae_repo = state.agent_execution_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let run = state.repo.get_pipeline_run(run_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+
+    // Get pipeline name
+    let pipeline_name = state
+        .repo
+        .list_pipelines(crate::types::UserId(run.user_id))
+        .await
+        .ok()
+        .and_then(|ps| ps.into_iter().find(|p| p.id == run.pipeline_id).map(|p| p.name))
+        .unwrap_or_default();
+
+    // Get total cost from token_ledger
+    let total_cost_usd = if let Some(tl_repo) = &state.token_ledger_repo {
+        tl_repo.get_run_spend(run_id).await.unwrap_or(0.0)
+    } else {
+        0.0
+    };
+
+    // Get stage executions
+    let stage_execs = state.repo.list_stage_executions(run_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Get pipeline stages for stage names
+    let pipeline_stages = state.repo.list_pipeline_stages(run.pipeline_id).await.unwrap_or_default();
+
+    // Group stage executions by stage_number, build tree stages
+    let mut stage_map: std::collections::BTreeMap<i32, Vec<crate::db::StageExecutionRow>> = std::collections::BTreeMap::new();
+    for se in stage_execs {
+        stage_map.entry(se.stage_number).or_default().push(se);
+    }
+
+    let mut stages = Vec::new();
+    for (stage_num, execs) in &stage_map {
+        let stage_name = execs
+            .first()
+            .map(|e| e.stage_name.clone())
+            .or_else(|| pipeline_stages.iter().find(|ps| ps.stage_number == *stage_num).map(|ps| ps.stage_name.clone()))
+            .unwrap_or_default();
+
+        // Derive stage status from its executions
+        let stage_status = if execs.iter().all(|e| e.status == "completed") {
+            "completed"
+        } else if execs.iter().any(|e| e.status == "failed") {
+            "failed"
+        } else if execs.iter().any(|e| e.status == "running") {
+            "running"
+        } else if execs.iter().any(|e| e.status == "waiting_for_approval") {
+            "waiting_for_approval"
+        } else {
+            "pending"
+        };
+
+        let mut tree_stage_execs = Vec::new();
+        for se in execs {
+            // Fetch agent_executions for this stage_execution
+            let ae_rows = ae_repo.list_agent_executions_by_stage(se.id).await.unwrap_or_default();
+
+            // Separate main vs interactive executions
+            let main_execs: Vec<_> = ae_rows.iter().filter(|ae| !ae.is_interactive).collect();
+            let interactive_map: std::collections::HashMap<Uuid, &crate::db::AgentExecutionRow> = ae_rows
+                .iter()
+                .filter(|ae| ae.is_interactive)
+                .filter_map(|ae| ae.parent_agent_execution_id.map(|pid| (pid, ae)))
+                .collect();
+
+            let mut tree_agent_execs = Vec::new();
+            for ae in &main_execs {
+                // Look up agent name
+                let agent_name = state
+                    .repo
+                    .get_persisted_agent(ae.agent_id)
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|a| a.name)
+                    .unwrap_or_else(|| "Unknown".to_string());
+
+                let interactive_review = if let Some(iae) = interactive_map.get(&ae.id) {
+                    let ia_name = state
+                        .repo
+                        .get_persisted_agent(iae.agent_id)
+                        .await
+                        .ok()
+                        .flatten()
+                        .map(|a| a.name)
+                        .unwrap_or_else(|| "Reviewer".to_string());
+                    Some(Box::new(TreeAgentExecution {
+                        id: iae.id,
+                        agent_name: ia_name,
+                        workflow_step_id: iae.workflow_step_id,
+                        is_interactive: true,
+                        status: iae.status.clone(),
+                        structured_output: iae.structured_output.clone(),
+                        input_tokens: iae.input_tokens,
+                        output_tokens: iae.output_tokens,
+                        cost_usd: iae.cost_usd,
+                        started_at: iae.started_at,
+                        completed_at: iae.completed_at,
+                        for_each_index: None,
+                        for_each_label: None,
+                        interactive_review: None,
+                    }))
+                } else {
+                    None
+                };
+
+                tree_agent_execs.push(TreeAgentExecution {
+                    id: ae.id,
+                    agent_name: agent_name.clone(),
+                    workflow_step_id: ae.workflow_step_id,
+                    is_interactive: false,
+                    status: ae.status.clone(),
+                    structured_output: ae.structured_output.clone(),
+                    input_tokens: ae.input_tokens,
+                    output_tokens: ae.output_tokens,
+                    cost_usd: ae.cost_usd,
+                    started_at: ae.started_at,
+                    completed_at: ae.completed_at,
+                    for_each_index: None, // TODO: populated when DAG executor is built (step 4.3)
+                    for_each_label: None, // TODO: populated when DAG executor is built (step 4.3)
+                    interactive_review,
+                });
+            }
+
+            tree_stage_execs.push(TreeStageExecution {
+                id: se.id,
+                workflow_name: se.stage_name.clone(), // Currently stage_name; will be workflow name after step 4.3
+                status: se.status.clone(),
+                agent_executions: tree_agent_execs,
+            });
+        }
+
+        stages.push(TreeStage {
+            stage_number: *stage_num,
+            stage_name,
+            status: stage_status.to_string(),
+            stage_executions: tree_stage_execs,
+        });
+    }
+
+    // Include stages with no executions yet (from pipeline definition)
+    for ps in &pipeline_stages {
+        if !stage_map.contains_key(&ps.stage_number) {
+            stages.push(TreeStage {
+                stage_number: ps.stage_number,
+                stage_name: ps.stage_name.clone(),
+                status: "pending".to_string(),
+                stage_executions: vec![],
+            });
+        }
+    }
+
+    stages.sort_by_key(|s| s.stage_number);
+
+    Ok(Json(TreeResponse {
+        run: TreeRunInfo {
+            id: run.id,
+            pipeline_id: run.pipeline_id,
+            pipeline_name,
+            status: run.status,
+            initial_input: run.initial_task,
+            current_stage: run.current_stage,
+            started_at: run.started_at,
+            completed_at: run.completed_at,
+            total_input_tokens: run.total_input_tokens.unwrap_or(0),
+            total_output_tokens: run.total_output_tokens.unwrap_or(0),
+            total_cost_usd,
+        },
+        stages,
+    }))
+}
+
+// ============================================================================
 // Result Endpoints
 // ============================================================================
 
