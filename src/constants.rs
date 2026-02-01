@@ -242,6 +242,14 @@ pub mod routes {
     pub const PROMPT_TEMPLATES: &str = "/prompt-templates";
     pub const PROMPT_TEMPLATE: &str = "/prompt-templates/:id";
 
+    // Workflows
+    pub const WORKFLOWS: &str = "/workflows";
+    pub const WORKFLOW: &str = "/workflows/:id";
+    pub const WORKFLOW_STEPS: &str = "/workflows/:id/steps";
+    pub const WORKFLOW_STEP: &str = "/workflows/:wid/steps/:sid";
+    pub const WORKFLOW_EDGES: &str = "/workflows/:id/edges";
+    pub const WORKFLOW_STEP_DOCUMENTS: &str = "/workflows/:wid/steps/:sid/documents";
+
     // Stats
     pub const STATS: &str = "/stats";
 

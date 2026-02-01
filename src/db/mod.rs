@@ -165,6 +165,46 @@ pub struct PromptTemplateRow {
     pub created_at: DateTime<Utc>,
 }
 
+/// Row type for persisted workflow definitions.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct WorkflowRow {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub name: String,
+    pub description: String,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Row type for a workflow step (DAG node).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct WorkflowStepRow {
+    pub id: Uuid,
+    pub workflow_id: Uuid,
+    pub agent_id: Uuid,
+    pub execution_mode: String,
+    pub for_each_ref: Option<String>,
+    pub prompt_template_id: Option<Uuid>,
+    pub prompt_template: String,
+    pub output_schema_id: Option<Uuid>,
+    pub output_variable_name: Option<String>,
+    pub interactive_agent_id: Option<Uuid>,
+    pub display_order: i32,
+}
+
+/// Row type for a workflow step edge (DAG edge).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct WorkflowStepEdgeRow {
+    pub from_step_id: Uuid,
+    pub to_step_id: Uuid,
+}
+
+/// Row type for a step-document attachment.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct StepDocumentRow {
+    pub step_id: Uuid,
+    pub document_id: Uuid,
+}
+
 /// Row type for token usage summary.
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct UsageSummaryRow {

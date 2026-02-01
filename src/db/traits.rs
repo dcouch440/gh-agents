@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::db::{
     AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageRow, PromptTemplateRow, ScheduleRow, SessionRow,
-    StageExecutionRow, StageSideTaskRow, ToolRow, TriggerRow, UsageSummaryRow,
+    StageExecutionRow, StageSideTaskRow, StepDocumentRow, ToolRow, TriggerRow, UsageSummaryRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::orchestration::DependencyError;
@@ -488,4 +488,38 @@ pub trait PromptTemplateRepo: Send + Sync {
 
     /// Delete a prompt template by ID.
     async fn delete_prompt_template(&self, id: Uuid) -> Result<()>;
+}
+
+// ============================================================================
+// Workflow Repository
+// ============================================================================
+
+/// Database operations for workflows, steps, edges, and step documents.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait WorkflowRepo: Send + Sync {
+    // --- Workflows ---
+    async fn create_workflow(&self, user_id: Uuid, name: String, description: String) -> Result<WorkflowRow>;
+    async fn get_workflow(&self, id: Uuid) -> Result<Option<WorkflowRow>>;
+    async fn list_workflows(&self, user_id: Uuid) -> Result<Vec<WorkflowRow>>;
+    async fn update_workflow(&self, id: Uuid, name: Option<String>, description: Option<String>) -> Result<WorkflowRow>;
+    async fn delete_workflow(&self, id: Uuid) -> Result<()>;
+
+    // --- Steps ---
+    async fn create_step(&self, step: WorkflowStepRow) -> Result<WorkflowStepRow>;
+    async fn get_step(&self, id: Uuid) -> Result<Option<WorkflowStepRow>>;
+    async fn list_steps(&self, workflow_id: Uuid) -> Result<Vec<WorkflowStepRow>>;
+    async fn update_step(&self, step: WorkflowStepRow) -> Result<WorkflowStepRow>;
+    async fn delete_step(&self, id: Uuid) -> Result<()>;
+
+    // --- Edges ---
+    async fn set_edges(&self, workflow_id: Uuid, edges: Vec<WorkflowStepEdgeRow>) -> Result<()>;
+    async fn list_edges(&self, workflow_id: Uuid) -> Result<Vec<WorkflowStepEdgeRow>>;
+    async fn add_edge(&self, from_step_id: Uuid, to_step_id: Uuid) -> Result<()>;
+    async fn remove_edge(&self, from_step_id: Uuid, to_step_id: Uuid) -> Result<()>;
+
+    // --- Step documents ---
+    async fn list_step_documents(&self, step_id: Uuid) -> Result<Vec<StepDocumentRow>>;
+    async fn add_step_document(&self, step_id: Uuid, document_id: Uuid) -> Result<()>;
+    async fn remove_step_document(&self, step_id: Uuid, document_id: Uuid) -> Result<()>;
 }

@@ -150,6 +150,15 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::PROMPT_TEMPLATE,
             get(api::get_prompt_template).put(api::update_prompt_template).delete(api::delete_prompt_template),
         )
+        .route(routes::WORKFLOWS, get(api::list_workflows).post(api::create_workflow))
+        .route(routes::WORKFLOW, get(api::get_workflow).put(api::update_workflow).delete(api::delete_workflow))
+        .route(routes::WORKFLOW_STEPS, get(api::list_workflow_steps).post(api::create_workflow_step))
+        .route(routes::WORKFLOW_STEP, get(api::get_workflow_step).put(api::update_workflow_step).delete(api::delete_workflow_step))
+        .route(routes::WORKFLOW_EDGES, get(api::list_workflow_edges).post(api::add_workflow_edge).delete(api::remove_workflow_edge))
+        .route(
+            routes::WORKFLOW_STEP_DOCUMENTS,
+            get(api::list_step_documents).post(api::add_step_document).delete(api::remove_step_document),
+        )
         .route(routes::STATS, get(api::get_usage_stats))
         .route(routes::CONTEXT_RESPONSE, post(api::submit_context_response))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth))
