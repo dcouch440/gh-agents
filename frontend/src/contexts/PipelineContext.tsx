@@ -1,6 +1,6 @@
 import { createContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { useWebSocket } from '../hooks/useWebSocket'
-import { WS_CHANNEL, USE_MOCK_DATA } from '../constants'
+import { ACTION, WS_CHANNEL, USE_MOCK_DATA } from '../constants'
 import { api } from '../api'
 import { mock } from '../mock'
 import type { Pipeline, PipelineRun } from '../types/pipeline'
@@ -19,28 +19,28 @@ const initialState: PipelineState = { pipelines: [], runs: [], loading: true, er
 // ── Actions ──────────────────────────────────────────────────────────────────
 
 type PipelineAction =
-  | { type: 'SET_PIPELINES'; pipelines: Pipeline[] }
-  | { type: 'SET_RUNS'; runs: PipelineRun[] }
-  | { type: 'UPDATE_RUN'; run: PipelineRun }
-  | { type: 'SET_LOADING'; loading: boolean }
-  | { type: 'SET_ERROR'; error: string }
+  | { type: typeof ACTION.SET_PIPELINES; pipelines: Pipeline[] }
+  | { type: typeof ACTION.SET_RUNS; runs: PipelineRun[] }
+  | { type: typeof ACTION.UPDATE_RUN; run: PipelineRun }
+  | { type: typeof ACTION.SET_LOADING; loading: boolean }
+  | { type: typeof ACTION.SET_ERROR; error: string }
 
 const reducer = (state: PipelineState, action: PipelineAction): PipelineState => {
   switch (action.type) {
-    case 'SET_PIPELINES':
+    case ACTION.SET_PIPELINES:
       return { ...state, pipelines: action.pipelines, loading: false, error: null }
-    case 'SET_RUNS':
+    case ACTION.SET_RUNS:
       return { ...state, runs: action.runs }
-    case 'UPDATE_RUN':
+    case ACTION.UPDATE_RUN:
       return {
         ...state,
         runs: state.runs.some((r) => r.id === action.run.id)
           ? state.runs.map((r) => (r.id === action.run.id ? action.run : r))
           : [...state.runs, action.run],
       }
-    case 'SET_LOADING':
+    case ACTION.SET_LOADING:
       return { ...state, loading: action.loading }
-    case 'SET_ERROR':
+    case ACTION.SET_ERROR:
       return { ...state, loading: false, error: action.error }
   }
 }
@@ -59,14 +59,14 @@ function PipelineProvider({ children }: { children: ReactNode }) {
   const mountedRef = useRef(true)
 
   const load = useCallback(async () => {
-    dispatch({ type: 'SET_LOADING', loading: true })
+    dispatch({ type: ACTION.SET_LOADING, loading: true })
     try {
       const pipelines = USE_MOCK_DATA
         ? await mock.getPipelines()
         : await api.get<Pipeline[]>('/pipelines')
-      if (mountedRef.current) dispatch({ type: 'SET_PIPELINES', pipelines })
+      if (mountedRef.current) dispatch({ type: ACTION.SET_PIPELINES, pipelines })
     } catch (e) {
-      if (mountedRef.current) dispatch({ type: 'SET_ERROR', error: e instanceof Error ? e.message : 'Failed to load pipelines' })
+      if (mountedRef.current) dispatch({ type: ACTION.SET_ERROR, error: e instanceof Error ? e.message : 'Failed to load pipelines' })
     }
   }, [])
 
@@ -79,7 +79,7 @@ function PipelineProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unsub = subscribe(WS_CHANNEL.PIPELINES, (data) => {
       const msg = data as { run?: PipelineRun }
-      if (msg.run) dispatch({ type: 'UPDATE_RUN', run: msg.run })
+      if (msg.run) dispatch({ type: ACTION.UPDATE_RUN, run: msg.run })
     })
     return unsub
   }, [subscribe])
