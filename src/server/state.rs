@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::agents::{AgentPool, AgentResponse, ClusterManager, Dispatcher, PipelineManager, RoleManager, ScheduleManager, ToolClusterIndex};
 use crate::db::pg_repo::PgRepo;
-use crate::db::traits::{DocumentRepo, OutputSchemaRepo, PromptTemplateRepo, ServerRepo, UserRepo, WorkflowRepo};
+use crate::db::traits::{DocumentRepo, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ServerRepo, UserRepo, WorkflowRepo};
 use crate::llm::AnthropicClient;
 use crate::orchestration::Scheduler;
 use crate::types::{AgentPoolConfig, AppConfig, UserId};
@@ -71,6 +71,8 @@ pub struct AppState {
     pub prompt_template_repo: Option<Arc<dyn PromptTemplateRepo>>,
     /// Workflow repository (None in legacy/test mode)
     pub workflow_repo: Option<Arc<dyn WorkflowRepo>>,
+    /// Pipeline stage member repository (None in legacy/test mode)
+    pub stage_member_repo: Option<Arc<dyn PipelineStageMemberRepo>>,
     /// Task scheduler for orchestration (None in mock-based tests)
     pub scheduler: Option<Arc<RwLock<Scheduler>>>,
     /// Application configuration (mutable at runtime via API)
@@ -125,12 +127,14 @@ impl AppState {
         let output_schema_repo: Arc<dyn OutputSchemaRepo> = Arc::new(PgRepo::new(db.clone()));
         let prompt_template_repo: Arc<dyn PromptTemplateRepo> = Arc::new(PgRepo::new(db.clone()));
         let workflow_repo: Arc<dyn WorkflowRepo> = Arc::new(PgRepo::new(db.clone()));
+        let stage_member_repo: Arc<dyn PipelineStageMemberRepo> = Arc::new(PgRepo::new(db.clone()));
         let (mut state, rx) = Self::with_repo(Some(db), repo, Some(scheduler), config.clone());
         state.user_repo = Some(user_repo);
         state.doc_repo = Some(doc_repo);
         state.output_schema_repo = Some(output_schema_repo);
         state.prompt_template_repo = Some(prompt_template_repo);
         state.workflow_repo = Some(workflow_repo);
+        state.stage_member_repo = Some(stage_member_repo);
 
         // Initialize role manager with current working directory as project root
         let project_root = std::env::current_dir().unwrap_or_default();
@@ -292,6 +296,7 @@ impl AppState {
                 output_schema_repo: None,
                 prompt_template_repo: None,
                 workflow_repo: None,
+                stage_member_repo: None,
                 scheduler,
                 config: Arc::new(RwLock::new(config)),
                 jwt_secret,

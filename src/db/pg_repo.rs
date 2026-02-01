@@ -6,10 +6,13 @@ use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::db::traits::{CostRepo, DependencyRepo, DocumentRepo, MergeQueueRepo, OutputSchemaRepo, PromptTemplateRepo, RefactorRepo, SchedulerRepo, ServerRepo, TaskQueueRepo, UserRepo, WorkflowRepo};
+use crate::db::traits::{
+    CostRepo, DependencyRepo, DocumentRepo, MergeQueueRepo, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, RefactorRepo, SchedulerRepo, ServerRepo, TaskQueueRepo, UserRepo,
+    WorkflowRepo,
+};
 use crate::db::{
-    AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageRow, PromptTemplateRow, ScheduleRow, SessionRow,
-    StageExecutionRow, StageSideTaskRow, StepDocumentRow, ToolRow, TriggerRow, UsageSummaryRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow,
+    AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageMemberRow, PipelineStageRow, PromptTemplateRow, ScheduleRow,
+    SessionRow, StageExecutionRow, StageSideTaskRow, StepDocumentRow, ToolRow, TriggerRow, UsageSummaryRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::orchestration::DependencyError;
@@ -2033,6 +2036,46 @@ impl WorkflowRepo for PgRepo {
             .execute(&self.pool)
             .await?;
         Ok(())
+    }
+}
+
+#[async_trait]
+impl PipelineStageMemberRepo for PgRepo {
+    async fn list_stage_members(&self, pipeline_id: Uuid, stage_number: i32) -> Result<Vec<PipelineStageMemberRow>> {
+        let rows: Vec<PipelineStageMemberRow> =
+            sqlx::query_as("SELECT id, pipeline_id, stage_number, workflow_id, display_order FROM pipeline_stage_members WHERE pipeline_id = $1 AND stage_number = $2 ORDER BY display_order")
+                .bind(pipeline_id)
+                .bind(stage_number)
+                .fetch_all(&self.pool)
+                .await?;
+        Ok(rows)
+    }
+
+    async fn add_stage_member(&self, pipeline_id: Uuid, stage_number: i32, workflow_id: Uuid, display_order: i32) -> Result<PipelineStageMemberRow> {
+        let row: PipelineStageMemberRow = sqlx::query_as(
+            "INSERT INTO pipeline_stage_members (pipeline_id, stage_number, workflow_id, display_order) VALUES ($1, $2, $3, $4) RETURNING id, pipeline_id, stage_number, workflow_id, display_order",
+        )
+        .bind(pipeline_id)
+        .bind(stage_number)
+        .bind(workflow_id)
+        .bind(display_order)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn remove_stage_member(&self, member_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM pipeline_stage_members WHERE id = $1").bind(member_id).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    async fn update_stage_member(&self, member_id: Uuid, display_order: i32) -> Result<PipelineStageMemberRow> {
+        let row: PipelineStageMemberRow = sqlx::query_as("UPDATE pipeline_stage_members SET display_order = $1 WHERE id = $2 RETURNING id, pipeline_id, stage_number, workflow_id, display_order")
+            .bind(display_order)
+            .bind(member_id)
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(row)
     }
 }
 

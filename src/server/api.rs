@@ -1813,6 +1813,126 @@ pub async fn delete_prompt_template(State(state): State<AppState>, auth: auth::A
 }
 
 // ============================================================================
+// Pipeline Stage Members Endpoints
+// ============================================================================
+
+#[derive(Serialize)]
+pub struct StageMemberResponse {
+    pub id: Uuid,
+    pub pipeline_id: Uuid,
+    pub stage_number: i32,
+    pub workflow_id: Uuid,
+    pub display_order: i32,
+}
+
+#[derive(Deserialize)]
+pub struct CreateStageMemberRequest {
+    pub workflow_id: Uuid,
+    pub display_order: Option<i32>,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateStageMemberRequest {
+    pub display_order: i32,
+}
+
+#[derive(Deserialize)]
+pub struct StageMemberPath {
+    pub pid: Uuid,
+    pub num: i32,
+}
+
+#[derive(Deserialize)]
+pub struct StageMemberItemPath {
+    pub pid: Uuid,
+    pub num: i32,
+    pub mid: Uuid,
+}
+
+fn member_response(r: crate::db::PipelineStageMemberRow) -> StageMemberResponse {
+    StageMemberResponse {
+        id: r.id,
+        pipeline_id: r.pipeline_id,
+        stage_number: r.stage_number,
+        workflow_id: r.workflow_id,
+        display_order: r.display_order,
+    }
+}
+
+/// GET /api/pipelines/:pid/stages/:num/members
+pub async fn list_stage_members(State(state): State<AppState>, auth: auth::AuthUser, Path(p): Path<StageMemberPath>) -> Result<Json<Vec<StageMemberResponse>>, StatusCode> {
+    let _pipeline = state
+        .repo
+        .list_pipelines(auth.user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .into_iter()
+        .find(|pl| pl.id == p.pid)
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let repo = state.stage_member_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = repo.list_stage_members(p.pid, p.num).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(rows.into_iter().map(member_response).collect()))
+}
+
+/// POST /api/pipelines/:pid/stages/:num/members
+pub async fn add_stage_member(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+    Path(p): Path<StageMemberPath>,
+    Json(req): Json<CreateStageMemberRequest>,
+) -> Result<(StatusCode, Json<StageMemberResponse>), StatusCode> {
+    let _pipeline = state
+        .repo
+        .list_pipelines(auth.user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .into_iter()
+        .find(|pl| pl.id == p.pid)
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let repo = state.stage_member_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = repo
+        .add_stage_member(p.pid, p.num, req.workflow_id, req.display_order.unwrap_or(0))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok((StatusCode::CREATED, Json(member_response(row))))
+}
+
+/// PUT /api/pipelines/:pid/stages/:num/members/:mid
+pub async fn update_stage_member(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+    Path(p): Path<StageMemberItemPath>,
+    Json(req): Json<UpdateStageMemberRequest>,
+) -> Result<Json<StageMemberResponse>, StatusCode> {
+    let _pipeline = state
+        .repo
+        .list_pipelines(auth.user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .into_iter()
+        .find(|pl| pl.id == p.pid)
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let repo = state.stage_member_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = repo.update_stage_member(p.mid, req.display_order).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(member_response(row)))
+}
+
+/// DELETE /api/pipelines/:pid/stages/:num/members/:mid
+pub async fn delete_stage_member(State(state): State<AppState>, auth: auth::AuthUser, Path(p): Path<StageMemberItemPath>) -> Result<StatusCode, StatusCode> {
+    let _pipeline = state
+        .repo
+        .list_pipelines(auth.user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .into_iter()
+        .find(|pl| pl.id == p.pid)
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let repo = state.stage_member_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    repo.remove_stage_member(p.mid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ============================================================================
 // Workflows Endpoints
 // ============================================================================
 

@@ -159,6 +159,8 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::WORKFLOW_STEP_DOCUMENTS,
             get(api::list_step_documents).post(api::add_step_document).delete(api::remove_step_document),
         )
+        .route(routes::PIPELINE_STAGE_MEMBERS, get(api::list_stage_members).post(api::add_stage_member))
+        .route(routes::PIPELINE_STAGE_MEMBER, delete(api::delete_stage_member).put(api::update_stage_member))
         .route(routes::STATS, get(api::get_usage_stats))
         .route(routes::CONTEXT_RESPONSE, post(api::submit_context_response))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth))
