@@ -2021,6 +2021,69 @@ pub async fn list_execution_messages(State(state): State<AppState>, _auth: auth:
 }
 
 // ============================================================================
+// Interactive Chat Endpoints
+// ============================================================================
+
+#[derive(Deserialize)]
+pub struct SendMessageRequest {
+    pub content: String,
+}
+
+#[derive(Deserialize)]
+pub struct ApproveExecutionRequest {
+    pub structured_output: Option<serde_json::Value>,
+}
+
+/// POST /api/agent-executions/:id/messages — send a user message to an interactive agent execution.
+pub async fn send_execution_message(
+    State(state): State<AppState>,
+    _auth: auth::AuthUser,
+    Path(id): Path<Uuid>,
+    Json(req): Json<SendMessageRequest>,
+) -> Result<Json<ExecutionMessageResponse>, StatusCode> {
+    let repo = state.agent_execution_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let ae = repo.get_agent_execution(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+
+    if !ae.is_interactive {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Record the user message
+    let msg = repo
+        .create_execution_message(id, "user", &req.content, None, 0, 0)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(ExecutionMessageResponse::from(msg)))
+}
+
+/// POST /api/agent-executions/:id/approve — approve an interactive agent execution.
+///
+/// With no `structured_output` body → approve as-is (main output used).
+/// With `structured_output` → approve with changes (revised output used downstream).
+pub async fn approve_execution(
+    State(state): State<AppState>,
+    _auth: auth::AuthUser,
+    Path(id): Path<Uuid>,
+    Json(req): Json<ApproveExecutionRequest>,
+) -> Result<Json<AgentExecutionResponse>, StatusCode> {
+    let repo = state.agent_execution_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let ae = repo.get_agent_execution(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+
+    if !ae.is_interactive || ae.status != "awaiting_user" {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Update status to completed, optionally with revised structured_output
+    let updated = repo
+        .update_agent_execution_status(id, "completed", ae.output.clone(), req.structured_output, ae.input_tokens, ae.output_tokens, ae.cost_usd)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(AgentExecutionResponse::from(updated)))
+}
+
+// ============================================================================
 // Cost Endpoints
 // ============================================================================
 

@@ -258,6 +258,7 @@ pub mod routes {
     // Agent executions
     pub const AGENT_EXECUTION: &str = "/agent-executions/:id";
     pub const AGENT_EXECUTION_MESSAGES: &str = "/agent-executions/:id/messages";
+    pub const AGENT_EXECUTION_APPROVE: &str = "/agent-executions/:id/approve";
 
     // Costs
     pub const COSTS: &str = "/costs";
