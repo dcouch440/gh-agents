@@ -1,12 +1,7 @@
 import { createContext, useState, useCallback, useEffect, type ReactNode } from 'react'
 import { api } from '../api'
 import { LS_AUTH_TOKEN } from '../constants'
-
-type User = {
-  id: string
-  email: string
-  github_login: string | null
-}
+import type { User } from '../types/user'
 
 type AuthState = {
   user: User | null
@@ -81,4 +76,4 @@ function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export { AuthContext, AuthProvider }
-export type { User, AuthState }
+export type { AuthState }
