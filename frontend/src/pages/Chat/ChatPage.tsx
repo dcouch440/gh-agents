@@ -1,5 +1,7 @@
+import { ToolActivityDemo } from '@/components/chat'
+
 function ChatPage() {
-  return <h1>Chat</h1>
+  return <ToolActivityDemo />
 }
 
 export { ChatPage }
