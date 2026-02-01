@@ -93,7 +93,7 @@ All endpoints are prefixed with `/api`. All require `Authorization: Bearer <toke
 
 | Method | Path | Body | Returns |
 |--------|------|------|---------|
-| `POST` | `/workflows/:id/steps` | `{ agent_id, execution_mode, for_each_ref?, prompt_template_id?, prompt_template?, output_schema_id?, output_variable_name?, interactive_agent_id?, display_order }` | `WorkflowStep` |
+| `POST` | `/workflows/:id/steps` | `{ agent_id, execution_mode, for_each_ref?, prompt_template_id?, prompt_template?, output_schema_id?, output_variable_name?, interactive_agent_id?, for_each_label_field?, display_order }` | `WorkflowStep` |
 | `PUT` | `/workflows/:wid/steps/:sid` | (any field) | `WorkflowStep` |
 | `DELETE` | `/workflows/:wid/steps/:sid` | — | `204` |
 

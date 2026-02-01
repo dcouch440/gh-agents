@@ -267,6 +267,7 @@ workflow_steps (
     output_schema_id UUID REFERENCES output_schemas(id),
     output_variable_name TEXT,
     interactive_agent_id UUID REFERENCES agents(id),
+    for_each_label_field TEXT,
     display_order INTEGER NOT NULL DEFAULT 0
 )
 -- idx_workflow_steps_workflow(workflow_id)
@@ -287,6 +288,7 @@ Each node in the workflow DAG. This is where all the configuration lives — wha
 | `output_schema_id` | The expected output shape. The agent is instructed to return structured data matching this schema. If null, the agent returns freeform text. |
 | `output_variable_name` | Names this step's output so other steps can reference it via `{variable_name}` in their prompt templates. Example: `'features'`, `'tickets'`, `'review_notes'`. |
 | `interactive_agent_id` | References an agent template that acts as the reviewer. When not null, the step pauses after the main agent completes. The interactive agent receives the main agent's output, responds with its review/feedback (driven by its own system prompt), and the user chats with it to refine the result. On approval, the interactive agent's final output replaces the step output. When null, the step completes with no pause. |
+| `for_each_label_field` | Which field from each array element to use as the display label in the execution tree UI (e.g. `'name'`, `'title'`). Only used when `execution_mode = 'for_each'`. At runtime, `element[for_each_label_field]` populates `for_each_label` in the tree response. If null, falls back to the element index. The workflow editor populates this via a dropdown of the referenced array's element schema fields. |
 | `display_order` | Rendering order within the tree UI. Steps are displayed in ascending order. The DAG edges define execution order; this only controls visual layout. |
 
 ---

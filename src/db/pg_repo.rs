@@ -1808,9 +1808,9 @@ impl WorkflowRepo for PgRepo {
     async fn create_step(&self, step: WorkflowStepRow) -> Result<WorkflowStepRow> {
         let row: WorkflowStepRow = sqlx::query_as(
             r#"
-            INSERT INTO workflow_steps (id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, display_order)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            RETURNING id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, display_order
+            INSERT INTO workflow_steps (id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, for_each_label_field, display_order)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            RETURNING *
             "#,
         )
         .bind(step.id)
@@ -1823,6 +1823,7 @@ impl WorkflowRepo for PgRepo {
         .bind(step.output_schema_id)
         .bind(&step.output_variable_name)
         .bind(step.interactive_agent_id)
+        .bind(&step.for_each_label_field)
         .bind(step.display_order)
         .fetch_one(&self.pool)
         .await?;
@@ -1830,22 +1831,15 @@ impl WorkflowRepo for PgRepo {
     }
 
     async fn get_step(&self, id: Uuid) -> Result<Option<WorkflowStepRow>> {
-        let row: Option<WorkflowStepRow> = sqlx::query_as(
-            "SELECT id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, display_order FROM workflow_steps WHERE id = $1",
-        )
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await?;
+        let row: Option<WorkflowStepRow> = sqlx::query_as("SELECT * FROM workflow_steps WHERE id = $1").bind(id).fetch_optional(&self.pool).await?;
         Ok(row)
     }
 
     async fn list_steps(&self, workflow_id: Uuid) -> Result<Vec<WorkflowStepRow>> {
-        let rows: Vec<WorkflowStepRow> = sqlx::query_as(
-            "SELECT id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, display_order FROM workflow_steps WHERE workflow_id = $1 ORDER BY display_order",
-        )
-        .bind(workflow_id)
-        .fetch_all(&self.pool)
-        .await?;
+        let rows: Vec<WorkflowStepRow> = sqlx::query_as("SELECT * FROM workflow_steps WHERE workflow_id = $1 ORDER BY display_order")
+            .bind(workflow_id)
+            .fetch_all(&self.pool)
+            .await?;
         Ok(rows)
     }
 
@@ -1854,9 +1848,9 @@ impl WorkflowRepo for PgRepo {
             r#"
             UPDATE workflow_steps
             SET agent_id = $1, execution_mode = $2, for_each_ref = $3, prompt_template_id = $4, prompt_template = $5,
-                output_schema_id = $6, output_variable_name = $7, interactive_agent_id = $8, display_order = $9
-            WHERE id = $10
-            RETURNING id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, display_order
+                output_schema_id = $6, output_variable_name = $7, interactive_agent_id = $8, for_each_label_field = $9, display_order = $10
+            WHERE id = $11
+            RETURNING *
             "#,
         )
         .bind(step.agent_id)
@@ -1867,6 +1861,7 @@ impl WorkflowRepo for PgRepo {
         .bind(step.output_schema_id)
         .bind(&step.output_variable_name)
         .bind(step.interactive_agent_id)
+        .bind(&step.for_each_label_field)
         .bind(step.display_order)
         .bind(step.id)
         .fetch_one(&self.pool)
