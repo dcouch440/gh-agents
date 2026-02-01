@@ -264,12 +264,12 @@ impl AppState {
     ) -> (Self, mpsc::Receiver<OrchestratorMessage>) {
         let (orchestrator_tx, orchestrator_rx) =
             mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
-        let (feed_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
+        let (feed_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST_HIGH);
         let (task_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
-        let (agent_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
-        let (session_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
+        let (agent_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST_LOW);
+        let (session_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST_LOW);
         let (pipeline_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
-        let (routing_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
+        let (routing_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST_HIGH);
 
         // Generate a random JWT secret
         // In production, this should be persisted or configured via environment variable

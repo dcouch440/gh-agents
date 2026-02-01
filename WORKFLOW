@@ -1,8 +1,59 @@
-1. Get server up to speed for the vision on the front end.
-2. Create a reference list of the database, endpoints and any other good stuff.
-3. Setup strict guidelines and ease of use for the AI for the code for context injection.
-4. Create mock data so agents can create showcases.
-5. Create context layers depending on uses like webhooks.
-6. Create reusable hooks based off the specification.
-7. Create reusable components by decomping them in stages, easy medium hard. Start with easy and provide briefe context on medium, hard.
-8. Plan css module pattern.
+## Completed
+
+- [x] Step 1: Backend tool routing — `request_assistance` → router agent → cluster dispatch
+  - Migration 032 (routing_events with full analytics columns)
+  - ToolClusterIndex, router_agent.rs, tool_router.rs rewrite
+  - WS routing channel + broadcast support
+  - All tests passing, clippy clean
+
+---
+
+## Pre-Step 2: Backend Hardening (before frontend contexts)
+
+The frontend contexts are livestream-style WS subscribers. The server must be
+rock-solid before we build that layer. Three phases:
+
+### Phase A — WebSocket & Serialization Safety
+- [ ] Remove all `.unwrap()` in WS handler (ws.rs) — log + skip on failure
+- [ ] Remove `.expect()` calls in orchestrator.rs — Result propagation
+- [ ] Audit all unwrap/expect in non-test server code
+- [ ] Add broadcast `lagged` handling so slow clients don't block channels
+- [ ] Tune per-channel buffer sizes (feed = high, stats = low)
+
+### Phase B — Auth & API Protection
+- [ ] Lock down CORS — read from `CORS_ORIGINS` env var, fail in production if unset
+- [ ] Require `JWT_SECRET` in production — refuse to start without it
+- [ ] Require WS authentication or cap unauthenticated connections
+- [ ] Add HTTP rate limiting (tower-governor or similar)
+  - Auth routes: 10 req/min per IP
+  - General API: 100 req/min per user
+  - WS inbound message rate limit
+
+### Phase C — Operational Config
+- [ ] DB pool size from `DB_MAX_CONNECTIONS` env var (default 10)
+- [ ] Request ID middleware (tower-request-id) — log + response header
+- [ ] Input validation: string length limits, enum checks, structured errors
+
+---
+
+## Step 2: Frontend — Granular Context Architecture
+
+Goal: Each context subscribes to one WS channel, placed deep in the component
+tree so only relevant subtrees rerender. Livestream model — smooth, reactive,
+no full-page update cascades.
+
+1. Create context layers depending on uses like webhooks.
+2. Create reusable hooks based off the specification.
+3. Create reusable components by decomping them in stages, easy medium hard. Start with easy and provide brief context on medium, hard.
+4. Plan css module pattern.
+
+Contexts: AgentContext, TaskContext, PipelineContext, FeedContext, StatsContext,
+ChatContext, RoutingContext. Full spec in plan file.
+
+---
+
+## Reference Tasks (ongoing)
+
+- [ ] Create a reference list of the database, endpoints and any other good stuff.
+- [ ] Setup strict guidelines and ease of use for the AI for the code for context injection.
+- [ ] Create mock data so agents can create showcases.
