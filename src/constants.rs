@@ -238,6 +238,10 @@ pub mod routes {
     pub const OUTPUT_SCHEMAS: &str = "/output-schemas";
     pub const OUTPUT_SCHEMA: &str = "/output-schemas/:id";
 
+    // Prompt templates
+    pub const PROMPT_TEMPLATES: &str = "/prompt-templates";
+    pub const PROMPT_TEMPLATE: &str = "/prompt-templates/:id";
+
     // Stats
     pub const STATS: &str = "/stats";
 

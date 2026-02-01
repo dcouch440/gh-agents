@@ -155,6 +155,16 @@ pub struct OutputSchemaRow {
     pub created_at: DateTime<Utc>,
 }
 
+/// Row type for persisted prompt template definitions.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct PromptTemplateRow {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub name: String,
+    pub content: String,
+    pub created_at: DateTime<Utc>,
+}
+
 /// Row type for token usage summary.
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct UsageSummaryRow {

@@ -145,6 +145,11 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         .route(routes::DOCUMENT, get(api::get_document).patch(api::update_document).delete(api::delete_document))
         .route(routes::OUTPUT_SCHEMAS, get(api::list_output_schemas).post(api::create_output_schema))
         .route(routes::OUTPUT_SCHEMA, get(api::get_output_schema).put(api::update_output_schema).delete(api::delete_output_schema))
+        .route(routes::PROMPT_TEMPLATES, get(api::list_prompt_templates).post(api::create_prompt_template))
+        .route(
+            routes::PROMPT_TEMPLATE,
+            get(api::get_prompt_template).put(api::update_prompt_template).delete(api::delete_prompt_template),
+        )
         .route(routes::STATS, get(api::get_usage_stats))
         .route(routes::CONTEXT_RESPONSE, post(api::submit_context_response))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth))
