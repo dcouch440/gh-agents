@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { Pipeline, PipelineRun, StageExecution } from '@/types/pipeline'
-import { USE_MOCK_DATA } from '@/constants'
+import { API, USE_MOCK_DATA } from '@/constants'
 import { mock } from '@/mock'
 import { api } from '@/api'
 
@@ -15,7 +15,7 @@ const usePipelines = () => {
     try {
       const data = USE_MOCK_DATA
         ? await mock.getPipelines()
-        : await api.get<Pipeline[]>('/pipelines')
+        : await api.get<Pipeline[]>(API.PIPELINES)
       setPipelines(data)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load pipelines')
@@ -48,7 +48,7 @@ const usePipelineRuns = (pipelineId?: string) => {
     try {
       const data = USE_MOCK_DATA
         ? await mock.getPipelineRuns(pipelineId)
-        : await api.get<PipelineRun[]>(pipelineId ? `/pipeline-runs?pipeline_id=${pipelineId}` : '/pipeline-runs')
+        : await api.get<PipelineRun[]>(pipelineId ? `${API.PIPELINE_RUNS}?pipeline_id=${pipelineId}` : API.PIPELINE_RUNS)
       setRuns(data)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load pipeline runs')
@@ -99,7 +99,7 @@ const usePipelineRun = (id: string | null) => {
             setExecutions(e)
           }
         } else {
-          const data = await api.get<PipelineRun & { stage_executions?: StageExecution[] }>(`/pipeline-runs/${id}`)
+          const data = await api.get<PipelineRun & { stage_executions?: StageExecution[] }>(API.PIPELINE_RUN(id))
           if (!cancelled) {
             const { stage_executions, ...rest } = data
             setRun(rest)

@@ -1,6 +1,6 @@
 import { createContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { useWebSocket } from '@/hooks/useWebSocket'
-import { ACTION, WS_CHANNEL, USE_MOCK_DATA } from '@/constants'
+import { ACTION, WS_CHANNEL, USE_MOCK_DATA, API } from '@/constants'
 import { api } from '@/api'
 import { mock } from '@/mock'
 import type { ChatMessage } from '@/types/session'
@@ -62,7 +62,7 @@ function ChatProvider({ sessionId, children }: ChatProviderProps) {
     try {
       const messages = USE_MOCK_DATA
         ? await mock.getChatHistory(sessionId)
-        : await api.get<ChatMessage[]>(`/sessions/${sessionId}/history`)
+        : await api.get<ChatMessage[]>(API.SESSION_HISTORY(sessionId))
       if (mountedRef.current) dispatch({ type: ACTION.SET_ALL, messages })
     } catch (e) {
       if (mountedRef.current) dispatch({ type: ACTION.SET_ERROR, error: e instanceof Error ? e.message : 'Failed to load chat history' })

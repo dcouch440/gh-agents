@@ -1,5 +1,5 @@
 import { createContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react'
-import { ACTION, STATS_POLL_INTERVAL_MS, USE_MOCK_DATA } from '@/constants'
+import { ACTION, STATS_POLL_INTERVAL_MS, USE_MOCK_DATA, API } from '@/constants'
 import { api } from '@/api'
 import { mock } from '@/mock'
 import type { UsageSummary } from '@/types/stats'
@@ -48,7 +48,7 @@ function StatsProvider({ children }: { children: ReactNode }) {
     try {
       const stats = USE_MOCK_DATA
         ? await mock.getStats()
-        : await api.get<UsageSummary[]>('/stats')
+        : await api.get<UsageSummary[]>(API.STATS)
       if (mountedRef.current) dispatch({ type: ACTION.SET_ALL, stats })
     } catch (e) {
       if (mountedRef.current) dispatch({ type: ACTION.SET_ERROR, error: e instanceof Error ? e.message : 'Failed to load stats' })

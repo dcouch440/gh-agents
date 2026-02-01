@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { api } from '@/api'
+import { API } from '@/constants'
 import type { Session, CreateSessionRequest, UpdateSessionRequest } from '@/types'
 
 const useCreateSession = () => {
@@ -10,7 +11,7 @@ const useCreateSession = () => {
     setLoading(true)
     setError(null)
     try {
-      return await api.post<Session>('/sessions', body)
+      return await api.post<Session>(API.SESSIONS, body)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to create session'
       setError(msg)
@@ -31,7 +32,7 @@ const useUpdateSession = () => {
     setLoading(true)
     setError(null)
     try {
-      return await api.patch<Session>(`/sessions/${id}`, body)
+      return await api.patch<Session>(API.SESSION(id), body)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to update session'
       setError(msg)
@@ -52,7 +53,7 @@ const useDeleteSession = () => {
     setLoading(true)
     setError(null)
     try {
-      await api.del(`/sessions/${id}`)
+      await api.del(API.SESSION(id))
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to delete session'
       setError(msg)

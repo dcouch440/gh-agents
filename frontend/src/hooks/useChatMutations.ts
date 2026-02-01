@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
 import { api, createSSEStream } from '@/api'
+import { API } from '@/constants'
 import type { SendMessageRequest } from '@/types'
 
 type SendMessageResponse = {
@@ -20,11 +21,11 @@ const useSendMessage = () => {
     setLoading(true)
     setError(null)
     try {
-      const { message_id } = await api.post<SendMessageResponse>('/chat', body)
+      const { message_id } = await api.post<SendMessageResponse>(API.CHAT, body)
 
       if (onChunk) {
         setStreaming(true)
-        abortRef.current = createSSEStream(`/chat/${message_id}/stream`, {
+        abortRef.current = createSSEStream(API.CHAT_STREAM(message_id), {
           onMessage: onChunk,
           onDone: () => {
             setStreaming(false)
@@ -73,11 +74,11 @@ const useSendSessionMessage = () => {
     setLoading(true)
     setError(null)
     try {
-      const { message_id } = await api.post<SendMessageResponse>(`/sessions/${sessionId}/chat`, body)
+      const { message_id } = await api.post<SendMessageResponse>(API.SESSION_CHAT(sessionId), body)
 
       if (onChunk) {
         setStreaming(true)
-        abortRef.current = createSSEStream(`/sessions/${sessionId}/chat/${message_id}/stream`, {
+        abortRef.current = createSSEStream(API.SESSION_CHAT_STREAM(sessionId, message_id), {
           onMessage: onChunk,
           onDone: () => {
             setStreaming(false)
@@ -119,7 +120,7 @@ const useClearHistory = () => {
     setLoading(true)
     setError(null)
     try {
-      await api.del('/chat/history')
+      await api.del(API.CHAT_HISTORY)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to clear history'
       setError(msg)

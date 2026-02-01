@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { api } from '@/api'
+import { API } from '@/constants'
 import type { Agent, CreateAgentRequest, UpdateAgentRequest, Tool, Document } from '@/types'
 
 const useCreateAgent = () => {
@@ -10,7 +11,7 @@ const useCreateAgent = () => {
     setLoading(true)
     setError(null)
     try {
-      return await api.post<Agent>('/agents', body)
+      return await api.post<Agent>(API.AGENTS, body)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to create agent'
       setError(msg)
@@ -31,7 +32,7 @@ const useUpdateAgent = () => {
     setLoading(true)
     setError(null)
     try {
-      return await api.patch<Agent>(`/agents/${id}`, body)
+      return await api.patch<Agent>(API.AGENT(id), body)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to update agent'
       setError(msg)
@@ -52,7 +53,7 @@ const useDeleteAgent = () => {
     setLoading(true)
     setError(null)
     try {
-      await api.del(`/agents/${id}`)
+      await api.del(API.AGENT(id))
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to delete agent'
       setError(msg)
@@ -74,7 +75,7 @@ const useAgentTools = () => {
     setLoading(true)
     setError(null)
     try {
-      const data = await api.get<Tool[]>(`/agents/${agentId}/tools`)
+      const data = await api.get<Tool[]>(API.AGENT_TOOLS(agentId))
       setTools(data)
       return data
     } catch (e) {
@@ -90,7 +91,7 @@ const useAgentTools = () => {
     setLoading(true)
     setError(null)
     try {
-      await api.put(`/agents/${agentId}/tools`, toolIds)
+      await api.put(API.AGENT_TOOLS(agentId), toolIds)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to save agent tools'
       setError(msg)
@@ -112,7 +113,7 @@ const useAgentContextDocs = () => {
     setLoading(true)
     setError(null)
     try {
-      const data = await api.get<Document[]>(`/agents/${agentId}/context`)
+      const data = await api.get<Document[]>(API.AGENT_CONTEXT(agentId))
       setDocs(data)
       return data
     } catch (e) {
@@ -128,7 +129,7 @@ const useAgentContextDocs = () => {
     setLoading(true)
     setError(null)
     try {
-      await api.put(`/agents/${agentId}/context`, docIds)
+      await api.put(API.AGENT_CONTEXT(agentId), docIds)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to save agent context'
       setError(msg)

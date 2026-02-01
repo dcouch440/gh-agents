@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { api } from '@/api'
+import { API } from '@/constants'
 import type { Task, CreateTaskRequest } from '@/types'
 
 const useCreateTask = () => {
@@ -10,7 +11,7 @@ const useCreateTask = () => {
     setLoading(true)
     setError(null)
     try {
-      return await api.post<Task>('/tasks', body)
+      return await api.post<Task>(API.TASKS, body)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to create task'
       setError(msg)

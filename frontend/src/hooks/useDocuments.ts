@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { Document } from '@/types/document'
-import { USE_MOCK_DATA } from '@/constants'
+import { API, USE_MOCK_DATA } from '@/constants'
 import { mock } from '@/mock'
 import { api } from '@/api'
 
@@ -15,7 +15,7 @@ const useDocuments = () => {
     try {
       const data = USE_MOCK_DATA
         ? await mock.getDocuments()
-        : await api.get<Document[]>('/documents')
+        : await api.get<Document[]>(API.DOCUMENTS)
       setDocuments(data)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load documents')
@@ -56,7 +56,7 @@ const useDocument = (id: string | null) => {
       try {
         const data = USE_MOCK_DATA
           ? await mock.getDocument(id)
-          : await api.get<Document>(`/documents/${id}`)
+          : await api.get<Document>(API.DOCUMENT(id))
         if (!cancelled) setDocument(data)
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load document')
