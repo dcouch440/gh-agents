@@ -1933,6 +1933,94 @@ pub async fn delete_stage_member(State(state): State<AppState>, auth: auth::Auth
 }
 
 // ============================================================================
+// Agent Execution Endpoints (read-only)
+// ============================================================================
+
+#[derive(Serialize)]
+pub struct AgentExecutionResponse {
+    pub id: Uuid,
+    pub stage_execution_id: Uuid,
+    pub agent_id: Uuid,
+    pub workflow_step_id: Option<Uuid>,
+    pub is_interactive: bool,
+    pub parent_agent_execution_id: Option<Uuid>,
+    pub system_prompt_rendered: String,
+    pub input: String,
+    pub output: Option<String>,
+    pub structured_output: Option<serde_json::Value>,
+    pub status: String,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub cost_usd: f32,
+    pub started_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+impl From<crate::db::AgentExecutionRow> for AgentExecutionResponse {
+    fn from(r: crate::db::AgentExecutionRow) -> Self {
+        Self {
+            id: r.id,
+            stage_execution_id: r.stage_execution_id,
+            agent_id: r.agent_id,
+            workflow_step_id: r.workflow_step_id,
+            is_interactive: r.is_interactive,
+            parent_agent_execution_id: r.parent_agent_execution_id,
+            system_prompt_rendered: r.system_prompt_rendered,
+            input: r.input,
+            output: r.output,
+            structured_output: r.structured_output,
+            status: r.status,
+            input_tokens: r.input_tokens,
+            output_tokens: r.output_tokens,
+            cost_usd: r.cost_usd,
+            started_at: r.started_at,
+            completed_at: r.completed_at,
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct ExecutionMessageResponse {
+    pub id: Uuid,
+    pub agent_execution_id: Uuid,
+    pub role: String,
+    pub content: String,
+    pub tool_call_id: Option<String>,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<crate::db::ExecutionMessageRow> for ExecutionMessageResponse {
+    fn from(r: crate::db::ExecutionMessageRow) -> Self {
+        Self {
+            id: r.id,
+            agent_execution_id: r.agent_execution_id,
+            role: r.role,
+            content: r.content,
+            tool_call_id: r.tool_call_id,
+            input_tokens: r.input_tokens,
+            output_tokens: r.output_tokens,
+            created_at: r.created_at,
+        }
+    }
+}
+
+pub async fn get_agent_execution(State(state): State<AppState>, _auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<AgentExecutionResponse>, StatusCode> {
+    let repo = state.agent_execution_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = repo.get_agent_execution(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    Ok(Json(AgentExecutionResponse::from(row)))
+}
+
+pub async fn list_execution_messages(State(state): State<AppState>, _auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<Vec<ExecutionMessageResponse>>, StatusCode> {
+    let repo = state.agent_execution_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    // Verify execution exists
+    repo.get_agent_execution(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let rows = repo.list_execution_messages(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(rows.into_iter().map(ExecutionMessageResponse::from).collect()))
+}
+
+// ============================================================================
 // Workflows Endpoints
 // ============================================================================
 
