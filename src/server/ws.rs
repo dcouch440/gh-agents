@@ -15,6 +15,7 @@ use futures::{sink::SinkExt, stream::StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tokio::time::interval;
+use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
@@ -23,6 +24,17 @@ use crate::types::UserId;
 
 /// Ping interval for keeping connection alive (30 seconds)
 const PING_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Serialize a server message to JSON text, returning None on failure.
+fn serialize_msg(msg: &ServerMessage) -> Option<String> {
+    match serde_json::to_string(msg) {
+        Ok(json) => Some(json),
+        Err(e) => {
+            warn!("Failed to serialize ServerMessage: {}", e);
+            None
+        }
+    }
+}
 
 /// Valid subscription channels
 pub const CHANNEL_FEED: &str = "feed";
@@ -214,10 +226,11 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
                             Ok(client_msg) => {
                                 let response = handle_client_message(client_msg, &subscriptions).await;
                                 if let Some(server_msg) = response {
-                                    let json = serde_json::to_string(&server_msg).unwrap();
-                                    if sender.send(Message::Text(json)).await.is_err() {
-                                        warn!("Failed to send message to client");
-                                        break;
+                                    if let Some(json) = serialize_msg(&server_msg) {
+                                        if sender.send(Message::Text(json)).await.is_err() {
+                                            warn!("Failed to send message to client");
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -226,9 +239,10 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
                                 let error_msg = ServerMessage::Error {
                                     message: format!("Invalid message format: {}", e),
                                 };
-                                let json = serde_json::to_string(&error_msg).unwrap();
-                                if sender.send(Message::Text(json)).await.is_err() {
-                                    break;
+                                if let Some(json) = serialize_msg(&error_msg) {
+                                    if sender.send(Message::Text(json)).await.is_err() {
+                                        break;
+                                    }
                                 }
                             }
                         }
@@ -262,109 +276,151 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
 
             // Handle feed updates
             feed = feed_rx.recv() => {
-                if let Ok(update) = feed {
-                    let subs = subscriptions.lock().await;
-                    if subs.contains(CHANNEL_FEED) {
-                        let should_send = update.user_id.is_none()
-                            || user_id.map(|u| Some(u.0) == update.user_id).unwrap_or(false);
-                        if should_send {
-                            let msg = ServerMessage::Feed { data: update };
-                            let json = serde_json::to_string(&msg).unwrap();
-                            if sender.send(Message::Text(json)).await.is_err() {
-                                break;
+                match feed {
+                    Ok(update) => {
+                        let subs = subscriptions.lock().await;
+                        if subs.contains(CHANNEL_FEED) {
+                            let should_send = update.user_id.is_none()
+                                || user_id.map(|u| Some(u.0) == update.user_id).unwrap_or(false);
+                            if should_send {
+                                let msg = ServerMessage::Feed { data: update };
+                                if let Some(json) = serialize_msg(&msg) {
+                                    if sender.send(Message::Text(json)).await.is_err() {
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
+                    Err(RecvError::Lagged(n)) => {
+                        warn!("Feed receiver lagged, skipped {} messages", n);
+                    }
+                    Err(RecvError::Closed) => break,
                 }
             }
 
             // Handle task updates
             task = task_rx.recv() => {
-                if let Ok(update) = task {
-                    let subs = subscriptions.lock().await;
-                    if subs.contains(CHANNEL_TASKS) {
-                        let should_send = update.user_id.is_none()
-                            || user_id.map(|u| Some(u.0) == update.user_id).unwrap_or(false);
-                        if should_send {
-                            let msg = ServerMessage::TaskUpdate { data: update };
-                            let json = serde_json::to_string(&msg).unwrap();
-                            if sender.send(Message::Text(json)).await.is_err() {
-                                break;
+                match task {
+                    Ok(update) => {
+                        let subs = subscriptions.lock().await;
+                        if subs.contains(CHANNEL_TASKS) {
+                            let should_send = update.user_id.is_none()
+                                || user_id.map(|u| Some(u.0) == update.user_id).unwrap_or(false);
+                            if should_send {
+                                let msg = ServerMessage::TaskUpdate { data: update };
+                                if let Some(json) = serialize_msg(&msg) {
+                                    if sender.send(Message::Text(json)).await.is_err() {
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
+                    Err(RecvError::Lagged(n)) => {
+                        warn!("Task receiver lagged, skipped {} messages", n);
+                    }
+                    Err(RecvError::Closed) => break,
                 }
             }
 
             // Handle agent updates
             agent = agent_rx.recv() => {
-                if let Ok(update) = agent {
-                    let subs = subscriptions.lock().await;
-                    if subs.contains(CHANNEL_AGENTS) {
-                        let should_send = update.user_id.is_none()
-                            || user_id.map(|u| Some(u.0) == update.user_id).unwrap_or(false);
-                        if should_send {
-                            let msg = ServerMessage::AgentUpdate { data: update };
-                            let json = serde_json::to_string(&msg).unwrap();
-                            if sender.send(Message::Text(json)).await.is_err() {
-                                break;
+                match agent {
+                    Ok(update) => {
+                        let subs = subscriptions.lock().await;
+                        if subs.contains(CHANNEL_AGENTS) {
+                            let should_send = update.user_id.is_none()
+                                || user_id.map(|u| Some(u.0) == update.user_id).unwrap_or(false);
+                            if should_send {
+                                let msg = ServerMessage::AgentUpdate { data: update };
+                                if let Some(json) = serialize_msg(&msg) {
+                                    if sender.send(Message::Text(json)).await.is_err() {
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
+                    Err(RecvError::Lagged(n)) => {
+                        warn!("Agent receiver lagged, skipped {} messages", n);
+                    }
+                    Err(RecvError::Closed) => break,
                 }
             }
 
             // Handle session updates
             session = session_rx.recv() => {
-                if let Ok(update) = session {
-                    let subs = subscriptions.lock().await;
-                    if subs.contains(CHANNEL_SESSIONS) {
-                        let should_send = update.user_id.is_none()
-                            || user_id.map(|u| Some(u.0) == update.user_id).unwrap_or(false);
-                        if should_send {
-                            let msg = ServerMessage::SessionUpdate { data: update };
-                            let json = serde_json::to_string(&msg).unwrap();
-                            if sender.send(Message::Text(json)).await.is_err() {
-                                break;
+                match session {
+                    Ok(update) => {
+                        let subs = subscriptions.lock().await;
+                        if subs.contains(CHANNEL_SESSIONS) {
+                            let should_send = update.user_id.is_none()
+                                || user_id.map(|u| Some(u.0) == update.user_id).unwrap_or(false);
+                            if should_send {
+                                let msg = ServerMessage::SessionUpdate { data: update };
+                                if let Some(json) = serialize_msg(&msg) {
+                                    if sender.send(Message::Text(json)).await.is_err() {
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
+                    Err(RecvError::Lagged(n)) => {
+                        warn!("Session receiver lagged, skipped {} messages", n);
+                    }
+                    Err(RecvError::Closed) => break,
                 }
             }
 
             // Handle pipeline updates
             pipeline = pipeline_rx.recv() => {
-                if let Ok(update) = pipeline {
-                    let subs = subscriptions.lock().await;
-                    if subs.contains(CHANNEL_PIPELINES) {
-                        let should_send = update.user_id.is_none()
-                            || user_id.map(|u| Some(u.0) == update.user_id).unwrap_or(false);
-                        if should_send {
-                            let msg = ServerMessage::PipelineUpdate { data: update };
-                            let json = serde_json::to_string(&msg).unwrap();
-                            if sender.send(Message::Text(json)).await.is_err() {
-                                break;
+                match pipeline {
+                    Ok(update) => {
+                        let subs = subscriptions.lock().await;
+                        if subs.contains(CHANNEL_PIPELINES) {
+                            let should_send = update.user_id.is_none()
+                                || user_id.map(|u| Some(u.0) == update.user_id).unwrap_or(false);
+                            if should_send {
+                                let msg = ServerMessage::PipelineUpdate { data: update };
+                                if let Some(json) = serialize_msg(&msg) {
+                                    if sender.send(Message::Text(json)).await.is_err() {
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
+                    Err(RecvError::Lagged(n)) => {
+                        warn!("Pipeline receiver lagged, skipped {} messages", n);
+                    }
+                    Err(RecvError::Closed) => break,
                 }
             }
 
             // Handle routing updates
             routing = routing_rx.recv() => {
-                if let Ok(update) = routing {
-                    let subs = subscriptions.lock().await;
-                    if subs.contains(CHANNEL_ROUTING) {
-                        let should_send = update.user_id.is_none()
-                            || user_id.map(|u| Some(u.0) == update.user_id).unwrap_or(false);
-                        if should_send {
-                            let msg = ServerMessage::RoutingUpdate { data: update };
-                            let json = serde_json::to_string(&msg).unwrap();
-                            if sender.send(Message::Text(json)).await.is_err() {
-                                break;
+                match routing {
+                    Ok(update) => {
+                        let subs = subscriptions.lock().await;
+                        if subs.contains(CHANNEL_ROUTING) {
+                            let should_send = update.user_id.is_none()
+                                || user_id.map(|u| Some(u.0) == update.user_id).unwrap_or(false);
+                            if should_send {
+                                let msg = ServerMessage::RoutingUpdate { data: update };
+                                if let Some(json) = serialize_msg(&msg) {
+                                    if sender.send(Message::Text(json)).await.is_err() {
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
+                    Err(RecvError::Lagged(n)) => {
+                        warn!("Routing receiver lagged, skipped {} messages", n);
+                    }
+                    Err(RecvError::Closed) => break,
                 }
             }
         }

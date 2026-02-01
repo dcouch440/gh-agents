@@ -1055,18 +1055,23 @@ async fn handle_message(
     let user_id = msg.user_id;
 
     // Look up agent mode configuration
-    let mode = state
-        .mode_registry
-        .get(&msg.mode_id)
-        .cloned()
-        .unwrap_or_else(|| {
+    let mode = match state.mode_registry.get(&msg.mode_id).cloned() {
+        Some(m) => m,
+        None => {
             warn!("Unknown mode '{}', falling back to home", msg.mode_id);
-            state
+            match state
                 .mode_registry
                 .get(&super::agent_mode::ModeRegistry::default_mode_id())
                 .cloned()
-                .expect("home mode must exist")
-        });
+            {
+                Some(m) => m,
+                None => {
+                    error!("Default home mode missing from registry");
+                    anyhow::bail!("Default home mode missing from registry");
+                }
+            }
+        }
+    };
 
     // Load chat history based on mode's history policy
     let mut messages: Vec<Message> = match &mode.history_policy {

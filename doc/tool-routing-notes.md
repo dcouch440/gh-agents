@@ -1,6 +1,6 @@
 # Tool Routing System — Design Notes
 
-## Current State
+## Current State 
 
 ### Two Separate Tool Systems
 1. **Execution tools** (hardcoded): 11 built-in tools in `execution_tools.rs` — read_file, write_file, edit_file, list_files, git_status, git_diff, git_add, git_commit, git_branch, run_tests, run_command

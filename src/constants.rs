@@ -91,6 +91,10 @@ pub const CHANNEL_AGENT: usize = 32;
 pub const CHANNEL_ORCHESTRATOR: usize = 100;
 /// Buffer size for broadcast channels (feed, task, agent, session updates).
 pub const CHANNEL_BROADCAST: usize = 100;
+/// Buffer size for high-throughput broadcast channels (feed, routing).
+pub const CHANNEL_BROADCAST_HIGH: usize = 256;
+/// Buffer size for low-throughput broadcast channels (agents, sessions).
+pub const CHANNEL_BROADCAST_LOW: usize = 64;
 
 // ── Content Truncation Limits (chars) ───────────────────────────────────────
 
