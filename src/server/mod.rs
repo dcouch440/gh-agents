@@ -28,10 +28,12 @@ use axum::{
 };
 use sqlx::PgPool;
 use tokio::sync::RwLock;
-use tower_http::cors::{Any, CorsLayer};
+use tower_governor::governor::GovernorConfigBuilder;
+use tower_governor::GovernorLayer;
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::orchestration::Scheduler;
 use crate::types::AppConfig;
@@ -76,30 +78,57 @@ pub async fn start_server(
     Ok(())
 }
 
-/// Create the application router with all routes and middleware
+/// Create the application router with all routes, middleware, and rate limiting
 fn create_router(state: AppState) -> Router {
     let static_dir = std::env::var("NEXOR_STATIC_DIR").unwrap_or_else(|_| "ui/dist".to_string());
-    create_router_with_static_dir(state, &static_dir)
+    let cors = build_cors_layer();
+
+    // Rate limiter for auth routes: 10 requests per 60 seconds per IP
+    let auth_rate_limit = GovernorConfigBuilder::default()
+        .per_second(6)
+        .burst_size(10)
+        .finish()
+        .expect("valid governor config");
+
+    // Rate limiter for general API routes: ~100 requests per minute per IP
+    let api_rate_limit = GovernorConfigBuilder::default()
+        .per_second(2)
+        .burst_size(50)
+        .finish()
+        .expect("valid governor config");
+
+    let public_routes = build_public_routes().layer(GovernorLayer {
+        config: std::sync::Arc::new(auth_rate_limit),
+    });
+    let protected_routes = build_protected_routes(state.clone()).layer(GovernorLayer {
+        config: std::sync::Arc::new(api_rate_limit),
+    });
+
+    let serve_dir = ServeDir::new(&static_dir)
+        .not_found_service(ServeFile::new(format!("{}/index.html", static_dir)));
+
+    Router::new()
+        .nest("/api", public_routes.merge(protected_routes))
+        .route("/ws", get(ws::ws_handler))
+        .fallback_service(serve_dir)
+        .layer(middleware::from_fn(cache_control_middleware))
+        .layer(cors)
+        .layer(TraceLayer::new_for_http())
+        .with_state(state)
 }
 
-/// Create the application router with a specific static directory
-fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
-    // CORS configuration for development
-    // In production, restrict to specific origins
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
-
-    // Public routes (no auth required)
-    let public_routes = Router::new()
+/// Build the public route group (no auth required).
+fn build_public_routes() -> Router<AppState> {
+    Router::new()
         .route("/health", get(api::health_check))
         .route("/auth/setup", post(api::auth_setup))
         .route("/auth/login", post(api::auth_login))
-        .route("/auth/register", post(api::auth_register));
+        .route("/auth/register", post(api::auth_register))
+}
 
-    // Protected routes (auth required)
-    let protected_routes = Router::new()
+/// Build the protected route group (auth required).
+fn build_protected_routes(state: AppState) -> Router<AppState> {
+    Router::new()
         .route("/auth/me", get(api::auth_me))
         .route("/tasks", get(api::list_tasks).post(api::create_task))
         .route("/tasks/:id", get(api::get_task))
@@ -137,7 +166,6 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
             "/pipelines/:id/stages/:stage_number/side-tasks/:side_task_id",
             delete(api::delete_stage_side_task),
         )
-        // Pipeline run endpoints
         .route("/pipeline-runs", get(api::list_pipeline_runs))
         .route("/pipeline-runs/:run_id", get(api::get_pipeline_run))
         .route(
@@ -145,14 +173,12 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
             post(api::approve_pipeline_run),
         )
         .route("/config", get(api::get_config).patch(api::update_config))
-        // Chat endpoints (Ticket 10.3)
         .route("/chat", post(api::send_chat))
         .route(
             "/chat/history",
             get(api::get_chat_history).delete(api::clear_chat_history),
         )
         .route("/chat/:message_id/stream", get(api::chat_stream))
-        // Mode & Session endpoints
         .route("/modes", get(api::list_modes))
         .route(
             "/sessions",
@@ -173,7 +199,6 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
             "/sessions/:session_id/chat/:message_id/stream",
             get(api::session_chat_stream),
         )
-        // Document endpoints
         .route(
             "/documents",
             get(api::list_documents).post(api::create_document),
@@ -186,12 +211,16 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
                 .delete(api::delete_document),
         )
         .route("/stats", get(api::get_usage_stats))
-        // Context response endpoint (F6)
         .route("/context-response", post(api::submit_context_response))
-        .layer(middleware::from_fn_with_state(state.clone(), require_auth));
+        .layer(middleware::from_fn_with_state(state.clone(), require_auth))
+}
 
-    // Static file serving for production (Ticket 10.6)
-    // ServeDir with fallback to index.html for SPA routing
+/// Create the application router with a specific static directory (no rate limiting — used by tests)
+fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
+    let cors = build_cors_layer();
+    let public_routes = build_public_routes();
+    let protected_routes = build_protected_routes(state.clone());
+
     let serve_dir = ServeDir::new(static_dir)
         .not_found_service(ServeFile::new(format!("{}/index.html", static_dir)));
 
@@ -203,6 +232,47 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+/// Build CORS layer from CORS_ORIGINS env var.
+///
+/// - If `CORS_ORIGINS` is set, parse comma-separated origins.
+/// - If unset, default to permissive (dev mode) with a warning.
+fn build_cors_layer() -> CorsLayer {
+    match std::env::var("CORS_ORIGINS") {
+        Ok(origins) if !origins.is_empty() => {
+            let parsed: Vec<HeaderValue> = origins
+                .split(',')
+                .filter_map(|o| {
+                    let trimmed = o.trim();
+                    HeaderValue::from_str(trimmed)
+                        .map_err(|e| warn!("Invalid CORS origin '{}': {}", trimmed, e))
+                        .ok()
+                })
+                .collect();
+            if parsed.is_empty() {
+                warn!("CORS_ORIGINS set but no valid origins parsed, falling back to permissive");
+                CorsLayer::new()
+                    .allow_origin(Any)
+                    .allow_methods(Any)
+                    .allow_headers(Any)
+            } else {
+                info!("CORS restricted to {} origin(s)", parsed.len());
+                CorsLayer::new()
+                    .allow_origin(AllowOrigin::list(parsed))
+                    .allow_methods(Any)
+                    .allow_headers(Any)
+                    .allow_credentials(true)
+            }
+        }
+        _ => {
+            warn!("CORS_ORIGINS not set — allowing all origins (dev mode). Set CORS_ORIGINS for production.");
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers(Any)
+        }
+    }
 }
 
 /// Middleware to require valid JWT on protected routes.
