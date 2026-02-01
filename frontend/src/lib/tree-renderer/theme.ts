@@ -2,7 +2,7 @@ import type { TreeTheme } from './types'
 
 const DEFAULT_THEME: TreeTheme = {
   colorPending: '#555555',
-  colorRunning: '#3b82f6',
+  colorRunning: '#eab308',
   colorCompleted: '#22c55e',
   colorFailed: '#ef4444',
   colorWaiting: '#eab308',
