@@ -65,6 +65,11 @@ static MODEL_PRICING: Lazy<HashMap<&'static str, ModelPricing>> = Lazy::new(|| {
     // Claude 3 Haiku
     map.insert("claude-3-haiku-20240307", ModelPricing::new(0.00025, 0.00125));
 
+    // xAI Grok models
+    map.insert("grok-4-1-fast", ModelPricing::new(0.0002, 0.0005));
+    map.insert("grok-4", ModelPricing::new(0.003, 0.015));
+    map.insert("grok-3", ModelPricing::new(0.003, 0.015));
+
     // Shorthand aliases
     map.insert("claude-3-opus", ModelPricing::new(0.015, 0.075));
     map.insert("claude-3-sonnet", ModelPricing::new(0.003, 0.015));
