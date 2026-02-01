@@ -101,6 +101,7 @@ docker exec -it gh-agents-postgres-1 psql -U nexor -d nexor              # Inter
 - **`null` over `undefined`** for intentional absence. One bottom value.
 - **Named exports only.** No `export default`.
 - **One component per file.** File name matches component name.
+- **Components are stateless and pure.** Props in, JSX out. No hooks, no context, no side effects. Pages own data and state.
 - **Colocate** hooks, types, and helpers with the feature that uses them. Barrel `index.ts` only at feature/directory boundaries.
 - **API layer:** Thin generic fetch wrapper, no classes. Return typed promises.
 - **Early returns** for empty/loading/error states before the main render.
