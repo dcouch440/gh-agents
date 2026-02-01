@@ -159,19 +159,19 @@ impl AppState {
             let legacy_user = UserId(uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap());
             if let Ok(agent_rows) = state.repo.list_persisted_agents(legacy_user).await {
                 for row in agent_rows {
-                    let tier = match row.tier.as_str() {
+                    let tier = match row.tier.as_deref().unwrap_or("worker") {
                         "orchestrator" => crate::types::AgentTier::Orchestrator,
                         "utility" => crate::types::AgentTier::Utility,
                         _ => crate::types::AgentTier::Worker,
                     };
                     let persona = crate::types::AgentPersona {
-                        name: row.persona_name.clone(),
+                        name: row.name.clone(),
                         ..Default::default()
                     };
                     match pool.spawn_agent_with_dispatcher(tier, persona, crate::types::ModelConfig::default(), &mut dispatcher) {
-                        Ok(id) => tracing::info!("Restored agent {} ({})", row.persona_name, id.0),
+                        Ok(id) => tracing::info!("Restored agent {} ({})", row.name, id.0),
                         Err(e) => {
-                            tracing::warn!("Failed to restore agent {}: {}", row.persona_name, e)
+                            tracing::warn!("Failed to restore agent {}: {}", row.name, e)
                         }
                     }
                 }
