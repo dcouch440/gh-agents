@@ -1,0 +1,7 @@
+1. Get server up to speed for the vision on the front end.
+2. Create a reference list of the database, endpoints and any other good stuff.
+3. Setup strict guidelines and ease of use for the AI for the code for context injection.
+4. Create mock data so agents can create showcases.
+5. Create context layers depending on uses like webhooks.
+6. Create reusable hooks based off the specification.
+7. Create reusable components.

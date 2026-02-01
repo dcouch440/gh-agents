@@ -39,6 +39,9 @@ export const ROUTES = {
   SETTINGS: '/settings',
 } as const
 
+// Mock Data
+export const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true'
+
 // Local Storage
 export const LS_AUTH_TOKEN = 'nexor_auth_token'
 export const LS_THEME = 'nexor_theme'
