@@ -1,12 +1,12 @@
 import { renderHook, waitFor, act } from '@testing-library/react'
 import { useConfig } from './useConfig'
-import { mockConfig } from '../test/fixtures'
+import { mockConfig } from '@/test/fixtures'
 
 const { mockGet, mockPatch } = vi.hoisted(() => ({ mockGet: vi.fn(), mockPatch: vi.fn() }))
 
-vi.mock('../api', () => ({ api: { get: mockGet, patch: mockPatch } }))
-vi.mock('../constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('../constants')
+vi.mock('@/api', () => ({ api: { get: mockGet, patch: mockPatch } }))
+vi.mock('@/constants', async () => {
+  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
   return { ...actual, USE_MOCK_DATA: false }
 })
 

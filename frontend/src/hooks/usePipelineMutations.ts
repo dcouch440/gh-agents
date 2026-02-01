@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
-import { api } from '../api'
-import type { Task, ApproveGateRequest, CreateSideTaskRequest } from '../types'
+import { api } from '@/api'
+import type { Task, ApproveGateRequest, CreateSideTaskRequest } from '@/types'
 
 type RenderStageResponse = {
   rendered_prompt: string

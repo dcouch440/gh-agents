@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
-import { api } from '../api'
-import type { Tool, CreateToolRequest, UpdateToolRequest } from '../types'
+import { api } from '@/api'
+import type { Tool, CreateToolRequest, UpdateToolRequest } from '@/types'
 
 const useCreateTool = () => {
   const [loading, setLoading] = useState(false)

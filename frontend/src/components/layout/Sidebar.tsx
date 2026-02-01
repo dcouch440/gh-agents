@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { APP_NAME, ROUTES } from '../../constants'
+import { APP_NAME, ROUTES } from '@/constants'
 
 const NAV_ITEMS = [
   { to: ROUTES.DASHBOARD, label: 'Dashboard' },

@@ -1,12 +1,12 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { useSessions, useChatHistory, useModes } from './useSessions'
-import { mockSession, mockChatMessage, mockMode } from '../test/fixtures'
+import { mockSession, mockChatMessage, mockMode } from '@/test/fixtures'
 
 const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }))
 
-vi.mock('../api', () => ({ api: { get: mockGet } }))
-vi.mock('../constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('../constants')
+vi.mock('@/api', () => ({ api: { get: mockGet } }))
+vi.mock('@/constants', async () => {
+  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
   return { ...actual, USE_MOCK_DATA: false }
 })
 

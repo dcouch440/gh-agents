@@ -1,7 +1,7 @@
 import { createContext, useReducer, useEffect, type ReactNode } from 'react'
-import { useWebSocket } from '../hooks/useWebSocket'
-import { ACTION, WS_CHANNEL } from '../constants'
-import type { FeedItem } from '../types/feed'
+import { useWebSocket } from '@/hooks/useWebSocket'
+import { ACTION, WS_CHANNEL } from '@/constants'
+import type { FeedItem } from '@/types/feed'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 

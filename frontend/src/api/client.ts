@@ -1,4 +1,4 @@
-import { API_BASE, LS_AUTH_TOKEN } from '../constants'
+import { API_BASE, LS_AUTH_TOKEN } from '@/constants'
 
 class ApiError extends Error {
   constructor(

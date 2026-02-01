@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
-import { api } from '../api'
-import type { Task, CreateTaskRequest } from '../types'
+import { api } from '@/api'
+import type { Task, CreateTaskRequest } from '@/types'
 
 const useCreateTask = () => {
   const [loading, setLoading] = useState(false)

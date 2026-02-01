@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { FeedItem } from '../types/feed'
-import { USE_MOCK_DATA } from '../constants'
-import { mock } from '../mock'
+import type { FeedItem } from '@/types/feed'
+import { USE_MOCK_DATA } from '@/constants'
+import { mock } from '@/mock'
 
 const useFeed = () => {
   const [items, setItems] = useState<FeedItem[]>([])

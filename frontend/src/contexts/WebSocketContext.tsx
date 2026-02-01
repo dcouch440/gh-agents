@@ -1,6 +1,6 @@
 import { createContext, useEffect, useRef, useCallback, useState, type ReactNode } from 'react'
-import { WS_URL, WS_RECONNECT_BASE_MS, WS_RECONNECT_MAX_MS, type WsChannel } from '../constants'
-import { useAuth } from '../hooks/useAuth'
+import { WS_URL, WS_RECONNECT_BASE_MS, WS_RECONNECT_MAX_MS, type WsChannel } from '@/constants'
+import { useAuth } from '@/hooks/useAuth'
 
 type WsStatus = 'connecting' | 'connected' | 'disconnected'
 

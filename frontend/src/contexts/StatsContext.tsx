@@ -1,8 +1,8 @@
 import { createContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react'
-import { ACTION, STATS_POLL_INTERVAL_MS, USE_MOCK_DATA } from '../constants'
-import { api } from '../api'
-import { mock } from '../mock'
-import type { UsageSummary } from '../types/stats'
+import { ACTION, STATS_POLL_INTERVAL_MS, USE_MOCK_DATA } from '@/constants'
+import { api } from '@/api'
+import { mock } from '@/mock'
+import type { UsageSummary } from '@/types/stats'
 
 // ── State ────────────────────────────────────────────────────────────────────
 

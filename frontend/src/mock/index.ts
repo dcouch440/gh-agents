@@ -1,13 +1,13 @@
-import type { Agent } from '../types/agent'
-import type { Task } from '../types/task'
-import type { Session, ChatMessage, Mode } from '../types/session'
-import type { Pipeline, PipelineRun, StageExecution } from '../types/pipeline'
-import type { Document } from '../types/document'
-import type { FeedItem } from '../types/feed'
-import type { Tool } from '../types/tool'
-import type { UsageSummary } from '../types/stats'
-import type { Config } from '../types/config'
-import data from '../mock-data.json'
+import type { Agent } from '@/types/agent'
+import type { Task } from '@/types/task'
+import type { Session, ChatMessage, Mode } from '@/types/session'
+import type { Pipeline, PipelineRun, StageExecution } from '@/types/pipeline'
+import type { Document } from '@/types/document'
+import type { FeedItem } from '@/types/feed'
+import type { Tool } from '@/types/tool'
+import type { UsageSummary } from '@/types/stats'
+import type { Config } from '@/types/config'
+import data from '@/mock-data.json'
 
 const delay = (ms = 80): Promise<void> => new Promise((r) => setTimeout(r, ms))
 

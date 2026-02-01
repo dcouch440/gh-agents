@@ -1,5 +1,5 @@
 import { useContext } from 'react'
-import { AgentContext } from '../contexts/AgentContext'
+import { AgentContext } from '@/contexts/AgentContext'
 
 const useAgentContext = () => {
   const ctx = useContext(AgentContext)

@@ -1,13 +1,13 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { TaskProvider } from './TaskContext'
-import { useTaskContext } from '../hooks/useTaskContext'
-import { mockTask, mockTaskCompleted } from '../test/fixtures'
+import { useTaskContext } from '@/hooks/useTaskContext'
+import { mockTask, mockTaskCompleted } from '@/test/fixtures'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
 let wsHandler: ((data: unknown) => void) | null = null
 
-vi.mock('../hooks/useWebSocket', () => ({
+vi.mock('@/hooks/useWebSocket', () => ({
   useWebSocket: () => ({
     status: 'connected' as const,
     subscribe: (_channel: string, handler: (data: unknown) => void) => {
@@ -19,12 +19,12 @@ vi.mock('../hooks/useWebSocket', () => ({
 
 const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }))
 
-vi.mock('../api', () => ({
+vi.mock('@/api', () => ({
   api: { get: mockGet },
 }))
 
-vi.mock('../constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('../constants')
+vi.mock('@/constants', async () => {
+  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
   return { ...actual, USE_MOCK_DATA: false }
 })
 

@@ -1,7 +1,7 @@
 import { createContext, useState, useCallback, useEffect, type ReactNode } from 'react'
-import { api } from '../api'
-import { LS_AUTH_TOKEN } from '../constants'
-import type { User } from '../types/user'
+import { api } from '@/api'
+import { LS_AUTH_TOKEN } from '@/constants'
+import type { User } from '@/types/user'
 
 type AuthState = {
   user: User | null

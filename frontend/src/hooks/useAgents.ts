@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Agent } from '../types/agent'
-import { USE_MOCK_DATA } from '../constants'
-import { mock } from '../mock'
-import { api } from '../api'
+import type { Agent } from '@/types/agent'
+import { USE_MOCK_DATA } from '@/constants'
+import { mock } from '@/mock'
+import { api } from '@/api'
 
 type AgentsResponse = {
   stats: { orchestrators: number; workers: number; utilities: number }

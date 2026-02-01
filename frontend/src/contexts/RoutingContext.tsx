@@ -1,7 +1,7 @@
 import { createContext, useReducer, useEffect, type ReactNode } from 'react'
-import { useWebSocket } from '../hooks/useWebSocket'
-import { ACTION, WS_CHANNEL } from '../constants'
-import type { RoutingEvent } from '../types/routing'
+import { useWebSocket } from '@/hooks/useWebSocket'
+import { ACTION, WS_CHANNEL } from '@/constants'
+import type { RoutingEvent } from '@/types/routing'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
