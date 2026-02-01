@@ -8,12 +8,12 @@ use uuid::Uuid;
 
 use crate::db::ToolRow;
 use crate::execution::{ExecutionContext, FileOps, GitOps, Sandbox, TestRunner};
-use crate::llm::Tool;
+use crate::llm::{GrokResearchClient, ResearchRequest, ResearchSource, Tool, WebSearchFilters, XSearchFilters};
 
 /// Namespace UUID for generating deterministic builtin tool IDs.
 const TOOLS_NS: Uuid = Uuid::from_bytes([0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8]);
 
-/// Return the 11 built-in execution tools as DB rows for seeding.
+/// Return the built-in execution tools as DB rows for seeding.
 ///
 /// Each tool gets a deterministic UUID via `Uuid::new_v5(TOOLS_NS, name)` so
 /// seeding is idempotent.
@@ -163,6 +163,39 @@ pub fn execution_tools() -> Vec<Tool> {
                 "required": ["command"]
             }),
         },
+        Tool {
+            name: "web_research".into(),
+            description: "Research a topic using real-time web and X/Twitter search via xAI Grok. Returns a synthesized answer with citations. Requires XAI_API_KEY environment variable.".into(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The research query or question to investigate"
+                    },
+                    "sources": {
+                        "type": "array",
+                        "items": { "type": "string", "enum": ["web", "x"] },
+                        "description": "Which sources to search. Default: both web and X."
+                    },
+                    "allowed_domains": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Only search these web domains (max 5). Optional."
+                    },
+                    "x_handles": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Only search posts from these X handles (max 10). Optional."
+                    },
+                    "x_from_date": {
+                        "type": "string",
+                        "description": "ISO8601 date to limit X search start (YYYY-MM-DD). Optional."
+                    }
+                },
+                "required": ["query"]
+            }),
+        },
     ]
 }
 
@@ -188,6 +221,7 @@ pub async fn execute_execution_tool(name: &str, input: &Value, ctx: &ExecutionCo
         "git_branch" => exec_git_branch(input, ctx),
         "run_tests" => exec_run_tests(input, ctx).await,
         "run_command" => exec_run_command(input, ctx).await,
+        "web_research" => exec_web_research(input).await,
         _ => json!({ "error": format!("Unknown tool: {}", name) }),
     }
 }
@@ -453,6 +487,76 @@ async fn exec_run_command(input: &Value, ctx: &ExecutionContext) -> Value {
     }
 }
 
+// --- Web research (xAI Grok) ---
+
+async fn exec_web_research(input: &Value) -> Value {
+    let query = match input["query"].as_str() {
+        Some(q) => q,
+        None => return json!({ "error": "Missing required parameter: query" }),
+    };
+
+    // Parse sources (default: both)
+    let sources = match input.get("sources").and_then(|v| v.as_array()) {
+        Some(arr) => arr
+            .iter()
+            .filter_map(|v| match v.as_str() {
+                Some("web") => Some(ResearchSource::Web),
+                Some("x") => Some(ResearchSource::X),
+                _ => None,
+            })
+            .collect(),
+        None => vec![ResearchSource::Web, ResearchSource::X],
+    };
+
+    // Parse optional filters
+    let web_filters = input.get("allowed_domains").and_then(|v| v.as_array()).map(|domains| WebSearchFilters {
+        allowed_domains: Some(domains.iter().filter_map(|d| d.as_str().map(String::from)).collect()),
+        excluded_domains: None,
+    });
+
+    let x_handles = input.get("x_handles").and_then(|v| v.as_array());
+    let x_from_date = input.get("x_from_date").and_then(|v| v.as_str());
+    let x_filters = if x_handles.is_some() || x_from_date.is_some() {
+        Some(XSearchFilters {
+            allowed_x_handles: x_handles.map(|arr| arr.iter().filter_map(|h| h.as_str().map(String::from)).collect()),
+            excluded_x_handles: None,
+            from_date: x_from_date.map(String::from),
+            to_date: None,
+        })
+    } else {
+        None
+    };
+
+    let client = match GrokResearchClient::from_env() {
+        Ok(c) => c,
+        Err(e) => {
+            return json!({
+                "error": format!("Grok client initialization failed: {}. Ensure XAI_API_KEY is set.", e)
+            })
+        }
+    };
+
+    let request = ResearchRequest {
+        query: query.to_string(),
+        sources,
+        web_filters,
+        x_filters,
+        system_prompt: None,
+    };
+
+    match client.research(&request).await {
+        Ok(response) => json!({
+            "answer": response.answer,
+            "citations": response.citations,
+            "usage": {
+                "input_tokens": response.usage.input_tokens,
+                "output_tokens": response.usage.output_tokens
+            }
+        }),
+        Err(e) => json!({ "error": format!("Research failed: {}", e) }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -461,7 +565,7 @@ mod tests {
     #[test]
     fn tool_schemas_are_valid() {
         let tools = execution_tools();
-        assert_eq!(tools.len(), 11);
+        assert_eq!(tools.len(), 12);
         for tool in &tools {
             assert!(!tool.name.is_empty());
             assert!(!tool.description.is_empty());
@@ -481,7 +585,7 @@ mod tests {
     #[test]
     fn builtin_tool_rows_returns_11() {
         let rows = builtin_tool_rows();
-        assert_eq!(rows.len(), 11);
+        assert_eq!(rows.len(), 12);
         for row in &rows {
             assert!(row.is_builtin);
             assert!(row.cluster_id.is_none());
