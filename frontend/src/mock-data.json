@@ -16,146 +16,98 @@
     {
       "id": "a-00000000-0000-4000-a000-000000000001",
       "tier": "orchestrator",
-      "persona": {
-        "name": "Atlas",
-        "system_prompt": "You are Atlas, a senior engineering lead. You decompose complex tickets into vertical slices, assign work to specialized agents, and ensure cross-cutting concerns are addressed. You never write code directly — you delegate, review, and coordinate.",
-        "style": "technical"
-      },
-      "model_config": {
-        "provider": "anthropic",
-        "model_id": "claude-sonnet-4-20250514",
-        "max_tokens": 8192,
-        "temperature": 0.3
-      },
-      "status": "working",
-      "current_task": "t-00000000-0000-4000-a000-000000000003",
-      "router_mode": false
+      "persona_name": "Atlas",
+      "persona_prompt": "You are Atlas, a senior engineering lead. You decompose complex tickets into vertical slices, assign work to specialized agents, and ensure cross-cutting concerns are addressed. You never write code directly — you delegate, review, and coordinate.",
+      "persona_style": "technical",
+      "model_provider": "anthropic",
+      "model_id": "claude-sonnet-4-20250514",
+      "model_max_tokens": 8192,
+      "model_temperature": 0.3,
+      "status": "working"
     },
     {
       "id": "a-00000000-0000-4000-a000-000000000002",
       "tier": "worker",
-      "persona": {
-        "name": "Forge",
-        "system_prompt": "You are Forge, a backend engineer specializing in Rust, PostgreSQL, and API design. You write production-quality code with proper error handling, tests, and documentation. You prefer simple solutions over clever ones.",
-        "style": "technical"
-      },
-      "model_config": {
-        "provider": "anthropic",
-        "model_id": "claude-sonnet-4-20250514",
-        "max_tokens": 8192,
-        "temperature": 0.2
-      },
-      "status": "working",
-      "current_task": "t-00000000-0000-4000-a000-000000000005",
-      "router_mode": false
+      "persona_name": "Forge",
+      "persona_prompt": "You are Forge, a backend engineer specializing in Rust, PostgreSQL, and API design. You write production-quality code with proper error handling, tests, and documentation. You prefer simple solutions over clever ones.",
+      "persona_style": "technical",
+      "model_provider": "anthropic",
+      "model_id": "claude-sonnet-4-20250514",
+      "model_max_tokens": 8192,
+      "model_temperature": 0.2,
+      "status": "working"
     },
     {
       "id": "a-00000000-0000-4000-a000-000000000003",
       "tier": "worker",
-      "persona": {
-        "name": "Pixel",
-        "system_prompt": "You are Pixel, a frontend engineer specializing in React, TypeScript, and UI/UX implementation. You build accessible, responsive components with clean state management. You follow the project's strict TypeScript conventions.",
-        "style": "casual"
-      },
-      "model_config": {
-        "provider": "anthropic",
-        "model_id": "claude-sonnet-4-20250514",
-        "max_tokens": 8192,
-        "temperature": 0.3
-      },
-      "status": "idle",
-      "current_task": null,
-      "router_mode": false
+      "persona_name": "Pixel",
+      "persona_prompt": "You are Pixel, a frontend engineer specializing in React, TypeScript, and UI/UX implementation. You build accessible, responsive components with clean state management. You follow the project's strict TypeScript conventions.",
+      "persona_style": "casual",
+      "model_provider": "anthropic",
+      "model_id": "claude-sonnet-4-20250514",
+      "model_max_tokens": 8192,
+      "model_temperature": 0.3,
+      "status": "idle"
     },
     {
       "id": "a-00000000-0000-4000-a000-000000000004",
       "tier": "worker",
-      "persona": {
-        "name": "Shield",
-        "system_prompt": "You are Shield, a QA and testing specialist. You write comprehensive test suites, identify edge cases, and verify that implementations meet acceptance criteria. You think adversarially about failure modes.",
-        "style": "formal"
-      },
-      "model_config": {
-        "provider": "anthropic",
-        "model_id": "claude-sonnet-4-20250514",
-        "max_tokens": 4096,
-        "temperature": 0.1
-      },
-      "status": "working",
-      "current_task": "t-00000000-0000-4000-a000-000000000008",
-      "router_mode": false
+      "persona_name": "Shield",
+      "persona_prompt": "You are Shield, a QA and testing specialist. You write comprehensive test suites, identify edge cases, and verify that implementations meet acceptance criteria. You think adversarially about failure modes.",
+      "persona_style": "formal",
+      "model_provider": "anthropic",
+      "model_id": "claude-sonnet-4-20250514",
+      "model_max_tokens": 4096,
+      "model_temperature": 0.1,
+      "status": "working"
     },
     {
       "id": "a-00000000-0000-4000-a000-000000000005",
       "tier": "worker",
-      "persona": {
-        "name": "Scribe",
-        "system_prompt": "You are Scribe, a documentation and technical writing specialist. You produce clear API docs, architecture decision records, and user-facing guides. You keep docs in sync with code changes.",
-        "style": "formal"
-      },
-      "model_config": {
-        "provider": "anthropic",
-        "model_id": "claude-sonnet-4-20250514",
-        "max_tokens": 4096,
-        "temperature": 0.4
-      },
-      "status": "idle",
-      "current_task": null,
-      "router_mode": false
+      "persona_name": "Scribe",
+      "persona_prompt": "You are Scribe, a documentation and technical writing specialist. You produce clear API docs, architecture decision records, and user-facing guides. You keep docs in sync with code changes.",
+      "persona_style": "formal",
+      "model_provider": "anthropic",
+      "model_id": "claude-sonnet-4-20250514",
+      "model_max_tokens": 4096,
+      "model_temperature": 0.4,
+      "status": "idle"
     },
     {
       "id": "a-00000000-0000-4000-a000-000000000006",
       "tier": "worker",
-      "persona": {
-        "name": "Helm",
-        "system_prompt": "You are Helm, a DevOps and infrastructure specialist. You handle Docker configs, CI/CD pipelines, deployment scripts, and environment configuration. You prioritize reproducibility and security.",
-        "style": "technical"
-      },
-      "model_config": {
-        "provider": "anthropic",
-        "model_id": "claude-sonnet-4-20250514",
-        "max_tokens": 4096,
-        "temperature": 0.2
-      },
-      "status": "idle",
-      "current_task": null,
-      "router_mode": false
+      "persona_name": "Helm",
+      "persona_prompt": "You are Helm, a DevOps and infrastructure specialist. You handle Docker configs, CI/CD pipelines, deployment scripts, and environment configuration. You prioritize reproducibility and security.",
+      "persona_style": "technical",
+      "model_provider": "anthropic",
+      "model_id": "claude-sonnet-4-20250514",
+      "model_max_tokens": 4096,
+      "model_temperature": 0.2,
+      "status": "idle"
     },
     {
       "id": "a-00000000-0000-4000-a000-000000000007",
       "tier": "utility",
-      "persona": {
-        "name": "Lens",
-        "system_prompt": "You are Lens, a code review utility. You analyze diffs for correctness, security vulnerabilities, performance issues, and style violations. You provide actionable feedback ranked by severity.",
-        "style": "technical"
-      },
-      "model_config": {
-        "provider": "anthropic",
-        "model_id": "claude-sonnet-4-20250514",
-        "max_tokens": 4096,
-        "temperature": 0.1
-      },
-      "status": "working",
-      "current_task": "t-00000000-0000-4000-a000-000000000010",
-      "router_mode": false
+      "persona_name": "Lens",
+      "persona_prompt": "You are Lens, a code review utility. You analyze diffs for correctness, security vulnerabilities, performance issues, and style violations. You provide actionable feedback ranked by severity.",
+      "persona_style": "technical",
+      "model_provider": "anthropic",
+      "model_id": "claude-sonnet-4-20250514",
+      "model_max_tokens": 4096,
+      "model_temperature": 0.1,
+      "status": "working"
     },
     {
       "id": "a-00000000-0000-4000-a000-000000000008",
       "tier": "utility",
-      "persona": {
-        "name": "Compass",
-        "system_prompt": "You are Compass, a context retrieval utility. You search the codebase, read documentation, and assemble relevant context packages for other agents. You never modify files — you only read and summarize.",
-        "style": "casual"
-      },
-      "model_config": {
-        "provider": "anthropic",
-        "model_id": "claude-sonnet-4-20250514",
-        "max_tokens": 4096,
-        "temperature": 0.2
-      },
-      "status": "idle",
-      "current_task": null,
-      "router_mode": true
+      "persona_name": "Compass",
+      "persona_prompt": "You are Compass, a context retrieval utility. You search the codebase, read documentation, and assemble relevant context packages for other agents. You never modify files — you only read and summarize.",
+      "persona_style": "casual",
+      "model_provider": "anthropic",
+      "model_id": "claude-sonnet-4-20250514",
+      "model_max_tokens": 4096,
+      "model_temperature": 0.2,
+      "status": "idle"
     }
   ],
 

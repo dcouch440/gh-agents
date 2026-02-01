@@ -1,7 +1,9 @@
-import { AgentProvider, TaskProvider, PipelineProvider, FeedProvider, StatsProvider, RoutingProvider } from './contexts'
+import { AgentProvider, TaskProvider, PipelineProvider, FeedProvider, StatsProvider, RoutingProvider, ChatProvider } from './contexts'
 import { DashboardPage } from './pages/Dashboard/DashboardPage'
 import { AgentsPage } from './pages/Agents/AgentsPage'
 import { AgentDetailPage } from './pages/Agents/AgentDetailPage'
+import { ChatPage } from './pages/Chat/ChatPage'
+import { ChatSessionPage } from './pages/Chat/ChatSessionPage'
 import { PipelinesPage } from './pages/Pipelines/PipelinesPage'
 import { PipelineDetailPage } from './pages/Pipelines/PipelineDetailPage'
 import { PipelineRunPage } from './pages/Pipelines/PipelineRunPage'
@@ -67,10 +69,28 @@ function PipelineRunWithProvider() {
   )
 }
 
+function ChatWithProvider() {
+  return (
+    <ChatProvider>
+      <ChatPage />
+    </ChatProvider>
+  )
+}
+
+function ChatSessionWithProvider() {
+  return (
+    <ChatProvider>
+      <ChatSessionPage />
+    </ChatProvider>
+  )
+}
+
 export {
   DashboardWithProviders,
   AgentsWithProvider,
   AgentDetailWithProvider,
+  ChatWithProvider,
+  ChatSessionWithProvider,
   TasksWithProvider,
   PipelinesWithProvider,
   PipelineDetailWithProvider,
