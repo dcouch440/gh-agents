@@ -8,6 +8,7 @@
 pub mod agent_mode;
 pub mod api;
 pub mod auth;
+pub mod dag_executor;
 pub mod orchestrator;
 pub mod state;
 pub mod tools;
@@ -163,7 +164,8 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         .route(routes::PIPELINE_STAGE_MEMBERS, get(api::list_stage_members).post(api::add_stage_member))
         .route(routes::PIPELINE_STAGE_MEMBER, delete(api::delete_stage_member).put(api::update_stage_member))
         .route(routes::AGENT_EXECUTION, get(api::get_agent_execution))
-        .route(routes::AGENT_EXECUTION_MESSAGES, get(api::list_execution_messages))
+        .route(routes::AGENT_EXECUTION_MESSAGES, get(api::list_execution_messages).post(api::send_execution_message))
+        .route(routes::AGENT_EXECUTION_APPROVE, post(api::approve_execution))
         .route(routes::COSTS, get(api::get_costs))
         .route(routes::RESULTS, get(api::list_results))
         .route(routes::RESULT, get(api::get_result).delete(api::delete_result))
