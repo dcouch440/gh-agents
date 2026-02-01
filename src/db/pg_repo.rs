@@ -6,10 +6,10 @@ use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::db::traits::{CostRepo, DependencyRepo, DocumentRepo, MergeQueueRepo, OutputSchemaRepo, PromptTemplateRepo, RefactorRepo, SchedulerRepo, ServerRepo, TaskQueueRepo, UserRepo};
+use crate::db::traits::{CostRepo, DependencyRepo, DocumentRepo, MergeQueueRepo, OutputSchemaRepo, PromptTemplateRepo, RefactorRepo, SchedulerRepo, ServerRepo, TaskQueueRepo, UserRepo, WorkflowRepo};
 use crate::db::{
     AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageRow, PromptTemplateRow, ScheduleRow, SessionRow,
-    StageExecutionRow, StageSideTaskRow, ToolRow, TriggerRow, UsageSummaryRow,
+    StageExecutionRow, StageSideTaskRow, StepDocumentRow, ToolRow, TriggerRow, UsageSummaryRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::orchestration::DependencyError;
@@ -1836,6 +1836,202 @@ impl PromptTemplateRepo for PgRepo {
 
     async fn delete_prompt_template(&self, id: Uuid) -> Result<()> {
         sqlx::query("DELETE FROM prompt_templates WHERE id = $1").bind(id).execute(&self.pool).await?;
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl WorkflowRepo for PgRepo {
+    // --- Workflows ---
+
+    async fn create_workflow(&self, user_id: Uuid, name: String, description: String) -> Result<WorkflowRow> {
+        let row: WorkflowRow = sqlx::query_as("INSERT INTO workflows (user_id, name, description) VALUES ($1, $2, $3) RETURNING id, user_id, name, description, created_at")
+            .bind(user_id)
+            .bind(&name)
+            .bind(&description)
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(row)
+    }
+
+    async fn get_workflow(&self, id: Uuid) -> Result<Option<WorkflowRow>> {
+        let row: Option<WorkflowRow> = sqlx::query_as("SELECT id, user_id, name, description, created_at FROM workflows WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row)
+    }
+
+    async fn list_workflows(&self, user_id: Uuid) -> Result<Vec<WorkflowRow>> {
+        let rows: Vec<WorkflowRow> = sqlx::query_as("SELECT id, user_id, name, description, created_at FROM workflows WHERE user_id = $1 ORDER BY created_at DESC")
+            .bind(user_id)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows)
+    }
+
+    async fn update_workflow(&self, id: Uuid, name: Option<String>, description: Option<String>) -> Result<WorkflowRow> {
+        let row: WorkflowRow =
+            sqlx::query_as("UPDATE workflows SET name = COALESCE($1, name), description = COALESCE($2, description) WHERE id = $3 RETURNING id, user_id, name, description, created_at")
+                .bind(name)
+                .bind(description)
+                .bind(id)
+                .fetch_one(&self.pool)
+                .await?;
+        Ok(row)
+    }
+
+    async fn delete_workflow(&self, id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM workflows WHERE id = $1").bind(id).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    // --- Steps ---
+
+    async fn create_step(&self, step: WorkflowStepRow) -> Result<WorkflowStepRow> {
+        let row: WorkflowStepRow = sqlx::query_as(
+            r#"
+            INSERT INTO workflow_steps (id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, display_order)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            RETURNING id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, display_order
+            "#,
+        )
+        .bind(step.id)
+        .bind(step.workflow_id)
+        .bind(step.agent_id)
+        .bind(&step.execution_mode)
+        .bind(&step.for_each_ref)
+        .bind(step.prompt_template_id)
+        .bind(&step.prompt_template)
+        .bind(step.output_schema_id)
+        .bind(&step.output_variable_name)
+        .bind(step.interactive_agent_id)
+        .bind(step.display_order)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn get_step(&self, id: Uuid) -> Result<Option<WorkflowStepRow>> {
+        let row: Option<WorkflowStepRow> = sqlx::query_as(
+            "SELECT id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, display_order FROM workflow_steps WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn list_steps(&self, workflow_id: Uuid) -> Result<Vec<WorkflowStepRow>> {
+        let rows: Vec<WorkflowStepRow> = sqlx::query_as(
+            "SELECT id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, display_order FROM workflow_steps WHERE workflow_id = $1 ORDER BY display_order",
+        )
+        .bind(workflow_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn update_step(&self, step: WorkflowStepRow) -> Result<WorkflowStepRow> {
+        let row: WorkflowStepRow = sqlx::query_as(
+            r#"
+            UPDATE workflow_steps
+            SET agent_id = $1, execution_mode = $2, for_each_ref = $3, prompt_template_id = $4, prompt_template = $5,
+                output_schema_id = $6, output_variable_name = $7, interactive_agent_id = $8, display_order = $9
+            WHERE id = $10
+            RETURNING id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, display_order
+            "#,
+        )
+        .bind(step.agent_id)
+        .bind(&step.execution_mode)
+        .bind(&step.for_each_ref)
+        .bind(step.prompt_template_id)
+        .bind(&step.prompt_template)
+        .bind(step.output_schema_id)
+        .bind(&step.output_variable_name)
+        .bind(step.interactive_agent_id)
+        .bind(step.display_order)
+        .bind(step.id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn delete_step(&self, id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM workflow_steps WHERE id = $1").bind(id).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    // --- Edges ---
+
+    async fn set_edges(&self, workflow_id: Uuid, edges: Vec<WorkflowStepEdgeRow>) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("DELETE FROM workflow_step_edges WHERE from_step_id IN (SELECT id FROM workflow_steps WHERE workflow_id = $1)")
+            .bind(workflow_id)
+            .execute(&mut *tx)
+            .await?;
+        for edge in &edges {
+            sqlx::query("INSERT INTO workflow_step_edges (from_step_id, to_step_id) VALUES ($1, $2)")
+                .bind(edge.from_step_id)
+                .bind(edge.to_step_id)
+                .execute(&mut *tx)
+                .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    async fn list_edges(&self, workflow_id: Uuid) -> Result<Vec<WorkflowStepEdgeRow>> {
+        let rows: Vec<WorkflowStepEdgeRow> = sqlx::query_as("SELECT e.from_step_id, e.to_step_id FROM workflow_step_edges e JOIN workflow_steps s ON e.from_step_id = s.id WHERE s.workflow_id = $1")
+            .bind(workflow_id)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows)
+    }
+
+    async fn add_edge(&self, from_step_id: Uuid, to_step_id: Uuid) -> Result<()> {
+        sqlx::query("INSERT INTO workflow_step_edges (from_step_id, to_step_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
+            .bind(from_step_id)
+            .bind(to_step_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn remove_edge(&self, from_step_id: Uuid, to_step_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM workflow_step_edges WHERE from_step_id = $1 AND to_step_id = $2")
+            .bind(from_step_id)
+            .bind(to_step_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    // --- Step documents ---
+
+    async fn list_step_documents(&self, step_id: Uuid) -> Result<Vec<StepDocumentRow>> {
+        let rows: Vec<StepDocumentRow> = sqlx::query_as("SELECT step_id, document_id FROM step_documents WHERE step_id = $1")
+            .bind(step_id)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows)
+    }
+
+    async fn add_step_document(&self, step_id: Uuid, document_id: Uuid) -> Result<()> {
+        sqlx::query("INSERT INTO step_documents (step_id, document_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
+            .bind(step_id)
+            .bind(document_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn remove_step_document(&self, step_id: Uuid, document_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM step_documents WHERE step_id = $1 AND document_id = $2")
+            .bind(step_id)
+            .bind(document_id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 }
