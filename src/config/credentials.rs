@@ -92,7 +92,7 @@ impl CredentialsStore {
     /// Get GitHub token, checking env var first, then stored credentials
     pub fn get_github_token(&self) -> Option<String> {
         // Check environment variable first (allows override)
-        if let Ok(token) = std::env::var("GITHUB_TOKEN") {
+        if let Ok(token) = std::env::var(crate::constants::ENV_GITHUB_TOKEN) {
             if !token.is_empty() {
                 return Some(token);
             }

@@ -8,7 +8,7 @@ use nexor::llm::{AnthropicClient, LLMProvider, LLMRequest, Message, StreamChunk}
 
 /// Helper to skip test if API key not available
 fn require_api_key() -> Option<String> {
-    std::env::var("ANTHROPIC_API_KEY").ok()
+    std::env::var(nexor::constants::ENV_ANTHROPIC_API_KEY).ok()
 }
 
 #[tokio::test]

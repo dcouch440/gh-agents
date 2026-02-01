@@ -41,9 +41,9 @@ pub struct AnthropicConfig {
 impl AnthropicConfig {
     /// Create config from environment
     pub fn from_env() -> Result<Self, LLMError> {
-        let api_key = std::env::var("ANTHROPIC_API_KEY").map_err(|_| LLMError::AuthError("ANTHROPIC_API_KEY not set".to_string()))?;
+        let api_key = std::env::var(crate::constants::ENV_ANTHROPIC_API_KEY).map_err(|_| LLMError::AuthError(format!("{} not set", crate::constants::ENV_ANTHROPIC_API_KEY)))?;
 
-        let model = std::env::var("ANTHROPIC_MODEL").unwrap_or_else(|_| crate::constants::DEFAULT_MODEL.to_string());
+        let model = std::env::var(crate::constants::ENV_ANTHROPIC_MODEL).unwrap_or_else(|_| crate::constants::DEFAULT_MODEL.to_string());
 
         Ok(Self {
             api_key,

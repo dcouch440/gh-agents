@@ -87,8 +87,8 @@ impl NexorError {
     /// Create error for missing API key
     pub fn api_key_missing(provider: &str) -> Self {
         let env_var = match provider {
-            "anthropic" => "ANTHROPIC_API_KEY",
-            "github" => "GITHUB_TOKEN",
+            "anthropic" => crate::constants::ENV_ANTHROPIC_API_KEY,
+            "github" => crate::constants::ENV_GITHUB_TOKEN,
             _ => "API_KEY",
         };
         NexorError::Config {

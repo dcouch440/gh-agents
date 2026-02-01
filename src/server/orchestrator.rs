@@ -1383,8 +1383,8 @@ mod tests {
 
     #[tokio::test]
     async fn orchestrator_sends_error_when_no_api_key() {
-        let saved = std::env::var("ANTHROPIC_API_KEY").ok();
-        std::env::remove_var("ANTHROPIC_API_KEY");
+        let saved = std::env::var(crate::constants::ENV_ANTHROPIC_API_KEY).ok();
+        std::env::remove_var(crate::constants::ENV_ANTHROPIC_API_KEY);
 
         let repo: Arc<dyn ServerRepo> = Arc::new(TestRepo::new());
         let (state, orchestrator_rx) = AppState::with_repo(None, repo, None, AppConfig::default());
@@ -1415,7 +1415,7 @@ mod tests {
         assert!(matches!(chunk, StreamChunk::Error(_)));
 
         if let Some(key) = saved {
-            std::env::set_var("ANTHROPIC_API_KEY", key);
+            std::env::set_var(crate::constants::ENV_ANTHROPIC_API_KEY, key);
         }
     }
 }
