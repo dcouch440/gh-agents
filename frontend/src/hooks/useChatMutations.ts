@@ -1,10 +1,12 @@
 import { useState, useCallback, useRef } from 'react'
 import { api, createSSEStream } from '@/api'
+import type { SSEEvent } from '@/api'
 import { API } from '@/constants'
 import type { SendMessageRequest } from '@/types'
 
 type SendMessageResponse = {
   message_id: string
+  status: string
 }
 
 const useSendMessage = () => {
@@ -15,7 +17,7 @@ const useSendMessage = () => {
 
   const send = useCallback(async (
     body: SendMessageRequest,
-    onChunk?: (data: string) => void,
+    onEvent?: (event: SSEEvent) => void,
     onDone?: () => void,
   ): Promise<string> => {
     setLoading(true)
@@ -23,10 +25,10 @@ const useSendMessage = () => {
     try {
       const { message_id } = await api.post<SendMessageResponse>(API.CHAT, body)
 
-      if (onChunk) {
+      if (onEvent) {
         setStreaming(true)
         abortRef.current = createSSEStream(API.CHAT_STREAM(message_id), {
-          onMessage: onChunk,
+          onEvent,
           onDone: () => {
             setStreaming(false)
             abortRef.current = null
@@ -68,7 +70,7 @@ const useSendSessionMessage = () => {
   const send = useCallback(async (
     sessionId: string,
     body: SendMessageRequest,
-    onChunk?: (data: string) => void,
+    onEvent?: (event: SSEEvent) => void,
     onDone?: () => void,
   ): Promise<string> => {
     setLoading(true)
@@ -76,10 +78,10 @@ const useSendSessionMessage = () => {
     try {
       const { message_id } = await api.post<SendMessageResponse>(API.SESSION_CHAT(sessionId), body)
 
-      if (onChunk) {
+      if (onEvent) {
         setStreaming(true)
         abortRef.current = createSSEStream(API.SESSION_CHAT_STREAM(sessionId, message_id), {
-          onMessage: onChunk,
+          onEvent,
           onDone: () => {
             setStreaming(false)
             abortRef.current = null

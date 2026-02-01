@@ -31,8 +31,7 @@ type UpdateSessionRequest = {
 }
 
 type SendMessageRequest = {
-  content: string
-  mode_id?: string
+  message: string
 }
 
 export type { Session, ChatMessage, Mode, CreateSessionRequest, UpdateSessionRequest, SendMessageRequest }

@@ -23,12 +23,9 @@ type Task = {
 
 type CreateTaskRequest = {
   title: string
-  description: string
-  assigned_tier: string
-  priority?: TaskPriority
-  context_files?: string[]
-  depends_on?: string[]
-  metadata?: Record<string, string>
+  description?: string
+  priority?: string
+  tier?: string
 }
 
 export type { Task, TaskStatus, TaskPriority, CreateTaskRequest }

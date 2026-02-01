@@ -2,36 +2,72 @@ type AgentTier = 'orchestrator' | 'worker' | 'utility'
 
 type AgentStatus = 'idle' | 'working' | 'waiting_for_context' | 'waiting_for_approval'
 
-type AgentPersona = {
-  name: string
-  system_prompt: string
-  style: string
+type TierStats = {
+  total: number
+  available: number
+  max: number
 }
 
-type ModelConfig = {
-  provider: string
-  model_id: string
-  max_tokens: number
-  temperature: number
+type AgentPoolStats = {
+  orchestrators: TierStats
+  workers: TierStats
+  utilities: TierStats
 }
 
 type Agent = {
   id: string
   tier: AgentTier
-  persona: AgentPersona
-  model_config: ModelConfig
+  persona_name: string
+  persona_prompt: string
+  persona_style: string
+  model_provider: string
+  model_id: string
+  model_max_tokens: number
+  model_temperature: number
   status: AgentStatus
-  current_task: string | null
-  router_mode: boolean
+}
+
+type AgentsResponse = {
+  agents: Agent[]
+  stats: AgentPoolStats
+}
+
+type AgentToolsResponse = {
+  agent_id: string
+  tools: Tool[]
+}
+
+type AgentContextResponse = {
+  agent_id: string
+  documents: DocumentListItem[]
 }
 
 type CreateAgentRequest = {
-  tier: AgentTier
-  persona: AgentPersona
-  model_config: ModelConfig
-  router_mode?: boolean
+  tier: string
+  persona_name: string
+  persona_prompt?: string
+  persona_style?: string
+  model_provider?: string
+  model_id: string
+  model_max_tokens?: number
+  model_temperature?: number
 }
 
 type UpdateAgentRequest = Partial<CreateAgentRequest>
 
-export type { Agent, AgentTier, AgentStatus, AgentPersona, ModelConfig, CreateAgentRequest, UpdateAgentRequest }
+// Avoid circular import — these are lightweight forward references
+import type { Tool } from './tool'
+import type { DocumentListItem } from './document'
+
+export type {
+  Agent,
+  AgentTier,
+  AgentStatus,
+  TierStats,
+  AgentPoolStats,
+  AgentsResponse,
+  AgentToolsResponse,
+  AgentContextResponse,
+  CreateAgentRequest,
+  UpdateAgentRequest,
+}
