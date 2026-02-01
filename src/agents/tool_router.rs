@@ -49,11 +49,18 @@ pub fn request_assistance_tool() -> Tool {
 }
 
 /// Context needed for cluster routing, passed from the executor.
+#[derive(Clone)]
 pub struct ClusterRoutingContext {
     pub cluster_index: Arc<ToolClusterIndex>,
     pub pool: Arc<Mutex<AgentPool>>,
     pub dispatcher: Arc<Mutex<Dispatcher>>,
     pub execution_context: Option<crate::execution::ExecutionContext>,
+}
+
+impl std::fmt::Debug for ClusterRoutingContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClusterRoutingContext").finish_non_exhaustive()
+    }
 }
 
 /// Execute a `request_assistance` tool call by routing to the appropriate tool/cluster.

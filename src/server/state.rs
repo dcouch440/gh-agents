@@ -8,7 +8,7 @@ use sqlx::PgPool;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use uuid::Uuid;
 
-use crate::agents::{AgentPool, AgentResponse, ClusterManager, Dispatcher, PipelineManager, RoleManager, ScheduleManager};
+use crate::agents::{AgentPool, AgentResponse, ClusterManager, Dispatcher, PipelineManager, RoleManager, ScheduleManager, ToolClusterIndex};
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::{DocumentRepo, ServerRepo, UserRepo};
 use crate::llm::AnthropicClient;
@@ -103,6 +103,8 @@ pub struct AppState {
     pub schedule_manager: Arc<RwLock<ScheduleManager>>,
     /// Registry of available agent modes
     pub mode_registry: Arc<ModeRegistry>,
+    /// Tool-to-cluster index for routing tool calls to cluster agents
+    pub cluster_index: Option<Arc<ToolClusterIndex>>,
 }
 
 impl AppState {
@@ -165,6 +167,18 @@ impl AppState {
                             let _ = mgr.add_agent(cid, crate::agents::AgentId(agent_uuid));
                         }
                     }
+                }
+            }
+
+            // Build tool-to-cluster index for routing
+            match crate::db::list_clusters_with_tools(state.db.as_ref().unwrap()).await {
+                Ok(pairs) => {
+                    let tool_count: usize = pairs.iter().map(|(_, tools)| tools.len()).sum();
+                    tracing::info!("Built ToolClusterIndex: {} clusters, {} tools", pairs.len(), tool_count);
+                    state.cluster_index = Some(Arc::new(ToolClusterIndex::new(pairs)));
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to build ToolClusterIndex: {}", e);
                 }
             }
 
@@ -290,6 +304,7 @@ impl AppState {
                 pipeline_manager: Arc::new(RwLock::new(PipelineManager::new())),
                 schedule_manager: Arc::new(RwLock::new(ScheduleManager::new())),
                 mode_registry: Arc::new(ModeRegistry::new()),
+                cluster_index: None,
             },
             orchestrator_rx,
         )

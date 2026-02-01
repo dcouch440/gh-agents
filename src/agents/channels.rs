@@ -81,6 +81,9 @@ pub struct TaskContext {
     /// When true, the agent receives only the `request_assistance` meta-tool
     /// instead of individual tools. Tool calls are routed to clusters.
     pub router_mode: bool,
+    /// Cluster routing context for dispatching tool calls to cluster agents.
+    /// Required when `router_mode` is true and tools have `cluster_id` set.
+    pub cluster_routing: Option<super::tool_router::ClusterRoutingContext>,
 }
 
 /// Role-specific context for prompt building
