@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { Session, ChatMessage, Mode } from '@/types/session'
-import { USE_MOCK_DATA } from '@/constants'
+import { API, USE_MOCK_DATA } from '@/constants'
 import { mock } from '@/mock'
 import { api } from '@/api'
 
@@ -15,7 +15,7 @@ const useSessions = () => {
     try {
       const data = USE_MOCK_DATA
         ? await mock.getSessions()
-        : await api.get<Session[]>('/sessions')
+        : await api.get<Session[]>(API.SESSIONS)
       setSessions(data)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load sessions')
@@ -56,7 +56,7 @@ const useChatHistory = (sessionId: string | null) => {
       try {
         const data = USE_MOCK_DATA
           ? await mock.getChatHistory(sessionId)
-          : await api.get<ChatMessage[]>(`/sessions/${sessionId}/history`)
+          : await api.get<ChatMessage[]>(API.SESSION_HISTORY(sessionId))
         if (!cancelled) setMessages(data)
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load chat history')
@@ -84,7 +84,7 @@ const useModes = () => {
       try {
         const data = USE_MOCK_DATA
           ? await mock.getModes()
-          : await api.get<Mode[]>('/modes')
+          : await api.get<Mode[]>(API.MODES)
         if (!cancelled) setModes(data)
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load modes')

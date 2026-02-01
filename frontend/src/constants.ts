@@ -55,6 +55,67 @@ export const ACTION = {
   UPDATE_RUN: 'UPDATE_RUN',
 } as const
 
+// API Endpoints
+export const API = {
+  // Auth
+  AUTH_LOGIN: '/auth/login',
+  AUTH_REGISTER: '/auth/register',
+  AUTH_ME: '/auth/me',
+
+  // Agents
+  AGENTS: '/agents',
+  AGENT: (id: string) => `/agents/${id}`,
+  AGENT_TOOLS: (id: string) => `/agents/${id}/tools`,
+  AGENT_CONTEXT: (id: string) => `/agents/${id}/context`,
+
+  // Tasks
+  TASKS: '/tasks',
+  TASK: (id: string) => `/tasks/${id}`,
+
+  // Tools
+  TOOLS: '/tools',
+  TOOL: (id: string) => `/tools/${id}`,
+
+  // Documents
+  DOCUMENTS: '/documents',
+  DOCUMENT: (id: string) => `/documents/${id}`,
+  DOCUMENTS_SEARCH: (q: string) => `/documents/search?q=${encodeURIComponent(q)}`,
+
+  // Sessions
+  SESSIONS: '/sessions',
+  SESSION: (id: string) => `/sessions/${id}`,
+  SESSION_CHAT: (id: string) => `/sessions/${id}/chat`,
+  SESSION_HISTORY: (id: string) => `/sessions/${id}/history`,
+  SESSION_CHAT_STREAM: (sessionId: string, messageId: string) => `/sessions/${sessionId}/chat/${messageId}/stream`,
+
+  // Chat
+  CHAT: '/chat',
+  CHAT_HISTORY: '/chat/history',
+  CHAT_STREAM: (messageId: string) => `/chat/${messageId}/stream`,
+
+  // Modes
+  MODES: '/modes',
+
+  // Config
+  CONFIG: '/config',
+
+  // Stats
+  STATS: '/stats',
+
+  // Pipelines
+  PIPELINES: '/pipelines',
+  PIPELINE: (id: string) => `/pipelines/${id}`,
+  PIPELINE_STAGE_RENDER: (id: string, stage: number) => `/pipelines/${id}/stages/${stage}/render`,
+  PIPELINE_SIDE_TASKS: (id: string, stage: number) => `/pipelines/${id}/stages/${stage}/side-tasks`,
+  PIPELINE_SIDE_TASK: (id: string, stage: number, taskId: string) => `/pipelines/${id}/stages/${stage}/side-tasks/${taskId}`,
+  PIPELINE_RUNS: '/pipeline-runs',
+  PIPELINE_RUN: (id: string) => `/pipeline-runs/${id}`,
+  PIPELINE_RUN_APPROVE: (id: string) => `/pipeline-runs/${id}/approve`,
+
+  // Context Response
+  CONTEXT_RESPONSE: '/context-response',
+} as const
+
 // Mock Data
 export const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true'
 

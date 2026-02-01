@@ -1,6 +1,6 @@
 import { createContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { useWebSocket } from '@/hooks/useWebSocket'
-import { ACTION, WS_CHANNEL, USE_MOCK_DATA } from '@/constants'
+import { ACTION, WS_CHANNEL, USE_MOCK_DATA, API } from '@/constants'
 import { api } from '@/api'
 import { mock } from '@/mock'
 import type { Agent } from '@/types/agent'
@@ -64,7 +64,7 @@ function AgentProvider({ children }: { children: ReactNode }) {
     try {
       const agents = USE_MOCK_DATA
         ? await mock.getAgents()
-        : (await api.get<AgentsResponse>('/agents')).agents
+        : (await api.get<AgentsResponse>(API.AGENTS)).agents
       if (mountedRef.current) dispatch({ type: ACTION.SET_ALL, agents })
     } catch (e) {
       if (mountedRef.current) dispatch({ type: ACTION.SET_ERROR, error: e instanceof Error ? e.message : 'Failed to load agents' })

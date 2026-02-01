@@ -1,6 +1,6 @@
 import { createContext, useState, useCallback, useEffect, type ReactNode } from 'react'
 import { api } from '@/api'
-import { LS_AUTH_TOKEN } from '@/constants'
+import { LS_AUTH_TOKEN, API } from '@/constants'
 import type { User } from '@/types/user'
 
 type AuthState = {
@@ -40,13 +40,13 @@ function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = useCallback(async (email: string, password: string) => {
-    const res = await api.post<AuthResponse>('/auth/login', { email, password })
+    const res = await api.post<AuthResponse>(API.AUTH_LOGIN, { email, password })
     saveToken(res.token)
     setUser(res.user)
   }, [saveToken])
 
   const register = useCallback(async (email: string, password: string) => {
-    const res = await api.post<AuthResponse>('/auth/register', { email, password })
+    const res = await api.post<AuthResponse>(API.AUTH_REGISTER, { email, password })
     saveToken(res.token)
     setUser(res.user)
   }, [saveToken])
@@ -60,7 +60,7 @@ function AuthProvider({ children }: { children: ReactNode }) {
     if (!token) return
 
     let cancelled = false
-    api.get<User>('/auth/me')
+    api.get<User>(API.AUTH_ME)
       .then((u) => { if (!cancelled) setUser(u) })
       .catch(() => { if (!cancelled) clearToken() })
       .finally(() => { if (!cancelled) setLoading(false) })

@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { api } from '@/api'
+import { API } from '@/constants'
 import type { Task, ApproveGateRequest, CreateSideTaskRequest } from '@/types'
 
 type RenderStageResponse = {
@@ -14,7 +15,7 @@ const useApproveGate = () => {
     setLoading(true)
     setError(null)
     try {
-      await api.post(`/pipeline-runs/${runId}/approve`, body)
+      await api.post(API.PIPELINE_RUN_APPROVE(runId), body)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to approve gate'
       setError(msg)
@@ -35,7 +36,7 @@ const useRenderStage = () => {
     setLoading(true)
     setError(null)
     try {
-      return await api.post<RenderStageResponse>(`/pipelines/${pipelineId}/stages/${stageNumber}/render`)
+      return await api.post<RenderStageResponse>(API.PIPELINE_STAGE_RENDER(pipelineId, stageNumber))
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to render stage'
       setError(msg)
@@ -57,7 +58,7 @@ const useSideTasks = () => {
     setLoading(true)
     setError(null)
     try {
-      const data = await api.get<Task[]>(`/pipelines/${pipelineId}/stages/${stageNumber}/side-tasks`)
+      const data = await api.get<Task[]>(API.PIPELINE_SIDE_TASKS(pipelineId, stageNumber))
       setTasks(data)
       return data
     } catch (e) {
@@ -73,7 +74,7 @@ const useSideTasks = () => {
     setLoading(true)
     setError(null)
     try {
-      return await api.post<Task>(`/pipelines/${pipelineId}/stages/${stageNumber}/side-tasks`, body)
+      return await api.post<Task>(API.PIPELINE_SIDE_TASKS(pipelineId, stageNumber), body)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to create side task'
       setError(msg)
@@ -87,7 +88,7 @@ const useSideTasks = () => {
     setLoading(true)
     setError(null)
     try {
-      await api.del(`/pipelines/${pipelineId}/stages/${stageNumber}/side-tasks/${sideTaskId}`)
+      await api.del(API.PIPELINE_SIDE_TASK(pipelineId, stageNumber, sideTaskId))
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to delete side task'
       setError(msg)

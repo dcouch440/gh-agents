@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { api } from '@/api'
+import { API } from '@/constants'
 import type { Document, DocumentSearchResult, CreateDocumentRequest, UpdateDocumentRequest } from '@/types'
 
 const useCreateDocument = () => {
@@ -10,7 +11,7 @@ const useCreateDocument = () => {
     setLoading(true)
     setError(null)
     try {
-      return await api.post<Document>('/documents', body)
+      return await api.post<Document>(API.DOCUMENTS, body)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to create document'
       setError(msg)
@@ -31,7 +32,7 @@ const useUpdateDocument = () => {
     setLoading(true)
     setError(null)
     try {
-      return await api.patch<Document>(`/documents/${id}`, body)
+      return await api.patch<Document>(API.DOCUMENT(id), body)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to update document'
       setError(msg)
@@ -52,7 +53,7 @@ const useDeleteDocument = () => {
     setLoading(true)
     setError(null)
     try {
-      await api.del(`/documents/${id}`)
+      await api.del(API.DOCUMENT(id))
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to delete document'
       setError(msg)
@@ -74,7 +75,7 @@ const useSearchDocuments = () => {
     setLoading(true)
     setError(null)
     try {
-      const data = await api.get<DocumentSearchResult[]>(`/documents/search?q=${encodeURIComponent(query)}`)
+      const data = await api.get<DocumentSearchResult[]>(API.DOCUMENTS_SEARCH(query))
       setResults(data)
       return data
     } catch (e) {

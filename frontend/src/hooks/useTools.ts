@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { Tool } from '@/types/tool'
-import { USE_MOCK_DATA } from '@/constants'
+import { API, USE_MOCK_DATA } from '@/constants'
 import { mock } from '@/mock'
 import { api } from '@/api'
 
@@ -15,7 +15,7 @@ const useTools = () => {
     try {
       const data = USE_MOCK_DATA
         ? await mock.getTools()
-        : await api.get<Tool[]>('/tools')
+        : await api.get<Tool[]>(API.TOOLS)
       setTools(data)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load tools')

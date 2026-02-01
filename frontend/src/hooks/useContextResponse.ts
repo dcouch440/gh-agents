@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { api } from '@/api'
+import { API } from '@/constants'
 
 type ContextResponseRequest = {
   agent_id: string
@@ -14,7 +15,7 @@ const useContextResponse = () => {
     setLoading(true)
     setError(null)
     try {
-      await api.post('/context-response', body)
+      await api.post(API.CONTEXT_RESPONSE, body)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to submit context response'
       setError(msg)

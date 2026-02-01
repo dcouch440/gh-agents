@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { UsageSummary } from '@/types/stats'
-import { USE_MOCK_DATA, STATS_POLL_INTERVAL_MS } from '@/constants'
+import { API, USE_MOCK_DATA, STATS_POLL_INTERVAL_MS } from '@/constants'
 import { mock } from '@/mock'
 import { api } from '@/api'
 
@@ -13,7 +13,7 @@ const useStats = () => {
     try {
       const data = USE_MOCK_DATA
         ? await mock.getStats()
-        : await api.get<UsageSummary[]>('/stats')
+        : await api.get<UsageSummary[]>(API.STATS)
       setStats(data)
       setError(null)
     } catch (e) {

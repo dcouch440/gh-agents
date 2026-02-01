@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { Config } from '@/types/config'
-import { USE_MOCK_DATA } from '@/constants'
+import { API, USE_MOCK_DATA } from '@/constants'
 import { mock } from '@/mock'
 import { api } from '@/api'
 
@@ -15,7 +15,7 @@ const useConfig = () => {
     try {
       const data = USE_MOCK_DATA
         ? await mock.getConfig()
-        : await api.get<Config>('/config')
+        : await api.get<Config>(API.CONFIG)
       setConfig(data)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load config')
@@ -39,7 +39,7 @@ const useConfig = () => {
       setConfig((prev) => prev ? { ...prev, ...patch } : null)
       return
     }
-    const updated = await api.patch<Config>('/config', patch)
+    const updated = await api.patch<Config>(API.CONFIG, patch)
     setConfig(updated)
   }, [])
 

@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { api } from '@/api'
+import { API } from '@/constants'
 import type { Config, UpdateConfigRequest } from '@/types'
 
 const useUpdateConfig = () => {
@@ -10,7 +11,7 @@ const useUpdateConfig = () => {
     setLoading(true)
     setError(null)
     try {
-      return await api.patch<Config>('/config', body)
+      return await api.patch<Config>(API.CONFIG, body)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to update config'
       setError(msg)
