@@ -10,8 +10,8 @@ use uuid::Uuid;
 
 use crate::db::{
     AgentExecutionRow, AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageMemberRow,
-    PipelineStageRow, PromptTemplateRow, ScheduleRow, SessionRow, StageExecutionRow, StageSideTaskRow, StepDocumentRow, ToolRow, TriggerRow, UsageSummaryRow, WorkflowRow, WorkflowStepEdgeRow,
-    WorkflowStepRow,
+    PipelineStageRow, PromptTemplateRow, ScheduleRow, SessionRow, StageExecutionRow, StageSideTaskRow, StepDocumentRow, TokenLedgerRow, ToolRow, TriggerRow, UsageSummaryRow, WorkflowRow,
+    WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::orchestration::DependencyError;
@@ -574,4 +574,28 @@ pub trait AgentExecutionRepo: Send + Sync {
     // --- Execution Messages ---
     async fn create_execution_message(&self, agent_execution_id: Uuid, role: &str, content: &str, tool_call_id: Option<String>, input_tokens: i64, output_tokens: i64) -> Result<ExecutionMessageRow>;
     async fn list_execution_messages(&self, agent_execution_id: Uuid) -> Result<Vec<ExecutionMessageRow>>;
+}
+
+// ============================================================================
+// Token Ledger Repository
+// ============================================================================
+
+/// Aggregated spend by model.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct ModelSpendRow {
+    pub model_id: String,
+    pub total_input_tokens: i64,
+    pub total_output_tokens: i64,
+    pub total_cost_usd: f64,
+    pub call_count: i64,
+}
+
+/// Database operations for token cost tracking.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait TokenLedgerRepo: Send + Sync {
+    async fn insert_ledger_entry(&self, user_id: Uuid, agent_execution_id: Uuid, model_id: &str, input_tokens: i64, output_tokens: i64, cost_usd: f32) -> Result<TokenLedgerRow>;
+    async fn get_user_spend(&self, user_id: Uuid, since: Option<DateTime<Utc>>) -> Result<f64>;
+    async fn get_run_spend(&self, run_id: Uuid) -> Result<f64>;
+    async fn get_model_breakdown(&self, user_id: Uuid, since: Option<DateTime<Utc>>) -> Result<Vec<ModelSpendRow>>;
 }

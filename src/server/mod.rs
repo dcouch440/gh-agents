@@ -163,6 +163,7 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         .route(routes::PIPELINE_STAGE_MEMBER, delete(api::delete_stage_member).put(api::update_stage_member))
         .route(routes::AGENT_EXECUTION, get(api::get_agent_execution))
         .route(routes::AGENT_EXECUTION_MESSAGES, get(api::list_execution_messages))
+        .route(routes::COSTS, get(api::get_costs))
         .route(routes::STATS, get(api::get_usage_stats))
         .route(routes::CONTEXT_RESPONSE, post(api::submit_context_response))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth))

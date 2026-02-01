@@ -249,6 +249,19 @@ pub struct ExecutionMessageRow {
     pub created_at: DateTime<Utc>,
 }
 
+/// Row type for token ledger entries.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct TokenLedgerRow {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub agent_execution_id: Uuid,
+    pub model_id: String,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub cost_usd: f32,
+    pub created_at: DateTime<Utc>,
+}
+
 /// Row type for token usage summary.
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct UsageSummaryRow {

@@ -258,6 +258,9 @@ pub mod routes {
     pub const AGENT_EXECUTION: &str = "/agent-executions/:id";
     pub const AGENT_EXECUTION_MESSAGES: &str = "/agent-executions/:id/messages";
 
+    // Costs
+    pub const COSTS: &str = "/costs";
+
     // Stats
     pub const STATS: &str = "/stats";
 
