@@ -21,4 +21,14 @@ type Task = {
   updated_at: string
 }
 
-export type { Task, TaskStatus, TaskPriority }
+type CreateTaskRequest = {
+  title: string
+  description: string
+  assigned_tier: string
+  priority?: TaskPriority
+  context_files?: string[]
+  depends_on?: string[]
+  metadata?: Record<string, string>
+}
+
+export type { Task, TaskStatus, TaskPriority, CreateTaskRequest }

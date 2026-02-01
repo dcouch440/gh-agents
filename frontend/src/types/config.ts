@@ -22,4 +22,6 @@ type Config = {
   sandbox_mode: string
 }
 
-export type { Config }
+type UpdateConfigRequest = Partial<Config>
+
+export type { Config, UpdateConfigRequest }

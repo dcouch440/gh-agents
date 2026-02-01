@@ -25,4 +25,13 @@ type Agent = {
   router_mode: boolean
 }
 
-export type { Agent, AgentTier, AgentStatus, AgentPersona, ModelConfig }
+type CreateAgentRequest = {
+  tier: AgentTier
+  persona: AgentPersona
+  model_config: ModelConfig
+  router_mode?: boolean
+}
+
+type UpdateAgentRequest = Partial<CreateAgentRequest>
+
+export type { Agent, AgentTier, AgentStatus, AgentPersona, ModelConfig, CreateAgentRequest, UpdateAgentRequest }
