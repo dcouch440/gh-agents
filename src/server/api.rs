@@ -163,15 +163,15 @@ impl AgentResponse {
     fn from_row(row: crate::db::AgentRow) -> Self {
         Self {
             id: row.id.to_string(),
-            tier: row.tier,
-            persona_name: row.persona_name,
-            persona_prompt: row.persona_prompt,
-            persona_style: row.persona_style,
+            tier: row.tier.unwrap_or_else(|| "worker".to_string()),
+            persona_name: row.name,
+            persona_prompt: row.system_prompt,
+            persona_style: row.persona_style.unwrap_or_else(|| "casual".to_string()),
             model_provider: row.model_provider,
             model_id: row.model_id,
             model_max_tokens: row.model_max_tokens,
             model_temperature: row.model_temperature,
-            status: row.status,
+            status: row.status.unwrap_or_else(|| "idle".to_string()),
         }
     }
 }
@@ -276,16 +276,16 @@ pub async fn create_agent(State(state): State<AppState>, auth: auth::AuthUser, J
 
     let row = crate::db::AgentRow {
         id: Uuid::new_v4(),
-        tier: request.tier.trim().to_lowercase(),
-        persona_name: request.persona_name.trim().to_string(),
-        persona_prompt: request.persona_prompt.unwrap_or_default(),
-        persona_style: request.persona_style.unwrap_or_else(|| "casual".to_string()),
+        tier: Some(request.tier.trim().to_lowercase()),
+        name: request.persona_name.trim().to_string(),
+        system_prompt: request.persona_prompt.unwrap_or_default(),
+        persona_style: Some(request.persona_style.unwrap_or_else(|| "casual".to_string())),
         model_provider: request.model_provider.unwrap_or_else(|| "anthropic".to_string()),
         model_id: request.model_id.trim().to_string(),
         model_max_tokens: request.model_max_tokens.unwrap_or(4096),
         model_temperature: request.model_temperature.unwrap_or(0.7),
-        status: "idle".to_string(),
-        router_mode: false,
+        status: Some("idle".to_string()),
+        router_mode: Some(false),
     };
 
     state.repo.upsert_agent(auth.user_id, row.clone()).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -306,10 +306,10 @@ pub async fn update_agent(State(state): State<AppState>, auth: auth::AuthUser, P
 
     let updated = crate::db::AgentRow {
         id: existing.id,
-        tier: request.tier.unwrap_or(existing.tier),
-        persona_name: request.persona_name.unwrap_or(existing.persona_name),
-        persona_prompt: request.persona_prompt.unwrap_or(existing.persona_prompt),
-        persona_style: request.persona_style.unwrap_or(existing.persona_style),
+        tier: request.tier.map(Some).unwrap_or(existing.tier),
+        name: request.persona_name.unwrap_or(existing.name),
+        system_prompt: request.persona_prompt.unwrap_or(existing.system_prompt),
+        persona_style: request.persona_style.map(Some).unwrap_or(existing.persona_style),
         model_provider: request.model_provider.unwrap_or(existing.model_provider),
         model_id: request.model_id.unwrap_or(existing.model_id),
         model_max_tokens: request.model_max_tokens.unwrap_or(existing.model_max_tokens),
