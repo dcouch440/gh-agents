@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::agents::{AgentPool, AgentResponse, ClusterManager, Dispatcher, PipelineManager, RoleManager, ScheduleManager, ToolClusterIndex};
 use crate::db::pg_repo::PgRepo;
-use crate::db::traits::{AgentExecutionRepo, DocumentRepo, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ServerRepo, TokenLedgerRepo, UserRepo, WorkflowRepo};
+use crate::db::traits::{AgentExecutionRepo, DocumentRepo, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, ServerRepo, TokenLedgerRepo, UserRepo, WorkflowRepo};
 use crate::llm::AnthropicClient;
 use crate::orchestration::Scheduler;
 use crate::types::{AgentPoolConfig, AppConfig, UserId};
@@ -75,6 +75,7 @@ pub struct AppState {
     pub stage_member_repo: Option<Arc<dyn PipelineStageMemberRepo>>,
     pub agent_execution_repo: Option<Arc<dyn AgentExecutionRepo>>,
     pub token_ledger_repo: Option<Arc<dyn TokenLedgerRepo>>,
+    pub result_repo: Option<Arc<dyn ResultRepo>>,
     /// Task scheduler for orchestration (None in mock-based tests)
     pub scheduler: Option<Arc<RwLock<Scheduler>>>,
     /// Application configuration (mutable at runtime via API)
@@ -132,6 +133,7 @@ impl AppState {
         let stage_member_repo: Arc<dyn PipelineStageMemberRepo> = Arc::new(PgRepo::new(db.clone()));
         let agent_execution_repo: Arc<dyn AgentExecutionRepo> = Arc::new(PgRepo::new(db.clone()));
         let token_ledger_repo: Arc<dyn TokenLedgerRepo> = Arc::new(PgRepo::new(db.clone()));
+        let result_repo: Arc<dyn ResultRepo> = Arc::new(PgRepo::new(db.clone()));
         let (mut state, rx) = Self::with_repo(Some(db), repo, Some(scheduler), config.clone());
         state.user_repo = Some(user_repo);
         state.doc_repo = Some(doc_repo);
@@ -141,6 +143,7 @@ impl AppState {
         state.stage_member_repo = Some(stage_member_repo);
         state.agent_execution_repo = Some(agent_execution_repo);
         state.token_ledger_repo = Some(token_ledger_repo);
+        state.result_repo = Some(result_repo);
 
         // Initialize role manager with current working directory as project root
         let project_root = std::env::current_dir().unwrap_or_default();
@@ -305,6 +308,7 @@ impl AppState {
                 stage_member_repo: None,
                 agent_execution_repo: None,
                 token_ledger_repo: None,
+                result_repo: None,
                 scheduler,
                 config: Arc::new(RwLock::new(config)),
                 jwt_secret,

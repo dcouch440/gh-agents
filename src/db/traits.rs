@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::db::{
     AgentExecutionRow, AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageMemberRow,
-    PipelineStageRow, PromptTemplateRow, ScheduleRow, SessionRow, StageExecutionRow, StageSideTaskRow, StepDocumentRow, TokenLedgerRow, ToolRow, TriggerRow, UsageSummaryRow, WorkflowRow,
+    PipelineStageRow, PromptTemplateRow, ResultRow, ScheduleRow, SessionRow, StageExecutionRow, StageSideTaskRow, StepDocumentRow, TokenLedgerRow, ToolRow, TriggerRow, UsageSummaryRow, WorkflowRow,
     WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
@@ -598,4 +598,19 @@ pub trait TokenLedgerRepo: Send + Sync {
     async fn get_user_spend(&self, user_id: Uuid, since: Option<DateTime<Utc>>) -> Result<f64>;
     async fn get_run_spend(&self, run_id: Uuid) -> Result<f64>;
     async fn get_model_breakdown(&self, user_id: Uuid, since: Option<DateTime<Utc>>) -> Result<Vec<ModelSpendRow>>;
+}
+
+// ============================================================================
+// Result Repository
+// ============================================================================
+
+/// Database operations for saved structured results.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait ResultRepo: Send + Sync {
+    async fn save_result(&self, user_id: Uuid, agent_execution_id: Uuid, output_schema_id: Option<Uuid>, name: &str, data: serde_json::Value) -> Result<ResultRow>;
+    async fn get_result(&self, id: Uuid) -> Result<Option<ResultRow>>;
+    async fn list_results(&self, user_id: Uuid) -> Result<Vec<ResultRow>>;
+    async fn list_results_by_schema(&self, user_id: Uuid, output_schema_id: Uuid) -> Result<Vec<ResultRow>>;
+    async fn delete_result(&self, id: Uuid) -> Result<()>;
 }
