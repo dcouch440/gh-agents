@@ -218,15 +218,17 @@ pub type DbPool = PgPool;
 
 /// Initialize the database using DATABASE_URL from environment
 pub async fn init_db() -> Result<PgPool> {
-    let database_url =
-        std::env::var("DATABASE_URL").context("DATABASE_URL environment variable not set")?;
+    let database_url = std::env::var("DATABASE_URL").context("DATABASE_URL environment variable not set")?;
     init_db_with_url(&database_url).await
 }
 
 /// Initialize the database with an explicit URL
 pub async fn init_db_with_url(database_url: &str) -> Result<PgPool> {
+    let max_connections: u32 = std::env::var("DB_MAX_CONNECTIONS").ok().and_then(|s| s.parse().ok()).unwrap_or(10);
+    tracing::info!("DB pool max_connections = {}", max_connections);
+
     let pool = PgPoolOptions::new()
-        .max_connections(10)
+        .max_connections(max_connections)
         .connect(database_url)
         .await
         .with_context(|| format!("Failed to connect to database at {}", database_url))?;
@@ -234,10 +236,7 @@ pub async fn init_db_with_url(database_url: &str) -> Result<PgPool> {
     tracing::info!("Database connected to PostgreSQL");
 
     // Run migrations
-    sqlx::migrate!()
-        .run(&pool)
-        .await
-        .context("Failed to run database migrations")?;
+    sqlx::migrate!().run(&pool).await.context("Failed to run database migrations")?;
 
     tracing::info!("All migrations complete");
 

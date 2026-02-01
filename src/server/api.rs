@@ -17,6 +17,7 @@ use uuid::Uuid;
 use super::auth;
 use super::state::{AppState, OrchestratorMessage, StreamChunk};
 use super::ws::SessionUpdate;
+use crate::constants::{MAX_CHAT_MESSAGE_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH};
 use crate::types::{AgentPoolConfig, AgentTier, Priority, Task, TierModels};
 
 // ============================================================================
@@ -60,11 +61,7 @@ pub struct TasksQuery {
 /// Supports query parameters:
 /// - `status`: Filter by task status (pending, in_progress, completed, etc.)
 /// - `limit`: Maximum number of tasks to return (default 100, max 1000)
-pub async fn list_tasks(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Query(query): Query<TasksQuery>,
-) -> Result<Json<Vec<Task>>, StatusCode> {
+pub async fn list_tasks(State(state): State<AppState>, auth: auth::AuthUser, Query(query): Query<TasksQuery>) -> Result<Json<Vec<Task>>, StatusCode> {
     let tasks = state
         .repo
         .list_tasks(auth.user_id, query.status, query.limit)
@@ -77,11 +74,7 @@ pub async fn list_tasks(
 /// Get a single task by ID
 ///
 /// Returns 404 if the task is not found.
-pub async fn get_task(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Path(id): Path<Uuid>,
-) -> Result<Json<Task>, StatusCode> {
+pub async fn get_task(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<Task>, StatusCode> {
     let task = state
         .repo
         .get_task_by_uuid(auth.user_id, id)
@@ -105,13 +98,14 @@ pub struct CreateTaskRequest {
 ///
 /// Returns 201 with the created task on success.
 /// Returns 400 if the title is empty.
-pub async fn create_task(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Json(request): Json<CreateTaskRequest>,
-) -> Result<(StatusCode, Json<Task>), StatusCode> {
-    if request.title.trim().is_empty() {
+pub async fn create_task(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateTaskRequest>) -> Result<(StatusCode, Json<Task>), StatusCode> {
+    if request.title.trim().is_empty() || request.title.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
+    }
+    if let Some(ref desc) = request.description {
+        if desc.len() > MAX_DESCRIPTION_LENGTH {
+            return Err(StatusCode::BAD_REQUEST);
+        }
     }
 
     // Parse tier (default to Worker)
@@ -145,11 +139,7 @@ pub async fn create_task(
     task.updated_at = Utc::now();
 
     // Insert into database
-    state
-        .repo
-        .insert_task(auth.user_id, task.clone())
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state.repo.insert_task(auth.user_id, task.clone()).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok((StatusCode::CREATED, Json(task)))
 }
@@ -240,18 +230,11 @@ pub struct UpdateAgentRequest {
 }
 
 /// List all agents and their status
-pub async fn list_agents(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-) -> Result<Json<AgentsListResponse>, StatusCode> {
+pub async fn list_agents(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<AgentsListResponse>, StatusCode> {
     let config = state.config.read().await;
     let pool_config = &config.pool;
 
-    let rows = state
-        .repo
-        .list_persisted_agents(auth.user_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = state.repo.list_persisted_agents(auth.user_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let agents: Vec<AgentResponse> = rows.into_iter().map(AgentResponse::from_row).collect();
 
@@ -282,13 +265,17 @@ pub async fn list_agents(
 }
 
 /// Create a new agent
-pub async fn create_agent(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Json(request): Json<CreateAgentRequest>,
-) -> Result<(StatusCode, Json<AgentResponse>), StatusCode> {
+pub async fn create_agent(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateAgentRequest>) -> Result<(StatusCode, Json<AgentResponse>), StatusCode> {
     if request.tier.trim().is_empty() || request.model_id.trim().is_empty() {
         return Err(StatusCode::BAD_REQUEST);
+    }
+    if request.persona_name.len() > MAX_TITLE_LENGTH {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if let Some(ref prompt) = request.persona_prompt {
+        if prompt.len() > MAX_PROMPT_LENGTH {
+            return Err(StatusCode::BAD_REQUEST);
+        }
     }
 
     let row = crate::db::AgentRow {
@@ -296,12 +283,8 @@ pub async fn create_agent(
         tier: request.tier.trim().to_lowercase(),
         persona_name: request.persona_name.trim().to_string(),
         persona_prompt: request.persona_prompt.unwrap_or_default(),
-        persona_style: request
-            .persona_style
-            .unwrap_or_else(|| "casual".to_string()),
-        model_provider: request
-            .model_provider
-            .unwrap_or_else(|| "anthropic".to_string()),
+        persona_style: request.persona_style.unwrap_or_else(|| "casual".to_string()),
+        model_provider: request.model_provider.unwrap_or_else(|| "anthropic".to_string()),
         model_id: request.model_id.trim().to_string(),
         model_max_tokens: request.model_max_tokens.unwrap_or(4096),
         model_temperature: request.model_temperature.unwrap_or(0.7),
@@ -309,21 +292,13 @@ pub async fn create_agent(
         router_mode: false,
     };
 
-    state
-        .repo
-        .upsert_agent(auth.user_id, row.clone())
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state.repo.upsert_agent(auth.user_id, row.clone()).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok((StatusCode::CREATED, Json(AgentResponse::from_row(row))))
 }
 
 /// Get a single agent by ID
-pub async fn get_agent(
-    State(state): State<AppState>,
-    _auth: auth::AuthUser,
-    Path(id): Path<Uuid>,
-) -> Result<Json<AgentResponse>, StatusCode> {
+pub async fn get_agent(State(state): State<AppState>, _auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<AgentResponse>, StatusCode> {
     let row = state
         .repo
         .get_persisted_agent(id)
@@ -356,12 +331,8 @@ pub async fn update_agent(
         persona_style: request.persona_style.unwrap_or(existing.persona_style),
         model_provider: request.model_provider.unwrap_or(existing.model_provider),
         model_id: request.model_id.unwrap_or(existing.model_id),
-        model_max_tokens: request
-            .model_max_tokens
-            .unwrap_or(existing.model_max_tokens),
-        model_temperature: request
-            .model_temperature
-            .unwrap_or(existing.model_temperature),
+        model_max_tokens: request.model_max_tokens.unwrap_or(existing.model_max_tokens),
+        model_temperature: request.model_temperature.unwrap_or(existing.model_temperature),
         status: existing.status,
         router_mode: existing.router_mode,
     };
@@ -376,16 +347,8 @@ pub async fn update_agent(
 }
 
 /// Delete an agent by ID
-pub async fn delete_agent(
-    State(state): State<AppState>,
-    _auth: auth::AuthUser,
-    Path(id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
-    state
-        .repo
-        .delete_persisted_agent(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn delete_agent(State(state): State<AppState>, _auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
+    state.repo.delete_persisted_agent(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -462,74 +425,41 @@ pub struct AgentToolsResponse {
 }
 
 /// List all tools
-pub async fn list_tools(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
-    let rows = state
-        .repo
-        .list_tools(auth.user_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn list_tools(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
+    let rows = state.repo.list_tools(auth.user_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let tools = rows.into_iter().map(ToolResponse::from_row).collect();
     Ok(Json(tools))
 }
 
 /// Create a new tool
-pub async fn create_tool(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Json(request): Json<CreateToolRequest>,
-) -> Result<(StatusCode, Json<ToolResponse>), StatusCode> {
+pub async fn create_tool(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateToolRequest>) -> Result<(StatusCode, Json<ToolResponse>), StatusCode> {
     if request.name.trim().is_empty() {
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let cluster_id = request
-        .cluster_id
-        .as_deref()
-        .map(Uuid::parse_str)
-        .transpose()
-        .map_err(|_| StatusCode::BAD_REQUEST)?;
+    let cluster_id = request.cluster_id.as_deref().map(Uuid::parse_str).transpose().map_err(|_| StatusCode::BAD_REQUEST)?;
 
     let row = crate::db::ToolRow {
         id: Uuid::new_v4(),
         name: request.name.trim().to_string(),
         description: request.description.unwrap_or_default(),
         category: request.category.unwrap_or_else(|| "general".to_string()),
-        parameter_schema: request
-            .parameter_schema
-            .unwrap_or_else(|| serde_json::json!({})),
-        output_schema: request
-            .output_schema
-            .unwrap_or_else(|| serde_json::json!({})),
+        parameter_schema: request.parameter_schema.unwrap_or_else(|| serde_json::json!({})),
+        output_schema: request.output_schema.unwrap_or_else(|| serde_json::json!({})),
         enabled: request.enabled.unwrap_or(true),
         cluster_id,
         is_builtin: false,
     };
 
-    state
-        .repo
-        .upsert_tool(auth.user_id, row.clone())
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state.repo.upsert_tool(auth.user_id, row.clone()).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok((StatusCode::CREATED, Json(ToolResponse::from_row(row))))
 }
 
 /// Get a single tool by ID
-pub async fn get_tool(
-    State(state): State<AppState>,
-    _auth: auth::AuthUser,
-    Path(id): Path<Uuid>,
-) -> Result<Json<ToolResponse>, StatusCode> {
-    let row = state
-        .repo
-        .get_tool(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+pub async fn get_tool(State(state): State<AppState>, _auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<ToolResponse>, StatusCode> {
+    let row = state.repo.get_tool(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     Ok(Json(ToolResponse::from_row(row)))
 }
@@ -541,12 +471,7 @@ pub async fn update_tool(
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateToolRequest>,
 ) -> Result<Json<ToolResponse>, StatusCode> {
-    let existing = state
-        .repo
-        .get_tool(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let existing = state.repo.get_tool(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     let cluster_id = match &request.cluster_id {
         Some(cid) => Some(Uuid::parse_str(cid).map_err(|_| StatusCode::BAD_REQUEST)?),
@@ -558,50 +483,28 @@ pub async fn update_tool(
         name: request.name.unwrap_or(existing.name),
         description: request.description.unwrap_or(existing.description),
         category: request.category.unwrap_or(existing.category),
-        parameter_schema: request
-            .parameter_schema
-            .unwrap_or(existing.parameter_schema),
+        parameter_schema: request.parameter_schema.unwrap_or(existing.parameter_schema),
         output_schema: request.output_schema.unwrap_or(existing.output_schema),
         enabled: request.enabled.unwrap_or(existing.enabled),
         cluster_id,
         is_builtin: existing.is_builtin,
     };
 
-    state
-        .repo
-        .upsert_tool(auth.user_id, updated.clone())
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state.repo.upsert_tool(auth.user_id, updated.clone()).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(ToolResponse::from_row(updated)))
 }
 
 /// Delete a tool by ID
-pub async fn delete_tool(
-    State(state): State<AppState>,
-    _auth: auth::AuthUser,
-    Path(id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
-    state
-        .repo
-        .delete_tool(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn delete_tool(State(state): State<AppState>, _auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
+    state.repo.delete_tool(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// Get tools assigned to an agent
-pub async fn get_agent_tools(
-    State(state): State<AppState>,
-    _auth: auth::AuthUser,
-    Path(agent_id): Path<Uuid>,
-) -> Result<Json<AgentToolsResponse>, StatusCode> {
-    let rows = state
-        .repo
-        .get_agent_tools(agent_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn get_agent_tools(State(state): State<AppState>, _auth: auth::AuthUser, Path(agent_id): Path<Uuid>) -> Result<Json<AgentToolsResponse>, StatusCode> {
+    let rows = state.repo.get_agent_tools(agent_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let tools = rows.into_iter().map(ToolResponse::from_row).collect();
 
@@ -618,25 +521,13 @@ pub async fn set_agent_tools(
     Path(agent_id): Path<Uuid>,
     Json(request): Json<SetAgentToolsRequest>,
 ) -> Result<Json<AgentToolsResponse>, StatusCode> {
-    let tool_ids: Result<Vec<Uuid>, _> = request
-        .tool_ids
-        .iter()
-        .map(|s| Uuid::parse_str(s))
-        .collect();
+    let tool_ids: Result<Vec<Uuid>, _> = request.tool_ids.iter().map(|s| Uuid::parse_str(s)).collect();
 
     let tool_ids = tool_ids.map_err(|_| StatusCode::BAD_REQUEST)?;
 
-    state
-        .repo
-        .set_agent_tools(agent_id, tool_ids)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state.repo.set_agent_tools(agent_id, tool_ids).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let rows = state
-        .repo
-        .get_agent_tools(agent_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = state.repo.get_agent_tools(agent_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let tools = rows.into_iter().map(ToolResponse::from_row).collect();
 
@@ -662,16 +553,8 @@ pub struct AgentContextResponse {
 }
 
 /// Get context documents assigned to an agent
-pub async fn get_agent_context(
-    State(state): State<AppState>,
-    _auth: auth::AuthUser,
-    Path(agent_id): Path<Uuid>,
-) -> Result<Json<AgentContextResponse>, StatusCode> {
-    let rows = state
-        .repo
-        .get_agent_context(agent_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn get_agent_context(State(state): State<AppState>, _auth: auth::AuthUser, Path(agent_id): Path<Uuid>) -> Result<Json<AgentContextResponse>, StatusCode> {
+    let rows = state.repo.get_agent_context(agent_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let documents = rows
         .into_iter()
@@ -699,25 +582,13 @@ pub async fn set_agent_context(
     Path(agent_id): Path<Uuid>,
     Json(request): Json<SetAgentContextRequest>,
 ) -> Result<Json<AgentContextResponse>, StatusCode> {
-    let document_ids: Result<Vec<Uuid>, _> = request
-        .document_ids
-        .iter()
-        .map(|s| Uuid::parse_str(s))
-        .collect();
+    let document_ids: Result<Vec<Uuid>, _> = request.document_ids.iter().map(|s| Uuid::parse_str(s)).collect();
 
     let document_ids = document_ids.map_err(|_| StatusCode::BAD_REQUEST)?;
 
-    state
-        .repo
-        .set_agent_context(agent_id, document_ids)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state.repo.set_agent_context(agent_id, document_ids).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let rows = state
-        .repo
-        .get_agent_context(agent_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = state.repo.get_agent_context(agent_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let documents = rows
         .into_iter()
@@ -803,10 +674,7 @@ pub struct UpdateConfigRequest {
 }
 
 /// Update configuration (partial update)
-pub async fn update_config(
-    State(state): State<AppState>,
-    Json(request): Json<UpdateConfigRequest>,
-) -> Result<Json<ConfigResponse>, StatusCode> {
+pub async fn update_config(State(state): State<AppState>, Json(request): Json<UpdateConfigRequest>) -> Result<Json<ConfigResponse>, StatusCode> {
     use crate::types::{AutonomyLevel, GitStrategy, SandboxMode, VerbosityLevel};
 
     let mut config = state.config.write().await;
@@ -920,12 +788,8 @@ pub struct ChatResponse {
 ///
 /// Returns 202 Accepted with the message ID.
 /// The message is queued for processing by the orchestrator.
-pub async fn send_chat(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Json(request): Json<ChatRequest>,
-) -> Result<(StatusCode, Json<ChatResponse>), StatusCode> {
-    if request.message.trim().is_empty() {
+pub async fn send_chat(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<ChatRequest>) -> Result<(StatusCode, Json<ChatResponse>), StatusCode> {
+    if request.message.trim().is_empty() || request.message.len() > MAX_CHAT_MESSAGE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }
 
@@ -938,12 +802,7 @@ pub async fn send_chat(
     // Store the user message in the database
     state
         .repo
-        .insert_chat_message(
-            auth.user_id,
-            message_id,
-            "user".to_string(),
-            request.message.clone(),
-        )
+        .insert_chat_message(auth.user_id, message_id, "user".to_string(), request.message.clone())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -989,11 +848,7 @@ pub struct ChatMessage {
 /// Get chat history with pagination
 ///
 /// Returns messages in chronological order.
-pub async fn get_chat_history(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Query(query): Query<HistoryQuery>,
-) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
+pub async fn get_chat_history(State(state): State<AppState>, auth: auth::AuthUser, Query(query): Query<HistoryQuery>) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
     let limit = query.limit.unwrap_or(50);
     let offset = query.offset.unwrap_or(0);
 
@@ -1020,10 +875,7 @@ pub async fn get_chat_history(
 ///
 /// Subscribes to the response stream for a specific message and
 /// streams tokens as they are generated.
-pub async fn chat_stream(
-    State(state): State<AppState>,
-    Path(message_id): Path<Uuid>,
-) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+pub async fn chat_stream(State(state): State<AppState>, Path(message_id): Path<Uuid>) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     chat_stream_inner(state, message_id)
 }
 
@@ -1031,17 +883,11 @@ pub async fn chat_stream(
 ///
 /// Same as `chat_stream` but extracts both session_id and message_id
 /// from the path (only message_id is used for stream lookup).
-pub async fn session_chat_stream(
-    State(state): State<AppState>,
-    Path((_session_id, message_id)): Path<(Uuid, Uuid)>,
-) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+pub async fn session_chat_stream(State(state): State<AppState>, Path((_session_id, message_id)): Path<(Uuid, Uuid)>) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     chat_stream_inner(state, message_id)
 }
 
-fn chat_stream_inner(
-    state: AppState,
-    message_id: Uuid,
-) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+fn chat_stream_inner(state: AppState, message_id: Uuid) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let stream = async_stream::stream! {
         let (buffered, mut rx, already_done) = state.get_response_stream(message_id).await;
 
@@ -1145,10 +991,7 @@ pub struct ModeInfo {
 }
 
 /// List available agent modes
-pub async fn list_modes(
-    State(state): State<AppState>,
-    _auth: auth::AuthUser,
-) -> Json<Vec<ModeInfo>> {
+pub async fn list_modes(State(state): State<AppState>, _auth: auth::AuthUser) -> Json<Vec<ModeInfo>> {
     let modes: Vec<ModeInfo> = state
         .mode_registry
         .list()
@@ -1239,15 +1082,8 @@ pub async fn create_session(
 }
 
 /// List sessions for the current user
-pub async fn list_sessions(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-) -> Result<Json<Vec<SessionResponse>>, StatusCode> {
-    let sessions = state
-        .repo
-        .list_sessions(auth.user_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn list_sessions(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<SessionResponse>>, StatusCode> {
+    let sessions = state.repo.list_sessions(auth.user_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let response: Vec<SessionResponse> = sessions
         .into_iter()
@@ -1264,11 +1100,7 @@ pub async fn list_sessions(
 }
 
 /// Get a specific session
-pub async fn get_session(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Path(session_id): Path<Uuid>,
-) -> Result<Json<SessionResponse>, StatusCode> {
+pub async fn get_session(State(state): State<AppState>, auth: auth::AuthUser, Path(session_id): Path<Uuid>) -> Result<Json<SessionResponse>, StatusCode> {
     let session = state
         .repo
         .get_session(session_id)
@@ -1291,11 +1123,7 @@ pub async fn get_session(
 }
 
 /// Delete a session
-pub async fn delete_session(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Path(session_id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
+pub async fn delete_session(State(state): State<AppState>, auth: auth::AuthUser, Path(session_id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     // Verify ownership
     let session = state
         .repo
@@ -1308,11 +1136,7 @@ pub async fn delete_session(
         return Err(StatusCode::NOT_FOUND);
     }
 
-    state
-        .repo
-        .delete_session(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state.repo.delete_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     state.broadcast_session(SessionUpdate {
         id: session_id,
@@ -1403,13 +1227,7 @@ pub async fn send_session_chat(
     // Store user message scoped to session
     state
         .repo
-        .insert_session_message(
-            auth.user_id,
-            session_id,
-            message_id,
-            "user".to_string(),
-            request.message.clone(),
-        )
+        .insert_session_message(auth.user_id, session_id, message_id, "user".to_string(), request.message.clone())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -1456,11 +1274,7 @@ pub async fn get_session_history(
     }
 
     let limit = query.limit.unwrap_or(50);
-    let rows = state
-        .repo
-        .get_session_history(session_id, limit)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = state.repo.get_session_history(session_id, limit).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let messages: Vec<ChatMessage> = rows
         .into_iter()
@@ -1495,40 +1309,21 @@ pub struct SetupResponse {
 ///
 /// This endpoint is only available when no password has been configured yet.
 /// Once a password is set, this endpoint returns 409 Conflict.
-pub async fn auth_setup(
-    State(state): State<AppState>,
-    Json(request): Json<SetupRequest>,
-) -> Result<Json<SetupResponse>, (StatusCode, String)> {
+pub async fn auth_setup(State(state): State<AppState>, Json(request): Json<SetupRequest>) -> Result<Json<SetupResponse>, (StatusCode, String)> {
     // Check if already setup
-    if state
-        .repo
-        .has_password()
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-    {
-        return Err((
-            StatusCode::CONFLICT,
-            "Password already configured".to_string(),
-        ));
+    if state.repo.has_password().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))? {
+        return Err((StatusCode::CONFLICT, "Password already configured".to_string()));
     }
 
     // Validate password strength
     if request.password.len() < 8 {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            "Password must be at least 8 characters".to_string(),
-        ));
+        return Err((StatusCode::BAD_REQUEST, "Password must be at least 8 characters".to_string()));
     }
 
     // Hash and store
-    let hash = auth::hash_password(&request.password)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let hash = auth::hash_password(&request.password).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    state
-        .repo
-        .set_password(hash)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    state.repo.set_password(hash).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(SetupResponse {
         message: "Password configured successfully".to_string(),
@@ -1559,25 +1354,16 @@ pub struct UserResponse {
 }
 
 /// POST /api/auth/register - Register a new user
-pub async fn auth_register(
-    State(state): State<AppState>,
-    Json(request): Json<RegisterRequest>,
-) -> Result<(StatusCode, Json<AuthTokenResponse>), (StatusCode, String)> {
+pub async fn auth_register(State(state): State<AppState>, Json(request): Json<RegisterRequest>) -> Result<(StatusCode, Json<AuthTokenResponse>), (StatusCode, String)> {
     // Validate
     if request.email.trim().is_empty() || !request.email.contains('@') {
         return Err((StatusCode::BAD_REQUEST, "Invalid email".into()));
     }
     if request.password.len() < 8 {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            "Password must be at least 8 characters".into(),
-        ));
+        return Err((StatusCode::BAD_REQUEST, "Password must be at least 8 characters".into()));
     }
 
-    let user_repo = state.user_repo.as_ref().ok_or((
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "User service unavailable".into(),
-    ))?;
+    let user_repo = state.user_repo.as_ref().ok_or((StatusCode::INTERNAL_SERVER_ERROR, "User service unavailable".into()))?;
 
     // Check if email already exists
     if user_repo
@@ -1589,8 +1375,7 @@ pub async fn auth_register(
         return Err((StatusCode::CONFLICT, "Email already registered".into()));
     }
 
-    let hash = auth::hash_password(&request.password)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let hash = auth::hash_password(&request.password).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let user = user_repo
         .create_user(&request.email, &hash)
@@ -1600,8 +1385,7 @@ pub async fn auth_register(
     // Seed built-in execution tools for the new user
     let _ = state.repo.seed_builtin_tools(user.id).await;
 
-    let token = auth::create_token(&state.jwt_secret, 24, user.id, &user.email)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let token = auth::create_token(&state.jwt_secret, 24, user.id, &user.email).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok((
         StatusCode::CREATED,
@@ -1634,14 +1418,8 @@ pub struct LoginResponse {
 /// POST /api/auth/login - Authenticate and get JWT token
 ///
 /// Verifies the provided password and returns a JWT token valid for 24 hours.
-pub async fn auth_login(
-    State(state): State<AppState>,
-    Json(request): Json<LoginRequest>,
-) -> Result<Json<LoginResponse>, StatusCode> {
-    let user_repo = state
-        .user_repo
-        .as_ref()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn auth_login(State(state): State<AppState>, Json(request): Json<LoginRequest>) -> Result<Json<LoginResponse>, StatusCode> {
+    let user_repo = state.user_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let user = user_repo
         .get_user_by_email(&request.email)
@@ -1649,21 +1427,14 @@ pub async fn auth_login(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    let password_hash = user
-        .password_hash
-        .as_ref()
-        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let password_hash = user.password_hash.as_ref().ok_or(StatusCode::UNAUTHORIZED)?;
     if !auth::verify_password(&request.password, password_hash) {
         return Err(StatusCode::UNAUTHORIZED);
     }
 
-    let token = auth::create_token(&state.jwt_secret, 24, user.id, &user.email)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let token = auth::create_token(&state.jwt_secret, 24, user.id, &user.email).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok(Json(LoginResponse {
-        token,
-        expires_in: 86400,
-    }))
+    Ok(Json(LoginResponse { token, expires_in: 86400 }))
 }
 
 /// Response for /api/auth/me
@@ -1741,18 +1512,9 @@ pub struct DocumentSearchQuery {
 }
 
 /// GET /api/documents - List all documents for the authenticated user.
-pub async fn list_documents(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-) -> Result<Json<Vec<DocumentListItem>>, StatusCode> {
-    let doc_repo = state
-        .doc_repo
-        .as_ref()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let docs = doc_repo
-        .list_documents(auth.user_id.0)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn list_documents(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<DocumentListItem>>, StatusCode> {
+    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let docs = doc_repo.list_documents(auth.user_id.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let items: Vec<DocumentListItem> = docs
         .into_iter()
@@ -1776,28 +1538,15 @@ pub async fn search_documents(
     auth: auth::AuthUser,
     Query(query): Query<DocumentSearchQuery>,
 ) -> Result<Json<Vec<crate::db::DocumentSearchResult>>, StatusCode> {
-    let doc_repo = state
-        .doc_repo
-        .as_ref()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let results = doc_repo
-        .search_documents(auth.user_id.0, &query.q)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let results = doc_repo.search_documents(auth.user_id.0, &query.q).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(results))
 }
 
 /// GET /api/documents/:id - Get a full document by ID.
-pub async fn get_document(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Path(doc_id): Path<Uuid>,
-) -> Result<Json<DocumentResponse>, StatusCode> {
-    let doc_repo = state
-        .doc_repo
-        .as_ref()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn get_document(State(state): State<AppState>, auth: auth::AuthUser, Path(doc_id): Path<Uuid>) -> Result<Json<DocumentResponse>, StatusCode> {
+    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let doc = doc_repo
         .get_document(doc_id)
         .await
@@ -1829,23 +1578,21 @@ pub async fn create_document(
     auth: auth::AuthUser,
     Json(request): Json<CreateDocumentRequest>,
 ) -> Result<(StatusCode, Json<DocumentResponse>), StatusCode> {
-    if request.title.trim().is_empty() {
+    if request.title.trim().is_empty() || request.title.len() > MAX_TITLE_LENGTH {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if request.content.len() > MAX_DESCRIPTION_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let doc_repo = state
-        .doc_repo
-        .as_ref()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let doc = doc_repo
         .create_document(
             auth.user_id.0,
             request.session_id,
             request.title,
             request.content,
-            request
-                .doc_type
-                .unwrap_or_else(|| "architecture".to_string()),
+            request.doc_type.unwrap_or_else(|| "architecture".to_string()),
             String::new(),
             request.tags.unwrap_or_default(),
         )
@@ -1876,10 +1623,7 @@ pub async fn update_document(
     Path(doc_id): Path<Uuid>,
     Json(request): Json<UpdateDocumentRequest>,
 ) -> Result<Json<DocumentResponse>, StatusCode> {
-    let doc_repo = state
-        .doc_repo
-        .as_ref()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Verify ownership
     let existing = doc_repo
@@ -1912,15 +1656,8 @@ pub async fn update_document(
 }
 
 /// DELETE /api/documents/:id - Delete a document.
-pub async fn delete_document(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Path(doc_id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
-    let doc_repo = state
-        .doc_repo
-        .as_ref()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn delete_document(State(state): State<AppState>, auth: auth::AuthUser, Path(doc_id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
+    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Verify ownership
     let existing = doc_repo
@@ -1933,10 +1670,7 @@ pub async fn delete_document(
         return Err(StatusCode::NOT_FOUND);
     }
 
-    doc_repo
-        .delete_document(doc_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    doc_repo.delete_document(doc_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -1962,34 +1696,16 @@ pub struct FilePathContent {
 }
 
 /// POST /api/context-response - Submit a human context response to an agent
-pub async fn submit_context_response(
-    State(state): State<AppState>,
-    _auth: auth::AuthUser,
-    Json(request): Json<ContextResponseRequest>,
-) -> Result<StatusCode, StatusCode> {
+pub async fn submit_context_response(State(state): State<AppState>, _auth: auth::AuthUser, Json(request): Json<ContextResponseRequest>) -> Result<StatusCode, StatusCode> {
     use crate::agents::{AgentCommand, AgentId, ContextResponse, FileContent};
 
     let agent_id = AgentId(request.agent_id);
 
-    let files: Vec<FileContent> = request
-        .files
-        .into_iter()
-        .map(|f| FileContent {
-            path: f.path,
-            content: f.content,
-        })
-        .collect();
+    let files: Vec<FileContent> = request.files.into_iter().map(|f| FileContent { path: f.path, content: f.content }).collect();
 
-    let answers = if request.context.is_empty() {
-        vec![]
-    } else {
-        vec![request.context]
-    };
+    let answers = if request.context.is_empty() { vec![] } else { vec![request.context] };
 
-    let dispatcher = state
-        .dispatcher
-        .as_ref()
-        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let dispatcher = state.dispatcher.as_ref().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
     let disp = dispatcher.lock().await;
     disp.send_to_agent(
         &agent_id,
@@ -2010,9 +1726,7 @@ pub async fn submit_context_response(
 // ============================================================================
 
 /// Get token usage summary for the last 24 hours.
-pub async fn get_usage_stats(
-    State(state): State<AppState>,
-) -> Result<Json<Vec<crate::db::UsageSummaryRow>>, StatusCode> {
+pub async fn get_usage_stats(State(state): State<AppState>) -> Result<Json<Vec<crate::db::UsageSummaryRow>>, StatusCode> {
     let stats = state.repo.get_usage_summary(24).await.map_err(|e| {
         tracing::error!("get_usage_stats failed: {e:?}");
         StatusCode::INTERNAL_SERVER_ERROR
@@ -2027,21 +1741,14 @@ pub async fn get_usage_stats(
 /// Resolve `{{stage_name.field}}` placeholders in a template string.
 ///
 /// `stage_outputs` maps stage_name → JSON object of that stage's output fields.
-pub fn resolve_template(
-    template: &str,
-    stage_outputs: &std::collections::HashMap<String, serde_json::Value>,
-    context_docs: &std::collections::HashMap<String, String>,
-) -> String {
+pub fn resolve_template(template: &str, stage_outputs: &std::collections::HashMap<String, serde_json::Value>, context_docs: &std::collections::HashMap<String, String>) -> String {
     let mut result = template.to_string();
     // Match {{context.ref_tag}} patterns first (so stage refs can contain context)
     let context_re = regex::Regex::new(r"\{\{context\.(\w+)\}\}").unwrap();
     for cap in context_re.captures_iter(template) {
         let full_match = &cap[0];
         let ref_tag = &cap[1];
-        let replacement = context_docs
-            .get(ref_tag)
-            .cloned()
-            .unwrap_or_else(|| full_match.to_string());
+        let replacement = context_docs.get(ref_tag).cloned().unwrap_or_else(|| full_match.to_string());
         result = result.replace(full_match, &replacement);
     }
     // Match {{stage_name.field}} patterns
@@ -2070,11 +1777,7 @@ pub fn resolve_template(
 /// Render a pipeline stage into a markdown prompt.
 ///
 /// Takes the stage definition and a map of resolved input values (key → string value).
-pub fn render_stage_prompt(
-    output_description: &str,
-    resolved_inputs: &[(String, String)],
-    output_schema: &serde_json::Value,
-) -> String {
+pub fn render_stage_prompt(output_description: &str, resolved_inputs: &[(String, String)], output_schema: &serde_json::Value) -> String {
     let mut prompt = String::new();
 
     // Goal section
@@ -2097,14 +1800,8 @@ pub fn render_stage_prompt(
             prompt.push_str("# Output Schema\nReturn a JSON object with these fields:\n");
             for field in fields {
                 let name = field.get("name").and_then(|n| n.as_str()).unwrap_or("?");
-                let ftype = field
-                    .get("type")
-                    .and_then(|t| t.as_str())
-                    .unwrap_or("string");
-                let desc = field
-                    .get("description")
-                    .and_then(|d| d.as_str())
-                    .unwrap_or("");
+                let ftype = field.get("type").and_then(|t| t.as_str()).unwrap_or("string");
+                let desc = field.get("description").and_then(|d| d.as_str()).unwrap_or("");
                 let type_str = if ftype == "enum" {
                     if let Some(values) = field.get("values").and_then(|v| v.as_array()) {
                         let vals: Vec<&str> = values.iter().filter_map(|v| v.as_str()).collect();
@@ -2137,8 +1834,7 @@ pub async fn render_stage(
     stage_outputs: &std::collections::HashMap<String, serde_json::Value>,
 ) -> String {
     // Fetch context documents referenced via {{context.ref_tag}} patterns
-    let mut context_docs: std::collections::HashMap<String, String> =
-        std::collections::HashMap::new();
+    let mut context_docs: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     let context_re = regex::Regex::new(r"\{\{context\.(\w+)\}\}").unwrap();
     let mut all_text = stage.output_description.clone();
     if let Some(defs) = stage.input_definitions.as_array() {
@@ -2152,9 +1848,7 @@ pub async fn render_stage(
     if let Some(doc_repo) = doc_repo {
         for cap in context_re.captures_iter(&all_text) {
             let ref_tag_str = cap[1].to_string();
-            if let std::collections::hash_map::Entry::Vacant(e) =
-                context_docs.entry(ref_tag_str.clone())
-            {
+            if let std::collections::hash_map::Entry::Vacant(e) = context_docs.entry(ref_tag_str.clone()) {
                 if let Ok(Some(doc)) = doc_repo.get_document_by_ref_tag(&ref_tag_str).await {
                     e.insert(doc.content);
                 }
@@ -2166,11 +1860,7 @@ pub async fn render_stage(
     let mut resolved_inputs: Vec<(String, String)> = Vec::new();
     if let Some(defs) = stage.input_definitions.as_array() {
         for def in defs {
-            let key = def
-                .get("key")
-                .and_then(|k| k.as_str())
-                .unwrap_or("")
-                .to_string();
+            let key = def.get("key").and_then(|k| k.as_str()).unwrap_or("").to_string();
             let source = def.get("source").and_then(|s| s.as_str()).unwrap_or("");
             let value = match source {
                 "static" => def
@@ -2194,14 +1884,9 @@ pub async fn render_stage(
     }
 
     // Resolve output_description template
-    let resolved_description =
-        resolve_template(&stage.output_description, stage_outputs, &context_docs);
+    let resolved_description = resolve_template(&stage.output_description, stage_outputs, &context_docs);
 
-    render_stage_prompt(
-        &resolved_description,
-        &resolved_inputs,
-        &stage.output_schema,
-    )
+    render_stage_prompt(&resolved_description, &resolved_inputs, &stage.output_schema)
 }
 
 /// Request body for rendering a pipeline stage prompt.
@@ -2222,16 +1907,9 @@ pub async fn render_pipeline_stage(
         return Err(StatusCode::BAD_REQUEST);
     };
 
-    let stages = state
-        .repo
-        .list_pipeline_stages(pipeline_uuid)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let stages = state.repo.list_pipeline_stages(pipeline_uuid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let stage = stages
-        .into_iter()
-        .find(|s| s.stage_number == stage_number)
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let stage = stages.into_iter().find(|s| s.stage_number == stage_number).ok_or(StatusCode::NOT_FOUND)?;
 
     let doc_repo_ref = state.doc_repo.as_deref();
     let prompt = render_stage(doc_repo_ref, &stage, &body.stage_outputs).await;
@@ -2315,21 +1993,13 @@ pub async fn create_stage_side_task(
         pipeline_id: pipeline_uuid,
         stage_number,
         agent_id: agent_uuid,
-        input_definitions: request
-            .input_definitions
-            .unwrap_or_else(|| serde_json::json!([])),
+        input_definitions: request.input_definitions.unwrap_or_else(|| serde_json::json!([])),
         output_name: request.output_name.unwrap_or_default(),
         blocking: request.blocking.unwrap_or(false),
-        output_schema: request
-            .output_schema
-            .unwrap_or_else(|| serde_json::json!({"fields": []})),
+        output_schema: request.output_schema.unwrap_or_else(|| serde_json::json!({"fields": []})),
     };
 
-    state
-        .repo
-        .upsert_stage_side_task(row.clone())
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state.repo.upsert_stage_side_task(row.clone()).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok((StatusCode::CREATED, Json(SideTaskResponse::from_row(row))))
 }
@@ -2342,11 +2012,7 @@ pub async fn delete_stage_side_task(
     let Ok(side_task_uuid) = Uuid::parse_str(&side_task_id) else {
         return Err(StatusCode::BAD_REQUEST);
     };
-    state
-        .repo
-        .delete_stage_side_task(side_task_uuid)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state.repo.delete_stage_side_task(side_task_uuid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -2444,36 +2110,16 @@ pub struct ListRunsQuery {
 }
 
 /// List pipeline runs, optionally filtered by pipeline_id.
-pub async fn list_pipeline_runs(
-    State(state): State<AppState>,
-    _user: auth::AuthUser,
-    Query(query): Query<ListRunsQuery>,
-) -> Result<Json<Vec<PipelineRunResponse>>, StatusCode> {
-    let pipeline_id = query
-        .pipeline_id
-        .as_deref()
-        .and_then(|s| Uuid::parse_str(s).ok())
-        .ok_or(StatusCode::BAD_REQUEST)?;
+pub async fn list_pipeline_runs(State(state): State<AppState>, _user: auth::AuthUser, Query(query): Query<ListRunsQuery>) -> Result<Json<Vec<PipelineRunResponse>>, StatusCode> {
+    let pipeline_id = query.pipeline_id.as_deref().and_then(|s| Uuid::parse_str(s).ok()).ok_or(StatusCode::BAD_REQUEST)?;
 
-    let runs = state
-        .repo
-        .list_pipeline_runs(pipeline_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let runs = state.repo.list_pipeline_runs(pipeline_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok(Json(
-        runs.into_iter()
-            .map(PipelineRunResponse::from_row)
-            .collect(),
-    ))
+    Ok(Json(runs.into_iter().map(PipelineRunResponse::from_row).collect()))
 }
 
 /// Get a pipeline run with its stage executions.
-pub async fn get_pipeline_run(
-    State(state): State<AppState>,
-    _user: auth::AuthUser,
-    Path(run_id): Path<String>,
-) -> Result<Json<PipelineRunDetailResponse>, StatusCode> {
+pub async fn get_pipeline_run(State(state): State<AppState>, _user: auth::AuthUser, Path(run_id): Path<String>) -> Result<Json<PipelineRunDetailResponse>, StatusCode> {
     let run_uuid = Uuid::parse_str(&run_id).map_err(|_| StatusCode::BAD_REQUEST)?;
 
     let run = state
@@ -2483,18 +2129,11 @@ pub async fn get_pipeline_run(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
 
-    let stages = state
-        .repo
-        .list_stage_executions(run_uuid)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let stages = state.repo.list_stage_executions(run_uuid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(PipelineRunDetailResponse {
         run: PipelineRunResponse::from_row(run),
-        stages: stages
-            .into_iter()
-            .map(StageExecutionResponse::from_row)
-            .collect(),
+        stages: stages.into_iter().map(StageExecutionResponse::from_row).collect(),
     }))
 }
 
@@ -2521,16 +2160,9 @@ pub async fn approve_pipeline_run(
 
     // If user provided input, store it on the current stage execution
     if let Some(ref user_input) = request.user_input {
-        let stages = state
-            .repo
-            .list_stage_executions(run_uuid)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let stages = state.repo.list_stage_executions(run_uuid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-        if let Some(current_exec) = stages
-            .into_iter()
-            .find(|s| s.stage_number == run.current_stage)
-        {
+        if let Some(current_exec) = stages.into_iter().find(|s| s.stage_number == run.current_stage) {
             let mut updated = current_exec;
             updated.user_input = Some(user_input.clone());
             updated.status = "completed".to_string();
@@ -2546,11 +2178,7 @@ pub async fn approve_pipeline_run(
         };
         {
             let mut mgr = state.pipeline_manager.write().await;
-            mgr.record_stage_output(
-                run_uuid,
-                stage_name,
-                serde_json::json!({ "user_input": user_input }),
-            );
+            mgr.record_stage_output(run_uuid, stage_name, serde_json::json!({ "user_input": user_input }));
         }
     }
 
@@ -2573,15 +2201,11 @@ pub async fn approve_pipeline_run(
                         // Trigger task assignment for the next stage
                         let initial_task = {
                             let mgr2 = state.pipeline_manager.read().await;
-                            mgr2.get_run_initial_task(run_uuid)
-                                .unwrap_or_default()
-                                .to_string()
+                            mgr2.get_run_initial_task(run_uuid).unwrap_or_default().to_string()
                         };
                         let stage_outputs = {
                             let mgr2 = state.pipeline_manager.read().await;
-                            mgr2.get_stage_outputs(run_uuid)
-                                .cloned()
-                                .unwrap_or_default()
+                            mgr2.get_stage_outputs(run_uuid).cloned().unwrap_or_default()
                         };
                         let pipeline_id = {
                             let mgr2 = state.pipeline_manager.read().await;
@@ -2591,15 +2215,9 @@ pub async fn approve_pipeline_run(
                         let rendered_prompt = if let Some(pid) = pipeline_id {
                             match state.repo.list_pipeline_stages(pid.0).await {
                                 Ok(db_stages) => {
-                                    if let Some(db_stage) = db_stages
-                                        .into_iter()
-                                        .find(|s| s.stage_number == next_stage.stage_number as i32)
-                                    {
+                                    if let Some(db_stage) = db_stages.into_iter().find(|s| s.stage_number == next_stage.stage_number as i32) {
                                         let doc_repo_ref = state.doc_repo.as_deref();
-                                        Some(
-                                            render_stage(doc_repo_ref, &db_stage, &stage_outputs)
-                                                .await,
-                                        )
+                                        Some(render_stage(doc_repo_ref, &db_stage, &stage_outputs).await)
                                     } else {
                                         None
                                     }
@@ -2610,12 +2228,7 @@ pub async fn approve_pipeline_run(
                             None
                         };
 
-                        let description = rendered_prompt.unwrap_or_else(|| {
-                            format!(
-                                "{}\n\nPrevious output available in stage context.",
-                                initial_task
-                            )
-                        });
+                        let description = rendered_prompt.unwrap_or_else(|| format!("{}\n\nPrevious output available in stage context.", initial_task));
 
                         let mut context_reading: Vec<crate::agents::FileContent> = Vec::new();
 
@@ -2623,14 +2236,7 @@ pub async fn approve_pipeline_run(
                             if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
                                 for doc in &docs {
                                     context_reading.push(crate::agents::FileContent {
-                                        path: format!(
-                                            "context:{}",
-                                            if doc.ref_tag.is_empty() {
-                                                &doc.title
-                                            } else {
-                                                &doc.ref_tag
-                                            }
-                                        ),
+                                        path: format!("context:{}", if doc.ref_tag.is_empty() { &doc.title } else { &doc.ref_tag }),
                                         content: doc.content.clone(),
                                     });
                                 }
@@ -2639,21 +2245,12 @@ pub async fn approve_pipeline_run(
                         } else if let Some(cid) = &next_stage.cluster_id {
                             match state.repo.list_cluster_members(cid.0).await {
                                 Ok(member_ids) => {
-                                    let picked =
-                                        member_ids.first().map(|mid| crate::agents::AgentId(*mid));
+                                    let picked = member_ids.first().map(|mid| crate::agents::AgentId(*mid));
                                     if let Some(aid) = &picked {
-                                        if let Ok(docs) = state.repo.get_agent_context(aid.0).await
-                                        {
+                                        if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
                                             for doc in &docs {
                                                 context_reading.push(crate::agents::FileContent {
-                                                    path: format!(
-                                                        "context:{}",
-                                                        if doc.ref_tag.is_empty() {
-                                                            &doc.title
-                                                        } else {
-                                                            &doc.ref_tag
-                                                        }
-                                                    ),
+                                                    path: format!("context:{}", if doc.ref_tag.is_empty() { &doc.title } else { &doc.ref_tag }),
                                                     content: doc.content.clone(),
                                                 });
                                             }
@@ -2667,18 +2264,12 @@ pub async fn approve_pipeline_run(
                             None
                         };
 
-                        use crate::agents::{
-                            AgentCommand, CommunicationStyle, OutputFormat, RoleContext, RoleId,
-                            TaskAssignment, TaskConstraints, TaskContext,
-                        };
+                        use crate::agents::{AgentCommand, CommunicationStyle, OutputFormat, RoleContext, RoleId, TaskAssignment, TaskConstraints, TaskContext};
 
                         let role_str = next_stage.role.as_deref().unwrap_or("worker");
                         let assignment = TaskAssignment {
                             task_id: Uuid::new_v4(),
-                            title: format!(
-                                "Pipeline stage {}: {}",
-                                next_stage.stage_number, initial_task
-                            ),
+                            title: format!("Pipeline stage {}: {}", next_stage.stage_number, initial_task),
                             description,
                             context: TaskContext {
                                 required_reading: context_reading,
@@ -2686,24 +2277,17 @@ pub async fn approve_pipeline_run(
                                 history: vec![],
                                 conventions: String::new(),
                                 role_context: RoleContext {
-                                    system_prompt: format!(
-                                        "You are a {} working on: {}",
-                                        role_str, initial_task
-                                    ),
+                                    system_prompt: format!("You are a {} working on: {}", role_str, initial_task),
                                     style: CommunicationStyle::Technical,
                                     output_format: OutputFormat::CodeAndReport,
                                 },
                                 chat_messages: vec![],
-                                execution_context: Some(crate::execution::ExecutionContext::new(
-                                    std::env::current_dir().unwrap_or_default(),
-                                )),
+                                execution_context: Some(crate::execution::ExecutionContext::new(std::env::current_dir().unwrap_or_default())),
                                 tool_rows: vec![],
                                 router_mode: false,
                             },
                             constraints: TaskConstraints::default(),
-                            timeout: std::time::Duration::from_secs(
-                                crate::constants::DEFAULT_TIMEOUT_SECS,
-                            ),
+                            timeout: std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),
                             role_id: RoleId::new(role_str),
                         };
 
@@ -2716,13 +2300,7 @@ pub async fn approve_pipeline_run(
                         if let Some(agent_id) = &resolved_agent_id {
                             if let Some(disp) = &state.dispatcher {
                                 let disp = disp.lock().await;
-                                if let Err(e) = disp
-                                    .send_to_agent(
-                                        agent_id,
-                                        AgentCommand::AssignTask(Box::new(assignment)),
-                                    )
-                                    .await
-                                {
+                                if let Err(e) = disp.send_to_agent(agent_id, AgentCommand::AssignTask(Box::new(assignment))).await {
                                     tracing::error!("Gate resume dispatch failed: {}", e);
                                     let mut mgr2 = state.pipeline_manager.write().await;
                                     let _ = mgr2.fail_run(run_uuid, &e.to_string());
@@ -2747,9 +2325,7 @@ pub async fn approve_pipeline_run(
                             user_id: Some(_user.user_id.0),
                         });
 
-                        return Ok(Json(
-                            serde_json::json!({ "status": "resumed", "next_stage": next_stage.stage_number }),
-                        ));
+                        return Ok(Json(serde_json::json!({ "status": "resumed", "next_stage": next_stage.stage_number })));
                     }
                     Ok(None) => {
                         // Pipeline completed
@@ -2820,21 +2396,9 @@ mod tests {
     #[test]
     fn agent_pool_stats_serializes() {
         let stats = AgentPoolStats {
-            orchestrators: TierStats {
-                total: 1,
-                available: 1,
-                max: 2,
-            },
-            workers: TierStats {
-                total: 3,
-                available: 2,
-                max: 6,
-            },
-            utilities: TierStats {
-                total: 2,
-                available: 2,
-                max: 4,
-            },
+            orchestrators: TierStats { total: 1, available: 1, max: 2 },
+            workers: TierStats { total: 3, available: 2, max: 6 },
+            utilities: TierStats { total: 2, available: 2, max: 4 },
         };
         let json = serde_json::to_string(&stats).unwrap();
         assert!(json.contains("\"orchestrators\""));
@@ -2931,16 +2495,9 @@ mod tests {
             true
         }
 
-        async fn list_tasks(
-            &self,
-            _user_id: UserId,
-            status: Option<String>,
-            limit: Option<u32>,
-        ) -> anyhow::Result<Vec<Task>> {
+        async fn list_tasks(&self, _user_id: UserId, status: Option<String>, limit: Option<u32>) -> anyhow::Result<Vec<Task>> {
             let tasks = self.tasks.lock().unwrap();
-            let limit = limit
-                .unwrap_or(crate::constants::DEFAULT_QUERY_LIMIT as u32)
-                .min(crate::constants::MAX_QUERY_LIMIT as u32) as usize;
+            let limit = limit.unwrap_or(crate::constants::DEFAULT_QUERY_LIMIT as u32).min(crate::constants::MAX_QUERY_LIMIT as u32) as usize;
             let filtered: Vec<Task> = tasks
                 .iter()
                 .filter(|t| {
@@ -2958,11 +2515,7 @@ mod tests {
             Ok(filtered)
         }
 
-        async fn get_task_by_uuid(
-            &self,
-            _user_id: UserId,
-            id: Uuid,
-        ) -> anyhow::Result<Option<Task>> {
+        async fn get_task_by_uuid(&self, _user_id: UserId, id: Uuid) -> anyhow::Result<Option<Task>> {
             let tasks = self.tasks.lock().unwrap();
             Ok(tasks.iter().find(|t| t.id.0 == id).cloned())
         }
@@ -2972,13 +2525,7 @@ mod tests {
             Ok(())
         }
 
-        async fn insert_chat_message(
-            &self,
-            _user_id: UserId,
-            id: Uuid,
-            role: String,
-            content: String,
-        ) -> anyhow::Result<()> {
+        async fn insert_chat_message(&self, _user_id: UserId, id: Uuid, role: String, content: String) -> anyhow::Result<()> {
             self.chat_messages.lock().unwrap().push(ChatMessageRow {
                 id,
                 role,
@@ -2988,19 +2535,9 @@ mod tests {
             Ok(())
         }
 
-        async fn get_chat_history(
-            &self,
-            _user_id: UserId,
-            limit: u32,
-            offset: u32,
-        ) -> anyhow::Result<Vec<ChatMessageRow>> {
+        async fn get_chat_history(&self, _user_id: UserId, limit: u32, offset: u32) -> anyhow::Result<Vec<ChatMessageRow>> {
             let msgs = self.chat_messages.lock().unwrap();
-            let result: Vec<ChatMessageRow> = msgs
-                .iter()
-                .skip(offset as usize)
-                .take(limit.min(1000) as usize)
-                .cloned()
-                .collect();
+            let result: Vec<ChatMessageRow> = msgs.iter().skip(offset as usize).take(limit.min(1000) as usize).cloned().collect();
             Ok(result)
         }
 
@@ -3021,29 +2558,13 @@ mod tests {
         async fn get_password(&self) -> anyhow::Result<Option<String>> {
             Ok(self.password_hash.lock().unwrap().clone())
         }
-        async fn list_persisted_agents(
-            &self,
-            _user_id: UserId,
-        ) -> anyhow::Result<Vec<crate::db::AgentRow>> {
+        async fn list_persisted_agents(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::AgentRow>> {
             Ok(self.agents.lock().unwrap().clone())
         }
-        async fn get_persisted_agent(
-            &self,
-            agent_id: Uuid,
-        ) -> anyhow::Result<Option<crate::db::AgentRow>> {
-            Ok(self
-                .agents
-                .lock()
-                .unwrap()
-                .iter()
-                .find(|a| a.id == agent_id)
-                .cloned())
+        async fn get_persisted_agent(&self, agent_id: Uuid) -> anyhow::Result<Option<crate::db::AgentRow>> {
+            Ok(self.agents.lock().unwrap().iter().find(|a| a.id == agent_id).cloned())
         }
-        async fn upsert_agent(
-            &self,
-            _user_id: UserId,
-            agent: crate::db::AgentRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_agent(&self, _user_id: UserId, agent: crate::db::AgentRow) -> anyhow::Result<()> {
             let mut agents = self.agents.lock().unwrap();
             if let Some(existing) = agents.iter_mut().find(|a| a.id == agent.id) {
                 *existing = agent;
@@ -3060,19 +2581,9 @@ mod tests {
             Ok(self.tools.lock().unwrap().clone())
         }
         async fn get_tool(&self, tool_id: Uuid) -> anyhow::Result<Option<crate::db::ToolRow>> {
-            Ok(self
-                .tools
-                .lock()
-                .unwrap()
-                .iter()
-                .find(|t| t.id == tool_id)
-                .cloned())
+            Ok(self.tools.lock().unwrap().iter().find(|t| t.id == tool_id).cloned())
         }
-        async fn upsert_tool(
-            &self,
-            _user_id: UserId,
-            tool: crate::db::ToolRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_tool(&self, _user_id: UserId, tool: crate::db::ToolRow) -> anyhow::Result<()> {
             let mut tools = self.tools.lock().unwrap();
             if let Some(existing) = tools.iter_mut().find(|t| t.id == tool.id) {
                 *existing = tool;
@@ -3083,25 +2594,14 @@ mod tests {
         }
         async fn delete_tool(&self, tool_id: Uuid) -> anyhow::Result<()> {
             self.tools.lock().unwrap().retain(|t| t.id != tool_id);
-            self.agent_tools
-                .lock()
-                .unwrap()
-                .retain(|(_, tid)| *tid != tool_id);
+            self.agent_tools.lock().unwrap().retain(|(_, tid)| *tid != tool_id);
             Ok(())
         }
         async fn get_agent_tools(&self, agent_id: Uuid) -> anyhow::Result<Vec<crate::db::ToolRow>> {
             let at = self.agent_tools.lock().unwrap();
-            let tool_ids: Vec<Uuid> = at
-                .iter()
-                .filter(|(aid, _)| *aid == agent_id)
-                .map(|(_, tid)| *tid)
-                .collect();
+            let tool_ids: Vec<Uuid> = at.iter().filter(|(aid, _)| *aid == agent_id).map(|(_, tid)| *tid).collect();
             let tools = self.tools.lock().unwrap();
-            Ok(tools
-                .iter()
-                .filter(|t| tool_ids.contains(&t.id))
-                .cloned()
-                .collect())
+            Ok(tools.iter().filter(|t| tool_ids.contains(&t.id)).cloned().collect())
         }
         async fn set_agent_tools(&self, agent_id: Uuid, tool_ids: Vec<Uuid>) -> anyhow::Result<()> {
             let mut at = self.agent_tools.lock().unwrap();
@@ -3114,30 +2614,16 @@ mod tests {
         async fn seed_builtin_tools(&self, _user_id: UserId) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn get_agent_context(
-            &self,
-            _agent_id: Uuid,
-        ) -> anyhow::Result<Vec<crate::db::DocumentRow>> {
+        async fn get_agent_context(&self, _agent_id: Uuid) -> anyhow::Result<Vec<crate::db::DocumentRow>> {
             Ok(vec![])
         }
-        async fn set_agent_context(
-            &self,
-            _agent_id: Uuid,
-            _document_ids: Vec<Uuid>,
-        ) -> anyhow::Result<()> {
+        async fn set_agent_context(&self, _agent_id: Uuid, _document_ids: Vec<Uuid>) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn list_persisted_clusters(
-            &self,
-            _user_id: UserId,
-        ) -> anyhow::Result<Vec<crate::db::ClusterRow>> {
+        async fn list_persisted_clusters(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::ClusterRow>> {
             Ok(vec![])
         }
-        async fn upsert_cluster(
-            &self,
-            _user_id: UserId,
-            _cluster: crate::db::ClusterRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_cluster(&self, _user_id: UserId, _cluster: crate::db::ClusterRow) -> anyhow::Result<()> {
             Ok(())
         }
         async fn delete_cluster(&self, _cluster_id: Uuid) -> anyhow::Result<()> {
@@ -3146,53 +2632,31 @@ mod tests {
         async fn list_cluster_members(&self, _cluster_id: Uuid) -> anyhow::Result<Vec<Uuid>> {
             Ok(vec![])
         }
-        async fn add_cluster_member(
-            &self,
-            _cluster_id: Uuid,
-            _agent_id: Uuid,
-        ) -> anyhow::Result<()> {
+        async fn add_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn remove_cluster_member(
-            &self,
-            _cluster_id: Uuid,
-            _agent_id: Uuid,
-        ) -> anyhow::Result<()> {
+        async fn remove_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
         async fn list_pipelines(&self, _user_id: UserId) -> anyhow::Result<Vec<PipelineRow>> {
             Ok(vec![])
         }
-        async fn upsert_pipeline(
-            &self,
-            _user_id: UserId,
-            _pipeline: PipelineRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_pipeline(&self, _user_id: UserId, _pipeline: PipelineRow) -> anyhow::Result<()> {
             Ok(())
         }
         async fn delete_pipeline(&self, _pipeline_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn list_pipeline_stages(
-            &self,
-            _pipeline_id: Uuid,
-        ) -> anyhow::Result<Vec<PipelineStageRow>> {
+        async fn list_pipeline_stages(&self, _pipeline_id: Uuid) -> anyhow::Result<Vec<PipelineStageRow>> {
             Ok(vec![])
         }
         async fn upsert_pipeline_stage(&self, _stage: PipelineStageRow) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn list_stage_side_tasks(
-            &self,
-            _pipeline_id: Uuid,
-            _stage_number: i32,
-        ) -> anyhow::Result<Vec<crate::db::StageSideTaskRow>> {
+        async fn list_stage_side_tasks(&self, _pipeline_id: Uuid, _stage_number: i32) -> anyhow::Result<Vec<crate::db::StageSideTaskRow>> {
             Ok(vec![])
         }
-        async fn upsert_stage_side_task(
-            &self,
-            _side_task: crate::db::StageSideTaskRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_stage_side_task(&self, _side_task: crate::db::StageSideTaskRow) -> anyhow::Result<()> {
             Ok(())
         }
         async fn delete_stage_side_task(&self, _side_task_id: Uuid) -> anyhow::Result<()> {
@@ -3201,89 +2665,46 @@ mod tests {
         async fn list_schedules(&self, _user_id: UserId) -> anyhow::Result<Vec<ScheduleRow>> {
             Ok(vec![])
         }
-        async fn upsert_schedule(
-            &self,
-            _user_id: UserId,
-            _schedule: ScheduleRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_schedule(&self, _user_id: UserId, _schedule: ScheduleRow) -> anyhow::Result<()> {
             Ok(())
         }
         async fn delete_schedule(&self, _schedule_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn update_schedule_last_run(
-            &self,
-            _schedule_id: Uuid,
-            _last_run_at: DateTime<Utc>,
-        ) -> anyhow::Result<()> {
+        async fn update_schedule_last_run(&self, _schedule_id: Uuid, _last_run_at: DateTime<Utc>) -> anyhow::Result<()> {
             Ok(())
         }
         async fn list_triggers(&self, _user_id: UserId) -> anyhow::Result<Vec<TriggerRow>> {
             Ok(vec![])
         }
-        async fn upsert_trigger(
-            &self,
-            _user_id: UserId,
-            _trigger: TriggerRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_trigger(&self, _user_id: UserId, _trigger: TriggerRow) -> anyhow::Result<()> {
             Ok(())
         }
         async fn delete_trigger(&self, _trigger_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn create_session(
-            &self,
-            _user_id: UserId,
-            _session_id: Uuid,
-            _mode_id: &str,
-            _title: &str,
-        ) -> anyhow::Result<()> {
+        async fn create_session(&self, _user_id: UserId, _session_id: Uuid, _mode_id: &str, _title: &str) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn list_sessions(
-            &self,
-            _user_id: UserId,
-        ) -> anyhow::Result<Vec<crate::db::SessionRow>> {
+        async fn list_sessions(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::SessionRow>> {
             Ok(vec![])
         }
-        async fn get_session(
-            &self,
-            _session_id: Uuid,
-        ) -> anyhow::Result<Option<crate::db::SessionRow>> {
+        async fn get_session(&self, _session_id: Uuid) -> anyhow::Result<Option<crate::db::SessionRow>> {
             Ok(None)
         }
         async fn delete_session(&self, _session_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn insert_session_message(
-            &self,
-            _user_id: UserId,
-            _session_id: Uuid,
-            _id: Uuid,
-            _role: String,
-            _content: String,
-        ) -> anyhow::Result<()> {
+        async fn insert_session_message(&self, _user_id: UserId, _session_id: Uuid, _id: Uuid, _role: String, _content: String) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn get_session_history(
-            &self,
-            _session_id: Uuid,
-            _limit: u32,
-        ) -> anyhow::Result<Vec<ChatMessageRow>> {
+        async fn get_session_history(&self, _session_id: Uuid, _limit: u32) -> anyhow::Result<Vec<ChatMessageRow>> {
             Ok(vec![])
         }
-        async fn update_session_title(
-            &self,
-            _session_id: Uuid,
-            _title: &str,
-        ) -> anyhow::Result<()> {
+        async fn update_session_title(&self, _session_id: Uuid, _title: &str) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn update_session_summary(
-            &self,
-            _session_id: Uuid,
-            _summary: &str,
-        ) -> anyhow::Result<()> {
+        async fn update_session_summary(&self, _session_id: Uuid, _summary: &str) -> anyhow::Result<()> {
             Ok(())
         }
         async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> {
@@ -3300,52 +2721,28 @@ mod tests {
         ) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn get_usage_summary(
-            &self,
-            _since_hours: u32,
-        ) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> {
+        async fn get_usage_summary(&self, _since_hours: u32) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> {
             Ok(vec![])
         }
-        async fn create_pipeline_run(
-            &self,
-            _run: &crate::db::PipelineRunRow,
-        ) -> anyhow::Result<()> {
+        async fn create_pipeline_run(&self, _run: &crate::db::PipelineRunRow) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn update_pipeline_run(
-            &self,
-            _run: &crate::db::PipelineRunRow,
-        ) -> anyhow::Result<()> {
+        async fn update_pipeline_run(&self, _run: &crate::db::PipelineRunRow) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn get_pipeline_run(
-            &self,
-            _run_id: Uuid,
-        ) -> anyhow::Result<Option<crate::db::PipelineRunRow>> {
+        async fn get_pipeline_run(&self, _run_id: Uuid) -> anyhow::Result<Option<crate::db::PipelineRunRow>> {
             Ok(None)
         }
-        async fn list_pipeline_runs(
-            &self,
-            _pipeline_id: Uuid,
-        ) -> anyhow::Result<Vec<crate::db::PipelineRunRow>> {
+        async fn list_pipeline_runs(&self, _pipeline_id: Uuid) -> anyhow::Result<Vec<crate::db::PipelineRunRow>> {
             Ok(vec![])
         }
-        async fn create_stage_execution(
-            &self,
-            _exec: &crate::db::StageExecutionRow,
-        ) -> anyhow::Result<()> {
+        async fn create_stage_execution(&self, _exec: &crate::db::StageExecutionRow) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn update_stage_execution(
-            &self,
-            _exec: &crate::db::StageExecutionRow,
-        ) -> anyhow::Result<()> {
+        async fn update_stage_execution(&self, _exec: &crate::db::StageExecutionRow) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn list_stage_executions(
-            &self,
-            _run_id: Uuid,
-        ) -> anyhow::Result<Vec<crate::db::StageExecutionRow>> {
+        async fn list_stage_executions(&self, _run_id: Uuid) -> anyhow::Result<Vec<crate::db::StageExecutionRow>> {
             Ok(vec![])
         }
 
@@ -3372,9 +2769,7 @@ mod tests {
         setup_test_app_with_user_repo(None)
     }
 
-    fn setup_test_app_with_user_repo(
-        user_repo: Option<Arc<dyn crate::db::traits::UserRepo>>,
-    ) -> (axum::Router, Vec<u8>) {
+    fn setup_test_app_with_user_repo(user_repo: Option<Arc<dyn crate::db::traits::UserRepo>>) -> (axum::Router, Vec<u8>) {
         let repo: Arc<dyn ServerRepo> = Arc::new(InMemoryServerRepo::new());
         let config = crate::types::AppConfig::default();
         let (mut state, rx) = AppState::with_repo(None, repo, None, config);
@@ -3400,9 +2795,7 @@ mod tests {
                     .uri("/api/tasks")
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(
-                        r#"{"title":"My task","description":"desc","priority":"high"}"#,
-                    ))
+                    .body(Body::from(r#"{"title":"My task","description":"desc","priority":"high"}"#))
                     .unwrap(),
             )
             .await
@@ -3519,21 +2912,11 @@ mod tests {
     async fn health_check_returns_ok() {
         let (app, _jwt_secret) = setup_test_app();
 
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/api/health")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = app.oneshot(Request::builder().uri("/api/health").body(Body::empty()).unwrap()).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
 
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"status\":\"ok\""));
         assert!(body_str.contains("\"db_connected\":true"));
@@ -3560,9 +2943,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"assigned_tier\":\"orchestrator\""));
     }
@@ -3586,9 +2967,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"assigned_tier\":\"utility\""));
     }
@@ -3605,18 +2984,14 @@ mod tests {
                     .uri("/api/tasks")
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(
-                        r#"{"title":"Default tier","tier":"nonexistent"}"#,
-                    ))
+                    .body(Body::from(r#"{"title":"Default tier","tier":"nonexistent"}"#))
                     .unwrap(),
             )
             .await
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"assigned_tier\":\"worker\""));
     }
@@ -3640,9 +3015,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"assigned_tier\":\"worker\""));
     }
@@ -3666,9 +3039,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"priority\":\"low\""));
     }
@@ -3692,9 +3063,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"priority\":\"urgent\""));
     }
@@ -3711,18 +3080,14 @@ mod tests {
                     .uri("/api/tasks")
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(
-                        r#"{"title":"Default prio","priority":"critical"}"#,
-                    ))
+                    .body(Body::from(r#"{"title":"Default prio","priority":"critical"}"#))
                     .unwrap(),
             )
             .await
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"priority\":\"normal\""));
     }
@@ -3746,9 +3111,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert!(body_str.contains("\"priority\":\"normal\""));
     }
@@ -3776,9 +3139,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(create_resp.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(create_resp.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(create_resp.into_body(), usize::MAX).await.unwrap();
         let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let task_id = created["id"].as_str().unwrap();
 
@@ -3795,9 +3156,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(list_resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(list_resp.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(list_resp.into_body(), usize::MAX).await.unwrap();
         let tasks: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         let found = tasks.iter().find(|t| t["id"].as_str() == Some(task_id));
         assert!(found.is_some(), "Created task should appear in task list");
@@ -3844,9 +3203,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let tasks: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert!(tasks.is_empty());
     }
@@ -3884,9 +3241,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let tasks: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert_eq!(tasks.len(), 1);
     }
@@ -3923,9 +3278,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let tasks: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert!(tasks.is_empty());
     }
@@ -4035,9 +3388,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(resp["agents"].is_array());
         assert!(resp["stats"]["orchestrators"].is_object());
@@ -4059,18 +3410,14 @@ mod tests {
                     .uri("/api/agents")
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(
-                        r#"{"tier":"worker","persona_name":"Builder","model_id":"claude-sonnet-4-20250514"}"#,
-                    ))
+                    .body(Body::from(r#"{"tier":"worker","persona_name":"Builder","model_id":"claude-sonnet-4-20250514"}"#))
                     .unwrap(),
             )
             .await
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let agent: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(agent["tier"].as_str().unwrap(), "worker");
         assert_eq!(agent["persona_name"].as_str().unwrap(), "Builder");
@@ -4092,9 +3439,7 @@ mod tests {
                     .uri("/api/agents")
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(
-                        r#"{"tier":"","persona_name":"X","model_id":"claude-sonnet-4-20250514"}"#,
-                    ))
+                    .body(Body::from(r#"{"tier":"","persona_name":"X","model_id":"claude-sonnet-4-20250514"}"#))
                     .unwrap(),
             )
             .await
@@ -4116,9 +3461,7 @@ mod tests {
                     .uri("/api/agents")
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(
-                        r#"{"tier":"orchestrator","persona_name":"Planner","model_id":"claude-sonnet-4-20250514"}"#,
-                    ))
+                    .body(Body::from(r#"{"tier":"orchestrator","persona_name":"Planner","model_id":"claude-sonnet-4-20250514"}"#))
                     .unwrap(),
             )
             .await
@@ -4137,9 +3480,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let agents = resp["agents"].as_array().unwrap();
         assert_eq!(agents.len(), 1);
@@ -4160,17 +3501,13 @@ mod tests {
                     .uri("/api/agents")
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(
-                        r#"{"tier":"utility","persona_name":"Helper","model_id":"claude-haiku-35-20241022"}"#,
-                    ))
+                    .body(Body::from(r#"{"tier":"utility","persona_name":"Helper","model_id":"claude-haiku-35-20241022"}"#))
                     .unwrap(),
             )
             .await
             .unwrap();
 
-        let body = axum::body::to_bytes(create_resp.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(create_resp.into_body(), usize::MAX).await.unwrap();
         let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let agent_id = created["id"].as_str().unwrap();
 
@@ -4187,9 +3524,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let agent: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(agent["persona_name"].as_str().unwrap(), "Helper");
         assert_eq!(agent["tier"].as_str().unwrap(), "utility");
@@ -4228,17 +3563,13 @@ mod tests {
                     .uri("/api/agents")
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(
-                        r#"{"tier":"worker","persona_name":"OldName","model_id":"claude-sonnet-4-20250514"}"#,
-                    ))
+                    .body(Body::from(r#"{"tier":"worker","persona_name":"OldName","model_id":"claude-sonnet-4-20250514"}"#))
                     .unwrap(),
             )
             .await
             .unwrap();
 
-        let body = axum::body::to_bytes(create_resp.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(create_resp.into_body(), usize::MAX).await.unwrap();
         let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let agent_id = created["id"].as_str().unwrap();
 
@@ -4257,9 +3588,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let agent: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(agent["persona_name"].as_str().unwrap(), "NewName");
         assert_eq!(agent["tier"].as_str().unwrap(), "worker"); // unchanged
@@ -4279,17 +3608,13 @@ mod tests {
                     .uri("/api/agents")
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(
-                        r#"{"tier":"worker","persona_name":"ToDelete","model_id":"claude-sonnet-4-20250514"}"#,
-                    ))
+                    .body(Body::from(r#"{"tier":"worker","persona_name":"ToDelete","model_id":"claude-sonnet-4-20250514"}"#))
                     .unwrap(),
             )
             .await
             .unwrap();
 
-        let body = axum::body::to_bytes(create_resp.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(create_resp.into_body(), usize::MAX).await.unwrap();
         let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let agent_id = created["id"].as_str().unwrap();
 
@@ -4347,9 +3672,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let tool: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(tool["name"], "read_file");
         assert_eq!(tool["category"], "file");
@@ -4390,9 +3713,7 @@ mod tests {
                     .uri("/api/tools")
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(
-                        r#"{"name":"git_status","description":"Show git status","category":"git"}"#,
-                    ))
+                    .body(Body::from(r#"{"name":"git_status","description":"Show git status","category":"git"}"#))
                     .unwrap(),
             )
             .await
@@ -4411,9 +3732,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let tools: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0]["name"], "git_status");
@@ -4432,17 +3751,13 @@ mod tests {
                     .uri("/api/tools")
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(
-                        r#"{"name":"run_tests","description":"Run tests"}"#,
-                    ))
+                    .body(Body::from(r#"{"name":"run_tests","description":"Run tests"}"#))
                     .unwrap(),
             )
             .await
             .unwrap();
 
-        let body = axum::body::to_bytes(create_resp.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(create_resp.into_body(), usize::MAX).await.unwrap();
         let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let tool_id = created["id"].as_str().unwrap();
 
@@ -4458,9 +3773,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let tool: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(tool["name"], "run_tests");
     }
@@ -4497,17 +3810,13 @@ mod tests {
                     .uri("/api/tools")
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(
-                        r#"{"name":"write_file","description":"Write a file","category":"file"}"#,
-                    ))
+                    .body(Body::from(r#"{"name":"write_file","description":"Write a file","category":"file"}"#))
                     .unwrap(),
             )
             .await
             .unwrap();
 
-        let body = axum::body::to_bytes(create_resp.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(create_resp.into_body(), usize::MAX).await.unwrap();
         let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let tool_id = created["id"].as_str().unwrap();
 
@@ -4518,18 +3827,14 @@ mod tests {
                     .uri(format!("/api/tools/{}", tool_id))
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(
-                        r#"{"description":"Write content to a file","enabled":false}"#,
-                    ))
+                    .body(Body::from(r#"{"description":"Write content to a file","enabled":false}"#))
                     .unwrap(),
             )
             .await
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let tool: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(tool["description"], "Write content to a file");
         assert_eq!(tool["enabled"], false);
@@ -4555,9 +3860,7 @@ mod tests {
             .await
             .unwrap();
 
-        let body = axum::body::to_bytes(create_resp.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(create_resp.into_body(), usize::MAX).await.unwrap();
         let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let tool_id = created["id"].as_str().unwrap();
 
@@ -4605,17 +3908,13 @@ mod tests {
                     .uri("/api/agents")
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(
-                        r#"{"tier":"worker","persona_name":"ToolUser","model_id":"claude-sonnet-4-20250514"}"#,
-                    ))
+                    .body(Body::from(r#"{"tier":"worker","persona_name":"ToolUser","model_id":"claude-sonnet-4-20250514"}"#))
                     .unwrap(),
             )
             .await
             .unwrap();
 
-        let body = axum::body::to_bytes(agent_resp.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(agent_resp.into_body(), usize::MAX).await.unwrap();
         let agent: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let agent_id = agent["id"].as_str().unwrap();
 
@@ -4633,9 +3932,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let body = axum::body::to_bytes(tool1_resp.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(tool1_resp.into_body(), usize::MAX).await.unwrap();
         let tool1: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let tool1_id = tool1["id"].as_str().unwrap();
 
@@ -4652,9 +3949,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let body = axum::body::to_bytes(tool2_resp.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(tool2_resp.into_body(), usize::MAX).await.unwrap();
         let tool2: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let tool2_id = tool2["id"].as_str().unwrap();
 
@@ -4667,9 +3962,7 @@ mod tests {
                     .uri(format!("/api/agents/{}/tools", agent_id))
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(
-                        serde_json::json!({"tool_ids": [tool1_id, tool2_id]}).to_string(),
-                    ))
+                    .body(Body::from(serde_json::json!({"tool_ids": [tool1_id, tool2_id]}).to_string()))
                     .unwrap(),
             )
             .await
@@ -4690,9 +3983,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(get_resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(get_resp.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(get_resp.into_body(), usize::MAX).await.unwrap();
         let result: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(result["agent_id"], agent_id);
         assert_eq!(result["tools"].as_array().unwrap().len(), 2);
@@ -4717,9 +4008,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(resp["verbosity"].is_string());
         assert!(resp["models"].is_object());
@@ -4767,14 +4056,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(
-            resp["message"].as_str().unwrap(),
-            "Password configured successfully"
-        );
+        assert_eq!(resp["message"].as_str().unwrap(), "Password configured successfully");
     }
 
     #[tokio::test]
@@ -4824,13 +4108,8 @@ mod tests {
         };
         let mut mock = MockUserRepo::new();
         let user_clone = test_user.clone();
-        mock.expect_get_user_by_email().returning(move |email| {
-            if email == "test@test.com" {
-                Ok(Some(user_clone.clone()))
-            } else {
-                Ok(None)
-            }
-        });
+        mock.expect_get_user_by_email()
+            .returning(move |email| if email == "test@test.com" { Ok(Some(user_clone.clone())) } else { Ok(None) });
         setup_test_app_with_user_repo(Some(Arc::new(mock)))
     }
 
@@ -4845,9 +4124,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/auth/login")
                     .header("content-type", "application/json")
-                    .body(Body::from(
-                        r#"{"email":"test@test.com","password":"anything"}"#,
-                    ))
+                    .body(Body::from(r#"{"email":"test@test.com","password":"anything"}"#))
                     .unwrap(),
             )
             .await
@@ -4868,9 +4145,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/auth/login")
                     .header("content-type", "application/json")
-                    .body(Body::from(
-                        r#"{"email":"test@test.com","password":"wrongpassword!"}"#,
-                    ))
+                    .body(Body::from(r#"{"email":"test@test.com","password":"wrongpassword!"}"#))
                     .unwrap(),
             )
             .await
@@ -4890,18 +4165,14 @@ mod tests {
                     .method("POST")
                     .uri("/api/auth/login")
                     .header("content-type", "application/json")
-                    .body(Body::from(
-                        r#"{"email":"test@test.com","password":"correctpassword"}"#,
-                    ))
+                    .body(Body::from(r#"{"email":"test@test.com","password":"correctpassword"}"#))
                     .unwrap(),
             )
             .await
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(resp["token"].is_string());
         assert_eq!(resp["expires_in"].as_u64().unwrap(), 86400);
@@ -4941,9 +4212,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let messages: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0]["role"].as_str().unwrap(), "user");
@@ -4985,9 +4254,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let messages: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert_eq!(messages.len(), 1);
 
@@ -5004,9 +4271,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let messages: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert_eq!(messages.len(), 1);
     }
@@ -5058,9 +4323,7 @@ mod tests {
 
     #[test]
     fn setup_response_serializes() {
-        let response = SetupResponse {
-            message: "ok".to_string(),
-        };
+        let response = SetupResponse { message: "ok".to_string() };
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("\"message\":\"ok\""));
     }
@@ -5109,21 +4372,9 @@ mod tests {
         let response = AgentsListResponse {
             agents: vec![test_agent_response()],
             stats: AgentPoolStats {
-                orchestrators: TierStats {
-                    total: 0,
-                    available: 0,
-                    max: 1,
-                },
-                workers: TierStats {
-                    total: 1,
-                    available: 1,
-                    max: 4,
-                },
-                utilities: TierStats {
-                    total: 0,
-                    available: 0,
-                    max: 2,
-                },
+                orchestrators: TierStats { total: 0, available: 0, max: 1 },
+                workers: TierStats { total: 1, available: 1, max: 4 },
+                utilities: TierStats { total: 0, available: 0, max: 2 },
             },
         };
         let json = serde_json::to_string(&response).unwrap();
@@ -5161,9 +4412,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::ACCEPTED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(resp["message_id"].is_string());
         assert_eq!(resp["status"].as_str().unwrap(), "queued");
@@ -5185,18 +4434,14 @@ mod tests {
                     .uri("/api/tasks")
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(
-                        r#"{"title":"Full task","description":"A description","priority":"high","tier":"worker"}"#,
-                    ))
+                    .body(Body::from(r#"{"title":"Full task","description":"A description","priority":"high","tier":"worker"}"#))
                     .unwrap(),
             )
             .await
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let task: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(task["title"].as_str().unwrap(), "Full task");
         assert_eq!(task["description"].as_str().unwrap(), "A description");
@@ -5252,9 +4497,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let messages: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert!(messages.is_empty());
     }
@@ -5266,16 +4509,9 @@ mod tests {
     #[test]
     fn resolve_template_basic() {
         let mut outputs = std::collections::HashMap::new();
-        outputs.insert(
-            "weather_check".to_string(),
-            serde_json::json!({"forecast": "stormy", "location": "Denver"}),
-        );
+        outputs.insert("weather_check".to_string(), serde_json::json!({"forecast": "stormy", "location": "Denver"}));
         let no_ctx = std::collections::HashMap::new();
-        let result = resolve_template(
-            "The weather in {{weather_check.location}} is {{weather_check.forecast}}",
-            &outputs,
-            &no_ctx,
-        );
+        let result = resolve_template("The weather in {{weather_check.location}} is {{weather_check.forecast}}", &outputs, &no_ctx);
         assert_eq!(result, "The weather in Denver is stormy");
     }
 
@@ -5310,10 +4546,7 @@ mod tests {
     fn resolve_template_with_context() {
         let outputs = std::collections::HashMap::new();
         let mut ctx = std::collections::HashMap::new();
-        ctx.insert(
-            "style_guide".to_string(),
-            "Use camelCase for variables.".to_string(),
-        );
+        ctx.insert("style_guide".to_string(), "Use camelCase for variables.".to_string());
         let result = resolve_template("Review: {{context.style_guide}}", &outputs, &ctx);
         assert_eq!(result, "Review: Use camelCase for variables.");
     }
@@ -5329,26 +4562,16 @@ mod tests {
     #[test]
     fn resolve_template_stage_and_context() {
         let mut outputs = std::collections::HashMap::new();
-        outputs.insert(
-            "analysis".to_string(),
-            serde_json::json!({"status": "complete"}),
-        );
+        outputs.insert("analysis".to_string(), serde_json::json!({"status": "complete"}));
         let mut ctx = std::collections::HashMap::new();
         ctx.insert("prd".to_string(), "Build a login feature.".to_string());
-        let result = resolve_template(
-            "{{context.prd}} Status: {{analysis.status}}",
-            &outputs,
-            &ctx,
-        );
+        let result = resolve_template("{{context.prd}} Status: {{analysis.status}}", &outputs, &ctx);
         assert_eq!(result, "Build a login feature. Status: complete");
     }
 
     #[test]
     fn render_stage_prompt_full() {
-        let inputs = vec![
-            ("weather".to_string(), "stormy".to_string()),
-            ("location".to_string(), "Denver, CO".to_string()),
-        ];
+        let inputs = vec![("weather".to_string(), "stormy".to_string()), ("location".to_string(), "Denver, CO".to_string())];
         let schema = serde_json::json!({
             "fields": [
                 {"name": "urgency", "type": "enum", "values": ["URGENT", "NON_URGENT"], "description": "How urgent"},
@@ -5394,10 +4617,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("GET")
-                    .uri(format!(
-                        "/api/pipelines/{}/stages/0/side-tasks",
-                        pipeline_id
-                    ))
+                    .uri(format!("/api/pipelines/{}/stages/0/side-tasks", pipeline_id))
                     .header("authorization", format!("Bearer {}", token))
                     .body(Body::empty())
                     .unwrap(),
@@ -5419,10 +4639,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri(format!(
-                        "/api/pipelines/{}/stages/0/side-tasks",
-                        pipeline_id
-                    ))
+                    .uri(format!("/api/pipelines/{}/stages/0/side-tasks", pipeline_id))
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(
@@ -5439,9 +4656,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(resp["agent_id"].as_str().unwrap(), agent_id.to_string());
         assert_eq!(resp["output_name"].as_str().unwrap(), "docs");
@@ -5459,10 +4674,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("DELETE")
-                    .uri(format!(
-                        "/api/pipelines/{}/stages/0/side-tasks/{}",
-                        pipeline_id, side_task_id
-                    ))
+                    .uri(format!("/api/pipelines/{}/stages/0/side-tasks/{}", pipeline_id, side_task_id))
                     .header("authorization", format!("Bearer {}", token))
                     .body(Body::empty())
                     .unwrap(),
