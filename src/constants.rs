@@ -210,6 +210,7 @@ pub mod routes {
     pub const PIPELINE_RUNS: &str = "/pipeline-runs";
     pub const PIPELINE_RUN: &str = "/pipeline-runs/:run_id";
     pub const PIPELINE_RUN_APPROVE: &str = "/pipeline-runs/:run_id/approve";
+    pub const PIPELINE_RUN_TREE: &str = "/pipeline-runs/:run_id/tree";
 
     // Config
     pub const CONFIG: &str = "/config";

@@ -130,6 +130,7 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         .route(routes::PIPELINE_RUNS, get(api::list_pipeline_runs))
         .route(routes::PIPELINE_RUN, get(api::get_pipeline_run))
         .route(routes::PIPELINE_RUN_APPROVE, post(api::approve_pipeline_run))
+        .route(routes::PIPELINE_RUN_TREE, get(api::get_pipeline_run_tree))
         .route(routes::CONFIG, get(api::get_config).patch(api::update_config))
         .route(routes::CHAT, post(api::send_chat))
         .route(routes::CHAT_HISTORY, get(api::get_chat_history).delete(api::clear_chat_history))
