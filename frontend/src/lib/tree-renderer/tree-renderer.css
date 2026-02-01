@@ -106,14 +106,18 @@
   opacity: 0.6;
 }
 
-/* ── Status Indicator ────────────────────────────── */
+/* ── Status Bubble ───────────────────────────────── */
 
-.tree-status-indicator {
-  transition: fill 300ms ease;
+.tree-status-bubble {
+  transition: fill 400ms ease;
 }
 
-.tree-status-running {
-  animation: tree-running-dash 1s linear infinite;
+.tree-status-bubble--running {
+  animation: tree-bubble-blink 800ms ease-in-out infinite;
+}
+
+.tree-status-bubble--waiting {
+  animation: tree-bubble-blink 1.2s ease-in-out infinite;
 }
 
 /* ── Keyframes ───────────────────────────────────── */
@@ -132,6 +136,7 @@
   to { stroke-dashoffset: -9; }
 }
 
-@keyframes tree-running-dash {
-  to { stroke-dashoffset: -20; }
+@keyframes tree-bubble-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }

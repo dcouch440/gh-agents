@@ -93,15 +93,22 @@ function TreeCanvas<M = Record<string, unknown>>({
                 renderNode(node, pos)
               ) : (
                 <>
+                  <defs>
+                    <clipPath id={`clip-${pos.id}`}>
+                      <rect x={0} y={0} width={pos.width} height={pos.height} />
+                    </clipPath>
+                  </defs>
                   <TreeNodeBox width={pos.width} height={pos.height} status={node.status} />
-                  <TreeNodeLabel y={16}>{node.label}</TreeNodeLabel>
                   <StatusIndicator
                     status={node.status}
-                    x={pos.width - 18}
-                    y={6}
-                    size={12}
+                    x={6}
+                    y={pos.height / 2 - 5}
+                    size={10}
                     theme={theme}
                   />
+                  <g clipPath={`url(#clip-${pos.id})`}>
+                    <TreeNodeLabel x={20} y={16}>{node.label}</TreeNodeLabel>
+                  </g>
                 </>
               )}
             </TreeNodeGroup>
