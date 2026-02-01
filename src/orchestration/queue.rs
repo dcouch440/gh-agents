@@ -424,10 +424,7 @@ impl<TQ: TaskQueueRepo, DR: DependencyRepo> DependencyAwareQueue<TQ, DR> {
     /// Enqueue a task and save its dependencies
     pub async fn enqueue(&mut self, task: Task) -> Result<(), QueueError> {
         // Save dependencies first
-        self.dependency_tracker
-            .save_dependencies(&task)
-            .await
-            .map_err(|e| QueueError::DatabaseError(e.to_string()))?;
+        self.dependency_tracker.save_dependencies(&task).await.map_err(|e| QueueError::DatabaseError(e.to_string()))?;
 
         self.queue.enqueue_and_persist(task).await
     }
@@ -445,10 +442,7 @@ impl<TQ: TaskQueueRepo, DR: DependencyRepo> DependencyAwareQueue<TQ, DR> {
             match self.queue.dequeue().await? {
                 Some(mut task) => {
                     // Load dependencies from database
-                    self.dependency_tracker
-                        .load_dependencies(&mut task)
-                        .await
-                        .map_err(|e| QueueError::DatabaseError(e.to_string()))?;
+                    self.dependency_tracker.load_dependencies(&mut task).await.map_err(|e| QueueError::DatabaseError(e.to_string()))?;
 
                     let is_blocked = self.dependency_tracker.is_blocked(&task).await.map_err(|e| QueueError::DatabaseError(e.to_string()))?;
 
@@ -536,11 +530,7 @@ impl<TQ: TaskQueueRepo, DR: DependencyRepo> DependencyAwareQueue<TQ, DR> {
 
     /// Notify that a task completed - returns IDs of tasks that may be unblocked
     pub async fn on_task_completed(&self, task_id: &TaskId) -> Result<Vec<TaskId>, QueueError> {
-        let unblocked = self
-            .dependency_tracker
-            .get_blocked_by(task_id)
-            .await
-            .map_err(|e| QueueError::DatabaseError(e.to_string()))?;
+        let unblocked = self.dependency_tracker.get_blocked_by(task_id).await.map_err(|e| QueueError::DatabaseError(e.to_string()))?;
 
         if !unblocked.is_empty() {
             tracing::info!(
@@ -906,9 +896,7 @@ mod tests {
 
     #[test]
     fn prioritized_task_ordering() {
-        let urgent = PrioritizedTask {
-            task: make_task(Priority::Urgent),
-        };
+        let urgent = PrioritizedTask { task: make_task(Priority::Urgent) };
         let low = PrioritizedTask { task: make_task(Priority::Low) };
 
         // Urgent > Low in ordering
@@ -934,11 +922,7 @@ mod tests {
 
     #[test]
     fn queue_stats_fields() {
-        let stats = QueueStats {
-            blocked: 3,
-            unblocked: 7,
-            total: 10,
-        };
+        let stats = QueueStats { blocked: 3, unblocked: 7, total: 10 };
         assert_eq!(stats.blocked, 3);
         assert_eq!(stats.unblocked, 7);
         assert_eq!(stats.total, 10);
@@ -950,11 +934,7 @@ mod tests {
 
     #[test]
     fn queue_stats_clone() {
-        let stats = QueueStats {
-            blocked: 1,
-            unblocked: 2,
-            total: 3,
-        };
+        let stats = QueueStats { blocked: 1, unblocked: 2, total: 3 };
         let cloned = stats.clone();
         assert_eq!(cloned.total, 3);
     }
@@ -1022,9 +1002,7 @@ mod persistent_queue_tests {
     async fn dequeue_updates_status_to_in_progress() {
         let task = make_task(Priority::Normal);
         let mut mock = mock_repo_with_tasks(vec![task]);
-        mock.expect_update_task_status()
-            .withf(|_, status| *status == TaskStatus::InProgress)
-            .returning(|_, _| Ok(()));
+        mock.expect_update_task_status().withf(|_, status| *status == TaskStatus::InProgress).returning(|_, _| Ok(()));
 
         let mut queue = PersistentTaskQueue::new(mock).await.unwrap();
         let dequeued = queue.dequeue().await.unwrap();

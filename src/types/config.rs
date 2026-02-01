@@ -448,10 +448,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let project = ProjectConfig {
-            models: None,
-            ..Default::default()
-        };
+        let project = ProjectConfig { models: None, ..Default::default() };
         let merged = AppConfig::merge(global, Some(project));
         assert_eq!(merged.models.orchestrator.model_id, "global-model");
     }

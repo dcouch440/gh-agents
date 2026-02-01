@@ -66,11 +66,7 @@ impl GitHubClient {
 
         let remaining = headers.get("x-ratelimit-remaining").and_then(|v| v.to_str().ok()).and_then(|v| v.parse().ok()).unwrap_or(0);
 
-        let reset_timestamp = headers
-            .get("x-ratelimit-reset")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.parse::<i64>().ok())
-            .unwrap_or(0);
+        let reset_timestamp = headers.get("x-ratelimit-reset").and_then(|v| v.to_str().ok()).and_then(|v| v.parse::<i64>().ok()).unwrap_or(0);
 
         let reset = DateTime::from_timestamp(reset_timestamp, 0).unwrap_or_else(Utc::now);
 
@@ -335,13 +331,7 @@ impl GitHubClient {
     // =========================================================================
 
     /// Submit a review on a pull request
-    pub async fn create_review(
-        &self,
-        owner: &str,
-        repo: &str,
-        number: u32,
-        review: &crate::github::types::CreateReviewRequest,
-    ) -> Result<crate::github::types::GitHubReview, GitHubError> {
+    pub async fn create_review(&self, owner: &str, repo: &str, number: u32, review: &crate::github::types::CreateReviewRequest) -> Result<crate::github::types::GitHubReview, GitHubError> {
         let url = format!("{}/repos/{}/{}/pulls/{}/reviews", self.base_url, owner, repo, number);
 
         tracing::debug!(url = %url, event = ?review.event, "Submitting PR review");
@@ -466,13 +456,7 @@ impl GitHubClient {
     }
 
     /// Merge PR with simple options
-    pub async fn merge_pr_simple(
-        &self,
-        owner: &str,
-        repo: &str,
-        number: u32,
-        method: crate::github::merge::MergeMethod,
-    ) -> Result<crate::github::merge::MergePrResult, GitHubError> {
+    pub async fn merge_pr_simple(&self, owner: &str, repo: &str, number: u32, method: crate::github::merge::MergeMethod) -> Result<crate::github::merge::MergePrResult, GitHubError> {
         use crate::github::merge::MergePrRequest;
         self.merge_pr(owner, repo, number, &MergePrRequest::new(method)).await
     }
@@ -682,10 +666,7 @@ mod tests {
 
         let client = GitHubClient::with_token("test-token").unwrap().with_base_url(mock_server.uri());
 
-        let comment = client
-            .create_issue_comment("owner", "repo", 1, &CreateIssueComment { body: "Nice work!".into() })
-            .await
-            .unwrap();
+        let comment = client.create_issue_comment("owner", "repo", 1, &CreateIssueComment { body: "Nice work!".into() }).await.unwrap();
         assert_eq!(comment.body, "Nice work!");
     }
 
@@ -901,10 +882,7 @@ mod tests {
             .await;
 
         let client = mock_client(&server).await;
-        let comment = client
-            .update_issue_comment("owner", "repo", 42, &CreateIssueComment { body: "Updated body".into() })
-            .await
-            .unwrap();
+        let comment = client.update_issue_comment("owner", "repo", 42, &CreateIssueComment { body: "Updated body".into() }).await.unwrap();
         assert_eq!(comment.id, 42);
         assert_eq!(comment.body, "Updated body");
     }

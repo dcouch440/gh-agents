@@ -145,6 +145,16 @@ pub struct DocumentSearchResult {
     pub snippet: String,
 }
 
+/// Row type for persisted output schema definitions.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct OutputSchemaRow {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub name: String,
+    pub schema: serde_json::Value,
+    pub created_at: DateTime<Utc>,
+}
+
 /// Row type for token usage summary.
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct UsageSummaryRow {

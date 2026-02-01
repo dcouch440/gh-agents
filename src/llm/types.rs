@@ -444,11 +444,7 @@ impl StreamAccumulator {
                 // Finalize any in-progress tool use block
                 if let Some(tool) = self.current_tool_use.take() {
                     let input = serde_json::from_str(&tool.input_json).unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
-                    self.content_blocks.push(ContentBlock::ToolUse {
-                        id: tool.id,
-                        name: tool.name,
-                        input,
-                    });
+                    self.content_blocks.push(ContentBlock::ToolUse { id: tool.id, name: tool.name, input });
                 }
             }
             _ => {}
@@ -518,10 +514,7 @@ mod tests {
 
     #[test]
     fn token_usage_total() {
-        let usage = TokenUsage {
-            input_tokens: 100,
-            output_tokens: 50,
-        };
+        let usage = TokenUsage { input_tokens: 100, output_tokens: 50 };
         assert_eq!(usage.total(), 150);
     }
 
@@ -532,14 +525,8 @@ mod tests {
             model: "claude-3".to_string(),
             input_tokens: 10,
         });
-        acc.apply(&StreamChunk::ContentDelta {
-            text: "Hello ".to_string(),
-            index: 0,
-        });
-        acc.apply(&StreamChunk::ContentDelta {
-            text: "world!".to_string(),
-            index: 0,
-        });
+        acc.apply(&StreamChunk::ContentDelta { text: "Hello ".to_string(), index: 0 });
+        acc.apply(&StreamChunk::ContentDelta { text: "world!".to_string(), index: 0 });
         acc.apply(&StreamChunk::MessageDelta {
             stop_reason: Some(StopReason::EndTurn),
             output_tokens: Some(5),

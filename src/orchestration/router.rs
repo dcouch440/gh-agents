@@ -77,13 +77,7 @@ impl Default for RouterConfig {
                 // Orchestrator tier: complex/review tasks
                 RoutingRule {
                     name: "review_tasks".to_string(),
-                    matcher: RuleMatcher::TitleContains(vec![
-                        "review".to_string(),
-                        "approve".to_string(),
-                        "architect".to_string(),
-                        "design".to_string(),
-                        "plan".to_string(),
-                    ]),
+                    matcher: RuleMatcher::TitleContains(vec!["review".to_string(), "approve".to_string(), "architect".to_string(), "design".to_string(), "plan".to_string()]),
                     target_tier: AgentTier::Orchestrator,
                     priority: 70,
                 },

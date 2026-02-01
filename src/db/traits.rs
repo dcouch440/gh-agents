@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::db::{
-    AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, PipelineRow, PipelineRunRow, PipelineStageRow, ScheduleRow, SessionRow, StageExecutionRow,
+    AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageRow, ScheduleRow, SessionRow, StageExecutionRow,
     StageSideTaskRow, ToolRow, TriggerRow, UsageSummaryRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
@@ -38,15 +38,7 @@ pub trait MergeQueueRepo: Send + Sync {
     async fn get_queue_entries(&self, owner: String, repo: String) -> Result<Vec<PrQueueEntry>, MergeQueueError>;
 
     /// Update the status (and optional error message) of a queue entry.
-    async fn update_entry_status(
-        &self,
-        owner: String,
-        repo: String,
-        pr_number: u32,
-        status: String,
-        error_message: Option<String>,
-        now: DateTime<Utc>,
-    ) -> Result<bool, MergeQueueError>;
+    async fn update_entry_status(&self, owner: String, repo: String, pr_number: u32, status: String, error_message: Option<String>, now: DateTime<Utc>) -> Result<bool, MergeQueueError>;
 
     /// Set conflict info on a queue entry.
     async fn set_entry_conflict(&self, owner: String, repo: String, pr_number: u32, conflict_json: String, now: DateTime<Utc>) -> Result<bool, MergeQueueError>;
@@ -423,16 +415,7 @@ pub trait UserRepo: Send + Sync {
 #[async_trait]
 pub trait DocumentRepo: Send + Sync {
     /// Create a new document.
-    async fn create_document(
-        &self,
-        user_id: Uuid,
-        session_id: Option<Uuid>,
-        title: String,
-        content: String,
-        doc_type: String,
-        ref_tag: String,
-        tags: Vec<String>,
-    ) -> Result<DocumentRow>;
+    async fn create_document(&self, user_id: Uuid, session_id: Option<Uuid>, title: String, content: String, doc_type: String, ref_tag: String, tags: Vec<String>) -> Result<DocumentRow>;
 
     /// Update a document's content, title, and tags.
     async fn update_document(&self, doc_id: Uuid, content: Option<String>, title: Option<String>, tags: Option<Vec<String>>) -> Result<DocumentRow>;
@@ -457,4 +440,28 @@ pub trait DocumentRepo: Send + Sync {
 
     /// Delete a document by ID.
     async fn delete_document(&self, doc_id: Uuid) -> Result<()>;
+}
+
+// ============================================================================
+// Output Schema Repository
+// ============================================================================
+
+/// Database operations for output schema management.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait OutputSchemaRepo: Send + Sync {
+    /// Create a new output schema.
+    async fn create_output_schema(&self, user_id: Uuid, name: String, schema: serde_json::Value) -> Result<OutputSchemaRow>;
+
+    /// Get an output schema by ID.
+    async fn get_output_schema(&self, id: Uuid) -> Result<Option<OutputSchemaRow>>;
+
+    /// List all output schemas for a user.
+    async fn list_output_schemas(&self, user_id: Uuid) -> Result<Vec<OutputSchemaRow>>;
+
+    /// Update an output schema's name and/or schema.
+    async fn update_output_schema(&self, id: Uuid, name: Option<String>, schema: Option<serde_json::Value>) -> Result<OutputSchemaRow>;
+
+    /// Delete an output schema by ID.
+    async fn delete_output_schema(&self, id: Uuid) -> Result<()>;
 }

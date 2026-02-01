@@ -82,11 +82,7 @@ impl GitHubAuth {
     }
 
     pub fn with_client_id(client_id: String) -> Self {
-        let client = Client::builder()
-            .user_agent("nexor")
-            .timeout(Duration::from_secs(30))
-            .build()
-            .expect("Failed to create HTTP client");
+        let client = Client::builder().user_agent("nexor").timeout(Duration::from_secs(30)).build().expect("Failed to create HTTP client");
 
         Self {
             client,
@@ -355,11 +351,7 @@ mod tests {
 
         let mock_server = MockServer::start().await;
 
-        Mock::given(method("GET"))
-            .and(path("/user"))
-            .respond_with(ResponseTemplate::new(401))
-            .mount(&mock_server)
-            .await;
+        Mock::given(method("GET")).and(path("/user")).respond_with(ResponseTemplate::new(401)).mount(&mock_server).await;
 
         let auth = GitHubAuth::with_client_id("test-id".to_string()).with_api_base_url(mock_server.uri());
 

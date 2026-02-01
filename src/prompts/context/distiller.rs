@@ -163,11 +163,7 @@ fn parse_front_matter(content: &str) -> Option<Vec<String>> {
         if trimmed.starts_with("tags:") {
             let value = trimmed.strip_prefix("tags:")?.trim();
             let inner = value.trim_start_matches('[').trim_end_matches(']');
-            let tags: Vec<String> = inner
-                .split(',')
-                .map(|s| s.trim().trim_matches('"').trim_matches('\'').to_string())
-                .filter(|s| !s.is_empty())
-                .collect();
+            let tags: Vec<String> = inner.split(',').map(|s| s.trim().trim_matches('"').trim_matches('\'').to_string()).filter(|s| !s.is_empty()).collect();
             if tags.is_empty() {
                 return None;
             }

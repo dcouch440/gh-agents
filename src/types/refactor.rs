@@ -413,12 +413,7 @@ mod tests {
     #[test]
     fn refactor_change_create() {
         let session_id = RefactorId::new();
-        let change = RefactorChange::create(
-            session_id.clone(),
-            "decomp/M2/2.7.md".to_string(),
-            "# Ticket 2.7".to_string(),
-            "Adding new ticket".to_string(),
-        );
+        let change = RefactorChange::create(session_id.clone(), "decomp/M2/2.7.md".to_string(), "# Ticket 2.7".to_string(), "Adding new ticket".to_string());
 
         assert_eq!(change.session_id, session_id);
         assert_eq!(change.change_type, ChangeType::Create);
@@ -446,12 +441,7 @@ mod tests {
     #[test]
     fn refactor_change_delete() {
         let session_id = RefactorId::new();
-        let change = RefactorChange::delete(
-            session_id.clone(),
-            "decomp/M2/2.3.md".to_string(),
-            "# Old ticket".to_string(),
-            "Ticket no longer needed".to_string(),
-        );
+        let change = RefactorChange::delete(session_id.clone(), "decomp/M2/2.3.md".to_string(), "# Old ticket".to_string(), "Ticket no longer needed".to_string());
 
         assert_eq!(change.change_type, ChangeType::Delete);
         assert!(change.before_content.is_some());

@@ -192,11 +192,7 @@ impl Agent {
         self.start_task(task_id)?;
 
         // Notify that we've started
-        self.send_response(AgentResponse::TaskStarted {
-            agent_id: self.id.clone(),
-            task_id,
-        })
-        .await?;
+        self.send_response(AgentResponse::TaskStarted { agent_id: self.id.clone(), task_id }).await?;
 
         // Execute the task with timeout and progress updates
         match self.execute_task_with_timeout(&assignment).await {
@@ -204,11 +200,7 @@ impl Agent {
                 // Complete the task
                 self.complete_task()?;
 
-                self.send_response(AgentResponse::TaskCompleted {
-                    agent_id: self.id.clone(),
-                    result,
-                })
-                .await?;
+                self.send_response(AgentResponse::TaskCompleted { agent_id: self.id.clone(), result }).await?;
             }
             Err(e) => {
                 // Fail the task
@@ -443,8 +435,7 @@ impl Agent {
 
         // True Context distiller — cheap LLM pre-pass that analyses intent & vibe.
         // Off: skip. Background: async spawn, injected between rounds. Blocking: await before first LLM call.
-        let pending_context: std::sync::Arc<tokio::sync::Mutex<Vec<crate::prompts::TrueContext>>> =
-            std::sync::Arc::new(tokio::sync::Mutex::new(Vec::new()));
+        let pending_context: std::sync::Arc<tokio::sync::Mutex<Vec<crate::prompts::TrueContext>>> = std::sync::Arc::new(tokio::sync::Mutex::new(Vec::new()));
 
         let should_distill = !assignment.context.chat_messages.is_empty() || assignment.description.len() > 200;
 
@@ -951,10 +942,7 @@ mod tests {
                 content_blocks: vec![],
                 model: "test-model".to_string(),
                 stop_reason: StopReason::EndTurn,
-                usage: TokenUsage {
-                    input_tokens: 10,
-                    output_tokens: 20,
-                },
+                usage: TokenUsage { input_tokens: 10, output_tokens: 20 },
             })
         }
 
@@ -1026,10 +1014,7 @@ mod tests {
                 content_blocks: vec![],
                 model: "test-model".to_string(),
                 stop_reason: StopReason::EndTurn,
-                usage: TokenUsage {
-                    input_tokens: 1,
-                    output_tokens: 1,
-                },
+                usage: TokenUsage { input_tokens: 1, output_tokens: 1 },
             })
         }
 
@@ -1148,10 +1133,7 @@ mod tests {
             content_blocks: vec![],
             model: "test".to_string(),
             stop_reason: StopReason::EndTurn,
-            usage: TokenUsage {
-                input_tokens: 5,
-                output_tokens: 10,
-            },
+            usage: TokenUsage { input_tokens: 5, output_tokens: 10 },
         };
 
         let result = agent.parse_llm_response(task_id, response, &OutputFormat::CodeAndReport).unwrap();
@@ -1170,10 +1152,7 @@ mod tests {
             content_blocks: vec![],
             model: "test".to_string(),
             stop_reason: StopReason::EndTurn,
-            usage: TokenUsage {
-                input_tokens: 5,
-                output_tokens: 10,
-            },
+            usage: TokenUsage { input_tokens: 5, output_tokens: 10 },
         };
 
         // Plan format should not extract files

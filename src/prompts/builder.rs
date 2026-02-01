@@ -131,10 +131,7 @@ impl PromptBuilder {
 
     /// Set expected output format as JSON with schema
     pub fn output_json(mut self, schema: impl Into<String>) -> Self {
-        self.template.output_format = OutputFormat::Json {
-            schema: schema.into(),
-            example: None,
-        };
+        self.template.output_format = OutputFormat::Json { schema: schema.into(), example: None };
         self
     }
 
@@ -300,14 +297,7 @@ impl PromptBuilder {
 
         // Conversation history
         if !self.template.context.history.is_empty() {
-            let history = self
-                .template
-                .context
-                .history
-                .iter()
-                .map(|h| format!("**{}**: {}", h.role, h.content))
-                .collect::<Vec<_>>()
-                .join("\n\n");
+            let history = self.template.context.history.iter().map(|h| format!("**{}**: {}", h.role, h.content)).collect::<Vec<_>>().join("\n\n");
             parts.push(format!("### Conversation History\n\n{}", history));
         }
 
@@ -409,10 +399,7 @@ mod tests {
 
     #[test]
     fn test_prompt_builder_with_json_output() {
-        let prompt = PromptBuilder::new()
-            .task("Analyze code")
-            .output_json(r#"{"analysis": "string", "score": "number"}"#)
-            .build();
+        let prompt = PromptBuilder::new().task("Analyze code").output_json(r#"{"analysis": "string", "score": "number"}"#).build();
 
         assert!(prompt.text.contains("## Output Format"));
         assert!(prompt.text.contains("Respond with valid JSON"));
@@ -463,10 +450,7 @@ mod tests {
 
     #[test]
     fn test_prompt_builder_output_json_with_example() {
-        let prompt = PromptBuilder::new()
-            .task("Analyze")
-            .output_json_with_example(r#"{"score": "number"}"#, r#"{"score": 42}"#)
-            .build();
+        let prompt = PromptBuilder::new().task("Analyze").output_json_with_example(r#"{"score": "number"}"#, r#"{"score": 42}"#).build();
 
         assert!(prompt.text.contains("Respond with valid JSON"));
         assert!(prompt.text.contains(r#"{"score": "number"}"#));

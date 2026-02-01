@@ -461,10 +461,7 @@ async fn handle_client_message(msg: ClientMessage, subscriptions: &Subscriptions
 
 /// Check if a channel name is valid
 fn is_valid_channel(channel: &str) -> bool {
-    matches!(
-        channel,
-        CHANNEL_FEED | CHANNEL_TASKS | CHANNEL_AGENTS | CHANNEL_SESSIONS | CHANNEL_PIPELINES | CHANNEL_ROUTING
-    )
+    matches!(channel, CHANNEL_FEED | CHANNEL_TASKS | CHANNEL_AGENTS | CHANNEL_SESSIONS | CHANNEL_PIPELINES | CHANNEL_ROUTING)
 }
 
 #[cfg(test)]
@@ -588,9 +585,7 @@ mod tests {
         subscriptions.lock().await.insert("feed".to_string());
         subscriptions.lock().await.insert("tasks".to_string());
 
-        let msg = ClientMessage::Unsubscribe {
-            channels: vec!["feed".to_string()],
-        };
+        let msg = ClientMessage::Unsubscribe { channels: vec!["feed".to_string()] };
 
         let response = handle_client_message(msg, &subscriptions).await;
 
@@ -627,9 +622,7 @@ mod tests {
 
     #[test]
     fn server_message_error_roundtrip_contains_message() {
-        let msg = ServerMessage::Error {
-            message: "bad request".to_string(),
-        };
+        let msg = ServerMessage::Error { message: "bad request".to_string() };
         let json = serde_json::to_string(&msg).unwrap();
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(value["type"], "error");
@@ -809,12 +802,8 @@ mod tests {
     #[tokio::test]
     async fn subscribe_idempotent() {
         let subscriptions: Subscriptions = Arc::new(Mutex::new(HashSet::new()));
-        let msg1 = ClientMessage::Subscribe {
-            channels: vec!["feed".to_string()],
-        };
-        let msg2 = ClientMessage::Subscribe {
-            channels: vec!["feed".to_string()],
-        };
+        let msg1 = ClientMessage::Subscribe { channels: vec!["feed".to_string()] };
+        let msg2 = ClientMessage::Subscribe { channels: vec!["feed".to_string()] };
         handle_client_message(msg1, &subscriptions).await;
         let response = handle_client_message(msg2, &subscriptions).await;
         if let Some(ServerMessage::Subscribed { channels }) = response {
@@ -829,9 +818,7 @@ mod tests {
         let subscriptions: Subscriptions = Arc::new(Mutex::new(HashSet::new()));
         subscriptions.lock().await.insert("feed".to_string());
 
-        let msg = ClientMessage::Unsubscribe {
-            channels: vec!["tasks".to_string()],
-        };
+        let msg = ClientMessage::Unsubscribe { channels: vec!["tasks".to_string()] };
         let response = handle_client_message(msg, &subscriptions).await;
         if let Some(ServerMessage::Subscribed { channels }) = response {
             assert_eq!(channels.len(), 1);
@@ -876,14 +863,10 @@ mod tests {
     async fn subscribe_then_unsubscribe_then_subscribe() {
         let subscriptions: Subscriptions = Arc::new(Mutex::new(HashSet::new()));
 
-        let msg = ClientMessage::Subscribe {
-            channels: vec!["feed".to_string()],
-        };
+        let msg = ClientMessage::Subscribe { channels: vec!["feed".to_string()] };
         handle_client_message(msg, &subscriptions).await;
 
-        let msg = ClientMessage::Unsubscribe {
-            channels: vec!["feed".to_string()],
-        };
+        let msg = ClientMessage::Unsubscribe { channels: vec!["feed".to_string()] };
         handle_client_message(msg, &subscriptions).await;
 
         let msg = ClientMessage::Subscribe {
@@ -971,9 +954,7 @@ mod tests {
 
     #[test]
     fn client_message_debug_format() {
-        let msg = ClientMessage::Subscribe {
-            channels: vec!["feed".to_string()],
-        };
+        let msg = ClientMessage::Subscribe { channels: vec!["feed".to_string()] };
         let debug = format!("{:?}", msg);
         assert!(debug.contains("Subscribe"));
         assert!(debug.contains("feed"));
@@ -989,9 +970,7 @@ mod tests {
 
     #[test]
     fn client_message_clone() {
-        let msg = ClientMessage::Subscribe {
-            channels: vec!["feed".to_string()],
-        };
+        let msg = ClientMessage::Subscribe { channels: vec!["feed".to_string()] };
         let cloned = msg.clone();
         match cloned {
             ClientMessage::Subscribe { channels } => {

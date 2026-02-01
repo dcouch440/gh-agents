@@ -53,10 +53,7 @@ mod tests {
                 content_blocks: vec![],
                 model: self.model.clone(),
                 stop_reason: super::super::types::StopReason::EndTurn,
-                usage: super::super::types::TokenUsage {
-                    input_tokens: 10,
-                    output_tokens: 20,
-                },
+                usage: super::super::types::TokenUsage { input_tokens: 10, output_tokens: 20 },
             })
         }
 

@@ -11,8 +11,7 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 
 use crate::agents::{
-    AgentCommand, AgentResponse, ClusterId, CommunicationStyle, OutputFormat, PipelineId, RoleContext, RoleId, ScheduleId, TaskAssignment, TaskConstraints, TaskContext,
-    TriggerEvent,
+    AgentCommand, AgentResponse, ClusterId, CommunicationStyle, OutputFormat, PipelineId, RoleContext, RoleId, ScheduleId, TaskAssignment, TaskConstraints, TaskContext, TriggerEvent,
 };
 use crate::db::traits::DocumentRepo;
 use crate::db::{AgentRow, ClusterRow, PipelineRow, PipelineStageRow, ScheduleRow, TriggerRow};
@@ -103,8 +102,7 @@ pub fn agent_tools() -> Vec<Tool> {
         },
         Tool {
             name: "assign_task".to_string(),
-            description: "Assign a task to an agent by its ID. The agent will begin working on it."
-                .to_string(),
+            description: "Assign a task to an agent by its ID. The agent will begin working on it.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -136,9 +134,7 @@ pub fn agent_tools() -> Vec<Tool> {
         },
         Tool {
             name: "get_task_result".to_string(),
-            description:
-                "Check the result of a previously assigned task. Returns pending, started, in_progress, completed, or failed."
-                    .to_string(),
+            description: "Check the result of a previously assigned task. Returns pending, started, in_progress, completed, or failed.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -152,8 +148,7 @@ pub fn agent_tools() -> Vec<Tool> {
         },
         Tool {
             name: "list_pending_approvals".to_string(),
-            description: "List all pending approval requests from agents that need a decision."
-                .to_string(),
+            description: "List all pending approval requests from agents that need a decision.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {},
@@ -162,9 +157,7 @@ pub fn agent_tools() -> Vec<Tool> {
         },
         Tool {
             name: "respond_to_approval".to_string(),
-            description:
-                "Approve or deny a pending approval request from an agent."
-                    .to_string(),
+            description: "Approve or deny a pending approval request from an agent.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -490,7 +483,8 @@ pub fn agent_tools() -> Vec<Tool> {
         },
         Tool {
             name: "search_files".to_string(),
-            description: "Search for a pattern in project files. Returns matching lines with file paths and line numbers. Use this to find code references instead of reading entire files.".to_string(),
+            description: "Search for a pattern in project files. Returns matching lines with file paths and line numbers. Use this to find code references instead of reading entire files."
+                .to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -515,7 +509,8 @@ pub fn agent_tools() -> Vec<Tool> {
             description: "Use this tool to think step-by-step before taking action. Write out your reasoning, \
                 plan your approach, and consider edge cases. This tool has no side effects — it simply \
                 returns your thoughts back to you. Use it before complex decisions, when choosing between \
-                multiple approaches, or when you need to analyze information before responding.".to_string(),
+                multiple approaches, or when you need to analyze information before responding."
+                .to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -595,7 +590,8 @@ pub fn agent_tools() -> Vec<Tool> {
         // --- Structured output validation tools ---
         Tool {
             name: "submit_prd".to_string(),
-            description: "Submit a finalized PRD as structured JSON. Validates all fields and stores the PRD as a document. Returns validation errors if any fields are missing or invalid.".to_string(),
+            description: "Submit a finalized PRD as structured JSON. Validates all fields and stores the PRD as a document. Returns validation errors if any fields are missing or invalid."
+                .to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -626,7 +622,8 @@ pub fn agent_tools() -> Vec<Tool> {
         },
         Tool {
             name: "submit_ticket".to_string(),
-            description: "Submit a decomposition ticket as structured JSON. Validates all fields and returns the validated ticket. Does not store the ticket — it flows through the pipeline system.".to_string(),
+            description: "Submit a decomposition ticket as structured JSON. Validates all fields and returns the validated ticket. Does not store the ticket — it flows through the pipeline system."
+                .to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -916,11 +913,7 @@ async fn execute_assign_task(input: &Value, state: &AppState, session_id: Option
             let prompt = ctx.build_system_prompt();
             let s = role.style;
             let fmt = role.output_format.clone();
-            let files = ctx
-                .loaded_files
-                .into_iter()
-                .map(|f| crate::agents::FileContent { path: f.path, content: f.content })
-                .collect();
+            let files = ctx.loaded_files.into_iter().map(|f| crate::agents::FileContent { path: f.path, content: f.content }).collect();
             (prompt, s, fmt, files)
         } else {
             // Unknown role, fall back to defaults
@@ -1012,14 +1005,9 @@ async fn execute_assign_task(input: &Value, state: &AppState, session_id: Option
     };
 
     // Parse allowed_tools if provided
-    let allowed_tools = input["allowed_tools"]
-        .as_array()
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
+    let allowed_tools = input["allowed_tools"].as_array().map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
 
-    let constraints = TaskConstraints {
-        allowed_tools,
-        ..Default::default()
-    };
+    let constraints = TaskConstraints { allowed_tools, ..Default::default() };
 
     let assignment = TaskAssignment {
         task_id: uuid::Uuid::new_v4(),
@@ -1030,11 +1018,7 @@ async fn execute_assign_task(input: &Value, state: &AppState, session_id: Option
             files: cluster_files,
             history: vec![],
             conventions,
-            role_context: RoleContext {
-                system_prompt,
-                style,
-                output_format,
-            },
+            role_context: RoleContext { system_prompt, style, output_format },
             chat_messages,
             execution_context,
             tool_rows: vec![],
@@ -1911,10 +1895,7 @@ async fn execute_read_file(input: &Value) -> Value {
                     // Large files: summarize with Haiku
                     let truncated_for_haiku: String = content.chars().take(crate::constants::TRUNCATE_SUMMARIZE_INPUT).collect();
                     let focus_instruction = match focus {
-                        Some(f) => format!(
-                            "Focus on: {}. Extract the most relevant code sections, function signatures, and logic related to this focus area.",
-                            f
-                        ),
+                        Some(f) => format!("Focus on: {}. Extract the most relevant code sections, function signatures, and logic related to this focus area.", f),
                         None => "Extract the key structures, function signatures, imports, and overall purpose of this file.".to_string(),
                     };
 

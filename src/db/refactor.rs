@@ -235,12 +235,11 @@ pub async fn insert_refactor_change(pool: &PgPool, change: &RefactorChange) -> R
 
 /// Get a refactor change by ID
 pub async fn get_refactor_change(pool: &PgPool, id: &ChangeId) -> Result<Option<RefactorChange>> {
-    let row: Option<RefactorChangeRow> =
-        sqlx::query_as("SELECT id, session_id, file_path, change_type, before_content, after_content, reason, status, created_at FROM refactor_changes WHERE id = $1")
-            .bind(id.0)
-            .fetch_optional(pool)
-            .await
-            .context("Failed to fetch refactor change")?;
+    let row: Option<RefactorChangeRow> = sqlx::query_as("SELECT id, session_id, file_path, change_type, before_content, after_content, reason, status, created_at FROM refactor_changes WHERE id = $1")
+        .bind(id.0)
+        .fetch_optional(pool)
+        .await
+        .context("Failed to fetch refactor change")?;
 
     match row {
         Some(row) => Ok(Some(row.into_change())),
@@ -250,13 +249,12 @@ pub async fn get_refactor_change(pool: &PgPool, id: &ChangeId) -> Result<Option<
 
 /// List changes for a session
 pub async fn list_changes_for_session(pool: &PgPool, session_id: &RefactorId) -> Result<Vec<RefactorChange>> {
-    let rows: Vec<RefactorChangeRow> = sqlx::query_as(
-        "SELECT id, session_id, file_path, change_type, before_content, after_content, reason, status, created_at FROM refactor_changes WHERE session_id = $1 ORDER BY created_at ASC"
-    )
-    .bind(session_id.0)
-    .fetch_all(pool)
-    .await
-    .context("Failed to list changes for session")?;
+    let rows: Vec<RefactorChangeRow> =
+        sqlx::query_as("SELECT id, session_id, file_path, change_type, before_content, after_content, reason, status, created_at FROM refactor_changes WHERE session_id = $1 ORDER BY created_at ASC")
+            .bind(session_id.0)
+            .fetch_all(pool)
+            .await
+            .context("Failed to list changes for session")?;
 
     Ok(rows.into_iter().map(|r| r.into_change()).collect())
 }
@@ -279,13 +277,12 @@ pub async fn update_change_status(pool: &PgPool, id: &ChangeId, status: ChangeSt
 pub async fn list_changes_by_status(pool: &PgPool, status: ChangeStatus) -> Result<Vec<RefactorChange>> {
     let status_str = status.as_str();
 
-    let rows: Vec<RefactorChangeRow> = sqlx::query_as(
-        "SELECT id, session_id, file_path, change_type, before_content, after_content, reason, status, created_at FROM refactor_changes WHERE status = $1 ORDER BY created_at ASC",
-    )
-    .bind(status_str)
-    .fetch_all(pool)
-    .await
-    .context("Failed to list changes by status")?;
+    let rows: Vec<RefactorChangeRow> =
+        sqlx::query_as("SELECT id, session_id, file_path, change_type, before_content, after_content, reason, status, created_at FROM refactor_changes WHERE status = $1 ORDER BY created_at ASC")
+            .bind(status_str)
+            .fetch_all(pool)
+            .await
+            .context("Failed to list changes by status")?;
 
     Ok(rows.into_iter().map(|r| r.into_change()).collect())
 }
