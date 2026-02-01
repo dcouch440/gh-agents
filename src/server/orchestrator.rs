@@ -364,6 +364,8 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         started_at: chrono::Utc::now(),
                                         completed_at: None,
                                         duration_ms: 0,
+                                        stage_member_id: None,
+                                        pipeline_id: None,
                                     };
                                     let _ = state.repo.create_stage_execution(&gate_exec).await;
                                     state.broadcast_feed(FeedUpdate {
@@ -541,6 +543,8 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         started_at: chrono::Utc::now(),
                                         completed_at: None,
                                         duration_ms: 0,
+                                        stage_member_id: None,
+                                        pipeline_id: None,
                                     };
                                     let _ = state.repo.create_stage_execution(&stage_exec).await;
 

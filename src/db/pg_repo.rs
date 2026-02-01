@@ -1306,8 +1306,8 @@ impl ServerRepo for PgRepo {
     async fn create_stage_execution(&self, exec: &StageExecutionRow) -> Result<()> {
         sqlx::query(
             r#"
-            INSERT INTO stage_executions (id, run_id, stage_number, stage_name, agent_id, status, rendered_prompt, output, structured_output, user_input, input_tokens, output_tokens, started_at, completed_at, duration_ms)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            INSERT INTO stage_executions (id, run_id, stage_number, stage_name, agent_id, status, rendered_prompt, output, structured_output, user_input, input_tokens, output_tokens, started_at, completed_at, duration_ms, stage_member_id, pipeline_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
             "#,
         )
         .bind(exec.id)
@@ -1325,6 +1325,8 @@ impl ServerRepo for PgRepo {
         .bind(exec.started_at)
         .bind(exec.completed_at)
         .bind(exec.duration_ms)
+        .bind(exec.stage_member_id)
+        .bind(exec.pipeline_id)
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -1353,51 +1355,11 @@ impl ServerRepo for PgRepo {
     }
 
     async fn list_stage_executions(&self, run_id: Uuid) -> Result<Vec<StageExecutionRow>> {
-        let rows: Vec<(Uuid, Uuid, i32, String, Option<Uuid>, String, Option<String>, Option<String>, Option<serde_json::Value>, Option<String>, i64, i64, chrono::DateTime<chrono::Utc>, Option<chrono::DateTime<chrono::Utc>>, i64)> = sqlx::query_as(
-            "SELECT id, run_id, stage_number, stage_name, agent_id, status, rendered_prompt, output, structured_output, user_input, input_tokens, output_tokens, started_at, completed_at, duration_ms FROM stage_executions WHERE run_id = $1 ORDER BY stage_number"
-        )
-        .bind(run_id)
-        .fetch_all(&self.pool)
-        .await?;
-
-        Ok(rows
-            .into_iter()
-            .map(
-                |(
-                    id,
-                    run_id,
-                    stage_number,
-                    stage_name,
-                    agent_id,
-                    status,
-                    rendered_prompt,
-                    output,
-                    structured_output,
-                    user_input,
-                    input_tokens,
-                    output_tokens,
-                    started_at,
-                    completed_at,
-                    duration_ms,
-                )| StageExecutionRow {
-                    id,
-                    run_id,
-                    stage_number,
-                    stage_name,
-                    agent_id,
-                    status,
-                    rendered_prompt,
-                    output,
-                    structured_output,
-                    user_input,
-                    input_tokens,
-                    output_tokens,
-                    started_at,
-                    completed_at,
-                    duration_ms,
-                },
-            )
-            .collect())
+        let rows = sqlx::query_as::<_, StageExecutionRow>("SELECT * FROM stage_executions WHERE run_id = $1 ORDER BY stage_number")
+            .bind(run_id)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows)
     }
 
     async fn insert_tool_call(

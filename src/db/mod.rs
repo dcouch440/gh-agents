@@ -298,6 +298,7 @@ pub struct PipelineRunRow {
     pub total_output_tokens: i64,
 }
 
+#[derive(Debug, Clone, sqlx::FromRow)]
 pub struct StageExecutionRow {
     pub id: Uuid,
     pub run_id: Uuid,
@@ -314,6 +315,8 @@ pub struct StageExecutionRow {
     pub started_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
     pub duration_ms: i64,
+    pub stage_member_id: Option<Uuid>,
+    pub pipeline_id: Option<Uuid>,
 }
 
 /// Row type for routing events (tool routing observability and analytics).
