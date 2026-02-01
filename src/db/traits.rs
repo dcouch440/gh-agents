@@ -9,8 +9,9 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::db::{
-    AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageMemberRow, PipelineStageRow, PromptTemplateRow, ScheduleRow,
-    SessionRow, StageExecutionRow, StageSideTaskRow, StepDocumentRow, ToolRow, TriggerRow, UsageSummaryRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow,
+    AgentExecutionRow, AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageMemberRow,
+    PipelineStageRow, PromptTemplateRow, ScheduleRow, SessionRow, StageExecutionRow, StageSideTaskRow, StepDocumentRow, ToolRow, TriggerRow, UsageSummaryRow, WorkflowRow, WorkflowStepEdgeRow,
+    WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::orchestration::DependencyError;
@@ -536,4 +537,41 @@ pub trait PipelineStageMemberRepo: Send + Sync {
     async fn add_stage_member(&self, pipeline_id: Uuid, stage_number: i32, workflow_id: Uuid, display_order: i32) -> Result<PipelineStageMemberRow>;
     async fn remove_stage_member(&self, member_id: Uuid) -> Result<()>;
     async fn update_stage_member(&self, member_id: Uuid, display_order: i32) -> Result<PipelineStageMemberRow>;
+}
+
+// ============================================================================
+// Agent Execution Repository
+// ============================================================================
+
+/// Database operations for agent executions and execution messages.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait AgentExecutionRepo: Send + Sync {
+    // --- Agent Executions ---
+    async fn create_agent_execution(
+        &self,
+        stage_execution_id: Uuid,
+        agent_id: Uuid,
+        workflow_step_id: Option<Uuid>,
+        is_interactive: bool,
+        parent_agent_execution_id: Option<Uuid>,
+        system_prompt_rendered: &str,
+        input: &str,
+    ) -> Result<AgentExecutionRow>;
+    async fn get_agent_execution(&self, id: Uuid) -> Result<Option<AgentExecutionRow>>;
+    async fn list_agent_executions_by_stage(&self, stage_execution_id: Uuid) -> Result<Vec<AgentExecutionRow>>;
+    async fn update_agent_execution_status(
+        &self,
+        id: Uuid,
+        status: &str,
+        output: Option<String>,
+        structured_output: Option<serde_json::Value>,
+        input_tokens: i64,
+        output_tokens: i64,
+        cost_usd: f32,
+    ) -> Result<AgentExecutionRow>;
+
+    // --- Execution Messages ---
+    async fn create_execution_message(&self, agent_execution_id: Uuid, role: &str, content: &str, tool_call_id: Option<String>, input_tokens: i64, output_tokens: i64) -> Result<ExecutionMessageRow>;
+    async fn list_execution_messages(&self, agent_execution_id: Uuid) -> Result<Vec<ExecutionMessageRow>>;
 }

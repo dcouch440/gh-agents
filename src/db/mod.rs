@@ -215,6 +215,40 @@ pub struct PipelineStageMemberRow {
     pub display_order: i32,
 }
 
+/// Row type for agent execution records.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct AgentExecutionRow {
+    pub id: Uuid,
+    pub stage_execution_id: Uuid,
+    pub agent_id: Uuid,
+    pub workflow_step_id: Option<Uuid>,
+    pub is_interactive: bool,
+    pub parent_agent_execution_id: Option<Uuid>,
+    pub system_prompt_rendered: String,
+    pub input: String,
+    pub output: Option<String>,
+    pub structured_output: Option<serde_json::Value>,
+    pub status: String,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub cost_usd: f32,
+    pub started_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+/// Row type for execution message records.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct ExecutionMessageRow {
+    pub id: Uuid,
+    pub agent_execution_id: Uuid,
+    pub role: String,
+    pub content: String,
+    pub tool_call_id: Option<String>,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub created_at: DateTime<Utc>,
+}
+
 /// Row type for token usage summary.
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct UsageSummaryRow {

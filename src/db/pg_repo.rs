@@ -7,12 +7,13 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::db::traits::{
-    CostRepo, DependencyRepo, DocumentRepo, MergeQueueRepo, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, RefactorRepo, SchedulerRepo, ServerRepo, TaskQueueRepo, UserRepo,
-    WorkflowRepo,
+    AgentExecutionRepo, CostRepo, DependencyRepo, DocumentRepo, MergeQueueRepo, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, RefactorRepo, SchedulerRepo, ServerRepo, TaskQueueRepo,
+    UserRepo, WorkflowRepo,
 };
 use crate::db::{
-    AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageMemberRow, PipelineStageRow, PromptTemplateRow, ScheduleRow,
-    SessionRow, StageExecutionRow, StageSideTaskRow, StepDocumentRow, ToolRow, TriggerRow, UsageSummaryRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow,
+    AgentExecutionRow, AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageMemberRow,
+    PipelineStageRow, PromptTemplateRow, ScheduleRow, SessionRow, StageExecutionRow, StageSideTaskRow, StepDocumentRow, ToolRow, TriggerRow, UsageSummaryRow, WorkflowRow, WorkflowStepEdgeRow,
+    WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::orchestration::DependencyError;
@@ -2076,6 +2077,98 @@ impl PipelineStageMemberRepo for PgRepo {
             .fetch_one(&self.pool)
             .await?;
         Ok(row)
+    }
+}
+
+#[async_trait]
+impl AgentExecutionRepo for PgRepo {
+    async fn create_agent_execution(
+        &self,
+        stage_execution_id: Uuid,
+        agent_id: Uuid,
+        workflow_step_id: Option<Uuid>,
+        is_interactive: bool,
+        parent_agent_execution_id: Option<Uuid>,
+        system_prompt_rendered: &str,
+        input: &str,
+    ) -> Result<AgentExecutionRow> {
+        let row = sqlx::query_as::<_, AgentExecutionRow>(
+            "INSERT INTO agent_executions (stage_execution_id, agent_id, workflow_step_id, is_interactive, parent_agent_execution_id, system_prompt_rendered, input) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *",
+        )
+        .bind(stage_execution_id)
+        .bind(agent_id)
+        .bind(workflow_step_id)
+        .bind(is_interactive)
+        .bind(parent_agent_execution_id)
+        .bind(system_prompt_rendered)
+        .bind(input)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn get_agent_execution(&self, id: Uuid) -> Result<Option<AgentExecutionRow>> {
+        let row = sqlx::query_as::<_, AgentExecutionRow>("SELECT * FROM agent_executions WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row)
+    }
+
+    async fn list_agent_executions_by_stage(&self, stage_execution_id: Uuid) -> Result<Vec<AgentExecutionRow>> {
+        let rows = sqlx::query_as::<_, AgentExecutionRow>("SELECT * FROM agent_executions WHERE stage_execution_id = $1 ORDER BY started_at ASC")
+            .bind(stage_execution_id)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows)
+    }
+
+    async fn update_agent_execution_status(
+        &self,
+        id: Uuid,
+        status: &str,
+        output: Option<String>,
+        structured_output: Option<serde_json::Value>,
+        input_tokens: i64,
+        output_tokens: i64,
+        cost_usd: f32,
+    ) -> Result<AgentExecutionRow> {
+        let row = sqlx::query_as::<_, AgentExecutionRow>(
+            "UPDATE agent_executions SET status = $2, output = COALESCE($3, output), structured_output = COALESCE($4, structured_output), input_tokens = $5, output_tokens = $6, cost_usd = $7, completed_at = CASE WHEN $2 IN ('completed', 'failed') THEN NOW() ELSE completed_at END WHERE id = $1 RETURNING *",
+        )
+        .bind(id)
+        .bind(status)
+        .bind(output)
+        .bind(structured_output)
+        .bind(input_tokens)
+        .bind(output_tokens)
+        .bind(cost_usd)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn create_execution_message(&self, agent_execution_id: Uuid, role: &str, content: &str, tool_call_id: Option<String>, input_tokens: i64, output_tokens: i64) -> Result<ExecutionMessageRow> {
+        let row = sqlx::query_as::<_, ExecutionMessageRow>(
+            "INSERT INTO execution_messages (agent_execution_id, role, content, tool_call_id, input_tokens, output_tokens) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
+        )
+        .bind(agent_execution_id)
+        .bind(role)
+        .bind(content)
+        .bind(tool_call_id)
+        .bind(input_tokens)
+        .bind(output_tokens)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn list_execution_messages(&self, agent_execution_id: Uuid) -> Result<Vec<ExecutionMessageRow>> {
+        let rows = sqlx::query_as::<_, ExecutionMessageRow>("SELECT * FROM execution_messages WHERE agent_execution_id = $1 ORDER BY created_at ASC")
+            .bind(agent_execution_id)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows)
     }
 }
 
