@@ -1,29 +1,29 @@
 :root {
-  /* Colors — neutrals */
-  --color-bg: #fafafa;
-  --color-bg-raised: #ffffff;
-  --color-bg-sunken: #f0f0f0;
-  --color-border: #e2e2e2;
-  --color-border-light: #f0f0f0;
-  --color-text: #1a1a1a;
-  --color-text-secondary: #666666;
-  --color-text-muted: #999999;
+  /* Colors — neutrals (dark theme) */
+  --color-bg: #0a0a0a;
+  --color-bg-raised: #111111;
+  --color-bg-sunken: #1a1a1a;
+  --color-border: #2a2a2a;
+  --color-border-light: #1f1f1f;
+  --color-text: #e0e0e0;
+  --color-text-secondary: #888888;
+  --color-text-muted: #555555;
 
   /* Colors — status */
-  --color-success: #16a34a;
-  --color-success-bg: #dcfce7;
-  --color-warning: #ca8a04;
-  --color-warning-bg: #fef9c3;
-  --color-error: #dc2626;
-  --color-error-bg: #fee2e2;
-  --color-info: #2563eb;
-  --color-info-bg: #dbeafe;
-  --color-neutral: #666666;
-  --color-neutral-bg: #f0f0f0;
+  --color-success: #22c55e;
+  --color-success-bg: rgba(34, 197, 94, 0.1);
+  --color-warning: #eab308;
+  --color-warning-bg: rgba(234, 179, 8, 0.1);
+  --color-error: #ef4444;
+  --color-error-bg: rgba(239, 68, 68, 0.1);
+  --color-info: #3b82f6;
+  --color-info-bg: rgba(59, 130, 246, 0.1);
+  --color-neutral: #888888;
+  --color-neutral-bg: #1a1a1a;
 
   /* Colors — accent */
-  --color-accent: #333333;
-  --color-accent-fg: #ffffff;
+  --color-accent: #e0e0e0;
+  --color-accent-fg: #0a0a0a;
 
   /* Spacing */
   --space-xs: 0.25rem;

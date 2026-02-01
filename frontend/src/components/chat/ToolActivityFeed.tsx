@@ -8,7 +8,6 @@ type ToolEvent = {
   startedAt: number
   completedAt: number | null
   detail?: string
-  progress?: number
 }
 
 type ToolActivityFeedProps = {
@@ -24,7 +23,6 @@ const getDuration = (event: ToolEvent, now: number): number | null => {
 }
 
 function ToolActivityFeed({ events, hint, now }: ToolActivityFeedProps) {
-
   return (
     <div className="tool-feed">
       {events.map((event) => (
@@ -34,7 +32,6 @@ function ToolActivityFeed({ events, hint, now }: ToolActivityFeedProps) {
           status={event.status}
           durationMs={getDuration(event, now)}
           detail={event.detail}
-          progress={event.progress}
         />
       ))}
       {hint ? <div className="tool-feed__hint">{hint}</div> : null}

@@ -1,7 +1,7 @@
-import { ToolActivityDemo } from '@/components/chat'
+import { AgentActivityDemo } from '@/components/chat'
 
 function ChatPage() {
-  return <ToolActivityDemo />
+  return <AgentActivityDemo />
 }
 
 export { ChatPage }

@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { to: ROUTES.TASKS, label: 'Tasks' },
   { to: ROUTES.DOCUMENTS, label: 'Documents' },
   { to: ROUTES.SETTINGS, label: 'Settings' },
+  { to: ROUTES.SHOWCASE, label: 'Showcase' },
 ] as const
 
 function Sidebar() {
