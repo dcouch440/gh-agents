@@ -205,6 +205,16 @@ pub struct StepDocumentRow {
     pub document_id: Uuid,
 }
 
+/// Row type for a pipeline stage member (workflow assigned to a stage).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct PipelineStageMemberRow {
+    pub id: Uuid,
+    pub pipeline_id: Uuid,
+    pub stage_number: i32,
+    pub workflow_id: Uuid,
+    pub display_order: i32,
+}
+
 /// Row type for token usage summary.
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct UsageSummaryRow {

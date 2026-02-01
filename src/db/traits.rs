@@ -9,8 +9,8 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::db::{
-    AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageRow, PromptTemplateRow, ScheduleRow, SessionRow,
-    StageExecutionRow, StageSideTaskRow, StepDocumentRow, ToolRow, TriggerRow, UsageSummaryRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow,
+    AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageMemberRow, PipelineStageRow, PromptTemplateRow, ScheduleRow,
+    SessionRow, StageExecutionRow, StageSideTaskRow, StepDocumentRow, ToolRow, TriggerRow, UsageSummaryRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::orchestration::DependencyError;
@@ -522,4 +522,18 @@ pub trait WorkflowRepo: Send + Sync {
     async fn list_step_documents(&self, step_id: Uuid) -> Result<Vec<StepDocumentRow>>;
     async fn add_step_document(&self, step_id: Uuid, document_id: Uuid) -> Result<()>;
     async fn remove_step_document(&self, step_id: Uuid, document_id: Uuid) -> Result<()>;
+}
+
+// ============================================================================
+// Pipeline Stage Member Repository
+// ============================================================================
+
+/// Database operations for pipeline stage members.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait PipelineStageMemberRepo: Send + Sync {
+    async fn list_stage_members(&self, pipeline_id: Uuid, stage_number: i32) -> Result<Vec<PipelineStageMemberRow>>;
+    async fn add_stage_member(&self, pipeline_id: Uuid, stage_number: i32, workflow_id: Uuid, display_order: i32) -> Result<PipelineStageMemberRow>;
+    async fn remove_stage_member(&self, member_id: Uuid) -> Result<()>;
+    async fn update_stage_member(&self, member_id: Uuid, display_order: i32) -> Result<PipelineStageMemberRow>;
 }
