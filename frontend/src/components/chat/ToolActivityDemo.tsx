@@ -35,6 +35,8 @@ function ToolActivityDemo() {
   const [userMessage] = useState('Find the auth module and update the middleware')
   const [assistantText, setAssistantText] = useState('')
   const [showCursor, setShowCursor] = useState(false)
+  const [paused, setPaused] = useState(false)
+  const pausedRef = useRef(false)
   const cycleRef = useRef(0)
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
@@ -128,8 +130,23 @@ function ToolActivityDemo() {
     return clearTimers
   }, [runCycle, clearTimers])
 
+  const togglePause = useCallback(() => {
+    const next = !pausedRef.current
+    pausedRef.current = next
+    setPaused(next)
+    if (next) {
+      clearTimers()
+    } else {
+      cycleRef.current++
+      runCycle()
+    }
+  }, [clearTimers, runCycle])
+
   return (
     <div className="chat-demo">
+      <button className="demo-pause-btn" onClick={togglePause} type="button">
+        {paused ? '[>]' : '[||]'}
+      </button>
       <div className="chat-bubble chat-bubble--user">{userMessage}</div>
 
       {events.length > 0 ? (

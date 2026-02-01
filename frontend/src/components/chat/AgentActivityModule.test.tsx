@@ -99,10 +99,12 @@ describe('AgentActivityModule', () => {
     expect(runningIndicator?.textContent).toBe('\u27F3')
   })
 
-  it('returns null when empty', () => {
+  it('renders empty wrappers when no data', () => {
     const { container } = render(
       <AgentActivityModule agents={[]} statusText={null} activities={[]} toolCallCount={0} />,
     )
-    expect(container.querySelector('.activity-module')).not.toBeInTheDocument()
+    expect(container.querySelector('.activity-module')).toBeInTheDocument()
+    expect(container.querySelector('.activity-module__agents')?.children.length).toBe(0)
+    expect(container.querySelector('.activity-module__feed')?.children.length).toBe(0)
   })
 })
