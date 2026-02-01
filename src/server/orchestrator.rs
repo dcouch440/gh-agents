@@ -168,6 +168,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                                 task_id: request.task_id,
                                                 files: resolved_files,
                                                 answers: vec![],
+                                                true_context: None,
                                             }),
                                         )
                                         .await;
@@ -523,6 +524,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                             router_mode: false,
                                             cluster_routing: None,
                                             context_docs,
+                                            distiller_mode: crate::agents::DistillerMode::Blocking,
                                         },
                                         constraints: TaskConstraints::default(),
                                         timeout: std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),
@@ -676,6 +678,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         router_mode: false,
                                         cluster_routing: None,
                                         context_docs: vec![],
+                                        distiller_mode: crate::agents::DistillerMode::Off,
                                     },
                                     constraints: TaskConstraints::default(),
                                     timeout: std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),
@@ -746,6 +749,7 @@ pub fn spawn_schedule_runner(state: AppState) -> Option<tokio::task::JoinHandle<
                         router_mode: false,
                         cluster_routing: None,
                         context_docs: vec![],
+                        distiller_mode: crate::agents::DistillerMode::Off,
                     },
                     constraints: TaskConstraints::default(),
                     timeout: std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),

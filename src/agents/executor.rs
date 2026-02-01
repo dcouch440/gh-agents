@@ -441,25 +441,47 @@ impl Agent {
         let mut system_prompt = self.build_role_aware_prompt(assignment, role_context);
         let temperature = self.temperature_for_style(&role_context.style);
 
-        // Distill true context — cheap pre-pass that summarises intent & vibe.
-        // Only fires when there are chat messages to distill or the task
-        // description is complex enough to benefit from context analysis.
-        let true_context = if !assignment.context.chat_messages.is_empty() || assignment.description.len() > 200 {
-            crate::prompts::distill_true_context(
-                &assignment.context.chat_messages,
-                &assignment.title,
-                &assignment.description,
-                &assignment.context.context_docs,
-            )
-            .await
-        } else {
-            None
-        };
+        // True Context distiller — cheap LLM pre-pass that analyses intent & vibe.
+        // Off: skip. Background: async spawn, injected between rounds. Blocking: await before first LLM call.
+        let pending_context: std::sync::Arc<tokio::sync::Mutex<Vec<crate::prompts::TrueContext>>> =
+            std::sync::Arc::new(tokio::sync::Mutex::new(Vec::new()));
 
-        if let Some(ref ctx) = true_context {
-            system_prompt.push_str("\n\n## True Context\n\n");
-            system_prompt.push_str(&format!("<ctx_scop>{}</ctx_scop>\n", ctx.scope));
-            system_prompt.push_str(&format!("<ctx_vibe>{}</ctx_vibe>\n", ctx.vibe));
+        let should_distill = !assignment.context.chat_messages.is_empty() || assignment.description.len() > 200;
+
+        match assignment.context.distiller_mode {
+            super::channels::DistillerMode::Off => {}
+            super::channels::DistillerMode::Background if should_distill => {
+                let pending = pending_context.clone();
+                let messages = assignment.context.chat_messages.clone();
+                let title = assignment.title.clone();
+                let desc = assignment.description.clone();
+                let docs = assignment.context.context_docs.clone();
+
+                tokio::spawn(async move {
+                    if let Some(ctx) = crate::prompts::distill_true_context(&messages, &title, &desc, &docs).await {
+                        pending.lock().await.push(ctx);
+                    }
+                });
+
+                self.emit_progress(task_id, "Background context analysis started", None).await?;
+            }
+            super::channels::DistillerMode::Blocking if should_distill => {
+                self.emit_progress(task_id, "Running context analysis (blocking)", None).await?;
+
+                let messages = assignment.context.chat_messages.clone();
+                let title = assignment.title.clone();
+                let desc = assignment.description.clone();
+                let docs = assignment.context.context_docs.clone();
+
+                if let Some(ctx) = crate::prompts::distill_true_context(&messages, &title, &desc, &docs).await {
+                    system_prompt.push_str("\n\n## True Context\n\n");
+                    for (key, value) in &ctx.fields {
+                        system_prompt.push_str(&format!("<{}>{}</{}>\n", key, value, key));
+                    }
+                    self.emit_progress(task_id, "Context analysis complete", None).await?;
+                }
+            }
+            _ => {}
         }
 
         // Build tool definitions: router_mode gets only request_assistance,
@@ -497,6 +519,20 @@ impl Agent {
         let task_start = std::time::Instant::now();
 
         for round in 0..max_tool_rounds {
+            // Drain any pending context from the background distiller
+            {
+                let mut pending = pending_context.lock().await;
+                if !pending.is_empty() {
+                    system_prompt.push_str("\n\n## True Context\n\n");
+                    for ctx in pending.drain(..) {
+                        for (key, value) in &ctx.fields {
+                            system_prompt.push_str(&format!("<{}>{}</{}>\n", key, value, key));
+                        }
+                    }
+                    self.emit_progress(task_id, "Background context injected", None).await?;
+                }
+            }
+
             let progress = 10 + (round as u8 * 5).min(70);
             self.emit_progress(task_id, &format!("Working... (round {})", round + 1), Some(progress)).await?;
 
@@ -1048,6 +1084,7 @@ mod tests {
                 router_mode: false,
                 cluster_routing: None,
                 context_docs: vec![],
+                distiller_mode: crate::agents::channels::DistillerMode::Off,
             },
             constraints: TaskConstraints::default(),
             timeout: Duration::from_secs(30),
@@ -1332,6 +1369,7 @@ mod tests {
             task_id: Uuid::new_v4(),
             files: vec![],
             answers: vec![],
+            true_context: None,
         };
         agent.handle_context_received(context).await.unwrap();
         assert_eq!(agent.status(), AgentStatus::Idle);
@@ -1350,6 +1388,7 @@ mod tests {
             task_id,
             files: vec![],
             answers: vec![],
+            true_context: None,
         };
         agent.handle_context_received(context).await.unwrap();
         assert_eq!(agent.status(), AgentStatus::Working);
