@@ -90,7 +90,6 @@ pub enum OutputFormat {
     Custom(String),
 }
 
-
 /// A role defines agent behavior, file access, and delegation rules
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Role {
@@ -360,10 +359,7 @@ impl RoleLibrary {
         let id = role.id.clone();
         let category = role.category;
         self.roles.insert(id.clone(), role);
-        self.by_category
-            .entry(category)
-            .or_default()
-            .push(id);
+        self.by_category.entry(category).or_default().push(id);
     }
 
     /// Get a role by ID

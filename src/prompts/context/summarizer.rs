@@ -266,7 +266,8 @@ impl FileSummarizer {
     }
 
     fn extract_js_export_signature(&self, line: &str) -> Option<String> {
-        line.find('{').map(|brace_pos| line[..brace_pos].trim().to_string())
+        line.find('{')
+            .map(|brace_pos| line[..brace_pos].trim().to_string())
     }
 
     fn truncate_with_notice(&self, content: &str, max_tokens: usize) -> String {

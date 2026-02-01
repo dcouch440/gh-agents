@@ -545,10 +545,7 @@ mod tests {
 
         // Second retry exceeds max
         let result = mgr.retry_stage(run_id);
-        assert!(matches!(
-            result,
-            Err(PipelineError::MaxRetriesExceeded(_))
-        ));
+        assert!(matches!(result, Err(PipelineError::MaxRetriesExceeded(_))));
         assert_eq!(
             mgr.get_run(run_id).unwrap().status,
             PipelineRunStatus::Failed

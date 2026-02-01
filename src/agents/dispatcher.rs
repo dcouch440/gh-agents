@@ -52,10 +52,7 @@ impl Dispatcher {
         info!(agent_id = ?agent_id, tier = ?tier, "Registering agent with dispatcher");
 
         self.handles.insert(agent_id.clone(), handle);
-        self.by_tier
-            .entry(tier)
-            .or_default()
-            .push(agent_id);
+        self.by_tier.entry(tier).or_default().push(agent_id);
     }
 
     /// Unregister an agent

@@ -117,10 +117,7 @@ impl ToolDefinition {
                 let required = if p.required { " (required)" } else { "" };
                 format!(
                     "  - {}: {}{} - {}",
-                    p.name,
-                    p.param_type,
-                    required,
-                    p.description
+                    p.name, p.param_type, required, p.description
                 )
             })
             .collect();

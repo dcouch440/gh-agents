@@ -19,7 +19,9 @@ use crate::orchestration::Scheduler;
 use crate::types::{AgentPoolConfig, AppConfig, UserId};
 
 use super::agent_mode::{AgentModeId, ModeRegistry};
-use super::ws::{AgentUpdate, FeedUpdate, PipelineUpdate, SessionUpdate, TaskUpdate};
+use super::ws::{
+    AgentUpdate, FeedUpdate, PipelineUpdate, RoutingUpdate, SessionUpdate, TaskUpdate,
+};
 
 /// Message sent to the orchestrator
 #[derive(Debug, Clone)]
@@ -88,6 +90,8 @@ pub struct AppState {
     pub session_tx: broadcast::Sender<SessionUpdate>,
     /// Broadcast channel for pipeline execution updates
     pub pipeline_tx: broadcast::Sender<PipelineUpdate>,
+    /// Broadcast channel for tool routing updates
+    pub routing_tx: broadcast::Sender<RoutingUpdate>,
     /// Agent pool for managing agents (None in tests that don't need agents)
     pub pool: Option<Arc<tokio::sync::Mutex<AgentPool>>>,
     /// Dispatcher for routing commands to agents (None in tests)
@@ -265,6 +269,7 @@ impl AppState {
         let (agent_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
         let (session_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
         let (pipeline_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
+        let (routing_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
 
         // Generate a random JWT secret
         // In production, this should be persisted or configured via environment variable
@@ -286,6 +291,7 @@ impl AppState {
                 agent_tx,
                 session_tx,
                 pipeline_tx,
+                routing_tx,
                 pool: None,
                 dispatcher: None,
                 task_results: Arc::new(RwLock::new(HashMap::new())),
@@ -347,6 +353,16 @@ impl AppState {
     /// Broadcast a pipeline execution update to all subscribers
     pub fn broadcast_pipeline(&self, update: PipelineUpdate) {
         let _ = self.pipeline_tx.send(update);
+    }
+
+    /// Subscribe to routing updates
+    pub fn subscribe_routing(&self) -> broadcast::Receiver<RoutingUpdate> {
+        self.routing_tx.subscribe()
+    }
+
+    /// Broadcast a routing update to all subscribers
+    pub fn broadcast_routing(&self, update: RoutingUpdate) {
+        let _ = self.routing_tx.send(update);
     }
 
     /// Ensure a response stream exists for this message (creates if missing).

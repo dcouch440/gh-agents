@@ -187,6 +187,32 @@ pub struct StageExecutionRow {
     pub duration_ms: i64,
 }
 
+/// Row type for routing events (tool routing observability and analytics).
+#[derive(Debug, Clone)]
+pub struct RoutingEventRow {
+    pub id: Uuid,
+    pub user_id: Option<Uuid>,
+    pub session_id: Option<Uuid>,
+    pub task_id: Option<Uuid>,
+    pub router_agent_id: Uuid,
+    pub cluster_agent_id: Option<Uuid>,
+    pub cluster_id: Option<Uuid>,
+    pub cluster_name: String,
+    pub tool_name: String,
+    pub request: String,
+    pub parameters: serde_json::Value,
+    pub response: Option<String>,
+    pub error: Option<String>,
+    pub status: String,
+    pub agent_tier: Option<String>,
+    pub model_id: Option<String>,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub duration_ms: Option<i64>,
+    pub created_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
 /// Type alias for the database pool
 pub type DbPool = PgPool;
 

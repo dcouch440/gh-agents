@@ -23,8 +23,7 @@ pub enum CredentialsError {
     DirectoryError,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct StoredCredentials {
     pub github_token: Option<String>,
     #[serde(default)]
@@ -32,7 +31,6 @@ pub struct StoredCredentials {
     #[serde(default)]
     pub created_at: Option<String>,
 }
-
 
 pub struct CredentialsStore {
     path: PathBuf,

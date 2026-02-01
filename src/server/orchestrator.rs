@@ -323,16 +323,26 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                         {
                             let pipeline_id = {
                                 let mgr = state.pipeline_manager.read().await;
-                                mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
+                                mgr.get_run_pipeline_id(run_id)
+                                    .map(|p| p.0)
+                                    .unwrap_or(run_id)
                             };
                             state.broadcast_pipeline(PipelineUpdate {
                                 run_id,
                                 pipeline_id,
-                                event: if succeeded { "stage_completed".into() } else { "stage_failed".into() },
+                                event: if succeeded {
+                                    "stage_completed".into()
+                                } else {
+                                    "stage_failed".into()
+                                },
                                 stage_number: Some(completed_stage_number as i32),
                                 stage_name: None,
                                 agent_id: None,
-                                output: if succeeded { Some(prev_output.clone()) } else { None },
+                                output: if succeeded {
+                                    Some(prev_output.clone())
+                                } else {
+                                    None
+                                },
                                 input_tokens: Some(stage_input_tokens),
                                 output_tokens: Some(stage_output_tokens),
                                 duration_ms: Some(stage_duration_ms),
@@ -357,7 +367,9 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                             {
                                 let pipeline_id = {
                                     let mgr = state.pipeline_manager.read().await;
-                                    mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
+                                    mgr.get_run_pipeline_id(run_id)
+                                        .map(|p| p.0)
+                                        .unwrap_or(run_id)
                                 };
                                 state.broadcast_pipeline(PipelineUpdate {
                                     run_id,
@@ -448,7 +460,9 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                     {
                                         let pipeline_id = {
                                             let mgr = state.pipeline_manager.read().await;
-                                            mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
+                                            mgr.get_run_pipeline_id(run_id)
+                                                .map(|p| p.0)
+                                                .unwrap_or(run_id)
                                         };
                                         state.broadcast_pipeline(PipelineUpdate {
                                             run_id,
@@ -456,7 +470,10 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                             event: "gate_waiting".into(),
                                             stage_number: Some(next_stage.stage_number as i32),
                                             stage_name: Some(next_stage.stage_name.clone()),
-                                            agent_id: next_stage.agent_id.as_ref().map(|a| a.0.to_string()),
+                                            agent_id: next_stage
+                                                .agent_id
+                                                .as_ref()
+                                                .map(|a| a.0.to_string()),
                                             output: None,
                                             input_tokens: None,
                                             output_tokens: None,
@@ -695,16 +712,25 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                                 // Broadcast stage_started
                                                 {
                                                     let pipeline_id = {
-                                                        let mgr = state.pipeline_manager.read().await;
-                                                        mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
+                                                        let mgr =
+                                                            state.pipeline_manager.read().await;
+                                                        mgr.get_run_pipeline_id(run_id)
+                                                            .map(|p| p.0)
+                                                            .unwrap_or(run_id)
                                                     };
                                                     state.broadcast_pipeline(PipelineUpdate {
                                                         run_id,
                                                         pipeline_id,
                                                         event: "stage_started".into(),
-                                                        stage_number: Some(next_stage.stage_number as i32),
-                                                        stage_name: Some(next_stage.stage_name.clone()),
-                                                        agent_id: resolved_agent_id.as_ref().map(|a| a.0.to_string()),
+                                                        stage_number: Some(
+                                                            next_stage.stage_number as i32,
+                                                        ),
+                                                        stage_name: Some(
+                                                            next_stage.stage_name.clone(),
+                                                        ),
+                                                        agent_id: resolved_agent_id
+                                                            .as_ref()
+                                                            .map(|a| a.0.to_string()),
                                                         output: None,
                                                         input_tokens: None,
                                                         output_tokens: None,
@@ -747,7 +773,9 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                 {
                                     let pipeline_id = {
                                         let mgr = state.pipeline_manager.read().await;
-                                        mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
+                                        mgr.get_run_pipeline_id(run_id)
+                                            .map(|p| p.0)
+                                            .unwrap_or(run_id)
                                     };
                                     state.broadcast_pipeline(PipelineUpdate {
                                         run_id,
@@ -905,7 +933,10 @@ pub fn spawn_schedule_runner(state: AppState) -> Option<tokio::task::JoinHandle<
 
                 let disp = dispatcher.lock().await;
                 if let Err(e) = disp
-                    .send_to_agent(&schedule.agent_id, AgentCommand::AssignTask(Box::new(assignment)))
+                    .send_to_agent(
+                        &schedule.agent_id,
+                        AgentCommand::AssignTask(Box::new(assignment)),
+                    )
                     .await
                 {
                     error!("Schedule {} failed to assign task: {}", schedule.name, e);

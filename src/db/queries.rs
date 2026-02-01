@@ -447,6 +447,157 @@ pub async fn get_password(pool: &PgPool) -> Result<Option<String>> {
     Ok(row.map(|r| r.0))
 }
 
+// ============================================================================
+// Routing Event Queries
+// ============================================================================
+
+/// Insert a new routing event (when a tool call is routed to a cluster).
+/// Captures user, session, task context and the raw parameters for analytics.
+pub async fn insert_routing_event(
+    pool: &PgPool,
+    id: Uuid,
+    user_id: Option<Uuid>,
+    session_id: Option<Uuid>,
+    task_id: Option<Uuid>,
+    router_agent_id: Uuid,
+    cluster_id: Option<Uuid>,
+    cluster_name: &str,
+    tool_name: &str,
+    request: &str,
+    parameters: &serde_json::Value,
+) -> Result<()> {
+    sqlx::query(
+        r#"INSERT INTO routing_events
+           (id, user_id, session_id, task_id, router_agent_id, cluster_id, cluster_name, tool_name, request, parameters, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending')"#,
+    )
+    .bind(id)
+    .bind(user_id)
+    .bind(session_id)
+    .bind(task_id)
+    .bind(router_agent_id)
+    .bind(cluster_id)
+    .bind(cluster_name)
+    .bind(tool_name)
+    .bind(request)
+    .bind(parameters)
+    .execute(pool)
+    .await
+    .context("Failed to insert routing event")?;
+    Ok(())
+}
+
+/// Complete a routing event with result, cost, and timing data.
+pub async fn complete_routing_event(
+    pool: &PgPool,
+    id: Uuid,
+    cluster_agent_id: Option<Uuid>,
+    response: Option<&str>,
+    error: Option<&str>,
+    status: &str,
+    agent_tier: Option<&str>,
+    model_id: Option<&str>,
+    input_tokens: i64,
+    output_tokens: i64,
+    duration_ms: i64,
+) -> Result<()> {
+    sqlx::query(
+        r#"UPDATE routing_events
+           SET cluster_agent_id = $2, response = $3, error = $4, status = $5,
+               agent_tier = $6, model_id = $7,
+               input_tokens = $8, output_tokens = $9, duration_ms = $10,
+               completed_at = NOW()
+           WHERE id = $1"#,
+    )
+    .bind(id)
+    .bind(cluster_agent_id)
+    .bind(response)
+    .bind(error)
+    .bind(status)
+    .bind(agent_tier)
+    .bind(model_id)
+    .bind(input_tokens)
+    .bind(output_tokens)
+    .bind(duration_ms)
+    .execute(pool)
+    .await
+    .context("Failed to complete routing event")?;
+    Ok(())
+}
+
+/// List tools belonging to a cluster
+pub async fn list_tools_by_cluster(pool: &PgPool, cluster_id: Uuid) -> Result<Vec<super::ToolRow>> {
+    let rows: Vec<ToolRowDb> = sqlx::query_as(
+        "SELECT id, name, description, category, parameter_schema, output_schema, enabled, cluster_id, is_builtin FROM tools WHERE cluster_id = $1 AND enabled = true",
+    )
+    .bind(cluster_id)
+    .fetch_all(pool)
+    .await
+    .context("Failed to list tools by cluster")?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| super::ToolRow {
+            id: r.id,
+            name: r.name,
+            description: r.description,
+            category: r.category,
+            parameter_schema: r.parameter_schema,
+            output_schema: r.output_schema,
+            enabled: r.enabled,
+            cluster_id: r.cluster_id,
+            is_builtin: r.is_builtin,
+        })
+        .collect())
+}
+
+#[derive(sqlx::FromRow)]
+struct ToolRowDb {
+    id: Uuid,
+    name: String,
+    description: String,
+    category: String,
+    parameter_schema: serde_json::Value,
+    output_schema: serde_json::Value,
+    enabled: bool,
+    cluster_id: Option<Uuid>,
+    is_builtin: bool,
+}
+
+/// List all clusters with their tools (for building the ToolClusterIndex)
+pub async fn list_clusters_with_tools(
+    pool: &PgPool,
+) -> Result<Vec<(super::ClusterRow, Vec<super::ToolRow>)>> {
+    let cluster_rows: Vec<ClusterRowDb> =
+        sqlx::query_as("SELECT id, name, description, conventions, shared_files FROM clusters")
+            .fetch_all(pool)
+            .await
+            .context("Failed to list clusters")?;
+
+    let mut results = Vec::new();
+    for cr in cluster_rows {
+        let tool_rows = list_tools_by_cluster(pool, cr.id).await?;
+        let cluster = super::ClusterRow {
+            id: cr.id,
+            name: cr.name,
+            description: cr.description,
+            conventions: cr.conventions,
+            shared_files: cr.shared_files,
+        };
+        results.push((cluster, tool_rows));
+    }
+    Ok(results)
+}
+
+#[derive(sqlx::FromRow)]
+struct ClusterRowDb {
+    id: Uuid,
+    name: String,
+    description: String,
+    conventions: String,
+    shared_files: serde_json::Value,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

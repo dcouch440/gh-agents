@@ -6,12 +6,13 @@ pub mod cluster;
 mod dispatcher;
 pub mod execution_tools;
 mod executor;
-pub mod tool_router;
 pub mod pipeline;
 mod pool;
 pub mod protocol;
 mod roles;
+pub mod router_agent;
 pub mod schedule;
+pub mod tool_router;
 
 pub use agent::{Agent, AgentError, AgentId};
 pub use channels::{
@@ -30,6 +31,8 @@ pub use roles::{
     CommunicationStyle, LoadedFile, OutputFormat, RequiredReadingLoader, Role, RoleCategory,
     RoleId, RoleLibrary, RoleManager, RoleTemplate, TemplateVariable, VariableType,
 };
+pub use router_agent::{ClusterEntry, ToolClusterIndex};
 pub use schedule::{
     Schedule, ScheduleError, ScheduleId, ScheduleManager, Trigger, TriggerEvent, TriggerId,
 };
+pub use tool_router::ClusterRoutingContext;

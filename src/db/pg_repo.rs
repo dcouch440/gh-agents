@@ -7,8 +7,8 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::db::traits::{
-    CostRepo, DependencyRepo, DocumentRepo, MergeQueueRepo,
-    RefactorRepo, SchedulerRepo, ServerRepo, TaskQueueRepo, UserRepo,
+    CostRepo, DependencyRepo, DocumentRepo, MergeQueueRepo, RefactorRepo, SchedulerRepo,
+    ServerRepo, TaskQueueRepo, UserRepo,
 };
 use crate::db::{
     AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, PipelineRow,
