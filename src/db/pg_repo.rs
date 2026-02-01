@@ -6,10 +6,10 @@ use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::db::traits::{CostRepo, DependencyRepo, DocumentRepo, MergeQueueRepo, OutputSchemaRepo, RefactorRepo, SchedulerRepo, ServerRepo, TaskQueueRepo, UserRepo};
+use crate::db::traits::{CostRepo, DependencyRepo, DocumentRepo, MergeQueueRepo, OutputSchemaRepo, PromptTemplateRepo, RefactorRepo, SchedulerRepo, ServerRepo, TaskQueueRepo, UserRepo};
 use crate::db::{
-    AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageRow, ScheduleRow, SessionRow, StageExecutionRow,
-    StageSideTaskRow, ToolRow, TriggerRow, UsageSummaryRow,
+    AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageRow, PromptTemplateRow, ScheduleRow, SessionRow,
+    StageExecutionRow, StageSideTaskRow, ToolRow, TriggerRow, UsageSummaryRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::orchestration::DependencyError;
@@ -1778,6 +1778,64 @@ impl OutputSchemaRepo for PgRepo {
 
     async fn delete_output_schema(&self, id: Uuid) -> Result<()> {
         sqlx::query("DELETE FROM output_schemas WHERE id = $1").bind(id).execute(&self.pool).await?;
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl PromptTemplateRepo for PgRepo {
+    async fn create_prompt_template(&self, user_id: Uuid, name: String, content: String) -> Result<PromptTemplateRow> {
+        let row: PromptTemplateRow = sqlx::query_as(
+            r#"
+            INSERT INTO prompt_templates (user_id, name, content)
+            VALUES ($1, $2, $3)
+            RETURNING id, user_id, name, content, created_at
+            "#,
+        )
+        .bind(user_id)
+        .bind(&name)
+        .bind(&content)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn get_prompt_template(&self, id: Uuid) -> Result<Option<PromptTemplateRow>> {
+        let row: Option<PromptTemplateRow> = sqlx::query_as("SELECT id, user_id, name, content, created_at FROM prompt_templates WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row)
+    }
+
+    async fn list_prompt_templates(&self, user_id: Uuid) -> Result<Vec<PromptTemplateRow>> {
+        let rows: Vec<PromptTemplateRow> = sqlx::query_as("SELECT id, user_id, name, content, created_at FROM prompt_templates WHERE user_id = $1 ORDER BY created_at DESC")
+            .bind(user_id)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows)
+    }
+
+    async fn update_prompt_template(&self, id: Uuid, name: Option<String>, content: Option<String>) -> Result<PromptTemplateRow> {
+        let row: PromptTemplateRow = sqlx::query_as(
+            r#"
+            UPDATE prompt_templates
+            SET name = COALESCE($1, name),
+                content = COALESCE($2, content)
+            WHERE id = $3
+            RETURNING id, user_id, name, content, created_at
+            "#,
+        )
+        .bind(name)
+        .bind(content)
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn delete_prompt_template(&self, id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM prompt_templates WHERE id = $1").bind(id).execute(&self.pool).await?;
         Ok(())
     }
 }

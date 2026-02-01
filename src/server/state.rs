@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::agents::{AgentPool, AgentResponse, ClusterManager, Dispatcher, PipelineManager, RoleManager, ScheduleManager, ToolClusterIndex};
 use crate::db::pg_repo::PgRepo;
-use crate::db::traits::{DocumentRepo, OutputSchemaRepo, ServerRepo, UserRepo};
+use crate::db::traits::{DocumentRepo, OutputSchemaRepo, PromptTemplateRepo, ServerRepo, UserRepo};
 use crate::llm::AnthropicClient;
 use crate::orchestration::Scheduler;
 use crate::types::{AgentPoolConfig, AppConfig, UserId};
@@ -67,6 +67,8 @@ pub struct AppState {
     pub doc_repo: Option<Arc<dyn DocumentRepo>>,
     /// Output schema repository (None in legacy/test mode)
     pub output_schema_repo: Option<Arc<dyn OutputSchemaRepo>>,
+    /// Prompt template repository (None in legacy/test mode)
+    pub prompt_template_repo: Option<Arc<dyn PromptTemplateRepo>>,
     /// Task scheduler for orchestration (None in mock-based tests)
     pub scheduler: Option<Arc<RwLock<Scheduler>>>,
     /// Application configuration (mutable at runtime via API)
@@ -119,10 +121,12 @@ impl AppState {
         let user_repo: Arc<dyn UserRepo> = Arc::new(PgRepo::new(db.clone()));
         let doc_repo: Arc<dyn DocumentRepo> = Arc::new(PgRepo::new(db.clone()));
         let output_schema_repo: Arc<dyn OutputSchemaRepo> = Arc::new(PgRepo::new(db.clone()));
+        let prompt_template_repo: Arc<dyn PromptTemplateRepo> = Arc::new(PgRepo::new(db.clone()));
         let (mut state, rx) = Self::with_repo(Some(db), repo, Some(scheduler), config.clone());
         state.user_repo = Some(user_repo);
         state.doc_repo = Some(doc_repo);
         state.output_schema_repo = Some(output_schema_repo);
+        state.prompt_template_repo = Some(prompt_template_repo);
 
         // Initialize role manager with current working directory as project root
         let project_root = std::env::current_dir().unwrap_or_default();
@@ -282,6 +286,7 @@ impl AppState {
                 user_repo: None,
                 doc_repo: None,
                 output_schema_repo: None,
+                prompt_template_repo: None,
                 scheduler,
                 config: Arc::new(RwLock::new(config)),
                 jwt_secret,

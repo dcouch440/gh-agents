@@ -9,8 +9,8 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::db::{
-    AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageRow, ScheduleRow, SessionRow, StageExecutionRow,
-    StageSideTaskRow, ToolRow, TriggerRow, UsageSummaryRow,
+    AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageRow, PromptTemplateRow, ScheduleRow, SessionRow,
+    StageExecutionRow, StageSideTaskRow, ToolRow, TriggerRow, UsageSummaryRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::orchestration::DependencyError;
@@ -464,4 +464,28 @@ pub trait OutputSchemaRepo: Send + Sync {
 
     /// Delete an output schema by ID.
     async fn delete_output_schema(&self, id: Uuid) -> Result<()>;
+}
+
+// ============================================================================
+// Prompt Template Repository
+// ============================================================================
+
+/// Database operations for prompt template management.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait PromptTemplateRepo: Send + Sync {
+    /// Create a new prompt template.
+    async fn create_prompt_template(&self, user_id: Uuid, name: String, content: String) -> Result<PromptTemplateRow>;
+
+    /// Get a prompt template by ID.
+    async fn get_prompt_template(&self, id: Uuid) -> Result<Option<PromptTemplateRow>>;
+
+    /// List all prompt templates for a user.
+    async fn list_prompt_templates(&self, user_id: Uuid) -> Result<Vec<PromptTemplateRow>>;
+
+    /// Update a prompt template's name and/or content.
+    async fn update_prompt_template(&self, id: Uuid, name: Option<String>, content: Option<String>) -> Result<PromptTemplateRow>;
+
+    /// Delete a prompt template by ID.
+    async fn delete_prompt_template(&self, id: Uuid) -> Result<()>;
 }
