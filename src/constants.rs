@@ -261,6 +261,10 @@ pub mod routes {
     // Costs
     pub const COSTS: &str = "/costs";
 
+    // Results
+    pub const RESULTS: &str = "/results";
+    pub const RESULT: &str = "/results/:id";
+
     // Stats
     pub const STATS: &str = "/stats";
 

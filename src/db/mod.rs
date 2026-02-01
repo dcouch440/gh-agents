@@ -249,6 +249,18 @@ pub struct ExecutionMessageRow {
     pub created_at: DateTime<Utc>,
 }
 
+/// Row type for saved structured results.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct ResultRow {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub agent_execution_id: Uuid,
+    pub output_schema_id: Option<Uuid>,
+    pub name: String,
+    pub data: serde_json::Value,
+    pub created_at: DateTime<Utc>,
+}
+
 /// Row type for token ledger entries.
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct TokenLedgerRow {

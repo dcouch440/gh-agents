@@ -7,12 +7,12 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::db::traits::{
-    AgentExecutionRepo, CostRepo, DependencyRepo, DocumentRepo, MergeQueueRepo, ModelSpendRow, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, RefactorRepo, SchedulerRepo, ServerRepo,
-    TaskQueueRepo, TokenLedgerRepo, UserRepo, WorkflowRepo,
+    AgentExecutionRepo, CostRepo, DependencyRepo, DocumentRepo, MergeQueueRepo, ModelSpendRow, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, RefactorRepo, ResultRepo, SchedulerRepo,
+    ServerRepo, TaskQueueRepo, TokenLedgerRepo, UserRepo, WorkflowRepo,
 };
 use crate::db::{
     AgentExecutionRow, AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageMemberRow,
-    PipelineStageRow, PromptTemplateRow, ScheduleRow, SessionRow, StageExecutionRow, StageSideTaskRow, StepDocumentRow, TokenLedgerRow, ToolRow, TriggerRow, UsageSummaryRow, WorkflowRow,
+    PipelineStageRow, PromptTemplateRow, ResultRow, ScheduleRow, SessionRow, StageExecutionRow, StageSideTaskRow, StepDocumentRow, TokenLedgerRow, ToolRow, TriggerRow, UsageSummaryRow, WorkflowRow,
     WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
@@ -2234,6 +2234,48 @@ impl TokenLedgerRepo for PgRepo {
             }
         };
         Ok(rows)
+    }
+}
+
+#[async_trait]
+impl ResultRepo for PgRepo {
+    async fn save_result(&self, user_id: Uuid, agent_execution_id: Uuid, output_schema_id: Option<Uuid>, name: &str, data: serde_json::Value) -> Result<ResultRow> {
+        let row = sqlx::query_as::<_, ResultRow>("INSERT INTO results (user_id, agent_execution_id, output_schema_id, name, data) VALUES ($1, $2, $3, $4, $5) RETURNING *")
+            .bind(user_id)
+            .bind(agent_execution_id)
+            .bind(output_schema_id)
+            .bind(name)
+            .bind(data)
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(row)
+    }
+
+    async fn get_result(&self, id: Uuid) -> Result<Option<ResultRow>> {
+        let row = sqlx::query_as::<_, ResultRow>("SELECT * FROM results WHERE id = $1").bind(id).fetch_optional(&self.pool).await?;
+        Ok(row)
+    }
+
+    async fn list_results(&self, user_id: Uuid) -> Result<Vec<ResultRow>> {
+        let rows = sqlx::query_as::<_, ResultRow>("SELECT * FROM results WHERE user_id = $1 ORDER BY created_at DESC")
+            .bind(user_id)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows)
+    }
+
+    async fn list_results_by_schema(&self, user_id: Uuid, output_schema_id: Uuid) -> Result<Vec<ResultRow>> {
+        let rows = sqlx::query_as::<_, ResultRow>("SELECT * FROM results WHERE user_id = $1 AND output_schema_id = $2 ORDER BY created_at DESC")
+            .bind(user_id)
+            .bind(output_schema_id)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows)
+    }
+
+    async fn delete_result(&self, id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM results WHERE id = $1").bind(id).execute(&self.pool).await?;
+        Ok(())
     }
 }
 

@@ -2043,6 +2043,67 @@ pub async fn get_costs(State(state): State<AppState>, auth: auth::AuthUser, Quer
 }
 
 // ============================================================================
+// Result Endpoints
+// ============================================================================
+
+#[derive(Serialize)]
+pub struct ResultResponse {
+    pub id: Uuid,
+    pub agent_execution_id: Uuid,
+    pub output_schema_id: Option<Uuid>,
+    pub name: String,
+    pub data: serde_json::Value,
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<crate::db::ResultRow> for ResultResponse {
+    fn from(r: crate::db::ResultRow) -> Self {
+        Self {
+            id: r.id,
+            agent_execution_id: r.agent_execution_id,
+            output_schema_id: r.output_schema_id,
+            name: r.name,
+            data: r.data,
+            created_at: r.created_at,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct ResultQuery {
+    pub output_schema_id: Option<Uuid>,
+}
+
+pub async fn list_results(State(state): State<AppState>, auth: auth::AuthUser, Query(q): Query<ResultQuery>) -> Result<Json<Vec<ResultResponse>>, StatusCode> {
+    let repo = state.result_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = match q.output_schema_id {
+        Some(schema_id) => repo.list_results_by_schema(auth.user_id.0, schema_id).await,
+        None => repo.list_results(auth.user_id.0).await,
+    }
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(rows.into_iter().map(ResultResponse::from).collect()))
+}
+
+pub async fn get_result(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<ResultResponse>, StatusCode> {
+    let repo = state.result_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = repo.get_result(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    if row.user_id != auth.user_id.0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    Ok(Json(ResultResponse::from(row)))
+}
+
+pub async fn delete_result(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
+    let repo = state.result_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = repo.get_result(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    if row.user_id != auth.user_id.0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    repo.delete_result(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ============================================================================
 // Workflows Endpoints
 // ============================================================================
 
