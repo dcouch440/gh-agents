@@ -450,7 +450,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                         if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
                                             for doc in &docs {
                                                 context_reading.push(FileContent {
-                                                    path: format!("context:{}", if doc.ref_tag.is_empty() { &doc.title } else { &doc.ref_tag }),
+                                                    path: format!("context:{}", doc.ref_tag.as_deref().filter(|s| !s.is_empty()).unwrap_or(&doc.title)),
                                                     content: doc.content.clone(),
                                                 });
                                             }
@@ -467,7 +467,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                                     if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
                                                         for doc in &docs {
                                                             context_reading.push(FileContent {
-                                                                path: format!("context:{}", if doc.ref_tag.is_empty() { &doc.title } else { &doc.ref_tag }),
+                                                                path: format!("context:{}", doc.ref_tag.as_deref().filter(|s| !s.is_empty()).unwrap_or(&doc.title)),
                                                                 content: doc.content.clone(),
                                                             });
                                                         }

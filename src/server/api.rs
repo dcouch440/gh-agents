@@ -1383,10 +1383,10 @@ pub async fn auth_me(auth: auth::AuthUser) -> Json<MeResponse> {
 pub struct DocumentListItem {
     pub id: Uuid,
     pub title: String,
-    pub summary: String,
-    pub ref_tag: String,
-    pub tags: Vec<String>,
-    pub doc_type: String,
+    pub summary: Option<String>,
+    pub ref_tag: Option<String>,
+    pub tags: Option<Vec<String>>,
+    pub doc_type: Option<String>,
     pub updated_at: DateTime<Utc>,
 }
 
@@ -1396,10 +1396,10 @@ pub struct DocumentResponse {
     pub id: Uuid,
     pub title: String,
     pub content: String,
-    pub summary: String,
-    pub ref_tag: String,
-    pub tags: Vec<String>,
-    pub doc_type: String,
+    pub summary: Option<String>,
+    pub ref_tag: Option<String>,
+    pub tags: Option<Vec<String>>,
+    pub doc_type: Option<String>,
     pub session_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -3039,7 +3039,7 @@ pub async fn approve_pipeline_run(
                             if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
                                 for doc in &docs {
                                     context_reading.push(crate::agents::FileContent {
-                                        path: format!("context:{}", if doc.ref_tag.is_empty() { &doc.title } else { &doc.ref_tag }),
+                                        path: format!("context:{}", doc.ref_tag.as_deref().filter(|s| !s.is_empty()).unwrap_or(&doc.title)),
                                         content: doc.content.clone(),
                                     });
                                 }
@@ -3053,7 +3053,7 @@ pub async fn approve_pipeline_run(
                                         if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
                                             for doc in &docs {
                                                 context_reading.push(crate::agents::FileContent {
-                                                    path: format!("context:{}", if doc.ref_tag.is_empty() { &doc.title } else { &doc.ref_tag }),
+                                                    path: format!("context:{}", doc.ref_tag.as_deref().filter(|s| !s.is_empty()).unwrap_or(&doc.title)),
                                                     content: doc.content.clone(),
                                                 });
                                             }

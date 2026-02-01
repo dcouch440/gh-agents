@@ -942,8 +942,8 @@ async fn execute_assign_task(input: &Value, state: &AppState, session_id: Option
             for cap in re.captures_iter(&desc) {
                 let ref_tag = &cap[1];
                 match doc_repo.get_document_by_ref_tag(ref_tag).await {
-                    Ok(Some(row)) if !row.summary.is_empty() => {
-                        doc_sections.push(format!("### @doc:{}\n{}", ref_tag, row.summary));
+                    Ok(Some(row)) if row.summary.as_ref().is_some_and(|s| !s.is_empty()) => {
+                        doc_sections.push(format!("### @doc:{}\n{}", ref_tag, row.summary.as_deref().unwrap_or("")));
                     }
                     _ => {
                         tracing::debug!("Document ref @doc:{} not found or has no summary", ref_tag);
@@ -1415,7 +1415,7 @@ async fn execute_start_pipeline(input: &Value, state: &AppState, user_id: UserId
         if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
             for doc in &docs {
                 context_reading.push(crate::agents::FileContent {
-                    path: format!("context:{}", if doc.ref_tag.is_empty() { &doc.title } else { &doc.ref_tag }),
+                    path: format!("context:{}", doc.ref_tag.as_deref().filter(|s| !s.is_empty()).unwrap_or(&doc.title)),
                     content: doc.content.clone(),
                 });
             }
@@ -1429,7 +1429,7 @@ async fn execute_start_pipeline(input: &Value, state: &AppState, user_id: UserId
                     if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
                         for doc in &docs {
                             context_reading.push(crate::agents::FileContent {
-                                path: format!("context:{}", if doc.ref_tag.is_empty() { &doc.title } else { &doc.ref_tag }),
+                                path: format!("context:{}", doc.ref_tag.as_deref().filter(|s| !s.is_empty()).unwrap_or(&doc.title)),
                                 content: doc.content.clone(),
                             });
                         }
