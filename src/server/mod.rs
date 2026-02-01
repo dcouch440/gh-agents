@@ -149,6 +149,7 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
 }
 
 /// Create the application router with a specific static directory (no rate limiting — used by tests)
+#[cfg(test)]
 fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
     let cors = build_cors_layer();
     let public_routes = build_public_routes();
