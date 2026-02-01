@@ -112,9 +112,8 @@
   transition: fill 300ms ease;
 }
 
-.tree-status-spinner {
-  animation: tree-spin 1s linear infinite;
-  transform-origin: center;
+.tree-status-running {
+  animation: tree-running-dash 1s linear infinite;
 }
 
 /* ── Keyframes ───────────────────────────────────── */
@@ -133,6 +132,6 @@
   to { stroke-dashoffset: -9; }
 }
 
-@keyframes tree-spin {
-  to { transform: rotate(360deg); }
+@keyframes tree-running-dash {
+  to { stroke-dashoffset: -20; }
 }

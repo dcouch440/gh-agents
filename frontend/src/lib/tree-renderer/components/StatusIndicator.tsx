@@ -30,10 +30,19 @@ function StatusIndicator({ status, x, y, size = 12, theme }: StatusIndicatorProp
   }
 
   if (status === 'running') {
+    const circumference = 2 * Math.PI * r
     return (
-      <g className="tree-status-spinner" style={{ transformOrigin: `${cx}px ${cy}px` }}>
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={1.5} strokeDasharray={`${r * 4} ${r * 2}`} />
-      </g>
+      <circle
+        className="tree-status-running"
+        cx={cx}
+        cy={cy}
+        r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeDasharray={`${circumference * 0.3} ${circumference * 0.7}`}
+        strokeLinecap="round"
+      />
     )
   }
 
