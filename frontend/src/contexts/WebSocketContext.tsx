@@ -19,7 +19,7 @@ function WebSocketProvider({ children }: { children: ReactNode }) {
   const handlersRef = useRef<Map<WsChannel, Set<MessageHandler>>>(new Map())
   const subscribedChannelsRef = useRef<Set<WsChannel>>(new Set())
   const reconnectAttemptRef = useRef(0)
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout>>()
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [status, setStatus] = useState<WsStatus>('disconnected')
   const tokenRef = useRef(token)
 

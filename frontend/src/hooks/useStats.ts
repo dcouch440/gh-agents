@@ -29,11 +29,11 @@ const useStats = () => {
       await load()
       if (cancelled) return
     }
-    run()
+    void run()
 
     if (!USE_MOCK_DATA) {
       const interval = setInterval(() => {
-        if (!cancelled) load()
+        if (!cancelled) void load()
       }, STATS_POLL_INTERVAL_MS)
       return () => { cancelled = true; clearInterval(interval) }
     }

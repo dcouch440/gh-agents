@@ -3,8 +3,8 @@ export const APP_NAME = 'nexor'
 export const APP_VERSION = '0.1.0'
 
 // API
-export const API_BASE = import.meta.env.VITE_API_URL ?? '/api'
-export const WS_URL = import.meta.env.VITE_WS_URL ?? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
+export const API_BASE: string = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
+export const WS_URL: string = (import.meta.env.VITE_WS_URL as string | undefined) ?? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
 
 // WS Channels
 export const WS_CHANNEL = {

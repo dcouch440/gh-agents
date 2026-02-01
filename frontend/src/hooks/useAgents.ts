@@ -30,7 +30,7 @@ const useAgents = () => {
       await load()
       if (cancelled) return
     }
-    run()
+    void run()
     return () => { cancelled = true }
   }, [load])
 
@@ -64,7 +64,7 @@ const useAgent = (id: string | null) => {
         if (!cancelled) setLoading(false)
       }
     }
-    load()
+    void load()
     return () => { cancelled = true }
   }, [id])
 

@@ -40,7 +40,7 @@ type StageExecution = {
   status: string
   rendered_prompt: string | null
   output: string | null
-  structured_output: unknown | null
+  structured_output: unknown
   user_input: string | null
   input_tokens: number
   output_tokens: number

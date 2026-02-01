@@ -15,9 +15,10 @@ const getToken = (): string | null => localStorage.getItem(LS_AUTH_TOKEN)
 
 const request = async <T>(path: string, opts?: RequestInit): Promise<T> => {
   const token = getToken()
+  const extra = (opts?.headers ?? {}) as Record<string, string>
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...((opts?.headers as Record<string, string>) ?? {}),
+    ...extra,
   }
   if (token) {
     headers['Authorization'] = `Bearer ${token}`

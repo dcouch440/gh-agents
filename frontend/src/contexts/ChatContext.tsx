@@ -73,7 +73,7 @@ function ChatProvider({ sessionId, children }: ChatProviderProps) {
   useEffect(() => {
     mountedRef.current = true
     dispatch({ type: ACTION.CLEAR })
-    load()
+    void load()
     return () => { mountedRef.current = false }
   }, [load])
 
@@ -89,7 +89,7 @@ function ChatProvider({ sessionId, children }: ChatProviderProps) {
   }, [subscribe, sessionId])
 
   return (
-    <ChatContext.Provider value={{ ...state, reload: load }}>
+    <ChatContext.Provider value={{ ...state, reload: () => { void load() } }}>
       {children}
     </ChatContext.Provider>
   )

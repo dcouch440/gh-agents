@@ -30,7 +30,7 @@ const useSessions = () => {
       await load()
       if (cancelled) return
     }
-    run()
+    void run()
     return () => { cancelled = true }
   }, [load])
 
@@ -64,7 +64,7 @@ const useChatHistory = (sessionId: string | null) => {
         if (!cancelled) setLoading(false)
       }
     }
-    load()
+    void load()
     return () => { cancelled = true }
   }, [sessionId])
 
@@ -92,7 +92,7 @@ const useModes = () => {
         if (!cancelled) setLoading(false)
       }
     }
-    load()
+    void load()
     return () => { cancelled = true }
   }, [])
 

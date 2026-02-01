@@ -71,7 +71,7 @@ function TaskProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     mountedRef.current = true
-    load()
+    void load()
     return () => { mountedRef.current = false }
   }, [load])
 
@@ -85,7 +85,7 @@ function TaskProvider({ children }: { children: ReactNode }) {
   }, [subscribe])
 
   return (
-    <TaskContext.Provider value={{ ...state, reload: load }}>
+    <TaskContext.Provider value={{ ...state, reload: () => { void load() } }}>
       {children}
     </TaskContext.Provider>
   )

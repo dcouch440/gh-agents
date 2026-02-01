@@ -57,8 +57,8 @@ function StatsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     mountedRef.current = true
-    load()
-    const interval = setInterval(load, STATS_POLL_INTERVAL_MS)
+    void load()
+    const interval = setInterval(() => { void load() }, STATS_POLL_INTERVAL_MS)
     return () => {
       mountedRef.current = false
       clearInterval(interval)

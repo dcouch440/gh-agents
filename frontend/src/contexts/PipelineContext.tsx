@@ -72,7 +72,7 @@ function PipelineProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     mountedRef.current = true
-    load()
+    void load()
     return () => { mountedRef.current = false }
   }, [load])
 
@@ -85,7 +85,7 @@ function PipelineProvider({ children }: { children: ReactNode }) {
   }, [subscribe])
 
   return (
-    <PipelineContext.Provider value={{ ...state, reload: load }}>
+    <PipelineContext.Provider value={{ ...state, reload: () => { void load() } }}>
       {children}
     </PipelineContext.Provider>
   )
