@@ -1,6 +1,6 @@
 import { createContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { useWebSocket } from '../hooks/useWebSocket'
-import { WS_CHANNEL, USE_MOCK_DATA } from '../constants'
+import { ACTION, WS_CHANNEL, USE_MOCK_DATA } from '../constants'
 import { api } from '../api'
 import { mock } from '../mock'
 import type { ChatMessage } from '../types/session'
@@ -18,23 +18,23 @@ const initialState: ChatState = { messages: [], loading: true, error: null }
 // ── Actions ──────────────────────────────────────────────────────────────────
 
 type ChatAction =
-  | { type: 'SET_ALL'; messages: ChatMessage[] }
-  | { type: 'APPEND'; message: ChatMessage }
-  | { type: 'SET_LOADING'; loading: boolean }
-  | { type: 'SET_ERROR'; error: string }
-  | { type: 'CLEAR' }
+  | { type: typeof ACTION.SET_ALL; messages: ChatMessage[] }
+  | { type: typeof ACTION.APPEND; message: ChatMessage }
+  | { type: typeof ACTION.SET_LOADING; loading: boolean }
+  | { type: typeof ACTION.SET_ERROR; error: string }
+  | { type: typeof ACTION.CLEAR }
 
 const reducer = (state: ChatState, action: ChatAction): ChatState => {
   switch (action.type) {
-    case 'SET_ALL':
+    case ACTION.SET_ALL:
       return { messages: action.messages, loading: false, error: null }
-    case 'APPEND':
+    case ACTION.APPEND:
       return { ...state, messages: [...state.messages, action.message] }
-    case 'SET_LOADING':
+    case ACTION.SET_LOADING:
       return { ...state, loading: action.loading }
-    case 'SET_ERROR':
+    case ACTION.SET_ERROR:
       return { ...state, loading: false, error: action.error }
-    case 'CLEAR':
+    case ACTION.CLEAR:
       return initialState
   }
 }
@@ -58,21 +58,21 @@ function ChatProvider({ sessionId, children }: ChatProviderProps) {
   const mountedRef = useRef(true)
 
   const load = useCallback(async () => {
-    dispatch({ type: 'SET_LOADING', loading: true })
+    dispatch({ type: ACTION.SET_LOADING, loading: true })
     try {
       const messages = USE_MOCK_DATA
         ? await mock.getChatHistory(sessionId)
         : await api.get<ChatMessage[]>(`/sessions/${sessionId}/history`)
-      if (mountedRef.current) dispatch({ type: 'SET_ALL', messages })
+      if (mountedRef.current) dispatch({ type: ACTION.SET_ALL, messages })
     } catch (e) {
-      if (mountedRef.current) dispatch({ type: 'SET_ERROR', error: e instanceof Error ? e.message : 'Failed to load chat history' })
+      if (mountedRef.current) dispatch({ type: ACTION.SET_ERROR, error: e instanceof Error ? e.message : 'Failed to load chat history' })
     }
   }, [sessionId])
 
   // Reset and reload when sessionId changes
   useEffect(() => {
     mountedRef.current = true
-    dispatch({ type: 'CLEAR' })
+    dispatch({ type: ACTION.CLEAR })
     load()
     return () => { mountedRef.current = false }
   }, [load])
@@ -82,7 +82,7 @@ function ChatProvider({ sessionId, children }: ChatProviderProps) {
     const unsub = subscribe(WS_CHANNEL.SESSIONS, (data) => {
       const msg = data as { session_id?: string; message?: ChatMessage }
       if (msg.session_id === sessionId && msg.message) {
-        dispatch({ type: 'APPEND', message: msg.message })
+        dispatch({ type: ACTION.APPEND, message: msg.message })
       }
     })
     return unsub

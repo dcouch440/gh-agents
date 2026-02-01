@@ -40,6 +40,21 @@ export const ROUTES = {
   SETTINGS: '/settings',
 } as const
 
+// Reducer Action Types
+export const ACTION = {
+  SET_ALL: 'SET_ALL',
+  SET_LOADING: 'SET_LOADING',
+  SET_ERROR: 'SET_ERROR',
+  UPDATE_ONE: 'UPDATE_ONE',
+  REMOVE_ONE: 'REMOVE_ONE',
+  APPEND: 'APPEND',
+  CLEAR: 'CLEAR',
+  UPDATE: 'UPDATE',
+  SET_PIPELINES: 'SET_PIPELINES',
+  SET_RUNS: 'SET_RUNS',
+  UPDATE_RUN: 'UPDATE_RUN',
+} as const
+
 // Mock Data
 export const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true'
 

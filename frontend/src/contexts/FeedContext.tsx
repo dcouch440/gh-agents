@@ -1,6 +1,6 @@
 import { createContext, useReducer, useEffect, type ReactNode } from 'react'
 import { useWebSocket } from '../hooks/useWebSocket'
-import { WS_CHANNEL } from '../constants'
+import { ACTION, WS_CHANNEL } from '../constants'
 import type { FeedItem } from '../types/feed'
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -18,16 +18,16 @@ const initialState: FeedState = { items: [] }
 // ── Actions ──────────────────────────────────────────────────────────────────
 
 type FeedAction =
-  | { type: 'APPEND'; item: FeedItem }
-  | { type: 'CLEAR' }
+  | { type: typeof ACTION.APPEND; item: FeedItem }
+  | { type: typeof ACTION.CLEAR }
 
 const reducer = (state: FeedState, action: FeedAction): FeedState => {
   switch (action.type) {
-    case 'APPEND': {
+    case ACTION.APPEND: {
       const next = [action.item, ...state.items]
       return { items: next.length > FEED_MAX_ITEMS ? next.slice(0, FEED_MAX_ITEMS) : next }
     }
-    case 'CLEAR':
+    case ACTION.CLEAR:
       return initialState
   }
 }
@@ -47,7 +47,7 @@ function FeedProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unsub = subscribe(WS_CHANNEL.FEED, (data) => {
       const msg = data as { item?: FeedItem }
-      if (msg.item) dispatch({ type: 'APPEND', item: msg.item })
+      if (msg.item) dispatch({ type: ACTION.APPEND, item: msg.item })
     })
     return unsub
   }, [subscribe])
