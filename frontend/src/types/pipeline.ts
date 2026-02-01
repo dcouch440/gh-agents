@@ -49,4 +49,13 @@ type StageExecution = {
   duration_ms: number
 }
 
-export type { Pipeline, PipelineStage, PipelineRun, StageExecution }
+type ApproveGateRequest = {
+  user_input?: string
+}
+
+type CreateSideTaskRequest = {
+  title: string
+  description: string
+}
+
+export type { Pipeline, PipelineStage, PipelineRun, StageExecution, ApproveGateRequest, CreateSideTaskRequest }

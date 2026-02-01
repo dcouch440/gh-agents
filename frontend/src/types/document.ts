@@ -20,4 +20,14 @@ type DocumentSearchResult = {
   snippet: string
 }
 
-export type { Document, DocumentSearchResult }
+type CreateDocumentRequest = {
+  title: string
+  content: string
+  doc_type: string
+  ref_tag?: string
+  tags?: string[]
+}
+
+type UpdateDocumentRequest = Partial<CreateDocumentRequest>
+
+export type { Document, DocumentSearchResult, CreateDocumentRequest, UpdateDocumentRequest }

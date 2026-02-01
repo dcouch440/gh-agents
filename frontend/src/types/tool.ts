@@ -10,4 +10,14 @@ type Tool = {
   is_builtin: boolean
 }
 
-export type { Tool }
+type CreateToolRequest = {
+  name: string
+  description: string
+  category: string
+  parameter_schema?: unknown
+  output_schema?: unknown
+}
+
+type UpdateToolRequest = Partial<CreateToolRequest & { enabled: boolean }>
+
+export type { Tool, CreateToolRequest, UpdateToolRequest }

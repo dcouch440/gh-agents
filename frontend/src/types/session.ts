@@ -21,4 +21,18 @@ type Mode = {
   description: string
 }
 
-export type { Session, ChatMessage, Mode }
+type CreateSessionRequest = {
+  mode_id: string
+  title?: string
+}
+
+type UpdateSessionRequest = {
+  title?: string
+}
+
+type SendMessageRequest = {
+  content: string
+  mode_id?: string
+}
+
+export type { Session, ChatMessage, Mode, CreateSessionRequest, UpdateSessionRequest, SendMessageRequest }
