@@ -188,6 +188,7 @@ pub struct WorkflowStepRow {
     pub output_schema_id: Option<Uuid>,
     pub output_variable_name: Option<String>,
     pub interactive_agent_id: Option<Uuid>,
+    pub for_each_label_field: Option<String>,
     pub display_order: i32,
 }
 

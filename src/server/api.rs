@@ -2139,6 +2139,7 @@ pub struct WorkflowStepResponse {
     pub output_schema_id: Option<Uuid>,
     pub output_variable_name: Option<String>,
     pub interactive_agent_id: Option<Uuid>,
+    pub for_each_label_field: Option<String>,
     pub display_order: i32,
 }
 
@@ -2152,6 +2153,7 @@ pub struct CreateStepRequest {
     pub output_schema_id: Option<Uuid>,
     pub output_variable_name: Option<String>,
     pub interactive_agent_id: Option<Uuid>,
+    pub for_each_label_field: Option<String>,
     pub display_order: Option<i32>,
 }
 
@@ -2165,6 +2167,7 @@ pub struct UpdateStepRequest {
     pub output_schema_id: Option<Uuid>,
     pub output_variable_name: Option<String>,
     pub interactive_agent_id: Option<Uuid>,
+    pub for_each_label_field: Option<String>,
     pub display_order: Option<i32>,
 }
 
@@ -2203,6 +2206,7 @@ fn step_response(r: crate::db::WorkflowStepRow) -> WorkflowStepResponse {
         output_schema_id: r.output_schema_id,
         output_variable_name: r.output_variable_name,
         interactive_agent_id: r.interactive_agent_id,
+        for_each_label_field: r.for_each_label_field,
         display_order: r.display_order,
     }
 }
@@ -2314,6 +2318,7 @@ pub async fn create_workflow_step(
         output_schema_id: req.output_schema_id,
         output_variable_name: req.output_variable_name,
         interactive_agent_id: req.interactive_agent_id,
+        for_each_label_field: req.for_each_label_field,
         display_order: req.display_order.unwrap_or(0),
     };
     let row = repo.create_step(step).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -2378,6 +2383,7 @@ pub async fn update_workflow_step(
         output_schema_id: req.output_schema_id,
         output_variable_name: req.output_variable_name,
         interactive_agent_id: req.interactive_agent_id,
+        for_each_label_field: req.for_each_label_field.or(existing.for_each_label_field),
         display_order: req.display_order.unwrap_or(existing.display_order),
     };
     let row = repo.update_step(step).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
