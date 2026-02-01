@@ -4,4 +4,5 @@
 4. Create mock data so agents can create showcases.
 5. Create context layers depending on uses like webhooks.
 6. Create reusable hooks based off the specification.
-7. Create reusable components.
+7. Create reusable components by decomping them in stages, easy medium hard. Start with easy and provide briefe context on medium, hard.
+8. Plan css module pattern.

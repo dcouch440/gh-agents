@@ -1,0 +1,65 @@
+  ⎿  Prompt:                                                                                                                                                                 
+       You are designing an implementation plan for a Rust + React project called nexor. Based on the context below, produce a detailed, actionable plan.                    
+                                                                                                                                                                             
+       What we're building                                                                                                                                                   
+                                                                                                                                                                             
+       Backend (primary focus): Tool Routing System                                                                                                                          
+                                                                                                                                                                             
+       The request_assistance pattern from TOOLS.md. The primary conversational agent has ONE tool: request_assistance. When called, a router agent (Sonnet-tier) receives   
+       the request, identifies the right cluster/tool, dispatches to specialist agents, and returns a response.                                                              
+                                                                                                                                                                             
+       Existing code already has:                                                                                                                                            
+       - Agent system with tiers (Orchestrator/Worker/Utility) in src/agents/                                                                                                
+       - Channels (AgentCommand/AgentResponse) in src/agents/channels.rs                                                                                                     
+       - Role system with delegation in src/agents/roles.rs                                                                                                                  
+       - Router in src/orchestration/router.rs (currently routes by complexity to tiers)                                                                                     
+       - Tools table in DB (migration 024) with cluster_id field                                                                                                             
+       - Tool definitions in src/prompts/tools/ with router_mode support                                                                                                     
+       - request_assistance already exists as a concept in the tool system                                                                                                   
+       - WebSocket broadcasting on channels: feed, tasks, agents, sessions, pipelines                                                                                        
+                                                                                                                                                                             
+       What needs to be built:                                                                                                                                               
+       1. Cluster definitions — Named clusters of tools (e.g., "database", "codebase", "testing") stored in DB                                                               
+       2. Router Agent — A dedicated Sonnet-tier agent that receives request_assistance calls, has context about available clusters/tools, and dispatches work               
+       3. Cluster execution — When the router picks a cluster, spawn/assign a utility agent to execute the actual tool(s) in that cluster                                    
+       4. Response pipeline — Route results back: cluster agent → router agent → primary agent → user                                                                        
+       5. WS events — Broadcast routing/cluster events so the frontend can visualize the flow                                                                                
+                                                                                                                                                                             
+       Frontend (scaffolding only): Granular Context Architecture                                                                                                            
+                                                                                                                                                                             
+       Set up the context/hook layer that mirrors the backend's data domains. Each context:                                                                                  
+       - Subscribes to its own WS channel                                                                                                                                    
+       - Is placed as deep as possible in the component tree (not all at App root)                                                                                           
+       - Scoped updates — only the subtree that needs the data rerenders                                                                                                     
+       - Production-ready patterns that an AI agent could write components against                                                                                           
+                                                                                                                                                                             
+       Contexts to create:                                                                                                                                                   
+       - AgentContext (WS channel: agents)                                                                                                                                   
+       - TaskContext (WS channel: tasks)                                                                                                                                     
+       - PipelineContext (WS channel: pipelines)                                                                                                                             
+       - FeedContext (WS channel: feed)                                                                                                                                      
+       - StatsContext (polling-based, not WS)                                                                                                                                
+       - ChatContext (WS channel: sessions, scoped to active session)                                                                                                        
+                                                                                                                                                                             
+       Each gets a custom hook that throws outside provider. Existing AuthContext and WebSocketContext stay as-is at the root.                                               
+                                                                                                                                                                             
+       Constraints                                                                                                                                                           
+                                                                                                                                                                             
+       - Rust: cargo fmt, cargo clippy, thiserror for lib errors, anyhow for app code, tokio async, timeout external calls                                                   
+       - Frontend: strict TypeScript, type over interface, function declarations for components, arrow for everything else, null over undefined, named exports only, no      
+       external state libs, useReducer for complex state                                                                                                                     
+       - Zero ESLint warnings                                                                                                                                                
+                                                                                                                                                                             
+       Deliverables                                                                                                                                                          
+                                                                                                                                                                             
+       Write a step-by-step implementation plan with:                                                                                                                        
+       1. Exact files to create/modify                                                                                                                                       
+       2. Data structures and types                                                                                                                                          
+       3. Migration SQL                                                                                                                                                      
+       4. API endpoints if needed                                                                                                                                            
+       5. Testing approach                                                                                                                                                   
+       6. Verification steps                                                                                                                                                 
+                                                                                                                                                                             
+       Keep it concise but precise enough to execute.                                                                                                                        
+                                                                                                                                                                             
+     ❯ You are designing an implementation plan for a Rust + React project called nexor. Based on the context below, produce a detailed, actionable plan.

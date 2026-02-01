@@ -19,8 +19,10 @@ The agent layer that picks up the the task is bassicly a switch case "expert in 
 
 Task Description: "The details it takes to get the job done"
 Task Identifier: "a simple key to write thats easy to identify"
+Task Response: "Ok I have agents working on it right now".
 Additional Values: "suggestions needed"
 
+The Task Response will be returned to the user and the 
 
 This could return a response that is detailed in framing for the primary agent to have targeted context for the task at and and the data is precieved with the most capable agent.
 
