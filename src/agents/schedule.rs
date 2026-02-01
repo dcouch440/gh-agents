@@ -221,16 +221,7 @@ impl ScheduleManager {
     }
 
     /// Create a trigger with a specific ID (for DB reconstruction).
-    pub fn create_trigger_with_id(
-        &mut self,
-        id: TriggerId,
-        name: String,
-        event_type: TriggerEvent,
-        agent_id: AgentId,
-        task_title: String,
-        task_description: String,
-        role: Option<String>,
-    ) {
+    pub fn create_trigger_with_id(&mut self, id: TriggerId, name: String, event_type: TriggerEvent, agent_id: AgentId, task_title: String, task_description: String, role: Option<String>) {
         self.triggers.insert(
             id,
             Trigger {

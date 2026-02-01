@@ -126,10 +126,7 @@ impl ContextInjector {
         sources.sort_by(|a, b| b.priority.cmp(&a.priority));
 
         // Calculate budget per category
-        let budgets: HashMap<ContextCategory, usize> = ContextCategory::all()
-            .iter()
-            .map(|cat| (*cat, (self.budget as f32 * cat.budget_percent()) as usize))
-            .collect();
+        let budgets: HashMap<ContextCategory, usize> = ContextCategory::all().iter().map(|cat| (*cat, (self.budget as f32 * cat.budget_percent()) as usize)).collect();
 
         let mut used: HashMap<ContextCategory, usize> = HashMap::new();
 
@@ -174,10 +171,7 @@ impl ContextInjector {
         let mut sources = self.sources.clone();
         sources.sort_by(|a, b| b.priority.cmp(&a.priority));
 
-        let budgets: HashMap<ContextCategory, usize> = ContextCategory::all()
-            .iter()
-            .map(|cat| (*cat, (self.budget as f32 * cat.budget_percent()) as usize))
-            .collect();
+        let budgets: HashMap<ContextCategory, usize> = ContextCategory::all().iter().map(|cat| (*cat, (self.budget as f32 * cat.budget_percent()) as usize)).collect();
 
         let mut used: HashMap<ContextCategory, usize> = HashMap::new();
         let mut counts: HashMap<ContextCategory, usize> = HashMap::new();

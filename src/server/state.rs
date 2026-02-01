@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::agents::{AgentPool, AgentResponse, ClusterManager, Dispatcher, PipelineManager, RoleManager, ScheduleManager, ToolClusterIndex};
 use crate::db::pg_repo::PgRepo;
-use crate::db::traits::{DocumentRepo, ServerRepo, UserRepo};
+use crate::db::traits::{DocumentRepo, OutputSchemaRepo, ServerRepo, UserRepo};
 use crate::llm::AnthropicClient;
 use crate::orchestration::Scheduler;
 use crate::types::{AgentPoolConfig, AppConfig, UserId};
@@ -65,6 +65,8 @@ pub struct AppState {
     pub user_repo: Option<Arc<dyn UserRepo>>,
     /// Document repository for document CRUD operations (None in legacy/test mode)
     pub doc_repo: Option<Arc<dyn DocumentRepo>>,
+    /// Output schema repository (None in legacy/test mode)
+    pub output_schema_repo: Option<Arc<dyn OutputSchemaRepo>>,
     /// Task scheduler for orchestration (None in mock-based tests)
     pub scheduler: Option<Arc<RwLock<Scheduler>>>,
     /// Application configuration (mutable at runtime via API)
@@ -116,9 +118,11 @@ impl AppState {
         let repo: Arc<dyn ServerRepo> = Arc::new(PgRepo::new(db.clone()));
         let user_repo: Arc<dyn UserRepo> = Arc::new(PgRepo::new(db.clone()));
         let doc_repo: Arc<dyn DocumentRepo> = Arc::new(PgRepo::new(db.clone()));
+        let output_schema_repo: Arc<dyn OutputSchemaRepo> = Arc::new(PgRepo::new(db.clone()));
         let (mut state, rx) = Self::with_repo(Some(db), repo, Some(scheduler), config.clone());
         state.user_repo = Some(user_repo);
         state.doc_repo = Some(doc_repo);
+        state.output_schema_repo = Some(output_schema_repo);
 
         // Initialize role manager with current working directory as project root
         let project_root = std::env::current_dir().unwrap_or_default();
@@ -234,15 +238,7 @@ impl AppState {
                 for row in trigger_rows {
                     if let Some(event_type) = crate::agents::TriggerEvent::from_str(&row.event_type) {
                         let tid = crate::agents::TriggerId(row.id);
-                        mgr.create_trigger_with_id(
-                            tid,
-                            row.name.clone(),
-                            event_type,
-                            crate::agents::AgentId(row.agent_id),
-                            row.task_title,
-                            row.task_description,
-                            row.role,
-                        );
+                        mgr.create_trigger_with_id(tid, row.name.clone(), event_type, crate::agents::AgentId(row.agent_id), row.task_title, row.task_description, row.role);
                         tracing::info!("Restored trigger {} ({})", row.name, row.id);
                     }
                 }
@@ -272,11 +268,7 @@ impl AppState {
             _ => {
                 let is_production = std::env::var(crate::constants::ENV_RUST_ENV).map(|v| v.eq_ignore_ascii_case("production")).unwrap_or(false);
                 if is_production {
-                    panic!(
-                        "{} must be set in production ({}=production)",
-                        crate::constants::ENV_JWT_SECRET,
-                        crate::constants::ENV_RUST_ENV
-                    );
+                    panic!("{} must be set in production ({}=production)", crate::constants::ENV_JWT_SECRET, crate::constants::ENV_RUST_ENV);
                 }
                 tracing::warn!("{} not set — using random secret. Tokens will not survive restarts.", crate::constants::ENV_JWT_SECRET);
                 rand::random::<[u8; 32]>().to_vec()
@@ -289,6 +281,7 @@ impl AppState {
                 repo,
                 user_repo: None,
                 doc_repo: None,
+                output_schema_repo: None,
                 scheduler,
                 config: Arc::new(RwLock::new(config)),
                 jwt_secret,
@@ -382,11 +375,7 @@ impl AppState {
         let mut streams = self.response_streams.write().await;
         streams.entry(message_id).or_insert_with(|| {
             let (tx, _) = broadcast::channel(100);
-            Arc::new(RwLock::new(BufferedStream {
-                tx,
-                buffer: Vec::new(),
-                done: false,
-            }))
+            Arc::new(RwLock::new(BufferedStream { tx, buffer: Vec::new(), done: false }))
         });
     }
 
@@ -399,11 +388,7 @@ impl AppState {
         let mut streams = self.response_streams.write().await;
         let entry = streams.entry(message_id).or_insert_with(|| {
             let (tx, _) = broadcast::channel(100);
-            Arc::new(RwLock::new(BufferedStream {
-                tx,
-                buffer: Vec::new(),
-                done: false,
-            }))
+            Arc::new(RwLock::new(BufferedStream { tx, buffer: Vec::new(), done: false }))
         });
         let inner = entry.read().await;
         let rx = inner.tx.subscribe();

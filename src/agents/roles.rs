@@ -357,10 +357,7 @@ impl RoleLibrary {
 
     /// List all roles in a category
     pub fn list_by_category(&self, category: RoleCategory) -> Vec<&Role> {
-        self.by_category
-            .get(&category)
-            .map(|ids| ids.iter().filter_map(|id| self.roles.get(id)).collect())
-            .unwrap_or_default()
+        self.by_category.get(&category).map(|ids| ids.iter().filter_map(|id| self.roles.get(id)).collect()).unwrap_or_default()
     }
 
     /// List all roles

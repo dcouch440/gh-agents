@@ -12,9 +12,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::llm::{
-    AnthropicClient, ContentBlock, LLMProvider, LLMRequest, Message, RateLimitedProvider, RetryingProvider, Role, StopReason, StreamAccumulator, StreamChunk as LLMStreamChunk,
-};
+use crate::llm::{AnthropicClient, ContentBlock, LLMProvider, LLMRequest, Message, RateLimitedProvider, RetryingProvider, Role, StopReason, StreamAccumulator, StreamChunk as LLMStreamChunk};
 
 use crate::agents::{AgentCommand, AgentResponse, CommunicationStyle, FileContent, OutputFormat, RoleContext, RoleId, TaskAssignment, TaskConstraints, TaskContext, TriggerEvent};
 
@@ -199,17 +197,8 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                     let pipeline_advance = match &resp {
                         AgentResponse::TaskCompleted { result, .. } => {
                             let mgr = state.pipeline_manager.read().await;
-                            mgr.lookup_run_by_task(result.task_id).map(|(run_id, stage_number)| {
-                                (
-                                    run_id,
-                                    stage_number,
-                                    result.output.clone(),
-                                    true,
-                                    result.input_tokens,
-                                    result.output_tokens,
-                                    result.duration_ms,
-                                )
-                            })
+                            mgr.lookup_run_by_task(result.task_id)
+                                .map(|(run_id, stage_number)| (run_id, stage_number, result.output.clone(), true, result.input_tokens, result.output_tokens, result.duration_ms))
                         }
                         AgentResponse::TaskFailed { result, .. } => {
                             let mgr = state.pipeline_manager.read().await;
@@ -513,11 +502,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                             files: vec![],
                                             history: vec![],
                                             conventions: String::new(),
-                                            role_context: RoleContext {
-                                                system_prompt,
-                                                style,
-                                                output_format,
-                                            },
+                                            role_context: RoleContext { system_prompt, style, output_format },
                                             chat_messages: vec![],
                                             execution_context,
                                             tool_rows: vec![],
@@ -800,9 +785,7 @@ async fn run_orchestrator(state: AppState, mut orchestrator_rx: mpsc::Receiver<O
         Err(e) => {
             error!("Failed to initialize LLM provider: {}. Chat will not work. Set ANTHROPIC_API_KEY.", e);
             while let Some(msg) = orchestrator_rx.recv().await {
-                state
-                    .send_stream_chunk(msg.id, StreamChunk::Error("LLM provider not configured. Set ANTHROPIC_API_KEY.".into()))
-                    .await;
+                state.send_stream_chunk(msg.id, StreamChunk::Error("LLM provider not configured. Set ANTHROPIC_API_KEY.".into())).await;
                 let cleanup_state = state.clone();
                 let mid = msg.id;
                 tokio::spawn(async move {
@@ -1086,10 +1069,7 @@ async fn handle_message(state: &AppState, provider: Arc<dyn LLMProvider + Send +
     if !accumulated_response.is_empty() {
         let response_id = Uuid::new_v4();
         let save_result = if let Some(session_id) = msg.session_id {
-            state
-                .repo
-                .insert_session_message(user_id, session_id, response_id, "assistant".into(), accumulated_response)
-                .await
+            state.repo.insert_session_message(user_id, session_id, response_id, "assistant".into(), accumulated_response).await
         } else {
             state.repo.insert_chat_message(user_id, response_id, "assistant".into(), accumulated_response).await
         };
@@ -1340,15 +1320,7 @@ mod tests {
         async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> {
             Ok(0)
         }
-        async fn insert_token_usage(
-            &self,
-            _session_id: Option<Uuid>,
-            _agent_id: Option<Uuid>,
-            _tier: &str,
-            _model_id: &str,
-            _input_tokens: i64,
-            _output_tokens: i64,
-        ) -> anyhow::Result<()> {
+        async fn insert_token_usage(&self, _session_id: Option<Uuid>, _agent_id: Option<Uuid>, _tier: &str, _model_id: &str, _input_tokens: i64, _output_tokens: i64) -> anyhow::Result<()> {
             Ok(())
         }
         async fn get_usage_summary(&self, _since_hours: u32) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> {

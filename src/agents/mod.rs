@@ -16,16 +16,14 @@ pub mod tool_router;
 
 pub use agent::{Agent, AgentError, AgentId};
 pub use channels::{
-    create_agent_channel, AgentCommand, AgentHandle, AgentResponse, ApprovalRequest, ContextRequest, ContextResponse, DistillerMode, FileContent, HistoryEntry, ProgressUpdate,
-    RoleContext, TaskAssignment, TaskConstraints, TaskContext, TaskResult,
+    create_agent_channel, AgentCommand, AgentHandle, AgentResponse, ApprovalRequest, ContextRequest, ContextResponse, DistillerMode, FileContent, HistoryEntry, ProgressUpdate, RoleContext,
+    TaskAssignment, TaskConstraints, TaskContext, TaskResult,
 };
 pub use cluster::{Cluster, ClusterContext, ClusterError, ClusterId, ClusterManager};
 pub use dispatcher::{DispatchError, Dispatcher};
 pub use pipeline::{Pipeline, PipelineError, PipelineId, PipelineManager, PipelineRun, PipelineRunStatus, PipelineStage};
 pub use pool::{AgentPool, PoolError, PoolStats, PoolTierStats};
-pub use roles::{
-    CommunicationStyle, LoadedFile, OutputFormat, RequiredReadingLoader, Role, RoleCategory, RoleId, RoleLibrary, RoleManager, RoleTemplate, TemplateVariable, VariableType,
-};
+pub use roles::{CommunicationStyle, LoadedFile, OutputFormat, RequiredReadingLoader, Role, RoleCategory, RoleId, RoleLibrary, RoleManager, RoleTemplate, TemplateVariable, VariableType};
 pub use router_agent::{ClusterEntry, ToolClusterIndex};
 pub use schedule::{Schedule, ScheduleError, ScheduleId, ScheduleManager, Trigger, TriggerEvent, TriggerId};
 pub use tool_router::ClusterRoutingContext;

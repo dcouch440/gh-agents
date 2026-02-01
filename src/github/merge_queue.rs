@@ -565,9 +565,7 @@ impl MergeQueueProcessor {
         }
 
         if pr.state == "closed" {
-            return Ok(ProcessResult::Skipped {
-                reason: "PR is closed".to_string(),
-            });
+            return Ok(ProcessResult::Skipped { reason: "PR is closed".to_string() });
         }
 
         // Try to merge directly first
@@ -644,10 +642,7 @@ impl MergeQueueProcessor {
                 let result = self.github.merge_pr_simple(owner, repo, pr_number, merge_method).await?;
 
                 match result {
-                    MergePrResult::Merged { sha, .. } => Ok(ProcessResult::MergedAfterResolution {
-                        sha,
-                        conflicts_resolved: resolved,
-                    }),
+                    MergePrResult::Merged { sha, .. } => Ok(ProcessResult::MergedAfterResolution { sha, conflicts_resolved: resolved }),
                     _ => Ok(ProcessResult::Failed {
                         error: "Merge failed after conflict resolution".to_string(),
                     }),
@@ -722,9 +717,7 @@ impl MergeQueueProcessor {
     async fn post_status(&self, owner: &str, repo: &str, pr_number: u32, status: &str, details: &str) -> Result<(), QueueError> {
         let body = format!("**Merge Queue Update**: {}\n\n{}\n\n---\n*Automated by nexor*", status, details);
 
-        self.github
-            .create_issue_comment(owner, repo, pr_number, &crate::github::CreateIssueComment { body })
-            .await?;
+        self.github.create_issue_comment(owner, repo, pr_number, &crate::github::CreateIssueComment { body }).await?;
 
         Ok(())
     }
@@ -747,19 +740,14 @@ impl MergeQueueProcessor {
 
     /// Notify merge completed
     async fn notify_merged(&self, owner: &str, repo: &str, pr_number: u32, sha: &str) -> Result<(), QueueError> {
-        self.post_status(owner, repo, pr_number, "Merged", &format!("Successfully merged in commit `{}`", sha))
-            .await
+        self.post_status(owner, repo, pr_number, "Merged", &format!("Successfully merged in commit `{}`", sha)).await
     }
 
     /// Notify conflicts need resolution
     async fn notify_conflicts(&self, owner: &str, repo: &str, pr_number: u32, files: &[String]) -> Result<(), QueueError> {
         let file_list = files.iter().take(10).map(|f| format!("- `{}`", f)).collect::<Vec<_>>().join("\n");
 
-        let more = if files.len() > 10 {
-            format!("\n...and {} more files", files.len() - 10)
-        } else {
-            String::new()
-        };
+        let more = if files.len() > 10 { format!("\n...and {} more files", files.len() - 10) } else { String::new() };
 
         let details = format!(
             "This PR has merge conflicts that need resolution:\n\n{}{}\n\n\
@@ -1442,9 +1430,7 @@ mod tests {
             Ok(vec![e1, e3])
         });
         // Entry 1 at position 1 is correct; entry 3 at position 3 needs update to 2
-        mock.expect_update_entry_position()
-            .withf(move |id, pos, _| *id == id3 && *pos == 2)
-            .returning(|_, _, _| Ok(()));
+        mock.expect_update_entry_position().withf(move |id, pos, _| *id == id3 && *pos == 2).returning(|_, _, _| Ok(()));
         let mq = MergeQueue::new(mock);
 
         mq.compact_queue("owner", "repo").await.unwrap();
@@ -1461,9 +1447,7 @@ mod tests {
             Ok(vec![make_entry(1, 1, QueueStatus::Merged), e2])
         });
         // PR 2 at position 2 should be renumbered to 1
-        mock.expect_update_entry_position()
-            .withf(move |id, pos, _| *id == id2 && *pos == 1)
-            .returning(|_, _, _| Ok(()));
+        mock.expect_update_entry_position().withf(move |id, pos, _| *id == id2 && *pos == 1).returning(|_, _, _| Ok(()));
         let mq = MergeQueue::new(mock);
 
         mq.compact_queue("owner", "repo").await.unwrap();

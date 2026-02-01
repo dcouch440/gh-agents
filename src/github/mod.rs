@@ -17,7 +17,6 @@ pub use merge::{MergeError, MergeMethod, MergePrRequest, MergePrResponse, MergeP
 pub use merge_queue::{ConflictInfoJson, MergeQueue, MergeQueueProcessor, NotificationOptions, PrQueueEntry, ProcessResult, QueueError, QueueStats, QueueStatus};
 pub use pr::{PrBodyGenerator, PrError, PrResult, PrService};
 pub use types::{
-    CreateIssueComment, CreatePullRequest, CreateReviewRequest, FileStatus, GitHubApiUser, GitHubBranchRef, GitHubComment, GitHubError, GitHubIssue, GitHubLabel,
-    GitHubPullRequest, GitHubRepoRef, GitHubRepository, GitHubReview, IssueFilters, IssueState, PrChangeSummary, PrFile, PullRequestRef, RateLimitInfo, ReviewComment, ReviewEvent,
-    ReviewState,
+    CreateIssueComment, CreatePullRequest, CreateReviewRequest, FileStatus, GitHubApiUser, GitHubBranchRef, GitHubComment, GitHubError, GitHubIssue, GitHubLabel, GitHubPullRequest, GitHubRepoRef,
+    GitHubRepository, GitHubReview, IssueFilters, IssueState, PrChangeSummary, PrFile, PullRequestRef, RateLimitInfo, ReviewComment, ReviewEvent, ReviewState,
 };

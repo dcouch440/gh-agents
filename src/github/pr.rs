@@ -291,9 +291,7 @@ mod tests {
     #[test]
     fn pr_body_generator_with_files() {
         let slice = mock_slice();
-        let body = PrBodyGenerator::from_slice(&slice)
-            .with_files(vec!["src/auth.rs".to_string(), "src/main.rs".to_string()])
-            .generate();
+        let body = PrBodyGenerator::from_slice(&slice).with_files(vec!["src/auth.rs".to_string(), "src/main.rs".to_string()]).generate();
 
         assert!(body.contains("## Files Modified"));
         assert!(body.contains("`src/auth.rs`"));

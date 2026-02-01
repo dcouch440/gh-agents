@@ -220,9 +220,7 @@ pub mod file_tools {
             }],
             returns: ToolReturn {
                 return_type: ParameterType::Object {
-                    properties: [("content".to_string(), ParameterType::String), ("exists".to_string(), ParameterType::Boolean)]
-                        .into_iter()
-                        .collect(),
+                    properties: [("content".to_string(), ParameterType::String), ("exists".to_string(), ParameterType::Boolean)].into_iter().collect(),
                 },
                 description: "File content and existence status".to_string(),
             },
@@ -273,12 +271,9 @@ pub mod file_tools {
                 description: "Create a new file".to_string(),
                 invocation: ToolInvocation {
                     tool: "write_file".to_string(),
-                    params: [
-                        ("path".to_string(), serde_json::json!("src/lib.rs")),
-                        ("content".to_string(), serde_json::json!("// New library\n")),
-                    ]
-                    .into_iter()
-                    .collect(),
+                    params: [("path".to_string(), serde_json::json!("src/lib.rs")), ("content".to_string(), serde_json::json!("// New library\n"))]
+                        .into_iter()
+                        .collect(),
                 },
                 expected_result: r#"{"success": true, "bytes_written": 15}"#.to_string(),
             }],
@@ -308,9 +303,7 @@ pub mod file_tools {
             returns: ToolReturn {
                 return_type: ParameterType::Array {
                     item_type: Box::new(ParameterType::Object {
-                        properties: [("name".to_string(), ParameterType::String), ("is_dir".to_string(), ParameterType::Boolean)]
-                            .into_iter()
-                            .collect(),
+                        properties: [("name".to_string(), ParameterType::String), ("is_dir".to_string(), ParameterType::Boolean)].into_iter().collect(),
                     }),
                 },
                 description: "List of files and directories".to_string(),
@@ -496,12 +489,9 @@ pub mod git_tools {
                 description: "Create and switch to feature branch".to_string(),
                 invocation: ToolInvocation {
                     tool: "git_branch".to_string(),
-                    params: [
-                        ("name".to_string(), serde_json::json!("feature/user-auth")),
-                        ("create".to_string(), serde_json::json!(true)),
-                    ]
-                    .into_iter()
-                    .collect(),
+                    params: [("name".to_string(), serde_json::json!("feature/user-auth")), ("create".to_string(), serde_json::json!(true))]
+                        .into_iter()
+                        .collect(),
                 },
                 expected_result: r#"{"success": true, "current_branch": "feature/user-auth"}"#.to_string(),
             }],
@@ -550,9 +540,7 @@ pub mod test_tools {
                             "failures".to_string(),
                             ParameterType::Array {
                                 item_type: Box::new(ParameterType::Object {
-                                    properties: [("test_name".to_string(), ParameterType::String), ("error".to_string(), ParameterType::String)]
-                                        .into_iter()
-                                        .collect(),
+                                    properties: [("test_name".to_string(), ParameterType::String), ("error".to_string(), ParameterType::String)].into_iter().collect(),
                                 }),
                             },
                         ),
@@ -1169,12 +1157,9 @@ Then write the changes:
 
         let invocation = ToolInvocation {
             tool: "read_file".to_string(),
-            params: [
-                ("path".to_string(), serde_json::json!("src/main.rs")),
-                ("invalid_param".to_string(), serde_json::json!("value")),
-            ]
-            .into_iter()
-            .collect(),
+            params: [("path".to_string(), serde_json::json!("src/main.rs")), ("invalid_param".to_string(), serde_json::json!("value"))]
+                .into_iter()
+                .collect(),
         };
 
         let result = ToolInvocationParser::validate(&invocation, &registry);

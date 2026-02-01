@@ -540,10 +540,7 @@ mod tests {
                     },
                 ],
             }],
-            usage: XAIUsage {
-                input_tokens: 50,
-                output_tokens: 100,
-            },
+            usage: XAIUsage { input_tokens: 50, output_tokens: 100 },
         };
 
         let result = GrokResearchClient::parse_response(api_response);

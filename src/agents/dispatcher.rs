@@ -287,12 +287,7 @@ mod tests {
         let agent_id = AgentId(Uuid::new_v4());
         let task_id = Uuid::new_v4();
 
-        tx.send(AgentResponse::TaskStarted {
-            agent_id: agent_id.clone(),
-            task_id,
-        })
-        .await
-        .unwrap();
+        tx.send(AgentResponse::TaskStarted { agent_id: agent_id.clone(), task_id }).await.unwrap();
 
         let resp = d.recv_response().await.unwrap();
         assert!(matches!(resp, AgentResponse::TaskStarted { .. }));

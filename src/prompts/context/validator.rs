@@ -1174,9 +1174,7 @@ mod tests {
                     entries_removed: 5,
                     tokens_saved: 200,
                 },
-                TruncationAction::ReferenceFilesRemoved {
-                    files: vec!["file.rs".to_string()],
-                },
+                TruncationAction::ReferenceFilesRemoved { files: vec!["file.rs".to_string()] },
             ],
             final_tokens: 1000,
             success: true,

@@ -230,11 +230,7 @@ impl CommentService {
     pub async fn on_ticket_completed(&mut self, ticket: &Ticket, pr_url: Option<&str>) -> Result<GitHubComment, CommentError> {
         let (owner, repo, number) = self.get_issue_ref(ticket)?;
 
-        let pr_section = if let Some(url) = pr_url {
-            format!("\n\n**Pull Request:** {}", url)
-        } else {
-            String::new()
-        };
+        let pr_section = if let Some(url) = pr_url { format!("\n\n**Pull Request:** {}", url) } else { String::new() };
 
         let body = format!(
             "## ✅ Work Complete\n\n\
@@ -423,9 +419,7 @@ mod tests {
 
     #[test]
     fn progress_summary_all_completed() {
-        let summary = ProgressSummary::new("Done")
-            .add_slice("S1", TaskStatus::Completed, 1, 1)
-            .add_slice("S2", TaskStatus::Completed, 1, 1);
+        let summary = ProgressSummary::new("Done").add_slice("S1", TaskStatus::Completed, 1, 1).add_slice("S2", TaskStatus::Completed, 1, 1);
 
         let md = summary.generate_markdown();
         assert!(md.contains("2 of 2 slices complete"));

@@ -161,16 +161,10 @@ impl AnthropicClient {
                 429 => LLMError::RateLimited {
                     retry_after_ms: retry_after_ms.unwrap_or(60000),
                 },
-                _ => LLMError::ApiError {
-                    status,
-                    message: error.error.message,
-                },
+                _ => LLMError::ApiError { status, message: error.error.message },
             }
         } else {
-            LLMError::ApiError {
-                status,
-                message: body.to_string(),
-            }
+            LLMError::ApiError { status, message: body.to_string() }
         }
     }
 
@@ -238,10 +232,7 @@ impl AnthropicClient {
                     SSEData::MessageStop => StreamChunk::MessageStop,
                     SSEData::Ping => StreamChunk::Ping,
                     SSEData::Error { error } => {
-                        return Some(Err(LLMError::ApiError {
-                            status: 500,
-                            message: error.message,
-                        }));
+                        return Some(Err(LLMError::ApiError { status: 500, message: error.message }));
                     }
                 };
                 Some(Ok(chunk))

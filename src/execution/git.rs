@@ -470,10 +470,7 @@ impl GitOps {
 
     /// Get diff of staged changes
     pub fn diff_staged(&self) -> Result<String, GitError> {
-        self.diff_with_options(DiffOptions {
-            staged: true,
-            ..Default::default()
-        })
+        self.diff_with_options(DiffOptions { staged: true, ..Default::default() })
     }
 
     /// Get diff with custom options
@@ -679,11 +676,7 @@ impl GitOps {
         if output.status.success() {
             // Check if fast-forward
             let fast_forward = stdout.contains("Fast-forward");
-            let merge_commit = if fast_forward {
-                None
-            } else {
-                Some(self.run_git(&["rev-parse", "HEAD"])?.trim().to_string())
-            };
+            let merge_commit = if fast_forward { None } else { Some(self.run_git(&["rev-parse", "HEAD"])?.trim().to_string()) };
 
             tracing::info!(
                 branch = %branch,
@@ -750,10 +743,7 @@ impl GitOps {
 
         let regions = self.parse_conflict_markers(&content)?;
 
-        Ok(ConflictInfo {
-            path: path.to_path_buf(),
-            regions,
-        })
+        Ok(ConflictInfo { path: path.to_path_buf(), regions })
     }
 
     /// Parse conflict markers from file content
@@ -1023,9 +1013,7 @@ impl GitOps {
     fn ensure_git_repo(&self) -> Result<(), GitError> {
         let git_dir = self.ctx.project_root.join(".git");
         if !git_dir.exists() {
-            return Err(GitError::NotARepo {
-                path: self.ctx.project_root.clone(),
-            });
+            return Err(GitError::NotARepo { path: self.ctx.project_root.clone() });
         }
         Ok(())
     }
@@ -1119,11 +1107,7 @@ mod tests {
 
     fn init_git_repo(dir: &TempDir) {
         Command::new("git").args(["init"]).current_dir(dir.path()).output().unwrap();
-        Command::new("git")
-            .args(["config", "user.email", "test@test.com"])
-            .current_dir(dir.path())
-            .output()
-            .unwrap();
+        Command::new("git").args(["config", "user.email", "test@test.com"]).current_dir(dir.path()).output().unwrap();
         Command::new("git").args(["config", "user.name", "Test"]).current_dir(dir.path()).output().unwrap();
     }
 
@@ -1273,10 +1257,7 @@ mod tests {
         let ctx = ExecutionContext::new(tmp.path().to_path_buf());
         let git = GitOps::new(ctx);
 
-        let result = git.push_with_options(PushOptions {
-            force: true,
-            ..Default::default()
-        });
+        let result = git.push_with_options(PushOptions { force: true, ..Default::default() });
 
         assert!(matches!(result, Err(GitError::NotAllowed { .. })));
     }
@@ -1477,11 +1458,7 @@ their version
         let temp_dir = TempDir::new().unwrap();
         let repo_path = temp_dir.path().to_path_buf();
         Command::new("git").args(["init"]).current_dir(&repo_path).output().unwrap();
-        Command::new("git")
-            .args(["config", "user.email", "test@test.com"])
-            .current_dir(&repo_path)
-            .output()
-            .unwrap();
+        Command::new("git").args(["config", "user.email", "test@test.com"]).current_dir(&repo_path).output().unwrap();
         Command::new("git").args(["config", "user.name", "Test"]).current_dir(&repo_path).output().unwrap();
         (temp_dir, repo_path)
     }
@@ -2218,10 +2195,7 @@ their version
         make_initial_commit(&repo_path);
 
         let git = GitOps::new(ExecutionContext::new(repo_path));
-        let result = git.push_with_options(PushOptions {
-            force: true,
-            ..Default::default()
-        });
+        let result = git.push_with_options(PushOptions { force: true, ..Default::default() });
         assert!(matches!(result, Err(GitError::NotAllowed { .. })));
     }
 

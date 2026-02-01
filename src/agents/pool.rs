@@ -262,13 +262,7 @@ impl AgentPool {
             .get(&tier)
             .map(|ids| {
                 ids.iter()
-                    .filter(|id| {
-                        self.agents
-                            .get(*id)
-                            .and_then(|e| e.status.try_lock().ok())
-                            .map(|s| *s == AgentStatus::Idle)
-                            .unwrap_or(false)
-                    })
+                    .filter(|id| self.agents.get(*id).and_then(|e| e.status.try_lock().ok()).map(|s| *s == AgentStatus::Idle).unwrap_or(false))
                     .count()
             })
             .unwrap_or(0)
@@ -347,10 +341,7 @@ mod tests {
                 content_blocks: vec![],
                 model: "test-model".to_string(),
                 stop_reason: StopReason::EndTurn,
-                usage: TokenUsage {
-                    input_tokens: 10,
-                    output_tokens: 20,
-                },
+                usage: TokenUsage { input_tokens: 10, output_tokens: 20 },
             })
         }
 

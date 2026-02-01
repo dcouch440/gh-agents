@@ -294,10 +294,7 @@ mod tests {
                 content_blocks: vec![],
                 model: "test-model".to_string(),
                 stop_reason: StopReason::EndTurn,
-                usage: TokenUsage {
-                    input_tokens: 10,
-                    output_tokens: 20,
-                },
+                usage: TokenUsage { input_tokens: 10, output_tokens: 20 },
             })
         }
 

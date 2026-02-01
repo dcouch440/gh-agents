@@ -251,13 +251,7 @@ impl<R: CostRepo> CostTracker<R> {
             repo.persist_cost_record(record.clone()).await.map_err(CostTrackerError::DatabaseError)?;
         }
 
-        tracing::debug!(
-            "Recorded API call: model={}, tokens={}+{}, cost=${:.6}",
-            model_id,
-            usage.input_tokens,
-            usage.output_tokens,
-            cost_usd
-        );
+        tracing::debug!("Recorded API call: model={}, tokens={}+{}, cost=${:.6}", model_id, usage.input_tokens, usage.output_tokens, cost_usd);
 
         Ok(record)
     }

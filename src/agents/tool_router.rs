@@ -25,8 +25,7 @@ const CLUSTER_ROUTING_TIMEOUT: Duration = Duration::from_secs(120);
 pub fn request_assistance_tool() -> Tool {
     Tool {
         name: "request_assistance".into(),
-        description: "Request help from a specialized agent cluster. Provide the tool name and describe what you need. The request will be routed to the appropriate specialist."
-            .into(),
+        description: "Request help from a specialized agent cluster. Provide the tool name and describe what you need. The request will be routed to the appropriate specialist.".into(),
         input_schema: json!({
             "type": "object",
             "properties": {
@@ -225,14 +224,7 @@ mod tests {
             cluster_id: None,
             is_builtin: true,
         };
-        let result = execute_request_assistance(
-            &json!({"tool_name": "read_file", "request": "read it", "parameters": {"path": "foo.txt"}}),
-            &[row],
-            None,
-            None,
-            None,
-        )
-        .await;
+        let result = execute_request_assistance(&json!({"tool_name": "read_file", "request": "read it", "parameters": {"path": "foo.txt"}}), &[row], None, None, None).await;
         assert!(result["error"].as_str().unwrap().contains("execution context"));
     }
 }

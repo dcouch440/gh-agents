@@ -137,10 +137,7 @@ mod tests {
 
     #[test]
     fn replace_db_name_works() {
-        assert_eq!(
-            replace_db_name("postgres://user:pass@localhost:5432/mydb", "newdb"),
-            "postgres://user:pass@localhost:5432/newdb"
-        );
+        assert_eq!(replace_db_name("postgres://user:pass@localhost:5432/mydb", "newdb"), "postgres://user:pass@localhost:5432/newdb");
         assert_eq!(
             replace_db_name("postgres://user:pass@localhost:5432/mydb?sslmode=require", "newdb"),
             "postgres://user:pass@localhost:5432/newdb?sslmode=require"

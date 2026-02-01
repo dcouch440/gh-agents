@@ -6,9 +6,9 @@ use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::db::traits::{CostRepo, DependencyRepo, DocumentRepo, MergeQueueRepo, RefactorRepo, SchedulerRepo, ServerRepo, TaskQueueRepo, UserRepo};
+use crate::db::traits::{CostRepo, DependencyRepo, DocumentRepo, MergeQueueRepo, OutputSchemaRepo, RefactorRepo, SchedulerRepo, ServerRepo, TaskQueueRepo, UserRepo};
 use crate::db::{
-    AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, PipelineRow, PipelineRunRow, PipelineStageRow, ScheduleRow, SessionRow, StageExecutionRow,
+    AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageRow, ScheduleRow, SessionRow, StageExecutionRow,
     StageSideTaskRow, ToolRow, TriggerRow, UsageSummaryRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
@@ -130,15 +130,7 @@ impl MergeQueueRepo for PgRepo {
         Ok(entries)
     }
 
-    async fn update_entry_status(
-        &self,
-        owner: String,
-        repo: String,
-        pr_number: u32,
-        status: String,
-        error_message: Option<String>,
-        now: DateTime<Utc>,
-    ) -> Result<bool, MergeQueueError> {
+    async fn update_entry_status(&self, owner: String, repo: String, pr_number: u32, status: String, error_message: Option<String>, now: DateTime<Utc>) -> Result<bool, MergeQueueError> {
         let result = sqlx::query(
             r#"
             UPDATE pr_merge_queue
@@ -324,15 +316,11 @@ impl DependencyRepo for PgRepo {
 #[async_trait]
 impl TaskQueueRepo for PgRepo {
     async fn list_tasks_by_status(&self, status: TaskStatus) -> Result<Vec<Task>, TaskQueueError> {
-        crate::db::list_tasks_by_status(&self.pool, status)
-            .await
-            .map_err(|e| TaskQueueError::DatabaseError(e.to_string()))
+        crate::db::list_tasks_by_status(&self.pool, status).await.map_err(|e| TaskQueueError::DatabaseError(e.to_string()))
     }
 
     async fn update_task_status(&self, id: TaskId, status: TaskStatus) -> Result<(), TaskQueueError> {
-        crate::db::update_task_status(&self.pool, &id, status)
-            .await
-            .map_err(|e| TaskQueueError::DatabaseError(e.to_string()))
+        crate::db::update_task_status(&self.pool, &id, status).await.map_err(|e| TaskQueueError::DatabaseError(e.to_string()))
     }
 
     async fn update_task_for_requeue(&self, task_id: TaskId, priority_str: String, policy_description: String, now: DateTime<Utc>) -> Result<(), TaskQueueError> {
@@ -576,7 +564,7 @@ impl ServerRepo for PgRepo {
 
     async fn list_persisted_agents(&self, user_id: UserId) -> Result<Vec<AgentRow>> {
         let rows = sqlx::query_as::<_, PgAgentRow>(
-            "SELECT id, tier, persona_name, persona_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode FROM agents WHERE user_id = $1"
+            "SELECT id, tier, persona_name, persona_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode FROM agents WHERE user_id = $1",
         )
         .bind(user_id.0)
         .fetch_all(&self.pool)
@@ -587,7 +575,7 @@ impl ServerRepo for PgRepo {
 
     async fn get_persisted_agent(&self, agent_id: Uuid) -> Result<Option<AgentRow>> {
         let row = sqlx::query_as::<_, PgAgentRow>(
-            "SELECT id, tier, persona_name, persona_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode FROM agents WHERE id = $1"
+            "SELECT id, tier, persona_name, persona_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode FROM agents WHERE id = $1",
         )
         .bind(agent_id)
         .fetch_optional(&self.pool)
@@ -650,11 +638,10 @@ impl ServerRepo for PgRepo {
     }
 
     async fn get_tool(&self, tool_id: Uuid) -> Result<Option<ToolRow>> {
-        let row =
-            sqlx::query_as::<_, PgToolRow>("SELECT id, name, description, category, parameter_schema, output_schema, enabled, cluster_id, is_builtin FROM tools WHERE id = $1")
-                .bind(tool_id)
-                .fetch_optional(&self.pool)
-                .await?;
+        let row = sqlx::query_as::<_, PgToolRow>("SELECT id, name, description, category, parameter_schema, output_schema, enabled, cluster_id, is_builtin FROM tools WHERE id = $1")
+            .bind(tool_id)
+            .fetch_optional(&self.pool)
+            .await?;
 
         Ok(row.map(tool_row_from_pg))
     }
@@ -691,10 +678,7 @@ impl ServerRepo for PgRepo {
     }
 
     async fn delete_tool(&self, tool_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM tools WHERE id = $1 AND is_builtin = false")
-            .bind(tool_id)
-            .execute(&self.pool)
-            .await?;
+        sqlx::query("DELETE FROM tools WHERE id = $1 AND is_builtin = false").bind(tool_id).execute(&self.pool).await?;
         Ok(())
     }
 
@@ -857,10 +841,7 @@ impl ServerRepo for PgRepo {
     // --- Pipeline persistence ---
 
     async fn list_pipelines(&self, user_id: UserId) -> Result<Vec<PipelineRow>> {
-        let rows: Vec<(Uuid, String)> = sqlx::query_as("SELECT id, name FROM pipelines WHERE user_id = $1")
-            .bind(user_id.0)
-            .fetch_all(&self.pool)
-            .await?;
+        let rows: Vec<(Uuid, String)> = sqlx::query_as("SELECT id, name FROM pipelines WHERE user_id = $1").bind(user_id.0).fetch_all(&self.pool).await?;
 
         Ok(rows.into_iter().map(|(id, name)| PipelineRow { id, name }).collect())
     }
@@ -897,27 +878,26 @@ impl ServerRepo for PgRepo {
         Ok(rows
             .into_iter()
             .map(
-                |(pipeline_id, stage_number, agent_id, cluster_id, role, approval_required, fan_out, stage_name, input_definitions, output_description, output_schema)| {
-                    PipelineStageRow {
-                        pipeline_id,
-                        stage_number,
-                        agent_id,
-                        cluster_id,
-                        role,
-                        approval_required,
-                        fan_out,
-                        stage_name,
-                        input_definitions,
-                        output_description,
-                        output_schema,
-                    }
+                |(pipeline_id, stage_number, agent_id, cluster_id, role, approval_required, fan_out, stage_name, input_definitions, output_description, output_schema)| PipelineStageRow {
+                    pipeline_id,
+                    stage_number,
+                    agent_id,
+                    cluster_id,
+                    role,
+                    approval_required,
+                    fan_out,
+                    stage_name,
+                    input_definitions,
+                    output_description,
+                    output_schema,
                 },
             )
             .collect())
     }
 
     async fn upsert_pipeline_stage(&self, stage: PipelineStageRow) -> Result<()> {
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             INSERT INTO pipeline_stages (pipeline_id, stage_number, agent_id, cluster_id, role, approval_required, fan_out, stage_name, input_definitions, output_description, output_schema)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             ON CONFLICT (pipeline_id, stage_number) DO UPDATE SET
@@ -930,7 +910,8 @@ impl ServerRepo for PgRepo {
                 input_definitions = EXCLUDED.input_definitions,
                 output_description = EXCLUDED.output_description,
                 output_schema = EXCLUDED.output_schema
-        "#)
+        "#,
+        )
         .bind(stage.pipeline_id)
         .bind(stage.stage_number)
         .bind(stage.agent_id)
@@ -951,7 +932,7 @@ impl ServerRepo for PgRepo {
 
     async fn list_stage_side_tasks(&self, pipeline_id: Uuid, stage_number: i32) -> Result<Vec<StageSideTaskRow>> {
         let rows: Vec<(Uuid, Uuid, i32, Uuid, serde_json::Value, String, bool, serde_json::Value)> = sqlx::query_as(
-            "SELECT id, pipeline_id, stage_number, agent_id, input_definitions, output_name, blocking, output_schema FROM stage_side_tasks WHERE pipeline_id = $1 AND stage_number = $2"
+            "SELECT id, pipeline_id, stage_number, agent_id, input_definitions, output_name, blocking, output_schema FROM stage_side_tasks WHERE pipeline_id = $1 AND stage_number = $2",
         )
         .bind(pipeline_id)
         .bind(stage_number)
@@ -960,18 +941,16 @@ impl ServerRepo for PgRepo {
 
         Ok(rows
             .into_iter()
-            .map(
-                |(id, pipeline_id, stage_number, agent_id, input_definitions, output_name, blocking, output_schema)| StageSideTaskRow {
-                    id,
-                    pipeline_id,
-                    stage_number,
-                    agent_id,
-                    input_definitions,
-                    output_name,
-                    blocking,
-                    output_schema,
-                },
-            )
+            .map(|(id, pipeline_id, stage_number, agent_id, input_definitions, output_name, blocking, output_schema)| StageSideTaskRow {
+                id,
+                pipeline_id,
+                stage_number,
+                agent_id,
+                input_definitions,
+                output_name,
+                blocking,
+                output_schema,
+            })
             .collect())
     }
 
@@ -1017,19 +996,17 @@ impl ServerRepo for PgRepo {
 
         Ok(rows
             .into_iter()
-            .map(
-                |(id, name, agent_id, interval_seconds, task_title, task_description, role, enabled, last_run_at)| ScheduleRow {
-                    id,
-                    name,
-                    agent_id,
-                    interval_seconds,
-                    task_title,
-                    task_description,
-                    role,
-                    enabled,
-                    last_run_at,
-                },
-            )
+            .map(|(id, name, agent_id, interval_seconds, task_title, task_description, role, enabled, last_run_at)| ScheduleRow {
+                id,
+                name,
+                agent_id,
+                interval_seconds,
+                task_title,
+                task_description,
+                role,
+                enabled,
+                last_run_at,
+            })
             .collect())
     }
 
@@ -1258,8 +1235,20 @@ impl ServerRepo for PgRepo {
     }
 
     async fn get_pipeline_run(&self, run_id: Uuid) -> Result<Option<PipelineRunRow>> {
-        let row: Option<(Uuid, Uuid, Uuid, String, String, serde_json::Value, i32, chrono::DateTime<chrono::Utc>, Option<chrono::DateTime<chrono::Utc>>, i64, i64)> = sqlx::query_as(
-            "SELECT id, pipeline_id, user_id, status, initial_task, stage_outputs, current_stage, started_at, completed_at, total_input_tokens, total_output_tokens FROM pipeline_runs WHERE id = $1"
+        let row: Option<(
+            Uuid,
+            Uuid,
+            Uuid,
+            String,
+            String,
+            serde_json::Value,
+            i32,
+            chrono::DateTime<chrono::Utc>,
+            Option<chrono::DateTime<chrono::Utc>>,
+            i64,
+            i64,
+        )> = sqlx::query_as(
+            "SELECT id, pipeline_id, user_id, status, initial_task, stage_outputs, current_stage, started_at, completed_at, total_input_tokens, total_output_tokens FROM pipeline_runs WHERE id = $1",
         )
         .bind(run_id)
         .fetch_optional(&self.pool)
@@ -1293,20 +1282,18 @@ impl ServerRepo for PgRepo {
         Ok(rows
             .into_iter()
             .map(
-                |(id, pipeline_id, user_id, status, initial_task, stage_outputs, current_stage, started_at, completed_at, total_input_tokens, total_output_tokens)| {
-                    PipelineRunRow {
-                        id,
-                        pipeline_id,
-                        user_id,
-                        status,
-                        initial_task,
-                        stage_outputs,
-                        current_stage,
-                        started_at,
-                        completed_at,
-                        total_input_tokens,
-                        total_output_tokens,
-                    }
+                |(id, pipeline_id, user_id, status, initial_task, stage_outputs, current_stage, started_at, completed_at, total_input_tokens, total_output_tokens)| PipelineRunRow {
+                    id,
+                    pipeline_id,
+                    user_id,
+                    status,
+                    initial_task,
+                    stage_outputs,
+                    current_stage,
+                    started_at,
+                    completed_at,
+                    total_input_tokens,
+                    total_output_tokens,
                 },
             )
             .collect())
@@ -1553,31 +1540,28 @@ impl UserRepo for PgRepo {
     }
 
     async fn get_user_by_email(&self, email: &str) -> Result<Option<User>> {
-        let row: Option<UserRow> =
-            sqlx::query_as("SELECT id, email, password_hash, github_id, github_login, github_token_encrypted, created_at, updated_at FROM users WHERE email = $1")
-                .bind(email)
-                .fetch_optional(&self.pool)
-                .await?;
+        let row: Option<UserRow> = sqlx::query_as("SELECT id, email, password_hash, github_id, github_login, github_token_encrypted, created_at, updated_at FROM users WHERE email = $1")
+            .bind(email)
+            .fetch_optional(&self.pool)
+            .await?;
 
         Ok(row.map(|r| r.into()))
     }
 
     async fn get_user_by_id(&self, id: UserId) -> Result<Option<User>> {
-        let row: Option<UserRow> =
-            sqlx::query_as("SELECT id, email, password_hash, github_id, github_login, github_token_encrypted, created_at, updated_at FROM users WHERE id = $1")
-                .bind(id.0)
-                .fetch_optional(&self.pool)
-                .await?;
+        let row: Option<UserRow> = sqlx::query_as("SELECT id, email, password_hash, github_id, github_login, github_token_encrypted, created_at, updated_at FROM users WHERE id = $1")
+            .bind(id.0)
+            .fetch_optional(&self.pool)
+            .await?;
 
         Ok(row.map(|r| r.into()))
     }
 
     async fn get_user_by_github_id(&self, github_id: i64) -> Result<Option<User>> {
-        let row: Option<UserRow> =
-            sqlx::query_as("SELECT id, email, password_hash, github_id, github_login, github_token_encrypted, created_at, updated_at FROM users WHERE github_id = $1")
-                .bind(github_id)
-                .fetch_optional(&self.pool)
-                .await?;
+        let row: Option<UserRow> = sqlx::query_as("SELECT id, email, password_hash, github_id, github_login, github_token_encrypted, created_at, updated_at FROM users WHERE github_id = $1")
+            .bind(github_id)
+            .fetch_optional(&self.pool)
+            .await?;
 
         Ok(row.map(|r| r.into()))
     }
@@ -1625,16 +1609,7 @@ impl UserRepo for PgRepo {
 
 #[async_trait]
 impl DocumentRepo for PgRepo {
-    async fn create_document(
-        &self,
-        user_id: Uuid,
-        session_id: Option<Uuid>,
-        title: String,
-        content: String,
-        doc_type: String,
-        ref_tag: String,
-        tags: Vec<String>,
-    ) -> Result<DocumentRow> {
+    async fn create_document(&self, user_id: Uuid, session_id: Option<Uuid>, title: String, content: String, doc_type: String, ref_tag: String, tags: Vec<String>) -> Result<DocumentRow> {
         let id = Uuid::new_v4();
         let row: DocumentRow = sqlx::query_as(
             r#"
@@ -1690,40 +1665,36 @@ impl DocumentRepo for PgRepo {
     }
 
     async fn get_document(&self, doc_id: Uuid) -> Result<Option<DocumentRow>> {
-        let row: Option<DocumentRow> =
-            sqlx::query_as("SELECT id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at FROM documents WHERE id = $1")
-                .bind(doc_id)
-                .fetch_optional(&self.pool)
-                .await?;
+        let row: Option<DocumentRow> = sqlx::query_as("SELECT id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at FROM documents WHERE id = $1")
+            .bind(doc_id)
+            .fetch_optional(&self.pool)
+            .await?;
         Ok(row)
     }
 
     async fn get_document_by_ref_tag(&self, ref_tag: &str) -> Result<Option<DocumentRow>> {
-        let row: Option<DocumentRow> =
-            sqlx::query_as("SELECT id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at FROM documents WHERE ref_tag = $1")
-                .bind(ref_tag)
-                .fetch_optional(&self.pool)
-                .await?;
+        let row: Option<DocumentRow> = sqlx::query_as("SELECT id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at FROM documents WHERE ref_tag = $1")
+            .bind(ref_tag)
+            .fetch_optional(&self.pool)
+            .await?;
         Ok(row)
     }
 
     async fn list_documents(&self, user_id: Uuid) -> Result<Vec<DocumentRow>> {
-        let rows: Vec<DocumentRow> = sqlx::query_as(
-            "SELECT id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at FROM documents WHERE user_id = $1 ORDER BY updated_at DESC",
-        )
-        .bind(user_id)
-        .fetch_all(&self.pool)
-        .await?;
+        let rows: Vec<DocumentRow> =
+            sqlx::query_as("SELECT id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at FROM documents WHERE user_id = $1 ORDER BY updated_at DESC")
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await?;
         Ok(rows)
     }
 
     async fn list_session_documents(&self, session_id: Uuid) -> Result<Vec<DocumentRow>> {
-        let rows: Vec<DocumentRow> = sqlx::query_as(
-            "SELECT id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at FROM documents WHERE session_id = $1 ORDER BY updated_at DESC",
-        )
-        .bind(session_id)
-        .fetch_all(&self.pool)
-        .await?;
+        let rows: Vec<DocumentRow> =
+            sqlx::query_as("SELECT id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at FROM documents WHERE session_id = $1 ORDER BY updated_at DESC")
+                .bind(session_id)
+                .fetch_all(&self.pool)
+                .await?;
         Ok(rows)
     }
 
@@ -1749,6 +1720,64 @@ impl DocumentRepo for PgRepo {
 
     async fn delete_document(&self, doc_id: Uuid) -> Result<()> {
         sqlx::query("DELETE FROM documents WHERE id = $1").bind(doc_id).execute(&self.pool).await?;
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl OutputSchemaRepo for PgRepo {
+    async fn create_output_schema(&self, user_id: Uuid, name: String, schema: serde_json::Value) -> Result<OutputSchemaRow> {
+        let row: OutputSchemaRow = sqlx::query_as(
+            r#"
+            INSERT INTO output_schemas (user_id, name, schema)
+            VALUES ($1, $2, $3)
+            RETURNING id, user_id, name, schema, created_at
+            "#,
+        )
+        .bind(user_id)
+        .bind(&name)
+        .bind(&schema)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn get_output_schema(&self, id: Uuid) -> Result<Option<OutputSchemaRow>> {
+        let row: Option<OutputSchemaRow> = sqlx::query_as("SELECT id, user_id, name, schema, created_at FROM output_schemas WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row)
+    }
+
+    async fn list_output_schemas(&self, user_id: Uuid) -> Result<Vec<OutputSchemaRow>> {
+        let rows: Vec<OutputSchemaRow> = sqlx::query_as("SELECT id, user_id, name, schema, created_at FROM output_schemas WHERE user_id = $1 ORDER BY created_at DESC")
+            .bind(user_id)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows)
+    }
+
+    async fn update_output_schema(&self, id: Uuid, name: Option<String>, schema: Option<serde_json::Value>) -> Result<OutputSchemaRow> {
+        let row: OutputSchemaRow = sqlx::query_as(
+            r#"
+            UPDATE output_schemas
+            SET name = COALESCE($1, name),
+                schema = COALESCE($2, schema)
+            WHERE id = $3
+            RETURNING id, user_id, name, schema, created_at
+            "#,
+        )
+        .bind(name)
+        .bind(schema)
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn delete_output_schema(&self, id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM output_schemas WHERE id = $1").bind(id).execute(&self.pool).await?;
         Ok(())
     }
 }
@@ -1873,9 +1902,7 @@ mod tests {
 
         // Insert entries with in_progress status
         repo.insert_queue_entry(Uuid::new_v4(), owner.clone(), repo_name.clone(), 1, 1, now).await.unwrap();
-        repo.update_entry_status(owner.clone(), repo_name.clone(), 1, "in_progress".to_string(), None, now)
-            .await
-            .unwrap();
+        repo.update_entry_status(owner.clone(), repo_name.clone(), 1, "in_progress".to_string(), None, now).await.unwrap();
 
         // Reset interrupted
         let count = repo.reset_interrupted(owner.clone(), repo_name.clone(), now).await.unwrap();
@@ -2146,10 +2173,7 @@ mod tests {
         let tags = vec!["tag1".to_string(), "tag2".to_string()];
 
         // Create document
-        let doc = repo
-            .create_document(user_id, None, title.clone(), content.clone(), doc_type, ref_tag.clone(), tags)
-            .await
-            .unwrap();
+        let doc = repo.create_document(user_id, None, title.clone(), content.clone(), doc_type, ref_tag.clone(), tags).await.unwrap();
 
         assert_eq!(doc.title, title);
         assert_eq!(doc.content, content);
@@ -2235,17 +2259,9 @@ mod tests {
 
         // Create multiple documents
         for i in 1..=3 {
-            repo.create_document(
-                user_id,
-                None,
-                format!("Doc {}", i),
-                "Content".to_string(),
-                "note".to_string(),
-                format!("ref-{}", i),
-                vec![],
-            )
-            .await
-            .unwrap();
+            repo.create_document(user_id, None, format!("Doc {}", i), "Content".to_string(), "note".to_string(), format!("ref-{}", i), vec![])
+                .await
+                .unwrap();
         }
 
         // List documents

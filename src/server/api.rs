@@ -62,11 +62,7 @@ pub struct TasksQuery {
 /// - `status`: Filter by task status (pending, in_progress, completed, etc.)
 /// - `limit`: Maximum number of tasks to return (default 100, max 1000)
 pub async fn list_tasks(State(state): State<AppState>, auth: auth::AuthUser, Query(query): Query<TasksQuery>) -> Result<Json<Vec<Task>>, StatusCode> {
-    let tasks = state
-        .repo
-        .list_tasks(auth.user_id, query.status, query.limit)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let tasks = state.repo.list_tasks(auth.user_id, query.status, query.limit).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(tasks))
 }
@@ -299,29 +295,14 @@ pub async fn create_agent(State(state): State<AppState>, auth: auth::AuthUser, J
 
 /// Get a single agent by ID
 pub async fn get_agent(State(state): State<AppState>, _auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<AgentResponse>, StatusCode> {
-    let row = state
-        .repo
-        .get_persisted_agent(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let row = state.repo.get_persisted_agent(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     Ok(Json(AgentResponse::from_row(row)))
 }
 
 /// Update an existing agent (partial)
-pub async fn update_agent(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Path(id): Path<Uuid>,
-    Json(request): Json<UpdateAgentRequest>,
-) -> Result<Json<AgentResponse>, StatusCode> {
-    let existing = state
-        .repo
-        .get_persisted_agent(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+pub async fn update_agent(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>, Json(request): Json<UpdateAgentRequest>) -> Result<Json<AgentResponse>, StatusCode> {
+    let existing = state.repo.get_persisted_agent(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     let updated = crate::db::AgentRow {
         id: existing.id,
@@ -337,11 +318,7 @@ pub async fn update_agent(
         router_mode: existing.router_mode,
     };
 
-    state
-        .repo
-        .upsert_agent(auth.user_id, updated.clone())
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state.repo.upsert_agent(auth.user_id, updated.clone()).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(AgentResponse::from_row(updated)))
 }
@@ -465,12 +442,7 @@ pub async fn get_tool(State(state): State<AppState>, _auth: auth::AuthUser, Path
 }
 
 /// Update an existing tool (partial)
-pub async fn update_tool(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Path(id): Path<Uuid>,
-    Json(request): Json<UpdateToolRequest>,
-) -> Result<Json<ToolResponse>, StatusCode> {
+pub async fn update_tool(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>, Json(request): Json<UpdateToolRequest>) -> Result<Json<ToolResponse>, StatusCode> {
     let existing = state.repo.get_tool(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     let cluster_id = match &request.cluster_id {
@@ -852,11 +824,7 @@ pub async fn get_chat_history(State(state): State<AppState>, auth: auth::AuthUse
     let limit = query.limit.unwrap_or(50);
     let offset = query.offset.unwrap_or(0);
 
-    let rows = state
-        .repo
-        .get_chat_history(auth.user_id, limit, offset)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = state.repo.get_chat_history(auth.user_id, limit, offset).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let messages: Vec<ChatMessage> = rows
         .into_iter()
@@ -1030,11 +998,7 @@ pub struct SessionResponse {
 }
 
 /// Create a new chat session
-pub async fn create_session(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Json(request): Json<CreateSessionRequest>,
-) -> Result<(StatusCode, Json<SessionResponse>), StatusCode> {
+pub async fn create_session(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateSessionRequest>) -> Result<(StatusCode, Json<SessionResponse>), StatusCode> {
     // Validate mode exists
     let mode_id = crate::server::agent_mode::AgentModeId::new(&request.mode_id);
     if state.mode_registry.get(&mode_id).is_none() {
@@ -1042,11 +1006,7 @@ pub async fn create_session(
     }
 
     let session_id = Uuid::new_v4();
-    let title = if request.title.is_empty() {
-        format!("New {} session", request.mode_id)
-    } else {
-        request.title
-    };
+    let title = if request.title.is_empty() { format!("New {} session", request.mode_id) } else { request.title };
 
     state
         .repo
@@ -1101,12 +1061,7 @@ pub async fn list_sessions(State(state): State<AppState>, auth: auth::AuthUser) 
 
 /// Get a specific session
 pub async fn get_session(State(state): State<AppState>, auth: auth::AuthUser, Path(session_id): Path<Uuid>) -> Result<Json<SessionResponse>, StatusCode> {
-    let session = state
-        .repo
-        .get_session(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let session = state.repo.get_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     // Verify ownership
     if session.user_id != auth.user_id.0 {
@@ -1125,12 +1080,7 @@ pub async fn get_session(State(state): State<AppState>, auth: auth::AuthUser, Pa
 /// Delete a session
 pub async fn delete_session(State(state): State<AppState>, auth: auth::AuthUser, Path(session_id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     // Verify ownership
-    let session = state
-        .repo
-        .get_session(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let session = state.repo.get_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     if session.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
@@ -1150,28 +1100,14 @@ pub async fn delete_session(State(state): State<AppState>, auth: auth::AuthUser,
 }
 
 /// Update a session (rename)
-pub async fn update_session(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Path(session_id): Path<Uuid>,
-    Json(request): Json<UpdateSessionRequest>,
-) -> Result<Json<SessionResponse>, StatusCode> {
-    let session = state
-        .repo
-        .get_session(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+pub async fn update_session(State(state): State<AppState>, auth: auth::AuthUser, Path(session_id): Path<Uuid>, Json(request): Json<UpdateSessionRequest>) -> Result<Json<SessionResponse>, StatusCode> {
+    let session = state.repo.get_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     if session.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
 
-    state
-        .repo
-        .update_session_title(session_id, &request.title)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state.repo.update_session_title(session_id, &request.title).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let updated = state
         .repo
@@ -1209,12 +1145,7 @@ pub async fn send_session_chat(
     }
 
     // Verify session exists and belongs to user
-    let session = state
-        .repo
-        .get_session(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let session = state.repo.get_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     if session.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
@@ -1255,19 +1186,9 @@ pub async fn send_session_chat(
 }
 
 /// Get session chat history
-pub async fn get_session_history(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Path(session_id): Path<Uuid>,
-    Query(query): Query<HistoryQuery>,
-) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
+pub async fn get_session_history(State(state): State<AppState>, auth: auth::AuthUser, Path(session_id): Path<Uuid>, Query(query): Query<HistoryQuery>) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
     // Verify session ownership
-    let session = state
-        .repo
-        .get_session(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let session = state.repo.get_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     if session.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
@@ -1377,10 +1298,7 @@ pub async fn auth_register(State(state): State<AppState>, Json(request): Json<Re
 
     let hash = auth::hash_password(&request.password).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let user = user_repo
-        .create_user(&request.email, &hash)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let user = user_repo.create_user(&request.email, &hash).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // Seed built-in execution tools for the new user
     let _ = state.repo.seed_builtin_tools(user.id).await;
@@ -1533,11 +1451,7 @@ pub async fn list_documents(State(state): State<AppState>, auth: auth::AuthUser)
 }
 
 /// GET /api/documents/search?q=query - Search documents.
-pub async fn search_documents(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Query(query): Query<DocumentSearchQuery>,
-) -> Result<Json<Vec<crate::db::DocumentSearchResult>>, StatusCode> {
+pub async fn search_documents(State(state): State<AppState>, auth: auth::AuthUser, Query(query): Query<DocumentSearchQuery>) -> Result<Json<Vec<crate::db::DocumentSearchResult>>, StatusCode> {
     let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let results = doc_repo.search_documents(auth.user_id.0, &query.q).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -1547,11 +1461,7 @@ pub async fn search_documents(
 /// GET /api/documents/:id - Get a full document by ID.
 pub async fn get_document(State(state): State<AppState>, auth: auth::AuthUser, Path(doc_id): Path<Uuid>) -> Result<Json<DocumentResponse>, StatusCode> {
     let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let doc = doc_repo
-        .get_document(doc_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let doc = doc_repo.get_document(doc_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     // Verify ownership
     if doc.user_id != auth.user_id.0 {
@@ -1573,11 +1483,7 @@ pub async fn get_document(State(state): State<AppState>, auth: auth::AuthUser, P
 }
 
 /// POST /api/documents - Create a new document.
-pub async fn create_document(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Json(request): Json<CreateDocumentRequest>,
-) -> Result<(StatusCode, Json<DocumentResponse>), StatusCode> {
+pub async fn create_document(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateDocumentRequest>) -> Result<(StatusCode, Json<DocumentResponse>), StatusCode> {
     if request.title.trim().is_empty() || request.title.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -1617,20 +1523,11 @@ pub async fn create_document(
 }
 
 /// PATCH /api/documents/:id - Update a document.
-pub async fn update_document(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Path(doc_id): Path<Uuid>,
-    Json(request): Json<UpdateDocumentRequest>,
-) -> Result<Json<DocumentResponse>, StatusCode> {
+pub async fn update_document(State(state): State<AppState>, auth: auth::AuthUser, Path(doc_id): Path<Uuid>, Json(request): Json<UpdateDocumentRequest>) -> Result<Json<DocumentResponse>, StatusCode> {
     let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Verify ownership
-    let existing = doc_repo
-        .get_document(doc_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let existing = doc_repo.get_document(doc_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     if existing.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
@@ -1660,11 +1557,7 @@ pub async fn delete_document(State(state): State<AppState>, auth: auth::AuthUser
     let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Verify ownership
-    let existing = doc_repo
-        .get_document(doc_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let existing = doc_repo.get_document(doc_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     if existing.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
@@ -1672,6 +1565,122 @@ pub async fn delete_document(State(state): State<AppState>, auth: auth::AuthUser
 
     doc_repo.delete_document(doc_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ============================================================================
+// Output Schemas Endpoints
+// ============================================================================
+
+/// Response for a single output schema.
+#[derive(Serialize)]
+pub struct OutputSchemaResponse {
+    pub id: Uuid,
+    pub name: String,
+    pub schema: serde_json::Value,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Request body for creating an output schema.
+#[derive(Deserialize)]
+pub struct CreateOutputSchemaRequest {
+    pub name: String,
+    pub schema: serde_json::Value,
+}
+
+/// Request body for updating an output schema.
+#[derive(Deserialize)]
+pub struct UpdateOutputSchemaRequest {
+    pub name: Option<String>,
+    pub schema: Option<serde_json::Value>,
+}
+
+/// GET /api/output-schemas - List all output schemas for the authenticated user.
+pub async fn list_output_schemas(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<OutputSchemaResponse>>, StatusCode> {
+    let repo = state.output_schema_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = repo.list_output_schemas(auth.user_id.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let items = rows
+        .into_iter()
+        .map(|r| OutputSchemaResponse {
+            id: r.id,
+            name: r.name,
+            schema: r.schema,
+            created_at: r.created_at,
+        })
+        .collect();
+    Ok(Json(items))
+}
+
+/// POST /api/output-schemas - Create a new output schema.
+pub async fn create_output_schema(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateOutputSchemaRequest>) -> Result<(StatusCode, Json<OutputSchemaResponse>), StatusCode> {
+    if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let repo = state.output_schema_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = repo
+        .create_output_schema(auth.user_id.0, request.name, request.schema)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok((
+        StatusCode::CREATED,
+        Json(OutputSchemaResponse {
+            id: row.id,
+            name: row.name,
+            schema: row.schema,
+            created_at: row.created_at,
+        }),
+    ))
+}
+
+/// GET /api/output-schemas/:id - Get an output schema by ID.
+pub async fn get_output_schema(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<OutputSchemaResponse>, StatusCode> {
+    let repo = state.output_schema_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = repo.get_output_schema(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    if row.user_id != auth.user_id.0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    Ok(Json(OutputSchemaResponse {
+        id: row.id,
+        name: row.name,
+        schema: row.schema,
+        created_at: row.created_at,
+    }))
+}
+
+/// PUT /api/output-schemas/:id - Update an output schema.
+pub async fn update_output_schema(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+    Path(id): Path<Uuid>,
+    Json(request): Json<UpdateOutputSchemaRequest>,
+) -> Result<Json<OutputSchemaResponse>, StatusCode> {
+    let repo = state.output_schema_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let existing = repo.get_output_schema(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    if existing.user_id != auth.user_id.0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    if let Some(ref name) = request.name {
+        if name.trim().is_empty() || name.len() > MAX_TITLE_LENGTH {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    let row = repo.update_output_schema(id, request.name, request.schema).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(OutputSchemaResponse {
+        id: row.id,
+        name: row.name,
+        schema: row.schema,
+        created_at: row.created_at,
+    }))
+}
+
+/// DELETE /api/output-schemas/:id - Delete an output schema.
+pub async fn delete_output_schema(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
+    let repo = state.output_schema_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let existing = repo.get_output_schema(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    if existing.user_id != auth.user_id.0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    repo.delete_output_schema(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -1829,11 +1838,7 @@ pub fn render_stage_prompt(output_description: &str, resolved_inputs: &[(String,
 ///
 /// Reusable core that can be called from HTTP endpoints or the orchestrator.
 /// Resolves input definitions, context documents, and output_description templates.
-pub async fn render_stage(
-    doc_repo: Option<&dyn crate::db::traits::DocumentRepo>,
-    stage: &crate::db::PipelineStageRow,
-    stage_outputs: &std::collections::HashMap<String, serde_json::Value>,
-) -> String {
+pub async fn render_stage(doc_repo: Option<&dyn crate::db::traits::DocumentRepo>, stage: &crate::db::PipelineStageRow, stage_outputs: &std::collections::HashMap<String, serde_json::Value>) -> String {
     // Fetch context documents referenced via {{context.ref_tag}} patterns
     let mut context_docs: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     let context_re = regex::Regex::new(r"\{\{context\.(\w+)\}\}").unwrap();
@@ -1959,19 +1964,11 @@ impl SideTaskResponse {
     }
 }
 
-pub async fn list_stage_side_tasks(
-    State(state): State<AppState>,
-    _user: auth::AuthUser,
-    Path((pipeline_id, stage_number)): Path<(String, i32)>,
-) -> Result<Json<Vec<SideTaskResponse>>, StatusCode> {
+pub async fn list_stage_side_tasks(State(state): State<AppState>, _user: auth::AuthUser, Path((pipeline_id, stage_number)): Path<(String, i32)>) -> Result<Json<Vec<SideTaskResponse>>, StatusCode> {
     let Ok(pipeline_uuid) = Uuid::parse_str(&pipeline_id) else {
         return Err(StatusCode::BAD_REQUEST);
     };
-    let rows = state
-        .repo
-        .list_stage_side_tasks(pipeline_uuid, stage_number)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = state.repo.list_stage_side_tasks(pipeline_uuid, stage_number).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let tasks = rows.into_iter().map(SideTaskResponse::from_row).collect();
     Ok(Json(tasks))
 }
@@ -2174,8 +2171,7 @@ pub async fn approve_pipeline_run(
         // Record user_input in stage_outputs for template access
         let stage_name = {
             let mgr = state.pipeline_manager.read().await;
-            mgr.get_stage_name(run_uuid, run.current_stage as u32)
-                .unwrap_or_else(|| format!("stage_{}", run.current_stage))
+            mgr.get_stage_name(run_uuid, run.current_stage as u32).unwrap_or_else(|| format!("stage_{}", run.current_stage))
         };
         {
             let mut mgr = state.pipeline_manager.write().await;
@@ -2714,15 +2710,7 @@ mod tests {
         async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> {
             Ok(0)
         }
-        async fn insert_token_usage(
-            &self,
-            _session_id: Option<Uuid>,
-            _agent_id: Option<Uuid>,
-            _tier: &str,
-            _model_id: &str,
-            _input_tokens: i64,
-            _output_tokens: i64,
-        ) -> anyhow::Result<()> {
+        async fn insert_token_usage(&self, _session_id: Option<Uuid>, _agent_id: Option<Uuid>, _tier: &str, _model_id: &str, _input_tokens: i64, _output_tokens: i64) -> anyhow::Result<()> {
             Ok(())
         }
         async fn get_usage_summary(&self, _since_hours: u32) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> {
@@ -3149,13 +3137,7 @@ mod tests {
 
         // Verify through list endpoint that the task was persisted
         let list_resp = app
-            .oneshot(
-                Request::builder()
-                    .uri("/api/tasks")
-                    .header("authorization", format!("Bearer {}", token))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::builder().uri("/api/tasks").header("authorization", format!("Bearer {}", token)).body(Body::empty()).unwrap())
             .await
             .unwrap();
 
@@ -3196,13 +3178,7 @@ mod tests {
         let token = create_test_token(&jwt_secret);
 
         let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/api/tasks")
-                    .header("authorization", format!("Bearer {}", token))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::builder().uri("/api/tasks").header("authorization", format!("Bearer {}", token)).body(Body::empty()).unwrap())
             .await
             .unwrap();
 
@@ -3381,13 +3357,7 @@ mod tests {
         let token = create_test_token(&jwt_secret);
 
         let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/api/agents")
-                    .header("authorization", format!("Bearer {}", token))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::builder().uri("/api/agents").header("authorization", format!("Bearer {}", token)).body(Body::empty()).unwrap())
             .await
             .unwrap();
 
@@ -3473,13 +3443,7 @@ mod tests {
 
         // List agents
         let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/api/agents")
-                    .header("authorization", format!("Bearer {}", token))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::builder().uri("/api/agents").header("authorization", format!("Bearer {}", token)).body(Body::empty()).unwrap())
             .await
             .unwrap();
 
@@ -3725,13 +3689,7 @@ mod tests {
 
         // List
         let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/api/tools")
-                    .header("authorization", format!("Bearer {}", token))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::builder().uri("/api/tools").header("authorization", format!("Bearer {}", token)).body(Body::empty()).unwrap())
             .await
             .unwrap();
 
@@ -4001,13 +3959,7 @@ mod tests {
         let token = create_test_token(&jwt_secret);
 
         let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/api/config")
-                    .header("authorization", format!("Bearer {}", token))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::builder().uri("/api/config").header("authorization", format!("Bearer {}", token)).body(Body::empty()).unwrap())
             .await
             .unwrap();
 

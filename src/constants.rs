@@ -234,6 +234,10 @@ pub mod routes {
     pub const DOCUMENTS_SEARCH: &str = "/documents/search";
     pub const DOCUMENT: &str = "/documents/:id";
 
+    // Output schemas
+    pub const OUTPUT_SCHEMAS: &str = "/output-schemas";
+    pub const OUTPUT_SCHEMA: &str = "/output-schemas/:id";
+
     // Stats
     pub const STATS: &str = "/stats";
 

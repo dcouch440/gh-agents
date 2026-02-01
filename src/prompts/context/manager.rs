@@ -201,12 +201,7 @@ pub enum BudgetError {
 impl std::fmt::Display for BudgetError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::CategoryExceeded {
-                category,
-                budget,
-                requested,
-                used,
-            } => {
+            Self::CategoryExceeded { category, budget, requested, used } => {
                 write!(f, "{:?} budget exceeded: {} used + {} requested > {} budget", category, used, requested, budget)
             }
         }
@@ -315,8 +310,8 @@ impl FileSelector {
 }
 
 const STOP_WORDS: &[&str] = &[
-    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by", "from", "this", "that", "these", "those", "is", "are", "was", "were", "be", "been",
-    "being", "have", "has", "had", "do", "does", "did", "will", "would", "could", "should", "may", "might",
+    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by", "from", "this", "that", "these", "those", "is", "are", "was", "were", "be", "been", "being", "have",
+    "has", "had", "do", "does", "did", "will", "would", "could", "should", "may", "might",
 ];
 
 /// Information about a file for selection

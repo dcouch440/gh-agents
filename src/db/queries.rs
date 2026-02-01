@@ -45,7 +45,7 @@ pub async fn insert_task(pool: &PgPool, user_id: UserId, task: &Task) -> Result<
 /// Get a task by ID
 pub async fn get_task(pool: &PgPool, user_id: UserId, id: &TaskId) -> Result<Option<Task>> {
     let row: Option<TaskRow> = sqlx::query_as(
-        "SELECT id, slice_id, title, description, assigned_tier, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks WHERE id = $1 AND user_id = $2"
+        "SELECT id, slice_id, title, description, assigned_tier, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks WHERE id = $1 AND user_id = $2",
     )
     .bind(id.0)
     .bind(user_id.0)
@@ -279,12 +279,11 @@ pub async fn create_session(pool: &PgPool, user_id: UserId, session_id: Uuid, mo
 
 /// List sessions for a user
 pub async fn list_sessions(pool: &PgPool, user_id: UserId) -> Result<Vec<SessionRow>> {
-    let rows: Vec<SessionRow> =
-        sqlx::query_as("SELECT id, user_id, mode_id, title, summary, created_at, updated_at FROM chat_sessions WHERE user_id = $1 ORDER BY updated_at DESC")
-            .bind(user_id.0)
-            .fetch_all(pool)
-            .await
-            .context("Failed to list sessions")?;
+    let rows: Vec<SessionRow> = sqlx::query_as("SELECT id, user_id, mode_id, title, summary, created_at, updated_at FROM chat_sessions WHERE user_id = $1 ORDER BY updated_at DESC")
+        .bind(user_id.0)
+        .fetch_all(pool)
+        .await
+        .context("Failed to list sessions")?;
     Ok(rows)
 }
 
@@ -476,13 +475,12 @@ pub async fn complete_routing_event(
 
 /// List tools belonging to a cluster
 pub async fn list_tools_by_cluster(pool: &PgPool, cluster_id: Uuid) -> Result<Vec<super::ToolRow>> {
-    let rows: Vec<ToolRowDb> = sqlx::query_as(
-        "SELECT id, name, description, category, parameter_schema, output_schema, enabled, cluster_id, is_builtin FROM tools WHERE cluster_id = $1 AND enabled = true",
-    )
-    .bind(cluster_id)
-    .fetch_all(pool)
-    .await
-    .context("Failed to list tools by cluster")?;
+    let rows: Vec<ToolRowDb> =
+        sqlx::query_as("SELECT id, name, description, category, parameter_schema, output_schema, enabled, cluster_id, is_builtin FROM tools WHERE cluster_id = $1 AND enabled = true")
+            .bind(cluster_id)
+            .fetch_all(pool)
+            .await
+            .context("Failed to list tools by cluster")?;
 
     Ok(rows
         .into_iter()

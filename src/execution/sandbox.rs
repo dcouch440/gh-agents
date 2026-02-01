@@ -482,10 +482,7 @@ mod tests {
         let e2 = SandboxError::ImageNotFound { image: "foo:bar".into() };
         assert!(e2.to_string().contains("foo:bar"));
 
-        let e3 = SandboxError::CommandFailed {
-            exit_code: 1,
-            stderr: "oops".into(),
-        };
+        let e3 = SandboxError::CommandFailed { exit_code: 1, stderr: "oops".into() };
         assert!(e3.to_string().contains("1"));
         assert!(e3.to_string().contains("oops"));
 
@@ -596,13 +593,7 @@ mod tests {
     #[test]
     fn sandbox_construction_with_custom_config() {
         let ctx = ExecutionContext::new("/my/project".into());
-        let config = SandboxConfig::builder()
-            .image("rust:latest")
-            .memory("4g")
-            .timeout(600)
-            .network(true)
-            .env("RUST_LOG", "debug")
-            .build();
+        let config = SandboxConfig::builder().image("rust:latest").memory("4g").timeout(600).network(true).env("RUST_LOG", "debug").build();
         let sandbox = Sandbox::new(ctx, config);
         assert_eq!(sandbox.config.image, "rust:latest");
         assert_eq!(sandbox.config.memory_limit, "4g");

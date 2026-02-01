@@ -262,10 +262,7 @@ mod tests {
                 content_blocks: vec![],
                 model: "mock".into(),
                 stop_reason: super::super::types::StopReason::EndTurn,
-                usage: super::super::types::TokenUsage {
-                    input_tokens: 1,
-                    output_tokens: 1,
-                },
+                usage: super::super::types::TokenUsage { input_tokens: 1, output_tokens: 1 },
             })
         }
 
@@ -320,10 +317,7 @@ mod tests {
                     content_blocks: vec![],
                     model: "mock".into(),
                     stop_reason: super::super::types::StopReason::EndTurn,
-                    usage: super::super::types::TokenUsage {
-                        input_tokens: 1,
-                        output_tokens: 1,
-                    },
+                    usage: super::super::types::TokenUsage { input_tokens: 1, output_tokens: 1 },
                 })
             }
             async fn send_message_stream(&self, _req: LLMRequest) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {

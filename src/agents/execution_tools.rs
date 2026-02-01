@@ -676,13 +676,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         std::fs::write(tmp.path().join("code.rs"), "fn main() {}\n").unwrap();
         let ctx = ExecutionContext::new(tmp.path().to_path_buf());
-        let result = execute_execution_tool(
-            "edit_file",
-            &json!({ "path": "code.rs", "old_string": "nonexistent", "new_string": "replacement" }),
-            &ctx,
-            None,
-        )
-        .await;
+        let result = execute_execution_tool("edit_file", &json!({ "path": "code.rs", "old_string": "nonexistent", "new_string": "replacement" }), &ctx, None).await;
         assert!(result["error"].as_str().unwrap().contains("not found"));
     }
 
@@ -691,13 +685,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         std::fs::write(tmp.path().join("code.rs"), "let x = 1;\nlet x = 1;\n").unwrap();
         let ctx = ExecutionContext::new(tmp.path().to_path_buf());
-        let result = execute_execution_tool(
-            "edit_file",
-            &json!({ "path": "code.rs", "old_string": "let x = 1;", "new_string": "let x = 2;" }),
-            &ctx,
-            None,
-        )
-        .await;
+        let result = execute_execution_tool("edit_file", &json!({ "path": "code.rs", "old_string": "let x = 1;", "new_string": "let x = 2;" }), &ctx, None).await;
         assert!(result["error"].as_str().unwrap().contains("matches 2 locations"));
     }
 

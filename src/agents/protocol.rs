@@ -1021,10 +1021,7 @@ impl Validatable for ContextRequest {
 
         // Must have at least one file or question
         if self.files_needed.is_empty() && self.questions.is_empty() {
-            errors.push(ValidationError::invalid(
-                "files_needed/questions",
-                "context request must have at least one file or question",
-            ));
+            errors.push(ValidationError::invalid("files_needed/questions", "context request must have at least one file or question"));
         }
 
         // Validate file paths

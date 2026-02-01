@@ -143,6 +143,8 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         .route(routes::DOCUMENTS, get(api::list_documents).post(api::create_document))
         .route(routes::DOCUMENTS_SEARCH, get(api::search_documents))
         .route(routes::DOCUMENT, get(api::get_document).patch(api::update_document).delete(api::delete_document))
+        .route(routes::OUTPUT_SCHEMAS, get(api::list_output_schemas).post(api::create_output_schema))
+        .route(routes::OUTPUT_SCHEMA, get(api::get_output_schema).put(api::update_output_schema).delete(api::delete_output_schema))
         .route(routes::STATS, get(api::get_usage_stats))
         .route(routes::CONTEXT_RESPONSE, post(api::submit_context_response))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth))
@@ -187,11 +189,7 @@ fn build_cors_layer() -> CorsLayer {
                 CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any)
             } else {
                 info!("CORS restricted to {} origin(s)", parsed.len());
-                CorsLayer::new()
-                    .allow_origin(AllowOrigin::list(parsed))
-                    .allow_methods(Any)
-                    .allow_headers(Any)
-                    .allow_credentials(true)
+                CorsLayer::new().allow_origin(AllowOrigin::list(parsed)).allow_methods(Any).allow_headers(Any).allow_credentials(true)
             }
         }
         _ => {
@@ -212,12 +210,7 @@ async fn require_auth(State(state): State<AppState>, request: axum::http::Reques
         .and_then(|value| value.to_str().ok())
         .and_then(|s| s.strip_prefix("Bearer "))
         .map(|s| s.to_string())
-        .or_else(|| {
-            request
-                .uri()
-                .query()
-                .and_then(|q| q.split('&').find_map(|pair| pair.strip_prefix("token=").map(|v| v.to_string())))
-        })
+        .or_else(|| request.uri().query().and_then(|q| q.split('&').find_map(|pair| pair.strip_prefix("token=").map(|v| v.to_string()))))
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
     auth::verify_token(&token, &state.jwt_secret).map_err(|_| StatusCode::UNAUTHORIZED)?;
@@ -241,16 +234,12 @@ async fn cache_control_middleware(request: Request<Body>, next: Next) -> Respons
 
     // Long cache for hashed assets (typically in /assets/ with hash in filename)
     if path.contains("/assets/") && (path.ends_with(".js") || path.ends_with(".css")) {
-        response
-            .headers_mut()
-            .insert(CACHE_CONTROL, HeaderValue::from_static("public, max-age=31536000, immutable"));
+        response.headers_mut().insert(CACHE_CONTROL, HeaderValue::from_static("public, max-age=31536000, immutable"));
     }
     // No cache for HTML files (ensures fresh version on deployment)
     // Check both path and content-type to handle SPA fallback routes
     else if path == "/" || path.ends_with(".html") || is_html_response(&response) {
-        response
-            .headers_mut()
-            .insert(CACHE_CONTROL, HeaderValue::from_static("no-cache, no-store, must-revalidate"));
+        response.headers_mut().insert(CACHE_CONTROL, HeaderValue::from_static("no-cache, no-store, must-revalidate"));
     }
 
     response
@@ -350,13 +339,7 @@ mod tests {
             let limit = limit.unwrap_or(crate::constants::DEFAULT_QUERY_LIMIT as u32).min(crate::constants::MAX_QUERY_LIMIT as u32) as usize;
             Ok(tasks
                 .iter()
-                .filter(|t| {
-                    if let Some(ref s) = status {
-                        format!("{:?}", t.status).to_lowercase() == *s
-                    } else {
-                        true
-                    }
-                })
+                .filter(|t| if let Some(ref s) = status { format!("{:?}", t.status).to_lowercase() == *s } else { true })
                 .rev()
                 .take(limit)
                 .cloned()
@@ -525,15 +508,7 @@ mod tests {
         async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> {
             Ok(0)
         }
-        async fn insert_token_usage(
-            &self,
-            _session_id: Option<Uuid>,
-            _agent_id: Option<Uuid>,
-            _tier: &str,
-            _model_id: &str,
-            _input_tokens: i64,
-            _output_tokens: i64,
-        ) -> anyhow::Result<()> {
+        async fn insert_token_usage(&self, _session_id: Option<Uuid>, _agent_id: Option<Uuid>, _tier: &str, _model_id: &str, _input_tokens: i64, _output_tokens: i64) -> anyhow::Result<()> {
             Ok(())
         }
         async fn get_usage_summary(&self, _since_hours: u32) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> {
