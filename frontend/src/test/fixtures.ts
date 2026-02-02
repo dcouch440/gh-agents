@@ -286,3 +286,68 @@ export const mockOutputSchema: OutputSchema = {
   created_at: '2025-01-01T00:00:00Z',
   updated_at: '2025-01-01T00:00:00Z',
 }
+
+// ── Execution Tree ───────────────────────────────────────────────────────────
+
+import type { TreeRunInfo, TreeStage, TreeStageExecution, TreeAgentExecution, ExecutionTree, ExecutionMessage } from '@/types/execution'
+
+export const mockTreeRunInfo: TreeRunInfo = {
+  id: 'run-001',
+  pipeline_id: 'pipeline-001',
+  pipeline_name: 'Test pipeline',
+  status: 'running',
+  initial_input: 'Do the thing',
+  current_stage: 1,
+  started_at: '2025-01-01T00:00:00Z',
+  completed_at: null,
+  total_input_tokens: 500,
+  total_output_tokens: 0,
+  total_cost_usd: 0,
+}
+
+export const mockTreeAgentExecution: TreeAgentExecution = {
+  id: 'agent-exec-001',
+  agent_name: 'TestBot',
+  workflow_step_id: null,
+  is_interactive: false,
+  status: 'running',
+  structured_output: null,
+  input_tokens: 500,
+  output_tokens: 0,
+  cost_usd: 0,
+  started_at: '2025-01-01T00:00:00Z',
+  completed_at: null,
+  for_each_index: null,
+  for_each_label: null,
+  interactive_review: null,
+}
+
+export const mockTreeStageExecution: TreeStageExecution = {
+  id: 'stage-exec-001',
+  workflow_name: 'Planning Workflow',
+  status: 'running',
+  agent_executions: [mockTreeAgentExecution],
+}
+
+export const mockTreeStage: TreeStage = {
+  stage_number: 1,
+  stage_name: 'Planning',
+  status: 'running',
+  stage_executions: [mockTreeStageExecution],
+}
+
+export const mockExecutionTree: ExecutionTree = {
+  run: mockTreeRunInfo,
+  stages: [mockTreeStage],
+}
+
+export const mockExecutionMessage: ExecutionMessage = {
+  id: 'msg-001',
+  agent_execution_id: 'agent-exec-001',
+  role: 'user',
+  content: 'Please proceed with the task',
+  tool_call_id: null,
+  input_tokens: 0,
+  output_tokens: 0,
+  created_at: '2025-01-01T00:00:00Z',
+}
