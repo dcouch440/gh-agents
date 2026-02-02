@@ -91,7 +91,7 @@ pub struct DocumentRow {
 }
 
 /// Search result for documents (no full content).
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct DocumentSearchResult {
     pub id: Uuid,
     pub title: String,
@@ -267,7 +267,7 @@ pub struct StageExecutionRow {
 }
 
 /// Row type for tool router definitions.
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct ToolRouterRow {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -281,7 +281,7 @@ pub struct ToolRouterRow {
 }
 
 /// Row type for context store entries.
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct ContextStoreRow {
     pub id: Uuid,
     pub session_id: Uuid,
@@ -295,7 +295,7 @@ pub struct ContextStoreRow {
 }
 
 /// Row type for router request logs.
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct RouterRequestRow {
     pub id: Uuid,
     pub session_id: Uuid,

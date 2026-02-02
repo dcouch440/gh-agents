@@ -9,6 +9,7 @@ pub mod api;
 pub mod auth;
 pub mod dag_executor;
 pub mod hub;
+pub mod openapi;
 pub mod orchestrator;
 pub mod state;
 pub mod router_service;
@@ -27,6 +28,8 @@ use axum::{
     routing::{delete, get, post},
     Router,
 };
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 use sqlx::PgPool;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::GovernorLayer;
@@ -93,6 +96,7 @@ fn create_router(state: AppState) -> Router {
 
     Router::new()
         .nest("/api", public_routes.merge(protected_routes))
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", openapi::ApiDoc::openapi()))
         .route(routes::WS, get(ws::ws_handler))
         .fallback_service(serve_dir)
         .layer(middleware::from_fn(request_id_middleware))
