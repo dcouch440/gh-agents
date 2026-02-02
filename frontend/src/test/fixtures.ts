@@ -8,6 +8,10 @@ import type { RoutingEvent } from '@/types/routing'
 import type { Document } from '@/types/document'
 import type { Tool } from '@/types/tool'
 import type { Config } from '@/types/config'
+import type { CostResponse } from '@/types/cost'
+import type { Result } from '@/types/result'
+import type { PromptTemplate } from '@/types/template'
+import type { OutputSchema } from '@/types/schema'
 
 export const mockAgent: Agent = {
   id: 'agent-001',
@@ -196,6 +200,22 @@ export const mockStageExecution: StageExecution = {
   duration_ms: 1000,
 }
 
+export const mockPromptTemplate: PromptTemplate = {
+  id: 'template-001',
+  user_id: 'user-001',
+  name: 'Test Template',
+  description: 'A test prompt template',
+  template: 'Hello {{name}}, please {{action}}',
+  variables: ['name', 'action'],
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
+}
+
+export const mockCostResponse: CostResponse = {
+  total_spend: 0.15,
+  models: [{ model_id: 'claude-sonnet-4-20250514', total_input_tokens: 10000, total_output_tokens: 5000, total_cost_usd: 0.15, call_count: 10 }],
+}
+
 const mockModelConfig = { provider: 'anthropic', model_id: 'claude-sonnet-4-20250514', max_tokens: 8192, temperature: 0.7 }
 
 export const mockConfig: Config = {
@@ -209,4 +229,24 @@ export const mockConfig: Config = {
   autonomy: 'supervised',
   git_strategy: 'branch',
   sandbox_mode: 'docker',
+}
+
+export const mockResult: Result = {
+  id: 'result-001',
+  pipeline_run_id: 'run-001',
+  stage_number: 1,
+  agent_execution_id: 'exec-001',
+  output: 'Task completed successfully',
+  structured_output: { status: 'success' },
+  created_at: '2025-01-01T00:00:00Z',
+}
+
+export const mockOutputSchema: OutputSchema = {
+  id: 'schema-001',
+  user_id: 'user-001',
+  name: 'Test Schema',
+  description: 'A test output schema',
+  json_schema: { type: 'object', properties: { result: { type: 'string' } } },
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
 }
