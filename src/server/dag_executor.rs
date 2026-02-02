@@ -446,7 +446,7 @@ async fn execute_step(
 
         // Write token_ledger for every LLM call
         if let Some(tl_repo) = &state.token_ledger_repo {
-            let _ = tl_repo.insert_ledger_entry(ctx.user_id, ae_row.id, &agent.model_id, in_tok, out_tok, cost).await;
+            let _ = tl_repo.insert_ledger_entry(ctx.user_id, Some(ae_row.id), &agent.model_id, in_tok, out_tok, cost).await;
         }
 
         if response.stop_reason == StopReason::ToolUse {
@@ -505,9 +505,6 @@ async fn execute_step(
             "completed",
             Some(final_content.clone()),
             structured_output.clone(),
-            total_input_tokens,
-            total_output_tokens,
-            total_cost_usd,
         )
         .await;
 
@@ -583,13 +580,13 @@ async fn execute_interactive_review(
     // Write token_ledger for the review call
     if let Some(tl_repo) = &state.token_ledger_repo {
         let _ = tl_repo
-            .insert_ledger_entry(ctx.user_id, iae_row.id, &interactive_agent.model_id, input_tokens, output_tokens, cost_usd)
+            .insert_ledger_entry(ctx.user_id, Some(iae_row.id), &interactive_agent.model_id, input_tokens, output_tokens, cost_usd)
             .await;
     }
 
     // Set status to awaiting_user — the user will chat and approve via the API
     let _ = ae_repo
-        .update_agent_execution_status(iae_row.id, "awaiting_user", Some(response.content.clone()), None, input_tokens, output_tokens, cost_usd)
+        .update_agent_execution_status(iae_row.id, "awaiting_user", Some(response.content.clone()), None)
         .await;
 
     // Broadcast awaiting_user
