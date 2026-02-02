@@ -47,6 +47,9 @@ pub enum HubError {
     #[error("interactive step {step_id} (execution {execution_id}) awaiting user input")]
     AwaitingUser { step_id: Uuid, execution_id: Uuid },
 
+    #[error("execution cancelled")]
+    Cancelled,
+
     #[error("stream interrupted for execution {execution_id}")]
     StreamInterrupted { execution_id: Uuid },
 
@@ -146,6 +149,12 @@ mod tests {
             execution_id: Uuid::nil(),
         };
         assert!(err.to_string().contains("awaiting user input"));
+    }
+
+    #[test]
+    fn display_cancelled() {
+        let err = HubError::Cancelled;
+        assert_eq!(err.to_string(), "execution cancelled");
     }
 
     #[test]

@@ -6,6 +6,7 @@ use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use tokio::sync::{broadcast, mpsc, RwLock};
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::agents::{AgentPool, AgentResponse, ClusterManager, Dispatcher, PipelineManager, RoleManager, ScheduleManager, ToolClusterIndex};
@@ -125,6 +126,8 @@ pub struct AppState {
     pub cluster_index: Option<Arc<ToolClusterIndex>>,
     /// Prompt registry for core system/agent prompts loaded from prompts/ directory
     pub prompt_registry: Arc<PromptRegistry>,
+    /// Cancellation tokens for running pipelines and agent executions
+    pub cancellation_tokens: Arc<RwLock<HashMap<Uuid, CancellationToken>>>,
 }
 
 impl AppState {
@@ -322,6 +325,7 @@ impl AppState {
                 default_agent_id: None,
                 cluster_index: None,
                 prompt_registry: Arc::new(PromptRegistry::empty()),
+                cancellation_tokens: Arc::new(RwLock::new(HashMap::new())),
             },
             orchestrator_rx,
         )
@@ -458,6 +462,41 @@ impl AppState {
     pub async fn remove_response_stream(&self, message_id: Uuid) {
         let mut streams = self.response_streams.write().await;
         streams.remove(&message_id);
+    }
+
+    /// Register a cancellation token for a running execution (pipeline run or agent execution).
+    /// Returns a clone of the token to pass through the execution chain.
+    pub async fn register_cancellation(&self, id: Uuid) -> CancellationToken {
+        let token = CancellationToken::new();
+        let mut tokens = self.cancellation_tokens.write().await;
+        tokens.insert(id, token.clone());
+        token
+    }
+
+    /// Create a child cancellation token linked to a parent.
+    /// Cancelling the parent automatically cancels all children.
+    pub async fn register_child_cancellation(&self, id: Uuid, parent: &CancellationToken) -> CancellationToken {
+        let child = parent.child_token();
+        let mut tokens = self.cancellation_tokens.write().await;
+        tokens.insert(id, child.clone());
+        child
+    }
+
+    /// Cancel a running execution by its ID. Returns true if the token existed.
+    pub async fn cancel_execution(&self, id: Uuid) -> bool {
+        let tokens = self.cancellation_tokens.read().await;
+        if let Some(token) = tokens.get(&id) {
+            token.cancel();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Remove a cancellation token after execution completes.
+    pub async fn remove_cancellation(&self, id: Uuid) {
+        let mut tokens = self.cancellation_tokens.write().await;
+        tokens.remove(&id);
     }
 }
 

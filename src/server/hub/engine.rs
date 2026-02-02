@@ -7,6 +7,7 @@
 use std::sync::Arc;
 
 use futures::StreamExt;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
 use crate::llm::{
@@ -59,6 +60,7 @@ impl ExecutionEngine {
         input: &str,
         sink: &dyn StreamSink,
         recorder: &ExecutionRecorder<'_>,
+        cancel: Option<&CancellationToken>,
     ) -> Result<ExecutionResult, HubError> {
         let mut messages = strategy.build_messages(input).await?;
         let max_rounds = strategy.max_rounds();
@@ -67,6 +69,11 @@ impl ExecutionEngine {
         let mut total_output: u64 = 0;
 
         for round in 0..max_rounds {
+            // Check cancellation
+            if cancel.map_or(false, |t| t.is_cancelled()) {
+                return Err(HubError::Cancelled);
+            }
+
             // Check context budget
             let char_count: usize = messages.iter().map(|m| m.estimated_chars()).sum();
             if char_count > budget {
@@ -98,9 +105,21 @@ impl ExecutionEngine {
                 let mut accumulator = StreamAccumulator::new();
                 let mut pinned = std::pin::pin!(stream);
 
-                while let Some(chunk_result) = pinned.next().await {
+                loop {
+                    let chunk_result = if let Some(ct) = cancel {
+                        tokio::select! {
+                            biased;
+                            _ = ct.cancelled() => {
+                                return Err(HubError::Cancelled);
+                            }
+                            next = pinned.next() => next,
+                        }
+                    } else {
+                        pinned.next().await
+                    };
+
                     match chunk_result {
-                        Ok(chunk) => {
+                        Some(Ok(chunk)) => {
                             // Forward text tokens to sink
                             if let LLMStreamChunk::ContentDelta { ref text, .. } = chunk {
                                 sink.token(text).await;
@@ -110,17 +129,28 @@ impl ExecutionEngine {
                             }
                             accumulator.apply(&chunk);
                         }
-                        Err(e) => {
+                        Some(Err(e)) => {
                             let msg = format!("stream error at round {}: {}", round, e);
                             sink.error(&msg).await;
                             return Err(HubError::LlmCallFailed { round, source: e });
                         }
+                        None => break,
                     }
                 }
 
                 accumulator.build().ok_or_else(|| {
                     HubError::Internal(anyhow::anyhow!("incomplete stream at round {}", round))
                 })?
+            } else if let Some(ct) = cancel {
+                tokio::select! {
+                    biased;
+                    _ = ct.cancelled() => {
+                        return Err(HubError::Cancelled);
+                    }
+                    result = self.provider.send_message(request) => {
+                        result.map_err(|e| HubError::LlmCallFailed { round, source: e })?
+                    }
+                }
             } else {
                 self.provider
                     .send_message(request)
@@ -157,6 +187,9 @@ impl ExecutionEngine {
                     // Execute each tool and build result blocks
                     let mut result_blocks = Vec::new();
                     for (tool_id, tool_name, tool_input) in &tool_uses {
+                        if cancel.map_or(false, |t| t.is_cancelled()) {
+                            return Err(HubError::Cancelled);
+                        }
                         debug!(round, tool = %tool_name, "executing tool");
                         sink.tool_start(tool_name, tool_id).await;
                         let result = strategy.execute_tool(tool_name, tool_input).await;
@@ -320,7 +353,7 @@ mod tests {
         let sink = NullSink;
         let (_mock, recorder) = make_mock_recorder();
 
-        let result = engine.execute(&strategy, "Hi", &sink, &recorder).await.unwrap();
+        let result = engine.execute(&strategy, "Hi", &sink, &recorder, None).await.unwrap();
         assert_eq!(result.content, "Hello!");
         assert_eq!(result.input_tokens, 10);
         assert_eq!(result.output_tokens, 5);
@@ -366,7 +399,7 @@ mod tests {
             }
         }
 
-        let result = engine.execute(&TinyBudgetStrategy, "Hello world", &sink, &recorder).await;
+        let result = engine.execute(&TinyBudgetStrategy, "Hello world", &sink, &recorder, None).await;
         assert!(matches!(result, Err(HubError::ContextBudgetExceeded { .. })));
     }
 
@@ -425,7 +458,7 @@ mod tests {
         let sink = NullSink;
         let (_mock, recorder) = make_mock_recorder();
 
-        let result = engine.execute(&strategy, "search for test", &sink, &recorder).await.unwrap();
+        let result = engine.execute(&strategy, "search for test", &sink, &recorder, None).await.unwrap();
         assert_eq!(result.content, "Done!");
         assert_eq!(result.rounds_used, 2);
         assert_eq!(result.input_tokens, 30);
@@ -491,7 +524,7 @@ mod tests {
         let sink = NullSink;
         let (_mock, recorder) = make_mock_recorder();
 
-        let result = engine.execute(&LimitedStrategy, "go", &sink, &recorder).await;
+        let result = engine.execute(&LimitedStrategy, "go", &sink, &recorder, None).await;
         assert!(matches!(result, Err(HubError::MaxRoundsExhausted { max: 3 })));
     }
 
@@ -544,7 +577,7 @@ mod tests {
         let sink = NullSink;
         let (_mock, recorder) = make_mock_recorder();
 
-        engine.execute(&strategy, "test", &sink, &recorder).await.unwrap();
+        engine.execute(&strategy, "test", &sink, &recorder, None).await.unwrap();
         assert!(completed.load(Ordering::SeqCst));
     }
 
@@ -565,7 +598,7 @@ mod tests {
         let sink = NullSink;
         let (_mock, recorder) = make_mock_recorder();
 
-        let result = engine.execute(&strategy, "long question", &sink, &recorder).await.unwrap();
+        let result = engine.execute(&strategy, "long question", &sink, &recorder, None).await.unwrap();
         assert_eq!(result.content, "partial response");
         assert_eq!(result.rounds_used, 1);
         assert_eq!(result.output_tokens, 4096);
@@ -651,11 +684,118 @@ mod tests {
         let sink = NullSink;
         let (_mock, recorder) = make_mock_recorder();
 
-        let result = engine.execute(&strategy, "do things", &sink, &recorder).await.unwrap();
+        let result = engine.execute(&strategy, "do things", &sink, &recorder, None).await.unwrap();
         assert_eq!(result.content, "All done");
         assert_eq!(result.rounds_used, 2);
         assert_eq!(result.input_tokens, 130); // 50 + 80
         assert_eq!(result.output_tokens, 50); // 30 + 20
         assert_eq!(tool_exec_count.load(Ordering::SeqCst), 3); // 3 tools executed
+    }
+
+    #[test]
+    fn display_cancelled() {
+        let err = HubError::Cancelled;
+        assert_eq!(err.to_string(), "execution cancelled");
+    }
+
+    #[tokio::test]
+    async fn execute_cancelled_before_start() {
+        let provider = Arc::new(FixedProvider {
+            response: LLMResponse {
+                content: "should not reach".into(),
+                content_blocks: vec![],
+                model: "m".into(),
+                stop_reason: StopReason::EndTurn,
+                usage: TokenUsage::default(),
+            },
+        });
+
+        let engine = ExecutionEngine::new(provider);
+        let strategy = TestStrategy::new();
+        let sink = NullSink;
+        let (_mock, recorder) = make_mock_recorder();
+
+        let token = CancellationToken::new();
+        token.cancel();
+
+        let result = engine.execute(&strategy, "Hi", &sink, &recorder, Some(&token)).await;
+        assert!(matches!(result, Err(HubError::Cancelled)));
+    }
+
+    #[tokio::test]
+    async fn execute_cancelled_between_tool_rounds() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        let call_count = Arc::new(AtomicU32::new(0));
+        let token = CancellationToken::new();
+        let token_for_strategy = token.clone();
+
+        struct CancelAfterToolProvider {
+            calls: Arc<AtomicU32>,
+        }
+
+        #[async_trait]
+        impl LLMProvider for CancelAfterToolProvider {
+            async fn send_message(&self, _req: LLMRequest) -> Result<LLMResponse, LLMError> {
+                Ok(LLMResponse {
+                    content: String::new(),
+                    content_blocks: vec![ContentBlock::ToolUse {
+                        id: "t1".into(),
+                        name: "do_thing".into(),
+                        input: serde_json::json!({}),
+                    }],
+                    model: "m".into(),
+                    stop_reason: StopReason::ToolUse,
+                    usage: TokenUsage { input_tokens: 5, output_tokens: 5 },
+                })
+            }
+            async fn send_message_stream(
+                &self,
+                _req: LLMRequest,
+            ) -> Result<Pin<Box<dyn Stream<Item = Result<LLMStreamChunk, LLMError>> + Send>>, LLMError>
+            {
+                Err(LLMError::StreamError("not implemented".into()))
+            }
+            fn provider_name(&self) -> &'static str { "cancel-test" }
+            fn model_id(&self) -> &str { "m" }
+        }
+
+        // Strategy that cancels the token after first tool execution
+        struct CancellingStrategy {
+            token: CancellationToken,
+            calls: Arc<AtomicU32>,
+        }
+
+        #[async_trait]
+        impl ExecutionStrategy for CancellingStrategy {
+            fn system_prompt(&self) -> &str { "sys" }
+            fn tools(&self) -> Vec<Tool> { vec![] }
+            fn model_id(&self) -> &str { "m" }
+            fn max_rounds(&self) -> u32 { 10 }
+            fn context_budget(&self) -> usize { 480_000 }
+            fn streaming(&self) -> bool { false }
+            fn temperature(&self) -> f32 { 0.7 }
+            async fn build_messages(&self, input: &str) -> Result<Vec<Message>, HubError> {
+                Ok(vec![Message::user(input)])
+            }
+            async fn execute_tool(&self, _: &str, _: &serde_json::Value) -> serde_json::Value {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                // Cancel after executing first tool
+                self.token.cancel();
+                serde_json::json!({"ok": true})
+            }
+            async fn on_complete(&self, _: &str, _: &TokenUsage) -> Result<(), HubError> {
+                Ok(())
+            }
+        }
+
+        let provider = Arc::new(CancelAfterToolProvider { calls: call_count.clone() });
+        let engine = ExecutionEngine::new(provider);
+        let strategy = CancellingStrategy { token: token_for_strategy, calls: call_count.clone() };
+        let sink = NullSink;
+        let (_mock, recorder) = make_mock_recorder();
+
+        let result = engine.execute(&strategy, "go", &sink, &recorder, Some(&token)).await;
+        assert!(matches!(result, Err(HubError::Cancelled)));
     }
 }

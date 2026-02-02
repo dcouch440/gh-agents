@@ -4311,6 +4311,119 @@ pub async fn approve_pipeline_run(
 
 
 // ============================================================================
+// Cancellation Endpoints
+// ============================================================================
+
+/// POST /pipeline-runs/:run_id/cancel - Cancel a running pipeline.
+#[utoipa::path(
+    post,
+    path = "/pipeline-runs/{run_id}/cancel",
+    params(("run_id" = String, Path, description = "Pipeline run UUID")),
+    responses(
+        (status = 200, description = "Pipeline cancelled"),
+        (status = 404, description = "Pipeline run not found"),
+        (status = 409, description = "Pipeline run not in a cancellable state")
+    )
+)]
+pub async fn cancel_pipeline_run(
+    State(state): State<AppState>,
+    _user: auth::AuthUser,
+    Path(run_id): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let run_uuid = Uuid::parse_str(&run_id).map_err(|_| StatusCode::BAD_REQUEST)?;
+
+    let run = state
+        .repo
+        .get_pipeline_run(run_uuid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if run.status == "completed" || run.status == "failed" || run.status == "cancelled" {
+        return Err(StatusCode::CONFLICT);
+    }
+
+    // Trigger cancellation token
+    state.cancel_execution(run_uuid).await;
+
+    // Update pipeline run status
+    let mut updated = run;
+    updated.status = "cancelled".to_string();
+    updated.completed_at = Some(chrono::Utc::now());
+    let _ = state.repo.update_pipeline_run(&updated).await;
+
+    // Cancel all running stage executions
+    if let Ok(stages) = state.repo.list_stage_executions(run_uuid).await {
+        for stage in stages {
+            if stage.status == "running" || stage.status == "waiting_for_approval" {
+                let mut s = stage;
+                s.status = "cancelled".to_string();
+                s.completed_at = Some(chrono::Utc::now());
+                let _ = state.repo.update_stage_execution(&s).await;
+            }
+        }
+    }
+
+    // Broadcast cancellation
+    let pipeline_id = {
+        let mgr = state.pipeline_manager.read().await;
+        mgr.get_run_pipeline_id(run_uuid)
+            .map(|p| p.0)
+            .unwrap_or(run_uuid)
+    };
+
+    state.broadcast_pipeline(super::ws::PipelineUpdate {
+        run_id: run_uuid,
+        pipeline_id,
+        event: "run_cancelled".into(),
+        stage_number: None,
+        stage_name: None,
+        agent_id: None,
+        output: None,
+        input_tokens: None,
+        output_tokens: None,
+        duration_ms: None,
+        user_input: None,
+        timestamp: chrono::Utc::now(),
+        user_id: Some(_user.user_id.0),
+    });
+
+    Ok(Json(serde_json::json!({ "status": "cancelled" })))
+}
+
+/// POST /agent-executions/:execution_id/cancel - Cancel a running agent execution.
+#[utoipa::path(
+    post,
+    path = "/agent-executions/{execution_id}/cancel",
+    params(("execution_id" = String, Path, description = "Agent execution UUID")),
+    responses(
+        (status = 200, description = "Execution cancelled"),
+        (status = 404, description = "Execution not found or no cancellation token registered")
+    )
+)]
+pub async fn cancel_agent_execution(
+    State(state): State<AppState>,
+    _user: auth::AuthUser,
+    Path(execution_id): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let exec_uuid = Uuid::parse_str(&execution_id).map_err(|_| StatusCode::BAD_REQUEST)?;
+
+    let cancelled = state.cancel_execution(exec_uuid).await;
+    if !cancelled {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    // Update execution status in DB
+    if let Some(ae_repo) = &state.agent_execution_repo {
+        let _ = ae_repo
+            .update_agent_execution_status(exec_uuid, "cancelled", None, None, 0, 0, 0.0)
+            .await;
+    }
+
+    Ok(Json(serde_json::json!({ "status": "cancelled" })))
+}
+
+// ============================================================================
 // Tool Router Endpoints
 // ============================================================================
 

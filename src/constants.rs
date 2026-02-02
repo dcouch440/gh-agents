@@ -210,7 +210,11 @@ pub mod routes {
     pub const PIPELINE_RUNS: &str = "/pipeline-runs";
     pub const PIPELINE_RUN: &str = "/pipeline-runs/:run_id";
     pub const PIPELINE_RUN_APPROVE: &str = "/pipeline-runs/:run_id/approve";
+    pub const PIPELINE_RUN_CANCEL: &str = "/pipeline-runs/:run_id/cancel";
     pub const PIPELINE_RUN_TREE: &str = "/pipeline-runs/:run_id/tree";
+
+    // Agent executions
+    pub const AGENT_EXECUTION_CANCEL: &str = "/agent-executions/:execution_id/cancel";
 
     // Config
     pub const CONFIG: &str = "/config";

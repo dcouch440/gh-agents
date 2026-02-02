@@ -1419,7 +1419,7 @@ impl AgentExecutionRepo for PgRepo {
         cost_usd: f32,
     ) -> Result<AgentExecutionRow> {
         let row = sqlx::query_as::<_, AgentExecutionRow>(
-            "UPDATE agent_executions SET status = $2, output = COALESCE($3, output), structured_output = COALESCE($4, structured_output), input_tokens = $5, output_tokens = $6, cost_usd = $7, completed_at = CASE WHEN $2 IN ('completed', 'failed') THEN NOW() ELSE completed_at END WHERE id = $1 RETURNING *",
+            "UPDATE agent_executions SET status = $2, output = COALESCE($3, output), structured_output = COALESCE($4, structured_output), input_tokens = $5, output_tokens = $6, cost_usd = $7, completed_at = CASE WHEN $2 IN ('completed', 'failed', 'cancelled') THEN NOW() ELSE completed_at END WHERE id = $1 RETURNING *",
         )
         .bind(id)
         .bind(status)
@@ -1735,7 +1735,7 @@ impl RouterRequestRepo for PgRepo {
             r#"UPDATE router_requests SET
                 routed_tool = $2, routed_args = $3, is_async = $4, passdown = $5,
                 chain = $6, status = $7, result = $8,
-                completed_at = CASE WHEN $7 IN ('completed', 'failed') THEN NOW() ELSE completed_at END
+                completed_at = CASE WHEN $7 IN ('completed', 'failed', 'cancelled') THEN NOW() ELSE completed_at END
             WHERE id = $1
             RETURNING id, session_id, agent_execution_id, intent, priority, callback_hint, routed_tool, routed_args, is_async, passdown, chain, status, result, created_at, completed_at"#,
         )

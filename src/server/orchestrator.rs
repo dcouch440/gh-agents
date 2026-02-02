@@ -595,7 +595,7 @@ async fn handle_message(state: &AppState, provider: Arc<dyn LLMProvider + Send +
 
     match agent_id {
         Some(aid) => {
-            match super::hub::run_chat(state, provider, aid, msg.session_id, message_id, &msg.content, msg.user_id).await {
+            match super::hub::run_chat(state, provider, aid, msg.session_id, message_id, &msg.content, msg.user_id, None).await {
                 Ok(_) => {}
                 Err(e) => {
                     warn!("Chat error for {}: {}", message_id, e);

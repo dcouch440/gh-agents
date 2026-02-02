@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use serde_json::Value as JsonValue;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
@@ -41,6 +42,7 @@ pub async fn execute_workflow_via_engine(
     ctx: &WorkflowExecutionContext,
     steps: &[WorkflowStepRow],
     edges: &[WorkflowStepEdgeRow],
+    cancel: Option<&CancellationToken>,
 ) -> Result<WorkflowExecutionResult, HubError> {
     let sorted = topological_sort(steps, edges).map_err(|_| HubError::DagCycle)?;
     let step_map: HashMap<Uuid, &WorkflowStepRow> = steps.iter().map(|s| (s.id, s)).collect();
@@ -56,6 +58,11 @@ pub async fn execute_workflow_via_engine(
             Some(s) => *s,
             None => continue,
         };
+
+        // Check cancellation before each step
+        if cancel.map_or(false, |t| t.is_cancelled()) {
+            return Err(HubError::Cancelled);
+        }
 
         // Check all parents are completed
         let parents = get_parent_steps(*step_id, edges);
@@ -89,6 +96,7 @@ pub async fn execute_workflow_via_engine(
                 &mut total_input_tokens,
                 &mut total_output_tokens,
                 &mut total_cost_usd,
+                cancel,
             )
             .await?;
         } else {
@@ -103,6 +111,7 @@ pub async fn execute_workflow_via_engine(
                 &mut total_input_tokens,
                 &mut total_output_tokens,
                 &mut total_cost_usd,
+                cancel,
             )
             .await?;
         }
@@ -133,6 +142,7 @@ async fn execute_single_step(
     total_input_tokens: &mut i64,
     total_output_tokens: &mut i64,
     total_cost_usd: &mut f32,
+    cancel: Option<&CancellationToken>,
 ) -> Result<(), HubError> {
     let prompt = compose_prompt(
         step,
@@ -146,7 +156,7 @@ async fn execute_single_step(
     .await;
 
     let (output, in_tok, out_tok, cost) =
-        run_step_via_engine(engine, state, ctx, step, agent, &prompt).await?;
+        run_step_via_engine(engine, state, ctx, step, agent, &prompt, cancel).await?;
 
     *total_input_tokens += in_tok;
     *total_output_tokens += out_tok;
@@ -177,6 +187,7 @@ async fn execute_for_each_step(
     total_input_tokens: &mut i64,
     total_output_tokens: &mut i64,
     total_cost_usd: &mut f32,
+    cancel: Option<&CancellationToken>,
 ) -> Result<(), HubError> {
     let for_each_ref = step
         .for_each_ref
@@ -199,6 +210,9 @@ async fn execute_for_each_step(
     let mut iteration_outputs = Vec::new();
 
     for (idx, element) in array.iter().enumerate() {
+        if cancel.map_or(false, |t| t.is_cancelled()) {
+            return Err(HubError::Cancelled);
+        }
         let _label = extract_for_each_label(element, label_field);
 
         let prompt = compose_prompt(
@@ -212,7 +226,7 @@ async fn execute_for_each_step(
         )
         .await;
 
-        match run_step_via_engine(engine, state, ctx, step, agent, &prompt).await {
+        match run_step_via_engine(engine, state, ctx, step, agent, &prompt, cancel).await {
             Ok((output, in_tok, out_tok, cost)) => {
                 *total_input_tokens += in_tok;
                 *total_output_tokens += out_tok;
@@ -252,6 +266,7 @@ async fn run_step_via_engine(
     step: &WorkflowStepRow,
     agent: &AgentRow,
     prompt: &str,
+    cancel: Option<&CancellationToken>,
 ) -> Result<(StepOutput, i64, i64, f32), HubError> {
     let ae_repo = state
         .agent_execution_repo
@@ -322,7 +337,7 @@ async fn run_step_via_engine(
     let sink = NullSink;
 
     // Execute
-    let result = engine.execute(&strategy, prompt, &sink, &recorder).await?;
+    let result = engine.execute(&strategy, prompt, &sink, &recorder, cancel).await?;
 
     let cost = compute_cost(
         &agent.model_id,
