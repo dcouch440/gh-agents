@@ -7,12 +7,14 @@
 
 pub mod engine;
 pub mod error;
+pub mod prompt_registry;
 pub mod recorder;
 pub mod streaming;
 pub mod strategy;
 
 pub use engine::{ExecutionEngine, ExecutionResult};
 pub use error::HubError;
+pub use prompt_registry::PromptRegistry;
 pub use recorder::ExecutionRecorder;
 pub use streaming::{NullSink, StreamSink};
 pub use strategy::ExecutionStrategy;
