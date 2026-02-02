@@ -2,6 +2,7 @@ type Session = {
   id: string
   user_id: string
   mode_id: string
+  agent_id: string | null
   title: string
   summary: string
   created_at: string
@@ -23,6 +24,7 @@ type Mode = {
 
 type CreateSessionRequest = {
   mode_id: string
+  agent_id?: string
   title?: string
 }
 

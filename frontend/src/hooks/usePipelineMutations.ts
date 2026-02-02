@@ -198,6 +198,27 @@ const useStartPipelineRun = () => {
   return { mutate, loading, error }
 }
 
+const useCancelPipelineRun = () => {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const mutate = useCallback(async (runId: string): Promise<{ status: string }> => {
+    setLoading(true)
+    setError(null)
+    try {
+      return await api.post<{ status: string }>(API.PIPELINE_RUN_CANCEL(runId))
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to cancel pipeline run'
+      setError(msg)
+      throw e
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  return { mutate, loading, error }
+}
+
 const useAddStageMember = () => {
   const { reload } = usePipelineContext()
   const [loading, setLoading] = useState(false)
@@ -245,4 +266,4 @@ const useRemoveStageMember = () => {
   return { mutate, loading, error }
 }
 
-export { useApproveGate, useRenderStage, useSideTasks, useCreatePipeline, useUpdatePipeline, useDeletePipeline, useStartPipelineRun, useAddStageMember, useRemoveStageMember }
+export { useApproveGate, useRenderStage, useSideTasks, useCreatePipeline, useUpdatePipeline, useDeletePipeline, useStartPipelineRun, useCancelPipelineRun, useAddStageMember, useRemoveStageMember }
