@@ -196,6 +196,8 @@ pub mod routes {
     pub const AGENT: &str = "/agents/:id";
     pub const AGENT_TOOLS: &str = "/agents/:id/tools";
     pub const AGENT_CONTEXT: &str = "/agents/:id/context";
+    pub const AGENT_MODES: &str = "/agents/:id/modes";
+    pub const AGENT_MODE: &str = "/agent-modes/:id";
 
     // Tools
     pub const TOOLS: &str = "/tools";
