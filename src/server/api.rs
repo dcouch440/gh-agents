@@ -3315,6 +3315,137 @@ pub async fn approve_pipeline_run(
     Ok(Json(serde_json::json!({ "status": "resumed" })))
 }
 
+
+// ============================================================================
+// Tool Router Endpoints
+// ============================================================================
+
+/// GET /api/tool-routers - List all tool routers for the authenticated user.
+pub async fn list_tool_routers(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<crate::db::ToolRouterRow>>, StatusCode> {
+    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = repo.list_tool_routers(auth.user_id.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(rows))
+}
+
+/// Request body for creating a tool router.
+#[derive(Deserialize)]
+pub struct CreateToolRouterRequest {
+    pub name: String,
+    pub description: Option<String>,
+    pub system_prompt: String,
+    pub model_id: String,
+}
+
+/// POST /api/tool-routers - Create a new tool router.
+pub async fn create_tool_router(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateToolRouterRequest>) -> Result<(StatusCode, Json<crate::db::ToolRouterRow>), StatusCode> {
+    if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = repo
+        .create_tool_router(auth.user_id.0, &request.name, request.description.as_deref(), &request.system_prompt, &request.model_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok((StatusCode::CREATED, Json(row)))
+}
+
+/// GET /api/tool-routers/:id - Get a tool router by ID.
+pub async fn get_tool_router(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<crate::db::ToolRouterRow>, StatusCode> {
+    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    if row.user_id != auth.user_id.0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    Ok(Json(row))
+}
+
+/// Request body for updating a tool router.
+#[derive(Deserialize)]
+pub struct UpdateToolRouterRequest {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub system_prompt: Option<String>,
+    pub model_id: Option<String>,
+    pub is_active: Option<bool>,
+}
+
+/// PUT /api/tool-routers/:id - Update a tool router.
+pub async fn update_tool_router(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+    Path(id): Path<Uuid>,
+    Json(request): Json<UpdateToolRouterRequest>,
+) -> Result<Json<crate::db::ToolRouterRow>, StatusCode> {
+    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    if existing.user_id != auth.user_id.0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    if let Some(ref name) = request.name {
+        if name.trim().is_empty() || name.len() > MAX_TITLE_LENGTH {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    let row = repo
+        .update_tool_router(id, request.name.as_deref(), request.description.as_deref(), request.system_prompt.as_deref(), request.model_id.as_deref(), request.is_active)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(row))
+}
+
+/// DELETE /api/tool-routers/:id - Delete a tool router.
+pub async fn delete_tool_router(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
+    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    if existing.user_id != auth.user_id.0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    repo.delete_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// GET /api/tool-routers/:id/tools - Get tools assigned to a router.
+pub async fn get_router_tools(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
+    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    if existing.user_id != auth.user_id.0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    let tools = repo.get_router_tools(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let tools = tools.into_iter().map(ToolResponse::from_row).collect();
+    Ok(Json(tools))
+}
+
+/// Request body for setting router tools.
+#[derive(Deserialize)]
+pub struct SetRouterToolsRequest {
+    pub tool_ids: Vec<Uuid>,
+}
+
+/// PUT /api/tool-routers/:id/tools - Set tools for a router.
+pub async fn set_router_tools(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>, Json(request): Json<SetRouterToolsRequest>) -> Result<StatusCode, StatusCode> {
+    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    if existing.user_id != auth.user_id.0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    repo.set_router_tools(id, &request.tool_ids).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// GET /api/sessions/:session_id/context - Get context entries for a session.
+pub async fn get_session_context(State(state): State<AppState>, _auth: auth::AuthUser, Path(session_id): Path<Uuid>) -> Result<Json<Vec<crate::db::ContextStoreRow>>, StatusCode> {
+    let repo = state.context_store_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = repo.get_active_context(session_id, 100).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(rows))
+}
+
+/// GET /api/sessions/:session_id/requests - List router requests for a session.
+pub async fn list_session_requests(State(state): State<AppState>, _auth: auth::AuthUser, Path(session_id): Path<Uuid>) -> Result<Json<Vec<crate::db::RouterRequestRow>>, StatusCode> {
+    let repo = state.router_request_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = repo.list_session_requests(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(rows))
+}
 // ============================================================================
 // Tests
 // ============================================================================
