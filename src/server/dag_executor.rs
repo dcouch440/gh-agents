@@ -407,7 +407,7 @@ async fn execute_step(
 
     // Create agent_execution row
     let ae_row = ae_repo
-        .create_agent_execution(ctx.stage_execution_id, agent.id, Some(step.id), false, None, &system_prompt, prompt)
+        .create_agent_execution(ctx.stage_execution_id, agent.id, Some(step.id), false, None, &system_prompt, prompt, None)
         .await?;
 
     // Record system + user messages
@@ -550,7 +550,7 @@ async fn execute_interactive_review(
 
     // Create interactive agent_execution
     let iae_row = ae_repo
-        .create_agent_execution(ctx.stage_execution_id, interactive_agent.id, Some(step.id), true, Some(parent_ae_id), &system_prompt, &review_prompt)
+        .create_agent_execution(ctx.stage_execution_id, interactive_agent.id, Some(step.id), true, Some(parent_ae_id), &system_prompt, &review_prompt, None)
         .await?;
 
     // Record messages

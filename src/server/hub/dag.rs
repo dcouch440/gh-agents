@@ -300,6 +300,7 @@ async fn run_step_via_engine(
             None,
             &system_prompt,
             prompt,
+            None,
         )
         .await
         .map_err(|e| anyhow::anyhow!("failed to create agent execution: {}", e))?;

@@ -215,7 +215,7 @@ pub async fn advance_pipeline(
             if let Some(ae_repo) = &state.agent_execution_repo {
                 if let Some(aid) = gate_exec.agent_id {
                     let _ = ae_repo
-                        .create_agent_execution(gate_exec.id, aid, None, false, None, "", "")
+                        .create_agent_execution(gate_exec.id, aid, None, false, None, "", "", None)
                         .await;
                 }
             }
