@@ -1,3 +1,5 @@
-export { api, ApiError } from './client'
+export { api, ApiError, configure, addInterceptor, cancelInFlightRequests } from './client'
+export type { RequestConfig, RequestContext, ResponseContext, Interceptor, ApiErrorType } from './client'
 export { createSSEStream } from './sse'
 export type { SSECallbacks, SSEEvent } from './sse'
+export { endpoints } from './endpoints'
