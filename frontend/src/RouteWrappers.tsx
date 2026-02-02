@@ -1,4 +1,4 @@
-import { AgentProvider, TaskProvider, PipelineProvider, FeedProvider, StatsProvider, RoutingProvider, ChatProvider } from './contexts'
+import { AgentProvider, TaskProvider, PipelineProvider, FeedProvider, ChatProvider } from './contexts'
 import { DashboardPage } from './pages/Dashboard/DashboardPage'
 import { AgentsPage } from './pages/Agents/AgentsPage'
 import { AgentDetailPage } from './pages/Agents/AgentDetailPage'
@@ -12,11 +12,7 @@ import { TasksPage } from './pages/Tasks/TasksPage'
 function DashboardWithProviders() {
   return (
     <FeedProvider>
-      <StatsProvider>
-        <RoutingProvider>
-          <DashboardPage />
-        </RoutingProvider>
-      </StatsProvider>
+      <DashboardPage />
     </FeedProvider>
   )
 }
