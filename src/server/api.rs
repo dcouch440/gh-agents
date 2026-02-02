@@ -3343,7 +3343,7 @@ pub async fn create_tool_router(State(state): State<AppState>, auth: auth::AuthU
     }
     let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo
-        .create_tool_router(auth.user_id.0, &request.name, request.description.as_deref(), &request.system_prompt, &request.model_id)
+        .create_tool_router(auth.user_id.0, &request.name, request.description, &request.system_prompt, &request.model_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok((StatusCode::CREATED, Json(row)))
@@ -3387,7 +3387,7 @@ pub async fn update_tool_router(
         }
     }
     let row = repo
-        .update_tool_router(id, request.name.as_deref(), request.description.as_deref(), request.system_prompt.as_deref(), request.model_id.as_deref(), request.is_active)
+        .update_tool_router(id, request.name, request.description, request.system_prompt, request.model_id, request.is_active)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(row))

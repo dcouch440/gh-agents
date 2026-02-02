@@ -54,6 +54,12 @@ pub enum ClientMessage {
     /// Unsubscribe from channels
     #[serde(rename = "unsubscribe")]
     Unsubscribe { channels: Vec<String> },
+    /// Subscribe to a specific pipeline run's events
+    #[serde(rename = "subscribe_run")]
+    SubscribeRun { run_id: Uuid },
+    /// Unsubscribe from a specific pipeline run
+    #[serde(rename = "unsubscribe_run")]
+    UnsubscribeRun { run_id: Uuid },
 }
 
 /// Message sent from server to client
@@ -81,6 +87,12 @@ pub enum ServerMessage {
     /// Tool routing update
     #[serde(rename = "routing_update")]
     RoutingUpdate { data: RoutingUpdate },
+    /// Router request lifecycle update (pending → routed → completed)
+    #[serde(rename = "router_request_update")]
+    RouterRequestUpdate { data: RouterRequestEvent },
+    /// New context arrived for a session
+    #[serde(rename = "context_update")]
+    ContextUpdate { data: ContextUpdateEvent },
     /// Error message
     #[serde(rename = "error")]
     Error { message: String },
@@ -162,8 +174,39 @@ pub struct RoutingUpdate {
     pub user_id: Option<Uuid>,
 }
 
+/// Router request lifecycle event broadcast to subscribers
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RouterRequestEvent {
+    pub request_id: Uuid,
+    pub session_id: Uuid,
+    pub run_id: Option<Uuid>,
+    pub intent: String,
+    pub status: String,
+    pub routed_tool: Option<String>,
+    pub passdown: Option<String>,
+    pub result: Option<String>,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    #[serde(default)]
+    pub user_id: Option<Uuid>,
+}
+
+/// Context store update event broadcast to subscribers
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContextUpdateEvent {
+    pub session_id: Uuid,
+    pub run_id: Option<Uuid>,
+    pub source: String,
+    pub priority: f32,
+    pub content_preview: String,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    #[serde(default)]
+    pub user_id: Option<Uuid>,
+}
+
 /// Shared subscriptions state for a client
 type Subscriptions = Arc<Mutex<HashSet<String>>>;
+/// Run-scoped subscriptions (pipeline run IDs the client wants events for)
+type RunSubscriptions = Arc<Mutex<HashSet<Uuid>>>;
 
 /// Query parameters for WebSocket connection
 #[derive(Debug, Deserialize)]
@@ -189,6 +232,7 @@ pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>, Que
 async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserId>) {
     let (mut sender, mut receiver) = socket.split();
     let subscriptions: Subscriptions = Arc::new(Mutex::new(HashSet::new()));
+    let run_subscriptions: RunSubscriptions = Arc::new(Mutex::new(HashSet::new()));
 
     // Subscribe to broadcast channels
     let mut feed_rx = state.subscribe_feed();
@@ -197,6 +241,8 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
     let mut session_rx = state.subscribe_sessions();
     let mut pipeline_rx = state.subscribe_pipelines();
     let mut routing_rx = state.subscribe_routing();
+    let mut router_request_rx = state.subscribe_router_requests();
+    let mut context_update_rx = state.subscribe_context_updates();
 
     // Ping interval for keeping connection alive
     let mut ping_interval = interval(PING_INTERVAL);
@@ -220,7 +266,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
                     Some(Ok(Message::Text(text))) => {
                         match serde_json::from_str::<ClientMessage>(&text) {
                             Ok(client_msg) => {
-                                let response = handle_client_message(client_msg, &subscriptions).await;
+                                let response = handle_client_message(client_msg, &subscriptions, &run_subscriptions).await;
                                 if let Some(server_msg) = response {
                                     if let Some(json) = serialize_msg(&server_msg) {
                                         if sender.send(Message::Text(json)).await.is_err() {
@@ -419,6 +465,69 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
                     Err(RecvError::Closed) => break,
                 }
             }
+
+            // Handle router request lifecycle events (filtered by run subscription)
+            rr = router_request_rx.recv() => {
+                match rr {
+                    Ok(event) => {
+                        let subs = subscriptions.lock().await;
+                        if subs.contains(CHANNEL_ROUTING) {
+                            let should_send = event.user_id.is_none()
+                                || user_id.map(|u| Some(u.0) == event.user_id).unwrap_or(false);
+                            // If the event has a run_id, also check run subscriptions
+                            let run_match = if let Some(rid) = event.run_id {
+                                let runs = run_subscriptions.lock().await;
+                                runs.contains(&rid)
+                            } else {
+                                true
+                            };
+                            if should_send && run_match {
+                                let msg = ServerMessage::RouterRequestUpdate { data: event };
+                                if let Some(json) = serialize_msg(&msg) {
+                                    if sender.send(Message::Text(json)).await.is_err() {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(RecvError::Lagged(n)) => {
+                        warn!("Router request receiver lagged, skipped {} messages", n);
+                    }
+                    Err(RecvError::Closed) => break,
+                }
+            }
+
+            // Handle context store updates (filtered by run subscription)
+            ctx = context_update_rx.recv() => {
+                match ctx {
+                    Ok(event) => {
+                        let subs = subscriptions.lock().await;
+                        if subs.contains(CHANNEL_ROUTING) {
+                            let should_send = event.user_id.is_none()
+                                || user_id.map(|u| Some(u.0) == event.user_id).unwrap_or(false);
+                            let run_match = if let Some(rid) = event.run_id {
+                                let runs = run_subscriptions.lock().await;
+                                runs.contains(&rid)
+                            } else {
+                                true
+                            };
+                            if should_send && run_match {
+                                let msg = ServerMessage::ContextUpdate { data: event };
+                                if let Some(json) = serialize_msg(&msg) {
+                                    if sender.send(Message::Text(json)).await.is_err() {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(RecvError::Lagged(n)) => {
+                        warn!("Context update receiver lagged, skipped {} messages", n);
+                    }
+                    Err(RecvError::Closed) => break,
+                }
+            }
         }
     }
 
@@ -431,7 +540,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
 }
 
 /// Handle a client message and return optional response
-async fn handle_client_message(msg: ClientMessage, subscriptions: &Subscriptions) -> Option<ServerMessage> {
+async fn handle_client_message(msg: ClientMessage, subscriptions: &Subscriptions, run_subscriptions: &RunSubscriptions) -> Option<ServerMessage> {
     match msg {
         ClientMessage::Subscribe { channels } => {
             let mut subs = subscriptions.lock().await;
@@ -455,6 +564,18 @@ async fn handle_client_message(msg: ClientMessage, subscriptions: &Subscriptions
 
             let current: Vec<String> = subs.iter().cloned().collect();
             Some(ServerMessage::Subscribed { channels: current })
+        }
+        ClientMessage::SubscribeRun { run_id } => {
+            let mut runs = run_subscriptions.lock().await;
+            runs.insert(run_id);
+            info!("Client subscribed to run: {}", run_id);
+            None
+        }
+        ClientMessage::UnsubscribeRun { run_id } => {
+            let mut runs = run_subscriptions.lock().await;
+            runs.remove(&run_id);
+            info!("Client unsubscribed from run: {}", run_id);
+            None
         }
     }
 }
@@ -567,7 +688,8 @@ mod tests {
             channels: vec!["feed".to_string(), "invalid".to_string()],
         };
 
-        let response = handle_client_message(msg, &subscriptions).await;
+        let run_subs: RunSubscriptions = Arc::new(Mutex::new(HashSet::new()));
+        let response = handle_client_message(msg, &subscriptions, &run_subs).await;
 
         assert!(response.is_some());
         if let Some(ServerMessage::Subscribed { channels }) = response {
@@ -587,7 +709,8 @@ mod tests {
 
         let msg = ClientMessage::Unsubscribe { channels: vec!["feed".to_string()] };
 
-        let response = handle_client_message(msg, &subscriptions).await;
+        let run_subs: RunSubscriptions = Arc::new(Mutex::new(HashSet::new()));
+        let response = handle_client_message(msg, &subscriptions, &run_subs).await;
 
         assert!(response.is_some());
         if let Some(ServerMessage::Subscribed { channels }) = response {
@@ -763,7 +886,8 @@ mod tests {
     async fn subscribe_empty_channels() {
         let subscriptions: Subscriptions = Arc::new(Mutex::new(HashSet::new()));
         let msg = ClientMessage::Subscribe { channels: vec![] };
-        let response = handle_client_message(msg, &subscriptions).await;
+        let run_subs: RunSubscriptions = Arc::new(Mutex::new(HashSet::new()));
+        let response = handle_client_message(msg, &subscriptions, &run_subs).await;
         if let Some(ServerMessage::Subscribed { channels }) = response {
             assert!(channels.is_empty());
         } else {
@@ -777,7 +901,8 @@ mod tests {
         let msg = ClientMessage::Subscribe {
             channels: vec!["feed".to_string(), "tasks".to_string(), "agents".to_string()],
         };
-        let response = handle_client_message(msg, &subscriptions).await;
+        let run_subs: RunSubscriptions = Arc::new(Mutex::new(HashSet::new()));
+        let response = handle_client_message(msg, &subscriptions, &run_subs).await;
         if let Some(ServerMessage::Subscribed { channels }) = response {
             assert_eq!(channels.len(), 3);
         } else {
@@ -791,7 +916,8 @@ mod tests {
         let msg = ClientMessage::Subscribe {
             channels: vec!["foo".to_string(), "bar".to_string()],
         };
-        let response = handle_client_message(msg, &subscriptions).await;
+        let run_subs: RunSubscriptions = Arc::new(Mutex::new(HashSet::new()));
+        let response = handle_client_message(msg, &subscriptions, &run_subs).await;
         if let Some(ServerMessage::Subscribed { channels }) = response {
             assert!(channels.is_empty());
         } else {
@@ -802,10 +928,11 @@ mod tests {
     #[tokio::test]
     async fn subscribe_idempotent() {
         let subscriptions: Subscriptions = Arc::new(Mutex::new(HashSet::new()));
+        let run_subs: RunSubscriptions = Arc::new(Mutex::new(HashSet::new()));
         let msg1 = ClientMessage::Subscribe { channels: vec!["feed".to_string()] };
         let msg2 = ClientMessage::Subscribe { channels: vec!["feed".to_string()] };
-        handle_client_message(msg1, &subscriptions).await;
-        let response = handle_client_message(msg2, &subscriptions).await;
+        handle_client_message(msg1, &subscriptions, &run_subs).await;
+        let response = handle_client_message(msg2, &subscriptions, &run_subs).await;
         if let Some(ServerMessage::Subscribed { channels }) = response {
             assert_eq!(channels.len(), 1);
         } else {
@@ -819,7 +946,8 @@ mod tests {
         subscriptions.lock().await.insert("feed".to_string());
 
         let msg = ClientMessage::Unsubscribe { channels: vec!["tasks".to_string()] };
-        let response = handle_client_message(msg, &subscriptions).await;
+        let run_subs: RunSubscriptions = Arc::new(Mutex::new(HashSet::new()));
+        let response = handle_client_message(msg, &subscriptions, &run_subs).await;
         if let Some(ServerMessage::Subscribed { channels }) = response {
             assert_eq!(channels.len(), 1);
             assert!(channels.contains(&"feed".to_string()));
@@ -837,7 +965,8 @@ mod tests {
         let msg = ClientMessage::Unsubscribe {
             channels: vec!["feed".to_string(), "tasks".to_string()],
         };
-        let response = handle_client_message(msg, &subscriptions).await;
+        let run_subs: RunSubscriptions = Arc::new(Mutex::new(HashSet::new()));
+        let response = handle_client_message(msg, &subscriptions, &run_subs).await;
         if let Some(ServerMessage::Subscribed { channels }) = response {
             assert!(channels.is_empty());
         } else {
@@ -851,7 +980,8 @@ mod tests {
         subscriptions.lock().await.insert("feed".to_string());
 
         let msg = ClientMessage::Unsubscribe { channels: vec![] };
-        let response = handle_client_message(msg, &subscriptions).await;
+        let run_subs: RunSubscriptions = Arc::new(Mutex::new(HashSet::new()));
+        let response = handle_client_message(msg, &subscriptions, &run_subs).await;
         if let Some(ServerMessage::Subscribed { channels }) = response {
             assert_eq!(channels.len(), 1);
         } else {
@@ -864,15 +994,18 @@ mod tests {
         let subscriptions: Subscriptions = Arc::new(Mutex::new(HashSet::new()));
 
         let msg = ClientMessage::Subscribe { channels: vec!["feed".to_string()] };
-        handle_client_message(msg, &subscriptions).await;
+        let run_subs: RunSubscriptions = Arc::new(Mutex::new(HashSet::new()));
+        handle_client_message(msg, &subscriptions, &run_subs).await;
 
         let msg = ClientMessage::Unsubscribe { channels: vec!["feed".to_string()] };
-        handle_client_message(msg, &subscriptions).await;
+        let run_subs: RunSubscriptions = Arc::new(Mutex::new(HashSet::new()));
+        handle_client_message(msg, &subscriptions, &run_subs).await;
 
         let msg = ClientMessage::Subscribe {
             channels: vec!["feed".to_string(), "agents".to_string()],
         };
-        let response = handle_client_message(msg, &subscriptions).await;
+        let run_subs: RunSubscriptions = Arc::new(Mutex::new(HashSet::new()));
+        let response = handle_client_message(msg, &subscriptions, &run_subs).await;
         if let Some(ServerMessage::Subscribed { channels }) = response {
             assert_eq!(channels.len(), 2);
             assert!(channels.contains(&"feed".to_string()));
