@@ -140,6 +140,7 @@ export const API = {
   PIPELINE_RUNS: '/pipeline-runs',
   PIPELINE_RUN: (id: string) => `/pipeline-runs/${id}`,
   PIPELINE_RUN_APPROVE: (id: string) => `/pipeline-runs/${id}/approve`,
+  PIPELINE_RUN_CANCEL: (id: string) => `/pipeline-runs/${id}/cancel`,
 
   // Workflows
   WORKFLOWS: '/workflows',
@@ -158,6 +159,7 @@ export const API = {
   AGENT_EXECUTION: (id: string) => `/agent-executions/${id}`,
   EXECUTION_MESSAGES: (id: string) => `/agent-executions/${id}/messages`,
   EXECUTION_APPROVE: (id: string) => `/agent-executions/${id}/approve`,
+  AGENT_EXECUTION_CANCEL: (id: string) => `/agent-executions/${id}/cancel`,
 
   // Pipeline Run Tree
   PIPELINE_RUN_TREE: (runId: string) => `/pipeline-runs/${runId}/tree`,
