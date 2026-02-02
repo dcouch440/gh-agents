@@ -7,6 +7,7 @@ import type { FeedItem } from '@/types/feed'
 import type { Tool } from '@/types/tool'
 import type { UsageSummary } from '@/types/stats'
 import type { Config } from '@/types/config'
+import type { CostResponse } from '@/types/cost'
 import data from '@/mock-data.json'
 
 const delay = (ms = 80): Promise<void> => new Promise((r) => setTimeout(r, ms))
@@ -104,6 +105,11 @@ const getStats = async (): Promise<UsageSummary[]> => {
   return data.usage_stats as UsageSummary[]
 }
 
+const getCosts = async (): Promise<CostResponse> => {
+  await delay()
+  return { total_spend: 0, models: [] }
+}
+
 const getConfig = async (): Promise<Config> => {
   await delay()
   return data.config as unknown as Config
@@ -128,5 +134,6 @@ export const mock = {
   getFeed,
   getTools,
   getStats,
+  getCosts,
   getConfig,
 }

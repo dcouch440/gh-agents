@@ -25,3 +25,7 @@ export { useSendMessage, useSendSessionMessage, useClearHistory } from './useCha
 export { useUpdateConfig } from './useUpdateConfig'
 export { useApproveGate, useRenderStage, useSideTasks } from './usePipelineMutations'
 export { useContextResponse } from './useContextResponse'
+export { usePromptTemplateContext } from './usePromptTemplateContext'
+export { useCreatePromptTemplate, useUpdatePromptTemplate, useDeletePromptTemplate } from './usePromptTemplateMutations'
+export { useOutputSchemaContext } from './useOutputSchemaContext'
+export { useCreateOutputSchema, useUpdateOutputSchema, useDeleteOutputSchema } from './useOutputSchemaMutations'
