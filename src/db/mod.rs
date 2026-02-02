@@ -52,32 +52,6 @@ pub struct PipelineStageRow {
     pub output_schema: Option<serde_json::Value>,
 }
 
-/// Row type for persisted schedules.
-#[derive(Debug, Clone)]
-pub struct ScheduleRow {
-    pub id: Uuid,
-    pub name: String,
-    pub agent_id: Uuid,
-    pub interval_seconds: i32,
-    pub task_title: String,
-    pub task_description: String,
-    pub role: Option<String>,
-    pub enabled: bool,
-    pub last_run_at: Option<DateTime<Utc>>,
-}
-
-/// Row type for persisted triggers.
-#[derive(Debug, Clone)]
-pub struct TriggerRow {
-    pub id: Uuid,
-    pub name: String,
-    pub event_type: String,
-    pub agent_id: Uuid,
-    pub task_title: String,
-    pub task_description: String,
-    pub role: Option<String>,
-}
-
 /// Row type for persisted tool definitions.
 #[derive(Debug, Clone)]
 pub struct ToolRow {
@@ -98,19 +72,6 @@ pub struct ClusterRow {
     pub description: String,
     pub conventions: String,
     pub shared_files: serde_json::Value,
-}
-
-/// Row type for persisted stage side tasks.
-#[derive(Debug, Clone)]
-pub struct StageSideTaskRow {
-    pub id: Uuid,
-    pub pipeline_id: Uuid,
-    pub stage_number: i32,
-    pub agent_id: Uuid,
-    pub input_definitions: serde_json::Value,
-    pub output_name: String,
-    pub blocking: bool,
-    pub output_schema: serde_json::Value,
 }
 
 /// Row type for persisted documents.
@@ -269,16 +230,6 @@ pub struct TokenLedgerRow {
     pub created_at: DateTime<Utc>,
 }
 
-/// Row type for token usage summary.
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
-pub struct UsageSummaryRow {
-    pub tier: String,
-    pub model_id: String,
-    pub total_input: i64,
-    pub total_output: i64,
-    pub call_count: i64,
-}
-
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct PipelineRunRow {
     pub id: Uuid,
@@ -313,32 +264,6 @@ pub struct StageExecutionRow {
     pub duration_ms: i64,
     pub stage_member_id: Option<Uuid>,
     pub pipeline_id: Option<Uuid>,
-}
-
-/// Row type for routing events (tool routing observability and analytics).
-#[derive(Debug, Clone)]
-pub struct RoutingEventRow {
-    pub id: Uuid,
-    pub user_id: Option<Uuid>,
-    pub session_id: Option<Uuid>,
-    pub task_id: Option<Uuid>,
-    pub router_agent_id: Uuid,
-    pub cluster_agent_id: Option<Uuid>,
-    pub cluster_id: Option<Uuid>,
-    pub cluster_name: String,
-    pub tool_name: String,
-    pub request: String,
-    pub parameters: serde_json::Value,
-    pub response: Option<String>,
-    pub error: Option<String>,
-    pub status: String,
-    pub agent_tier: Option<String>,
-    pub model_id: Option<String>,
-    pub input_tokens: i64,
-    pub output_tokens: i64,
-    pub duration_ms: Option<i64>,
-    pub created_at: DateTime<Utc>,
-    pub completed_at: Option<DateTime<Utc>>,
 }
 
 /// Type alias for the database pool
