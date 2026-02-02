@@ -15,6 +15,7 @@ use crate::llm::AnthropicClient;
 use crate::types::{AgentPoolConfig, AppConfig, UserId};
 
 use super::agent_mode::{AgentModeId, ModeRegistry};
+use super::hub::PromptRegistry;
 use super::ws::{AgentUpdate, FeedUpdate, PipelineUpdate, RoutingUpdate, SessionUpdate, TaskUpdate};
 
 /// Message sent to the orchestrator
@@ -123,6 +124,8 @@ pub struct AppState {
     pub mode_registry: Arc<ModeRegistry>,
     /// Tool-to-cluster index for routing tool calls to cluster agents
     pub cluster_index: Option<Arc<ToolClusterIndex>>,
+    /// Prompt registry for core system/agent prompts loaded from prompts/ directory
+    pub prompt_registry: Arc<PromptRegistry>,
 }
 
 impl AppState {
@@ -145,6 +148,18 @@ impl AppState {
         let context_store_repo: Arc<dyn ContextStoreRepo> = Arc::new(PgRepo::new(db.clone()));
         let router_request_repo: Arc<dyn RouterRequestRepo> = Arc::new(PgRepo::new(db.clone()));
         let (mut state, rx) = Self::with_repo(Some(db), repo, config.clone());
+
+        // Load prompt registry from prompts/ directory
+        let prompts_dir = std::env::current_dir().unwrap_or_default().join("prompts");
+        match PromptRegistry::load_from_dir(&prompts_dir) {
+            Ok(registry) => {
+                tracing::info!("Loaded {} prompts from {}", registry.len(), prompts_dir.display());
+                state.prompt_registry = Arc::new(registry);
+            }
+            Err(e) => {
+                tracing::warn!("Failed to load prompts from {}: {} — using empty registry", prompts_dir.display(), e);
+            }
+        }
         state.user_repo = Some(user_repo);
         state.doc_repo = Some(doc_repo);
         state.output_schema_repo = Some(output_schema_repo);
@@ -301,6 +316,7 @@ impl AppState {
                 schedule_manager: Arc::new(RwLock::new(ScheduleManager::new())),
                 mode_registry: Arc::new(ModeRegistry::new()),
                 cluster_index: None,
+                prompt_registry: Arc::new(PromptRegistry::empty()),
             },
             orchestrator_rx,
         )

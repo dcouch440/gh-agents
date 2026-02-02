@@ -7,17 +7,15 @@
 
 use std::sync::Arc;
 
-use futures::StreamExt;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::llm::{AnthropicClient, ContentBlock, LLMProvider, LLMRequest, Message, RateLimitedProvider, RetryingProvider, Role, StopReason, StreamAccumulator, StreamChunk as LLMStreamChunk};
+use crate::llm::{AnthropicClient, LLMProvider, RateLimitedProvider, RetryingProvider};
 
 use crate::agents::{AgentCommand, AgentResponse, CommunicationStyle, FileContent, OutputFormat, RoleContext, RoleId, TaskAssignment, TaskConstraints, TaskContext, TriggerEvent};
 
 use super::state::{AppState, OrchestratorMessage, StreamChunk};
-use super::tools;
 use super::ws::{AgentUpdate, FeedUpdate, PipelineUpdate, TaskUpdate};
 
 use super::agent_mode::HistoryPolicy;
@@ -220,274 +218,75 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                         state.task_results.write().await.insert(id, resp);
                     }
 
-                    // Pipeline auto-advance
+                    // Pipeline auto-advance (delegated to hub::advance_pipeline)
                     if let Some((run_id, completed_stage_number, prev_output, succeeded, stage_input_tokens, stage_output_tokens, stage_duration_ms)) = pipeline_advance {
-                        // Persist stage execution completion/failure
-                        {
-                            let now = chrono::Utc::now();
-                            // Try to find existing stage execution by listing and matching
-                            if let Ok(execs) = state.repo.list_stage_executions(run_id).await {
-                                if let Some(exec) = execs.into_iter().find(|e| e.stage_number == completed_stage_number as i32) {
-                                    let mut updated = exec;
-                                    updated.status = if succeeded { "completed".to_string() } else { "failed".to_string() };
-                                    updated.output = if succeeded { Some(prev_output.clone()) } else { None };
-                                    updated.input_tokens = stage_input_tokens as i64;
-                                    updated.output_tokens = stage_output_tokens as i64;
-                                    updated.duration_ms = stage_duration_ms as i64;
-                                    updated.completed_at = Some(now);
-                                    let _ = state.repo.update_stage_execution(&updated).await;
-
-                                    // Dual-write: update agent_execution + write token_ledger
-                                    if let Some(ae_repo) = &state.agent_execution_repo {
-                                        if let Ok(ae_rows) = ae_repo.list_agent_executions_by_stage(updated.id).await {
-                                            if let Some(ae) = ae_rows.first() {
-                                                let status = if succeeded { "completed" } else { "failed" };
-                                                let output = if succeeded { Some(prev_output.clone()) } else { None };
-                                                let _ = ae_repo
-                                                    .update_agent_execution_status(ae.id, status, output, None, stage_input_tokens as i64, stage_output_tokens as i64, 0.0)
-                                                    .await;
-
-                                                // Write token_ledger entry
-                                                if let Some(tl_repo) = &state.token_ledger_repo {
-                                                    // Get user_id and model_id from the run/agent
-                                                    if let Ok(Some(run_row)) = state.repo.get_pipeline_run(run_id).await {
-                                                        let model_id = if let Some(agent_id) = updated.agent_id {
-                                                            state
-                                                                .repo
-                                                                .get_persisted_agent(agent_id)
-                                                                .await
-                                                                .ok()
-                                                                .flatten()
-                                                                .map(|a| a.model_id)
-                                                                .unwrap_or_else(|| "unknown".to_string())
-                                                        } else {
-                                                            "unknown".to_string()
-                                                        };
-                                                        let _ = tl_repo
-                                                            .insert_ledger_entry(run_row.user_id, ae.id, &model_id, stage_input_tokens as i64, stage_output_tokens as i64, 0.0)
-                                                            .await;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            // Update run token totals
-                            if let Ok(Some(mut run_row)) = state.repo.get_pipeline_run(run_id).await {
-                                *run_row.total_input_tokens.get_or_insert(0) += stage_input_tokens as i64;
-                                *run_row.total_output_tokens.get_or_insert(0) += stage_output_tokens as i64;
-                                run_row.current_stage = completed_stage_number as i32;
-                                if !succeeded {
-                                    run_row.status = "failed".to_string();
-                                    run_row.completed_at = Some(now);
-                                }
-                                // Update stage_outputs from in-memory
-                                let mgr = state.pipeline_manager.read().await;
-                                if let Some(outputs) = mgr.get_stage_outputs(run_id) {
-                                    run_row.stage_outputs = Some(serde_json::to_value(outputs).unwrap_or_default());
-                                }
-                                drop(mgr);
-                                let _ = state.repo.update_pipeline_run(&run_row).await;
-                            }
-                        }
-
-                        // Broadcast stage completion/failure
-                        {
-                            let pipeline_id = {
-                                let mgr = state.pipeline_manager.read().await;
-                                mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
-                            };
-                            state.broadcast_pipeline(PipelineUpdate {
-                                run_id,
-                                pipeline_id,
-                                event: if succeeded { "stage_completed".into() } else { "stage_failed".into() },
-                                stage_number: Some(completed_stage_number as i32),
-                                stage_name: None,
-                                agent_id: None,
-                                output: if succeeded { Some(prev_output.clone()) } else { None },
-                                input_tokens: Some(stage_input_tokens),
-                                output_tokens: Some(stage_output_tokens),
-                                duration_ms: Some(stage_duration_ms),
-                                user_input: None,
-                                timestamp: chrono::Utc::now(),
-                                user_id: None,
-                            });
-                        }
-
-                        if !succeeded {
-                            let mut mgr = state.pipeline_manager.write().await;
-                            let _ = mgr.fail_run(run_id, "Stage task failed");
-                            state.broadcast_feed(FeedUpdate {
-                                id: run_id,
-                                agent_id: "pipeline".into(),
-                                content: "Pipeline failed due to stage failure".into(),
-                                item_type: "pipeline_failed".into(),
-                                timestamp: chrono::Utc::now(),
-                                user_id: None,
-                            });
-                            // Broadcast run_failed
-                            {
-                                let pipeline_id = {
-                                    let mgr = state.pipeline_manager.read().await;
-                                    mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
-                                };
-                                state.broadcast_pipeline(PipelineUpdate {
-                                    run_id,
-                                    pipeline_id,
-                                    event: "run_failed".into(),
-                                    stage_number: Some(completed_stage_number as i32),
-                                    stage_name: None,
-                                    agent_id: None,
-                                    output: None,
-                                    input_tokens: None,
-                                    output_tokens: None,
-                                    duration_ms: None,
-                                    user_input: None,
-                                    timestamp: chrono::Utc::now(),
-                                    user_id: None,
-                                });
-                            }
+                        let stage_output = if succeeded && !prev_output.is_empty() {
+                            Some(prev_output.clone())
                         } else {
-                            // Record structured output from completed stage
-                            {
-                                let mut mgr = state.pipeline_manager.write().await;
-                                let pipeline_id = mgr.get_run_pipeline_id(run_id);
-                                let stage_name = mgr.get_stage_name(run_id, completed_stage_number);
+                            None
+                        };
 
-                                if let (Some(pid), Some(sname)) = (pipeline_id, stage_name) {
-                                    // Get output schema from the completed stage
-                                    let output_schema = mgr
-                                        .get_pipeline(&pid)
-                                        .and_then(|p| p.stages.get(completed_stage_number as usize))
-                                        .map(|s| s.output_schema.clone())
-                                        .unwrap_or_else(|| serde_json::json!({"fields": []}));
-                                    let parsed = crate::agents::pipeline::parse_stage_output(&prev_output, &output_schema);
-                                    mgr.record_stage_output(run_id, sname, parsed);
-                                }
-                            }
+                        match super::hub::advance_pipeline(
+                            &state,
+                            run_id,
+                            completed_stage_number as i32,
+                            stage_output,
+                            succeeded,
+                            stage_input_tokens as i64,
+                            stage_output_tokens as i64,
+                            stage_duration_ms as i64,
+                        )
+                        .await
+                        {
+                            Ok(super::hub::PipelineAdvanceAction::NextStage { stage_number, stage_name }) => {
+                                info!("Pipeline {} advanced to stage {} ({})", run_id, stage_number, stage_name);
+                                // Dispatch the next stage via the old agent system
+                                // (full hub dispatch will replace this in a future phase)
+                                let initial_task = {
+                                    let mgr = state.pipeline_manager.read().await;
+                                    mgr.get_run_initial_task(run_id).unwrap_or_default().to_string()
+                                };
+                                let stage_outputs = {
+                                    let mgr = state.pipeline_manager.read().await;
+                                    mgr.get_stage_outputs(run_id).cloned().unwrap_or_default()
+                                };
+                                let next_stage_info = {
+                                    let mgr = state.pipeline_manager.read().await;
+                                    mgr.get_run_pipeline_id(run_id).and_then(|pid| {
+                                        mgr.get_pipeline(&pid).and_then(|p| {
+                                            p.stages.get(stage_number as usize).map(|s| {
+                                                (s.agent_id.clone(), s.role.clone())
+                                            })
+                                        })
+                                    })
+                                };
+                                let pipeline_id_opt = {
+                                    let mgr = state.pipeline_manager.read().await;
+                                    mgr.get_run_pipeline_id(run_id)
+                                };
 
-                            // Try to advance to next stage
-                            let next_stage = {
-                                let mut mgr = state.pipeline_manager.write().await;
-                                mgr.advance_stage(run_id).ok().flatten()
-                            };
-
-                            if let Some(next_stage) = next_stage {
-                                if next_stage.approval_required {
-                                    let mut mgr = state.pipeline_manager.write().await;
-                                    mgr.set_waiting_for_approval(run_id);
-                                    // Persist waiting status
-                                    if let Ok(Some(mut run_row)) = state.repo.get_pipeline_run(run_id).await {
-                                        run_row.status = "waiting_for_approval".to_string();
-                                        let _ = state.repo.update_pipeline_run(&run_row).await;
-                                    }
-                                    // Create stage execution for the gate stage
-                                    let gate_exec = crate::db::StageExecutionRow {
-                                        id: uuid::Uuid::new_v4(),
-                                        run_id,
-                                        stage_number: next_stage.stage_number as i32,
-                                        stage_name: next_stage.stage_name.clone(),
-                                        agent_id: next_stage.agent_id.as_ref().map(|a| a.0),
-                                        status: "waiting_for_approval".to_string(),
-                                        rendered_prompt: None,
-                                        output: None,
-                                        structured_output: None,
-                                        user_input: None,
-                                        input_tokens: 0,
-                                        output_tokens: 0,
-                                        started_at: chrono::Utc::now(),
-                                        completed_at: None,
-                                        duration_ms: 0,
-                                        stage_member_id: None,
-                                        pipeline_id: None,
-                                    };
-                                    let _ = state.repo.create_stage_execution(&gate_exec).await;
-                                    // Dual-write: create agent_execution for gate stage
-                                    if let Some(ae_repo) = &state.agent_execution_repo {
-                                        if let Some(aid) = gate_exec.agent_id {
-                                            let _ = ae_repo.create_agent_execution(gate_exec.id, aid, None, false, None, "", "").await;
-                                        }
-                                    }
-                                    state.broadcast_feed(FeedUpdate {
-                                        id: run_id,
-                                        agent_id: "pipeline".into(),
-                                        content: format!("Pipeline waiting for approval at stage {}", next_stage.stage_number),
-                                        item_type: "pipeline_approval".into(),
-                                        timestamp: chrono::Utc::now(),
-                                        user_id: None,
-                                    });
-                                    // Broadcast gate_waiting
-                                    {
-                                        let pipeline_id = {
-                                            let mgr = state.pipeline_manager.read().await;
-                                            mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
-                                        };
-                                        state.broadcast_pipeline(PipelineUpdate {
-                                            run_id,
-                                            pipeline_id,
-                                            event: "gate_waiting".into(),
-                                            stage_number: Some(next_stage.stage_number as i32),
-                                            stage_name: Some(next_stage.stage_name.clone()),
-                                            agent_id: next_stage.agent_id.as_ref().map(|a| a.0.to_string()),
-                                            output: None,
-                                            input_tokens: None,
-                                            output_tokens: None,
-                                            duration_ms: None,
-                                            user_input: None,
-                                            timestamp: chrono::Utc::now(),
-                                            user_id: None,
-                                        });
-                                    }
-                                } else {
-                                    // Auto-assign next stage using template rendering
-                                    let initial_task = {
-                                        let mgr = state.pipeline_manager.read().await;
-                                        mgr.get_run_initial_task(run_id).unwrap_or_default().to_string()
-                                    };
-
-                                    // Get stage outputs for template resolution
-                                    let stage_outputs = {
-                                        let mgr = state.pipeline_manager.read().await;
-                                        mgr.get_stage_outputs(run_id).cloned().unwrap_or_default()
-                                    };
-
-                                    // Get pipeline_id to load DB stage row
-                                    let pipeline_id = {
-                                        let mgr = state.pipeline_manager.read().await;
-                                        mgr.get_run_pipeline_id(run_id)
-                                    };
-
-                                    // Try to render the stage prompt using the template system
-                                    let rendered_prompt = if let Some(pid) = pipeline_id {
-                                        match state.repo.list_pipeline_stages(pid.0).await {
-                                            Ok(db_stages) => {
-                                                if let Some(db_stage) = db_stages.into_iter().find(|s| s.stage_number == next_stage.stage_number as i32) {
-                                                    let doc_repo_ref = state.doc_repo.as_deref();
-                                                    Some(super::api::render_stage(doc_repo_ref, &db_stage, &stage_outputs).await)
-                                                } else {
-                                                    None
-                                                }
-                                            }
-                                            Err(e) => {
-                                                warn!("Failed to load pipeline stages from DB: {}", e);
+                                // Try to render stage prompt
+                                let rendered_prompt = if let Some(pid) = pipeline_id_opt {
+                                    match state.repo.list_pipeline_stages(pid.0).await {
+                                        Ok(db_stages) => {
+                                            if let Some(db_stage) = db_stages.into_iter().find(|s| s.stage_number == stage_number) {
+                                                let doc_repo_ref = state.doc_repo.as_deref();
+                                                Some(super::api::render_stage(doc_repo_ref, &db_stage, &stage_outputs).await)
+                                            } else {
                                                 None
                                             }
                                         }
-                                    } else {
-                                        None
-                                    };
+                                        Err(e) => { warn!("Failed to load pipeline stages: {}", e); None }
+                                    }
+                                } else { None };
 
-                                    let description = rendered_prompt.unwrap_or_else(|| format!("{}\n\nPrevious stage output:\n{}", initial_task, prev_output));
-                                    let rendered_prompt_copy = description.clone();
+                                let description = rendered_prompt.unwrap_or_else(|| format!("{}\n\nPrevious stage output:\n{}", initial_task, prev_output));
+                                let rendered_prompt_copy = description.clone();
+                                let mut context_reading: Vec<FileContent> = Vec::new();
+                                let mut context_docs: Vec<crate::db::DocumentRow> = Vec::new();
 
-                                    // Load agent-level context documents
-                                    let mut context_reading: Vec<FileContent> = Vec::new();
-                                    let mut context_docs: Vec<crate::db::DocumentRow> = Vec::new();
-
-                                    // Resolve agent: prefer agent_id, fall back to cluster selection
-                                    let resolved_agent_id = if let Some(aid) = &next_stage.agent_id {
-                                        // Load context docs for this agent
+                                let (resolved_agent_id, role_str) = if let Some((agent_id, role)) = next_stage_info {
+                                    if let Some(ref aid) = agent_id {
                                         if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
                                             for doc in &docs {
                                                 context_reading.push(FileContent {
@@ -497,165 +296,114 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                             }
                                             context_docs = docs;
                                         }
-                                        Some(aid.clone())
-                                    } else {
-                                        None
-                                    };
+                                    }
+                                    (agent_id, role.unwrap_or_else(|| "worker".to_string()))
+                                } else {
+                                    (None, "worker".to_string())
+                                };
 
-                                    let role_str = next_stage.role.as_deref().unwrap_or("worker");
-                                    let role_id = RoleId::new(role_str);
-
-                                    let system_prompt = format!("You are a {} working on: {}", role_str, initial_task);
-                                    let style = CommunicationStyle::Technical;
-                                    let output_format = OutputFormat::CodeAndReport;
-
-                                    let project_root = std::env::current_dir().unwrap_or_default();
-                                    let execution_context = Some(crate::execution::ExecutionContext::new(project_root));
-
-                                    let assignment = TaskAssignment {
-                                        task_id: Uuid::new_v4(),
-                                        title: format!("Pipeline stage {}: {}", next_stage.stage_number, initial_task),
-                                        description,
-                                        context: TaskContext {
-                                            required_reading: context_reading,
-                                            files: vec![],
-                                            history: vec![],
-                                            conventions: String::new(),
-                                            role_context: RoleContext { system_prompt, style, output_format },
-                                            chat_messages: vec![],
-                                            execution_context,
-                                            tool_rows: vec![],
-                                            router_mode: false,
-                                            cluster_routing: None,
-                                            context_docs,
-                                            distiller_mode: crate::agents::DistillerMode::Blocking,
+                                let role_id = RoleId::new(&role_str);
+                                let assignment = TaskAssignment {
+                                    task_id: Uuid::new_v4(),
+                                    title: format!("Pipeline stage {}: {}", stage_number, initial_task),
+                                    description,
+                                    context: TaskContext {
+                                        required_reading: context_reading,
+                                        files: vec![],
+                                        history: vec![],
+                                        conventions: String::new(),
+                                        role_context: RoleContext {
+                                            system_prompt: format!("You are a {} working on: {}", role_str, initial_task),
+                                            style: CommunicationStyle::Technical,
+                                            output_format: OutputFormat::CodeAndReport,
                                         },
-                                        constraints: TaskConstraints::default(),
-                                        timeout: std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),
-                                        role_id,
-                                    };
-
-                                    let new_task_id = assignment.task_id;
-
-                                    // Record in pipeline manager
-                                    {
-                                        let mut mgr = state.pipeline_manager.write().await;
-                                        mgr.record_stage_task(run_id, next_stage.stage_number, new_task_id);
-                                    }
-
-                                    // Persist new stage execution
-                                    let stage_exec = crate::db::StageExecutionRow {
-                                        id: uuid::Uuid::new_v4(),
-                                        run_id,
-                                        stage_number: next_stage.stage_number as i32,
-                                        stage_name: next_stage.stage_name.clone(),
-                                        agent_id: resolved_agent_id.as_ref().map(|a| a.0),
-                                        status: "running".to_string(),
-                                        rendered_prompt: Some(rendered_prompt_copy),
-                                        output: None,
-                                        structured_output: None,
-                                        user_input: None,
-                                        input_tokens: 0,
-                                        output_tokens: 0,
-                                        started_at: chrono::Utc::now(),
-                                        completed_at: None,
-                                        duration_ms: 0,
-                                        stage_member_id: None,
-                                        pipeline_id: None,
-                                    };
-                                    let _ = state.repo.create_stage_execution(&stage_exec).await;
-                                    // Dual-write: create agent_execution for next stage
-                                    if let Some(ae_repo) = &state.agent_execution_repo {
-                                        if let Some(aid) = &resolved_agent_id {
-                                            let rendered = stage_exec.rendered_prompt.as_deref().unwrap_or("");
-                                            let _ = ae_repo.create_agent_execution(stage_exec.id, aid.0, None, false, None, &initial_task, rendered).await;
-                                        }
-                                    }
-
-                                    if let Some(agent_id) = &resolved_agent_id {
-                                        if let Some(disp) = &state.dispatcher {
-                                            let disp = disp.lock().await;
-                                            if let Err(e) = disp.send_to_agent(agent_id, AgentCommand::AssignTask(Box::new(assignment))).await {
-                                                error!("Pipeline auto-advance failed: {}", e);
-                                                let mut mgr = state.pipeline_manager.write().await;
-                                                let _ = mgr.fail_run(run_id, &e.to_string());
-                                            } else {
-                                                state.broadcast_feed(FeedUpdate {
-                                                    id: run_id,
-                                                    agent_id: "pipeline".into(),
-                                                    content: format!("Pipeline advanced to stage {}", next_stage.stage_number),
-                                                    item_type: "pipeline_progress".into(),
-                                                    timestamp: chrono::Utc::now(),
-                                                    user_id: None,
-                                                });
-                                                // Broadcast stage_started
-                                                {
-                                                    let pipeline_id = {
-                                                        let mgr = state.pipeline_manager.read().await;
-                                                        mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
-                                                    };
-                                                    state.broadcast_pipeline(PipelineUpdate {
-                                                        run_id,
-                                                        pipeline_id,
-                                                        event: "stage_started".into(),
-                                                        stage_number: Some(next_stage.stage_number as i32),
-                                                        stage_name: Some(next_stage.stage_name.clone()),
-                                                        agent_id: resolved_agent_id.as_ref().map(|a| a.0.to_string()),
-                                                        output: None,
-                                                        input_tokens: None,
-                                                        output_tokens: None,
-                                                        duration_ms: None,
-                                                        user_input: None,
-                                                        timestamp: chrono::Utc::now(),
-                                                        user_id: None,
-                                                    });
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        let reason = format!("Pipeline stage {} has no agent_id or cluster_id", next_stage.stage_number);
-                                        error!("{}", reason);
-                                        let mut mgr = state.pipeline_manager.write().await;
-                                        let _ = mgr.fail_run(run_id, &reason);
-                                    }
-                                }
-                            } else {
-                                // Pipeline completed — persist
-                                if let Ok(Some(mut run_row)) = state.repo.get_pipeline_run(run_id).await {
-                                    run_row.status = "completed".to_string();
-                                    run_row.completed_at = Some(chrono::Utc::now());
-                                    let _ = state.repo.update_pipeline_run(&run_row).await;
-                                }
-                                state.broadcast_feed(FeedUpdate {
-                                    id: run_id,
-                                    agent_id: "pipeline".into(),
-                                    content: "Pipeline completed successfully".into(),
-                                    item_type: "pipeline_completed".into(),
-                                    timestamp: chrono::Utc::now(),
-                                    user_id: None,
-                                });
-                                // Broadcast run_completed
+                                        chat_messages: vec![],
+                                        execution_context: Some(crate::execution::ExecutionContext::new(std::env::current_dir().unwrap_or_default())),
+                                        tool_rows: vec![],
+                                        router_mode: false,
+                                        cluster_routing: None,
+                                        context_docs,
+                                        distiller_mode: crate::agents::DistillerMode::Blocking,
+                                    },
+                                    constraints: TaskConstraints::default(),
+                                    timeout: std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),
+                                    role_id,
+                                };
+                                let new_task_id = assignment.task_id;
                                 {
-                                    let pipeline_id = {
-                                        let mgr = state.pipeline_manager.read().await;
-                                        mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
-                                    };
-                                    state.broadcast_pipeline(PipelineUpdate {
-                                        run_id,
-                                        pipeline_id,
-                                        event: "run_completed".into(),
-                                        stage_number: None,
-                                        stage_name: None,
-                                        agent_id: None,
-                                        output: None,
-                                        input_tokens: None,
-                                        output_tokens: None,
-                                        duration_ms: None,
-                                        user_input: None,
-                                        timestamp: chrono::Utc::now(),
-                                        user_id: None,
-                                    });
+                                    let mut mgr = state.pipeline_manager.write().await;
+                                    mgr.record_stage_task(run_id, stage_number as u32, new_task_id);
                                 }
+                                // Persist stage execution
+                                let stage_exec = crate::db::StageExecutionRow {
+                                    id: uuid::Uuid::new_v4(),
+                                    run_id,
+                                    stage_number,
+                                    stage_name: stage_name.clone(),
+                                    agent_id: resolved_agent_id.as_ref().map(|a| a.0),
+                                    status: "running".to_string(),
+                                    rendered_prompt: Some(rendered_prompt_copy),
+                                    output: None, structured_output: None, user_input: None,
+                                    input_tokens: 0, output_tokens: 0,
+                                    started_at: chrono::Utc::now(), completed_at: None, duration_ms: 0,
+                                    stage_member_id: None, pipeline_id: None,
+                                };
+                                let _ = state.repo.create_stage_execution(&stage_exec).await;
+                                if let Some(ae_repo) = &state.agent_execution_repo {
+                                    if let Some(aid) = &resolved_agent_id {
+                                        let rendered = stage_exec.rendered_prompt.as_deref().unwrap_or("");
+                                        let _ = ae_repo.create_agent_execution(stage_exec.id, aid.0, None, false, None, &initial_task, rendered).await;
+                                    }
+                                }
+
+                                if let Some(agent_id) = &resolved_agent_id {
+                                    if let Some(disp) = &state.dispatcher {
+                                        let disp = disp.lock().await;
+                                        if let Err(e) = disp.send_to_agent(agent_id, AgentCommand::AssignTask(Box::new(assignment))).await {
+                                            error!("Pipeline auto-advance failed: {}", e);
+                                            let mut mgr = state.pipeline_manager.write().await;
+                                            let _ = mgr.fail_run(run_id, &e.to_string());
+                                        } else {
+                                            state.broadcast_feed(FeedUpdate {
+                                                id: run_id, agent_id: "pipeline".into(),
+                                                content: format!("Pipeline advanced to stage {}", stage_number),
+                                                item_type: "pipeline_progress".into(),
+                                                timestamp: chrono::Utc::now(), user_id: None,
+                                            });
+                                            let pipeline_id = {
+                                                let mgr = state.pipeline_manager.read().await;
+                                                mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
+                                            };
+                                            state.broadcast_pipeline(PipelineUpdate {
+                                                run_id, pipeline_id,
+                                                event: "stage_started".into(),
+                                                stage_number: Some(stage_number),
+                                                stage_name: Some(stage_name),
+                                                agent_id: resolved_agent_id.as_ref().map(|a| a.0.to_string()),
+                                                output: None, input_tokens: None, output_tokens: None,
+                                                duration_ms: None, user_input: None,
+                                                timestamp: chrono::Utc::now(), user_id: None,
+                                            });
+                                        }
+                                    }
+                                } else {
+                                    let reason = format!("Pipeline stage {} has no agent_id", stage_number);
+                                    error!("{}", reason);
+                                    let mut mgr = state.pipeline_manager.write().await;
+                                    let _ = mgr.fail_run(run_id, &reason);
+                                }
+                            }
+                            Ok(super::hub::PipelineAdvanceAction::AwaitingApproval { stage_number, stage_name }) => {
+                                info!("Pipeline {} awaiting approval at stage {} ({})", run_id, stage_number, stage_name);
+                            }
+                            Ok(super::hub::PipelineAdvanceAction::Completed) => {
+                                info!("Pipeline {} completed", run_id);
+                            }
+                            Ok(super::hub::PipelineAdvanceAction::Failed { reason }) => {
+                                warn!("Pipeline {} failed: {}", run_id, reason);
+                            }
+                            Err(e) => {
+                                error!("Pipeline advance error for run {}: {}", run_id, e);
                             }
                         }
                     }
@@ -861,264 +609,50 @@ async fn handle_message(state: &AppState, provider: Arc<dyn LLMProvider + Send +
         }
     };
 
-    // Load chat history based on mode's history policy
-    let mut messages: Vec<Message> = match &mode.history_policy {
-        HistoryPolicy::None => vec![],
-        HistoryPolicy::SessionScoped { max_messages } => {
-            if let Some(session_id) = msg.session_id {
-                let history = state.repo.get_session_history(session_id, *max_messages).await.unwrap_or_default();
-                let mut hist_messages: Vec<Message> = history
-                    .iter()
-                    .map(|row| match row.role.as_str() {
-                        "assistant" => Message::assistant(&row.content),
-                        _ => Message::user(&row.content),
-                    })
-                    .collect();
-
-                // Phase 2: Targeted injection from session summary
-                if let Ok(Some(session)) = state.repo.get_session(session_id).await {
-                    if !session.summary.is_empty() {
-                        if let Some(targeted) = tools::haiku_extract_context(&session.summary, &msg.content).await {
-                            if !targeted.contains("No prior context needed") {
-                                hist_messages.insert(0, Message::user(format!("[Prior context] {}", targeted)));
-                                hist_messages.insert(1, Message::assistant("Understood, I have the relevant context."));
-                            }
-                        }
-                    }
-                }
-
-                hist_messages
-            } else {
-                vec![]
-            }
-        }
+    // Determine max history from mode's history policy
+    let max_history = match &mode.history_policy {
+        HistoryPolicy::None => 0,
+        HistoryPolicy::SessionScoped { max_messages } => *max_messages,
     };
 
-    // Ensure the current message is included
-    if !messages.iter().any(|m| m.role == Role::User && m.text() == msg.content) {
-        messages.push(Message::user(&msg.content));
-    }
-    if messages.is_empty() {
-        messages.push(Message::user(&msg.content));
-    }
+    // Build ChatConfig from mode
+    let chat_config = super::hub::strategies::ChatConfig {
+        system_prompt: mode.system_prompt.clone(),
+        tool_names: mode.tools.clone(),
+        model_id: provider.model_id().to_string(),
+        max_history,
+        ..Default::default()
+    };
 
-    let model_id = provider.model_id().to_string();
-    let tool_defs = tools::filtered_tools(&mode.tools);
+    // Create strategy, engine, sink, recorder
+    let strategy = super::hub::ChatStrategy::new(
+        chat_config,
+        state.clone(),
+        user_id,
+        msg.session_id,
+        message_id,
+    );
+    let engine = super::hub::ExecutionEngine::new(provider);
+    let sink = super::hub::streaming::SseSink::new(state.clone(), message_id);
+    let recorder = super::hub::ExecutionRecorder::new(
+        state.repo.as_ref(),
+        state.agent_execution_repo.as_deref(),
+        state.token_ledger_repo.as_deref(),
+    );
 
-    // Multi-turn tool use loop
-    let mut accumulated_response = String::new();
-    let max_tool_rounds = 10;
-    const MAX_CONTEXT_CHARS: usize = 480_000; // ~120K tokens at ~4 chars/token
-
-    for round in 0..max_tool_rounds {
-        // Check context budget before making another LLM call
-        let estimated_chars: usize = messages.iter().map(|m| m.estimated_chars()).sum();
-        if estimated_chars > MAX_CONTEXT_CHARS {
-            warn!(
-                "Context budget exceeded (~{}K chars, ~{}K tokens) at round {} for message {}",
-                estimated_chars / 1000,
-                estimated_chars / 4000,
-                round,
-                message_id
-            );
-            break;
+    // Execute via the unified engine
+    match engine.execute(&strategy, &msg.content, &sink, &recorder).await {
+        Ok(_result) => {
+            debug!("Chat message {} completed via hub engine", message_id);
         }
-
-        debug!("Tool use round {} for message {} (~{}K chars)", round, message_id, estimated_chars / 1000);
-
-        let request = LLMRequest {
-            model: model_id.clone(),
-            system: Some(mode.system_prompt.clone()),
-            messages: messages.clone(),
-            max_tokens: crate::constants::DEFAULT_MAX_TOKENS_ORCHESTRATOR,
-            stream: true,
-            tools: tool_defs.clone(),
-            ..Default::default()
-        };
-
-        // Stream the response
-        let mut stream = provider.send_message_stream(request).await.map_err(|e| anyhow::anyhow!("LLM stream error: {}", e))?;
-
-        let mut accumulator = StreamAccumulator::new();
-
-        while let Some(chunk_result) = stream.next().await {
-            match chunk_result {
-                Ok(ref chunk @ LLMStreamChunk::ContentDelta { ref text, .. }) => {
-                    accumulated_response.push_str(text);
-                    state.send_stream_chunk(message_id, StreamChunk::Token(text.clone())).await;
-                    accumulator.apply(chunk);
-                }
-                Ok(ref chunk) => {
-                    accumulator.apply(chunk);
-                }
-                Err(e) => {
-                    error!("Stream error for message {}: {}", message_id, e);
-                    state.send_stream_chunk(message_id, StreamChunk::Error(format!("Stream error: {}", e))).await;
-                    // Don't remove immediately — the SSE client may not have connected yet.
-                    // Schedule cleanup after a delay to allow the client to replay the buffer.
-                    let cleanup_state = state.clone();
-                    tokio::spawn(async move {
-                        tokio::time::sleep(std::time::Duration::from_secs(120)).await;
-                        cleanup_state.remove_response_stream(message_id).await;
-                    });
-                    return Ok(());
-                }
-            }
-        }
-
-        let response = match accumulator.build() {
-            Some(r) => r,
-            None => {
-                error!("Incomplete LLM response for message {}", message_id);
-                state.send_stream_chunk(message_id, StreamChunk::Error("Incomplete response from LLM".into())).await;
-                // Don't remove immediately — the SSE client may not have connected yet.
-                // Schedule cleanup after a delay to allow the client to replay the buffer.
-                let cleanup_state = state.clone();
-                tokio::spawn(async move {
-                    tokio::time::sleep(std::time::Duration::from_secs(120)).await;
-                    cleanup_state.remove_response_stream(message_id).await;
-                });
-                return Ok(());
-            }
-        };
-
-        // Check if we need to execute tools
-        if response.stop_reason == StopReason::ToolUse {
-            // Add assistant message with all content blocks (text + tool_use)
-            messages.push(Message::assistant_with_blocks(response.content_blocks.clone()));
-
-            // Execute each tool call and collect results
-            let mut tool_results = Vec::new();
-            for block in &response.content_blocks {
-                if let ContentBlock::ToolUse { id, name, input } = block {
-                    debug!("Executing tool: {} (id: {})", name, id);
-
-                    let is_internal = name == "think";
-
-                    // Signal tool start to the UI (skip internal tools)
-                    if !is_internal {
-                        state
-                            .send_stream_chunk(
-                                message_id,
-                                StreamChunk::ToolStart {
-                                    name: name.clone(),
-                                    tool_id: id.clone(),
-                                },
-                            )
-                            .await;
-                    }
-
-                    let tool_start = std::time::Instant::now();
-                    let result = tools::execute_tool(name, input, state, user_id, msg.session_id).await;
-                    let tool_latency = tool_start.elapsed().as_millis() as i32;
-                    let result_str = serde_json::to_string(&result).unwrap_or_else(|_| result.to_string());
-
-                    // Truncate oversized tool results to keep context manageable
-                    let result_str = if result_str.len() > crate::constants::TRUNCATE_TOOL_RESULT {
-                        format!(
-                            "{}...\n[truncated, showing first {} of {} chars]",
-                            &result_str[..crate::constants::TRUNCATE_TOOL_RESULT],
-                            crate::constants::TRUNCATE_TOOL_RESULT,
-                            result_str.len()
-                        )
-                    } else {
-                        result_str
-                    };
-
-                    tool_results.push(ContentBlock::ToolResult {
-                        tool_use_id: id.clone(),
-                        content: result_str,
-                    });
-
-                    // Signal tool end to the UI (skip internal tools)
-                    if !is_internal {
-                        state
-                            .send_stream_chunk(
-                                message_id,
-                                StreamChunk::ToolEnd {
-                                    name: name.clone(),
-                                    tool_id: id.clone(),
-                                },
-                            )
-                            .await;
-                    }
-                }
-            }
-
-            // Add tool results as a single user message with content blocks
-            messages.push(Message::tool_results(tool_results));
-
-            // Brief pause between tool rounds to avoid burst-firing LLM calls
-            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-
-            // Continue the loop for the next LLM call
-            continue;
-        }
-
-        // EndTurn or MaxTokens — we're done
-        break;
-    }
-
-    // Send done signal
-    state.send_stream_chunk(message_id, StreamChunk::Done).await;
-
-    // Save the assistant response to the database
-    if !accumulated_response.is_empty() {
-        let response_id = Uuid::new_v4();
-        let save_result = if let Some(session_id) = msg.session_id {
-            state.repo.insert_session_message(user_id, session_id, response_id, "assistant".into(), accumulated_response).await
-        } else {
-            state.repo.insert_chat_message(user_id, response_id, "assistant".into(), accumulated_response).await
-        };
-        if let Err(e) = save_result {
-            error!("Failed to save assistant message: {}", e);
-        }
-
-        // Auto-name session after first exchange
-        if let Some(session_id) = msg.session_id {
-            let state2 = state.clone();
-            let user_msg = msg.content.clone();
-            tokio::spawn(async move {
-                // Only auto-name if title starts with "New " (default)
-                if let Ok(Some(session)) = state2.repo.get_session(session_id).await {
-                    if session.title.starts_with("New ") {
-                        let prompt = format!("Conversation opener: {}", &user_msg[..user_msg.len().min(500)]);
-                        if let Some(title) = tools::haiku_summarize_title(&prompt).await {
-                            let _ = state2.repo.update_session_title(session_id, &title).await;
-                            state2.broadcast_session(super::ws::SessionUpdate {
-                                id: session_id,
-                                action: "updated".to_string(),
-                                title: Some(title),
-                                mode_id: None,
-                                user_id: None,
-                            });
-                        }
-                    }
-                }
-            });
-        }
-
-        // Phase 1: Spawn background compaction if session has > 20 messages
-        if let Some(session_id) = msg.session_id {
-            let state = state.clone();
-            tokio::spawn(async move {
-                let count = state.repo.count_session_messages(session_id).await.unwrap_or(0);
-                if count > crate::constants::SUMMARIZE_THRESHOLD as u32 {
-                    let history = state.repo.get_session_history(session_id, count).await.unwrap_or_default();
-                    let older_messages: Vec<_> = history.iter().take((count as usize).saturating_sub(crate::constants::SUMMARIZE_KEEP_RECENT)).collect();
-                    if !older_messages.is_empty() {
-                        let conversation_text = older_messages.iter().map(|m| format!("{}: {}", m.role, m.content)).collect::<Vec<_>>().join("\n");
-                        if let Some(summary) = crate::server::tools::haiku_summarize(&conversation_text).await {
-                            let _ = state.repo.update_session_summary(session_id, &summary).await;
-                        }
-                    }
-                }
-            });
+        Err(e) => {
+            warn!("Hub engine error for message {}: {}", message_id, e);
+            state.send_stream_chunk(message_id, StreamChunk::Error(format!("Engine error: {}", e))).await;
+            state.send_stream_chunk(message_id, StreamChunk::Done).await;
         }
     }
 
-    // Don't remove immediately — the SSE client may not have connected yet.
-    // Schedule cleanup after a delay to allow the client to replay the buffer.
+    // Schedule cleanup after a delay to allow late-connecting SSE clients
     let cleanup_state = state.clone();
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_secs(120)).await;
