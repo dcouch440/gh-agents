@@ -2560,9 +2560,6 @@ pub struct AgentExecutionResponse {
     pub output: Option<String>,
     pub structured_output: Option<serde_json::Value>,
     pub status: String,
-    pub input_tokens: i64,
-    pub output_tokens: i64,
-    pub cost_usd: f32,
     pub started_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
 }
@@ -2581,9 +2578,9 @@ impl From<crate::db::AgentExecutionRow> for AgentExecutionResponse {
             output: r.output,
             structured_output: r.structured_output,
             status: r.status,
-            input_tokens: r.input_tokens,
-            output_tokens: r.output_tokens,
-            cost_usd: r.cost_usd,
+            input_tokens: 0,  // Deprecated: use token_ledger
+            output_tokens: 0, // Deprecated: use token_ledger
+            cost_usd: 0.0,   // Deprecated: use token_ledger
             started_at: r.started_at,
             completed_at: r.completed_at,
         }
@@ -2735,7 +2732,7 @@ pub async fn approve_execution(
 
     // Update status to completed, optionally with revised structured_output
     let updated = repo
-        .update_agent_execution_status(id, "completed", ae.output.clone(), req.structured_output, ae.input_tokens, ae.output_tokens, ae.cost_usd)
+        .update_agent_execution_status(id, "completed", ae.output.clone(), req.structured_output)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -2943,9 +2940,9 @@ pub async fn get_pipeline_run_tree(State(state): State<AppState>, _auth: auth::A
                         is_interactive: true,
                         status: iae.status.clone(),
                         structured_output: iae.structured_output.clone(),
-                        input_tokens: iae.input_tokens,
-                        output_tokens: iae.output_tokens,
-                        cost_usd: iae.cost_usd,
+                        input_tokens: 0,
+                        output_tokens: 0,
+                        cost_usd: 0.0,
                         started_at: iae.started_at,
                         completed_at: iae.completed_at,
                         for_each_index: None,
@@ -2963,9 +2960,9 @@ pub async fn get_pipeline_run_tree(State(state): State<AppState>, _auth: auth::A
                     is_interactive: false,
                     status: ae.status.clone(),
                     structured_output: ae.structured_output.clone(),
-                    input_tokens: ae.input_tokens,
-                    output_tokens: ae.output_tokens,
-                    cost_usd: ae.cost_usd,
+                    input_tokens: 0,
+                    output_tokens: 0,
+                    cost_usd: 0.0,
                     started_at: ae.started_at,
                     completed_at: ae.completed_at,
                     for_each_index: None, // TODO: populated when DAG executor is built (step 4.3)
@@ -4416,7 +4413,7 @@ pub async fn cancel_agent_execution(
     // Update execution status in DB
     if let Some(ae_repo) = &state.agent_execution_repo {
         let _ = ae_repo
-            .update_agent_execution_status(exec_uuid, "cancelled", None, None, 0, 0, 0.0)
+            .update_agent_execution_status(exec_uuid, "cancelled", None, None)
             .await;
     }
 
