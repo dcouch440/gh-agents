@@ -1,108 +1,3 @@
-In the codebase at /Users/davidcouch/Dev/gh-agents, I need to understand which types from src/types/ are used by the  
-       server code that we're KEEPING (not removing). Specifically, search for usage of these types across src/server/,      
-       src/db/, src/llm/, and src/main.rs:                                                                                   
-                                                                                                                             
-       1. From types/task.rs: Task, TaskId, TaskStatus, TaskPriority - grep for these                                        
-       2. From types/cost.rs: CostRecord - grep for this                                                                     
-       3. From types/refactor.rs: RefactorSession, RefactorChange, ChangeId, ChangeStatus - grep for these                   
-       4. From types/prd.rs: anything exported                                                                               
-       5. From types/ticket.rs: anything exported                                                                            
-       6. From types/agent.rs: what's exported and used                                                                      
-       7. From types/config.rs: what's exported and used                                                                     
-       8. From types/message.rs: what's exported and used                                                                    
-       9. From types/user.rs: what's exported and used                                                                       
-       10. ProductionMode - grep for this                                                                                    
-                                                                                                                             
-       Also check: what does src/llm/mod.rs look like (pub mod declarations) and does anything besides cost.rs in llm/ use   
-       CostRepo?                                                                                                             
-                                                                                                                             
-       And check: what does src/github/mod.rs look like and is merge_queue.rs the only file that uses MergeQueueRepo?        
-                                                                                                                             
-       Be thorough - read the type files if needed to understand what they export.                                           
-                                                                                                                             
-     ❯ In the codebase at /Users/davidcouch/Dev/gh-agents, I need to understand which types from src/types/ are used by the  
-     Search(pattern: "src/types/*.rs")                                                                                       
-     Read(/Users/davidcouch/Dev/gh-agents/src/llm/mod.rs)                                                                    
-                                                                                                                             
-                                                                                                                             
-     Read(/Users/davidcouch/Dev/gh-agents/src/github/mod.rs)                                                                 
-                                                                                                                             
-     Search(pattern: "src/llm/*.rs")                                                                                         
-     Search(pattern: "src/github/*.rs")                                                                                      
-                                                                                                                             
-                                                                                                                             
-     Read(/Users/davidcouch/Dev/gh-agents/src/types/task.rs)                                                                 
-                                                                                                                             
-     Read(/Users/davidcouch/Dev/gh-agents/src/types/cost.rs)                                                                 
-                                                                                                                             
-     Read(/Users/davidcouch/Dev/gh-agents/src/types/refactor.rs)                                                             
-                                                                                                                             
-     Read(/Users/davidcouch/Dev/gh-agents/src/types/prd.rs)                                                                  
-                                                                                                                             
-     Read(/Users/davidcouch/Dev/gh-agents/src/types/ticket.rs)                                                               
-                                                                                                                             
-     Read(/Users/davidcouch/Dev/gh-agents/src/types/agent.rs)                                                                
-                                                                                                                             
-     Read(/Users/davidcouch/Dev/gh-agents/src/types/config.rs)                                                               
-                                                                                                                             
-     Read(/Users/davidcouch/Dev/gh-agents/src/types/message.rs)                                                              
-                                                                                                                             
-     Read(/Users/davidcouch/Dev/gh-agents/src/types/user.rs)                                                                 
-                                                                                                                             
-     Search(pattern: "\b(Task|TaskId|TaskStatus|Priority)\b", path: "src/server")                                            
-                                                                                                                             
-     Search(pattern: "\b(Task|TaskId|TaskStatus|Priority)\b", path: "src/db")                                                
-                                                                                                                             
-     Search(pattern: "\b(Task|TaskId|TaskStatus|Priority)\b", path: "src/main.rs")                                           
-                                                                                                                             
-     Search(pattern: "\bCostRecord\b", path: "src")                                                                          
-                                                                                                                             
-     Search(pattern: "\b(RefactorSession|RefactorChange|ChangeId|ChangeStatus)\b", path: "src")                              
-                                                                                                                             
-     Search(pattern: "\bProductionMode\b", path: "src")                                                                      
-                                                                                                                             
-     Search(pattern: "\b(PRDId|PRDDocument|PRDStatus|ProjectScale|TechnicalDecision|DataModelSketch|MilestoneSpec)\b", path: 
-                                                                                                                             
-     Search(pattern: "\b(TicketId|Ticket|TicketStatus|TicketSource)\b", path: "src")                                         
-                                                                                                                             
-     Search(pattern: "\b(AgentId|Agent|AgentTier|AgentStatus|AgentPersona|ModelConfig|LLMProvider|CommunicationStyle)\b",    
-                                                                                                                             
-     Search(pattern: "\b(AgentId|Agent|AgentTier|AgentStatus|AgentPersona|ModelConfig|LLMProvider|CommunicationStyle)\b",    
-                                                                                                                             
-     Search(pattern: "\b(AgentId|Agent|AgentTier|AgentStatus|AgentPersona|ModelConfig|LLMProvider|CommunicationStyle)\b",    
-                                                                                                                             
-     Search(pattern: "\b(AppConfig|GlobalConfig|ProjectConfig|TierModels|AgentPoolConfig|AutonomyLevel|ApprovalGates|GitStrat
-                                                                                                                             
-     Search(pattern: "\b(AppConfig|GlobalConfig|ProjectConfig|TierModels|AgentPoolConfig|AutonomyLevel|ApprovalGates|GitStrat
-                                                                                                                             
-     Search(pattern: "\b(AppConfig|GlobalConfig|ProjectConfig|TierModels|AgentPoolConfig|AutonomyLevel|ApprovalGates|GitStrat
-                                                                                                                             
-     Search(pattern: "\b(MessageId|AgentMessage|MessageType|TaskContext|FeedItem|FeedItemId|FeedItemType|VerbosityLevel)\b", 
-                                                                                                                             
-     Search(pattern: "\b(MessageId|AgentMessage|MessageType|TaskContext|FeedItem|FeedItemId|FeedItemType|VerbosityLevel)\b", 
-                                                                                                                             
-     Search(pattern: "\b(UserId|User)\b", path: "src/server")                                                                
-                                                                                                                             
-     Search(pattern: "\b(UserId|User)\b", path: "src/db")                                                                    
-                                                                                                                             
-     Search(pattern: "src/db/*.rs")                                                                                          
-                                                                                                                             
-     Search(pattern: "CostRepo", path: "src/llm")                                                                            
-                                                                                                                             
-     Search(pattern: "MergeQueueRepo", path: "src/github")                                                                   
-                                                                                                                             
-     Read(/Users/davidcouch/Dev/gh-agents/src/llm/cost.rs)                                                                   
-                                                                                                                             
-     Read(/Users/davidcouch/Dev/gh-agents/src/db/traits.rs)                                                                  
-                                                                                                                             
-     Read(/Users/davidcouch/Dev/gh-agents/src/db/mod.rs)                                                                     
-                                                                                                                             
-     Search(pattern: "use.*llm::cost", path: "src/llm")                                                                      
-                                                                                                                             
-     Search(pattern: "CostRepo", path: "src/llm")
-
----
-
 ## Router Design Notes (2026-02-01)
 
 The first router system prompt should follow this pattern:
@@ -122,3 +17,34 @@ Key points:
 - The router sees: chat history + last question + agent context
 - Routes tool requests, not general queries
 - This will be used with RouterStrategy (single-round, no tool_use, temp=0.0)
+
+---
+
+## Dynamic Mode Switching (2026-02-01)
+
+Agents can have LLM-driven "modes" that adjust config mid-conversation.
+
+### Flow
+1. User message arrives → `hub::run_chat()` loads the agent's base config
+2. Pre-execution RouterStrategy pass classifies the conversation → returns a mode key
+3. Mode key maps to a config overlay (system prompt suffix, temperature shift, tool set changes)
+4. Overlay applied to ChatConfig, then main chat turn executes
+
+### Proposed Schema
+```sql
+agent_modes (
+    id UUID PRIMARY KEY,
+    agent_id UUID REFERENCES agents(id),
+    name TEXT,                  -- "technical", "creative", "concise"
+    system_prompt_suffix TEXT,
+    temperature_override FLOAT,
+    tool_overrides TEXT[],
+    classifier_hint TEXT        -- helps the router pick this mode
+)
+```
+
+### Why This Works
+- `run_chat()` takes config and executes — doesn't care where config came from
+- Base agent config + overlay = dynamic personality without a separate "mode system"
+- RouterStrategy already exists for single-round classification (no tools, temp=0.0)
+- Completely different from the old static ModeRegistry — this is per-agent and LLM-driven

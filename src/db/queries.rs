@@ -261,17 +261,19 @@ pub struct SessionRow {
     pub title: String,
     pub summary: String,
     pub pipeline_id: Option<Uuid>,
+    pub agent_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
 /// Create a new chat session
-pub async fn create_session(pool: &PgPool, user_id: UserId, session_id: Uuid, mode_id: &str, title: &str) -> Result<()> {
-    sqlx::query("INSERT INTO chat_sessions (id, user_id, mode_id, title) VALUES ($1, $2, $3, $4)")
+pub async fn create_session(pool: &PgPool, user_id: UserId, session_id: Uuid, mode_id: &str, title: &str, agent_id: Option<Uuid>) -> Result<()> {
+    sqlx::query("INSERT INTO chat_sessions (id, user_id, mode_id, title, agent_id) VALUES ($1, $2, $3, $4, $5)")
         .bind(session_id)
         .bind(user_id.0)
         .bind(mode_id)
         .bind(title)
+        .bind(agent_id)
         .execute(pool)
         .await
         .context("Failed to create session")?;
@@ -279,13 +281,14 @@ pub async fn create_session(pool: &PgPool, user_id: UserId, session_id: Uuid, mo
 }
 
 /// Create a new chat session with optional pipeline binding.
-pub async fn create_session_with_pipeline(pool: &PgPool, user_id: UserId, session_id: Uuid, mode_id: &str, title: &str, pipeline_id: Option<Uuid>) -> Result<()> {
-    sqlx::query("INSERT INTO chat_sessions (id, user_id, mode_id, title, pipeline_id) VALUES ($1, $2, $3, $4, $5)")
+pub async fn create_session_with_pipeline(pool: &PgPool, user_id: UserId, session_id: Uuid, mode_id: &str, title: &str, pipeline_id: Option<Uuid>, agent_id: Option<Uuid>) -> Result<()> {
+    sqlx::query("INSERT INTO chat_sessions (id, user_id, mode_id, title, pipeline_id, agent_id) VALUES ($1, $2, $3, $4, $5, $6)")
         .bind(session_id)
         .bind(user_id.0)
         .bind(mode_id)
         .bind(title)
         .bind(pipeline_id)
+        .bind(agent_id)
         .execute(pool)
         .await
         .context("Failed to create session with pipeline")?;
@@ -294,7 +297,7 @@ pub async fn create_session_with_pipeline(pool: &PgPool, user_id: UserId, sessio
 
 /// List sessions for a user
 pub async fn list_sessions(pool: &PgPool, user_id: UserId) -> Result<Vec<SessionRow>> {
-    let rows: Vec<SessionRow> = sqlx::query_as("SELECT id, user_id, mode_id, title, summary, pipeline_id, created_at, updated_at FROM chat_sessions WHERE user_id = $1 ORDER BY updated_at DESC")
+    let rows: Vec<SessionRow> = sqlx::query_as("SELECT id, user_id, mode_id, title, summary, pipeline_id, agent_id, created_at, updated_at FROM chat_sessions WHERE user_id = $1 ORDER BY updated_at DESC")
         .bind(user_id.0)
         .fetch_all(pool)
         .await
@@ -304,7 +307,7 @@ pub async fn list_sessions(pool: &PgPool, user_id: UserId) -> Result<Vec<Session
 
 /// Get a session by ID
 pub async fn get_session(pool: &PgPool, session_id: Uuid) -> Result<Option<SessionRow>> {
-    let row: Option<SessionRow> = sqlx::query_as("SELECT id, user_id, mode_id, title, summary, pipeline_id, created_at, updated_at FROM chat_sessions WHERE id = $1")
+    let row: Option<SessionRow> = sqlx::query_as("SELECT id, user_id, mode_id, title, summary, pipeline_id, agent_id, created_at, updated_at FROM chat_sessions WHERE id = $1")
         .bind(session_id)
         .fetch_optional(pool)
         .await
@@ -477,6 +480,65 @@ struct ClusterRowDb {
     description: String,
     conventions: String,
     shared_files: serde_json::Value,
+}
+
+// ============================================================================
+// Agent Mode Queries
+// ============================================================================
+
+/// An agent mode row — config overlay for dynamic LLM-driven mode switching.
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct AgentModeRow {
+    pub id: Uuid,
+    pub agent_id: Uuid,
+    pub name: String,
+    pub system_prompt_suffix: Option<String>,
+    pub temperature_override: Option<f64>,
+    pub model_override: Option<String>,
+    pub tool_overrides: Option<Vec<String>>,
+    pub classifier_hint: String,
+    pub created_at: DateTime<Utc>,
+}
+
+/// List all modes for an agent.
+pub async fn list_agent_modes(pool: &PgPool, agent_id: Uuid) -> Result<Vec<AgentModeRow>> {
+    let rows: Vec<AgentModeRow> = sqlx::query_as(
+        "SELECT id, agent_id, name, system_prompt_suffix, temperature_override, model_override, tool_overrides, classifier_hint, created_at FROM agent_modes WHERE agent_id = $1 ORDER BY name",
+    )
+    .bind(agent_id)
+    .fetch_all(pool)
+    .await
+    .context("Failed to list agent modes")?;
+    Ok(rows)
+}
+
+/// Create an agent mode.
+pub async fn create_agent_mode(pool: &PgPool, mode: &AgentModeRow) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO agent_modes (id, agent_id, name, system_prompt_suffix, temperature_override, model_override, tool_overrides, classifier_hint) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+    )
+    .bind(mode.id)
+    .bind(mode.agent_id)
+    .bind(&mode.name)
+    .bind(&mode.system_prompt_suffix)
+    .bind(mode.temperature_override)
+    .bind(&mode.model_override)
+    .bind(&mode.tool_overrides)
+    .bind(&mode.classifier_hint)
+    .execute(pool)
+    .await
+    .context("Failed to create agent mode")?;
+    Ok(())
+}
+
+/// Delete an agent mode by ID.
+pub async fn delete_agent_mode(pool: &PgPool, mode_id: Uuid) -> Result<()> {
+    sqlx::query("DELETE FROM agent_modes WHERE id = $1")
+        .bind(mode_id)
+        .execute(pool)
+        .await
+        .context("Failed to delete agent mode")?;
+    Ok(())
 }
 
 #[cfg(test)]

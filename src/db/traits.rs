@@ -9,9 +9,9 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::db::{
-    AgentExecutionRow, AgentRow, ChatMessageRow, ContextStoreRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageMemberRow,
-    PipelineStageRow, PromptTemplateRow, ResultRow, RouterRequestRow, SessionRow, StageExecutionRow, StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow, WorkflowRow, WorkflowStepEdgeRow,
-    WorkflowStepRow,
+    AgentExecutionRow, AgentModeRow, AgentRow, ChatMessageRow, ContextStoreRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PipelineRow, PipelineRunRow,
+    PipelineStageMemberRow, PipelineStageRow, PromptTemplateRow, ResultRow, RouterRequestRow, SessionRow, StageExecutionRow, StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow, WorkflowRow,
+    WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -155,7 +155,7 @@ pub trait ServerRepo: Send + Sync {
     // --- Session management ---
 
     /// Create a new chat session.
-    async fn create_session(&self, user_id: UserId, session_id: Uuid, mode_id: &str, title: &str) -> Result<()>;
+    async fn create_session(&self, user_id: UserId, session_id: Uuid, mode_id: &str, title: &str, agent_id: Option<Uuid>) -> Result<()>;
 
     /// List sessions for a user.
     async fn list_sessions(&self, user_id: UserId) -> Result<Vec<SessionRow>>;
@@ -203,6 +203,17 @@ pub trait ServerRepo: Send + Sync {
 
     /// List stage executions for a run.
     async fn list_stage_executions(&self, run_id: Uuid) -> Result<Vec<StageExecutionRow>>;
+
+    // --- Agent modes ---
+
+    /// List all modes for an agent.
+    async fn get_agent_modes(&self, agent_id: Uuid) -> Result<Vec<AgentModeRow>>;
+
+    /// Create an agent mode.
+    async fn create_agent_mode(&self, mode: &AgentModeRow) -> Result<()>;
+
+    /// Delete an agent mode by ID.
+    async fn delete_agent_mode(&self, mode_id: Uuid) -> Result<()>;
 }
 
 // ============================================================================

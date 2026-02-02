@@ -5,7 +5,6 @@
 //! - WebSocket connections for real-time updates
 //! - Static files for the React frontend
 
-pub mod agent_mode;
 pub mod api;
 pub mod auth;
 pub mod dag_executor;
@@ -459,7 +458,7 @@ mod tests {
         async fn upsert_pipeline_stage(&self, _stage: PipelineStageRow) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn create_session(&self, _user_id: UserId, _session_id: Uuid, _mode_id: &str, _title: &str) -> anyhow::Result<()> {
+        async fn create_session(&self, _user_id: UserId, _session_id: Uuid, _mode_id: &str, _title: &str, _agent_id: Option<Uuid>) -> anyhow::Result<()> {
             Ok(())
         }
         async fn list_sessions(&self, _user_id: UserId) -> anyhow::Result<Vec<SessionRow>> {
@@ -506,6 +505,15 @@ mod tests {
         }
         async fn list_stage_executions(&self, _run_id: Uuid) -> anyhow::Result<Vec<crate::db::StageExecutionRow>> {
             Ok(vec![])
+        }
+        async fn get_agent_modes(&self, _agent_id: Uuid) -> anyhow::Result<Vec<crate::db::AgentModeRow>> {
+            Ok(vec![])
+        }
+        async fn create_agent_mode(&self, _mode: &crate::db::AgentModeRow) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn delete_agent_mode(&self, _mode_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
         }
     }
 

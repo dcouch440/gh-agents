@@ -18,7 +18,6 @@ use crate::agents::{AgentCommand, AgentResponse, CommunicationStyle, FileContent
 use super::state::{AppState, OrchestratorMessage, StreamChunk};
 use super::ws::{AgentUpdate, FeedUpdate, PipelineUpdate, TaskUpdate};
 
-use super::agent_mode::HistoryPolicy;
 
 /// Spawn a background task that drains agent responses from the dispatcher
 /// and stores them in `state.task_results` for retrieval by `get_task_result`.
@@ -592,72 +591,27 @@ async fn run_orchestrator(state: AppState, mut orchestrator_rx: mpsc::Receiver<O
 
 async fn handle_message(state: &AppState, provider: Arc<dyn LLMProvider + Send + Sync>, msg: OrchestratorMessage) -> anyhow::Result<()> {
     let message_id = msg.id;
-    let user_id = msg.user_id;
+    let agent_id = msg.agent_id.or(state.default_agent_id);
 
-    // Look up agent mode configuration
-    let mode = match state.mode_registry.get(&msg.mode_id).cloned() {
-        Some(m) => m,
-        None => {
-            warn!("Unknown mode '{}', falling back to home", msg.mode_id);
-            match state.mode_registry.get(&super::agent_mode::ModeRegistry::default_mode_id()).cloned() {
-                Some(m) => m,
-                None => {
-                    error!("Default home mode missing from registry");
-                    anyhow::bail!("Default home mode missing from registry");
+    match agent_id {
+        Some(aid) => {
+            match super::hub::run_chat(state, provider, aid, msg.session_id, message_id, &msg.content, msg.user_id).await {
+                Ok(_) => {}
+                Err(e) => {
+                    warn!("Chat error for {}: {}", message_id, e);
+                    state.send_stream_chunk(message_id, StreamChunk::Error(format!("{}", e))).await;
+                    state.send_stream_chunk(message_id, StreamChunk::Done).await;
                 }
             }
         }
-    };
-
-    // Determine max history from mode's history policy
-    let max_history = match &mode.history_policy {
-        HistoryPolicy::None => 0,
-        HistoryPolicy::SessionScoped { max_messages } => *max_messages,
-    };
-
-    // Build ChatConfig from mode
-    let chat_config = super::hub::strategies::ChatConfig {
-        system_prompt: mode.system_prompt.clone(),
-        tool_names: mode.tools.clone(),
-        model_id: provider.model_id().to_string(),
-        max_history,
-        ..Default::default()
-    };
-
-    // Create strategy, engine, sink, recorder
-    let strategy = super::hub::ChatStrategy::new(
-        chat_config,
-        state.clone(),
-        user_id,
-        msg.session_id,
-        message_id,
-    );
-    let engine = super::hub::ExecutionEngine::new(provider);
-    let sink = super::hub::streaming::SseSink::new(state.clone(), message_id);
-    let recorder = super::hub::ExecutionRecorder::new(
-        state.repo.as_ref(),
-        state.agent_execution_repo.as_deref(),
-        state.token_ledger_repo.as_deref(),
-    );
-
-    // Execute via the unified engine
-    match engine.execute(&strategy, &msg.content, &sink, &recorder).await {
-        Ok(_result) => {
-            debug!("Chat message {} completed via hub engine", message_id);
-        }
-        Err(e) => {
-            warn!("Hub engine error for message {}: {}", message_id, e);
-            state.send_stream_chunk(message_id, StreamChunk::Error(format!("Engine error: {}", e))).await;
+        None => {
+            warn!("No agent_id and no default agent configured for message {}", message_id);
+            state.send_stream_chunk(message_id, StreamChunk::Error("No agent configured".into())).await;
             state.send_stream_chunk(message_id, StreamChunk::Done).await;
         }
     }
 
-    // Schedule cleanup after a delay to allow late-connecting SSE clients
-    let cleanup_state = state.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_secs(120)).await;
-        cleanup_state.remove_response_stream(message_id).await;
-    });
+    super::hub::schedule_stream_cleanup(state, message_id);
     Ok(())
 }
 
@@ -776,7 +730,7 @@ mod tests {
         async fn upsert_pipeline_stage(&self, _stage: PipelineStageRow) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn create_session(&self, _user_id: UserId, _session_id: Uuid, _mode_id: &str, _title: &str) -> anyhow::Result<()> {
+        async fn create_session(&self, _user_id: UserId, _session_id: Uuid, _mode_id: &str, _title: &str, _agent_id: Option<Uuid>) -> anyhow::Result<()> {
             Ok(())
         }
         async fn list_sessions(&self, _user_id: UserId) -> anyhow::Result<Vec<SessionRow>> {
@@ -824,6 +778,15 @@ mod tests {
         async fn list_stage_executions(&self, _run_id: Uuid) -> anyhow::Result<Vec<crate::db::StageExecutionRow>> {
             Ok(vec![])
         }
+        async fn get_agent_modes(&self, _agent_id: Uuid) -> anyhow::Result<Vec<crate::db::AgentModeRow>> {
+            Ok(vec![])
+        }
+        async fn create_agent_mode(&self, _mode: &crate::db::AgentModeRow) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn delete_agent_mode(&self, _mode_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
     }
 
     #[tokio::test]
@@ -843,7 +806,7 @@ mod tests {
                 id: msg_id,
                 user_id: UserId::new(),
                 session_id: None,
-                mode_id: crate::server::agent_mode::AgentModeId::new("home"),
+                agent_id: None,
                 content: "Hello".into(),
                 timestamp: Utc::now(),
             })

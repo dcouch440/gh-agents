@@ -11,9 +11,9 @@ use crate::db::traits::{
     TokenLedgerRepo, ToolRouterRepo, UserRepo, WorkflowRepo,
 };
 use crate::db::{
-    AgentExecutionRow, AgentRow, ChatMessageRow, ContextStoreRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageMemberRow,
-    PipelineStageRow, PromptTemplateRow, ResultRow, RouterRequestRow, SessionRow, StageExecutionRow, StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow, WorkflowRow, WorkflowStepEdgeRow,
-    WorkflowStepRow,
+    AgentExecutionRow, AgentModeRow, AgentRow, ChatMessageRow, ContextStoreRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PipelineRow, PipelineRunRow,
+    PipelineStageMemberRow, PipelineStageRow, PromptTemplateRow, ResultRow, RouterRequestRow, SessionRow, StageExecutionRow, StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow, WorkflowRow,
+    WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -550,8 +550,8 @@ impl ServerRepo for PgRepo {
 
     // --- Session management ---
 
-    async fn create_session(&self, user_id: UserId, session_id: Uuid, mode_id: &str, title: &str) -> Result<()> {
-        crate::db::create_session(&self.pool, user_id, session_id, mode_id, title).await
+    async fn create_session(&self, user_id: UserId, session_id: Uuid, mode_id: &str, title: &str, agent_id: Option<Uuid>) -> Result<()> {
+        crate::db::create_session(&self.pool, user_id, session_id, mode_id, title, agent_id).await
     }
 
     async fn list_sessions(&self, user_id: UserId) -> Result<Vec<SessionRow>> {
@@ -713,6 +713,20 @@ impl ServerRepo for PgRepo {
             .fetch_all(&self.pool)
             .await?;
         Ok(rows)
+    }
+
+    // --- Agent modes ---
+
+    async fn get_agent_modes(&self, agent_id: Uuid) -> Result<Vec<AgentModeRow>> {
+        crate::db::list_agent_modes(&self.pool, agent_id).await
+    }
+
+    async fn create_agent_mode(&self, mode: &AgentModeRow) -> Result<()> {
+        crate::db::create_agent_mode(&self.pool, mode).await
+    }
+
+    async fn delete_agent_mode(&self, mode_id: Uuid) -> Result<()> {
+        crate::db::delete_agent_mode(&self.pool, mode_id).await
     }
 }
 
