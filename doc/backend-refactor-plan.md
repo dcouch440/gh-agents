@@ -159,7 +159,7 @@ Reference: `doc/database-model-guide.md` (19-table target schema)
   - chat_messages, chat_sessions (old)
   - messages
   - cost_records, llm_calls, decisions, token_usage
-  - tool_calls, agent_tools, tools
+  - tool_calls (tools and agent_tools are kept — recreated in migration 046)
   - routing_events, schedules, triggers
   - prds, planning_sessions
   - refactor_changes, refactor_sessions

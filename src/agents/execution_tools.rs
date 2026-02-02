@@ -13,6 +13,20 @@ use crate::llm::{GrokResearchClient, ResearchRequest, ResearchSource, Tool, WebS
 /// Namespace UUID for generating deterministic builtin tool IDs.
 const TOOLS_NS: Uuid = Uuid::from_bytes([0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8]);
 
+/// Convert a snake_case tool name to a human-readable display name.
+fn tool_display_name(name: &str) -> String {
+    name.split('_')
+        .map(|w| {
+            let mut c = w.chars();
+            match c.next() {
+                None => String::new(),
+                Some(first) => first.to_uppercase().to_string() + c.as_str(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// Return the built-in execution tools as DB rows for seeding.
 ///
 /// Each tool gets a deterministic UUID via `Uuid::new_v5(TOOLS_NS, name)` so
@@ -20,16 +34,17 @@ const TOOLS_NS: Uuid = Uuid::from_bytes([0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x1
 pub fn builtin_tool_rows() -> Vec<ToolRow> {
     execution_tools()
         .into_iter()
-        .map(|t| ToolRow {
-            id: Uuid::new_v5(&TOOLS_NS, t.name.as_bytes()),
-            name: t.name,
-            description: t.description,
-            category: "execution".to_string(),
-            parameter_schema: t.input_schema,
-            output_schema: json!({}),
-            enabled: true,
-            cluster_id: None,
-            is_builtin: true,
+        .map(|t| {
+            let display_name = tool_display_name(&t.name);
+            ToolRow {
+                id: Uuid::new_v5(&TOOLS_NS, t.name.as_bytes()),
+                user_id: Uuid::nil(), // Placeholder — overwritten by seed_builtin_tools
+                name: t.name,
+                display_name,
+                description: t.description,
+                parameters: t.input_schema,
+                created_at: chrono::Utc::now(),
+            }
         })
         .collect()
 }
@@ -583,14 +598,13 @@ mod tests {
     }
 
     #[test]
-    fn builtin_tool_rows_returns_11() {
+    fn builtin_tool_rows_returns_12() {
         let rows = builtin_tool_rows();
         assert_eq!(rows.len(), 12);
         for row in &rows {
-            assert!(row.is_builtin);
-            assert!(row.cluster_id.is_none());
-            assert_eq!(row.category, "execution");
-            assert!(row.enabled);
+            assert!(!row.name.is_empty());
+            assert!(!row.display_name.is_empty());
+            assert!(!row.description.is_empty());
         }
     }
 

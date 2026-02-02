@@ -473,27 +473,27 @@ pub async fn complete_routing_event(
     Ok(())
 }
 
-/// List tools belonging to a cluster
-pub async fn list_tools_by_cluster(pool: &PgPool, cluster_id: Uuid) -> Result<Vec<super::ToolRow>> {
-    let rows: Vec<ToolRowDb> =
-        sqlx::query_as("SELECT id, name, description, category, parameter_schema, output_schema, enabled, cluster_id, is_builtin FROM tools WHERE cluster_id = $1 AND enabled = true")
-            .bind(cluster_id)
-            .fetch_all(pool)
-            .await
-            .context("Failed to list tools by cluster")?;
+/// List tools belonging to a user.
+///
+/// Note: This replaces the old `list_tools_by_cluster` function.
+/// Cluster-based tool lookup is no longer supported.
+pub async fn list_tools_for_user(pool: &PgPool, user_id: Uuid) -> Result<Vec<super::ToolRow>> {
+    let rows: Vec<ToolRowDb> = sqlx::query_as("SELECT id, user_id, name, display_name, description, parameters, created_at FROM tools WHERE user_id = $1 ORDER BY name")
+        .bind(user_id)
+        .fetch_all(pool)
+        .await
+        .context("Failed to list tools for user")?;
 
     Ok(rows
         .into_iter()
         .map(|r| super::ToolRow {
             id: r.id,
+            user_id: r.user_id,
             name: r.name,
+            display_name: r.display_name,
             description: r.description,
-            category: r.category,
-            parameter_schema: r.parameter_schema,
-            output_schema: r.output_schema,
-            enabled: r.enabled,
-            cluster_id: r.cluster_id,
-            is_builtin: r.is_builtin,
+            parameters: r.parameters,
+            created_at: r.created_at,
         })
         .collect())
 }
@@ -501,17 +501,18 @@ pub async fn list_tools_by_cluster(pool: &PgPool, cluster_id: Uuid) -> Result<Ve
 #[derive(sqlx::FromRow)]
 struct ToolRowDb {
     id: Uuid,
+    user_id: Uuid,
     name: String,
+    display_name: String,
     description: String,
-    category: String,
-    parameter_schema: serde_json::Value,
-    output_schema: serde_json::Value,
-    enabled: bool,
-    cluster_id: Option<Uuid>,
-    is_builtin: bool,
+    parameters: serde_json::Value,
+    created_at: chrono::DateTime<chrono::Utc>,
 }
 
-/// List all clusters with their tools (for building the ToolClusterIndex)
+/// List all clusters (tools are no longer cluster-scoped).
+///
+/// Deprecated: clusters are being removed. This function returns clusters with empty tool lists
+/// for backwards compatibility until the cluster system is fully removed.
 pub async fn list_clusters_with_tools(pool: &PgPool) -> Result<Vec<(super::ClusterRow, Vec<super::ToolRow>)>> {
     let cluster_rows: Vec<ClusterRowDb> = sqlx::query_as("SELECT id, name, description, conventions, shared_files FROM clusters")
         .fetch_all(pool)
@@ -520,7 +521,6 @@ pub async fn list_clusters_with_tools(pool: &PgPool) -> Result<Vec<(super::Clust
 
     let mut results = Vec::new();
     for cr in cluster_rows {
-        let tool_rows = list_tools_by_cluster(pool, cr.id).await?;
         let cluster = super::ClusterRow {
             id: cr.id,
             name: cr.name,
@@ -528,7 +528,7 @@ pub async fn list_clusters_with_tools(pool: &PgPool) -> Result<Vec<(super::Clust
             conventions: cr.conventions,
             shared_files: cr.shared_files,
         };
-        results.push((cluster, tool_rows));
+        results.push((cluster, vec![]));
     }
     Ok(results)
 }

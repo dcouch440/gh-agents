@@ -20,10 +20,13 @@ use uuid::Uuid;
 
 use crate::db::traits::{AgentExecutionRepo, DocumentRepo, TokenLedgerRepo, WorkflowRepo};
 use crate::db::{AgentRow, WorkflowStepEdgeRow, WorkflowStepRow};
-use crate::llm::{LLMProvider, LLMRequest, LLMResponse, Message};
+use crate::llm::{ContentBlock, LLMProvider, LLMRequest, Message, StopReason, Tool};
 
 use super::state::AppState;
 use super::ws::PipelineUpdate;
+
+/// Maximum tool use rounds per step execution.
+const DAG_MAX_TOOL_ROUNDS: u32 = 15;
 
 /// Completed step output, keyed by output_variable_name.
 #[derive(Debug, Clone)]
@@ -41,6 +44,8 @@ pub struct WorkflowExecutionContext {
     pub initial_input: String,
     /// Outputs from prior pipeline stages, keyed by variable name.
     pub prior_outputs: HashMap<String, JsonValue>,
+    /// Execution context for tool calls (file ops, git, etc.). None if tools are not available.
+    pub execution_context: Option<crate::execution::ExecutionContext>,
 }
 
 /// Result of executing one workflow.
@@ -346,9 +351,31 @@ fn resolve_for_each_path(path: &str, element: &JsonValue, outputs: &HashMap<Stri
 // Step Execution
 // ============================================================================
 
-/// Execute a single workflow step: make LLM call, record results.
+/// Resolve the LLM tool definitions for an agent from the database.
 ///
-/// Returns the structured_output and raw output text.
+/// Returns an empty vec if the agent has no tools assigned — in that case
+/// the LLM will never return `StopReason::ToolUse` and the loop executes once.
+async fn resolve_agent_tools(state: &AppState, agent_id: Uuid) -> Vec<Tool> {
+    let tools = match state.repo.get_agent_tools(agent_id).await {
+        Ok(rows) => rows,
+        Err(_) => return vec![],
+    };
+    tools
+        .into_iter()
+        .map(|t| Tool {
+            name: t.name,
+            description: t.description,
+            input_schema: t.parameters,
+        })
+        .collect()
+}
+
+/// Execute a single workflow step: make LLM call(s), record results.
+///
+/// If the agent has tools assigned, runs a react loop (up to `DAG_MAX_TOOL_ROUNDS`).
+/// Otherwise behaves as a single LLM call.
+///
+/// Returns (agent_execution_id, StepOutput, input_tokens, output_tokens, cost_usd).
 async fn execute_step(
     state: &AppState,
     provider: &dyn LLMProvider,
@@ -356,8 +383,8 @@ async fn execute_step(
     step: &WorkflowStepRow,
     agent: &AgentRow,
     prompt: &str,
-    for_each_index: Option<i32>,
-    for_each_label: Option<String>,
+    _for_each_index: Option<i32>,
+    _for_each_label: Option<String>,
 ) -> Result<(Uuid, StepOutput, i64, i64, f32)> {
     let ae_repo = state.agent_execution_repo.as_ref().ok_or_else(|| anyhow!("agent_execution_repo not configured"))?;
 
@@ -374,6 +401,10 @@ async fn execute_step(
         }
     }
 
+    // Resolve tools for this agent (empty vec = no tools = single call)
+    let tools = resolve_agent_tools(state, agent.id).await;
+    let tool_names: Vec<String> = tools.iter().map(|t| t.name.clone()).collect();
+
     // Create agent_execution row
     let ae_row = ae_repo
         .create_agent_execution(ctx.stage_execution_id, agent.id, Some(step.id), false, None, &system_prompt, prompt)
@@ -386,38 +417,99 @@ async fn execute_step(
     // Broadcast running status
     broadcast_agent_execution_update(state, ctx.run_id, &ae_row.id, step.id, &agent.name, false, "running", None, 0, 0, 0.0);
 
-    // Make LLM call
-    let request = LLMRequest {
-        model: agent.model_id.clone(),
-        system: Some(system_prompt),
-        messages: vec![Message::user(prompt)],
-        max_tokens: agent.model_max_tokens as u32,
-        temperature: agent.model_temperature,
-        stream: false,
-        ..Default::default()
-    };
+    // React loop
+    let mut messages = vec![Message::user(prompt)];
+    let mut total_input_tokens: i64 = 0;
+    let mut total_output_tokens: i64 = 0;
+    let mut total_cost_usd: f32 = 0.0;
+    let mut final_content = String::new();
 
-    let response = provider.send_message(request).await.map_err(|e| anyhow!("LLM call failed: {}", e))?;
+    for round in 0..DAG_MAX_TOOL_ROUNDS {
+        let request = LLMRequest {
+            model: agent.model_id.clone(),
+            system: Some(system_prompt.clone()),
+            messages: messages.clone(),
+            max_tokens: agent.model_max_tokens as u32,
+            temperature: agent.model_temperature,
+            stream: false,
+            tools: tools.clone(),
+        };
 
-    let input_tokens = response.usage.input_tokens as i64;
-    let output_tokens = response.usage.output_tokens as i64;
-    let cost_usd = compute_cost(&agent.model_id, input_tokens, output_tokens);
+        let response = provider.send_message(request).await.map_err(|e| anyhow!("LLM call failed (round {}): {}", round, e))?;
 
-    // Parse structured output
-    let structured_output = parse_structured_output(&response.content);
+        let in_tok = response.usage.input_tokens as i64;
+        let out_tok = response.usage.output_tokens as i64;
+        let cost = compute_cost(&agent.model_id, in_tok, out_tok);
+        total_input_tokens += in_tok;
+        total_output_tokens += out_tok;
+        total_cost_usd += cost;
 
-    // Record assistant message
-    let _ = ae_repo.create_execution_message(ae_row.id, "assistant", &response.content, None, input_tokens, output_tokens).await;
+        // Write token_ledger for every LLM call
+        if let Some(tl_repo) = &state.token_ledger_repo {
+            let _ = tl_repo.insert_ledger_entry(ctx.user_id, ae_row.id, &agent.model_id, in_tok, out_tok, cost).await;
+        }
+
+        if response.stop_reason == StopReason::ToolUse {
+            // Record the assistant message with tool calls
+            let _ = ae_repo.create_execution_message(ae_row.id, "assistant", &response.content, None, in_tok, out_tok).await;
+
+            // Add assistant response (with content blocks) to conversation
+            messages.push(Message::assistant_with_blocks(response.content_blocks.clone()));
+
+            // Execute each tool call and collect results
+            let mut tool_results = Vec::new();
+            for block in &response.content_blocks {
+                if let ContentBlock::ToolUse { id, name, input } = block {
+                    info!(agent = %agent.name, round = round, tool = %name, "DAG step tool call");
+
+                    let result = match &ctx.execution_context {
+                        Some(exec_ctx) => crate::agents::execution_tools::execute_execution_tool(name, input, exec_ctx, Some(&tool_names)).await,
+                        None => {
+                            serde_json::json!({ "error": "No execution context available for tool calls" })
+                        }
+                    };
+
+                    let result_str = serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string());
+
+                    // Record tool call and result as execution_messages
+                    let call_content = serde_json::json!({ "tool": name, "input": input }).to_string();
+                    let _ = ae_repo.create_execution_message(ae_row.id, "assistant", &call_content, Some(id.clone()), 0, 0).await;
+                    let _ = ae_repo.create_execution_message(ae_row.id, "tool", &result_str, Some(id.clone()), 0, 0).await;
+
+                    tool_results.push(ContentBlock::ToolResult {
+                        tool_use_id: id.clone(),
+                        content: result_str,
+                    });
+                }
+            }
+
+            messages.push(Message::tool_results(tool_results));
+            continue;
+        }
+
+        // EndTurn or MaxTokens — final answer
+        final_content = response.content;
+
+        // Record final assistant message
+        let _ = ae_repo.create_execution_message(ae_row.id, "assistant", &final_content, None, in_tok, out_tok).await;
+        break;
+    }
+
+    // Parse structured output from final response
+    let structured_output = parse_structured_output(&final_content);
 
     // Update agent_execution with results
     let _ = ae_repo
-        .update_agent_execution_status(ae_row.id, "completed", Some(response.content.clone()), structured_output.clone(), input_tokens, output_tokens, cost_usd)
+        .update_agent_execution_status(
+            ae_row.id,
+            "completed",
+            Some(final_content.clone()),
+            structured_output.clone(),
+            total_input_tokens,
+            total_output_tokens,
+            total_cost_usd,
+        )
         .await;
-
-    // Write token_ledger
-    if let Some(tl_repo) = &state.token_ledger_repo {
-        let _ = tl_repo.insert_ledger_entry(ctx.user_id, ae_row.id, &agent.model_id, input_tokens, output_tokens, cost_usd).await;
-    }
 
     // Broadcast completed status
     broadcast_agent_execution_update(
@@ -429,19 +521,19 @@ async fn execute_step(
         false,
         "completed",
         structured_output.as_ref(),
-        input_tokens,
-        output_tokens,
-        cost_usd,
+        total_input_tokens,
+        total_output_tokens,
+        total_cost_usd,
     );
 
     let variable_name = step.output_variable_name.clone().unwrap_or_default();
     let step_output = StepOutput {
         variable_name: variable_name.clone(),
         structured_output: structured_output.clone(),
-        raw_output: response.content,
+        raw_output: final_content,
     };
 
-    Ok((ae_row.id, step_output, input_tokens, output_tokens, cost_usd))
+    Ok((ae_row.id, step_output, total_input_tokens, total_output_tokens, total_cost_usd))
 }
 
 /// Execute the interactive review agent for a step.
@@ -763,6 +855,7 @@ pub async fn execute_stage_via_members(
             user_id,
             initial_input: initial_input.to_string(),
             prior_outputs: prior_outputs.clone(),
+            execution_context: None, // TODO: pass execution context for tool-enabled agents
         };
 
         let state_clone = state.clone();

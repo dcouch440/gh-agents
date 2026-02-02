@@ -83,23 +83,12 @@ pub async fn execute_request_assistance(
 
     match tool_row {
         None => json!({ "error": format!("Unknown tool: {}", tool_name) }),
-        Some(row) if !row.enabled => {
-            json!({ "error": format!("Tool '{}' is disabled", tool_name) })
-        }
-        Some(row) => {
-            match row.cluster_id {
-                None => {
-                    // Direct execution tool — use existing dispatcher
-                    let params = input.get("parameters").unwrap_or(&json!({})).clone();
-                    match exec_ctx {
-                        Some(ctx) => super::execution_tools::execute_execution_tool(tool_name, &params, ctx, allowed_tools).await,
-                        None => json!({ "error": "No execution context available" }),
-                    }
-                }
-                Some(cluster_id) => {
-                    // Cluster-routed tool — dispatch to cluster agent
-                    route_to_cluster(cluster_id, tool_name, input, cluster_ctx).await
-                }
+        Some(_row) => {
+            // Direct execution tool — use existing dispatcher
+            let params = input.get("parameters").unwrap_or(&json!({})).clone();
+            match exec_ctx {
+                Some(ctx) => super::execution_tools::execute_execution_tool(tool_name, &params, ctx, allowed_tools).await,
+                None => json!({ "error": "No execution context available" }),
             }
         }
     }
@@ -175,55 +164,21 @@ mod tests {
         assert!(result["error"].as_str().unwrap().contains("Unknown tool"));
     }
 
-    #[tokio::test]
-    async fn disabled_tool_returns_error() {
-        let row = ToolRow {
+    fn make_test_tool(name: &str) -> ToolRow {
+        ToolRow {
             id: Uuid::new_v4(),
-            name: "my_tool".to_string(),
-            description: "test".to_string(),
-            category: "general".to_string(),
-            parameter_schema: json!({}),
-            output_schema: json!({}),
-            enabled: false,
-            cluster_id: None,
-            is_builtin: false,
-        };
-        let result = execute_request_assistance(&json!({"tool_name": "my_tool", "request": "help"}), &[row], None, None, None).await;
-        assert!(result["error"].as_str().unwrap().contains("disabled"));
-    }
-
-    #[tokio::test]
-    async fn cluster_routed_tool_without_context_returns_error() {
-        let cid = Uuid::new_v4();
-        let row = ToolRow {
-            id: Uuid::new_v4(),
-            name: "cluster_tool".to_string(),
-            description: "test".to_string(),
-            category: "general".to_string(),
-            parameter_schema: json!({}),
-            output_schema: json!({}),
-            enabled: true,
-            cluster_id: Some(cid),
-            is_builtin: false,
-        };
-        let result = execute_request_assistance(&json!({"tool_name": "cluster_tool", "request": "help"}), &[row], None, None, None).await;
-        let err = result["error"].as_str().unwrap();
-        assert!(err.contains("not available"));
+            user_id: Uuid::nil(),
+            name: name.to_string(),
+            display_name: name.to_string(),
+            description: format!("{} tool", name),
+            parameters: json!({}),
+            created_at: chrono::Utc::now(),
+        }
     }
 
     #[tokio::test]
     async fn direct_tool_without_exec_ctx_returns_error() {
-        let row = ToolRow {
-            id: Uuid::new_v4(),
-            name: "read_file".to_string(),
-            description: "Read a file".to_string(),
-            category: "execution".to_string(),
-            parameter_schema: json!({}),
-            output_schema: json!({}),
-            enabled: true,
-            cluster_id: None,
-            is_builtin: true,
-        };
+        let row = make_test_tool("read_file");
         let result = execute_request_assistance(&json!({"tool_name": "read_file", "request": "read it", "parameters": {"path": "foo.txt"}}), &[row], None, None, None).await;
         assert!(result["error"].as_str().unwrap().contains("execution context"));
     }

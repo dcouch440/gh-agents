@@ -86,14 +86,12 @@ pub struct TriggerRow {
 #[derive(Debug, Clone)]
 pub struct ToolRow {
     pub id: Uuid,
+    pub user_id: Uuid,
     pub name: String,
+    pub display_name: String,
     pub description: String,
-    pub category: String,
-    pub parameter_schema: serde_json::Value,
-    pub output_schema: serde_json::Value,
-    pub enabled: bool,
-    pub cluster_id: Option<Uuid>,
-    pub is_builtin: bool,
+    pub parameters: serde_json::Value,
+    pub created_at: DateTime<Utc>,
 }
 
 /// Row type for persisted clusters.

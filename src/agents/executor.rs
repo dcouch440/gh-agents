@@ -484,11 +484,10 @@ impl Agent {
                 .context
                 .tool_rows
                 .iter()
-                .filter(|t| t.enabled)
                 .map(|t| crate::llm::Tool {
                     name: t.name.clone(),
                     description: t.description.clone(),
-                    input_schema: t.parameter_schema.clone(),
+                    input_schema: t.parameters.clone(),
                 })
                 .collect()
         } else if assignment.context.execution_context.is_some() {
@@ -590,30 +589,7 @@ impl Agent {
                                 )
                                 .await
                             } else {
-                                // Check if tool routes to a cluster
-                                let tool_cluster = assignment.context.tool_rows.iter().find(|t| t.name == *name).and_then(|t| t.cluster_id);
-
-                                if tool_cluster.is_some() && assignment.context.cluster_routing.is_some() {
-                                    // Route to cluster agent via request_assistance
-                                    let ra_input = serde_json::json!({
-                                        "tool_name": name,
-                                        "parameters": input,
-                                    });
-                                    super::tool_router::execute_request_assistance(
-                                        &ra_input,
-                                        &assignment.context.tool_rows,
-                                        assignment.context.execution_context.as_ref(),
-                                        allowed_tools,
-                                        assignment.context.cluster_routing.as_ref(),
-                                    )
-                                    .await
-                                } else if tool_cluster.is_some() {
-                                    serde_json::json!({
-                                        "error": "Cluster routing not available for this tool"
-                                    })
-                                } else {
-                                    execution_tools::execute_execution_tool(name, input, exec_ctx, allowed_tools).await
-                                }
+                                execution_tools::execute_execution_tool(name, input, exec_ctx, allowed_tools).await
                             };
 
                             // Track consecutive errors for early bail-out
@@ -737,28 +713,7 @@ impl Agent {
                                         )
                                         .await
                                     } else {
-                                        let fix_cluster = assignment.context.tool_rows.iter().find(|t| t.name == *name).and_then(|t| t.cluster_id);
-
-                                        if fix_cluster.is_some() && assignment.context.cluster_routing.is_some() {
-                                            let ra_input = serde_json::json!({
-                                                "tool_name": name,
-                                                "parameters": input,
-                                            });
-                                            super::tool_router::execute_request_assistance(
-                                                &ra_input,
-                                                &assignment.context.tool_rows,
-                                                assignment.context.execution_context.as_ref(),
-                                                allowed_tools,
-                                                assignment.context.cluster_routing.as_ref(),
-                                            )
-                                            .await
-                                        } else if fix_cluster.is_some() {
-                                            serde_json::json!({
-                                                "error": "Cluster routing not available for this tool"
-                                            })
-                                        } else {
-                                            execution_tools::execute_execution_tool(name, input, exec_ctx, allowed_tools).await
-                                        }
+                                        execution_tools::execute_execution_tool(name, input, exec_ctx, allowed_tools).await
                                     };
 
                                     if name == "write_file" {
