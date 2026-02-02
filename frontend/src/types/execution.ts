@@ -10,14 +10,11 @@ type AgentExecution = {
   output: string | null
   structured_output: Record<string, unknown> | null
   status: AgentExecutionStatus
-  input_tokens: number
-  output_tokens: number
-  cost_usd: number
   started_at: string
   completed_at: string | null
 }
 
-type AgentExecutionStatus = 'pending' | 'running' | 'completed' | 'awaiting_user' | 'failed'
+type AgentExecutionStatus = 'pending' | 'running' | 'completed' | 'awaiting_user' | 'failed' | 'cancelled'
 
 type ExecutionMessage = {
   id: string
