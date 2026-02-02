@@ -388,6 +388,7 @@ pub trait AgentExecutionRepo: Send + Sync {
         parent_agent_execution_id: Option<Uuid>,
         system_prompt_rendered: &str,
         input: &str,
+        selected_mode_id: Option<Uuid>,
     ) -> Result<AgentExecutionRow>;
     async fn get_agent_execution(&self, id: Uuid) -> Result<Option<AgentExecutionRow>>;
     async fn list_agent_executions_by_stage(&self, stage_execution_id: Uuid) -> Result<Vec<AgentExecutionRow>>;
