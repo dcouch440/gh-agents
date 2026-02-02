@@ -1,18 +1,14 @@
 //! nexor: AI Agent Orchestration for GitHub Workflows
 
+use anyhow::Result;
 use std::net::SocketAddr;
 use std::path::Path;
-use std::sync::Arc;
-
-use anyhow::Result;
-use tokio::sync::RwLock;
 use tracing::{debug, info};
 
 use nexor::cli::Args;
 use nexor::config::load_config;
 use nexor::db::init_db;
 use nexor::logging::{init_logging_with_file, LOG_DIR};
-use nexor::orchestration::Scheduler;
 use nexor::server::start_server;
 
 #[tokio::main]
@@ -53,15 +49,11 @@ async fn run_server_mode(args: Args) -> Result<()> {
     // Initialize database
     let pool = init_db().await?;
 
-    // Initialize scheduler
-    let scheduler = Scheduler::new(pool.clone()).await?;
-    let scheduler = Arc::new(RwLock::new(scheduler));
-
     // Server address from CLI
     let addr: SocketAddr = format!("0.0.0.0:{}", args.port).parse()?;
 
     // Run server
-    start_server(pool, scheduler, config, addr).await?;
+    start_server(pool, config, addr).await?;
 
     info!("nexor shutting down");
     Ok(())

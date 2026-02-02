@@ -15,7 +15,6 @@ pub mod tools;
 pub mod ws;
 
 use std::net::SocketAddr;
-use std::sync::Arc;
 
 use anyhow::Result;
 use axum::{
@@ -28,7 +27,6 @@ use axum::{
     Router,
 };
 use sqlx::PgPool;
-use tokio::sync::RwLock;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::GovernorLayer;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
@@ -37,7 +35,6 @@ use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 
 use crate::constants::routes;
-use crate::orchestration::Scheduler;
 use crate::types::AppConfig;
 
 pub use state::AppState;
@@ -50,8 +47,8 @@ pub use state::AppState;
 /// - CORS configuration for development
 /// - Request tracing middleware
 /// - Graceful shutdown handling
-pub async fn start_server(db: PgPool, scheduler: Arc<RwLock<Scheduler>>, config: AppConfig, addr: SocketAddr) -> Result<()> {
-    let (state, orchestrator_rx) = AppState::new(db, scheduler, config).await;
+pub async fn start_server(db: PgPool, config: AppConfig, addr: SocketAddr) -> Result<()> {
+    let (state, orchestrator_rx) = AppState::new(db, config).await;
 
     // Spawn the orchestrator consumer to process chat messages via LLM
     let _orchestrator_handle = orchestrator::spawn_orchestrator(state.clone(), orchestrator_rx);
@@ -332,6 +329,7 @@ mod tests {
         http::{Request, StatusCode},
     };
     use chrono::{DateTime, Utc};
+    use std::sync::Arc;
     use tempfile::TempDir;
     use tower::util::ServiceExt;
     use uuid::Uuid;
@@ -577,7 +575,7 @@ mod tests {
 
     fn setup_mock_state() -> AppState {
         let repo: Arc<dyn ServerRepo> = Arc::new(InMemoryServerRepo::new());
-        let (state, rx) = AppState::with_repo(None, repo, None, AppConfig::default());
+        let (state, rx) = AppState::with_repo(None, repo, AppConfig::default());
         // Keep the receiver alive so orchestrator_tx.send() doesn't fail in tests
         std::mem::forget(rx);
         state

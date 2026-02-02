@@ -3853,7 +3853,7 @@ mod tests {
     fn setup_test_app_with_user_repo(user_repo: Option<Arc<dyn crate::db::traits::UserRepo>>) -> (axum::Router, Vec<u8>) {
         let repo: Arc<dyn ServerRepo> = Arc::new(InMemoryServerRepo::new());
         let config = crate::types::AppConfig::default();
-        let (mut state, rx) = AppState::with_repo(None, repo, None, config);
+        let (mut state, rx) = AppState::with_repo(None, repo, config);
         // Keep the receiver alive so orchestrator_tx.send() doesn't fail
         std::mem::forget(rx);
         if let Some(ur) = user_repo {

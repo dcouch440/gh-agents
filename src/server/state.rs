@@ -12,7 +12,6 @@ use crate::agents::{AgentPool, AgentResponse, ClusterManager, Dispatcher, Pipeli
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::{AgentExecutionRepo, DocumentRepo, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, ServerRepo, TokenLedgerRepo, UserRepo, WorkflowRepo};
 use crate::llm::AnthropicClient;
-use crate::orchestration::Scheduler;
 use crate::types::{AgentPoolConfig, AppConfig, UserId};
 
 use super::agent_mode::{AgentModeId, ModeRegistry};
@@ -76,8 +75,6 @@ pub struct AppState {
     pub agent_execution_repo: Option<Arc<dyn AgentExecutionRepo>>,
     pub token_ledger_repo: Option<Arc<dyn TokenLedgerRepo>>,
     pub result_repo: Option<Arc<dyn ResultRepo>>,
-    /// Task scheduler for orchestration (None in mock-based tests)
-    pub scheduler: Option<Arc<RwLock<Scheduler>>>,
     /// Application configuration (mutable at runtime via API)
     pub config: Arc<RwLock<AppConfig>>,
     /// JWT secret for token signing
@@ -123,7 +120,7 @@ impl AppState {
     /// so it can be passed to the orchestrator consumer task.
     ///
     /// Loads persisted agents and clusters from the database on startup.
-    pub async fn new(db: PgPool, scheduler: Arc<RwLock<Scheduler>>, config: AppConfig) -> (Self, mpsc::Receiver<OrchestratorMessage>) {
+    pub async fn new(db: PgPool, config: AppConfig) -> (Self, mpsc::Receiver<OrchestratorMessage>) {
         let repo: Arc<dyn ServerRepo> = Arc::new(PgRepo::new(db.clone()));
         let user_repo: Arc<dyn UserRepo> = Arc::new(PgRepo::new(db.clone()));
         let doc_repo: Arc<dyn DocumentRepo> = Arc::new(PgRepo::new(db.clone()));
@@ -134,7 +131,7 @@ impl AppState {
         let agent_execution_repo: Arc<dyn AgentExecutionRepo> = Arc::new(PgRepo::new(db.clone()));
         let token_ledger_repo: Arc<dyn TokenLedgerRepo> = Arc::new(PgRepo::new(db.clone()));
         let result_repo: Arc<dyn ResultRepo> = Arc::new(PgRepo::new(db.clone()));
-        let (mut state, rx) = Self::with_repo(Some(db), repo, Some(scheduler), config.clone());
+        let (mut state, rx) = Self::with_repo(Some(db), repo, config.clone());
         state.user_repo = Some(user_repo);
         state.doc_repo = Some(doc_repo);
         state.output_schema_repo = Some(output_schema_repo);
@@ -271,7 +268,7 @@ impl AppState {
 
     /// Create application state with a custom repo (for testing).
     /// Returns the state and the orchestrator message receiver.
-    pub fn with_repo(db: Option<PgPool>, repo: Arc<dyn ServerRepo>, scheduler: Option<Arc<RwLock<Scheduler>>>, config: AppConfig) -> (Self, mpsc::Receiver<OrchestratorMessage>) {
+    pub fn with_repo(db: Option<PgPool>, repo: Arc<dyn ServerRepo>, config: AppConfig) -> (Self, mpsc::Receiver<OrchestratorMessage>) {
         let (orchestrator_tx, orchestrator_rx) = mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
         let (feed_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST_HIGH);
         let (task_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
@@ -309,7 +306,6 @@ impl AppState {
                 agent_execution_repo: None,
                 token_ledger_repo: None,
                 result_repo: None,
-                scheduler,
                 config: Arc::new(RwLock::new(config)),
                 jwt_secret,
                 orchestrator_tx,
@@ -457,7 +453,7 @@ mod tests {
         let mut mock = MockServerRepo::new();
         mock.expect_health_check().returning(|| true);
         let repo: Arc<dyn ServerRepo> = Arc::new(mock);
-        let (state, _rx) = AppState::with_repo(None, repo, None, AppConfig::default());
+        let (state, _rx) = AppState::with_repo(None, repo, AppConfig::default());
         state
     }
 

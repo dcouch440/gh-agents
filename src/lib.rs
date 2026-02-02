@@ -10,7 +10,6 @@ pub mod execution;
 pub mod github;
 pub mod llm;
 pub mod logging;
-pub mod orchestration;
 pub mod prompts;
 pub mod server;
 pub mod types;
