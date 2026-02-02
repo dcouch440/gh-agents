@@ -190,6 +190,7 @@ pub struct AgentExecutionRow {
     pub input: String,
     pub output: Option<String>,
     pub structured_output: Option<serde_json::Value>,
+    pub selected_mode_id: Option<Uuid>,
     pub status: String,
     pub started_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,

@@ -1385,9 +1385,10 @@ impl AgentExecutionRepo for PgRepo {
         parent_agent_execution_id: Option<Uuid>,
         system_prompt_rendered: &str,
         input: &str,
+        selected_mode_id: Option<Uuid>,
     ) -> Result<AgentExecutionRow> {
         let row = sqlx::query_as::<_, AgentExecutionRow>(
-            "INSERT INTO agent_executions (stage_execution_id, agent_id, workflow_step_id, is_interactive, parent_agent_execution_id, system_prompt_rendered, input) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *",
+            "INSERT INTO agent_executions (stage_execution_id, agent_id, workflow_step_id, is_interactive, parent_agent_execution_id, system_prompt_rendered, input, selected_mode_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *",
         )
         .bind(stage_execution_id)
         .bind(agent_id)
@@ -1396,6 +1397,7 @@ impl AgentExecutionRepo for PgRepo {
         .bind(parent_agent_execution_id)
         .bind(system_prompt_rendered)
         .bind(input)
+        .bind(selected_mode_id)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)

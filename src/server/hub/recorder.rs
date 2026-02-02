@@ -69,6 +69,7 @@ impl<'a> ExecutionRecorder<'a> {
         parent_agent_execution_id: Option<Uuid>,
         system_prompt: &str,
         user_prompt: &str,
+        selected_mode_id: Option<Uuid>,
     ) -> Result<Uuid, HubError> {
         let repo = self
             .agent_execution_repo
@@ -82,6 +83,7 @@ impl<'a> ExecutionRecorder<'a> {
                 parent_agent_execution_id,
                 system_prompt,
                 user_prompt,
+                selected_mode_id,
             )
             .await
             .context("failed to create agent execution")?;
