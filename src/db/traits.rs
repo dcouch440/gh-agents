@@ -16,7 +16,7 @@ use crate::db::{
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::orchestration::DependencyError;
 use crate::orchestration::QueueError as TaskQueueError;
-use crate::types::{ChangeId, ChangeStatus, CostRecord, ProductionMode, RefactorChange, RefactorSession, Task, TaskId, TaskStatus, User, UserId};
+use crate::types::{ProductionMode, Task, TaskId, TaskStatus, User, UserId};
 
 // ============================================================================
 // Merge Queue Repository
@@ -103,17 +103,6 @@ pub trait TaskQueueRepo: Send + Sync {
 // Cost Repository
 // ============================================================================
 
-/// Database operations for cost tracking.
-#[cfg_attr(test, mockall::automock)]
-#[async_trait]
-pub trait CostRepo: Send + Sync {
-    /// Persist a cost record.
-    async fn persist_cost_record(&self, record: CostRecord) -> Result<(), String>;
-
-    /// Get all cost records, optionally filtered by timestamp.
-    async fn get_cost_records(&self, since: Option<DateTime<Utc>>) -> Result<Vec<CostRecord>, String>;
-}
-
 // ============================================================================
 // Scheduler Repository
 // ============================================================================
@@ -127,30 +116,6 @@ pub trait SchedulerRepo: Send + Sync {
 
     /// Set the production mode.
     async fn set_production_mode(&self, mode: ProductionMode) -> Result<(), anyhow::Error>;
-}
-
-// ============================================================================
-// Refactor Repository
-// ============================================================================
-
-/// Database operations for refactor sessions and changes.
-#[cfg_attr(test, mockall::automock)]
-#[async_trait]
-pub trait RefactorRepo: Send + Sync {
-    /// Get the currently active refactor session (if any).
-    async fn get_active_refactor_session(&self) -> Result<Option<RefactorSession>>;
-
-    /// Insert a new refactor session.
-    async fn insert_refactor_session(&self, session: RefactorSession) -> Result<()>;
-
-    /// Update a refactor session.
-    async fn update_refactor_session(&self, session: RefactorSession) -> Result<()>;
-
-    /// Insert a refactor change.
-    async fn insert_refactor_change(&self, change: RefactorChange) -> Result<()>;
-
-    /// Update the status of a refactor change.
-    async fn update_change_status(&self, id: ChangeId, status: ChangeStatus) -> Result<()>;
 }
 
 // ============================================================================

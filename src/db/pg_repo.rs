@@ -7,7 +7,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::db::traits::{
-    AgentExecutionRepo, CostRepo, DependencyRepo, DocumentRepo, MergeQueueRepo, ModelSpendRow, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, RefactorRepo, ResultRepo, SchedulerRepo,
+    AgentExecutionRepo, DependencyRepo, DocumentRepo, MergeQueueRepo, ModelSpendRow, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, SchedulerRepo,
     ServerRepo, TaskQueueRepo, TokenLedgerRepo, UserRepo, WorkflowRepo,
 };
 use crate::db::{
@@ -18,7 +18,7 @@ use crate::db::{
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::orchestration::DependencyError;
 use crate::orchestration::QueueError as TaskQueueError;
-use crate::types::{AgentId, AgentTier, ChangeId, ChangeStatus, CostRecord, ProductionMode, RefactorChange, RefactorSession, Task, TaskId, TaskStatus, User, UserId};
+use crate::types::{AgentId, AgentTier, ProductionMode, Task, TaskId, TaskStatus, User, UserId};
 
 /// Production repository backed by PostgreSQL.
 #[derive(Clone)]
@@ -392,133 +392,6 @@ impl SchedulerRepo for PgRepo {
         .map_err(|e| anyhow::anyhow!("Failed to set production mode: {}", e))?;
 
         Ok(())
-    }
-}
-
-#[async_trait]
-impl CostRepo for PgRepo {
-    async fn persist_cost_record(&self, record: CostRecord) -> Result<(), String> {
-        let task_id = record.task_id.as_ref().map(|id| id.0);
-        let tier_str = format!("{:?}", record.agent_tier);
-
-        sqlx::query(
-            r#"
-            INSERT INTO cost_records (
-                id, task_id, agent_id, agent_tier, model_id,
-                input_tokens, output_tokens, cost_usd, timestamp
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            "#,
-        )
-        .bind(record.id)
-        .bind(task_id)
-        .bind(record.agent_id.0)
-        .bind(tier_str)
-        .bind(&record.model_id)
-        .bind(record.input_tokens as i32)
-        .bind(record.output_tokens as i32)
-        .bind(record.cost_usd as f32)
-        .bind(record.timestamp)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| e.to_string())?;
-
-        Ok(())
-    }
-
-    async fn get_cost_records(&self, since: Option<DateTime<Utc>>) -> Result<Vec<CostRecord>, String> {
-        let rows: Vec<CostRecordPgRow> = if let Some(since_time) = since {
-            sqlx::query_as(
-                r#"
-                SELECT id, task_id, agent_id, agent_tier, model_id,
-                       input_tokens, output_tokens, cost_usd, timestamp
-                FROM cost_records
-                WHERE timestamp >= $1
-                ORDER BY timestamp DESC
-                "#,
-            )
-            .bind(since_time)
-            .fetch_all(&self.pool)
-            .await
-            .map_err(|e| e.to_string())?
-        } else {
-            sqlx::query_as(
-                r#"
-                SELECT id, task_id, agent_id, agent_tier, model_id,
-                       input_tokens, output_tokens, cost_usd, timestamp
-                FROM cost_records
-                ORDER BY timestamp DESC
-                "#,
-            )
-            .fetch_all(&self.pool)
-            .await
-            .map_err(|e| e.to_string())?
-        };
-
-        let cost_records: Vec<CostRecord> = rows.into_iter().filter_map(|row| row.try_into().ok()).collect();
-
-        Ok(cost_records)
-    }
-}
-
-#[async_trait]
-impl RefactorRepo for PgRepo {
-    async fn get_active_refactor_session(&self) -> Result<Option<RefactorSession>> {
-        crate::db::get_active_refactor_session(&self.pool).await
-    }
-
-    async fn insert_refactor_session(&self, session: RefactorSession) -> Result<()> {
-        crate::db::insert_refactor_session(&self.pool, &session).await
-    }
-
-    async fn update_refactor_session(&self, session: RefactorSession) -> Result<()> {
-        crate::db::update_refactor_session(&self.pool, &session).await
-    }
-
-    async fn insert_refactor_change(&self, change: RefactorChange) -> Result<()> {
-        crate::db::insert_refactor_change(&self.pool, &change).await
-    }
-
-    async fn update_change_status(&self, id: ChangeId, status: ChangeStatus) -> Result<()> {
-        crate::db::update_change_status(&self.pool, &id, status).await
-    }
-}
-
-/// Database row for cost records (used by CostRepo impl)
-#[derive(Debug, sqlx::FromRow)]
-struct CostRecordPgRow {
-    id: Uuid,
-    task_id: Option<Uuid>,
-    agent_id: Uuid,
-    agent_tier: String,
-    model_id: String,
-    input_tokens: i32,
-    output_tokens: i32,
-    cost_usd: f32,
-    timestamp: DateTime<Utc>,
-}
-
-impl TryFrom<CostRecordPgRow> for CostRecord {
-    type Error = String;
-
-    fn try_from(row: CostRecordPgRow) -> Result<Self, Self::Error> {
-        let agent_tier = match row.agent_tier.as_str() {
-            "Orchestrator" => AgentTier::Orchestrator,
-            "Worker" => AgentTier::Worker,
-            "Utility" => AgentTier::Utility,
-            _ => AgentTier::Worker,
-        };
-
-        Ok(CostRecord {
-            id: row.id,
-            task_id: row.task_id.map(TaskId),
-            agent_id: AgentId(row.agent_id),
-            agent_tier,
-            model_id: row.model_id,
-            input_tokens: row.input_tokens as u32,
-            output_tokens: row.output_tokens as u32,
-            cost_usd: row.cost_usd as f64,
-            timestamp: row.timestamp,
-        })
     }
 }
 
@@ -2388,84 +2261,6 @@ mod tests {
         let fetched = repo.get_user_by_id(user.id).await.unwrap().unwrap();
         assert_eq!(fetched.github_id, Some(github_id));
         assert_eq!(fetched.github_login, Some(github_login.to_string()));
-
-        db.cleanup().await;
-    }
-
-    #[tokio::test]
-    #[ignore = "requires running Postgres"]
-    async fn cost_repo_persist_and_get() {
-        let db = TestDb::new().await;
-        let repo = PgRepo::new(db.pool.clone());
-
-        let record = CostRecord {
-            id: Uuid::new_v4(),
-            task_id: Some(TaskId(Uuid::new_v4())),
-            agent_id: AgentId(Uuid::new_v4()),
-            agent_tier: AgentTier::Worker,
-            model_id: "claude-3-5-sonnet-20241022".to_string(),
-            input_tokens: 1000,
-            output_tokens: 500,
-            cost_usd: 0.015,
-            timestamp: Utc::now(),
-        };
-
-        // Persist cost record
-        repo.persist_cost_record(record.clone()).await.unwrap();
-
-        // Get cost records
-        let records = repo.get_cost_records(None).await.unwrap();
-        assert!(!records.is_empty());
-        assert_eq!(records[0].agent_id, record.agent_id);
-        assert_eq!(records[0].input_tokens, 1000);
-        assert_eq!(records[0].output_tokens, 500);
-
-        db.cleanup().await;
-    }
-
-    #[tokio::test]
-    #[ignore = "requires running Postgres"]
-    async fn cost_repo_get_since_filter() {
-        let db = TestDb::new().await;
-        let repo = PgRepo::new(db.pool.clone());
-
-        let old_time = Utc::now() - chrono::Duration::hours(2);
-        let recent_time = Utc::now();
-
-        // Create old record
-        let old_record = CostRecord {
-            id: Uuid::new_v4(),
-            task_id: None,
-            agent_id: AgentId(Uuid::new_v4()),
-            agent_tier: AgentTier::Worker,
-            model_id: "test-model".to_string(),
-            input_tokens: 100,
-            output_tokens: 50,
-            cost_usd: 0.001,
-            timestamp: old_time,
-        };
-        repo.persist_cost_record(old_record).await.unwrap();
-
-        // Create recent record
-        let recent_record = CostRecord {
-            id: Uuid::new_v4(),
-            task_id: None,
-            agent_id: AgentId(Uuid::new_v4()),
-            agent_tier: AgentTier::Worker,
-            model_id: "test-model".to_string(),
-            input_tokens: 200,
-            output_tokens: 100,
-            cost_usd: 0.002,
-            timestamp: recent_time,
-        };
-        repo.persist_cost_record(recent_record.clone()).await.unwrap();
-
-        // Get records since 1 hour ago (should only get recent)
-        let since = Utc::now() - chrono::Duration::hours(1);
-        let records = repo.get_cost_records(Some(since)).await.unwrap();
-
-        // Should only contain the recent record
-        assert!(records.iter().any(|r| r.id == recent_record.id));
 
         db.cleanup().await;
     }
