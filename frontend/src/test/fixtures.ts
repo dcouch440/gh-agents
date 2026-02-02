@@ -12,6 +12,7 @@ import type { CostResponse } from '@/types/cost'
 import type { Result } from '@/types/result'
 import type { PromptTemplate } from '@/types/template'
 import type { OutputSchema } from '@/types/schema'
+import type { Workflow, WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 
 export const mockAgent: Agent = {
   id: 'agent-001',
@@ -238,6 +239,41 @@ export const mockResult: Result = {
   agent_execution_id: 'exec-001',
   output: 'Task completed successfully',
   structured_output: { status: 'success' },
+  created_at: '2025-01-01T00:00:00Z',
+}
+
+export const mockWorkflow: Workflow = {
+  id: 'workflow-001',
+  user_id: 'user-001',
+  name: 'Test Workflow',
+  description: 'A test workflow',
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
+}
+
+export const mockWorkflowStep: WorkflowStep = {
+  id: 'step-001',
+  workflow_id: 'workflow-001',
+  name: 'First Step',
+  description: 'The first step',
+  step_type: 'llm',
+  agent_id: 'agent-001',
+  prompt_template_id: null,
+  output_schema_id: null,
+  for_each_label_field: null,
+  config: null,
+  position_x: 0,
+  position_y: 0,
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
+}
+
+export const mockWorkflowEdge: WorkflowStepEdge = {
+  id: 'edge-001',
+  workflow_id: 'workflow-001',
+  from_step_id: 'step-001',
+  to_step_id: 'step-002',
+  condition: null,
   created_at: '2025-01-01T00:00:00Z',
 }
 

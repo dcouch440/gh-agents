@@ -1,16 +1,21 @@
 import { renderHook, act, waitFor } from '@testing-library/react'
-import { useApproveGate, useRenderStage, useSideTasks } from './usePipelineMutations'
-import { mockTask } from '@/test/fixtures'
+import { useApproveGate, useRenderStage, useSideTasks, useCreatePipeline, useDeletePipeline } from './usePipelineMutations'
+import { mockTask, mockPipeline } from '@/test/fixtures'
 
 const { mockPost, mockGet, mockDel } = vi.hoisted(() => ({
   mockPost: vi.fn(), mockGet: vi.fn(), mockDel: vi.fn(),
 }))
+
+const mockReload = vi.fn()
 
 vi.mock('@/api', () => ({ api: { post: mockPost, get: mockGet, del: mockDel } }))
 vi.mock('@/constants', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('@/constants')
   return { ...actual, USE_MOCK_DATA: false }
 })
+vi.mock('@/hooks/usePipelineContext', () => ({
+  usePipelineContext: () => ({ reload: mockReload }),
+}))
 
 describe('usePipelineMutations', () => {
   beforeEach(() => {
@@ -229,6 +234,64 @@ describe('usePipelineMutations', () => {
       await waitFor(() => {
         expect(result.current.loading).toBe(false)
       })
+    })
+  })
+
+  describe('useCreatePipeline', () => {
+    it('creates a pipeline and calls reload', async () => {
+      mockPost.mockResolvedValue(mockPipeline)
+      const { result } = renderHook(() => useCreatePipeline())
+
+      let pipeline: unknown
+      await act(async () => {
+        pipeline = await result.current.mutate({ name: 'Test pipeline', stages: [] })
+      })
+
+      expect(pipeline).toEqual(mockPipeline)
+      expect(mockPost).toHaveBeenCalledWith('/pipelines', { name: 'Test pipeline', stages: [] })
+      expect(mockReload).toHaveBeenCalledOnce()
+      expect(result.current.loading).toBe(false)
+      expect(result.current.error).toBeNull()
+    })
+
+    it('sets error and throws on failure', async () => {
+      mockPost.mockRejectedValue(new Error('Create failed'))
+      const { result } = renderHook(() => useCreatePipeline())
+
+      await act(async () => {
+        await expect(result.current.mutate({ name: 'Test', stages: [] })).rejects.toThrow('Create failed')
+      })
+
+      expect(result.current.error).toBe('Create failed')
+      expect(result.current.loading).toBe(false)
+    })
+  })
+
+  describe('useDeletePipeline', () => {
+    it('deletes a pipeline and calls reload', async () => {
+      mockDel.mockResolvedValue(undefined)
+      const { result } = renderHook(() => useDeletePipeline())
+
+      await act(async () => {
+        await result.current.mutate('pipeline-001')
+      })
+
+      expect(mockDel).toHaveBeenCalledWith('/pipelines/pipeline-001')
+      expect(mockReload).toHaveBeenCalledOnce()
+      expect(result.current.loading).toBe(false)
+      expect(result.current.error).toBeNull()
+    })
+
+    it('sets error and throws on failure', async () => {
+      mockDel.mockRejectedValue(new Error('Delete failed'))
+      const { result } = renderHook(() => useDeletePipeline())
+
+      await act(async () => {
+        await expect(result.current.mutate('pipeline-001')).rejects.toThrow('Delete failed')
+      })
+
+      expect(result.current.error).toBe('Delete failed')
+      expect(result.current.loading).toBe(false)
     })
   })
 })
