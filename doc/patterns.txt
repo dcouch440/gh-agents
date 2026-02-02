@@ -99,5 +99,26 @@ In the codebase at /Users/davidcouch/Dev/gh-agents, I need to understand which t
                                                                                                                              
      Search(pattern: "use.*llm::cost", path: "src/llm")                                                                      
                                                                                                                              
-     Search(pattern: "CostRepo", path: "src/llm")                     
-      
+     Search(pattern: "CostRepo", path: "src/llm")
+
+---
+
+## Router Design Notes (2026-02-01)
+
+The first router system prompt should follow this pattern:
+
+```
+SYSTEM:
+Tools you can use:
+{tool configs in a line for the agent}
+
+You are a tool router. Please use the chat history presented in front of you,
+the last question asked, and the agent's added context to route the tool
+request to the appropriate tool.
+```
+
+Key points:
+- Tool configs are injected as compact one-liners (not full JSON schemas)
+- The router sees: chat history + last question + agent context
+- Routes tool requests, not general queries
+- This will be used with RouterStrategy (single-round, no tool_use, temp=0.0)
