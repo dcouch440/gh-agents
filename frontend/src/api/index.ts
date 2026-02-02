@@ -1,5 +1,5 @@
 // Main API export with both low-level methods and typed endpoints
-export { api } from './endpoints'
+export { api } from './api'
 
 // Additional exports from client
 export { ApiError, configure, addInterceptor, cancelInFlightRequests } from './client'
