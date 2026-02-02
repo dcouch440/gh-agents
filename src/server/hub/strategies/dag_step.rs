@@ -134,7 +134,7 @@ impl ExecutionStrategy for DagStepStrategy {
     async fn on_complete(&self, response: &str, usage: &TokenUsage) -> Result<(), HubError> {
         // Record token usage to ledger
         if let Some(tl_repo) = &self.state.token_ledger_repo {
-            let cost = compute_cost(
+            let cost = super::compute_cost(
                 &self.config.agent.model_id,
                 usage.input_tokens as i64,
                 usage.output_tokens as i64,
@@ -142,7 +142,7 @@ impl ExecutionStrategy for DagStepStrategy {
             let _ = tl_repo
                 .insert_ledger_entry(
                     self.config.user_id,
-                    self.config.agent_execution_id,
+                    Some(self.config.agent_execution_id),
                     &self.config.agent.model_id,
                     usage.input_tokens as i64,
                     usage.output_tokens as i64,
@@ -154,20 +154,12 @@ impl ExecutionStrategy for DagStepStrategy {
         // Update agent_execution with final status
         if let Some(ae_repo) = &self.state.agent_execution_repo {
             let structured = parse_structured_output(response);
-            let cost = compute_cost(
-                &self.config.agent.model_id,
-                usage.input_tokens as i64,
-                usage.output_tokens as i64,
-            );
             let _ = ae_repo
                 .update_agent_execution_status(
                     self.config.agent_execution_id,
                     "completed",
                     Some(response.to_string()),
                     structured,
-                    usage.input_tokens as i64,
-                    usage.output_tokens as i64,
-                    cost,
                 )
                 .await;
         }
@@ -183,26 +175,8 @@ impl DagStepStrategy {
     }
 }
 
-/// Approximate cost computation per model.
-pub fn compute_cost(model_id: &str, input_tokens: i64, output_tokens: i64) -> f32 {
-    let (input_rate, output_rate) = if model_id.contains("opus") {
-        (15.0_f32, 75.0_f32)
-    } else if model_id.contains("sonnet") {
-        (3.0, 15.0)
-    } else if model_id.contains("haiku") {
-        (0.25, 1.25)
-    } else if model_id.contains("gpt-4o") {
-        (2.5, 10.0)
-    } else if model_id.contains("gpt-4") {
-        (30.0, 60.0)
-    } else {
-        (1.0, 3.0)
-    };
-
-    let input_cost = (input_tokens as f32 / 1_000_000.0) * input_rate;
-    let output_cost = (output_tokens as f32 / 1_000_000.0) * output_rate;
-    input_cost + output_cost
-}
+/// Re-export compute_cost from the parent module for backward compatibility.
+pub use super::compute_cost;
 
 /// Try to parse JSON from the LLM's final response.
 fn parse_structured_output(content: &str) -> Option<Value> {

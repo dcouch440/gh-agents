@@ -397,9 +397,6 @@ pub trait AgentExecutionRepo: Send + Sync {
         status: &str,
         output: Option<String>,
         structured_output: Option<serde_json::Value>,
-        input_tokens: i64,
-        output_tokens: i64,
-        cost_usd: f32,
     ) -> Result<AgentExecutionRow>;
 
     // --- Execution Messages ---
@@ -425,7 +422,7 @@ pub struct ModelSpendRow {
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait TokenLedgerRepo: Send + Sync {
-    async fn insert_ledger_entry(&self, user_id: Uuid, agent_execution_id: Uuid, model_id: &str, input_tokens: i64, output_tokens: i64, cost_usd: f32) -> Result<TokenLedgerRow>;
+    async fn insert_ledger_entry(&self, user_id: Uuid, agent_execution_id: Option<Uuid>, model_id: &str, input_tokens: i64, output_tokens: i64, cost_usd: f32) -> Result<TokenLedgerRow>;
     async fn get_user_spend(&self, user_id: Uuid, since: Option<DateTime<Utc>>) -> Result<f64>;
     async fn get_run_spend(&self, run_id: Uuid) -> Result<f64>;
     async fn get_model_breakdown(&self, user_id: Uuid, since: Option<DateTime<Utc>>) -> Result<Vec<ModelSpendRow>>;

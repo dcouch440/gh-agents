@@ -1414,20 +1414,14 @@ impl AgentExecutionRepo for PgRepo {
         status: &str,
         output: Option<String>,
         structured_output: Option<serde_json::Value>,
-        input_tokens: i64,
-        output_tokens: i64,
-        cost_usd: f32,
     ) -> Result<AgentExecutionRow> {
         let row = sqlx::query_as::<_, AgentExecutionRow>(
-            "UPDATE agent_executions SET status = $2, output = COALESCE($3, output), structured_output = COALESCE($4, structured_output), input_tokens = $5, output_tokens = $6, cost_usd = $7, completed_at = CASE WHEN $2 IN ('completed', 'failed', 'cancelled') THEN NOW() ELSE completed_at END WHERE id = $1 RETURNING *",
+            "UPDATE agent_executions SET status = $2, output = COALESCE($3, output), structured_output = COALESCE($4, structured_output), completed_at = CASE WHEN $2 IN ('completed', 'failed', 'cancelled') THEN NOW() ELSE completed_at END WHERE id = $1 RETURNING *",
         )
         .bind(id)
         .bind(status)
         .bind(output)
         .bind(structured_output)
-        .bind(input_tokens)
-        .bind(output_tokens)
-        .bind(cost_usd)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -1459,7 +1453,7 @@ impl AgentExecutionRepo for PgRepo {
 
 #[async_trait]
 impl TokenLedgerRepo for PgRepo {
-    async fn insert_ledger_entry(&self, user_id: Uuid, agent_execution_id: Uuid, model_id: &str, input_tokens: i64, output_tokens: i64, cost_usd: f32) -> Result<TokenLedgerRow> {
+    async fn insert_ledger_entry(&self, user_id: Uuid, agent_execution_id: Option<Uuid>, model_id: &str, input_tokens: i64, output_tokens: i64, cost_usd: f32) -> Result<TokenLedgerRow> {
         let row =
             sqlx::query_as::<_, TokenLedgerRow>("INSERT INTO token_ledger (user_id, agent_execution_id, model_id, input_tokens, output_tokens, cost_usd) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *")
                 .bind(user_id)

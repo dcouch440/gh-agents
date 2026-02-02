@@ -7,6 +7,8 @@ use async_trait::async_trait;
 use serde_json::Value;
 
 use crate::llm::{Message, TokenUsage, Tool};
+use crate::server::state::AppState;
+use crate::types::UserId;
 
 use super::super::error::HubError;
 use super::super::strategy::ExecutionStrategy;
@@ -17,6 +19,9 @@ pub struct RouterConfig {
     pub system_prompt: String,
     /// The model to use for routing decisions.
     pub model_id: String,
+    /// Optional state + user for token ledger writes.
+    pub state: Option<AppState>,
+    pub user_id: Option<UserId>,
 }
 
 /// Strategy for tool routing — single LLM call that outputs a JSON decision.
@@ -73,8 +78,27 @@ impl ExecutionStrategy for RouterStrategy {
         serde_json::json!({"error": "router does not execute tools"})
     }
 
-    async fn on_complete(&self, _response: &str, _usage: &TokenUsage) -> Result<(), HubError> {
-        // Logging and request tracking are handled by the caller (RouterService)
+    async fn on_complete(&self, _response: &str, usage: &TokenUsage) -> Result<(), HubError> {
+        // Record token usage to ledger if state is available
+        if let (Some(state), Some(user_id)) = (&self.config.state, &self.config.user_id) {
+            if let Some(tl_repo) = &state.token_ledger_repo {
+                let cost = super::compute_cost(
+                    &self.config.model_id,
+                    usage.input_tokens as i64,
+                    usage.output_tokens as i64,
+                );
+                let _ = tl_repo
+                    .insert_ledger_entry(
+                        user_id.0,
+                        None,
+                        &self.config.model_id,
+                        usage.input_tokens as i64,
+                        usage.output_tokens as i64,
+                        cost,
+                    )
+                    .await;
+            }
+        }
         Ok(())
     }
 }
@@ -90,6 +114,8 @@ mod tests {
         let strategy = RouterStrategy::new(RouterConfig {
             system_prompt: "You are a router.".into(),
             model_id: "claude-3-haiku".into(),
+            state: None,
+            user_id: None,
         });
 
         assert_eq!(strategy.system_prompt(), "You are a router.");
@@ -105,6 +131,8 @@ mod tests {
         let strategy = RouterStrategy::new(RouterConfig {
             system_prompt: "route".into(),
             model_id: "m".into(),
+            state: None,
+            user_id: None,
         });
 
         let messages = strategy.build_messages("route this intent").await.unwrap();
@@ -117,6 +145,8 @@ mod tests {
         let strategy = RouterStrategy::new(RouterConfig {
             system_prompt: "route".into(),
             model_id: "m".into(),
+            state: None,
+            user_id: None,
         });
 
         let usage = TokenUsage {
