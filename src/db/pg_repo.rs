@@ -631,18 +631,16 @@ impl ServerRepo for PgRepo {
     // --- Tool persistence ---
 
     async fn list_tools(&self, user_id: UserId) -> Result<Vec<ToolRow>> {
-        let rows = sqlx::query_as::<_, PgToolRow>(
-            "SELECT id, name, description, category, parameter_schema, output_schema, enabled, cluster_id, is_builtin FROM tools WHERE user_id = $1 ORDER BY category, name",
-        )
-        .bind(user_id.0)
-        .fetch_all(&self.pool)
-        .await?;
+        let rows = sqlx::query_as::<_, PgToolRow>("SELECT id, user_id, name, display_name, description, parameters, created_at FROM tools WHERE user_id = $1 ORDER BY name")
+            .bind(user_id.0)
+            .fetch_all(&self.pool)
+            .await?;
 
         Ok(rows.into_iter().map(tool_row_from_pg).collect())
     }
 
     async fn get_tool(&self, tool_id: Uuid) -> Result<Option<ToolRow>> {
-        let row = sqlx::query_as::<_, PgToolRow>("SELECT id, name, description, category, parameter_schema, output_schema, enabled, cluster_id, is_builtin FROM tools WHERE id = $1")
+        let row = sqlx::query_as::<_, PgToolRow>("SELECT id, user_id, name, display_name, description, parameters, created_at FROM tools WHERE id = $1")
             .bind(tool_id)
             .fetch_optional(&self.pool)
             .await?;
@@ -653,42 +651,34 @@ impl ServerRepo for PgRepo {
     async fn upsert_tool(&self, user_id: UserId, tool: ToolRow) -> Result<()> {
         sqlx::query(
             r#"
-            INSERT INTO tools (id, user_id, name, description, category, parameter_schema, output_schema, enabled, cluster_id, is_builtin)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            INSERT INTO tools (id, user_id, name, display_name, description, parameters)
+            VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
+                display_name = EXCLUDED.display_name,
                 description = EXCLUDED.description,
-                category = EXCLUDED.category,
-                parameter_schema = EXCLUDED.parameter_schema,
-                output_schema = EXCLUDED.output_schema,
-                enabled = EXCLUDED.enabled,
-                cluster_id = EXCLUDED.cluster_id,
-                is_builtin = EXCLUDED.is_builtin
+                parameters = EXCLUDED.parameters
         "#,
         )
         .bind(tool.id)
         .bind(user_id.0)
         .bind(&tool.name)
+        .bind(&tool.display_name)
         .bind(&tool.description)
-        .bind(&tool.category)
-        .bind(&tool.parameter_schema)
-        .bind(&tool.output_schema)
-        .bind(tool.enabled)
-        .bind(tool.cluster_id)
-        .bind(tool.is_builtin)
+        .bind(&tool.parameters)
         .execute(&self.pool)
         .await?;
         Ok(())
     }
 
     async fn delete_tool(&self, tool_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM tools WHERE id = $1 AND is_builtin = false").bind(tool_id).execute(&self.pool).await?;
+        sqlx::query("DELETE FROM tools WHERE id = $1").bind(tool_id).execute(&self.pool).await?;
         Ok(())
     }
 
     async fn get_agent_tools(&self, agent_id: Uuid) -> Result<Vec<ToolRow>> {
         let rows = sqlx::query_as::<_, PgToolRow>(
-            "SELECT t.id, t.name, t.description, t.category, t.parameter_schema, t.output_schema, t.enabled, t.cluster_id, t.is_builtin FROM tools t INNER JOIN agent_tools at ON t.id = at.tool_id WHERE at.agent_id = $1 ORDER BY t.category, t.name",
+            "SELECT t.id, t.user_id, t.name, t.display_name, t.description, t.parameters, t.created_at FROM tools t INNER JOIN agent_tools at ON t.id = at.tool_id WHERE at.agent_id = $1 ORDER BY t.name",
         )
         .bind(agent_id)
         .fetch_all(&self.pool)
@@ -718,21 +708,17 @@ impl ServerRepo for PgRepo {
         for tool in crate::agents::execution_tools::builtin_tool_rows() {
             sqlx::query(
                 r#"
-                INSERT INTO tools (id, user_id, name, description, category, parameter_schema, output_schema, enabled, cluster_id, is_builtin)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                INSERT INTO tools (id, user_id, name, display_name, description, parameters)
+                VALUES ($1, $2, $3, $4, $5, $6)
                 ON CONFLICT (user_id, name) DO NOTHING
             "#,
             )
             .bind(tool.id)
             .bind(user_id.0)
             .bind(&tool.name)
+            .bind(&tool.display_name)
             .bind(&tool.description)
-            .bind(&tool.category)
-            .bind(&tool.parameter_schema)
-            .bind(&tool.output_schema)
-            .bind(tool.enabled)
-            .bind(tool.cluster_id)
-            .bind(tool.is_builtin)
+            .bind(&tool.parameters)
             .execute(&self.pool)
             .await?;
         }
@@ -1378,27 +1364,23 @@ fn agent_row_from_pg(r: PgAgentRow) -> AgentRow {
 #[derive(sqlx::FromRow)]
 struct PgToolRow {
     id: Uuid,
+    user_id: Uuid,
     name: String,
+    display_name: String,
     description: String,
-    category: String,
-    parameter_schema: serde_json::Value,
-    output_schema: serde_json::Value,
-    enabled: bool,
-    cluster_id: Option<Uuid>,
-    is_builtin: bool,
+    parameters: serde_json::Value,
+    created_at: chrono::DateTime<chrono::Utc>,
 }
 
 fn tool_row_from_pg(r: PgToolRow) -> ToolRow {
     ToolRow {
         id: r.id,
+        user_id: r.user_id,
         name: r.name,
+        display_name: r.display_name,
         description: r.description,
-        category: r.category,
-        parameter_schema: r.parameter_schema,
-        output_schema: r.output_schema,
-        enabled: r.enabled,
-        cluster_id: r.cluster_id,
-        is_builtin: r.is_builtin,
+        parameters: r.parameters,
+        created_at: r.created_at,
     }
 }
 

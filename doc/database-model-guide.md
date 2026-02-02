@@ -1,6 +1,6 @@
 # Nexor Database Model Guide
 
-19 tables across 3 layers:
+21 tables across 3 layers:
 
 - **Definition** — what the user builds (agents, schemas, workflows, pipelines, documents, prompt templates)
 - **Wiring** — how things connect (steps, edges, stage members, step documents)
@@ -14,8 +14,10 @@
 DEFINITION LAYER (user creates and reuses)
 ===========================================
 
-  agents              output_schemas        prompt_templates       documents
-  (who)               (output shape)        (reusable prompts)     (attachable context)
+  agents              output_schemas        prompt_templates       documents        tools
+  (who)               (output shape)        (reusable prompts)     (attachable context) (callable actions)
+    │                                                                                    │
+    └────────────────────────── agent_tools (N tools per agent) ─────────────────────────┘
     │                      │                      │                      │
     │                      │                      │                      │
     ▼                      ▼                      ▼                      ▼
@@ -49,6 +51,8 @@ EXECUTION LAYER (runtime records)
 ---
 
 ## Schema
+
+> **21 tables** after migration 046 added `tools` and `agent_tools`.
 
 ---
 
@@ -229,7 +233,58 @@ User-created documents that can be attached to workflow steps as additional cont
 
 ---
 
-### 7. workflows
+### 7. tools
+
+```sql
+tools (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    name TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    parameters JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (user_id, name)
+)
+-- idx_tools_user(user_id)
+```
+
+Metadata for hardcoded tool implementations. The `name` field is the machine key used to match against the `execute_execution_tool` dispatch table. The `description` and `parameters` are sent to the LLM in the `tools` array. The `display_name` is shown in the UI.
+
+Tools are optional on agents. If an agent has no tools assigned, the LLM is called once with no tool definitions. If tools are assigned, the DAG executor runs a react loop (up to 15 rounds) — the LLM can call tools and receive results until it produces a final answer.
+
+| Column | Purpose |
+|--------|---------|
+| `id` | Referenced by agent_tools. |
+| `user_id` | Owner. Tools are per-user so descriptions can be customized. |
+| `name` | Machine key matching the hardcoded dispatch (`read_file`, `write_file`, etc.). Unique per user. Immutable in practice — changing it breaks the dispatch. |
+| `display_name` | Human-readable label for the UI (e.g. "Read File", "Git Status"). Editable. |
+| `description` | Sent to the LLM to explain what the tool does. Editable — tweak how the LLM understands the tool without recompiling. |
+| `parameters` | JSON Schema describing the tool's input parameters. Sent to the LLM. |
+
+---
+
+### 8. agent_tools
+
+```sql
+agent_tools (
+    agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    tool_id UUID NOT NULL REFERENCES tools(id) ON DELETE CASCADE,
+    PRIMARY KEY (agent_id, tool_id)
+)
+-- idx_agent_tools_tool(tool_id)
+```
+
+Join table linking agents to their available tools. At execution time, the DAG executor queries this to build the `tools` array for the LLM request.
+
+| Column | Purpose |
+|--------|---------|
+| `agent_id` | Which agent has access to this tool. |
+| `tool_id` | Which tool is available. |
+
+---
+
+### 9. workflows
 
 ```sql
 workflows (
@@ -699,6 +754,8 @@ Saved structured outputs from agent executions. Promoted to a standalone entity 
 ```
 users
   ├── agents                              (reusable LLM agent templates)
+  │     └── agent_tools                  (N tools per agent)
+  ├── tools                               (tool metadata — name, description, parameters)
   ├── output_schemas                      (reusable structured output shapes)
   ├── prompt_templates                    (reusable prompt text with {variable} refs)
   ├── documents                           (attachable context — PRDs, specs, conventions)
@@ -735,7 +792,7 @@ When the runtime encounters a `{variable}` reference in a prompt template, it re
 
 ---
 
-## Table Count: 19
+## Table Count: 21
 
 | # | Table | Layer | Purpose |
 |---|-------|-------|---------|
@@ -745,16 +802,18 @@ When the runtime encounters a `{variable}` reference in a prompt template, it re
 | 4 | output_schemas | Definition | Reusable output shapes |
 | 5 | prompt_templates | Definition | Reusable prompt text |
 | 6 | documents | Definition | Attachable context documents |
-| 7 | workflows | Definition | Reusable execution DAGs |
-| 8 | workflow_steps | Wiring | DAG nodes |
-| 9 | workflow_step_edges | Wiring | DAG edges |
-| 10 | step_documents | Wiring | Document attachments per step |
-| 11 | pipelines | Definition | Stage sequences |
-| 12 | pipeline_stages | Wiring | Ordered stages |
-| 13 | pipeline_stage_members | Wiring | Workflows per stage |
-| 14 | pipeline_runs | Execution | Pipeline run instance |
-| 15 | stage_executions | Execution | Workflow execution per stage |
-| 16 | agent_executions | Execution | LLM invocation record |
-| 17 | execution_messages | Execution | Full LLM conversation |
-| 18 | token_ledger | Execution | Cost tracking |
-| 19 | results | Execution | Saved structured outputs |
+| 7 | tools | Definition | Tool metadata (name, description, parameters) |
+| 8 | agent_tools | Wiring | Which tools each agent can use |
+| 9 | workflows | Definition | Reusable execution DAGs |
+| 10 | workflow_steps | Wiring | DAG nodes |
+| 11 | workflow_step_edges | Wiring | DAG edges |
+| 12 | step_documents | Wiring | Document attachments per step |
+| 13 | pipelines | Definition | Stage sequences |
+| 14 | pipeline_stages | Wiring | Ordered stages |
+| 15 | pipeline_stage_members | Wiring | Workflows per stage |
+| 16 | pipeline_runs | Execution | Pipeline run instance |
+| 17 | stage_executions | Execution | Workflow execution per stage |
+| 18 | agent_executions | Execution | LLM invocation record |
+| 19 | execution_messages | Execution | Full LLM conversation |
+| 20 | token_ledger | Execution | Cost tracking |
+| 21 | results | Execution | Saved structured outputs |

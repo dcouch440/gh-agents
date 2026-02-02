@@ -223,17 +223,15 @@ pub async fn route_to_cluster_agent(
 mod tests {
     use super::*;
 
-    fn make_tool(name: &str, cluster_id: Uuid) -> ToolRow {
+    fn make_tool(name: &str, _cluster_id: Uuid) -> ToolRow {
         ToolRow {
             id: Uuid::new_v4(),
+            user_id: Uuid::nil(),
             name: name.to_string(),
+            display_name: name.to_string(),
             description: format!("{} tool", name),
-            category: "test".to_string(),
-            parameter_schema: json!({}),
-            output_schema: json!({}),
-            enabled: true,
-            cluster_id: Some(cluster_id),
-            is_builtin: false,
+            parameters: json!({}),
+            created_at: chrono::Utc::now(),
         }
     }
 

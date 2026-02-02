@@ -339,13 +339,9 @@ pub async fn delete_agent(State(state): State<AppState>, _auth: auth::AuthUser, 
 pub struct ToolResponse {
     pub id: String,
     pub name: String,
+    pub display_name: String,
     pub description: String,
-    pub category: String,
-    pub parameter_schema: serde_json::Value,
-    pub output_schema: serde_json::Value,
-    pub enabled: bool,
-    pub cluster_id: Option<String>,
-    pub is_builtin: bool,
+    pub parameters: serde_json::Value,
 }
 
 impl ToolResponse {
@@ -353,13 +349,9 @@ impl ToolResponse {
         Self {
             id: row.id.to_string(),
             name: row.name,
+            display_name: row.display_name,
             description: row.description,
-            category: row.category,
-            parameter_schema: row.parameter_schema,
-            output_schema: row.output_schema,
-            enabled: row.enabled,
-            cluster_id: row.cluster_id.map(|id| id.to_string()),
-            is_builtin: row.is_builtin,
+            parameters: row.parameters,
         }
     }
 }
@@ -368,24 +360,18 @@ impl ToolResponse {
 #[derive(Deserialize)]
 pub struct CreateToolRequest {
     pub name: String,
+    pub display_name: Option<String>,
     pub description: Option<String>,
-    pub category: Option<String>,
-    pub parameter_schema: Option<serde_json::Value>,
-    pub output_schema: Option<serde_json::Value>,
-    pub enabled: Option<bool>,
-    pub cluster_id: Option<String>,
+    pub parameters: Option<serde_json::Value>,
 }
 
 /// Request to update an existing tool
 #[derive(Deserialize)]
 pub struct UpdateToolRequest {
     pub name: Option<String>,
+    pub display_name: Option<String>,
     pub description: Option<String>,
-    pub category: Option<String>,
-    pub parameter_schema: Option<serde_json::Value>,
-    pub output_schema: Option<serde_json::Value>,
-    pub enabled: Option<bool>,
-    pub cluster_id: Option<String>,
+    pub parameters: Option<serde_json::Value>,
 }
 
 /// Request to set tools for an agent
@@ -415,18 +401,17 @@ pub async fn create_tool(State(state): State<AppState>, auth: auth::AuthUser, Js
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let cluster_id = request.cluster_id.as_deref().map(Uuid::parse_str).transpose().map_err(|_| StatusCode::BAD_REQUEST)?;
+    let name = request.name.trim().to_string();
+    let display_name = request.display_name.unwrap_or_else(|| name.clone());
 
     let row = crate::db::ToolRow {
         id: Uuid::new_v4(),
-        name: request.name.trim().to_string(),
+        user_id: auth.user_id.0,
+        name,
+        display_name,
         description: request.description.unwrap_or_default(),
-        category: request.category.unwrap_or_else(|| "general".to_string()),
-        parameter_schema: request.parameter_schema.unwrap_or_else(|| serde_json::json!({})),
-        output_schema: request.output_schema.unwrap_or_else(|| serde_json::json!({})),
-        enabled: request.enabled.unwrap_or(true),
-        cluster_id,
-        is_builtin: false,
+        parameters: request.parameters.unwrap_or_else(|| serde_json::json!({})),
+        created_at: chrono::Utc::now(),
     };
 
     state.repo.upsert_tool(auth.user_id, row.clone()).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -445,21 +430,14 @@ pub async fn get_tool(State(state): State<AppState>, _auth: auth::AuthUser, Path
 pub async fn update_tool(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>, Json(request): Json<UpdateToolRequest>) -> Result<Json<ToolResponse>, StatusCode> {
     let existing = state.repo.get_tool(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
-    let cluster_id = match &request.cluster_id {
-        Some(cid) => Some(Uuid::parse_str(cid).map_err(|_| StatusCode::BAD_REQUEST)?),
-        None => existing.cluster_id,
-    };
-
     let updated = crate::db::ToolRow {
         id: existing.id,
+        user_id: existing.user_id,
         name: request.name.unwrap_or(existing.name),
+        display_name: request.display_name.unwrap_or(existing.display_name),
         description: request.description.unwrap_or(existing.description),
-        category: request.category.unwrap_or(existing.category),
-        parameter_schema: request.parameter_schema.unwrap_or(existing.parameter_schema),
-        output_schema: request.output_schema.unwrap_or(existing.output_schema),
-        enabled: request.enabled.unwrap_or(existing.enabled),
-        cluster_id,
-        is_builtin: existing.is_builtin,
+        parameters: request.parameters.unwrap_or(existing.parameters),
+        created_at: existing.created_at,
     };
 
     state.repo.upsert_tool(auth.user_id, updated.clone()).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -4743,7 +4721,7 @@ mod tests {
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
                     .body(Body::from(
-                        r#"{"name":"read_file","description":"Read a file","category":"file","parameter_schema":{"type":"object"},"output_schema":{"type":"object"}}"#,
+                        r#"{"name":"read_file","display_name":"Read File","description":"Read a file","parameters":{"type":"object"}}"#,
                     ))
                     .unwrap(),
             )
@@ -4754,8 +4732,7 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let tool: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(tool["name"], "read_file");
-        assert_eq!(tool["category"], "file");
-        assert_eq!(tool["enabled"], true);
+        assert_eq!(tool["display_name"], "Read File");
     }
 
     #[tokio::test]
@@ -4883,7 +4860,7 @@ mod tests {
                     .uri("/api/tools")
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(r#"{"name":"write_file","description":"Write a file","category":"file"}"#))
+                    .body(Body::from(r#"{"name":"write_file","description":"Write a file"}"#))
                     .unwrap(),
             )
             .await
@@ -4900,7 +4877,7 @@ mod tests {
                     .uri(format!("/api/tools/{}", tool_id))
                     .header("content-type", "application/json")
                     .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(r#"{"description":"Write content to a file","enabled":false}"#))
+                    .body(Body::from(r#"{"description":"Write content to a file"}"#))
                     .unwrap(),
             )
             .await
@@ -4910,7 +4887,6 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let tool: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(tool["description"], "Write content to a file");
-        assert_eq!(tool["enabled"], false);
         assert_eq!(tool["name"], "write_file");
     }
 
