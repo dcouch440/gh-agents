@@ -398,6 +398,7 @@ mod tests {
                 interactive_agent_id: None,
                 for_each_label_field: None,
                 display_order: 0,
+                version: 1,
             },
             WorkflowStepRow {
                 id: s2,
@@ -412,6 +413,7 @@ mod tests {
                 interactive_agent_id: None,
                 for_each_label_field: None,
                 display_order: 1,
+                version: 1,
             },
         ];
         let edges = vec![WorkflowStepEdgeRow {
@@ -434,14 +436,14 @@ mod tests {
                 execution_mode: "single".into(), for_each_ref: None,
                 prompt_template_id: None, prompt_template: "p".into(),
                 output_schema_id: None, output_variable_name: None,
-                interactive_agent_id: None, for_each_label_field: None, display_order: 0,
+                interactive_agent_id: None, for_each_label_field: None, display_order: 0, version: 1,
             },
             WorkflowStepRow {
                 id: s2, workflow_id: Uuid::new_v4(), agent_id: Uuid::new_v4(),
                 execution_mode: "single".into(), for_each_ref: None,
                 prompt_template_id: None, prompt_template: "p".into(),
                 output_schema_id: None, output_variable_name: None,
-                interactive_agent_id: None, for_each_label_field: None, display_order: 1,
+                interactive_agent_id: None, for_each_label_field: None, display_order: 1, version: 1,
             },
         ];
         let edges = vec![

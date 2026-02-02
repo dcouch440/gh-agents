@@ -418,7 +418,7 @@ pub async fn get_password(pool: &PgPool) -> Result<Option<String>> {
 /// Note: This replaces the old `list_tools_by_cluster` function.
 /// Cluster-based tool lookup is no longer supported.
 pub async fn list_tools_for_user(pool: &PgPool, user_id: Uuid) -> Result<Vec<super::ToolRow>> {
-    let rows: Vec<ToolRowDb> = sqlx::query_as("SELECT id, user_id, name, display_name, description, parameters, created_at FROM tools WHERE user_id = $1 ORDER BY name")
+    let rows: Vec<ToolRowDb> = sqlx::query_as("SELECT id, user_id, name, display_name, description, parameters, created_at, version FROM tools WHERE user_id = $1 ORDER BY name")
         .bind(user_id)
         .fetch_all(pool)
         .await
@@ -434,6 +434,7 @@ pub async fn list_tools_for_user(pool: &PgPool, user_id: Uuid) -> Result<Vec<sup
             description: r.description,
             parameters: r.parameters,
             created_at: r.created_at,
+            version: r.version,
         })
         .collect())
 }
@@ -447,6 +448,7 @@ struct ToolRowDb {
     description: String,
     parameters: serde_json::Value,
     created_at: chrono::DateTime<chrono::Utc>,
+    version: i32,
 }
 
 /// List all clusters (tools are no longer cluster-scoped).
@@ -498,12 +500,13 @@ pub struct AgentModeRow {
     pub tool_overrides: Option<Vec<String>>,
     pub classifier_hint: String,
     pub created_at: DateTime<Utc>,
+    pub version: i32,
 }
 
 /// List all modes for an agent.
 pub async fn list_agent_modes(pool: &PgPool, agent_id: Uuid) -> Result<Vec<AgentModeRow>> {
     let rows: Vec<AgentModeRow> = sqlx::query_as(
-        "SELECT id, agent_id, name, system_prompt_suffix, temperature_override, model_override, tool_overrides, classifier_hint, created_at FROM agent_modes WHERE agent_id = $1 ORDER BY name",
+        "SELECT id, agent_id, name, system_prompt_suffix, temperature_override, model_override, tool_overrides, classifier_hint, created_at, version FROM agent_modes WHERE agent_id = $1 ORDER BY name",
     )
     .bind(agent_id)
     .fetch_all(pool)
