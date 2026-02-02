@@ -197,6 +197,7 @@ pub struct AgentResponse {
     pub model_max_tokens: i32,
     pub model_temperature: f32,
     pub status: String,
+    pub version: i32,
 }
 
 impl AgentResponse {
@@ -212,6 +213,7 @@ impl AgentResponse {
             model_max_tokens: row.model_max_tokens,
             model_temperature: row.model_temperature,
             status: row.status.unwrap_or_else(|| "idle".to_string()),
+            version: row.version,
         }
     }
 }
@@ -346,6 +348,7 @@ pub async fn create_agent(State(state): State<AppState>, auth: auth::AuthUser, J
         model_temperature: request.model_temperature.unwrap_or(0.7),
         status: Some("idle".to_string()),
         router_mode: Some(false),
+        version: 1,
     };
 
     state.repo.upsert_agent(auth.user_id, row.clone()).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -399,6 +402,7 @@ pub async fn update_agent(State(state): State<AppState>, auth: auth::AuthUser, P
         model_temperature: request.model_temperature.unwrap_or(existing.model_temperature),
         status: existing.status,
         router_mode: existing.router_mode,
+        version: existing.version,
     };
 
     state.repo.upsert_agent(auth.user_id, updated.clone()).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -436,6 +440,7 @@ pub struct ToolResponse {
     pub display_name: String,
     pub description: String,
     pub parameters: serde_json::Value,
+    pub version: i32,
 }
 
 impl ToolResponse {
@@ -446,6 +451,7 @@ impl ToolResponse {
             display_name: row.display_name,
             description: row.description,
             parameters: row.parameters,
+            version: row.version,
         }
     }
 }
@@ -526,6 +532,7 @@ pub async fn create_tool(State(state): State<AppState>, auth: auth::AuthUser, Js
         description: request.description.unwrap_or_default(),
         parameters: request.parameters.unwrap_or_else(|| serde_json::json!({})),
         created_at: chrono::Utc::now(),
+        version: 1,
     };
 
     state.repo.upsert_tool(auth.user_id, row.clone()).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -575,6 +582,7 @@ pub async fn update_tool(State(state): State<AppState>, auth: auth::AuthUser, Pa
         description: request.description.unwrap_or(existing.description),
         parameters: request.parameters.unwrap_or(existing.parameters),
         created_at: existing.created_at,
+        version: existing.version,
     };
 
     state.repo.upsert_tool(auth.user_id, updated.clone()).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -1236,6 +1244,7 @@ pub struct AgentModeResponse {
     pub tool_overrides: Option<Vec<String>>,
     pub classifier_hint: String,
     pub created_at: DateTime<Utc>,
+    pub version: i32,
 }
 
 impl From<crate::db::AgentModeRow> for AgentModeResponse {
@@ -1250,6 +1259,7 @@ impl From<crate::db::AgentModeRow> for AgentModeResponse {
             tool_overrides: r.tool_overrides,
             classifier_hint: r.classifier_hint,
             created_at: r.created_at,
+            version: r.version,
         }
     }
 }
@@ -1321,6 +1331,7 @@ pub async fn create_agent_mode(
         tool_overrides: req.tool_overrides,
         classifier_hint: req.classifier_hint,
         created_at: Utc::now(),
+        version: 1,
     };
 
     state
@@ -3283,6 +3294,7 @@ pub struct WorkflowStepResponse {
     pub interactive_agent_id: Option<Uuid>,
     pub for_each_label_field: Option<String>,
     pub display_order: i32,
+    pub version: i32,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -3350,6 +3362,7 @@ fn step_response(r: crate::db::WorkflowStepRow) -> WorkflowStepResponse {
         interactive_agent_id: r.interactive_agent_id,
         for_each_label_field: r.for_each_label_field,
         display_order: r.display_order,
+        version: r.version,
     }
 }
 
@@ -3528,6 +3541,7 @@ pub async fn create_workflow_step(
         interactive_agent_id: req.interactive_agent_id,
         for_each_label_field: req.for_each_label_field,
         display_order: req.display_order.unwrap_or(0),
+        version: 1,
     };
     let row = repo.create_step(step).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok((StatusCode::CREATED, Json(step_response(row))))
@@ -3633,6 +3647,7 @@ pub async fn update_workflow_step(
         interactive_agent_id: req.interactive_agent_id,
         for_each_label_field: req.for_each_label_field.or(existing.for_each_label_field),
         display_order: req.display_order.unwrap_or(existing.display_order),
+        version: existing.version,
     };
     let row = repo.update_step(step).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(step_response(row)))
@@ -6696,6 +6711,7 @@ mod tests {
             model_max_tokens: 4096,
             model_temperature: 0.7,
             status: "idle".to_string(),
+            version: 1,
         }
     }
 

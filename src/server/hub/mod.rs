@@ -220,6 +220,7 @@ mod tests {
             tool_overrides: None,
             classifier_hint: hint.to_string(),
             created_at: Utc::now(),
+            version: 1,
         }
     }
 

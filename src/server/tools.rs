@@ -604,6 +604,7 @@ async fn execute_create_agent(input: &Value, state: &AppState, user_id: UserId) 
                         model_temperature: model_config.temperature,
                         status: Some("idle".to_string()),
                         router_mode: Some(false),
+                        version: 1,
                     },
                 )
                 .await
@@ -678,6 +679,7 @@ async fn execute_create_agents(input: &Value, state: &AppState, user_id: UserId)
                             model_temperature: model_config.temperature,
                             status: Some("idle".to_string()),
                             router_mode: Some(false),
+                            version: 1,
                         },
                     )
                     .await

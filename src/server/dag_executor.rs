@@ -1036,6 +1036,7 @@ mod tests {
             interactive_agent_id: None,
             for_each_label_field: None,
             display_order: order,
+            version: 1,
         }
     }
 

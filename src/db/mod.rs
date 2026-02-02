@@ -27,6 +27,7 @@ pub struct AgentRow {
     pub model_temperature: f32,
     pub status: Option<String>,
     pub router_mode: Option<bool>,
+    pub version: i32,
 }
 
 /// Row type for persisted pipeline definitions.
@@ -62,6 +63,7 @@ pub struct ToolRow {
     pub description: String,
     pub parameters: serde_json::Value,
     pub created_at: DateTime<Utc>,
+    pub version: i32,
 }
 
 /// Row type for persisted clusters.
@@ -108,6 +110,7 @@ pub struct OutputSchemaRow {
     pub name: String,
     pub schema: serde_json::Value,
     pub created_at: DateTime<Utc>,
+    pub version: i32,
 }
 
 /// Row type for persisted prompt template definitions.
@@ -118,6 +121,7 @@ pub struct PromptTemplateRow {
     pub name: String,
     pub content: String,
     pub created_at: DateTime<Utc>,
+    pub version: i32,
 }
 
 /// Row type for persisted workflow definitions.
@@ -128,6 +132,7 @@ pub struct WorkflowRow {
     pub name: String,
     pub description: String,
     pub created_at: DateTime<Utc>,
+    pub version: i32,
 }
 
 /// Row type for a workflow step (DAG node).
@@ -145,6 +150,7 @@ pub struct WorkflowStepRow {
     pub interactive_agent_id: Option<Uuid>,
     pub for_each_label_field: Option<String>,
     pub display_order: i32,
+    pub version: i32,
 }
 
 /// Row type for a workflow step edge (DAG edge).

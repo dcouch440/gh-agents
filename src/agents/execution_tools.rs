@@ -44,6 +44,7 @@ pub fn builtin_tool_rows() -> Vec<ToolRow> {
                 description: t.description,
                 parameters: t.input_schema,
                 created_at: chrono::Utc::now(),
+                version: 1,
             }
         })
         .collect()

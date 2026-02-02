@@ -232,6 +232,7 @@ mod tests {
             description: format!("{} tool", name),
             parameters: json!({}),
             created_at: chrono::Utc::now(),
+            version: 1,
         }
     }
 

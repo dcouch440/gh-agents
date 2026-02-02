@@ -272,7 +272,7 @@ impl ServerRepo for PgRepo {
 
     async fn list_persisted_agents(&self, user_id: UserId) -> Result<Vec<AgentRow>> {
         let rows = sqlx::query_as::<_, PgAgentRow>(
-            "SELECT id, tier, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode FROM agents WHERE user_id = $1",
+            "SELECT id, tier, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, version FROM agents WHERE user_id = $1",
         )
         .bind(user_id.0)
         .fetch_all(&self.pool)
@@ -283,7 +283,7 @@ impl ServerRepo for PgRepo {
 
     async fn get_persisted_agent(&self, agent_id: Uuid) -> Result<Option<AgentRow>> {
         let row = sqlx::query_as::<_, PgAgentRow>(
-            "SELECT id, tier, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode FROM agents WHERE id = $1",
+            "SELECT id, tier, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, version FROM agents WHERE id = $1",
         )
         .bind(agent_id)
         .fetch_optional(&self.pool)
@@ -307,7 +307,8 @@ impl ServerRepo for PgRepo {
                 model_max_tokens = EXCLUDED.model_max_tokens,
                 model_temperature = EXCLUDED.model_temperature,
                 status = EXCLUDED.status,
-                router_mode = EXCLUDED.router_mode
+                router_mode = EXCLUDED.router_mode,
+                version = agents.version + 1
         "#,
         )
         .bind(agent.id)
@@ -335,7 +336,7 @@ impl ServerRepo for PgRepo {
     // --- Tool persistence ---
 
     async fn list_tools(&self, user_id: UserId) -> Result<Vec<ToolRow>> {
-        let rows = sqlx::query_as::<_, PgToolRow>("SELECT id, user_id, name, display_name, description, parameters, created_at FROM tools WHERE user_id = $1 ORDER BY name")
+        let rows = sqlx::query_as::<_, PgToolRow>("SELECT id, user_id, name, display_name, description, parameters, created_at, version FROM tools WHERE user_id = $1 ORDER BY name")
             .bind(user_id.0)
             .fetch_all(&self.pool)
             .await?;
@@ -344,7 +345,7 @@ impl ServerRepo for PgRepo {
     }
 
     async fn get_tool(&self, tool_id: Uuid) -> Result<Option<ToolRow>> {
-        let row = sqlx::query_as::<_, PgToolRow>("SELECT id, user_id, name, display_name, description, parameters, created_at FROM tools WHERE id = $1")
+        let row = sqlx::query_as::<_, PgToolRow>("SELECT id, user_id, name, display_name, description, parameters, created_at, version FROM tools WHERE id = $1")
             .bind(tool_id)
             .fetch_optional(&self.pool)
             .await?;
@@ -361,7 +362,8 @@ impl ServerRepo for PgRepo {
                 name = EXCLUDED.name,
                 display_name = EXCLUDED.display_name,
                 description = EXCLUDED.description,
-                parameters = EXCLUDED.parameters
+                parameters = EXCLUDED.parameters,
+                version = tools.version + 1
         "#,
         )
         .bind(tool.id)
@@ -382,7 +384,7 @@ impl ServerRepo for PgRepo {
 
     async fn get_agent_tools(&self, agent_id: Uuid) -> Result<Vec<ToolRow>> {
         let rows = sqlx::query_as::<_, PgToolRow>(
-            "SELECT t.id, t.user_id, t.name, t.display_name, t.description, t.parameters, t.created_at FROM tools t INNER JOIN agent_tools at ON t.id = at.tool_id WHERE at.agent_id = $1 ORDER BY t.name",
+            "SELECT t.id, t.user_id, t.name, t.display_name, t.description, t.parameters, t.created_at, t.version FROM tools t INNER JOIN agent_tools at ON t.id = at.tool_id WHERE at.agent_id = $1 ORDER BY t.name",
         )
         .bind(agent_id)
         .fetch_all(&self.pool)
@@ -747,6 +749,7 @@ struct PgAgentRow {
     model_temperature: f32,
     status: Option<String>,
     router_mode: Option<bool>,
+    version: i32,
 }
 
 fn agent_row_from_pg(r: PgAgentRow) -> AgentRow {
@@ -762,6 +765,7 @@ fn agent_row_from_pg(r: PgAgentRow) -> AgentRow {
         model_temperature: r.model_temperature,
         status: r.status,
         router_mode: r.router_mode,
+        version: r.version,
     }
 }
 
@@ -774,6 +778,7 @@ struct PgToolRow {
     description: String,
     parameters: serde_json::Value,
     created_at: chrono::DateTime<chrono::Utc>,
+    version: i32,
 }
 
 fn tool_row_from_pg(r: PgToolRow) -> ToolRow {
@@ -785,6 +790,7 @@ fn tool_row_from_pg(r: PgToolRow) -> ToolRow {
         description: r.description,
         parameters: r.parameters,
         created_at: r.created_at,
+        version: r.version,
     }
 }
 
@@ -1025,7 +1031,7 @@ impl OutputSchemaRepo for PgRepo {
             r#"
             INSERT INTO output_schemas (user_id, name, schema)
             VALUES ($1, $2, $3)
-            RETURNING id, user_id, name, schema, created_at
+            RETURNING id, user_id, name, schema, created_at, version
             "#,
         )
         .bind(user_id)
@@ -1037,7 +1043,7 @@ impl OutputSchemaRepo for PgRepo {
     }
 
     async fn get_output_schema(&self, id: Uuid) -> Result<Option<OutputSchemaRow>> {
-        let row: Option<OutputSchemaRow> = sqlx::query_as("SELECT id, user_id, name, schema, created_at FROM output_schemas WHERE id = $1")
+        let row: Option<OutputSchemaRow> = sqlx::query_as("SELECT id, user_id, name, schema, created_at, version FROM output_schemas WHERE id = $1")
             .bind(id)
             .fetch_optional(&self.pool)
             .await?;
@@ -1045,7 +1051,7 @@ impl OutputSchemaRepo for PgRepo {
     }
 
     async fn list_output_schemas(&self, user_id: Uuid) -> Result<Vec<OutputSchemaRow>> {
-        let rows: Vec<OutputSchemaRow> = sqlx::query_as("SELECT id, user_id, name, schema, created_at FROM output_schemas WHERE user_id = $1 ORDER BY created_at DESC")
+        let rows: Vec<OutputSchemaRow> = sqlx::query_as("SELECT id, user_id, name, schema, created_at, version FROM output_schemas WHERE user_id = $1 ORDER BY created_at DESC")
             .bind(user_id)
             .fetch_all(&self.pool)
             .await?;
@@ -1057,9 +1063,10 @@ impl OutputSchemaRepo for PgRepo {
             r#"
             UPDATE output_schemas
             SET name = COALESCE($1, name),
-                schema = COALESCE($2, schema)
+                schema = COALESCE($2, schema),
+                version = version + 1
             WHERE id = $3
-            RETURNING id, user_id, name, schema, created_at
+            RETURNING id, user_id, name, schema, created_at, version
             "#,
         )
         .bind(name)
@@ -1083,7 +1090,7 @@ impl PromptTemplateRepo for PgRepo {
             r#"
             INSERT INTO prompt_templates (user_id, name, content)
             VALUES ($1, $2, $3)
-            RETURNING id, user_id, name, content, created_at
+            RETURNING id, user_id, name, content, created_at, version
             "#,
         )
         .bind(user_id)
@@ -1095,7 +1102,7 @@ impl PromptTemplateRepo for PgRepo {
     }
 
     async fn get_prompt_template(&self, id: Uuid) -> Result<Option<PromptTemplateRow>> {
-        let row: Option<PromptTemplateRow> = sqlx::query_as("SELECT id, user_id, name, content, created_at FROM prompt_templates WHERE id = $1")
+        let row: Option<PromptTemplateRow> = sqlx::query_as("SELECT id, user_id, name, content, created_at, version FROM prompt_templates WHERE id = $1")
             .bind(id)
             .fetch_optional(&self.pool)
             .await?;
@@ -1103,7 +1110,7 @@ impl PromptTemplateRepo for PgRepo {
     }
 
     async fn list_prompt_templates(&self, user_id: Uuid) -> Result<Vec<PromptTemplateRow>> {
-        let rows: Vec<PromptTemplateRow> = sqlx::query_as("SELECT id, user_id, name, content, created_at FROM prompt_templates WHERE user_id = $1 ORDER BY created_at DESC")
+        let rows: Vec<PromptTemplateRow> = sqlx::query_as("SELECT id, user_id, name, content, created_at, version FROM prompt_templates WHERE user_id = $1 ORDER BY created_at DESC")
             .bind(user_id)
             .fetch_all(&self.pool)
             .await?;
@@ -1115,9 +1122,10 @@ impl PromptTemplateRepo for PgRepo {
             r#"
             UPDATE prompt_templates
             SET name = COALESCE($1, name),
-                content = COALESCE($2, content)
+                content = COALESCE($2, content),
+                version = version + 1
             WHERE id = $3
-            RETURNING id, user_id, name, content, created_at
+            RETURNING id, user_id, name, content, created_at, version
             "#,
         )
         .bind(name)
@@ -1139,7 +1147,7 @@ impl WorkflowRepo for PgRepo {
     // --- Workflows ---
 
     async fn create_workflow(&self, user_id: Uuid, name: String, description: String) -> Result<WorkflowRow> {
-        let row: WorkflowRow = sqlx::query_as("INSERT INTO workflows (user_id, name, description) VALUES ($1, $2, $3) RETURNING id, user_id, name, description, created_at")
+        let row: WorkflowRow = sqlx::query_as("INSERT INTO workflows (user_id, name, description) VALUES ($1, $2, $3) RETURNING id, user_id, name, description, created_at, version")
             .bind(user_id)
             .bind(&name)
             .bind(&description)
@@ -1149,7 +1157,7 @@ impl WorkflowRepo for PgRepo {
     }
 
     async fn get_workflow(&self, id: Uuid) -> Result<Option<WorkflowRow>> {
-        let row: Option<WorkflowRow> = sqlx::query_as("SELECT id, user_id, name, description, created_at FROM workflows WHERE id = $1")
+        let row: Option<WorkflowRow> = sqlx::query_as("SELECT id, user_id, name, description, created_at, version FROM workflows WHERE id = $1")
             .bind(id)
             .fetch_optional(&self.pool)
             .await?;
@@ -1157,7 +1165,7 @@ impl WorkflowRepo for PgRepo {
     }
 
     async fn list_workflows(&self, user_id: Uuid) -> Result<Vec<WorkflowRow>> {
-        let rows: Vec<WorkflowRow> = sqlx::query_as("SELECT id, user_id, name, description, created_at FROM workflows WHERE user_id = $1 ORDER BY created_at DESC")
+        let rows: Vec<WorkflowRow> = sqlx::query_as("SELECT id, user_id, name, description, created_at, version FROM workflows WHERE user_id = $1 ORDER BY created_at DESC")
             .bind(user_id)
             .fetch_all(&self.pool)
             .await?;
@@ -1166,7 +1174,7 @@ impl WorkflowRepo for PgRepo {
 
     async fn update_workflow(&self, id: Uuid, name: Option<String>, description: Option<String>) -> Result<WorkflowRow> {
         let row: WorkflowRow =
-            sqlx::query_as("UPDATE workflows SET name = COALESCE($1, name), description = COALESCE($2, description) WHERE id = $3 RETURNING id, user_id, name, description, created_at")
+            sqlx::query_as("UPDATE workflows SET name = COALESCE($1, name), description = COALESCE($2, description), version = version + 1 WHERE id = $3 RETURNING id, user_id, name, description, created_at, version")
                 .bind(name)
                 .bind(description)
                 .bind(id)
@@ -1225,7 +1233,8 @@ impl WorkflowRepo for PgRepo {
             r#"
             UPDATE workflow_steps
             SET agent_id = $1, execution_mode = $2, for_each_ref = $3, prompt_template_id = $4, prompt_template = $5,
-                output_schema_id = $6, output_variable_name = $7, interactive_agent_id = $8, for_each_label_field = $9, display_order = $10
+                output_schema_id = $6, output_variable_name = $7, interactive_agent_id = $8, for_each_label_field = $9, display_order = $10,
+                version = version + 1
             WHERE id = $11
             RETURNING *
             "#,
