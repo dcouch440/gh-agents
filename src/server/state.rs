@@ -101,6 +101,10 @@ pub struct AppState {
     pub pipeline_tx: broadcast::Sender<PipelineUpdate>,
     /// Broadcast channel for tool routing updates
     pub routing_tx: broadcast::Sender<RoutingUpdate>,
+    /// Broadcast channel for router request lifecycle events
+    pub router_request_tx: broadcast::Sender<super::ws::RouterRequestEvent>,
+    /// Broadcast channel for context store updates
+    pub context_update_tx: broadcast::Sender<super::ws::ContextUpdateEvent>,
     /// Agent pool for managing agents (None in tests that don't need agents)
     pub pool: Option<Arc<tokio::sync::Mutex<AgentPool>>>,
     /// Dispatcher for routing commands to agents (None in tests)
@@ -241,6 +245,8 @@ impl AppState {
         let (session_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST_LOW);
         let (pipeline_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
         let (routing_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST_HIGH);
+        let (router_request_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
+        let (context_update_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST_LOW);
 
         // JWT secret: require via env var, fall back to random for dev only
         let jwt_secret = match std::env::var(crate::constants::ENV_JWT_SECRET) {
@@ -284,6 +290,8 @@ impl AppState {
                 session_tx,
                 pipeline_tx,
                 routing_tx,
+                router_request_tx,
+                context_update_tx,
                 pool: None,
                 dispatcher: None,
                 task_results: Arc::new(RwLock::new(HashMap::new())),
@@ -356,6 +364,26 @@ impl AppState {
     /// Broadcast a routing update to all subscribers
     pub fn broadcast_routing(&self, update: RoutingUpdate) {
         let _ = self.routing_tx.send(update);
+    }
+
+    /// Subscribe to router request lifecycle events
+    pub fn subscribe_router_requests(&self) -> broadcast::Receiver<super::ws::RouterRequestEvent> {
+        self.router_request_tx.subscribe()
+    }
+
+    /// Broadcast a router request event
+    pub fn broadcast_router_request(&self, event: super::ws::RouterRequestEvent) {
+        let _ = self.router_request_tx.send(event);
+    }
+
+    /// Subscribe to context store updates
+    pub fn subscribe_context_updates(&self) -> broadcast::Receiver<super::ws::ContextUpdateEvent> {
+        self.context_update_tx.subscribe()
+    }
+
+    /// Broadcast a context update event
+    pub fn broadcast_context_update(&self, event: super::ws::ContextUpdateEvent) {
+        let _ = self.context_update_tx.send(event);
     }
 
     /// Ensure a response stream exists for this message (creates if missing).

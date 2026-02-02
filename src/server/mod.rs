@@ -11,6 +11,7 @@ pub mod auth;
 pub mod dag_executor;
 pub mod orchestrator;
 pub mod state;
+pub mod router_service;
 pub mod tools;
 pub mod ws;
 

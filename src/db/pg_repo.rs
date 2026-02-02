@@ -1576,7 +1576,7 @@ impl ToolRouterRepo for PgRepo {
         Ok(row)
     }
 
-    async fn create_tool_router(&self, user_id: Uuid, name: &str, description: Option<&str>, system_prompt: &str, model_id: &str) -> Result<ToolRouterRow> {
+    async fn create_tool_router(&self, user_id: Uuid, name: &str, description: Option<String>, system_prompt: &str, model_id: &str) -> Result<ToolRouterRow> {
         let row: ToolRouterRow = sqlx::query_as(
             "INSERT INTO tool_routers (user_id, name, description, system_prompt, model_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, user_id, name, description, system_prompt, model_id, is_active, created_at, updated_at",
         )
@@ -1590,7 +1590,7 @@ impl ToolRouterRepo for PgRepo {
         Ok(row)
     }
 
-    async fn update_tool_router(&self, id: Uuid, name: Option<&str>, description: Option<&str>, system_prompt: Option<&str>, model_id: Option<&str>, is_active: Option<bool>) -> Result<ToolRouterRow> {
+    async fn update_tool_router(&self, id: Uuid, name: Option<String>, description: Option<String>, system_prompt: Option<String>, model_id: Option<String>, is_active: Option<bool>) -> Result<ToolRouterRow> {
         let row: ToolRouterRow = sqlx::query_as(
             r#"UPDATE tool_routers SET
                 name = COALESCE($2, name),
@@ -1702,7 +1702,7 @@ impl ContextStoreRepo for PgRepo {
 
 #[async_trait]
 impl RouterRequestRepo for PgRepo {
-    async fn create_router_request(&self, session_id: Uuid, agent_execution_id: Option<Uuid>, intent: &str, priority: &str, callback_hint: Option<&str>) -> Result<RouterRequestRow> {
+    async fn create_router_request(&self, session_id: Uuid, agent_execution_id: Option<Uuid>, intent: &str, priority: &str, callback_hint: Option<String>) -> Result<RouterRequestRow> {
         let row: RouterRequestRow = sqlx::query_as(
             "INSERT INTO router_requests (session_id, agent_execution_id, intent, priority, callback_hint) VALUES ($1, $2, $3, $4, $5) RETURNING id, session_id, agent_execution_id, intent, priority, callback_hint, routed_tool, routed_args, is_async, passdown, chain, status, result, created_at, completed_at",
         )
@@ -1716,7 +1716,7 @@ impl RouterRequestRepo for PgRepo {
         Ok(row)
     }
 
-    async fn update_router_request(&self, id: Uuid, routed_tool: Option<&str>, routed_args: Option<serde_json::Value>, is_async: bool, passdown: Option<&str>, chain: Option<serde_json::Value>, status: &str, result: Option<&str>) -> Result<RouterRequestRow> {
+    async fn update_router_request(&self, id: Uuid, routed_tool: Option<String>, routed_args: Option<serde_json::Value>, is_async: bool, passdown: Option<String>, chain: Option<serde_json::Value>, status: &str, result: Option<String>) -> Result<RouterRequestRow> {
         let row: RouterRequestRow = sqlx::query_as(
             r#"UPDATE router_requests SET
                 routed_tool = $2, routed_args = $3, is_async = $4, passdown = $5,

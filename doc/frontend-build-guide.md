@@ -1019,3 +1019,225 @@ On pipeline_run_update:
   └─ Update run header (status, current_stage)
      └─ If completed → show completion state, final cost
 ```
+
+---
+
+## Tool Router System (New)
+
+The tool router system adds LLM-based tool routing, per-session context accumulation, and request lifecycle tracking. This section documents everything the frontend needs to integrate with it.
+
+### New Pages
+
+| Page | Route | Purpose |
+|------|-------|---------|
+| Tool Routers | `/tool-routers` | List + create router configurations |
+| Router Detail | `/tool-routers/:id` | Edit router system prompt, model, assign tools |
+| Powered Chat | `/chat/:id` | Chat session backed by a pipeline (activity panel) |
+
+### New API Endpoints
+
+#### Tool Routers
+
+| Method | Path | Body | Returns |
+|--------|------|------|---------|
+| `GET` | `/tool-routers` | — | `ToolRouter[]` |
+| `POST` | `/tool-routers` | `{ name, description?, system_prompt, model_id }` | `ToolRouter` |
+| `GET` | `/tool-routers/:id` | — | `ToolRouter` |
+| `PUT` | `/tool-routers/:id` | `{ name?, description?, system_prompt?, model_id?, is_active? }` | `ToolRouter` |
+| `DELETE` | `/tool-routers/:id` | — | `204` |
+| `GET` | `/tool-routers/:id/tools` | — | `Tool[]` |
+| `PUT` | `/tool-routers/:id/tools` | `{ tool_ids: [uuid] }` | `204` |
+
+#### Session Context & Requests
+
+| Method | Path | Body | Returns |
+|--------|------|------|---------|
+| `GET` | `/sessions/:id/context` | — | `ContextEntry[]` |
+| `GET` | `/sessions/:id/requests` | — | `RouterRequest[]` |
+
+#### Context Response
+
+| Method | Path | Body | Returns |
+|--------|------|------|---------|
+| `POST` | `/context-response` | `{ request_id, response }` | `204` |
+
+### New Types
+
+```typescript
+type ToolRouter = {
+  id: string
+  user_id: string
+  name: string
+  description: string | null
+  system_prompt: string
+  model_id: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+type ContextEntry = {
+  id: string
+  session_id: string
+  source: string
+  priority: number
+  content: string
+  metadata: Record<string, unknown> | null
+  status: string           // 'active' | 'expired' | 'dismissed'
+  created_at: string
+  expires_at: string | null
+}
+
+type RouterRequest = {
+  id: string
+  session_id: string
+  agent_execution_id: string | null
+  intent: string
+  priority: string          // 'low' | 'normal' | 'high' | 'critical'
+  callback_hint: string | null
+  routed_tool: string | null
+  routed_args: Record<string, unknown> | null
+  is_async: boolean
+  passdown: string | null
+  chain: ChainStep[] | null
+  status: string            // 'pending' | 'routed' | 'executing' | 'completed' | 'failed' | 'no_action'
+  result: string | null
+  created_at: string
+  completed_at: string | null
+}
+
+type ChainStep = {
+  tool: string
+  args: Record<string, unknown>
+}
+```
+
+### New WS Events
+
+#### Client → Server
+
+| Type | Payload | Purpose |
+|------|---------|---------|
+| `subscribe_run` | `{ run_id: uuid }` | Subscribe to events for a specific pipeline run |
+| `unsubscribe_run` | `{ run_id: uuid }` | Stop receiving events for a run |
+
+#### Server → Client
+
+| Type | Payload | Channel | Purpose |
+|------|---------|---------|---------|
+| `router_request_update` | `RouterRequestEvent` | `routing` | Router request lifecycle (pending → routed → completed) |
+| `context_update` | `ContextUpdateEvent` | `routing` | New context entry arrived for a session |
+
+```typescript
+type RouterRequestEvent = {
+  request_id: string
+  session_id: string
+  run_id: string | null
+  intent: string
+  status: string
+  routed_tool: string | null
+  passdown: string | null
+  result: string | null
+  timestamp: string
+  user_id: string | null
+}
+
+type ContextUpdateEvent = {
+  session_id: string
+  run_id: string | null
+  source: string
+  priority: number
+  content_preview: string
+  timestamp: string
+  user_id: string | null
+}
+```
+
+### Powered Chat UI
+
+When a session has a `pipeline_id`, the chat becomes a "powered chat" with a dual-zone layout:
+
+```
+┌─────────────────────────────────┬──────────────────────────┐
+│                                 │   Activity Panel         │
+│   Conversation                  │                          │
+│                                 │   ⏳ Searching for NVDA  │
+│   User: Analyze NVDA            │      via search_api      │
+│                                 │   ✅ search_api → 12 res │
+│   Assistant: I'll look into     │   ⏳ Reading 10-K filing │
+│   NVDA for you. Searching...    │      via read_file       │
+│                                 │                          │
+│                                 │   ── Costs ──            │
+│                                 │   Input:  12,340 tokens  │
+│                                 │   Output:  2,100 tokens  │
+│   [message input]               │   $0.034                 │
+└─────────────────────────────────┴──────────────────────────┘
+```
+
+**Left zone:** Standard chat interface — messages, streaming responses, input field.
+
+**Right zone:** Activity panel showing:
+- In-flight router requests (⏳ with intent + tool name)
+- Completed requests (✅ with tool + brief result)
+- Failed requests (❌ with error)
+- Token/cost accumulator
+
+**Data flow:**
+1. Subscribe to `routing` channel + `subscribe_run` for the session's active run
+2. `router_request_update` events update the activity panel
+3. `context_update` events can optionally show "new context loaded"
+4. Each request transitions: pending → routed → executing → completed/failed
+
+### New Chat Dialog
+
+When creating a new chat, add an optional pipeline selector:
+
+```
+┌─ New Chat ───────────────────────────────────┐
+│                                               │
+│  Name: [                          ]           │
+│                                               │
+│  Pipeline: [None (plain chat)        ▾]       │
+│            ├── Stock Research Pipeline         │
+│            ├── Code Analysis Pipeline          │
+│            └── None (plain chat)               │
+│                                               │
+│  [Create]                                     │
+└───────────────────────────────────────────────┘
+```
+
+The `POST /sessions` body gains an optional `pipeline_id` field. When set, the session is a powered chat.
+
+### New Contexts / Hooks
+
+| Context | Purpose |
+|---------|---------|
+| `ToolRouterContext` | CRUD for tool router configurations |
+
+| Hook | Purpose |
+|------|---------|
+| `useToolRouterContext` | Access router list, loading state |
+| `useToolRouterMutations` | Create, update, delete routers + set tools |
+| `useSessionActivity` | Load context store + router requests for a session's activity panel |
+
+**`ToolRouterContext` pattern:** Same as other entity contexts — fetch list on mount, CRUD mutations, WS subscription for live updates.
+
+**`useSessionActivity` pattern:**
+```typescript
+const useSessionActivity = (sessionId: string) => {
+  // 1. Fetch initial context + requests from REST
+  // 2. Subscribe to routing channel + subscribe_run
+  // 3. Merge WS events into local state
+  // Returns: { requests, context, costs }
+}
+```
+
+### Tool Router Detail Page
+
+The router detail page has:
+
+1. **Config section** — name, description, system prompt (textarea), model selector, active toggle
+2. **Tools section** — multi-select from available tools, save assigns via `PUT /tool-routers/:id/tools`
+3. **Test section** (future) — send a test intent and see the routing decision
+
+Layout follows the same pattern as Agent Detail — form fields with save button, tool assignment panel.
