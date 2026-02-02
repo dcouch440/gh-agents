@@ -17,9 +17,17 @@ const initialState: AgentState = { agents: [], loading: true, error: null }
 
 // ── Actions ──────────────────────────────────────────────────────────────────
 
+type AgentUpdate = {
+  id: string
+  status: string
+  current_task: string | null
+  user_id?: string | null
+}
+
 type AgentAction =
   | { type: typeof ACTION.SET_ALL; agents: Agent[] }
   | { type: typeof ACTION.UPDATE_ONE; agent: Agent }
+  | { type: typeof ACTION.UPDATE; update: AgentUpdate }
   | { type: typeof ACTION.SET_LOADING; loading: boolean }
   | { type: typeof ACTION.SET_ERROR; error: string }
 
@@ -33,6 +41,15 @@ const reducer = (state: AgentState, action: AgentAction): AgentState => {
         agents: state.agents.some((a) => a.id === action.agent.id)
           ? state.agents.map((a) => (a.id === action.agent.id ? action.agent : a))
           : [...state.agents, action.agent],
+      }
+    case ACTION.UPDATE:
+      return {
+        ...state,
+        agents: state.agents.map((a) =>
+          a.id === action.update.id
+            ? { ...a, status: action.update.status as Agent['status'] }
+            : a,
+        ),
       }
     case ACTION.SET_LOADING:
       return { ...state, loading: action.loading }
@@ -81,9 +98,9 @@ function AgentProvider({ children }: { children: ReactNode }) {
   // WS subscription
   useEffect(() => {
     const unsub = subscribe(WS_CHANNEL.AGENTS, (data) => {
-      const msg = data as { agent?: Agent }
-      if (msg.agent) {
-        dispatch({ type: ACTION.UPDATE_ONE, agent: msg.agent })
+      const update = data as AgentUpdate
+      if (update.id) {
+        dispatch({ type: ACTION.UPDATE, update })
       }
     })
     return unsub

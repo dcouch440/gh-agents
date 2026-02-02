@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { TaskProvider } from './TaskContext'
 import { useTaskContext } from '@/hooks/useTaskContext'
-import { mockTask, mockTaskCompleted } from '@/test/fixtures'
+import { mockTask } from '@/test/fixtures'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -67,7 +67,7 @@ describe('TaskContext', () => {
       })
     })
 
-    it('updates a task via WS', async () => {
+    it('updates a task status via WS partial update', async () => {
       render(
         <TaskProvider>
           <TestConsumer />
@@ -78,14 +78,15 @@ describe('TaskContext', () => {
         expect(screen.getByTestId('task-task-001')).toBeInTheDocument()
       })
 
-      wsHandler?.({ task: mockTaskCompleted })
+      // Backend sends partial update: { id, status, progress, assigned_agent, user_id }
+      wsHandler?.({ id: 'task-001', status: 'completed', progress: 1.0, assigned_agent: 'agent-001' })
 
       await waitFor(() => {
         expect(screen.getByTestId('task-task-001')).toHaveTextContent('Test task:completed')
       })
     })
 
-    it('removes a task via WS deleted_id', async () => {
+    it('ignores WS update for unknown task id', async () => {
       render(
         <TaskProvider>
           <TestConsumer />
@@ -96,11 +97,11 @@ describe('TaskContext', () => {
         expect(screen.getByTestId('task-task-001')).toBeInTheDocument()
       })
 
-      wsHandler?.({ deleted_id: 'task-001' })
+      wsHandler?.({ id: 'task-999', status: 'completed', progress: null, assigned_agent: null })
 
-      await waitFor(() => {
-        expect(screen.queryByTestId('task-task-001')).not.toBeInTheDocument()
-      })
+      // Original task unchanged, no new task added
+      expect(screen.getByTestId('task-task-001')).toHaveTextContent('Test task:pending')
+      expect(screen.queryByTestId('task-task-999')).not.toBeInTheDocument()
     })
 
     it('throws when hook is used outside provider', () => {

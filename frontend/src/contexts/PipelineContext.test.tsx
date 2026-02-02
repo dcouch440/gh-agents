@@ -53,10 +53,14 @@ describe('PipelineContext', () => {
     beforeEach(() => {
       wsHandler = null
       vi.clearAllMocks()
-      mockGet.mockResolvedValue([mockPipeline])
+      // First call returns pipelines, second returns runs
+      mockGet.mockImplementation((url: string) => {
+        if (url.includes('pipeline-runs')) return Promise.resolve([mockPipelineRun])
+        return Promise.resolve([mockPipeline])
+      })
     })
 
-    it('fetches pipelines on mount', async () => {
+    it('fetches pipelines and runs on mount', async () => {
       render(
         <PipelineProvider>
           <TestConsumer />
@@ -66,9 +70,18 @@ describe('PipelineContext', () => {
       await waitFor(() => {
         expect(screen.getByTestId('pipeline-count')).toHaveTextContent('1')
       })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('run-run-001')).toHaveTextContent('running')
+      })
     })
 
-    it('adds a run via WS', async () => {
+    it('reloads runs on WS pipeline event', async () => {
+      mockGet.mockImplementation((url: string) => {
+        if (url.includes('pipeline-runs')) return Promise.resolve([])
+        return Promise.resolve([mockPipeline])
+      })
+
       render(
         <PipelineProvider>
           <TestConsumer />
@@ -79,32 +92,17 @@ describe('PipelineContext', () => {
         expect(screen.getByTestId('pipeline-count')).toHaveTextContent('1')
       })
 
-      wsHandler?.({ run: mockPipelineRun })
+      // Now update mock to return a run and trigger WS event
+      mockGet.mockImplementation((url: string) => {
+        if (url.includes('pipeline-runs')) return Promise.resolve([mockPipelineRun])
+        return Promise.resolve([mockPipeline])
+      })
+
+      // Backend sends pipeline update event (partial data, not a PipelineRun)
+      wsHandler?.({ run_id: 'run-001', pipeline_id: 'pipeline-001', event: 'stage_started' })
 
       await waitFor(() => {
         expect(screen.getByTestId('run-run-001')).toHaveTextContent('running')
-      })
-    })
-
-    it('updates an existing run via WS', async () => {
-      render(
-        <PipelineProvider>
-          <TestConsumer />
-        </PipelineProvider>,
-      )
-
-      await waitFor(() => {
-        expect(screen.getByTestId('pipeline-count')).toBeInTheDocument()
-      })
-
-      wsHandler?.({ run: mockPipelineRun })
-      await waitFor(() => {
-        expect(screen.getByTestId('run-run-001')).toHaveTextContent('running')
-      })
-
-      wsHandler?.({ run: { ...mockPipelineRun, status: 'completed' } })
-      await waitFor(() => {
-        expect(screen.getByTestId('run-run-001')).toHaveTextContent('completed')
       })
     })
 

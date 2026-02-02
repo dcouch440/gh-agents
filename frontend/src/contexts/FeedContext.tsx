@@ -46,8 +46,8 @@ function FeedProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const unsub = subscribe(WS_CHANNEL.FEED, (data) => {
-      const msg = data as { item?: FeedItem }
-      if (msg.item) dispatch({ type: ACTION.APPEND, item: msg.item })
+      const item = data as FeedItem
+      if (item.id) dispatch({ type: ACTION.APPEND, item })
     })
     return unsub
   }, [subscribe])

@@ -59,7 +59,8 @@ describe('FeedContext', () => {
         </FeedProvider>,
       )
 
-      wsHandler?.({ item: mockFeedItem })
+      // Backend sends feed data directly (no wrapper)
+      wsHandler?.(mockFeedItem)
 
       await waitFor(() => {
         expect(screen.getByTestId('feed-feed-001')).toHaveTextContent('Agent started working')
@@ -73,8 +74,8 @@ describe('FeedContext', () => {
         </FeedProvider>,
       )
 
-      wsHandler?.({ item: mockFeedItem })
-      wsHandler?.({ item: { ...mockFeedItem, id: 'feed-002', content: 'Second event' } })
+      wsHandler?.(mockFeedItem)
+      wsHandler?.({ ...mockFeedItem, id: 'feed-002', content: 'Second event' })
 
       await waitFor(() => {
         expect(screen.getByTestId('count')).toHaveTextContent('2')
@@ -93,7 +94,7 @@ describe('FeedContext', () => {
       )
 
       for (let i = 0; i < 210; i++) {
-        wsHandler?.({ item: { ...mockFeedItem, id: `feed-${i}` } })
+        wsHandler?.({ ...mockFeedItem, id: `feed-${i}` })
       }
 
       await waitFor(() => {

@@ -3,12 +3,29 @@ type PipelineStage = {
   agent_id: string | null
   cluster_id: string | null
   role: string | null
-  approval_required: boolean
-  fan_out: boolean
+  approval_required: boolean | null
+  fan_out: boolean | null
   stage_name: string
-  input_definitions: Record<string, string>
-  output_description: string
+  input_definitions: Record<string, string> | null
+  output_description: string | null
   output_schema: unknown
+}
+
+type StageMember = {
+  id: string
+  pipeline_id: string
+  stage_number: number
+  workflow_id: string
+  display_order: number
+}
+
+type CreateStageMemberRequest = {
+  workflow_id: string
+  display_order?: number
+}
+
+type UpdateStageMemberRequest = {
+  display_order: number
 }
 
 type Pipeline = {
@@ -23,12 +40,12 @@ type PipelineRun = {
   user_id: string
   status: string
   initial_task: string
-  stage_outputs: Record<string, unknown>
+  stage_outputs: Record<string, unknown> | null
   current_stage: number
   started_at: string
   completed_at: string | null
-  total_input_tokens: number
-  total_output_tokens: number
+  total_input_tokens: number | null
+  total_output_tokens: number | null
 }
 
 type StageExecution = {
@@ -58,4 +75,4 @@ type CreateSideTaskRequest = {
   description: string
 }
 
-export type { Pipeline, PipelineStage, PipelineRun, StageExecution, ApproveGateRequest, CreateSideTaskRequest }
+export type { Pipeline, PipelineStage, PipelineRun, StageExecution, StageMember, ApproveGateRequest, CreateSideTaskRequest, CreateStageMemberRequest, UpdateStageMemberRequest }

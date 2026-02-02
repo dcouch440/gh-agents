@@ -4,10 +4,10 @@ type Document = {
   session_id: string | null
   title: string
   content: string
-  summary: string
-  doc_type: string
-  ref_tag: string
-  tags: string[]
+  summary: string | null
+  doc_type: string | null
+  ref_tag: string | null
+  tags: string[] | null
   created_at: string
   updated_at: string
 }
@@ -15,8 +15,8 @@ type Document = {
 type DocumentSearchResult = {
   id: string
   title: string
-  summary: string
-  ref_tag: string
+  summary: string | null
+  ref_tag: string | null
   snippet: string
 }
 
@@ -33,10 +33,10 @@ type UpdateDocumentRequest = Partial<CreateDocumentRequest>
 type DocumentListItem = {
   id: string
   title: string
-  summary: string
-  ref_tag: string
-  tags: string[]
-  doc_type: string
+  summary: string | null
+  ref_tag: string | null
+  tags: string[] | null
+  doc_type: string | null
   updated_at: string
 }
 
