@@ -10,11 +10,9 @@ use serde_json::{json, Value};
 
 use std::sync::Arc;
 
-use crate::agents::{
-    AgentCommand, AgentResponse, ClusterId, CommunicationStyle, OutputFormat, PipelineId, RoleContext, RoleId, ScheduleId, TaskAssignment, TaskConstraints, TaskContext, TriggerEvent,
-};
+use crate::agents::{AgentCommand, AgentResponse, CommunicationStyle, OutputFormat, PipelineId, RoleContext, RoleId, TaskAssignment, TaskConstraints, TaskContext};
 use crate::db::traits::DocumentRepo;
-use crate::db::{AgentRow, ClusterRow, PipelineRow, PipelineStageRow, ScheduleRow, TriggerRow};
+use crate::db::{AgentRow, PipelineRow, PipelineStageRow};
 use crate::llm::{AnthropicClient, AnthropicConfig, LLMProvider, LLMRequest, Message as LlmMessage, Tool};
 use crate::types::{AgentPersona, AgentTier, ModelConfig, UserId};
 
@@ -192,69 +190,6 @@ pub fn agent_tools() -> Vec<Tool> {
             }),
         },
         Tool {
-            name: "create_cluster".to_string(),
-            description: "Create a named cluster for grouping agents that share context.".to_string(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "Name for the cluster (e.g. 'frontend', 'backend-api')"
-                    },
-                    "description": {
-                        "type": "string",
-                        "description": "Optional description of the cluster's purpose"
-                    }
-                },
-                "required": ["name"]
-            }),
-        },
-        Tool {
-            name: "add_to_cluster".to_string(),
-            description: "Add an agent to a cluster. The agent will receive the cluster's shared context with every task.".to_string(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "cluster_id": {
-                        "type": "string",
-                        "description": "The UUID of the cluster"
-                    },
-                    "agent_id": {
-                        "type": "string",
-                        "description": "The UUID of the agent to add"
-                    }
-                },
-                "required": ["cluster_id", "agent_id"]
-            }),
-        },
-        Tool {
-            name: "remove_from_cluster".to_string(),
-            description: "Remove an agent from a cluster.".to_string(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "cluster_id": {
-                        "type": "string",
-                        "description": "The UUID of the cluster"
-                    },
-                    "agent_id": {
-                        "type": "string",
-                        "description": "The UUID of the agent to remove"
-                    }
-                },
-                "required": ["cluster_id", "agent_id"]
-            }),
-        },
-        Tool {
-            name: "list_clusters".to_string(),
-            description: "List all clusters with their members.".to_string(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {},
-                "required": []
-            }),
-        },
-        Tool {
             name: "create_pipeline".to_string(),
             description: "Create a named pipeline for chaining agent workflows. Stages are added separately.".to_string(),
             input_schema: json!({
@@ -341,111 +276,6 @@ pub fn agent_tools() -> Vec<Tool> {
                     }
                 },
                 "required": ["run_id"]
-            }),
-        },
-        Tool {
-            name: "create_schedule".to_string(),
-            description: "Create a periodic schedule that assigns a task to an agent at a fixed interval.".to_string(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "Name for the schedule (e.g. 'hourly-tests')"
-                    },
-                    "agent_id": {
-                        "type": "string",
-                        "description": "The UUID of the agent to run"
-                    },
-                    "interval_seconds": {
-                        "type": "integer",
-                        "description": "Interval in seconds between runs (e.g. 3600 for hourly)"
-                    },
-                    "task_title": {
-                        "type": "string",
-                        "description": "Title for the scheduled tasks"
-                    },
-                    "task_description": {
-                        "type": "string",
-                        "description": "Description template for the scheduled tasks"
-                    },
-                    "role": {
-                        "type": "string",
-                        "description": "Optional role for the agent when running"
-                    }
-                },
-                "required": ["name", "agent_id", "interval_seconds", "task_title", "task_description"]
-            }),
-        },
-        Tool {
-            name: "list_schedules".to_string(),
-            description: "List all periodic schedules with their status (enabled, last run time, interval).".to_string(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {},
-                "required": []
-            }),
-        },
-        Tool {
-            name: "toggle_schedule".to_string(),
-            description: "Enable or disable a periodic schedule.".to_string(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "schedule_id": {
-                        "type": "string",
-                        "description": "The UUID of the schedule"
-                    },
-                    "enabled": {
-                        "type": "boolean",
-                        "description": "True to enable, false to disable"
-                    }
-                },
-                "required": ["schedule_id", "enabled"]
-            }),
-        },
-        Tool {
-            name: "create_trigger".to_string(),
-            description: "Create an event-driven trigger that assigns a task to an agent when a task completes or fails.".to_string(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "Name for the trigger (e.g. 'auto-review')"
-                    },
-                    "event_type": {
-                        "type": "string",
-                        "enum": ["task_completed", "task_failed"],
-                        "description": "The event that fires this trigger"
-                    },
-                    "agent_id": {
-                        "type": "string",
-                        "description": "The UUID of the agent to assign work to when triggered"
-                    },
-                    "task_title": {
-                        "type": "string",
-                        "description": "Title for the triggered task"
-                    },
-                    "task_description": {
-                        "type": "string",
-                        "description": "Description for the triggered task"
-                    },
-                    "role": {
-                        "type": "string",
-                        "description": "Optional role for the agent"
-                    }
-                },
-                "required": ["name", "event_type", "agent_id", "task_title", "task_description"]
-            }),
-        },
-        Tool {
-            name: "list_triggers".to_string(),
-            description: "List all event-driven triggers.".to_string(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {},
-                "required": []
             }),
         },
         // --- Codebase exploration tools (read-only) ---
@@ -655,19 +485,10 @@ pub async fn execute_tool(name: &str, input: &Value, state: &AppState, user_id: 
         "list_pending_approvals" => execute_list_pending_approvals(state).await,
         "respond_to_approval" => execute_respond_to_approval(input, state).await,
         "remove_agent" => execute_remove_agent(input, state).await,
-        "create_cluster" => execute_create_cluster(input, state, user_id).await,
-        "add_to_cluster" => execute_add_to_cluster(input, state).await,
-        "remove_from_cluster" => execute_remove_from_cluster(input, state).await,
-        "list_clusters" => execute_list_clusters(state).await,
         "create_pipeline" => execute_create_pipeline(input, state, user_id).await,
         "add_pipeline_stage" => execute_add_pipeline_stage(input, state, user_id).await,
         "start_pipeline" => execute_start_pipeline(input, state, user_id).await,
         "get_pipeline_status" => execute_get_pipeline_status(input, state).await,
-        "create_schedule" => execute_create_schedule(input, state, user_id).await,
-        "list_schedules" => execute_list_schedules(state).await,
-        "toggle_schedule" => execute_toggle_schedule(input, state, user_id).await,
-        "create_trigger" => execute_create_trigger(input, state, user_id).await,
-        "list_triggers" => execute_list_triggers(state).await,
         "read_file" => execute_read_file(input).await,
         "list_files" => execute_list_files(input).await,
         "search_files" => execute_search_files(input).await,
@@ -1145,124 +966,6 @@ async fn execute_respond_to_approval(input: &Value, state: &AppState) -> Value {
     }
 }
 
-async fn execute_create_cluster(input: &Value, state: &AppState, user_id: UserId) -> Value {
-    let Some(name) = input["name"].as_str() else {
-        return json!({ "error": "name is required" });
-    };
-    let description = input["description"].as_str().unwrap_or("").to_string();
-
-    let mut mgr = state.cluster_manager.write().await;
-    let id = mgr.create_cluster(name.to_string(), description.clone());
-
-    // Persist to DB
-    if let Err(e) = state
-        .repo
-        .upsert_cluster(
-            user_id,
-            ClusterRow {
-                id: id.0,
-                name: name.to_string(),
-                description,
-                conventions: String::new(),
-                shared_files: serde_json::json!([]),
-            },
-        )
-        .await
-    {
-        tracing::error!("Failed to persist cluster: {}", e);
-    }
-
-    json!({
-        "status": "created",
-        "cluster_id": id.0.to_string(),
-        "name": name
-    })
-}
-
-async fn execute_add_to_cluster(input: &Value, state: &AppState) -> Value {
-    let Some(cluster_str) = input["cluster_id"].as_str() else {
-        return json!({ "error": "cluster_id is required" });
-    };
-    let Some(agent_str) = input["agent_id"].as_str() else {
-        return json!({ "error": "agent_id is required" });
-    };
-
-    let Ok(cluster_uuid) = uuid::Uuid::parse_str(cluster_str) else {
-        return json!({ "error": format!("Invalid cluster UUID: {}", cluster_str) });
-    };
-    let Ok(agent_uuid) = uuid::Uuid::parse_str(agent_str) else {
-        return json!({ "error": format!("Invalid agent UUID: {}", agent_str) });
-    };
-
-    let mut mgr = state.cluster_manager.write().await;
-    match mgr.add_agent(ClusterId(cluster_uuid), crate::agents::AgentId(agent_uuid)) {
-        Ok(()) => {
-            if let Err(e) = state.repo.add_cluster_member(cluster_uuid, agent_uuid).await {
-                tracing::error!("Failed to persist cluster member: {}", e);
-            }
-            json!({
-                "status": "added",
-                "cluster_id": cluster_str,
-                "agent_id": agent_str
-            })
-        }
-        Err(e) => json!({ "error": e.to_string() }),
-    }
-}
-
-async fn execute_remove_from_cluster(input: &Value, state: &AppState) -> Value {
-    let Some(cluster_str) = input["cluster_id"].as_str() else {
-        return json!({ "error": "cluster_id is required" });
-    };
-    let Some(agent_str) = input["agent_id"].as_str() else {
-        return json!({ "error": "agent_id is required" });
-    };
-
-    let Ok(cluster_uuid) = uuid::Uuid::parse_str(cluster_str) else {
-        return json!({ "error": format!("Invalid cluster UUID: {}", cluster_str) });
-    };
-    let Ok(agent_uuid) = uuid::Uuid::parse_str(agent_str) else {
-        return json!({ "error": format!("Invalid agent UUID: {}", agent_str) });
-    };
-
-    let mut mgr = state.cluster_manager.write().await;
-    match mgr.remove_agent(ClusterId(cluster_uuid), crate::agents::AgentId(agent_uuid)) {
-        Ok(()) => {
-            if let Err(e) = state.repo.remove_cluster_member(cluster_uuid, agent_uuid).await {
-                tracing::error!("Failed to persist cluster member removal: {}", e);
-            }
-            json!({
-                "status": "removed",
-                "cluster_id": cluster_str,
-                "agent_id": agent_str
-            })
-        }
-        Err(e) => json!({ "error": e.to_string() }),
-    }
-}
-
-async fn execute_list_clusters(state: &AppState) -> Value {
-    let mgr = state.cluster_manager.read().await;
-    let clusters: Vec<Value> = mgr
-        .list_clusters()
-        .iter()
-        .map(|c| {
-            json!({
-                "id": c.id.0.to_string(),
-                "name": c.name,
-                "description": c.description,
-                "member_count": c.members.len(),
-                "members": c.members.iter().map(|a| a.0.to_string()).collect::<Vec<_>>(),
-            })
-        })
-        .collect();
-
-    json!({
-        "clusters": clusters,
-        "count": clusters.len()
-    })
-}
-
 async fn execute_remove_agent(input: &Value, state: &AppState) -> Value {
     let Some(pool) = &state.pool else {
         return json!({ "error": "Agent pool not initialized" });
@@ -1421,24 +1124,6 @@ async fn execute_start_pipeline(input: &Value, state: &AppState, user_id: UserId
             }
         }
         Some(aid.clone())
-    } else if let Some(cid) = &first_stage_clone.cluster_id {
-        match state.repo.list_cluster_members(cid.0).await {
-            Ok(member_ids) => {
-                let picked = member_ids.first().map(|mid| crate::agents::AgentId(*mid));
-                if let Some(aid) = &picked {
-                    if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
-                        for doc in &docs {
-                            context_reading.push(crate::agents::FileContent {
-                                path: format!("context:{}", doc.ref_tag.as_deref().filter(|s| !s.is_empty()).unwrap_or(&doc.title)),
-                                content: doc.content.clone(),
-                            });
-                        }
-                    }
-                }
-                picked
-            }
-            Err(_) => None,
-        }
     } else {
         None
     };
@@ -1643,228 +1328,6 @@ async fn execute_get_pipeline_status(input: &Value, state: &AppState) -> Value {
         "status": status_str,
         "current_stage": run.current_stage,
         "stages": stage_results
-    })
-}
-
-async fn execute_create_schedule(input: &Value, state: &AppState, user_id: UserId) -> Value {
-    let Some(name) = input["name"].as_str() else {
-        return json!({ "error": "name is required" });
-    };
-    let Some(agent_str) = input["agent_id"].as_str() else {
-        return json!({ "error": "agent_id is required" });
-    };
-    let Some(interval) = input["interval_seconds"].as_u64() else {
-        return json!({ "error": "interval_seconds is required" });
-    };
-    let Some(task_title) = input["task_title"].as_str() else {
-        return json!({ "error": "task_title is required" });
-    };
-    let Some(task_description) = input["task_description"].as_str() else {
-        return json!({ "error": "task_description is required" });
-    };
-
-    let Ok(agent_uuid) = uuid::Uuid::parse_str(agent_str) else {
-        return json!({ "error": format!("Invalid agent UUID: {}", agent_str) });
-    };
-
-    let role = input["role"].as_str().map(String::from);
-
-    let mut mgr = state.schedule_manager.write().await;
-    let id = mgr.create_schedule(
-        name.to_string(),
-        crate::agents::AgentId(agent_uuid),
-        interval,
-        task_title.to_string(),
-        task_description.to_string(),
-        role.clone(),
-    );
-
-    // Persist to DB
-    if let Err(e) = state
-        .repo
-        .upsert_schedule(
-            user_id,
-            ScheduleRow {
-                id: id.0,
-                name: name.to_string(),
-                agent_id: agent_uuid,
-                interval_seconds: interval as i32,
-                task_title: task_title.to_string(),
-                task_description: task_description.to_string(),
-                role,
-                enabled: true,
-                last_run_at: None,
-            },
-        )
-        .await
-    {
-        tracing::error!("Failed to persist schedule: {}", e);
-    }
-
-    json!({
-        "status": "created",
-        "schedule_id": id.0.to_string(),
-        "name": name,
-        "interval_seconds": interval
-    })
-}
-
-async fn execute_list_schedules(state: &AppState) -> Value {
-    let mgr = state.schedule_manager.read().await;
-    let schedules: Vec<Value> = mgr
-        .list_schedules()
-        .iter()
-        .map(|s| {
-            json!({
-                "id": s.id.0.to_string(),
-                "name": s.name,
-                "agent_id": s.agent_id.0.to_string(),
-                "interval_seconds": s.interval_seconds,
-                "task_title": s.task_title,
-                "enabled": s.enabled,
-                "last_run_at": s.last_run_at.map(|t| t.to_rfc3339()),
-            })
-        })
-        .collect();
-
-    json!({
-        "schedules": schedules,
-        "count": schedules.len()
-    })
-}
-
-async fn execute_toggle_schedule(input: &Value, state: &AppState, user_id: UserId) -> Value {
-    let Some(schedule_str) = input["schedule_id"].as_str() else {
-        return json!({ "error": "schedule_id is required" });
-    };
-    let Some(enabled) = input["enabled"].as_bool() else {
-        return json!({ "error": "enabled is required" });
-    };
-
-    let Ok(schedule_uuid) = uuid::Uuid::parse_str(schedule_str) else {
-        return json!({ "error": format!("Invalid schedule UUID: {}", schedule_str) });
-    };
-
-    let mut mgr = state.schedule_manager.write().await;
-    let sid = ScheduleId(schedule_uuid);
-    match mgr.set_enabled(sid, enabled) {
-        Ok(()) => {
-            // Persist updated state
-            if let Some(schedule) = mgr.get_schedule(&sid) {
-                if let Err(e) = state
-                    .repo
-                    .upsert_schedule(
-                        user_id,
-                        ScheduleRow {
-                            id: schedule.id.0,
-                            name: schedule.name.clone(),
-                            agent_id: schedule.agent_id.0,
-                            interval_seconds: schedule.interval_seconds as i32,
-                            task_title: schedule.task_title.clone(),
-                            task_description: schedule.task_description.clone(),
-                            role: schedule.role.clone(),
-                            enabled: schedule.enabled,
-                            last_run_at: schedule.last_run_at,
-                        },
-                    )
-                    .await
-                {
-                    tracing::error!("Failed to persist schedule toggle: {}", e);
-                }
-            }
-            json!({
-                "status": if enabled { "enabled" } else { "disabled" },
-                "schedule_id": schedule_str
-            })
-        }
-        Err(e) => json!({ "error": e.to_string() }),
-    }
-}
-
-async fn execute_create_trigger(input: &Value, state: &AppState, user_id: UserId) -> Value {
-    let Some(name) = input["name"].as_str() else {
-        return json!({ "error": "name is required" });
-    };
-    let Some(event_str) = input["event_type"].as_str() else {
-        return json!({ "error": "event_type is required" });
-    };
-    let Some(agent_str) = input["agent_id"].as_str() else {
-        return json!({ "error": "agent_id is required" });
-    };
-    let Some(task_title) = input["task_title"].as_str() else {
-        return json!({ "error": "task_title is required" });
-    };
-    let Some(task_description) = input["task_description"].as_str() else {
-        return json!({ "error": "task_description is required" });
-    };
-
-    let Some(event_type) = TriggerEvent::from_str(event_str) else {
-        return json!({ "error": format!("Invalid event_type: {}. Use 'task_completed' or 'task_failed'", event_str) });
-    };
-    let Ok(agent_uuid) = uuid::Uuid::parse_str(agent_str) else {
-        return json!({ "error": format!("Invalid agent UUID: {}", agent_str) });
-    };
-
-    let role = input["role"].as_str().map(String::from);
-
-    let mut mgr = state.schedule_manager.write().await;
-    let id = mgr.create_trigger(
-        name.to_string(),
-        event_type,
-        crate::agents::AgentId(agent_uuid),
-        task_title.to_string(),
-        task_description.to_string(),
-        role.clone(),
-    );
-
-    // Persist to DB
-    if let Err(e) = state
-        .repo
-        .upsert_trigger(
-            user_id,
-            TriggerRow {
-                id: id.0,
-                name: name.to_string(),
-                event_type: event_str.to_string(),
-                agent_id: agent_uuid,
-                task_title: task_title.to_string(),
-                task_description: task_description.to_string(),
-                role,
-            },
-        )
-        .await
-    {
-        tracing::error!("Failed to persist trigger: {}", e);
-    }
-
-    json!({
-        "status": "created",
-        "trigger_id": id.0.to_string(),
-        "name": name,
-        "event_type": event_str
-    })
-}
-
-async fn execute_list_triggers(state: &AppState) -> Value {
-    let mgr = state.schedule_manager.read().await;
-    let triggers: Vec<Value> = mgr
-        .list_triggers()
-        .iter()
-        .map(|t| {
-            json!({
-                "id": t.id.0.to_string(),
-                "name": t.name,
-                "event_type": t.event_type.as_str(),
-                "agent_id": t.agent_id.0.to_string(),
-                "task_title": t.task_title,
-                "role": t.role,
-            })
-        })
-        .collect();
-
-    json!({
-        "triggers": triggers,
-        "count": triggers.len()
     })
 }
 
@@ -2495,7 +1958,7 @@ mod tests {
     #[test]
     fn agent_tools_returns_all_tools() {
         let tools = agent_tools();
-        assert_eq!(tools.len(), 31);
+        assert_eq!(tools.len(), 22);
         assert_eq!(tools[0].name, "list_agents");
         assert_eq!(tools[1].name, "list_roles");
         assert_eq!(tools[2].name, "create_agent");
@@ -2505,27 +1968,18 @@ mod tests {
         assert_eq!(tools[6].name, "list_pending_approvals");
         assert_eq!(tools[7].name, "respond_to_approval");
         assert_eq!(tools[8].name, "remove_agent");
-        assert_eq!(tools[9].name, "create_cluster");
-        assert_eq!(tools[10].name, "add_to_cluster");
-        assert_eq!(tools[11].name, "remove_from_cluster");
-        assert_eq!(tools[12].name, "list_clusters");
-        assert_eq!(tools[13].name, "create_pipeline");
-        assert_eq!(tools[14].name, "add_pipeline_stage");
-        assert_eq!(tools[15].name, "start_pipeline");
-        assert_eq!(tools[16].name, "get_pipeline_status");
-        assert_eq!(tools[17].name, "create_schedule");
-        assert_eq!(tools[18].name, "list_schedules");
-        assert_eq!(tools[19].name, "toggle_schedule");
-        assert_eq!(tools[20].name, "create_trigger");
-        assert_eq!(tools[21].name, "list_triggers");
-        assert_eq!(tools[22].name, "read_file");
-        assert_eq!(tools[23].name, "list_files");
-        assert_eq!(tools[24].name, "search_files");
-        assert_eq!(tools[26].name, "create_doc");
-        assert_eq!(tools[27].name, "update_doc");
-        assert_eq!(tools[28].name, "search_docs");
-        assert_eq!(tools[29].name, "submit_prd");
-        assert_eq!(tools[30].name, "submit_ticket");
+        assert_eq!(tools[9].name, "create_pipeline");
+        assert_eq!(tools[10].name, "add_pipeline_stage");
+        assert_eq!(tools[11].name, "start_pipeline");
+        assert_eq!(tools[12].name, "get_pipeline_status");
+        assert_eq!(tools[13].name, "read_file");
+        assert_eq!(tools[14].name, "list_files");
+        assert_eq!(tools[15].name, "search_files");
+        assert_eq!(tools[17].name, "create_doc");
+        assert_eq!(tools[18].name, "update_doc");
+        assert_eq!(tools[19].name, "search_docs");
+        assert_eq!(tools[20].name, "submit_prd");
+        assert_eq!(tools[21].name, "submit_ticket");
     }
 
     #[test]

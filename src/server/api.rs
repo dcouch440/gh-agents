@@ -2818,19 +2818,6 @@ pub async fn submit_context_response(State(state): State<AppState>, _auth: auth:
 }
 
 // ============================================================================
-// Usage Stats Endpoint (F5 - Cost Dashboard)
-// ============================================================================
-
-/// Get token usage summary for the last 24 hours.
-pub async fn get_usage_stats(State(state): State<AppState>) -> Result<Json<Vec<crate::db::UsageSummaryRow>>, StatusCode> {
-    let stats = state.repo.get_usage_summary(24).await.map_err(|e| {
-        tracing::error!("get_usage_stats failed: {e:?}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    Ok(Json(stats))
-}
-
-// ============================================================================
 // Pipeline Stage Template Rendering
 // ============================================================================
 
@@ -3015,92 +3002,6 @@ pub async fn render_pipeline_stage(
         "stage_name": stage.stage_name,
         "prompt": prompt
     })))
-}
-
-// ============================================================================
-// Stage Side Tasks
-// ============================================================================
-
-#[derive(Deserialize)]
-pub struct CreateSideTaskRequest {
-    pub agent_id: String,
-    pub input_definitions: Option<serde_json::Value>,
-    pub output_name: Option<String>,
-    pub blocking: Option<bool>,
-    pub output_schema: Option<serde_json::Value>,
-}
-
-#[derive(Serialize)]
-pub struct SideTaskResponse {
-    pub id: String,
-    pub agent_id: String,
-    pub input_definitions: serde_json::Value,
-    pub output_name: String,
-    pub blocking: bool,
-    pub output_schema: serde_json::Value,
-}
-
-impl SideTaskResponse {
-    fn from_row(row: crate::db::StageSideTaskRow) -> Self {
-        Self {
-            id: row.id.to_string(),
-            agent_id: row.agent_id.to_string(),
-            input_definitions: row.input_definitions,
-            output_name: row.output_name,
-            blocking: row.blocking,
-            output_schema: row.output_schema,
-        }
-    }
-}
-
-pub async fn list_stage_side_tasks(State(state): State<AppState>, _user: auth::AuthUser, Path((pipeline_id, stage_number)): Path<(String, i32)>) -> Result<Json<Vec<SideTaskResponse>>, StatusCode> {
-    let Ok(pipeline_uuid) = Uuid::parse_str(&pipeline_id) else {
-        return Err(StatusCode::BAD_REQUEST);
-    };
-    let rows = state.repo.list_stage_side_tasks(pipeline_uuid, stage_number).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let tasks = rows.into_iter().map(SideTaskResponse::from_row).collect();
-    Ok(Json(tasks))
-}
-
-pub async fn create_stage_side_task(
-    State(state): State<AppState>,
-    _user: auth::AuthUser,
-    Path((pipeline_id, stage_number)): Path<(String, i32)>,
-    Json(request): Json<CreateSideTaskRequest>,
-) -> Result<(StatusCode, Json<SideTaskResponse>), StatusCode> {
-    let Ok(pipeline_uuid) = Uuid::parse_str(&pipeline_id) else {
-        return Err(StatusCode::BAD_REQUEST);
-    };
-    let Ok(agent_uuid) = Uuid::parse_str(&request.agent_id) else {
-        return Err(StatusCode::BAD_REQUEST);
-    };
-
-    let row = crate::db::StageSideTaskRow {
-        id: Uuid::new_v4(),
-        pipeline_id: pipeline_uuid,
-        stage_number,
-        agent_id: agent_uuid,
-        input_definitions: request.input_definitions.unwrap_or_else(|| serde_json::json!([])),
-        output_name: request.output_name.unwrap_or_default(),
-        blocking: request.blocking.unwrap_or(false),
-        output_schema: request.output_schema.unwrap_or_else(|| serde_json::json!({"fields": []})),
-    };
-
-    state.repo.upsert_stage_side_task(row.clone()).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    Ok((StatusCode::CREATED, Json(SideTaskResponse::from_row(row))))
-}
-
-pub async fn delete_stage_side_task(
-    State(state): State<AppState>,
-    _user: auth::AuthUser,
-    Path((_pipeline_id, _stage_number, side_task_id)): Path<(String, i32, String)>,
-) -> Result<StatusCode, StatusCode> {
-    let Ok(side_task_uuid) = Uuid::parse_str(&side_task_id) else {
-        return Err(StatusCode::BAD_REQUEST);
-    };
-    state.repo.delete_stage_side_task(side_task_uuid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(StatusCode::NO_CONTENT)
 }
 
 // ============================================================================
@@ -3328,24 +3229,6 @@ pub async fn approve_pipeline_run(
                                 }
                             }
                             Some(aid.clone())
-                        } else if let Some(cid) = &next_stage.cluster_id {
-                            match state.repo.list_cluster_members(cid.0).await {
-                                Ok(member_ids) => {
-                                    let picked = member_ids.first().map(|mid| crate::agents::AgentId(*mid));
-                                    if let Some(aid) = &picked {
-                                        if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
-                                            for doc in &docs {
-                                                context_reading.push(crate::agents::FileContent {
-                                                    path: format!("context:{}", doc.ref_tag.as_deref().filter(|s| !s.is_empty()).unwrap_or(&doc.title)),
-                                                    content: doc.content.clone(),
-                                                });
-                                            }
-                                        }
-                                    }
-                                    picked
-                                }
-                                Err(_) => None,
-                            }
                         } else {
                             None
                         };
@@ -3552,7 +3435,7 @@ mod tests {
     use std::sync::Arc;
 
     use crate::db::traits::{MockUserRepo, ServerRepo};
-    use crate::db::{ChatMessageRow, PipelineRow, PipelineStageRow, ScheduleRow, TriggerRow};
+    use crate::db::{ChatMessageRow, PipelineRow, PipelineStageRow};
     use crate::types::{User, UserId};
 
     /// In-memory implementation of ServerRepo for tests (no Postgres needed).
@@ -3709,24 +3592,6 @@ mod tests {
         async fn set_agent_context(&self, _agent_id: Uuid, _document_ids: Vec<Uuid>) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn list_persisted_clusters(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::ClusterRow>> {
-            Ok(vec![])
-        }
-        async fn upsert_cluster(&self, _user_id: UserId, _cluster: crate::db::ClusterRow) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn delete_cluster(&self, _cluster_id: Uuid) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn list_cluster_members(&self, _cluster_id: Uuid) -> anyhow::Result<Vec<Uuid>> {
-            Ok(vec![])
-        }
-        async fn add_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn remove_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> {
-            Ok(())
-        }
         async fn list_pipelines(&self, _user_id: UserId) -> anyhow::Result<Vec<PipelineRow>> {
             Ok(vec![])
         }
@@ -3740,36 +3605,6 @@ mod tests {
             Ok(vec![])
         }
         async fn upsert_pipeline_stage(&self, _stage: PipelineStageRow) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn list_stage_side_tasks(&self, _pipeline_id: Uuid, _stage_number: i32) -> anyhow::Result<Vec<crate::db::StageSideTaskRow>> {
-            Ok(vec![])
-        }
-        async fn upsert_stage_side_task(&self, _side_task: crate::db::StageSideTaskRow) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn delete_stage_side_task(&self, _side_task_id: Uuid) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn list_schedules(&self, _user_id: UserId) -> anyhow::Result<Vec<ScheduleRow>> {
-            Ok(vec![])
-        }
-        async fn upsert_schedule(&self, _user_id: UserId, _schedule: ScheduleRow) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn delete_schedule(&self, _schedule_id: Uuid) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn update_schedule_last_run(&self, _schedule_id: Uuid, _last_run_at: DateTime<Utc>) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn list_triggers(&self, _user_id: UserId) -> anyhow::Result<Vec<TriggerRow>> {
-            Ok(vec![])
-        }
-        async fn upsert_trigger(&self, _user_id: UserId, _trigger: TriggerRow) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn delete_trigger(&self, _trigger_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
         async fn create_session(&self, _user_id: UserId, _session_id: Uuid, _mode_id: &str, _title: &str) -> anyhow::Result<()> {
@@ -3799,12 +3634,6 @@ mod tests {
         async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> {
             Ok(0)
         }
-        async fn insert_token_usage(&self, _session_id: Option<Uuid>, _agent_id: Option<Uuid>, _tier: &str, _model_id: &str, _input_tokens: i64, _output_tokens: i64) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn get_usage_summary(&self, _since_hours: u32) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> {
-            Ok(vec![])
-        }
         async fn create_pipeline_run(&self, _run: &crate::db::PipelineRunRow) -> anyhow::Result<()> {
             Ok(())
         }
@@ -3825,20 +3654,6 @@ mod tests {
         }
         async fn list_stage_executions(&self, _run_id: Uuid) -> anyhow::Result<Vec<crate::db::StageExecutionRow>> {
             Ok(vec![])
-        }
-
-        async fn insert_tool_call(
-            &self,
-            _session_id: Option<Uuid>,
-            _message_id: Uuid,
-            _round: i32,
-            _tool_name: &str,
-            _tool_use_id: &str,
-            _input: &serde_json::Value,
-            _output: &str,
-            _latency_ms: i32,
-        ) -> anyhow::Result<()> {
-            Ok(())
         }
     }
 
@@ -5646,85 +5461,5 @@ mod tests {
         assert!(result.contains("# Goal"));
         assert!(result.contains("- x: 1"));
         assert!(!result.contains("# Output Schema"));
-    }
-
-    // === Stage side task endpoint tests ===
-
-    #[tokio::test]
-    async fn list_stage_side_tasks_returns_200() {
-        let (app, jwt_secret) = setup_test_app();
-        let token = create_test_token(&jwt_secret);
-        let pipeline_id = Uuid::new_v4();
-
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .method("GET")
-                    .uri(format!("/api/pipelines/{}/stages/0/side-tasks", pipeline_id))
-                    .header("authorization", format!("Bearer {}", token))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::OK);
-    }
-
-    #[tokio::test]
-    async fn create_stage_side_task_returns_201() {
-        let (app, jwt_secret) = setup_test_app();
-        let token = create_test_token(&jwt_secret);
-        let pipeline_id = Uuid::new_v4();
-        let agent_id = Uuid::new_v4();
-
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri(format!("/api/pipelines/{}/stages/0/side-tasks", pipeline_id))
-                    .header("content-type", "application/json")
-                    .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(
-                        serde_json::json!({
-                            "agent_id": agent_id.to_string(),
-                            "output_name": "docs",
-                            "blocking": false
-                        })
-                        .to_string(),
-                    ))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(resp["agent_id"].as_str().unwrap(), agent_id.to_string());
-        assert_eq!(resp["output_name"].as_str().unwrap(), "docs");
-        assert_eq!(resp["blocking"].as_bool().unwrap(), false);
-    }
-
-    #[tokio::test]
-    async fn delete_stage_side_task_returns_204() {
-        let (app, jwt_secret) = setup_test_app();
-        let token = create_test_token(&jwt_secret);
-        let pipeline_id = Uuid::new_v4();
-        let side_task_id = Uuid::new_v4();
-
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .method("DELETE")
-                    .uri(format!("/api/pipelines/{}/stages/0/side-tasks/{}", pipeline_id, side_task_id))
-                    .header("authorization", format!("Bearer {}", token))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::NO_CONTENT);
     }
 }
