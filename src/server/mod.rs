@@ -123,8 +123,6 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         .route(routes::TOOLS, get(api::list_tools).post(api::create_tool))
         .route(routes::TOOL, get(api::get_tool).patch(api::update_tool).delete(api::delete_tool))
         .route(routes::PIPELINE_STAGE_RENDER, post(api::render_pipeline_stage))
-        .route(routes::PIPELINE_STAGE_SIDE_TASKS, get(api::list_stage_side_tasks).post(api::create_stage_side_task))
-        .route(routes::PIPELINE_STAGE_SIDE_TASK, delete(api::delete_stage_side_task))
         .route(routes::PIPELINE_RUNS, get(api::list_pipeline_runs))
         .route(routes::PIPELINE_RUN, get(api::get_pipeline_run))
         .route(routes::PIPELINE_RUN_APPROVE, post(api::approve_pipeline_run))
@@ -166,7 +164,6 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         .route(routes::COSTS, get(api::get_costs))
         .route(routes::RESULTS, get(api::list_results))
         .route(routes::RESULT, get(api::get_result).delete(api::delete_result))
-        .route(routes::STATS, get(api::get_usage_stats))
         .route(routes::CONTEXT_RESPONSE, post(api::submit_context_response))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth))
 }
@@ -322,7 +319,7 @@ async fn shutdown_signal() {
 mod tests {
     use super::*;
     use crate::db::traits::ServerRepo;
-    use crate::db::{ChatMessageRow, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow};
+    use crate::db::{ChatMessageRow, PipelineRow, PipelineStageRow, SessionRow};
     use crate::types::UserId;
     use axum::{
         body::Body,
@@ -440,24 +437,6 @@ mod tests {
         async fn set_agent_context(&self, _agent_id: Uuid, _document_ids: Vec<Uuid>) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn list_persisted_clusters(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::ClusterRow>> {
-            Ok(vec![])
-        }
-        async fn upsert_cluster(&self, _user_id: UserId, _cluster: crate::db::ClusterRow) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn delete_cluster(&self, _cluster_id: Uuid) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn list_cluster_members(&self, _cluster_id: Uuid) -> anyhow::Result<Vec<Uuid>> {
-            Ok(vec![])
-        }
-        async fn add_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn remove_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> {
-            Ok(())
-        }
         async fn list_pipelines(&self, _user_id: UserId) -> anyhow::Result<Vec<PipelineRow>> {
             Ok(vec![])
         }
@@ -471,36 +450,6 @@ mod tests {
             Ok(vec![])
         }
         async fn upsert_pipeline_stage(&self, _stage: PipelineStageRow) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn list_stage_side_tasks(&self, _pipeline_id: Uuid, _stage_number: i32) -> anyhow::Result<Vec<crate::db::StageSideTaskRow>> {
-            Ok(vec![])
-        }
-        async fn upsert_stage_side_task(&self, _side_task: crate::db::StageSideTaskRow) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn delete_stage_side_task(&self, _side_task_id: Uuid) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn list_schedules(&self, _user_id: UserId) -> anyhow::Result<Vec<ScheduleRow>> {
-            Ok(vec![])
-        }
-        async fn upsert_schedule(&self, _user_id: UserId, _schedule: ScheduleRow) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn delete_schedule(&self, _schedule_id: Uuid) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn update_schedule_last_run(&self, _schedule_id: Uuid, _last_run_at: DateTime<Utc>) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn list_triggers(&self, _user_id: UserId) -> anyhow::Result<Vec<TriggerRow>> {
-            Ok(vec![])
-        }
-        async fn upsert_trigger(&self, _user_id: UserId, _trigger: TriggerRow) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn delete_trigger(&self, _trigger_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
         async fn create_session(&self, _user_id: UserId, _session_id: Uuid, _mode_id: &str, _title: &str) -> anyhow::Result<()> {
@@ -530,12 +479,6 @@ mod tests {
         async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> {
             Ok(0)
         }
-        async fn insert_token_usage(&self, _session_id: Option<Uuid>, _agent_id: Option<Uuid>, _tier: &str, _model_id: &str, _input_tokens: i64, _output_tokens: i64) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn get_usage_summary(&self, _since_hours: u32) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> {
-            Ok(vec![])
-        }
         async fn create_pipeline_run(&self, _run: &crate::db::PipelineRunRow) -> anyhow::Result<()> {
             Ok(())
         }
@@ -556,20 +499,6 @@ mod tests {
         }
         async fn list_stage_executions(&self, _run_id: Uuid) -> anyhow::Result<Vec<crate::db::StageExecutionRow>> {
             Ok(vec![])
-        }
-
-        async fn insert_tool_call(
-            &self,
-            _session_id: Option<Uuid>,
-            _message_id: Uuid,
-            _round: i32,
-            _tool_name: &str,
-            _tool_use_id: &str,
-            _input: &serde_json::Value,
-            _output: &str,
-            _latency_ms: i32,
-        ) -> anyhow::Result<()> {
-            Ok(())
         }
     }
 

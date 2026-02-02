@@ -9,9 +9,8 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::db::{
-    AgentExecutionRow, AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageMemberRow,
-    PipelineStageRow, PromptTemplateRow, ResultRow, ScheduleRow, SessionRow, StageExecutionRow, StageSideTaskRow, StepDocumentRow, TokenLedgerRow, ToolRow, TriggerRow, UsageSummaryRow, WorkflowRow,
-    WorkflowStepEdgeRow, WorkflowStepRow,
+    AgentExecutionRow, AgentRow, ChatMessageRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageMemberRow, PipelineStageRow,
+    PromptTemplateRow, ResultRow, SessionRow, StageExecutionRow, StepDocumentRow, TokenLedgerRow, ToolRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -135,26 +134,6 @@ pub trait ServerRepo: Send + Sync {
     /// Set the full context document list for an agent (replaces existing).
     async fn set_agent_context(&self, agent_id: Uuid, document_ids: Vec<Uuid>) -> Result<()>;
 
-    // --- Cluster persistence ---
-
-    /// List all clusters for a user.
-    async fn list_persisted_clusters(&self, user_id: UserId) -> Result<Vec<ClusterRow>>;
-
-    /// Insert or update a cluster.
-    async fn upsert_cluster(&self, user_id: UserId, cluster: ClusterRow) -> Result<()>;
-
-    /// Delete a cluster by ID.
-    async fn delete_cluster(&self, cluster_id: Uuid) -> Result<()>;
-
-    /// List agent IDs in a cluster.
-    async fn list_cluster_members(&self, cluster_id: Uuid) -> Result<Vec<Uuid>>;
-
-    /// Add an agent to a cluster.
-    async fn add_cluster_member(&self, cluster_id: Uuid, agent_id: Uuid) -> Result<()>;
-
-    /// Remove an agent from a cluster.
-    async fn remove_cluster_member(&self, cluster_id: Uuid, agent_id: Uuid) -> Result<()>;
-
     // --- Pipeline persistence ---
 
     /// List all pipelines for a user.
@@ -171,42 +150,6 @@ pub trait ServerRepo: Send + Sync {
 
     /// Insert or update a pipeline stage.
     async fn upsert_pipeline_stage(&self, stage: PipelineStageRow) -> Result<()>;
-
-    // --- Stage side task persistence ---
-
-    /// List side tasks for a pipeline stage.
-    async fn list_stage_side_tasks(&self, pipeline_id: Uuid, stage_number: i32) -> Result<Vec<StageSideTaskRow>>;
-
-    /// Insert or update a stage side task.
-    async fn upsert_stage_side_task(&self, side_task: StageSideTaskRow) -> Result<()>;
-
-    /// Delete a stage side task by ID.
-    async fn delete_stage_side_task(&self, side_task_id: Uuid) -> Result<()>;
-
-    // --- Schedule persistence ---
-
-    /// List all schedules for a user.
-    async fn list_schedules(&self, user_id: UserId) -> Result<Vec<ScheduleRow>>;
-
-    /// Insert or update a schedule.
-    async fn upsert_schedule(&self, user_id: UserId, schedule: ScheduleRow) -> Result<()>;
-
-    /// Delete a schedule by ID.
-    async fn delete_schedule(&self, schedule_id: Uuid) -> Result<()>;
-
-    /// Update last_run_at for a schedule.
-    async fn update_schedule_last_run(&self, schedule_id: Uuid, last_run_at: DateTime<Utc>) -> Result<()>;
-
-    // --- Trigger persistence ---
-
-    /// List all triggers for a user.
-    async fn list_triggers(&self, user_id: UserId) -> Result<Vec<TriggerRow>>;
-
-    /// Insert or update a trigger.
-    async fn upsert_trigger(&self, user_id: UserId, trigger: TriggerRow) -> Result<()>;
-
-    /// Delete a trigger by ID.
-    async fn delete_trigger(&self, trigger_id: Uuid) -> Result<()>;
 
     // --- Session management ---
 
@@ -237,14 +180,6 @@ pub trait ServerRepo: Send + Sync {
     /// Count messages in a session.
     async fn count_session_messages(&self, session_id: Uuid) -> Result<u32>;
 
-    // --- Token usage tracking ---
-
-    /// Insert a token usage record.
-    async fn insert_token_usage(&self, session_id: Option<Uuid>, agent_id: Option<Uuid>, tier: &str, model_id: &str, input_tokens: i64, output_tokens: i64) -> Result<()>;
-
-    /// Get aggregated usage summary for the last N hours.
-    async fn get_usage_summary(&self, since_hours: u32) -> Result<Vec<UsageSummaryRow>>;
-
     // --- Pipeline run persistence ---
 
     /// Create a pipeline run record.
@@ -267,21 +202,6 @@ pub trait ServerRepo: Send + Sync {
 
     /// List stage executions for a run.
     async fn list_stage_executions(&self, run_id: Uuid) -> Result<Vec<StageExecutionRow>>;
-
-    // --- Tool call logging ---
-
-    /// Insert a tool call record.
-    async fn insert_tool_call(
-        &self,
-        session_id: Option<Uuid>,
-        message_id: Uuid,
-        round: i32,
-        tool_name: &str,
-        tool_use_id: &str,
-        input: &serde_json::Value,
-        output: &str,
-        latency_ms: i32,
-    ) -> Result<()>;
 }
 
 // ============================================================================

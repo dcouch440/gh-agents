@@ -498,30 +498,6 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                             context_docs = docs;
                                         }
                                         Some(aid.clone())
-                                    } else if let Some(cid) = &next_stage.cluster_id {
-                                        // Pick an agent from the cluster (first available member)
-                                        match state.repo.list_cluster_members(cid.0).await {
-                                            Ok(member_ids) => {
-                                                let picked = member_ids.first().map(|mid| crate::agents::AgentId(*mid));
-                                                // Load context docs for picked agent
-                                                if let Some(aid) = &picked {
-                                                    if let Ok(docs) = state.repo.get_agent_context(aid.0).await {
-                                                        for doc in &docs {
-                                                            context_reading.push(FileContent {
-                                                                path: format!("context:{}", doc.ref_tag.as_deref().filter(|s| !s.is_empty()).unwrap_or(&doc.title)),
-                                                                content: doc.content.clone(),
-                                                            });
-                                                        }
-                                                        context_docs = docs;
-                                                    }
-                                                }
-                                                picked
-                                            }
-                                            Err(e) => {
-                                                warn!("Failed to list cluster members: {}", e);
-                                                None
-                                            }
-                                        }
                                     } else {
                                         None
                                     };
@@ -809,14 +785,11 @@ pub fn spawn_schedule_runner(state: AppState) -> Option<tokio::task::JoinHandle<
                 }
                 drop(disp);
 
-                // Mark as run and persist
+                // Mark as run in memory
                 let now = chrono::Utc::now();
                 {
                     let mut mgr = state.schedule_manager.write().await;
                     mgr.mark_run(schedule.id, now);
-                }
-                if let Err(e) = state.repo.update_schedule_last_run(schedule.id.0, now).await {
-                    error!("Failed to persist schedule last_run_at: {}", e);
                 }
             }
         }
@@ -1009,18 +982,6 @@ async fn handle_message(state: &AppState, provider: Arc<dyn LLMProvider + Send +
             }
         };
 
-        // Record token usage in the background
-        {
-            let repo = state.repo.clone();
-            let session_id = msg.session_id;
-            let model = model_id.clone();
-            let input_tokens = response.usage.input_tokens as i64;
-            let output_tokens = response.usage.output_tokens as i64;
-            tokio::spawn(async move {
-                let _ = repo.insert_token_usage(session_id, None, "orchestrator", &model, input_tokens, output_tokens).await;
-            });
-        }
-
         // Check if we need to execute tools
         if response.stop_reason == StopReason::ToolUse {
             // Add assistant message with all content blocks (text + tool_use)
@@ -1051,22 +1012,6 @@ async fn handle_message(state: &AppState, provider: Arc<dyn LLMProvider + Send +
                     let result = tools::execute_tool(name, input, state, user_id, msg.session_id).await;
                     let tool_latency = tool_start.elapsed().as_millis() as i32;
                     let result_str = serde_json::to_string(&result).unwrap_or_else(|_| result.to_string());
-
-                    // Persist tool call to database
-                    {
-                        let repo = state.repo.clone();
-                        let session_id = msg.session_id;
-                        let tool_name = name.clone();
-                        let tool_use_id = id.clone();
-                        let tool_input = input.clone();
-                        let tool_output = result_str.clone();
-                        let tool_round = round;
-                        tokio::spawn(async move {
-                            let _ = repo
-                                .insert_tool_call(session_id, message_id, tool_round, &tool_name, &tool_use_id, &tool_input, &tool_output, tool_latency)
-                                .await;
-                        });
-                    }
 
                     // Truncate oversized tool results to keep context manageable
                     let result_str = if result_str.len() > crate::constants::TRUNCATE_TOOL_RESULT {
@@ -1186,7 +1131,7 @@ async fn handle_message(state: &AppState, provider: Arc<dyn LLMProvider + Send +
 mod tests {
     use super::*;
     use crate::db::traits::ServerRepo;
-    use crate::db::{ChatMessageRow, PipelineRow, PipelineStageRow, ScheduleRow, SessionRow, TriggerRow};
+    use crate::db::{ChatMessageRow, PipelineRow, PipelineStageRow, SessionRow};
     use crate::types::{AppConfig, UserId};
     use chrono::{DateTime, Utc};
     use std::sync::Arc;
@@ -1282,24 +1227,6 @@ mod tests {
         async fn set_agent_context(&self, _agent_id: Uuid, _document_ids: Vec<Uuid>) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn list_persisted_clusters(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::ClusterRow>> {
-            Ok(vec![])
-        }
-        async fn upsert_cluster(&self, _user_id: UserId, _cluster: crate::db::ClusterRow) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn delete_cluster(&self, _cluster_id: Uuid) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn list_cluster_members(&self, _cluster_id: Uuid) -> anyhow::Result<Vec<Uuid>> {
-            Ok(vec![])
-        }
-        async fn add_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn remove_cluster_member(&self, _cluster_id: Uuid, _agent_id: Uuid) -> anyhow::Result<()> {
-            Ok(())
-        }
         async fn list_pipelines(&self, _user_id: UserId) -> anyhow::Result<Vec<PipelineRow>> {
             Ok(vec![])
         }
@@ -1313,36 +1240,6 @@ mod tests {
             Ok(vec![])
         }
         async fn upsert_pipeline_stage(&self, _stage: PipelineStageRow) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn list_stage_side_tasks(&self, _pipeline_id: Uuid, _stage_number: i32) -> anyhow::Result<Vec<crate::db::StageSideTaskRow>> {
-            Ok(vec![])
-        }
-        async fn upsert_stage_side_task(&self, _side_task: crate::db::StageSideTaskRow) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn delete_stage_side_task(&self, _side_task_id: Uuid) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn list_schedules(&self, _user_id: UserId) -> anyhow::Result<Vec<ScheduleRow>> {
-            Ok(vec![])
-        }
-        async fn upsert_schedule(&self, _user_id: UserId, _schedule: ScheduleRow) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn delete_schedule(&self, _schedule_id: Uuid) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn update_schedule_last_run(&self, _schedule_id: Uuid, _last_run_at: DateTime<Utc>) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn list_triggers(&self, _user_id: UserId) -> anyhow::Result<Vec<TriggerRow>> {
-            Ok(vec![])
-        }
-        async fn upsert_trigger(&self, _user_id: UserId, _trigger: TriggerRow) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn delete_trigger(&self, _trigger_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
         async fn create_session(&self, _user_id: UserId, _session_id: Uuid, _mode_id: &str, _title: &str) -> anyhow::Result<()> {
@@ -1372,12 +1269,6 @@ mod tests {
         async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> {
             Ok(0)
         }
-        async fn insert_token_usage(&self, _session_id: Option<Uuid>, _agent_id: Option<Uuid>, _tier: &str, _model_id: &str, _input_tokens: i64, _output_tokens: i64) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn get_usage_summary(&self, _since_hours: u32) -> anyhow::Result<Vec<crate::db::UsageSummaryRow>> {
-            Ok(vec![])
-        }
         async fn create_pipeline_run(&self, _run: &crate::db::PipelineRunRow) -> anyhow::Result<()> {
             Ok(())
         }
@@ -1398,20 +1289,6 @@ mod tests {
         }
         async fn list_stage_executions(&self, _run_id: Uuid) -> anyhow::Result<Vec<crate::db::StageExecutionRow>> {
             Ok(vec![])
-        }
-
-        async fn insert_tool_call(
-            &self,
-            _session_id: Option<Uuid>,
-            _message_id: Uuid,
-            _round: i32,
-            _tool_name: &str,
-            _tool_use_id: &str,
-            _input: &serde_json::Value,
-            _output: &str,
-            _latency_ms: i32,
-        ) -> anyhow::Result<()> {
-            Ok(())
         }
     }
 

@@ -10,9 +10,8 @@ use crate::db::traits::{
     AgentExecutionRepo, DocumentRepo, MergeQueueRepo, ModelSpendRow, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, ServerRepo, TokenLedgerRepo, UserRepo, WorkflowRepo,
 };
 use crate::db::{
-    AgentExecutionRow, AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageMemberRow,
-    PipelineStageRow, PromptTemplateRow, ResultRow, ScheduleRow, SessionRow, StageExecutionRow, StageSideTaskRow, StepDocumentRow, TokenLedgerRow, ToolRow, TriggerRow, UsageSummaryRow, WorkflowRow,
-    WorkflowStepEdgeRow, WorkflowStepRow,
+    AgentExecutionRow, AgentRow, ChatMessageRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageMemberRow, PipelineStageRow,
+    PromptTemplateRow, ResultRow, SessionRow, StageExecutionRow, StepDocumentRow, TokenLedgerRow, ToolRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -457,80 +456,6 @@ impl ServerRepo for PgRepo {
         Ok(())
     }
 
-    // --- Cluster persistence ---
-
-    async fn list_persisted_clusters(&self, user_id: UserId) -> Result<Vec<ClusterRow>> {
-        let rows = sqlx::query_as::<_, PgClusterRow>("SELECT id, name, description, conventions, shared_files FROM clusters WHERE user_id = $1")
-            .bind(user_id.0)
-            .fetch_all(&self.pool)
-            .await?;
-
-        Ok(rows
-            .into_iter()
-            .map(|r| ClusterRow {
-                id: r.id,
-                name: r.name,
-                description: r.description,
-                conventions: r.conventions,
-                shared_files: r.shared_files,
-            })
-            .collect())
-    }
-
-    async fn upsert_cluster(&self, user_id: UserId, cluster: ClusterRow) -> Result<()> {
-        sqlx::query(
-            r#"
-            INSERT INTO clusters (id, user_id, name, description, conventions, shared_files)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (id) DO UPDATE SET
-                name = EXCLUDED.name,
-                description = EXCLUDED.description,
-                conventions = EXCLUDED.conventions,
-                shared_files = EXCLUDED.shared_files
-        "#,
-        )
-        .bind(cluster.id)
-        .bind(user_id.0)
-        .bind(&cluster.name)
-        .bind(&cluster.description)
-        .bind(&cluster.conventions)
-        .bind(&cluster.shared_files)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    async fn delete_cluster(&self, cluster_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM clusters WHERE id = $1").bind(cluster_id).execute(&self.pool).await?;
-        Ok(())
-    }
-
-    async fn list_cluster_members(&self, cluster_id: Uuid) -> Result<Vec<Uuid>> {
-        let rows: Vec<(Uuid,)> = sqlx::query_as("SELECT agent_id FROM cluster_members WHERE cluster_id = $1")
-            .bind(cluster_id)
-            .fetch_all(&self.pool)
-            .await?;
-        Ok(rows.into_iter().map(|r| r.0).collect())
-    }
-
-    async fn add_cluster_member(&self, cluster_id: Uuid, agent_id: Uuid) -> Result<()> {
-        sqlx::query("INSERT INTO cluster_members (cluster_id, agent_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
-            .bind(cluster_id)
-            .bind(agent_id)
-            .execute(&self.pool)
-            .await?;
-        Ok(())
-    }
-
-    async fn remove_cluster_member(&self, cluster_id: Uuid, agent_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM cluster_members WHERE cluster_id = $1 AND agent_id = $2")
-            .bind(cluster_id)
-            .bind(agent_id)
-            .execute(&self.pool)
-            .await?;
-        Ok(())
-    }
-
     // --- Pipeline persistence ---
 
     async fn list_pipelines(&self, user_id: UserId) -> Result<Vec<PipelineRow>> {
@@ -621,188 +546,6 @@ impl ServerRepo for PgRepo {
         Ok(())
     }
 
-    // --- Stage side task persistence ---
-
-    async fn list_stage_side_tasks(&self, pipeline_id: Uuid, stage_number: i32) -> Result<Vec<StageSideTaskRow>> {
-        let rows: Vec<(Uuid, Uuid, i32, Uuid, serde_json::Value, String, bool, serde_json::Value)> = sqlx::query_as(
-            "SELECT id, pipeline_id, stage_number, agent_id, input_definitions, output_name, blocking, output_schema FROM stage_side_tasks WHERE pipeline_id = $1 AND stage_number = $2",
-        )
-        .bind(pipeline_id)
-        .bind(stage_number)
-        .fetch_all(&self.pool)
-        .await?;
-
-        Ok(rows
-            .into_iter()
-            .map(|(id, pipeline_id, stage_number, agent_id, input_definitions, output_name, blocking, output_schema)| StageSideTaskRow {
-                id,
-                pipeline_id,
-                stage_number,
-                agent_id,
-                input_definitions,
-                output_name,
-                blocking,
-                output_schema,
-            })
-            .collect())
-    }
-
-    async fn upsert_stage_side_task(&self, side_task: StageSideTaskRow) -> Result<()> {
-        sqlx::query(
-            r#"
-            INSERT INTO stage_side_tasks (id, pipeline_id, stage_number, agent_id, input_definitions, output_name, blocking, output_schema)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            ON CONFLICT (id) DO UPDATE SET
-                agent_id = EXCLUDED.agent_id,
-                input_definitions = EXCLUDED.input_definitions,
-                output_name = EXCLUDED.output_name,
-                blocking = EXCLUDED.blocking,
-                output_schema = EXCLUDED.output_schema
-        "#,
-        )
-        .bind(side_task.id)
-        .bind(side_task.pipeline_id)
-        .bind(side_task.stage_number)
-        .bind(side_task.agent_id)
-        .bind(&side_task.input_definitions)
-        .bind(&side_task.output_name)
-        .bind(side_task.blocking)
-        .bind(&side_task.output_schema)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    async fn delete_stage_side_task(&self, side_task_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM stage_side_tasks WHERE id = $1").bind(side_task_id).execute(&self.pool).await?;
-        Ok(())
-    }
-
-    // --- Schedule persistence ---
-
-    async fn list_schedules(&self, user_id: UserId) -> Result<Vec<ScheduleRow>> {
-        let rows: Vec<(Uuid, String, Uuid, i32, String, String, Option<String>, bool, Option<DateTime<Utc>>)> =
-            sqlx::query_as("SELECT id, name, agent_id, interval_seconds, task_title, task_description, role, enabled, last_run_at FROM schedules WHERE user_id = $1")
-                .bind(user_id.0)
-                .fetch_all(&self.pool)
-                .await?;
-
-        Ok(rows
-            .into_iter()
-            .map(|(id, name, agent_id, interval_seconds, task_title, task_description, role, enabled, last_run_at)| ScheduleRow {
-                id,
-                name,
-                agent_id,
-                interval_seconds,
-                task_title,
-                task_description,
-                role,
-                enabled,
-                last_run_at,
-            })
-            .collect())
-    }
-
-    async fn upsert_schedule(&self, user_id: UserId, schedule: ScheduleRow) -> Result<()> {
-        sqlx::query(
-            r#"
-            INSERT INTO schedules (id, user_id, name, agent_id, interval_seconds, task_title, task_description, role, enabled, last_run_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            ON CONFLICT (id) DO UPDATE SET
-                name = EXCLUDED.name,
-                agent_id = EXCLUDED.agent_id,
-                interval_seconds = EXCLUDED.interval_seconds,
-                task_title = EXCLUDED.task_title,
-                task_description = EXCLUDED.task_description,
-                role = EXCLUDED.role,
-                enabled = EXCLUDED.enabled,
-                last_run_at = EXCLUDED.last_run_at
-        "#,
-        )
-        .bind(schedule.id)
-        .bind(user_id.0)
-        .bind(&schedule.name)
-        .bind(schedule.agent_id)
-        .bind(schedule.interval_seconds)
-        .bind(&schedule.task_title)
-        .bind(&schedule.task_description)
-        .bind(&schedule.role)
-        .bind(schedule.enabled)
-        .bind(schedule.last_run_at)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    async fn delete_schedule(&self, schedule_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM schedules WHERE id = $1").bind(schedule_id).execute(&self.pool).await?;
-        Ok(())
-    }
-
-    async fn update_schedule_last_run(&self, schedule_id: Uuid, last_run_at: DateTime<Utc>) -> Result<()> {
-        sqlx::query("UPDATE schedules SET last_run_at = $1 WHERE id = $2")
-            .bind(last_run_at)
-            .bind(schedule_id)
-            .execute(&self.pool)
-            .await?;
-        Ok(())
-    }
-
-    // --- Trigger persistence ---
-
-    async fn list_triggers(&self, user_id: UserId) -> Result<Vec<TriggerRow>> {
-        let rows: Vec<(Uuid, String, String, Uuid, String, String, Option<String>)> =
-            sqlx::query_as("SELECT id, name, event_type, agent_id, task_title, task_description, role FROM triggers WHERE user_id = $1")
-                .bind(user_id.0)
-                .fetch_all(&self.pool)
-                .await?;
-
-        Ok(rows
-            .into_iter()
-            .map(|(id, name, event_type, agent_id, task_title, task_description, role)| TriggerRow {
-                id,
-                name,
-                event_type,
-                agent_id,
-                task_title,
-                task_description,
-                role,
-            })
-            .collect())
-    }
-
-    async fn upsert_trigger(&self, user_id: UserId, trigger: TriggerRow) -> Result<()> {
-        sqlx::query(
-            r#"
-            INSERT INTO triggers (id, user_id, name, event_type, agent_id, task_title, task_description, role)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            ON CONFLICT (id) DO UPDATE SET
-                name = EXCLUDED.name,
-                event_type = EXCLUDED.event_type,
-                agent_id = EXCLUDED.agent_id,
-                task_title = EXCLUDED.task_title,
-                task_description = EXCLUDED.task_description,
-                role = EXCLUDED.role
-        "#,
-        )
-        .bind(trigger.id)
-        .bind(user_id.0)
-        .bind(&trigger.name)
-        .bind(&trigger.event_type)
-        .bind(trigger.agent_id)
-        .bind(&trigger.task_title)
-        .bind(&trigger.task_description)
-        .bind(&trigger.role)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    async fn delete_trigger(&self, trigger_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM triggers WHERE id = $1").bind(trigger_id).execute(&self.pool).await?;
-        Ok(())
-    }
-
     // --- Session management ---
 
     async fn create_session(&self, user_id: UserId, session_id: Uuid, mode_id: &str, title: &str) -> Result<()> {
@@ -851,38 +594,6 @@ impl ServerRepo for PgRepo {
     }
 
     // --- Token usage tracking ---
-
-    async fn insert_token_usage(&self, session_id: Option<Uuid>, agent_id: Option<Uuid>, tier: &str, model_id: &str, input_tokens: i64, output_tokens: i64) -> Result<()> {
-        sqlx::query("INSERT INTO token_usage (session_id, agent_id, tier, model_id, input_tokens, output_tokens) VALUES ($1, $2, $3, $4, $5, $6)")
-            .bind(session_id)
-            .bind(agent_id)
-            .bind(tier)
-            .bind(model_id)
-            .bind(input_tokens)
-            .bind(output_tokens)
-            .execute(&self.pool)
-            .await?;
-        Ok(())
-    }
-
-    async fn get_usage_summary(&self, since_hours: u32) -> Result<Vec<UsageSummaryRow>> {
-        let rows = sqlx::query_as::<_, UsageSummaryRow>(
-            r#"
-            SELECT tier, model_id,
-                   COALESCE(SUM(input_tokens), 0)::bigint AS total_input,
-                   COALESCE(SUM(output_tokens), 0)::bigint AS total_output,
-                   COUNT(*) AS call_count
-            FROM token_usage
-            WHERE created_at > NOW() - make_interval(hours => $1::int)
-            GROUP BY tier, model_id
-            ORDER BY SUM(input_tokens + output_tokens) DESC
-            "#,
-        )
-        .bind(since_hours as i32)
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(rows)
-    }
 
     async fn create_pipeline_run(&self, run: &PipelineRunRow) -> Result<()> {
         sqlx::query(
@@ -1001,32 +712,6 @@ impl ServerRepo for PgRepo {
             .await?;
         Ok(rows)
     }
-
-    async fn insert_tool_call(
-        &self,
-        session_id: Option<Uuid>,
-        message_id: Uuid,
-        round: i32,
-        tool_name: &str,
-        tool_use_id: &str,
-        input: &serde_json::Value,
-        output: &str,
-        latency_ms: i32,
-    ) -> Result<()> {
-        sqlx::query("INSERT INTO tool_calls (id, session_id, message_id, round, tool_name, tool_use_id, input, output, latency_ms) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
-            .bind(Uuid::new_v4())
-            .bind(session_id)
-            .bind(message_id)
-            .bind(round)
-            .bind(tool_name)
-            .bind(tool_use_id)
-            .bind(input)
-            .bind(output)
-            .bind(latency_ms)
-            .execute(&self.pool)
-            .await?;
-        Ok(())
-    }
 }
 
 // ============================================================================
@@ -1085,15 +770,6 @@ fn tool_row_from_pg(r: PgToolRow) -> ToolRow {
         parameters: r.parameters,
         created_at: r.created_at,
     }
-}
-
-#[derive(sqlx::FromRow)]
-struct PgClusterRow {
-    id: Uuid,
-    name: String,
-    description: String,
-    conventions: String,
-    shared_files: serde_json::Value,
 }
 
 #[derive(sqlx::FromRow)]

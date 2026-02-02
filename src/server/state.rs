@@ -177,21 +177,6 @@ impl AppState {
             state.pool = Some(Arc::new(tokio::sync::Mutex::new(pool)));
             state.dispatcher = Some(Arc::new(tokio::sync::Mutex::new(dispatcher)));
 
-            // Reconstruct clusters from DB
-            if let Ok(cluster_rows) = state.repo.list_persisted_clusters(legacy_user).await {
-                let mut mgr = state.cluster_manager.write().await;
-                for row in cluster_rows {
-                    let cid = crate::agents::ClusterId(row.id);
-                    mgr.create_cluster_with_id(cid, row.name.clone(), row.description.clone());
-                    tracing::info!("Restored cluster {} ({})", row.name, row.id);
-                    if let Ok(members) = state.repo.list_cluster_members(row.id).await {
-                        for agent_uuid in members {
-                            let _ = mgr.add_agent(cid, crate::agents::AgentId(agent_uuid));
-                        }
-                    }
-                }
-            }
-
             // Build tool-to-cluster index for routing
             match crate::db::list_clusters_with_tools(state.db.as_ref().unwrap()).await {
                 Ok(pairs) => {
@@ -226,38 +211,6 @@ impl AppState {
                                 stage.output_schema.unwrap_or_else(|| serde_json::json!({"fields": []})),
                             );
                         }
-                    }
-                }
-            }
-
-            // Reconstruct schedules from DB
-            if let Ok(schedule_rows) = state.repo.list_schedules(legacy_user).await {
-                let mut mgr = state.schedule_manager.write().await;
-                for row in schedule_rows {
-                    let sid = crate::agents::ScheduleId(row.id);
-                    mgr.create_schedule_with_id(
-                        sid,
-                        row.name.clone(),
-                        crate::agents::AgentId(row.agent_id),
-                        row.interval_seconds as u64,
-                        row.task_title,
-                        row.task_description,
-                        row.role,
-                        row.enabled,
-                        row.last_run_at,
-                    );
-                    tracing::info!("Restored schedule {} ({})", row.name, row.id);
-                }
-            }
-
-            // Reconstruct triggers from DB
-            if let Ok(trigger_rows) = state.repo.list_triggers(legacy_user).await {
-                let mut mgr = state.schedule_manager.write().await;
-                for row in trigger_rows {
-                    if let Some(event_type) = crate::agents::TriggerEvent::from_str(&row.event_type) {
-                        let tid = crate::agents::TriggerId(row.id);
-                        mgr.create_trigger_with_id(tid, row.name.clone(), event_type, crate::agents::AgentId(row.agent_id), row.task_title, row.task_description, row.role);
-                        tracing::info!("Restored trigger {} ({})", row.name, row.id);
                     }
                 }
             }
