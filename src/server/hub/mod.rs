@@ -16,6 +16,7 @@ pub mod streaming;
 pub mod strategy;
 
 use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::llm::LLMProvider;
@@ -44,6 +45,7 @@ pub async fn run_chat(
     message_id: Uuid,
     content: &str,
     user_id: UserId,
+    cancel: Option<&CancellationToken>,
 ) -> Result<ExecutionResult, HubError> {
     // Load agent from DB
     let agent = state
@@ -82,7 +84,7 @@ pub async fn run_chat(
         state.token_ledger_repo.as_deref(),
     );
 
-    engine.execute(&strategy, content, &sink, &recorder).await
+    engine.execute(&strategy, content, &sink, &recorder, cancel).await
 }
 
 /// Schedule removal of a response stream after a delay (for late-connecting SSE clients).
