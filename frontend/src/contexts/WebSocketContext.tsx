@@ -1,5 +1,5 @@
 import { createContext, useEffect, useRef, useCallback, useState, type ReactNode } from 'react'
-import { WS_URL, WS_RECONNECT_BASE_MS, WS_RECONNECT_MAX_MS, type WsChannel } from '@/constants'
+import { WS_URL, WS_RECONNECT_BASE_MS, WS_RECONNECT_MAX_MS, type WsChannel, type WsEvent } from '@/constants'
 import { useAuth } from '@/hooks/useAuth'
 
 type WsStatus = 'connecting' | 'connected' | 'disconnected'
@@ -9,6 +9,9 @@ type MessageHandler = (data: unknown) => void
 type WebSocketState = {
   status: WsStatus
   subscribe: (channel: WsChannel, handler: MessageHandler) => () => void
+  subscribeRun: (runId: string, event: WsEvent, handler: MessageHandler) => () => void
+  unsubscribeRun: (runId: string) => void
+  send: (msg: Record<string, unknown>) => void
 }
 
 const WebSocketContext = createContext<WebSocketState | null>(null)
@@ -18,6 +21,7 @@ function WebSocketProvider({ children }: { children: ReactNode }) {
   const wsRef = useRef<WebSocket | null>(null)
   const handlersRef = useRef<Map<WsChannel, Set<MessageHandler>>>(new Map())
   const subscribedChannelsRef = useRef<Set<WsChannel>>(new Set())
+  const runHandlersRef = useRef<Map<string, Map<WsEvent, Set<MessageHandler>>>>(new Map())
   const reconnectAttemptRef = useRef(0)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [status, setStatus] = useState<WsStatus>('disconnected')
@@ -34,6 +38,10 @@ function WebSocketProvider({ children }: { children: ReactNode }) {
     const channels = Array.from(subscribedChannelsRef.current)
     if (channels.length > 0) {
       sendJson({ type: 'subscribe', channels })
+    }
+    // Re-subscribe to any active runs
+    for (const runId of runHandlersRef.current.keys()) {
+      sendJson({ action: 'subscribe_run', run_id: runId })
     }
   }, [sendJson])
 
@@ -64,13 +72,32 @@ function WebSocketProvider({ children }: { children: ReactNode }) {
 
       ws.addEventListener('message', (event) => {
         try {
-          const msg = JSON.parse(event.data as string) as { type?: string; channel?: string }
-          const channel = msg.channel ?? msg.type
+          const msg = JSON.parse(event.data as string) as Record<string, unknown>
+
+          // Route run-scoped events (have `event` and `run_id` fields)
+          const eventType = msg.event as string | undefined
+          const runId = msg.run_id as string | undefined
+          if (eventType && runId) {
+            const runMap = runHandlersRef.current.get(runId)
+            if (runMap) {
+              const handlers = runMap.get(eventType as WsEvent)
+              if (handlers) {
+                for (const handler of handlers) {
+                  handler(msg)
+                }
+              }
+            }
+          }
+
+          // Route channel-based messages (have `type` field, data in `data`)
+          const channel = (msg.channel ?? msg.type) as string | undefined
           if (channel) {
             const handlers = handlersRef.current.get(channel as WsChannel)
             if (handlers) {
+              // Pass the `data` payload to handlers, not the full envelope
+              const payload = msg.data ?? msg
               for (const handler of handlers) {
-                handler(msg)
+                handler(payload)
               }
             }
           }
@@ -99,7 +126,7 @@ function WebSocketProvider({ children }: { children: ReactNode }) {
     openConnection()
 
     return () => {
-      clearTimeout(reconnectTimerRef.current)
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
       wsRef.current?.close()
       wsRef.current = null
     }
@@ -129,8 +156,44 @@ function WebSocketProvider({ children }: { children: ReactNode }) {
     }
   }, [sendJson])
 
+  const subscribeRun = useCallback((runId: string, event: WsEvent, handler: MessageHandler) => {
+    if (!runHandlersRef.current.has(runId)) {
+      runHandlersRef.current.set(runId, new Map())
+      sendJson({ action: 'subscribe_run', run_id: runId })
+    }
+    const runMap = runHandlersRef.current.get(runId)!
+    if (!runMap.has(event)) {
+      runMap.set(event, new Set())
+    }
+    runMap.get(event)!.add(handler)
+
+    return () => {
+      const rm = runHandlersRef.current.get(runId)
+      if (!rm) return
+      const handlers = rm.get(event)
+      if (handlers) {
+        handlers.delete(handler)
+        if (handlers.size === 0) rm.delete(event)
+      }
+      // If no more handlers for this run, unsubscribe
+      if (rm.size === 0) {
+        runHandlersRef.current.delete(runId)
+        sendJson({ action: 'unsubscribe_run', run_id: runId })
+      }
+    }
+  }, [sendJson])
+
+  const unsubscribeRun = useCallback((runId: string) => {
+    runHandlersRef.current.delete(runId)
+    sendJson({ action: 'unsubscribe_run', run_id: runId })
+  }, [sendJson])
+
+  const send = useCallback((msg: Record<string, unknown>) => {
+    sendJson(msg)
+  }, [sendJson])
+
   return (
-    <WebSocketContext.Provider value={{ status, subscribe }}>
+    <WebSocketContext.Provider value={{ status, subscribe, subscribeRun, unsubscribeRun, send }}>
       {children}
     </WebSocketContext.Provider>
   )

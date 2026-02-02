@@ -17,9 +17,18 @@ const initialState: TaskState = { tasks: [], loading: true, error: null }
 
 // ── Actions ──────────────────────────────────────────────────────────────────
 
+type TaskUpdate = {
+  id: string
+  status: string
+  progress: number | null
+  assigned_agent: string | null
+  user_id?: string | null
+}
+
 type TaskAction =
   | { type: typeof ACTION.SET_ALL; tasks: Task[] }
   | { type: typeof ACTION.UPDATE_ONE; task: Task }
+  | { type: typeof ACTION.UPDATE; update: TaskUpdate }
   | { type: typeof ACTION.REMOVE_ONE; id: string }
   | { type: typeof ACTION.SET_LOADING; loading: boolean }
   | { type: typeof ACTION.SET_ERROR; error: string }
@@ -34,6 +43,15 @@ const reducer = (state: TaskState, action: TaskAction): TaskState => {
         tasks: state.tasks.some((t) => t.id === action.task.id)
           ? state.tasks.map((t) => (t.id === action.task.id ? action.task : t))
           : [...state.tasks, action.task],
+      }
+    case ACTION.UPDATE:
+      return {
+        ...state,
+        tasks: state.tasks.map((t) =>
+          t.id === action.update.id
+            ? { ...t, status: action.update.status as Task['status'], assigned_agent: action.update.assigned_agent }
+            : t,
+        ),
       }
     case ACTION.REMOVE_ONE:
       return { ...state, tasks: state.tasks.filter((t) => t.id !== action.id) }
@@ -77,9 +95,10 @@ function TaskProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const unsub = subscribe(WS_CHANNEL.TASKS, (data) => {
-      const msg = data as { task?: Task; deleted_id?: string }
-      if (msg.task) dispatch({ type: ACTION.UPDATE_ONE, task: msg.task })
-      if (msg.deleted_id) dispatch({ type: ACTION.REMOVE_ONE, id: msg.deleted_id })
+      const update = data as TaskUpdate
+      if (update.id) {
+        dispatch({ type: ACTION.UPDATE, update })
+      }
     })
     return unsub
   }, [subscribe])

@@ -70,22 +70,33 @@ function PipelineProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const loadRuns = useCallback(async () => {
+    try {
+      const runs = await api.get<PipelineRun[]>(API.PIPELINE_RUNS)
+      if (mountedRef.current) dispatch({ type: ACTION.SET_RUNS, runs })
+    } catch {
+      // Runs reload is best-effort
+    }
+  }, [])
+
   useEffect(() => {
     mountedRef.current = true
     void load()
+    void loadRuns()
     return () => { mountedRef.current = false }
-  }, [load])
+  }, [load, loadRuns])
 
+  // Pipeline WS events are status notifications (not full PipelineRun objects).
+  // Reload runs list when we receive any pipeline event.
   useEffect(() => {
-    const unsub = subscribe(WS_CHANNEL.PIPELINES, (data) => {
-      const msg = data as { run?: PipelineRun }
-      if (msg.run) dispatch({ type: ACTION.UPDATE_RUN, run: msg.run })
+    const unsub = subscribe(WS_CHANNEL.PIPELINES, () => {
+      void loadRuns()
     })
     return unsub
-  }, [subscribe])
+  }, [subscribe, loadRuns])
 
   return (
-    <PipelineContext.Provider value={{ ...state, reload: () => { void load() } }}>
+    <PipelineContext.Provider value={{ ...state, reload: () => { void load(); void loadRuns() } }}>
       {children}
     </PipelineContext.Provider>
   )

@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { AgentProvider } from './AgentContext'
 import { useAgentContext } from '@/hooks/useAgentContext'
-import { mockAgent, mockAgentUpdated } from '@/test/fixtures'
+import { mockAgent } from '@/test/fixtures'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -73,7 +73,7 @@ describe('AgentContext', () => {
       })
     })
 
-    it('updates an agent via WS message', async () => {
+    it('updates an agent status via WS partial update', async () => {
       render(
         <AgentProvider>
           <TestConsumer />
@@ -84,15 +84,15 @@ describe('AgentContext', () => {
         expect(screen.getByTestId('agent-agent-001')).toBeInTheDocument()
       })
 
-      // Simulate WS message
-      wsHandler?.({ agent: mockAgentUpdated })
+      // Backend sends partial update: { id, status, current_task, user_id }
+      wsHandler?.({ id: 'agent-001', status: 'working', current_task: null })
 
       await waitFor(() => {
         expect(screen.getByTestId('agent-agent-001')).toHaveTextContent('TestBot:working')
       })
     })
 
-    it('adds a new agent via WS when id is unknown', async () => {
+    it('ignores WS update for unknown agent id', async () => {
       render(
         <AgentProvider>
           <TestConsumer />
@@ -103,11 +103,11 @@ describe('AgentContext', () => {
         expect(screen.getByTestId('agent-agent-001')).toBeInTheDocument()
       })
 
-      const newAgent = { ...mockAgent, id: 'agent-002', persona_name: 'NewBot' }
-      wsHandler?.({ agent: newAgent })
+      // Unknown agent — should not add a new entry
+      wsHandler?.({ id: 'agent-999', status: 'idle', current_task: null })
 
       await waitFor(() => {
-        expect(screen.getByTestId('agent-agent-002')).toHaveTextContent('NewBot:idle')
+        expect(screen.queryByTestId('agent-agent-999')).not.toBeInTheDocument()
       })
     })
 
