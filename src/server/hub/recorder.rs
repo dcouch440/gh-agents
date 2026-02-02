@@ -247,7 +247,7 @@ mod tests {
         let mock = MockServerRepo::new();
         let recorder = ExecutionRecorder::new(&mock, None, None);
         let result = recorder
-            .record_agent_execution(Uuid::new_v4(), Uuid::new_v4(), None, false, None, "system prompt", "user prompt")
+            .record_agent_execution(Uuid::new_v4(), Uuid::new_v4(), None, false, None, "system prompt", "user prompt", None)
             .await;
         assert!(result.is_err());
     }
