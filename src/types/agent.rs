@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Unique identifier for an agent
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct AgentId(pub Uuid);
 
 impl AgentId {
@@ -20,7 +20,7 @@ impl Default for AgentId {
 }
 
 /// Agent tier hierarchy
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentTier {
     /// Expensive AI for planning, review, decisions
@@ -55,7 +55,7 @@ pub enum CommunicationStyle {
 }
 
 /// LLM provider options
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum LLMProvider {
     #[default]
@@ -63,7 +63,7 @@ pub enum LLMProvider {
 }
 
 /// Model configuration for an agent
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ModelConfig {
     pub provider: LLMProvider,
     pub model_id: String,

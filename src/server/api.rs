@@ -25,7 +25,7 @@ use crate::types::{AgentPoolConfig, AgentTier, Priority, Task, TierModels};
 // ============================================================================
 
 /// Health check response
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct HealthResponse {
     pub status: String,
     pub version: String,
@@ -35,6 +35,14 @@ pub struct HealthResponse {
 /// Enhanced health check endpoint
 ///
 /// Returns JSON with status details including version and database connectivity.
+#[utoipa::path(
+    get,
+    path = "/api/health",
+    tag = "Health",
+    responses(
+        (status = 200, description = "Server health status", body = HealthResponse)
+    )
+)]
 pub async fn health_check(State(state): State<AppState>) -> Json<HealthResponse> {
     let db_connected = state.repo.health_check().await;
 
@@ -50,7 +58,7 @@ pub async fn health_check(State(state): State<AppState>) -> Json<HealthResponse>
 // ============================================================================
 
 /// Query parameters for listing tasks
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct TasksQuery {
     pub status: Option<String>,
     pub limit: Option<u32>,
@@ -61,6 +69,16 @@ pub struct TasksQuery {
 /// Supports query parameters:
 /// - `status`: Filter by task status (pending, in_progress, completed, etc.)
 /// - `limit`: Maximum number of tasks to return (default 100, max 1000)
+#[utoipa::path(
+    get,
+    path = "/api/tasks",
+    tag = "Tasks",
+    security(("bearer_auth" = [])),
+    params(TasksQuery),
+    responses(
+        (status = 200, description = "List of tasks", body = Vec<Task>)
+    )
+)]
 pub async fn list_tasks(State(state): State<AppState>, auth: auth::AuthUser, Query(query): Query<TasksQuery>) -> Result<Json<Vec<Task>>, StatusCode> {
     let tasks = state.repo.list_tasks(auth.user_id, query.status, query.limit).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -70,6 +88,17 @@ pub async fn list_tasks(State(state): State<AppState>, auth: auth::AuthUser, Que
 /// Get a single task by ID
 ///
 /// Returns 404 if the task is not found.
+#[utoipa::path(
+    get,
+    path = "/api/tasks/{id}",
+    tag = "Tasks",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Task ID")),
+    responses(
+        (status = 200, description = "Task found", body = Task),
+        (status = 404, description = "Task not found")
+    )
+)]
 pub async fn get_task(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<Task>, StatusCode> {
     let task = state
         .repo
@@ -82,7 +111,7 @@ pub async fn get_task(State(state): State<AppState>, auth: auth::AuthUser, Path(
 }
 
 /// Request body for creating a new task
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateTaskRequest {
     pub title: String,
     pub description: Option<String>,
@@ -94,6 +123,17 @@ pub struct CreateTaskRequest {
 ///
 /// Returns 201 with the created task on success.
 /// Returns 400 if the title is empty.
+#[utoipa::path(
+    post,
+    path = "/api/tasks",
+    tag = "Tasks",
+    security(("bearer_auth" = [])),
+    request_body = CreateTaskRequest,
+    responses(
+        (status = 201, description = "Task created", body = Task),
+        (status = 400, description = "Invalid request")
+    )
+)]
 pub async fn create_task(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateTaskRequest>) -> Result<(StatusCode, Json<Task>), StatusCode> {
     if request.title.trim().is_empty() || request.title.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
@@ -145,7 +185,7 @@ pub async fn create_task(State(state): State<AppState>, auth: auth::AuthUser, Js
 // ============================================================================
 
 /// Response for a single agent
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct AgentResponse {
     pub id: String,
     pub tier: String,
@@ -177,14 +217,14 @@ impl AgentResponse {
 }
 
 /// Response for the agents list endpoint
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct AgentsListResponse {
     pub agents: Vec<AgentResponse>,
     pub stats: AgentPoolStats,
 }
 
 /// Agent pool statistics
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct AgentPoolStats {
     pub orchestrators: TierStats,
     pub workers: TierStats,
@@ -192,7 +232,7 @@ pub struct AgentPoolStats {
 }
 
 /// Statistics for a single tier
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct TierStats {
     pub total: usize,
     pub available: usize,
@@ -200,7 +240,7 @@ pub struct TierStats {
 }
 
 /// Request to create a new agent
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateAgentRequest {
     pub tier: String,
     pub persona_name: String,
@@ -213,7 +253,7 @@ pub struct CreateAgentRequest {
 }
 
 /// Request to update an existing agent
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateAgentRequest {
     pub tier: Option<String>,
     pub persona_name: Option<String>,
@@ -226,6 +266,15 @@ pub struct UpdateAgentRequest {
 }
 
 /// List all agents and their status
+#[utoipa::path(
+    get,
+    path = "/api/agents",
+    tag = "Agents",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "List of agents with pool stats", body = AgentsListResponse)
+    )
+)]
 pub async fn list_agents(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<AgentsListResponse>, StatusCode> {
     let config = state.config.read().await;
     let pool_config = &config.pool;
@@ -261,6 +310,17 @@ pub async fn list_agents(State(state): State<AppState>, auth: auth::AuthUser) ->
 }
 
 /// Create a new agent
+#[utoipa::path(
+    post,
+    path = "/api/agents",
+    tag = "Agents",
+    security(("bearer_auth" = [])),
+    request_body = CreateAgentRequest,
+    responses(
+        (status = 201, description = "Agent created", body = AgentResponse),
+        (status = 400, description = "Invalid request")
+    )
+)]
 pub async fn create_agent(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateAgentRequest>) -> Result<(StatusCode, Json<AgentResponse>), StatusCode> {
     if request.tier.trim().is_empty() || request.model_id.trim().is_empty() {
         return Err(StatusCode::BAD_REQUEST);
@@ -294,6 +354,17 @@ pub async fn create_agent(State(state): State<AppState>, auth: auth::AuthUser, J
 }
 
 /// Get a single agent by ID
+#[utoipa::path(
+    get,
+    path = "/api/agents/{id}",
+    tag = "Agents",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Agent ID")),
+    responses(
+        (status = 200, description = "Agent found", body = AgentResponse),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn get_agent(State(state): State<AppState>, _auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<AgentResponse>, StatusCode> {
     let row = state.repo.get_persisted_agent(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
@@ -301,6 +372,18 @@ pub async fn get_agent(State(state): State<AppState>, _auth: auth::AuthUser, Pat
 }
 
 /// Update an existing agent (partial)
+#[utoipa::path(
+    patch,
+    path = "/api/agents/{id}",
+    tag = "Agents",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Agent ID")),
+    request_body = UpdateAgentRequest,
+    responses(
+        (status = 200, description = "Updated agent", body = AgentResponse),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn update_agent(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>, Json(request): Json<UpdateAgentRequest>) -> Result<Json<AgentResponse>, StatusCode> {
     let existing = state.repo.get_persisted_agent(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
@@ -324,6 +407,17 @@ pub async fn update_agent(State(state): State<AppState>, auth: auth::AuthUser, P
 }
 
 /// Delete an agent by ID
+#[utoipa::path(
+    delete,
+    path = "/api/agents/{id}",
+    tag = "Agents",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Agent ID")),
+    responses(
+        (status = 204, description = "Deleted successfully"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn delete_agent(State(state): State<AppState>, _auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     state.repo.delete_persisted_agent(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -335,7 +429,7 @@ pub async fn delete_agent(State(state): State<AppState>, _auth: auth::AuthUser, 
 // ============================================================================
 
 /// Response for a single tool
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct ToolResponse {
     pub id: String,
     pub name: String,
@@ -357,7 +451,7 @@ impl ToolResponse {
 }
 
 /// Request to create a new tool
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateToolRequest {
     pub name: String,
     pub display_name: Option<String>,
@@ -366,7 +460,7 @@ pub struct CreateToolRequest {
 }
 
 /// Request to update an existing tool
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateToolRequest {
     pub name: Option<String>,
     pub display_name: Option<String>,
@@ -375,19 +469,28 @@ pub struct UpdateToolRequest {
 }
 
 /// Request to set tools for an agent
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct SetAgentToolsRequest {
     pub tool_ids: Vec<String>,
 }
 
 /// Response for agent tools
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct AgentToolsResponse {
     pub agent_id: String,
     pub tools: Vec<ToolResponse>,
 }
 
 /// List all tools
+#[utoipa::path(
+    get,
+    path = "/api/tools",
+    tag = "Tools",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "List of tools", body = Vec<ToolResponse>)
+    )
+)]
 pub async fn list_tools(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
     let rows = state.repo.list_tools(auth.user_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -396,6 +499,17 @@ pub async fn list_tools(State(state): State<AppState>, auth: auth::AuthUser) -> 
 }
 
 /// Create a new tool
+#[utoipa::path(
+    post,
+    path = "/api/tools",
+    tag = "Tools",
+    security(("bearer_auth" = [])),
+    request_body = CreateToolRequest,
+    responses(
+        (status = 201, description = "Tool created", body = ToolResponse),
+        (status = 400, description = "Invalid request")
+    )
+)]
 pub async fn create_tool(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateToolRequest>) -> Result<(StatusCode, Json<ToolResponse>), StatusCode> {
     if request.name.trim().is_empty() {
         return Err(StatusCode::BAD_REQUEST);
@@ -420,6 +534,17 @@ pub async fn create_tool(State(state): State<AppState>, auth: auth::AuthUser, Js
 }
 
 /// Get a single tool by ID
+#[utoipa::path(
+    get,
+    path = "/api/tools/{id}",
+    tag = "Tools",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Tool ID")),
+    responses(
+        (status = 200, description = "Tool found", body = ToolResponse),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn get_tool(State(state): State<AppState>, _auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<ToolResponse>, StatusCode> {
     let row = state.repo.get_tool(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
@@ -427,6 +552,18 @@ pub async fn get_tool(State(state): State<AppState>, _auth: auth::AuthUser, Path
 }
 
 /// Update an existing tool (partial)
+#[utoipa::path(
+    patch,
+    path = "/api/tools/{id}",
+    tag = "Tools",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Tool ID")),
+    request_body = UpdateToolRequest,
+    responses(
+        (status = 200, description = "Updated tool", body = ToolResponse),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn update_tool(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>, Json(request): Json<UpdateToolRequest>) -> Result<Json<ToolResponse>, StatusCode> {
     let existing = state.repo.get_tool(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
@@ -446,6 +583,17 @@ pub async fn update_tool(State(state): State<AppState>, auth: auth::AuthUser, Pa
 }
 
 /// Delete a tool by ID
+#[utoipa::path(
+    delete,
+    path = "/api/tools/{id}",
+    tag = "Tools",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Tool ID")),
+    responses(
+        (status = 204, description = "Deleted successfully"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn delete_tool(State(state): State<AppState>, _auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     state.repo.delete_tool(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -453,6 +601,16 @@ pub async fn delete_tool(State(state): State<AppState>, _auth: auth::AuthUser, P
 }
 
 /// Get tools assigned to an agent
+#[utoipa::path(
+    get,
+    path = "/api/agents/{id}/tools",
+    tag = "Tools",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Agent ID")),
+    responses(
+        (status = 200, description = "Agent tools", body = AgentToolsResponse)
+    )
+)]
 pub async fn get_agent_tools(State(state): State<AppState>, _auth: auth::AuthUser, Path(agent_id): Path<Uuid>) -> Result<Json<AgentToolsResponse>, StatusCode> {
     let rows = state.repo.get_agent_tools(agent_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -465,6 +623,18 @@ pub async fn get_agent_tools(State(state): State<AppState>, _auth: auth::AuthUse
 }
 
 /// Set tools for an agent (replaces existing)
+#[utoipa::path(
+    put,
+    path = "/api/agents/{id}/tools",
+    tag = "Tools",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Agent ID")),
+    request_body = SetAgentToolsRequest,
+    responses(
+        (status = 200, description = "Agent tools updated", body = AgentToolsResponse),
+        (status = 400, description = "Invalid tool IDs")
+    )
+)]
 pub async fn set_agent_tools(
     State(state): State<AppState>,
     _auth: auth::AuthUser,
@@ -491,18 +661,28 @@ pub async fn set_agent_tools(
 // Agent Context (Document Linkage)
 // ============================================================================
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct SetAgentContextRequest {
     pub document_ids: Vec<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct AgentContextResponse {
     pub agent_id: String,
     pub documents: Vec<DocumentListItem>,
 }
 
 /// Get context documents assigned to an agent
+#[utoipa::path(
+    get,
+    path = "/api/agents/{id}/context",
+    tag = "Agent Context",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Agent ID")),
+    responses(
+        (status = 200, description = "Agent context documents", body = AgentContextResponse)
+    )
+)]
 pub async fn get_agent_context(State(state): State<AppState>, _auth: auth::AuthUser, Path(agent_id): Path<Uuid>) -> Result<Json<AgentContextResponse>, StatusCode> {
     let rows = state.repo.get_agent_context(agent_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -526,6 +706,18 @@ pub async fn get_agent_context(State(state): State<AppState>, _auth: auth::AuthU
 }
 
 /// Set context documents for an agent (replaces existing)
+#[utoipa::path(
+    put,
+    path = "/api/agents/{id}/context",
+    tag = "Agent Context",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Agent ID")),
+    request_body = SetAgentContextRequest,
+    responses(
+        (status = 200, description = "Agent context updated", body = AgentContextResponse),
+        (status = 400, description = "Invalid document IDs")
+    )
+)]
 pub async fn set_agent_context(
     State(state): State<AppState>,
     _auth: auth::AuthUser,
@@ -564,7 +756,7 @@ pub async fn set_agent_context(
 // ============================================================================
 
 /// Configuration response
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct ConfigResponse {
     pub verbosity: String,
     pub models: TierModels,
@@ -575,6 +767,14 @@ pub struct ConfigResponse {
 }
 
 /// Get current configuration
+#[utoipa::path(
+    get,
+    path = "/api/config",
+    tag = "Config",
+    responses(
+        (status = 200, description = "Current configuration", body = ConfigResponse)
+    )
+)]
 pub async fn get_config(State(state): State<AppState>) -> Json<ConfigResponse> {
     let config = state.config.read().await;
 
@@ -589,7 +789,7 @@ pub async fn get_config(State(state): State<AppState>) -> Json<ConfigResponse> {
 }
 
 /// Request body for updating a single model tier's config
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateModelConfig {
     pub model_id: Option<String>,
     pub max_tokens: Option<u32>,
@@ -597,7 +797,7 @@ pub struct UpdateModelConfig {
 }
 
 /// Request body for updating model configs by tier
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateModelsRequest {
     pub orchestrator: Option<UpdateModelConfig>,
     pub worker: Option<UpdateModelConfig>,
@@ -605,7 +805,7 @@ pub struct UpdateModelsRequest {
 }
 
 /// Request body for updating pool sizes
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdatePoolRequest {
     pub max_orchestrators: Option<u8>,
     pub max_workers: Option<u8>,
@@ -613,7 +813,7 @@ pub struct UpdatePoolRequest {
 }
 
 /// Request body for updating configuration
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateConfigRequest {
     pub verbosity: Option<String>,
     pub models: Option<UpdateModelsRequest>,
@@ -624,6 +824,16 @@ pub struct UpdateConfigRequest {
 }
 
 /// Update configuration (partial update)
+#[utoipa::path(
+    patch,
+    path = "/api/config",
+    tag = "Config",
+    request_body = UpdateConfigRequest,
+    responses(
+        (status = 200, description = "Updated configuration", body = ConfigResponse),
+        (status = 400, description = "Invalid value")
+    )
+)]
 pub async fn update_config(State(state): State<AppState>, Json(request): Json<UpdateConfigRequest>) -> Result<Json<ConfigResponse>, StatusCode> {
     use crate::types::{AutonomyLevel, GitStrategy, SandboxMode, VerbosityLevel};
 
@@ -722,13 +932,13 @@ pub async fn update_config(State(state): State<AppState>, Json(request): Json<Up
 // ============================================================================
 
 /// Request body for sending a chat message
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct ChatRequest {
     pub message: String,
 }
 
 /// Response for sending a chat message
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct ChatResponse {
     pub message_id: Uuid,
     pub status: String,
@@ -738,6 +948,17 @@ pub struct ChatResponse {
 ///
 /// Returns 202 Accepted with the message ID.
 /// The message is queued for processing by the orchestrator.
+#[utoipa::path(
+    post,
+    path = "/api/chat",
+    tag = "Chat",
+    security(("bearer_auth" = [])),
+    request_body = ChatRequest,
+    responses(
+        (status = 202, description = "Message queued", body = ChatResponse),
+        (status = 400, description = "Invalid message")
+    )
+)]
 pub async fn send_chat(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<ChatRequest>) -> Result<(StatusCode, Json<ChatResponse>), StatusCode> {
     if request.message.trim().is_empty() || request.message.len() > MAX_CHAT_MESSAGE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
@@ -780,14 +1001,14 @@ pub async fn send_chat(State(state): State<AppState>, auth: auth::AuthUser, Json
 }
 
 /// Query parameters for chat history
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct HistoryQuery {
     pub limit: Option<u32>,
     pub offset: Option<u32>,
 }
 
 /// A chat message in the response
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct ChatMessage {
     pub id: Uuid,
     pub role: String,
@@ -798,6 +1019,16 @@ pub struct ChatMessage {
 /// Get chat history with pagination
 ///
 /// Returns messages in chronological order.
+#[utoipa::path(
+    get,
+    path = "/api/chat/history",
+    tag = "Chat",
+    security(("bearer_auth" = [])),
+    params(HistoryQuery),
+    responses(
+        (status = 200, description = "Chat history", body = Vec<ChatMessage>)
+    )
+)]
 pub async fn get_chat_history(State(state): State<AppState>, auth: auth::AuthUser, Query(query): Query<HistoryQuery>) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
     let limit = query.limit.unwrap_or(50);
     let offset = query.offset.unwrap_or(0);
@@ -821,6 +1052,15 @@ pub async fn get_chat_history(State(state): State<AppState>, auth: auth::AuthUse
 ///
 /// Subscribes to the response stream for a specific message and
 /// streams tokens as they are generated.
+#[utoipa::path(
+    get,
+    path = "/api/chat/{message_id}/stream",
+    tag = "Chat",
+    params(("message_id" = Uuid, Path, description = "Message ID")),
+    responses(
+        (status = 200, description = "SSE event stream")
+    )
+)]
 pub async fn chat_stream(State(state): State<AppState>, Path(message_id): Path<Uuid>) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     chat_stream_inner(state, message_id)
 }
@@ -829,6 +1069,18 @@ pub async fn chat_stream(State(state): State<AppState>, Path(message_id): Path<U
 ///
 /// Same as `chat_stream` but extracts both session_id and message_id
 /// from the path (only message_id is used for stream lookup).
+#[utoipa::path(
+    get,
+    path = "/api/sessions/{session_id}/chat/{message_id}/stream",
+    tag = "Sessions",
+    params(
+        ("session_id" = Uuid, Path, description = "Session ID"),
+        ("message_id" = Uuid, Path, description = "Message ID")
+    ),
+    responses(
+        (status = 200, description = "SSE event stream")
+    )
+)]
 pub async fn session_chat_stream(State(state): State<AppState>, Path((_session_id, message_id)): Path<(Uuid, Uuid)>) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     chat_stream_inner(state, message_id)
 }
@@ -917,6 +1169,15 @@ fn chat_stream_inner(state: AppState, message_id: Uuid) -> Sse<impl Stream<Item 
 /// Clear all chat history
 ///
 /// Returns 204 No Content on success.
+#[utoipa::path(
+    delete,
+    path = "/api/chat/history",
+    tag = "Chat",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 204, description = "Chat history cleared")
+    )
+)]
 pub async fn clear_chat_history(State(state): State<AppState>, auth: auth::AuthUser) -> StatusCode {
     match state.repo.clear_chat_history(auth.user_id).await {
         Ok(_) => StatusCode::NO_CONTENT,
@@ -929,7 +1190,7 @@ pub async fn clear_chat_history(State(state): State<AppState>, auth: auth::AuthU
 // ============================================================================
 
 /// An available agent mode
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct ModeInfo {
     pub id: String,
     pub name: String,
@@ -937,6 +1198,15 @@ pub struct ModeInfo {
 }
 
 /// List available agents (replaces legacy list_modes)
+#[utoipa::path(
+    get,
+    path = "/api/modes",
+    tag = "Sessions",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "List of available modes", body = Vec<ModeInfo>)
+    )
+)]
 pub async fn list_modes(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<ModeInfo>>, StatusCode> {
     let agents = state.repo.list_persisted_agents(auth.user_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let modes: Vec<ModeInfo> = agents
@@ -951,7 +1221,7 @@ pub async fn list_modes(State(state): State<AppState>, auth: auth::AuthUser) -> 
 }
 
 /// Request body for creating a session
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateSessionRequest {
     #[serde(default)]
     pub mode_id: String,
@@ -962,13 +1232,13 @@ pub struct CreateSessionRequest {
 }
 
 /// Request body for updating a session
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateSessionRequest {
     pub title: String,
 }
 
 /// Response for session creation
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct SessionResponse {
     pub id: Uuid,
     pub mode_id: String,
@@ -979,6 +1249,17 @@ pub struct SessionResponse {
 }
 
 /// Create a new chat session
+#[utoipa::path(
+    post,
+    path = "/api/sessions",
+    tag = "Sessions",
+    security(("bearer_auth" = [])),
+    request_body = CreateSessionRequest,
+    responses(
+        (status = 201, description = "Session created", body = SessionResponse),
+        (status = 400, description = "Invalid agent ID")
+    )
+)]
 pub async fn create_session(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateSessionRequest>) -> Result<(StatusCode, Json<SessionResponse>), StatusCode> {
     // Validate agent exists if provided
     if let Some(aid) = request.agent_id {
@@ -1026,6 +1307,15 @@ pub async fn create_session(State(state): State<AppState>, auth: auth::AuthUser,
 }
 
 /// List sessions for the current user
+#[utoipa::path(
+    get,
+    path = "/api/sessions",
+    tag = "Sessions",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "List of sessions", body = Vec<SessionResponse>)
+    )
+)]
 pub async fn list_sessions(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<SessionResponse>>, StatusCode> {
     let sessions = state.repo.list_sessions(auth.user_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -1045,6 +1335,17 @@ pub async fn list_sessions(State(state): State<AppState>, auth: auth::AuthUser) 
 }
 
 /// Get a specific session
+#[utoipa::path(
+    get,
+    path = "/api/sessions/{session_id}",
+    tag = "Sessions",
+    security(("bearer_auth" = [])),
+    params(("session_id" = Uuid, Path, description = "Session ID")),
+    responses(
+        (status = 200, description = "Session found", body = SessionResponse),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn get_session(State(state): State<AppState>, auth: auth::AuthUser, Path(session_id): Path<Uuid>) -> Result<Json<SessionResponse>, StatusCode> {
     let session = state.repo.get_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
@@ -1064,6 +1365,17 @@ pub async fn get_session(State(state): State<AppState>, auth: auth::AuthUser, Pa
 }
 
 /// Delete a session
+#[utoipa::path(
+    delete,
+    path = "/api/sessions/{session_id}",
+    tag = "Sessions",
+    security(("bearer_auth" = [])),
+    params(("session_id" = Uuid, Path, description = "Session ID")),
+    responses(
+        (status = 204, description = "Deleted successfully"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn delete_session(State(state): State<AppState>, auth: auth::AuthUser, Path(session_id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     // Verify ownership
     let session = state.repo.get_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -1086,6 +1398,18 @@ pub async fn delete_session(State(state): State<AppState>, auth: auth::AuthUser,
 }
 
 /// Update a session (rename)
+#[utoipa::path(
+    patch,
+    path = "/api/sessions/{session_id}",
+    tag = "Sessions",
+    security(("bearer_auth" = [])),
+    params(("session_id" = Uuid, Path, description = "Session ID")),
+    request_body = UpdateSessionRequest,
+    responses(
+        (status = 200, description = "Session updated", body = SessionResponse),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn update_session(State(state): State<AppState>, auth: auth::AuthUser, Path(session_id): Path<Uuid>, Json(request): Json<UpdateSessionRequest>) -> Result<Json<SessionResponse>, StatusCode> {
     let session = state.repo.get_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
@@ -1121,6 +1445,19 @@ pub async fn update_session(State(state): State<AppState>, auth: auth::AuthUser,
 }
 
 /// Send a message to a session
+#[utoipa::path(
+    post,
+    path = "/api/sessions/{session_id}/chat",
+    tag = "Sessions",
+    security(("bearer_auth" = [])),
+    params(("session_id" = Uuid, Path, description = "Session ID")),
+    request_body = ChatRequest,
+    responses(
+        (status = 202, description = "Message queued", body = ChatResponse),
+        (status = 400, description = "Empty message"),
+        (status = 404, description = "Session not found")
+    )
+)]
 pub async fn send_session_chat(
     State(state): State<AppState>,
     auth: auth::AuthUser,
@@ -1173,6 +1510,20 @@ pub async fn send_session_chat(
 }
 
 /// Get session chat history
+#[utoipa::path(
+    get,
+    path = "/api/sessions/{session_id}/history",
+    tag = "Sessions",
+    security(("bearer_auth" = [])),
+    params(
+        ("session_id" = Uuid, Path, description = "Session ID"),
+        HistoryQuery
+    ),
+    responses(
+        (status = 200, description = "Session chat history", body = Vec<ChatMessage>),
+        (status = 404, description = "Session not found")
+    )
+)]
 pub async fn get_session_history(State(state): State<AppState>, auth: auth::AuthUser, Path(session_id): Path<Uuid>, Query(query): Query<HistoryQuery>) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
     // Verify session ownership
     let session = state.repo.get_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -1202,13 +1553,13 @@ pub async fn get_session_history(State(state): State<AppState>, auth: auth::Auth
 // ============================================================================
 
 /// Request body for auth setup
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct SetupRequest {
     pub password: String,
 }
 
 /// Response for auth setup
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct SetupResponse {
     pub message: String,
 }
@@ -1217,6 +1568,17 @@ pub struct SetupResponse {
 ///
 /// This endpoint is only available when no password has been configured yet.
 /// Once a password is set, this endpoint returns 409 Conflict.
+#[utoipa::path(
+    post,
+    path = "/api/auth/setup",
+    tag = "Auth",
+    request_body = SetupRequest,
+    responses(
+        (status = 200, description = "Password configured", body = SetupResponse),
+        (status = 400, description = "Password too short"),
+        (status = 409, description = "Password already configured")
+    )
+)]
 pub async fn auth_setup(State(state): State<AppState>, Json(request): Json<SetupRequest>) -> Result<Json<SetupResponse>, (StatusCode, String)> {
     // Check if already setup
     if state.repo.has_password().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))? {
@@ -1239,14 +1601,14 @@ pub async fn auth_setup(State(state): State<AppState>, Json(request): Json<Setup
 }
 
 /// Request body for registration
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct RegisterRequest {
     pub email: String,
     pub password: String,
 }
 
 /// Response for registration
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct AuthTokenResponse {
     pub token: String,
     pub expires_in: u64,
@@ -1254,7 +1616,7 @@ pub struct AuthTokenResponse {
 }
 
 /// User info in API responses
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct UserResponse {
     pub id: String,
     pub email: String,
@@ -1262,6 +1624,17 @@ pub struct UserResponse {
 }
 
 /// POST /api/auth/register - Register a new user
+#[utoipa::path(
+    post,
+    path = "/api/auth/register",
+    tag = "Auth",
+    request_body = RegisterRequest,
+    responses(
+        (status = 201, description = "User registered", body = AuthTokenResponse),
+        (status = 400, description = "Invalid email or password"),
+        (status = 409, description = "Email already registered")
+    )
+)]
 pub async fn auth_register(State(state): State<AppState>, Json(request): Json<RegisterRequest>) -> Result<(StatusCode, Json<AuthTokenResponse>), (StatusCode, String)> {
     // Validate
     if request.email.trim().is_empty() || !request.email.contains('@') {
@@ -1307,14 +1680,14 @@ pub async fn auth_register(State(state): State<AppState>, Json(request): Json<Re
 }
 
 /// Request body for login
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct LoginRequest {
     pub email: String,
     pub password: String,
 }
 
 /// Response for successful login
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct LoginResponse {
     pub token: String,
     pub expires_in: u64,
@@ -1323,6 +1696,16 @@ pub struct LoginResponse {
 /// POST /api/auth/login - Authenticate and get JWT token
 ///
 /// Verifies the provided password and returns a JWT token valid for 24 hours.
+#[utoipa::path(
+    post,
+    path = "/api/auth/login",
+    tag = "Auth",
+    request_body = LoginRequest,
+    responses(
+        (status = 200, description = "Login successful", body = LoginResponse),
+        (status = 401, description = "Invalid credentials")
+    )
+)]
 pub async fn auth_login(State(state): State<AppState>, Json(request): Json<LoginRequest>) -> Result<Json<LoginResponse>, StatusCode> {
     let user_repo = state.user_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -1343,7 +1726,7 @@ pub async fn auth_login(State(state): State<AppState>, Json(request): Json<Login
 }
 
 /// Response for /api/auth/me
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct MeResponse {
     pub user: String,
     pub authenticated: bool,
@@ -1353,6 +1736,15 @@ pub struct MeResponse {
 /// GET /api/auth/me - Get current user info from token
 ///
 /// Requires a valid JWT token in Authorization header.
+#[utoipa::path(
+    get,
+    path = "/api/auth/me",
+    tag = "Auth",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "Current user info", body = MeResponse)
+    )
+)]
 pub async fn auth_me(auth: auth::AuthUser) -> Json<MeResponse> {
     Json(MeResponse {
         user: auth.user_id.to_string(),
@@ -1366,7 +1758,7 @@ pub async fn auth_me(auth: auth::AuthUser) -> Json<MeResponse> {
 // ============================================================================
 
 /// List item for documents (excludes content).
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct DocumentListItem {
     pub id: Uuid,
     pub title: String,
@@ -1378,7 +1770,7 @@ pub struct DocumentListItem {
 }
 
 /// Response for a full document (includes content).
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct DocumentResponse {
     pub id: Uuid,
     pub title: String,
@@ -1393,7 +1785,7 @@ pub struct DocumentResponse {
 }
 
 /// Request body for creating a document.
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateDocumentRequest {
     pub title: String,
     pub content: String,
@@ -1403,7 +1795,7 @@ pub struct CreateDocumentRequest {
 }
 
 /// Request body for updating a document.
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateDocumentRequest {
     pub content: Option<String>,
     pub title: Option<String>,
@@ -1411,12 +1803,21 @@ pub struct UpdateDocumentRequest {
 }
 
 /// Query parameters for document search.
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct DocumentSearchQuery {
     pub q: String,
 }
 
 /// GET /api/documents - List all documents for the authenticated user.
+#[utoipa::path(
+    get,
+    path = "/api/documents",
+    tag = "Documents",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "List of documents", body = Vec<DocumentListItem>)
+    )
+)]
 pub async fn list_documents(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<DocumentListItem>>, StatusCode> {
     let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let docs = doc_repo.list_documents(auth.user_id.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -1438,6 +1839,16 @@ pub async fn list_documents(State(state): State<AppState>, auth: auth::AuthUser)
 }
 
 /// GET /api/documents/search?q=query - Search documents.
+#[utoipa::path(
+    get,
+    path = "/api/documents/search",
+    tag = "Documents",
+    security(("bearer_auth" = [])),
+    params(DocumentSearchQuery),
+    responses(
+        (status = 200, description = "Search results")
+    )
+)]
 pub async fn search_documents(State(state): State<AppState>, auth: auth::AuthUser, Query(query): Query<DocumentSearchQuery>) -> Result<Json<Vec<crate::db::DocumentSearchResult>>, StatusCode> {
     let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let results = doc_repo.search_documents(auth.user_id.0, &query.q).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -1446,6 +1857,17 @@ pub async fn search_documents(State(state): State<AppState>, auth: auth::AuthUse
 }
 
 /// GET /api/documents/:id - Get a full document by ID.
+#[utoipa::path(
+    get,
+    path = "/api/documents/{id}",
+    tag = "Documents",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Document ID")),
+    responses(
+        (status = 200, description = "Document found", body = DocumentResponse),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn get_document(State(state): State<AppState>, auth: auth::AuthUser, Path(doc_id): Path<Uuid>) -> Result<Json<DocumentResponse>, StatusCode> {
     let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let doc = doc_repo.get_document(doc_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -1470,6 +1892,17 @@ pub async fn get_document(State(state): State<AppState>, auth: auth::AuthUser, P
 }
 
 /// POST /api/documents - Create a new document.
+#[utoipa::path(
+    post,
+    path = "/api/documents",
+    tag = "Documents",
+    security(("bearer_auth" = [])),
+    request_body = CreateDocumentRequest,
+    responses(
+        (status = 201, description = "Document created", body = DocumentResponse),
+        (status = 400, description = "Invalid request")
+    )
+)]
 pub async fn create_document(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateDocumentRequest>) -> Result<(StatusCode, Json<DocumentResponse>), StatusCode> {
     if request.title.trim().is_empty() || request.title.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
@@ -1510,6 +1943,18 @@ pub async fn create_document(State(state): State<AppState>, auth: auth::AuthUser
 }
 
 /// PATCH /api/documents/:id - Update a document.
+#[utoipa::path(
+    patch,
+    path = "/api/documents/{id}",
+    tag = "Documents",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Document ID")),
+    request_body = UpdateDocumentRequest,
+    responses(
+        (status = 200, description = "Updated document", body = DocumentResponse),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn update_document(State(state): State<AppState>, auth: auth::AuthUser, Path(doc_id): Path<Uuid>, Json(request): Json<UpdateDocumentRequest>) -> Result<Json<DocumentResponse>, StatusCode> {
     let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -1540,6 +1985,17 @@ pub async fn update_document(State(state): State<AppState>, auth: auth::AuthUser
 }
 
 /// DELETE /api/documents/:id - Delete a document.
+#[utoipa::path(
+    delete,
+    path = "/api/documents/{id}",
+    tag = "Documents",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Document ID")),
+    responses(
+        (status = 204, description = "Deleted successfully"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn delete_document(State(state): State<AppState>, auth: auth::AuthUser, Path(doc_id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -1560,7 +2016,7 @@ pub async fn delete_document(State(state): State<AppState>, auth: auth::AuthUser
 // ============================================================================
 
 /// Response for a single output schema.
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct OutputSchemaResponse {
     pub id: Uuid,
     pub name: String,
@@ -1569,20 +2025,29 @@ pub struct OutputSchemaResponse {
 }
 
 /// Request body for creating an output schema.
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateOutputSchemaRequest {
     pub name: String,
     pub schema: serde_json::Value,
 }
 
 /// Request body for updating an output schema.
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateOutputSchemaRequest {
     pub name: Option<String>,
     pub schema: Option<serde_json::Value>,
 }
 
 /// GET /api/output-schemas - List all output schemas for the authenticated user.
+#[utoipa::path(
+    get,
+    path = "/api/output-schemas",
+    tag = "Output Schemas",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "List of output schemas", body = Vec<OutputSchemaResponse>)
+    )
+)]
 pub async fn list_output_schemas(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<OutputSchemaResponse>>, StatusCode> {
     let repo = state.output_schema_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo.list_output_schemas(auth.user_id.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -1599,6 +2064,17 @@ pub async fn list_output_schemas(State(state): State<AppState>, auth: auth::Auth
 }
 
 /// POST /api/output-schemas - Create a new output schema.
+#[utoipa::path(
+    post,
+    path = "/api/output-schemas",
+    tag = "Output Schemas",
+    security(("bearer_auth" = [])),
+    request_body = CreateOutputSchemaRequest,
+    responses(
+        (status = 201, description = "Output schema created", body = OutputSchemaResponse),
+        (status = 400, description = "Invalid request")
+    )
+)]
 pub async fn create_output_schema(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateOutputSchemaRequest>) -> Result<(StatusCode, Json<OutputSchemaResponse>), StatusCode> {
     if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
@@ -1620,6 +2096,17 @@ pub async fn create_output_schema(State(state): State<AppState>, auth: auth::Aut
 }
 
 /// GET /api/output-schemas/:id - Get an output schema by ID.
+#[utoipa::path(
+    get,
+    path = "/api/output-schemas/{id}",
+    tag = "Output Schemas",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Output schema ID")),
+    responses(
+        (status = 200, description = "Output schema found", body = OutputSchemaResponse),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn get_output_schema(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<OutputSchemaResponse>, StatusCode> {
     let repo = state.output_schema_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo.get_output_schema(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -1635,6 +2122,18 @@ pub async fn get_output_schema(State(state): State<AppState>, auth: auth::AuthUs
 }
 
 /// PUT /api/output-schemas/:id - Update an output schema.
+#[utoipa::path(
+    put,
+    path = "/api/output-schemas/{id}",
+    tag = "Output Schemas",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Output schema ID")),
+    request_body = UpdateOutputSchemaRequest,
+    responses(
+        (status = 200, description = "Updated output schema", body = OutputSchemaResponse),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn update_output_schema(
     State(state): State<AppState>,
     auth: auth::AuthUser,
@@ -1661,6 +2160,17 @@ pub async fn update_output_schema(
 }
 
 /// DELETE /api/output-schemas/:id - Delete an output schema.
+#[utoipa::path(
+    delete,
+    path = "/api/output-schemas/{id}",
+    tag = "Output Schemas",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Output schema ID")),
+    responses(
+        (status = 204, description = "Deleted successfully"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn delete_output_schema(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     let repo = state.output_schema_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo.get_output_schema(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -1676,7 +2186,7 @@ pub async fn delete_output_schema(State(state): State<AppState>, auth: auth::Aut
 // ============================================================================
 
 /// Response for a single prompt template.
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct PromptTemplateResponse {
     pub id: Uuid,
     pub name: String,
@@ -1685,20 +2195,29 @@ pub struct PromptTemplateResponse {
 }
 
 /// Request body for creating a prompt template.
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreatePromptTemplateRequest {
     pub name: String,
     pub content: String,
 }
 
 /// Request body for updating a prompt template.
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdatePromptTemplateRequest {
     pub name: Option<String>,
     pub content: Option<String>,
 }
 
 /// GET /api/prompt-templates
+#[utoipa::path(
+    get,
+    path = "/api/prompt-templates",
+    tag = "Prompt Templates",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "List of prompt templates", body = Vec<PromptTemplateResponse>)
+    )
+)]
 pub async fn list_prompt_templates(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<PromptTemplateResponse>>, StatusCode> {
     let repo = state.prompt_template_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo.list_prompt_templates(auth.user_id.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -1715,6 +2234,17 @@ pub async fn list_prompt_templates(State(state): State<AppState>, auth: auth::Au
 }
 
 /// POST /api/prompt-templates
+#[utoipa::path(
+    post,
+    path = "/api/prompt-templates",
+    tag = "Prompt Templates",
+    security(("bearer_auth" = [])),
+    request_body = CreatePromptTemplateRequest,
+    responses(
+        (status = 201, description = "Prompt template created", body = PromptTemplateResponse),
+        (status = 400, description = "Invalid request")
+    )
+)]
 pub async fn create_prompt_template(
     State(state): State<AppState>,
     auth: auth::AuthUser,
@@ -1743,6 +2273,17 @@ pub async fn create_prompt_template(
 }
 
 /// GET /api/prompt-templates/:id
+#[utoipa::path(
+    get,
+    path = "/api/prompt-templates/{id}",
+    tag = "Prompt Templates",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Prompt template ID")),
+    responses(
+        (status = 200, description = "Prompt template found", body = PromptTemplateResponse),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn get_prompt_template(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<PromptTemplateResponse>, StatusCode> {
     let repo = state.prompt_template_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo.get_prompt_template(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -1758,6 +2299,18 @@ pub async fn get_prompt_template(State(state): State<AppState>, auth: auth::Auth
 }
 
 /// PUT /api/prompt-templates/:id
+#[utoipa::path(
+    put,
+    path = "/api/prompt-templates/{id}",
+    tag = "Prompt Templates",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Prompt template ID")),
+    request_body = UpdatePromptTemplateRequest,
+    responses(
+        (status = 200, description = "Updated prompt template", body = PromptTemplateResponse),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn update_prompt_template(
     State(state): State<AppState>,
     auth: auth::AuthUser,
@@ -1789,6 +2342,17 @@ pub async fn update_prompt_template(
 }
 
 /// DELETE /api/prompt-templates/:id
+#[utoipa::path(
+    delete,
+    path = "/api/prompt-templates/{id}",
+    tag = "Prompt Templates",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Prompt template ID")),
+    responses(
+        (status = 204, description = "Deleted successfully"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn delete_prompt_template(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     let repo = state.prompt_template_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo.get_prompt_template(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -1803,7 +2367,7 @@ pub async fn delete_prompt_template(State(state): State<AppState>, auth: auth::A
 // Pipeline Stage Members Endpoints
 // ============================================================================
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct StageMemberResponse {
     pub id: Uuid,
     pub pipeline_id: Uuid,
@@ -1812,24 +2376,24 @@ pub struct StageMemberResponse {
     pub display_order: i32,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateStageMemberRequest {
     pub workflow_id: Uuid,
     pub display_order: Option<i32>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateStageMemberRequest {
     pub display_order: i32,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct StageMemberPath {
     pub pid: Uuid,
     pub num: i32,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct StageMemberItemPath {
     pub pid: Uuid,
     pub num: i32,
@@ -1847,6 +2411,20 @@ fn member_response(r: crate::db::PipelineStageMemberRow) -> StageMemberResponse 
 }
 
 /// GET /api/pipelines/:pid/stages/:num/members
+#[utoipa::path(
+    get,
+    path = "/api/pipelines/{pid}/stages/{num}/members",
+    tag = "Pipeline Stage Members",
+    security(("bearer_auth" = [])),
+    params(
+        ("pid" = Uuid, Path, description = "Pipeline ID"),
+        ("num" = i32, Path, description = "Stage number")
+    ),
+    responses(
+        (status = 200, description = "List of stage members", body = Vec<StageMemberResponse>),
+        (status = 404, description = "Pipeline not found")
+    )
+)]
 pub async fn list_stage_members(State(state): State<AppState>, auth: auth::AuthUser, Path(p): Path<StageMemberPath>) -> Result<Json<Vec<StageMemberResponse>>, StatusCode> {
     let _pipeline = state
         .repo
@@ -1862,6 +2440,21 @@ pub async fn list_stage_members(State(state): State<AppState>, auth: auth::AuthU
 }
 
 /// POST /api/pipelines/:pid/stages/:num/members
+#[utoipa::path(
+    post,
+    path = "/api/pipelines/{pid}/stages/{num}/members",
+    tag = "Pipeline Stage Members",
+    security(("bearer_auth" = [])),
+    params(
+        ("pid" = Uuid, Path, description = "Pipeline ID"),
+        ("num" = i32, Path, description = "Stage number")
+    ),
+    request_body = CreateStageMemberRequest,
+    responses(
+        (status = 201, description = "Stage member added", body = StageMemberResponse),
+        (status = 404, description = "Pipeline not found")
+    )
+)]
 pub async fn add_stage_member(
     State(state): State<AppState>,
     auth: auth::AuthUser,
@@ -1885,6 +2478,22 @@ pub async fn add_stage_member(
 }
 
 /// PUT /api/pipelines/:pid/stages/:num/members/:mid
+#[utoipa::path(
+    put,
+    path = "/api/pipelines/{pid}/stages/{num}/members/{mid}",
+    tag = "Pipeline Stage Members",
+    security(("bearer_auth" = [])),
+    params(
+        ("pid" = Uuid, Path, description = "Pipeline ID"),
+        ("num" = i32, Path, description = "Stage number"),
+        ("mid" = Uuid, Path, description = "Member ID")
+    ),
+    request_body = UpdateStageMemberRequest,
+    responses(
+        (status = 200, description = "Updated stage member", body = StageMemberResponse),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn update_stage_member(
     State(state): State<AppState>,
     auth: auth::AuthUser,
@@ -1905,6 +2514,21 @@ pub async fn update_stage_member(
 }
 
 /// DELETE /api/pipelines/:pid/stages/:num/members/:mid
+#[utoipa::path(
+    delete,
+    path = "/api/pipelines/{pid}/stages/{num}/members/{mid}",
+    tag = "Pipeline Stage Members",
+    security(("bearer_auth" = [])),
+    params(
+        ("pid" = Uuid, Path, description = "Pipeline ID"),
+        ("num" = i32, Path, description = "Stage number"),
+        ("mid" = Uuid, Path, description = "Member ID")
+    ),
+    responses(
+        (status = 204, description = "Deleted successfully"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn delete_stage_member(State(state): State<AppState>, auth: auth::AuthUser, Path(p): Path<StageMemberItemPath>) -> Result<StatusCode, StatusCode> {
     let _pipeline = state
         .repo
@@ -1923,7 +2547,7 @@ pub async fn delete_stage_member(State(state): State<AppState>, auth: auth::Auth
 // Agent Execution Endpoints (read-only)
 // ============================================================================
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct AgentExecutionResponse {
     pub id: Uuid,
     pub stage_execution_id: Uuid,
@@ -1966,7 +2590,7 @@ impl From<crate::db::AgentExecutionRow> for AgentExecutionResponse {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct ExecutionMessageResponse {
     pub id: Uuid,
     pub agent_execution_id: Uuid,
@@ -1993,12 +2617,34 @@ impl From<crate::db::ExecutionMessageRow> for ExecutionMessageResponse {
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/agent-executions/{id}",
+    tag = "Agent Executions",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Agent execution ID")),
+    responses(
+        (status = 200, description = "Agent execution found", body = AgentExecutionResponse),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn get_agent_execution(State(state): State<AppState>, _auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<AgentExecutionResponse>, StatusCode> {
     let repo = state.agent_execution_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo.get_agent_execution(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     Ok(Json(AgentExecutionResponse::from(row)))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/agent-executions/{id}/messages",
+    tag = "Agent Executions",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Agent execution ID")),
+    responses(
+        (status = 200, description = "List of execution messages", body = Vec<ExecutionMessageResponse>),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn list_execution_messages(State(state): State<AppState>, _auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<Vec<ExecutionMessageResponse>>, StatusCode> {
     let repo = state.agent_execution_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     // Verify execution exists
@@ -2011,17 +2657,30 @@ pub async fn list_execution_messages(State(state): State<AppState>, _auth: auth:
 // Interactive Chat Endpoints
 // ============================================================================
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct SendMessageRequest {
     pub content: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct ApproveExecutionRequest {
     pub structured_output: Option<serde_json::Value>,
 }
 
 /// POST /api/agent-executions/:id/messages — send a user message to an interactive agent execution.
+#[utoipa::path(
+    post,
+    path = "/api/agent-executions/{id}/messages",
+    tag = "Agent Executions",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Agent execution ID")),
+    request_body = SendMessageRequest,
+    responses(
+        (status = 200, description = "Message sent", body = ExecutionMessageResponse),
+        (status = 400, description = "Not interactive"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn send_execution_message(
     State(state): State<AppState>,
     _auth: auth::AuthUser,
@@ -2048,6 +2707,19 @@ pub async fn send_execution_message(
 ///
 /// With no `structured_output` body → approve as-is (main output used).
 /// With `structured_output` → approve with changes (revised output used downstream).
+#[utoipa::path(
+    post,
+    path = "/api/agent-executions/{id}/approve",
+    tag = "Agent Executions",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Agent execution ID")),
+    request_body = ApproveExecutionRequest,
+    responses(
+        (status = 200, description = "Execution approved", body = AgentExecutionResponse),
+        (status = 400, description = "Not interactive or not awaiting user"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn approve_execution(
     State(state): State<AppState>,
     _auth: auth::AuthUser,
@@ -2074,17 +2746,27 @@ pub async fn approve_execution(
 // Cost Endpoints
 // ============================================================================
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct CostQuery {
     pub since: Option<DateTime<Utc>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct CostResponse {
     pub total_spend: f64,
     pub models: Vec<crate::db::traits::ModelSpendRow>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/costs",
+    tag = "Costs",
+    security(("bearer_auth" = [])),
+    params(CostQuery),
+    responses(
+        (status = 200, description = "Cost breakdown", body = CostResponse)
+    )
+)]
 pub async fn get_costs(State(state): State<AppState>, auth: auth::AuthUser, Query(q): Query<CostQuery>) -> Result<Json<CostResponse>, StatusCode> {
     let repo = state.token_ledger_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let total_spend = repo.get_user_spend(auth.user_id.0, q.since).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -2096,7 +2778,7 @@ pub async fn get_costs(State(state): State<AppState>, auth: auth::AuthUser, Quer
 // Execution Tree Endpoint
 // ============================================================================
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct TreeRunInfo {
     pub id: Uuid,
     pub pipeline_id: Uuid,
@@ -2111,7 +2793,7 @@ pub struct TreeRunInfo {
     pub total_cost_usd: f64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct TreeStage {
     pub stage_number: i32,
     pub stage_name: String,
@@ -2119,7 +2801,7 @@ pub struct TreeStage {
     pub stage_executions: Vec<TreeStageExecution>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct TreeStageExecution {
     pub id: Uuid,
     pub workflow_name: String,
@@ -2127,7 +2809,8 @@ pub struct TreeStageExecution {
     pub agent_executions: Vec<TreeAgentExecution>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
+#[schema(no_recursion)]
 pub struct TreeAgentExecution {
     pub id: Uuid,
     pub agent_name: String,
@@ -2145,7 +2828,7 @@ pub struct TreeAgentExecution {
     pub interactive_review: Option<Box<TreeAgentExecution>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct TreeResponse {
     pub run: TreeRunInfo,
     pub stages: Vec<TreeStage>,
@@ -2154,6 +2837,17 @@ pub struct TreeResponse {
 /// GET /api/pipeline-runs/:run_id/tree
 ///
 /// Returns the full execution tree for a pipeline run, joining stage_executions → agent_executions.
+#[utoipa::path(
+    get,
+    path = "/api/pipeline-runs/{run_id}/tree",
+    tag = "Execution Tree",
+    security(("bearer_auth" = [])),
+    params(("run_id" = Uuid, Path, description = "Pipeline run ID")),
+    responses(
+        (status = 200, description = "Execution tree", body = TreeResponse),
+        (status = 404, description = "Run not found")
+    )
+)]
 pub async fn get_pipeline_run_tree(State(state): State<AppState>, _auth: auth::AuthUser, Path(run_id): Path<Uuid>) -> Result<Json<TreeResponse>, StatusCode> {
     let ae_repo = state.agent_execution_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -2332,7 +3026,7 @@ pub async fn get_pipeline_run_tree(State(state): State<AppState>, _auth: auth::A
 // Result Endpoints
 // ============================================================================
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct ResultResponse {
     pub id: Uuid,
     pub agent_execution_id: Uuid,
@@ -2355,11 +3049,21 @@ impl From<crate::db::ResultRow> for ResultResponse {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct ResultQuery {
     pub output_schema_id: Option<Uuid>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/results",
+    tag = "Results",
+    security(("bearer_auth" = [])),
+    params(ResultQuery),
+    responses(
+        (status = 200, description = "List of results", body = Vec<ResultResponse>)
+    )
+)]
 pub async fn list_results(State(state): State<AppState>, auth: auth::AuthUser, Query(q): Query<ResultQuery>) -> Result<Json<Vec<ResultResponse>>, StatusCode> {
     let repo = state.result_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = match q.output_schema_id {
@@ -2370,6 +3074,17 @@ pub async fn list_results(State(state): State<AppState>, auth: auth::AuthUser, Q
     Ok(Json(rows.into_iter().map(ResultResponse::from).collect()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/results/{id}",
+    tag = "Results",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Result ID")),
+    responses(
+        (status = 200, description = "Result found", body = ResultResponse),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn get_result(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<ResultResponse>, StatusCode> {
     let repo = state.result_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo.get_result(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -2379,6 +3094,17 @@ pub async fn get_result(State(state): State<AppState>, auth: auth::AuthUser, Pat
     Ok(Json(ResultResponse::from(row)))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/results/{id}",
+    tag = "Results",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Result ID")),
+    responses(
+        (status = 204, description = "Deleted successfully"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn delete_result(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     let repo = state.result_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo.get_result(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -2393,7 +3119,7 @@ pub async fn delete_result(State(state): State<AppState>, auth: auth::AuthUser, 
 // Workflows Endpoints
 // ============================================================================
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct WorkflowResponse {
     pub id: Uuid,
     pub name: String,
@@ -2401,19 +3127,19 @@ pub struct WorkflowResponse {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateWorkflowRequest {
     pub name: String,
     pub description: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateWorkflowRequest {
     pub name: Option<String>,
     pub description: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct WorkflowStepResponse {
     pub id: Uuid,
     pub workflow_id: Uuid,
@@ -2429,7 +3155,7 @@ pub struct WorkflowStepResponse {
     pub display_order: i32,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateStepRequest {
     pub agent_id: Uuid,
     pub execution_mode: Option<String>,
@@ -2443,7 +3169,7 @@ pub struct CreateStepRequest {
     pub display_order: Option<i32>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateStepRequest {
     pub agent_id: Uuid,
     pub execution_mode: Option<String>,
@@ -2457,24 +3183,24 @@ pub struct UpdateStepRequest {
     pub display_order: Option<i32>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct EdgeRequest {
     pub from_step_id: Uuid,
     pub to_step_id: Uuid,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct EdgeResponse {
     pub from_step_id: Uuid,
     pub to_step_id: Uuid,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct StepDocumentRequest {
     pub document_id: Uuid,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct StepDocumentResponse {
     pub step_id: Uuid,
     pub document_id: Uuid,
@@ -2498,6 +3224,15 @@ fn step_response(r: crate::db::WorkflowStepRow) -> WorkflowStepResponse {
 }
 
 /// GET /api/workflows
+#[utoipa::path(
+    get,
+    path = "/api/workflows",
+    tag = "Workflows",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "List of workflows", body = Vec<WorkflowResponse>)
+    )
+)]
 pub async fn list_workflows(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<WorkflowResponse>>, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo.list_workflows(auth.user_id.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -2514,6 +3249,17 @@ pub async fn list_workflows(State(state): State<AppState>, auth: auth::AuthUser)
 }
 
 /// POST /api/workflows
+#[utoipa::path(
+    post,
+    path = "/api/workflows",
+    tag = "Workflows",
+    security(("bearer_auth" = [])),
+    request_body = CreateWorkflowRequest,
+    responses(
+        (status = 201, description = "Workflow created", body = WorkflowResponse),
+        (status = 400, description = "Invalid request")
+    )
+)]
 pub async fn create_workflow(State(state): State<AppState>, auth: auth::AuthUser, Json(req): Json<CreateWorkflowRequest>) -> Result<(StatusCode, Json<WorkflowResponse>), StatusCode> {
     if req.name.trim().is_empty() || req.name.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
@@ -2535,6 +3281,17 @@ pub async fn create_workflow(State(state): State<AppState>, auth: auth::AuthUser
 }
 
 /// GET /api/workflows/:id
+#[utoipa::path(
+    get,
+    path = "/api/workflows/{id}",
+    tag = "Workflows",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Workflow ID")),
+    responses(
+        (status = 200, description = "Workflow found", body = WorkflowResponse),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn get_workflow(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<WorkflowResponse>, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo.get_workflow(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -2550,6 +3307,18 @@ pub async fn get_workflow(State(state): State<AppState>, auth: auth::AuthUser, P
 }
 
 /// PUT /api/workflows/:id
+#[utoipa::path(
+    put,
+    path = "/api/workflows/{id}",
+    tag = "Workflows",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Workflow ID")),
+    request_body = UpdateWorkflowRequest,
+    responses(
+        (status = 200, description = "Updated workflow", body = WorkflowResponse),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn update_workflow(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>, Json(req): Json<UpdateWorkflowRequest>) -> Result<Json<WorkflowResponse>, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo.get_workflow(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -2571,6 +3340,17 @@ pub async fn update_workflow(State(state): State<AppState>, auth: auth::AuthUser
 }
 
 /// DELETE /api/workflows/:id
+#[utoipa::path(
+    delete,
+    path = "/api/workflows/{id}",
+    tag = "Workflows",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Workflow ID")),
+    responses(
+        (status = 204, description = "Deleted successfully"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn delete_workflow(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo.get_workflow(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -2582,6 +3362,18 @@ pub async fn delete_workflow(State(state): State<AppState>, auth: auth::AuthUser
 }
 
 /// POST /api/workflows/:id/steps
+#[utoipa::path(
+    post,
+    path = "/api/workflows/{id}/steps",
+    tag = "Workflow Steps",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Workflow ID")),
+    request_body = CreateStepRequest,
+    responses(
+        (status = 201, description = "Step created", body = WorkflowStepResponse),
+        (status = 404, description = "Workflow not found")
+    )
+)]
 pub async fn create_workflow_step(
     State(state): State<AppState>,
     auth: auth::AuthUser,
@@ -2612,6 +3404,17 @@ pub async fn create_workflow_step(
 }
 
 /// GET /api/workflows/:id/steps
+#[utoipa::path(
+    get,
+    path = "/api/workflows/{id}/steps",
+    tag = "Workflow Steps",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Workflow ID")),
+    responses(
+        (status = 200, description = "List of workflow steps", body = Vec<WorkflowStepResponse>),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn list_workflow_steps(State(state): State<AppState>, auth: auth::AuthUser, Path(wid): Path<Uuid>) -> Result<Json<Vec<WorkflowStepResponse>>, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo.get_workflow(wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -2623,6 +3426,20 @@ pub async fn list_workflow_steps(State(state): State<AppState>, auth: auth::Auth
 }
 
 /// GET /api/workflows/:wid/steps/:sid
+#[utoipa::path(
+    get,
+    path = "/api/workflows/{wid}/steps/{sid}",
+    tag = "Workflow Steps",
+    security(("bearer_auth" = [])),
+    params(
+        ("wid" = Uuid, Path, description = "Workflow ID"),
+        ("sid" = Uuid, Path, description = "Step ID")
+    ),
+    responses(
+        (status = 200, description = "Workflow step found", body = WorkflowStepResponse),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn get_workflow_step(State(state): State<AppState>, auth: auth::AuthUser, Path(p): Path<(Uuid, Uuid)>) -> Result<Json<WorkflowStepResponse>, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo.get_workflow(p.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -2636,13 +3453,28 @@ pub async fn get_workflow_step(State(state): State<AppState>, auth: auth::AuthUs
     Ok(Json(step_response(step)))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct WorkflowStepPath {
     pub wid: Uuid,
     pub sid: Uuid,
 }
 
 /// PUT /api/workflows/:wid/steps/:sid
+#[utoipa::path(
+    put,
+    path = "/api/workflows/{wid}/steps/{sid}",
+    tag = "Workflow Steps",
+    security(("bearer_auth" = [])),
+    params(
+        ("wid" = Uuid, Path, description = "Workflow ID"),
+        ("sid" = Uuid, Path, description = "Step ID")
+    ),
+    request_body = UpdateStepRequest,
+    responses(
+        (status = 200, description = "Updated workflow step", body = WorkflowStepResponse),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn update_workflow_step(
     State(state): State<AppState>,
     auth: auth::AuthUser,
@@ -2677,6 +3509,20 @@ pub async fn update_workflow_step(
 }
 
 /// DELETE /api/workflows/:wid/steps/:sid
+#[utoipa::path(
+    delete,
+    path = "/api/workflows/{wid}/steps/{sid}",
+    tag = "Workflow Steps",
+    security(("bearer_auth" = [])),
+    params(
+        ("wid" = Uuid, Path, description = "Workflow ID"),
+        ("sid" = Uuid, Path, description = "Step ID")
+    ),
+    responses(
+        (status = 204, description = "Deleted successfully"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn delete_workflow_step(State(state): State<AppState>, auth: auth::AuthUser, Path(p): Path<WorkflowStepPath>) -> Result<StatusCode, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo.get_workflow(p.wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -2692,6 +3538,17 @@ pub async fn delete_workflow_step(State(state): State<AppState>, auth: auth::Aut
 }
 
 /// GET /api/workflows/:id/edges
+#[utoipa::path(
+    get,
+    path = "/api/workflows/{id}/edges",
+    tag = "Workflow Edges",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Workflow ID")),
+    responses(
+        (status = 200, description = "List of workflow edges", body = Vec<EdgeResponse>),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn list_workflow_edges(State(state): State<AppState>, auth: auth::AuthUser, Path(wid): Path<Uuid>) -> Result<Json<Vec<EdgeResponse>>, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo.get_workflow(wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -2710,6 +3567,18 @@ pub async fn list_workflow_edges(State(state): State<AppState>, auth: auth::Auth
 }
 
 /// POST /api/workflows/:id/edges
+#[utoipa::path(
+    post,
+    path = "/api/workflows/{id}/edges",
+    tag = "Workflow Edges",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Workflow ID")),
+    request_body = EdgeRequest,
+    responses(
+        (status = 201, description = "Edge added"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn add_workflow_edge(State(state): State<AppState>, auth: auth::AuthUser, Path(wid): Path<Uuid>, Json(req): Json<EdgeRequest>) -> Result<StatusCode, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo.get_workflow(wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -2721,6 +3590,18 @@ pub async fn add_workflow_edge(State(state): State<AppState>, auth: auth::AuthUs
 }
 
 /// DELETE /api/workflows/:id/edges
+#[utoipa::path(
+    delete,
+    path = "/api/workflows/{id}/edges",
+    tag = "Workflow Edges",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Workflow ID")),
+    request_body = EdgeRequest,
+    responses(
+        (status = 204, description = "Edge removed"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn remove_workflow_edge(State(state): State<AppState>, auth: auth::AuthUser, Path(wid): Path<Uuid>, Json(req): Json<EdgeRequest>) -> Result<StatusCode, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo.get_workflow(wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -2732,6 +3613,21 @@ pub async fn remove_workflow_edge(State(state): State<AppState>, auth: auth::Aut
 }
 
 /// POST /api/workflows/:wid/steps/:sid/documents
+#[utoipa::path(
+    post,
+    path = "/api/workflows/{wid}/steps/{sid}/documents",
+    tag = "Step Documents",
+    security(("bearer_auth" = [])),
+    params(
+        ("wid" = Uuid, Path, description = "Workflow ID"),
+        ("sid" = Uuid, Path, description = "Step ID")
+    ),
+    request_body = StepDocumentRequest,
+    responses(
+        (status = 201, description = "Document added to step"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn add_step_document(State(state): State<AppState>, auth: auth::AuthUser, Path(p): Path<WorkflowStepPath>, Json(req): Json<StepDocumentRequest>) -> Result<StatusCode, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo.get_workflow(p.wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -2747,6 +3643,21 @@ pub async fn add_step_document(State(state): State<AppState>, auth: auth::AuthUs
 }
 
 /// DELETE /api/workflows/:wid/steps/:sid/documents
+#[utoipa::path(
+    delete,
+    path = "/api/workflows/{wid}/steps/{sid}/documents",
+    tag = "Step Documents",
+    security(("bearer_auth" = [])),
+    params(
+        ("wid" = Uuid, Path, description = "Workflow ID"),
+        ("sid" = Uuid, Path, description = "Step ID")
+    ),
+    request_body = StepDocumentRequest,
+    responses(
+        (status = 204, description = "Document removed from step"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn remove_step_document(State(state): State<AppState>, auth: auth::AuthUser, Path(p): Path<WorkflowStepPath>, Json(req): Json<StepDocumentRequest>) -> Result<StatusCode, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo.get_workflow(p.wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -2762,6 +3673,20 @@ pub async fn remove_step_document(State(state): State<AppState>, auth: auth::Aut
 }
 
 /// GET /api/workflows/:wid/steps/:sid/documents
+#[utoipa::path(
+    get,
+    path = "/api/workflows/{wid}/steps/{sid}/documents",
+    tag = "Step Documents",
+    security(("bearer_auth" = [])),
+    params(
+        ("wid" = Uuid, Path, description = "Workflow ID"),
+        ("sid" = Uuid, Path, description = "Step ID")
+    ),
+    responses(
+        (status = 200, description = "List of step documents", body = Vec<StepDocumentResponse>),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn list_step_documents(State(state): State<AppState>, auth: auth::AuthUser, Path(p): Path<WorkflowStepPath>) -> Result<Json<Vec<StepDocumentResponse>>, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo.get_workflow(p.wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -2784,7 +3709,7 @@ pub async fn list_step_documents(State(state): State<AppState>, auth: auth::Auth
 // ============================================================================
 
 /// Request body for submitting a context response to an agent
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct ContextResponseRequest {
     pub agent_id: Uuid,
     pub task_id: Uuid,
@@ -2793,13 +3718,24 @@ pub struct ContextResponseRequest {
 }
 
 /// A file with path and content for context responses
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct FilePathContent {
     pub path: String,
     pub content: String,
 }
 
 /// POST /api/context-response - Submit a human context response to an agent
+#[utoipa::path(
+    post,
+    path = "/api/context-response",
+    tag = "Agent Context",
+    security(("bearer_auth" = [])),
+    request_body = ContextResponseRequest,
+    responses(
+        (status = 200, description = "Context response submitted"),
+        (status = 404, description = "Agent not found")
+    )
+)]
 pub async fn submit_context_response(State(state): State<AppState>, _auth: auth::AuthUser, Json(request): Json<ContextResponseRequest>) -> Result<StatusCode, StatusCode> {
     use crate::agents::{AgentCommand, AgentId, ContextResponse, FileContent};
 
@@ -2981,13 +3917,28 @@ pub async fn render_stage(doc_repo: Option<&dyn crate::db::traits::DocumentRepo>
 }
 
 /// Request body for rendering a pipeline stage prompt.
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct RenderStageRequest {
     /// Map of stage_name → JSON output from that stage.
     pub stage_outputs: std::collections::HashMap<String, serde_json::Value>,
 }
 
 /// Render a pipeline stage into a resolved prompt (HTTP endpoint wrapper).
+#[utoipa::path(
+    post,
+    path = "/api/pipelines/{id}/stages/{stage_number}/render",
+    tag = "Pipeline Runs",
+    security(("bearer_auth" = [])),
+    params(
+        ("id" = String, Path, description = "Pipeline ID"),
+        ("stage_number" = i32, Path, description = "Stage number")
+    ),
+    request_body = RenderStageRequest,
+    responses(
+        (status = 200, description = "Rendered stage prompt"),
+        (status = 404, description = "Stage not found")
+    )
+)]
 pub async fn render_pipeline_stage(
     State(state): State<AppState>,
     _user: auth::AuthUser,
@@ -3017,12 +3968,12 @@ pub async fn render_pipeline_stage(
 // Pipeline Run Endpoints
 // ============================================================================
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct ApproveRunRequest {
     pub user_input: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct PipelineRunResponse {
     pub id: String,
     pub pipeline_id: String,
@@ -3053,7 +4004,7 @@ impl PipelineRunResponse {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct StageExecutionResponse {
     pub id: String,
     pub run_id: String,
@@ -3094,19 +4045,29 @@ impl StageExecutionResponse {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct PipelineRunDetailResponse {
     #[serde(flatten)]
     pub run: PipelineRunResponse,
     pub stages: Vec<StageExecutionResponse>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
 pub struct ListRunsQuery {
     pub pipeline_id: Option<String>,
 }
 
 /// List pipeline runs, optionally filtered by pipeline_id.
+#[utoipa::path(
+    get,
+    path = "/api/pipeline-runs",
+    tag = "Pipeline Runs",
+    security(("bearer_auth" = [])),
+    params(ListRunsQuery),
+    responses(
+        (status = 200, description = "List of pipeline runs", body = Vec<PipelineRunResponse>)
+    )
+)]
 pub async fn list_pipeline_runs(State(state): State<AppState>, _user: auth::AuthUser, Query(query): Query<ListRunsQuery>) -> Result<Json<Vec<PipelineRunResponse>>, StatusCode> {
     let pipeline_id = query.pipeline_id.as_deref().and_then(|s| Uuid::parse_str(s).ok()).ok_or(StatusCode::BAD_REQUEST)?;
 
@@ -3116,6 +4077,17 @@ pub async fn list_pipeline_runs(State(state): State<AppState>, _user: auth::Auth
 }
 
 /// Get a pipeline run with its stage executions.
+#[utoipa::path(
+    get,
+    path = "/api/pipeline-runs/{run_id}",
+    tag = "Pipeline Runs",
+    security(("bearer_auth" = [])),
+    params(("run_id" = String, Path, description = "Pipeline run ID")),
+    responses(
+        (status = 200, description = "Pipeline run details", body = PipelineRunDetailResponse),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn get_pipeline_run(State(state): State<AppState>, _user: auth::AuthUser, Path(run_id): Path<String>) -> Result<Json<PipelineRunDetailResponse>, StatusCode> {
     let run_uuid = Uuid::parse_str(&run_id).map_err(|_| StatusCode::BAD_REQUEST)?;
 
@@ -3135,6 +4107,19 @@ pub async fn get_pipeline_run(State(state): State<AppState>, _user: auth::AuthUs
 }
 
 /// Approve a pipeline run gate and optionally inject user context.
+#[utoipa::path(
+    post,
+    path = "/api/pipeline-runs/{run_id}/approve",
+    tag = "Pipeline Runs",
+    security(("bearer_auth" = [])),
+    params(("run_id" = String, Path, description = "Pipeline run ID")),
+    request_body = ApproveRunRequest,
+    responses(
+        (status = 200, description = "Run approved and resumed"),
+        (status = 404, description = "Run not found"),
+        (status = 409, description = "Run not waiting for approval")
+    )
+)]
 pub async fn approve_pipeline_run(
     State(state): State<AppState>,
     _user: auth::AuthUser,
@@ -3330,6 +4315,15 @@ pub async fn approve_pipeline_run(
 // ============================================================================
 
 /// GET /api/tool-routers - List all tool routers for the authenticated user.
+#[utoipa::path(
+    get,
+    path = "/api/tool-routers",
+    tag = "Tool Routers",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "List of tool routers")
+    )
+)]
 pub async fn list_tool_routers(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<crate::db::ToolRouterRow>>, StatusCode> {
     let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo.list_tool_routers(auth.user_id.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -3337,7 +4331,7 @@ pub async fn list_tool_routers(State(state): State<AppState>, auth: auth::AuthUs
 }
 
 /// Request body for creating a tool router.
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateToolRouterRequest {
     pub name: String,
     pub description: Option<String>,
@@ -3346,6 +4340,17 @@ pub struct CreateToolRouterRequest {
 }
 
 /// POST /api/tool-routers - Create a new tool router.
+#[utoipa::path(
+    post,
+    path = "/api/tool-routers",
+    tag = "Tool Routers",
+    security(("bearer_auth" = [])),
+    request_body = CreateToolRouterRequest,
+    responses(
+        (status = 201, description = "Tool router created"),
+        (status = 400, description = "Invalid request")
+    )
+)]
 pub async fn create_tool_router(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateToolRouterRequest>) -> Result<(StatusCode, Json<crate::db::ToolRouterRow>), StatusCode> {
     if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
@@ -3359,6 +4364,17 @@ pub async fn create_tool_router(State(state): State<AppState>, auth: auth::AuthU
 }
 
 /// GET /api/tool-routers/:id - Get a tool router by ID.
+#[utoipa::path(
+    get,
+    path = "/api/tool-routers/{id}",
+    tag = "Tool Routers",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Tool router ID")),
+    responses(
+        (status = 200, description = "Tool router found"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn get_tool_router(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<crate::db::ToolRouterRow>, StatusCode> {
     let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -3369,7 +4385,7 @@ pub async fn get_tool_router(State(state): State<AppState>, auth: auth::AuthUser
 }
 
 /// Request body for updating a tool router.
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateToolRouterRequest {
     pub name: Option<String>,
     pub description: Option<String>,
@@ -3379,6 +4395,18 @@ pub struct UpdateToolRouterRequest {
 }
 
 /// PUT /api/tool-routers/:id - Update a tool router.
+#[utoipa::path(
+    put,
+    path = "/api/tool-routers/{id}",
+    tag = "Tool Routers",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Tool router ID")),
+    request_body = UpdateToolRouterRequest,
+    responses(
+        (status = 200, description = "Updated tool router"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn update_tool_router(
     State(state): State<AppState>,
     auth: auth::AuthUser,
@@ -3403,6 +4431,17 @@ pub async fn update_tool_router(
 }
 
 /// DELETE /api/tool-routers/:id - Delete a tool router.
+#[utoipa::path(
+    delete,
+    path = "/api/tool-routers/{id}",
+    tag = "Tool Routers",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Tool router ID")),
+    responses(
+        (status = 204, description = "Deleted successfully"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn delete_tool_router(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -3414,6 +4453,17 @@ pub async fn delete_tool_router(State(state): State<AppState>, auth: auth::AuthU
 }
 
 /// GET /api/tool-routers/:id/tools - Get tools assigned to a router.
+#[utoipa::path(
+    get,
+    path = "/api/tool-routers/{id}/tools",
+    tag = "Tool Routers",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Tool router ID")),
+    responses(
+        (status = 200, description = "List of tools assigned to router", body = Vec<ToolResponse>),
+        (status = 404, description = "Router not found")
+    )
+)]
 pub async fn get_router_tools(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
     let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -3426,12 +4476,24 @@ pub async fn get_router_tools(State(state): State<AppState>, auth: auth::AuthUse
 }
 
 /// Request body for setting router tools.
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct SetRouterToolsRequest {
     pub tool_ids: Vec<Uuid>,
 }
 
 /// PUT /api/tool-routers/:id/tools - Set tools for a router.
+#[utoipa::path(
+    put,
+    path = "/api/tool-routers/{id}/tools",
+    tag = "Tool Routers",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Tool router ID")),
+    request_body = SetRouterToolsRequest,
+    responses(
+        (status = 204, description = "Router tools updated"),
+        (status = 404, description = "Router not found")
+    )
+)]
 pub async fn set_router_tools(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>, Json(request): Json<SetRouterToolsRequest>) -> Result<StatusCode, StatusCode> {
     let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -3443,6 +4505,16 @@ pub async fn set_router_tools(State(state): State<AppState>, auth: auth::AuthUse
 }
 
 /// GET /api/sessions/:session_id/context - Get context entries for a session.
+#[utoipa::path(
+    get,
+    path = "/api/sessions/{session_id}/context",
+    tag = "Session Context",
+    security(("bearer_auth" = [])),
+    params(("session_id" = Uuid, Path, description = "Session ID")),
+    responses(
+        (status = 200, description = "Session context entries")
+    )
+)]
 pub async fn get_session_context(State(state): State<AppState>, _auth: auth::AuthUser, Path(session_id): Path<Uuid>) -> Result<Json<Vec<crate::db::ContextStoreRow>>, StatusCode> {
     let repo = state.context_store_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo.get_active_context(session_id, 100).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -3450,6 +4522,16 @@ pub async fn get_session_context(State(state): State<AppState>, _auth: auth::Aut
 }
 
 /// GET /api/sessions/:session_id/requests - List router requests for a session.
+#[utoipa::path(
+    get,
+    path = "/api/sessions/{session_id}/requests",
+    tag = "Session Context",
+    security(("bearer_auth" = [])),
+    params(("session_id" = Uuid, Path, description = "Session ID")),
+    responses(
+        (status = 200, description = "List of router requests")
+    )
+)]
 pub async fn list_session_requests(State(state): State<AppState>, _auth: auth::AuthUser, Path(session_id): Path<Uuid>) -> Result<Json<Vec<crate::db::RouterRequestRow>>, StatusCode> {
     let repo = state.router_request_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo.list_session_requests(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

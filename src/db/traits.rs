@@ -412,7 +412,7 @@ pub trait AgentExecutionRepo: Send + Sync {
 // ============================================================================
 
 /// Aggregated spend by model.
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct ModelSpendRow {
     pub model_id: String,
     pub total_input_tokens: i64,

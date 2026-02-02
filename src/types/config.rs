@@ -46,7 +46,7 @@ use super::message::VerbosityLevel;
 use crate::constants::*;
 
 /// Model configuration for each agent tier
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct TierModels {
     pub orchestrator: ModelConfig,
     pub worker: ModelConfig,
@@ -76,7 +76,7 @@ impl Default for TierModels {
 }
 
 /// Agent pool size configuration
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct AgentPoolConfig {
     pub max_orchestrators: u8,
     pub max_workers: u8,

@@ -9,7 +9,7 @@ use uuid::Uuid;
 use super::agent::AgentId;
 
 /// Unique identifier for a task
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct TaskId(pub Uuid);
 
 impl TaskId {
@@ -31,7 +31,7 @@ impl std::fmt::Display for TaskId {
 }
 
 /// Task lifecycle status
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskStatus {
     #[default]
@@ -43,7 +43,7 @@ pub enum TaskStatus {
 }
 
 /// Task priority levels
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Priority {
     Low,
@@ -55,7 +55,7 @@ pub enum Priority {
 }
 
 /// Unique identifier for a vertical slice
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct SliceId(pub Uuid);
 
 impl SliceId {
@@ -83,7 +83,7 @@ pub struct VerticalSlice {
 }
 
 /// Individual task assigned to an agent
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Task {
     pub id: TaskId,
     pub slice_id: Option<SliceId>,
@@ -93,6 +93,7 @@ pub struct Task {
     pub assigned_agent: Option<AgentId>,
     pub status: TaskStatus,
     pub priority: Priority,
+    #[schema(value_type = Vec<String>)]
     pub context_files: Vec<PathBuf>,
     /// Optional metadata for routing hints and tracking
     pub metadata: Option<HashMap<String, String>>,
