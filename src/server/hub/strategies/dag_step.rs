@@ -176,6 +176,13 @@ impl ExecutionStrategy for DagStepStrategy {
     }
 }
 
+impl DagStepStrategy {
+    /// Parse structured output from raw LLM response (public for dag.rs).
+    pub fn parse_output(content: &str) -> Option<Value> {
+        parse_structured_output(content)
+    }
+}
+
 /// Approximate cost computation per model.
 pub fn compute_cost(model_id: &str, input_tokens: i64, output_tokens: i64) -> f32 {
     let (input_rate, output_rate) = if model_id.contains("opus") {
