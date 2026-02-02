@@ -125,6 +125,8 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         .route(routes::AGENT, get(api::get_agent).patch(api::update_agent).delete(api::delete_agent))
         .route(routes::AGENT_TOOLS, get(api::get_agent_tools).put(api::set_agent_tools))
         .route(routes::AGENT_CONTEXT, get(api::get_agent_context).put(api::set_agent_context))
+        .route(routes::AGENT_MODES, get(api::list_agent_modes).post(api::create_agent_mode))
+        .route(routes::AGENT_MODE, delete(api::delete_agent_mode))
         .route(routes::TOOLS, get(api::list_tools).post(api::create_tool))
         .route(routes::TOOL, get(api::get_tool).patch(api::update_tool).delete(api::delete_tool))
         .route(routes::PIPELINE_STAGE_RENDER, post(api::render_pipeline_stage))

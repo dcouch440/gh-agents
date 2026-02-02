@@ -1220,6 +1220,142 @@ pub async fn list_modes(State(state): State<AppState>, auth: auth::AuthUser) -> 
     Ok(Json(modes))
 }
 
+// ============================================================================
+// Agent Mode Endpoints
+// ============================================================================
+
+/// Response for an agent mode
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct AgentModeResponse {
+    pub id: Uuid,
+    pub agent_id: Uuid,
+    pub name: String,
+    pub system_prompt_suffix: Option<String>,
+    pub temperature_override: Option<f64>,
+    pub model_override: Option<String>,
+    pub tool_overrides: Option<Vec<String>>,
+    pub classifier_hint: String,
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<crate::db::AgentModeRow> for AgentModeResponse {
+    fn from(r: crate::db::AgentModeRow) -> Self {
+        Self {
+            id: r.id,
+            agent_id: r.agent_id,
+            name: r.name,
+            system_prompt_suffix: r.system_prompt_suffix,
+            temperature_override: r.temperature_override,
+            model_override: r.model_override,
+            tool_overrides: r.tool_overrides,
+            classifier_hint: r.classifier_hint,
+            created_at: r.created_at,
+        }
+    }
+}
+
+/// Request body for creating an agent mode
+#[derive(Deserialize, utoipa::ToSchema)]
+pub struct CreateAgentModeRequest {
+    pub name: String,
+    #[serde(default)]
+    pub system_prompt_suffix: Option<String>,
+    #[serde(default)]
+    pub temperature_override: Option<f64>,
+    #[serde(default)]
+    pub model_override: Option<String>,
+    #[serde(default)]
+    pub tool_overrides: Option<Vec<String>>,
+    pub classifier_hint: String,
+}
+
+/// List all modes for an agent
+#[utoipa::path(
+    get,
+    path = "/api/agents/{agent_id}/modes",
+    tag = "Agent Modes",
+    security(("bearer_auth" = [])),
+    params(("agent_id" = Uuid, Path, description = "Agent ID")),
+    responses(
+        (status = 200, description = "List of agent modes", body = Vec<AgentModeResponse>)
+    )
+)]
+pub async fn list_agent_modes(
+    State(state): State<AppState>,
+    _auth: auth::AuthUser,
+    Path(agent_id): Path<Uuid>,
+) -> Result<Json<Vec<AgentModeResponse>>, StatusCode> {
+    let modes = state
+        .repo
+        .get_agent_modes(agent_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(modes.into_iter().map(AgentModeResponse::from).collect()))
+}
+
+/// Create a new mode for an agent
+#[utoipa::path(
+    post,
+    path = "/api/agents/{agent_id}/modes",
+    tag = "Agent Modes",
+    security(("bearer_auth" = [])),
+    params(("agent_id" = Uuid, Path, description = "Agent ID")),
+    request_body = CreateAgentModeRequest,
+    responses(
+        (status = 201, description = "Mode created", body = AgentModeResponse)
+    )
+)]
+pub async fn create_agent_mode(
+    State(state): State<AppState>,
+    _auth: auth::AuthUser,
+    Path(agent_id): Path<Uuid>,
+    Json(req): Json<CreateAgentModeRequest>,
+) -> Result<(StatusCode, Json<AgentModeResponse>), StatusCode> {
+    let mode = crate::db::AgentModeRow {
+        id: Uuid::new_v4(),
+        agent_id,
+        name: req.name,
+        system_prompt_suffix: req.system_prompt_suffix,
+        temperature_override: req.temperature_override,
+        model_override: req.model_override,
+        tool_overrides: req.tool_overrides,
+        classifier_hint: req.classifier_hint,
+        created_at: Utc::now(),
+    };
+
+    state
+        .repo
+        .create_agent_mode(&mode)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok((StatusCode::CREATED, Json(AgentModeResponse::from(mode))))
+}
+
+/// Delete an agent mode
+#[utoipa::path(
+    delete,
+    path = "/api/agent-modes/{mode_id}",
+    tag = "Agent Modes",
+    security(("bearer_auth" = [])),
+    params(("mode_id" = Uuid, Path, description = "Mode ID")),
+    responses(
+        (status = 204, description = "Mode deleted")
+    )
+)]
+pub async fn delete_agent_mode(
+    State(state): State<AppState>,
+    _auth: auth::AuthUser,
+    Path(mode_id): Path<Uuid>,
+) -> Result<StatusCode, StatusCode> {
+    state
+        .repo
+        .delete_agent_mode(mode_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 /// Request body for creating a session
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateSessionRequest {
