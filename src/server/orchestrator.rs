@@ -1421,7 +1421,7 @@ mod tests {
         std::env::remove_var(crate::constants::ENV_ANTHROPIC_API_KEY);
 
         let repo: Arc<dyn ServerRepo> = Arc::new(TestRepo::new());
-        let (state, orchestrator_rx) = AppState::with_repo(None, repo, None, AppConfig::default());
+        let (state, orchestrator_rx) = AppState::with_repo(None, repo, AppConfig::default());
 
         let msg_id = Uuid::new_v4();
         let (_buf, mut rx, _done) = state.get_response_stream(msg_id).await;

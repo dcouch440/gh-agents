@@ -14,9 +14,7 @@ use crate::db::{
     WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
-use crate::orchestration::DependencyError;
-use crate::orchestration::QueueError as TaskQueueError;
-use crate::types::{ProductionMode, Task, TaskId, TaskStatus, User, UserId};
+use crate::types::{Task, User, UserId};
 
 // ============================================================================
 // Merge Queue Repository
@@ -52,70 +50,6 @@ pub trait MergeQueueRepo: Send + Sync {
 
     /// Delete merged/skipped entries older than cutoff.
     async fn cleanup_old(&self, owner: String, repo: String, cutoff: DateTime<Utc>) -> Result<u32, MergeQueueError>;
-}
-
-// ============================================================================
-// Dependency Repository
-// ============================================================================
-
-/// Database operations for task dependency tracking.
-#[cfg_attr(test, mockall::automock)]
-#[async_trait]
-pub trait DependencyRepo: Send + Sync {
-    /// Get the status of a task by ID.
-    async fn get_task_status(&self, id: TaskId) -> Result<Option<TaskStatus>, DependencyError>;
-
-    /// Get all task IDs that depend on the given task.
-    async fn get_blocked_by(&self, task_id: TaskId) -> Result<Vec<TaskId>, DependencyError>;
-
-    /// Get the dependency IDs of a task.
-    async fn get_task_dependencies(&self, task_id: TaskId) -> Result<Vec<TaskId>, DependencyError>;
-
-    /// Save a single dependency.
-    async fn save_dependency(&self, task_id: TaskId, depends_on: TaskId, now: DateTime<Utc>) -> Result<(), DependencyError>;
-
-    /// Remove a dependency.
-    async fn remove_dependency(&self, task_id: TaskId, depends_on: TaskId) -> Result<(), DependencyError>;
-
-    /// Get all pending task IDs whose dependencies are all completed.
-    async fn get_ready_task_ids(&self) -> Result<Vec<TaskId>, DependencyError>;
-}
-
-// ============================================================================
-// Task Queue Repository
-// ============================================================================
-
-/// Database operations for the persistent task queue.
-#[cfg_attr(test, mockall::automock)]
-#[async_trait]
-pub trait TaskQueueRepo: Send + Sync {
-    /// List all tasks with the given status.
-    async fn list_tasks_by_status(&self, status: TaskStatus) -> Result<Vec<Task>, TaskQueueError>;
-
-    /// Update a task's status.
-    async fn update_task_status(&self, id: TaskId, status: TaskStatus) -> Result<(), TaskQueueError>;
-
-    /// Update a task for requeue (status, priority, updated_at) and log a task event.
-    async fn update_task_for_requeue(&self, task_id: TaskId, priority_str: String, policy_description: String, now: DateTime<Utc>) -> Result<(), TaskQueueError>;
-}
-
-// ============================================================================
-// Cost Repository
-// ============================================================================
-
-// ============================================================================
-// Scheduler Repository
-// ============================================================================
-
-/// Database operations for the scheduler (production mode).
-#[cfg_attr(test, mockall::automock)]
-#[async_trait]
-pub trait SchedulerRepo: Send + Sync {
-    /// Get the current production mode.
-    async fn get_production_mode(&self) -> Result<ProductionMode, anyhow::Error>;
-
-    /// Set the production mode.
-    async fn set_production_mode(&self, mode: ProductionMode) -> Result<(), anyhow::Error>;
 }
 
 // ============================================================================

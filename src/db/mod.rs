@@ -6,9 +6,9 @@ mod queries;
 pub mod test_utils;
 pub mod traits;
 
-pub use queries::*;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
+pub use queries::*;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use uuid::Uuid;

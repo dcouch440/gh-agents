@@ -7,8 +7,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::db::traits::{
-    AgentExecutionRepo, DependencyRepo, DocumentRepo, MergeQueueRepo, ModelSpendRow, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, SchedulerRepo,
-    ServerRepo, TaskQueueRepo, TokenLedgerRepo, UserRepo, WorkflowRepo,
+    AgentExecutionRepo, DocumentRepo, MergeQueueRepo, ModelSpendRow, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, ServerRepo, TokenLedgerRepo, UserRepo, WorkflowRepo,
 };
 use crate::db::{
     AgentExecutionRow, AgentRow, ChatMessageRow, ClusterRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageMemberRow,
@@ -16,9 +15,7 @@ use crate::db::{
     WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
-use crate::orchestration::DependencyError;
-use crate::orchestration::QueueError as TaskQueueError;
-use crate::types::{AgentId, AgentTier, ProductionMode, Task, TaskId, TaskStatus, User, UserId};
+use crate::types::{Task, User, UserId};
 
 /// Production repository backed by PostgreSQL.
 #[derive(Clone)]
@@ -225,173 +222,6 @@ impl MergeQueueRepo for PgRepo {
         .await?;
 
         Ok(result.rows_affected() as u32)
-    }
-}
-
-#[async_trait]
-impl DependencyRepo for PgRepo {
-    async fn get_task_status(&self, id: TaskId) -> Result<Option<TaskStatus>, DependencyError> {
-        let row: Option<(String,)> = sqlx::query_as("SELECT status FROM tasks WHERE id = $1")
-            .bind(id.0)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(|e| DependencyError::DatabaseError(e.to_string()))?;
-
-        Ok(row.map(|r| match r.0.as_str() {
-            "pending" => TaskStatus::Pending,
-            "inprogress" | "in_progress" => TaskStatus::InProgress,
-            "review" => TaskStatus::Review,
-            "completed" => TaskStatus::Completed,
-            "failed" => TaskStatus::Failed,
-            _ => TaskStatus::Pending,
-        }))
-    }
-
-    async fn get_blocked_by(&self, task_id: TaskId) -> Result<Vec<TaskId>, DependencyError> {
-        let rows: Vec<(Uuid,)> = sqlx::query_as("SELECT task_id FROM task_dependencies WHERE depends_on_id = $1")
-            .bind(task_id.0)
-            .fetch_all(&self.pool)
-            .await
-            .map_err(|e| DependencyError::DatabaseError(e.to_string()))?;
-
-        Ok(rows.into_iter().map(|r| TaskId(r.0)).collect())
-    }
-
-    async fn get_task_dependencies(&self, task_id: TaskId) -> Result<Vec<TaskId>, DependencyError> {
-        let rows: Vec<(Uuid,)> = sqlx::query_as("SELECT depends_on_id FROM task_dependencies WHERE task_id = $1")
-            .bind(task_id.0)
-            .fetch_all(&self.pool)
-            .await
-            .map_err(|e| DependencyError::DatabaseError(e.to_string()))?;
-
-        Ok(rows.into_iter().map(|r| TaskId(r.0)).collect())
-    }
-
-    async fn save_dependency(&self, task_id: TaskId, depends_on: TaskId, now: DateTime<Utc>) -> Result<(), DependencyError> {
-        sqlx::query(
-            r#"
-            INSERT INTO task_dependencies (task_id, depends_on_id, created_at)
-            VALUES ($1, $2, $3)
-            ON CONFLICT DO NOTHING
-            "#,
-        )
-        .bind(task_id.0)
-        .bind(depends_on.0)
-        .bind(now)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| DependencyError::DatabaseError(e.to_string()))?;
-
-        Ok(())
-    }
-
-    async fn remove_dependency(&self, task_id: TaskId, depends_on: TaskId) -> Result<(), DependencyError> {
-        sqlx::query("DELETE FROM task_dependencies WHERE task_id = $1 AND depends_on_id = $2")
-            .bind(task_id.0)
-            .bind(depends_on.0)
-            .execute(&self.pool)
-            .await
-            .map_err(|e| DependencyError::DatabaseError(e.to_string()))?;
-
-        Ok(())
-    }
-
-    async fn get_ready_task_ids(&self) -> Result<Vec<TaskId>, DependencyError> {
-        let rows: Vec<(Uuid,)> = sqlx::query_as(
-            r#"
-            SELECT t.id FROM tasks t
-            WHERE t.status = 'pending'
-            AND NOT EXISTS (
-                SELECT 1 FROM task_dependencies td
-                JOIN tasks dep ON td.depends_on_id = dep.id
-                WHERE td.task_id = t.id
-                AND dep.status != 'completed'
-            )
-            "#,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| DependencyError::DatabaseError(e.to_string()))?;
-
-        Ok(rows.into_iter().map(|r| TaskId(r.0)).collect())
-    }
-}
-
-#[async_trait]
-impl TaskQueueRepo for PgRepo {
-    async fn list_tasks_by_status(&self, status: TaskStatus) -> Result<Vec<Task>, TaskQueueError> {
-        crate::db::list_tasks_by_status(&self.pool, status).await.map_err(|e| TaskQueueError::DatabaseError(e.to_string()))
-    }
-
-    async fn update_task_status(&self, id: TaskId, status: TaskStatus) -> Result<(), TaskQueueError> {
-        crate::db::update_task_status(&self.pool, &id, status).await.map_err(|e| TaskQueueError::DatabaseError(e.to_string()))
-    }
-
-    async fn update_task_for_requeue(&self, task_id: TaskId, priority_str: String, policy_description: String, now: DateTime<Utc>) -> Result<(), TaskQueueError> {
-        sqlx::query(
-            r#"
-            UPDATE tasks
-            SET status = 'pending',
-                priority = $1,
-                updated_at = $2
-            WHERE id = $3
-            "#,
-        )
-        .bind(&priority_str)
-        .bind(now)
-        .bind(task_id.0)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| TaskQueueError::DatabaseError(e.to_string()))?;
-
-        sqlx::query(
-            r#"
-            INSERT INTO task_events (id, task_id, event_type, details, timestamp)
-            VALUES ($1, $2, 'requeued', $3, $4)
-            "#,
-        )
-        .bind(Uuid::new_v4())
-        .bind(task_id.0)
-        .bind(policy_description)
-        .bind(now)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| TaskQueueError::DatabaseError(e.to_string()))?;
-
-        Ok(())
-    }
-}
-
-#[async_trait]
-impl SchedulerRepo for PgRepo {
-    async fn get_production_mode(&self) -> Result<ProductionMode, anyhow::Error> {
-        let row: Option<(String,)> = sqlx::query_as("SELECT value FROM system_state WHERE key = 'production_mode'")
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch production mode: {}", e))?;
-
-        Ok(row.map(|(v,)| ProductionMode::from_str(&v)).unwrap_or_default())
-    }
-
-    async fn set_production_mode(&self, mode: ProductionMode) -> Result<(), anyhow::Error> {
-        let value = mode.as_str();
-
-        sqlx::query(
-            r#"
-            INSERT INTO system_state (key, value, updated_at)
-            VALUES ('production_mode', $1, $2)
-            ON CONFLICT(key) DO UPDATE SET
-                value = excluded.value,
-                updated_at = excluded.updated_at
-            "#,
-        )
-        .bind(value)
-        .bind(Utc::now())
-        .execute(&self.pool)
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to set production mode: {}", e))?;
-
-        Ok(())
     }
 }
 
@@ -2046,7 +1876,7 @@ impl ResultRepo for PgRepo {
 mod tests {
     use super::*;
     use crate::db::test_utils::TestDb;
-    use crate::types::{AgentTier, Priority, Task, TaskStatus};
+    use crate::types::{AgentTier, Priority, Task, TaskId, TaskStatus};
 
     #[tokio::test]
     #[ignore = "requires running Postgres"]
@@ -2267,26 +2097,6 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires running Postgres"]
-    async fn scheduler_repo_production_mode() {
-        let db = TestDb::new().await;
-        let repo = PgRepo::new(db.pool.clone());
-
-        // Default mode should be Running
-        let mode = repo.get_production_mode().await.unwrap();
-        assert_eq!(mode, ProductionMode::Running);
-
-        // Set to RefactorMode
-        repo.set_production_mode(ProductionMode::RefactorMode).await.unwrap();
-
-        // Verify
-        let mode = repo.get_production_mode().await.unwrap();
-        assert_eq!(mode, ProductionMode::RefactorMode);
-
-        db.cleanup().await;
-    }
-
-    #[tokio::test]
-    #[ignore = "requires running Postgres"]
     async fn server_repo_health_check() {
         let db = TestDb::new().await;
         let repo = PgRepo::new(db.pool.clone());
@@ -2449,133 +2259,6 @@ mod tests {
         // List documents
         let docs = repo.list_documents(user_id).await.unwrap();
         assert_eq!(docs.len(), 3);
-
-        db.cleanup().await;
-    }
-
-    #[tokio::test]
-    #[ignore = "requires running Postgres"]
-    async fn dependency_repo_save_and_get() {
-        let db = TestDb::new().await;
-        let repo = PgRepo::new(db.pool.clone());
-
-        // Create user and tasks first
-        let user = repo.create_user("depuser@example.com", "hash").await.unwrap();
-
-        let task1 = Task {
-            id: TaskId(Uuid::new_v4()),
-            slice_id: None,
-            title: "Task 1".to_string(),
-            description: "".to_string(),
-            assigned_tier: AgentTier::Worker,
-            assigned_agent: None,
-            status: TaskStatus::Pending,
-            priority: Priority::Normal,
-            context_files: vec![],
-            metadata: None,
-            depends_on: vec![],
-            retry_count: 0,
-            max_retries: 3,
-            last_error: None,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-        };
-
-        let task2 = Task {
-            id: TaskId(Uuid::new_v4()),
-            slice_id: None,
-            title: "Task 2".to_string(),
-            description: "".to_string(),
-            assigned_tier: AgentTier::Worker,
-            assigned_agent: None,
-            status: TaskStatus::Pending,
-            priority: Priority::Normal,
-            context_files: vec![],
-            metadata: None,
-            depends_on: vec![],
-            retry_count: 0,
-            max_retries: 3,
-            last_error: None,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-        };
-
-        repo.insert_task(user.id, task1.clone()).await.unwrap();
-        repo.insert_task(user.id, task2.clone()).await.unwrap();
-
-        // Save dependency (task2 depends on task1)
-        repo.save_dependency(task2.id.clone(), task1.id.clone(), Utc::now()).await.unwrap();
-
-        // Get dependencies
-        let deps = repo.get_task_dependencies(task2.id.clone()).await.unwrap();
-        assert_eq!(deps.len(), 1);
-        assert_eq!(deps[0], task1.id);
-
-        // Get blocked by
-        let blocked = repo.get_blocked_by(task1.id.clone()).await.unwrap();
-        assert_eq!(blocked.len(), 1);
-        assert_eq!(blocked[0], task2.id);
-
-        db.cleanup().await;
-    }
-
-    #[tokio::test]
-    #[ignore = "requires running Postgres"]
-    async fn dependency_repo_remove() {
-        let db = TestDb::new().await;
-        let repo = PgRepo::new(db.pool.clone());
-
-        // Create user and tasks
-        let user = repo.create_user("depremoveuser@example.com", "hash").await.unwrap();
-
-        let task1 = Task {
-            id: TaskId(Uuid::new_v4()),
-            slice_id: None,
-            title: "Task 1".to_string(),
-            description: "".to_string(),
-            assigned_tier: AgentTier::Worker,
-            assigned_agent: None,
-            status: TaskStatus::Pending,
-            priority: Priority::Normal,
-            context_files: vec![],
-            metadata: None,
-            depends_on: vec![],
-            retry_count: 0,
-            max_retries: 3,
-            last_error: None,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-        };
-
-        let task2 = Task {
-            id: TaskId(Uuid::new_v4()),
-            slice_id: None,
-            title: "Task 2".to_string(),
-            description: "".to_string(),
-            assigned_tier: AgentTier::Worker,
-            assigned_agent: None,
-            status: TaskStatus::Pending,
-            priority: Priority::Normal,
-            context_files: vec![],
-            metadata: None,
-            depends_on: vec![],
-            retry_count: 0,
-            max_retries: 3,
-            last_error: None,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-        };
-
-        repo.insert_task(user.id, task1.clone()).await.unwrap();
-        repo.insert_task(user.id, task2.clone()).await.unwrap();
-
-        // Save and remove dependency
-        repo.save_dependency(task2.id.clone(), task1.id.clone(), Utc::now()).await.unwrap();
-        repo.remove_dependency(task2.id.clone(), task1.id.clone()).await.unwrap();
-
-        // Verify removal
-        let deps = repo.get_task_dependencies(task2.id.clone()).await.unwrap();
-        assert_eq!(deps.len(), 0);
 
         db.cleanup().await;
     }
