@@ -9,6 +9,7 @@ pub mod agent_mode;
 pub mod api;
 pub mod auth;
 pub mod dag_executor;
+pub mod hub;
 pub mod orchestrator;
 pub mod state;
 pub mod router_service;
