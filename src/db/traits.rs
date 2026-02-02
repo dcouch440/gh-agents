@@ -9,8 +9,9 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::db::{
-    AgentExecutionRow, AgentRow, ChatMessageRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageMemberRow, PipelineStageRow,
-    PromptTemplateRow, ResultRow, SessionRow, StageExecutionRow, StepDocumentRow, TokenLedgerRow, ToolRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow,
+    AgentExecutionRow, AgentRow, ChatMessageRow, ContextStoreRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageMemberRow,
+    PipelineStageRow, PromptTemplateRow, ResultRow, RouterRequestRow, SessionRow, StageExecutionRow, StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow, WorkflowRow, WorkflowStepEdgeRow,
+    WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -432,4 +433,64 @@ pub trait ResultRepo: Send + Sync {
     async fn list_results(&self, user_id: Uuid) -> Result<Vec<ResultRow>>;
     async fn list_results_by_schema(&self, user_id: Uuid, output_schema_id: Uuid) -> Result<Vec<ResultRow>>;
     async fn delete_result(&self, id: Uuid) -> Result<()>;
+}
+
+// ============================================================================
+// Tool Router Repository
+// ============================================================================
+
+/// Database operations for tool router management.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait ToolRouterRepo: Send + Sync {
+    /// List all tool routers for a user.
+    async fn list_tool_routers(&self, user_id: Uuid) -> Result<Vec<ToolRouterRow>>;
+    /// Get a tool router by ID.
+    async fn get_tool_router(&self, id: Uuid) -> Result<Option<ToolRouterRow>>;
+    /// Create a new tool router.
+    async fn create_tool_router(&self, user_id: Uuid, name: &str, description: Option<&str>, system_prompt: &str, model_id: &str) -> Result<ToolRouterRow>;
+    /// Update a tool router.
+    async fn update_tool_router(&self, id: Uuid, name: Option<&str>, description: Option<&str>, system_prompt: Option<&str>, model_id: Option<&str>, is_active: Option<bool>) -> Result<ToolRouterRow>;
+    /// Delete a tool router.
+    async fn delete_tool_router(&self, id: Uuid) -> Result<()>;
+    /// Get all tools assigned to a router.
+    async fn get_router_tools(&self, router_id: Uuid) -> Result<Vec<ToolRow>>;
+    /// Set the full tool list for a router (replaces existing).
+    async fn set_router_tools(&self, router_id: Uuid, tool_ids: &[Uuid]) -> Result<()>;
+}
+
+// ============================================================================
+// Context Store Repository
+// ============================================================================
+
+/// Database operations for the per-session context store.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait ContextStoreRepo: Send + Sync {
+    /// Add a context entry to a session.
+    async fn add_context(&self, session_id: Uuid, source: &str, priority: f32, content: &str, metadata: Option<serde_json::Value>, expires_at: Option<DateTime<Utc>>) -> Result<ContextStoreRow>;
+    /// Get active context for a session, ordered by priority descending.
+    async fn get_active_context(&self, session_id: Uuid, limit: u32) -> Result<Vec<ContextStoreRow>>;
+    /// Update the status of a context entry.
+    async fn update_context_status(&self, id: Uuid, status: &str) -> Result<()>;
+    /// Expire stale context entries (past expires_at). Returns count expired.
+    async fn expire_stale_context(&self, session_id: Uuid) -> Result<u32>;
+}
+
+// ============================================================================
+// Router Request Repository
+// ============================================================================
+
+/// Database operations for router request logging.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait RouterRequestRepo: Send + Sync {
+    /// Create a new router request log entry.
+    async fn create_router_request(&self, session_id: Uuid, agent_execution_id: Option<Uuid>, intent: &str, priority: &str, callback_hint: Option<&str>) -> Result<RouterRequestRow>;
+    /// Update a router request with routing decision and result.
+    async fn update_router_request(&self, id: Uuid, routed_tool: Option<&str>, routed_args: Option<serde_json::Value>, is_async: bool, passdown: Option<&str>, chain: Option<serde_json::Value>, status: &str, result: Option<&str>) -> Result<RouterRequestRow>;
+    /// Get a router request by ID.
+    async fn get_router_request(&self, id: Uuid) -> Result<Option<RouterRequestRow>>;
+    /// List all router requests for a session.
+    async fn list_session_requests(&self, session_id: Uuid) -> Result<Vec<RouterRequestRow>>;
 }

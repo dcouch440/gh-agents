@@ -7,11 +7,13 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::db::traits::{
-    AgentExecutionRepo, DocumentRepo, MergeQueueRepo, ModelSpendRow, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, ServerRepo, TokenLedgerRepo, UserRepo, WorkflowRepo,
+    AgentExecutionRepo, ContextStoreRepo, DocumentRepo, MergeQueueRepo, ModelSpendRow, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, RouterRequestRepo, ServerRepo,
+    TokenLedgerRepo, ToolRouterRepo, UserRepo, WorkflowRepo,
 };
 use crate::db::{
-    AgentExecutionRow, AgentRow, ChatMessageRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageMemberRow, PipelineStageRow,
-    PromptTemplateRow, ResultRow, SessionRow, StageExecutionRow, StepDocumentRow, TokenLedgerRow, ToolRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow,
+    AgentExecutionRow, AgentRow, ChatMessageRow, ContextStoreRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageMemberRow,
+    PipelineStageRow, PromptTemplateRow, ResultRow, RouterRequestRow, SessionRow, StageExecutionRow, StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow, WorkflowRow, WorkflowStepEdgeRow,
+    WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -1545,6 +1547,215 @@ impl ResultRepo for PgRepo {
     async fn delete_result(&self, id: Uuid) -> Result<()> {
         sqlx::query("DELETE FROM results WHERE id = $1").bind(id).execute(&self.pool).await?;
         Ok(())
+    }
+}
+
+// ============================================================================
+// ToolRouterRepo
+// ============================================================================
+
+#[async_trait]
+impl ToolRouterRepo for PgRepo {
+    async fn list_tool_routers(&self, user_id: Uuid) -> Result<Vec<ToolRouterRow>> {
+        let rows: Vec<ToolRouterRow> = sqlx::query_as(
+            "SELECT id, user_id, name, description, system_prompt, model_id, is_active, created_at, updated_at FROM tool_routers WHERE user_id = $1 ORDER BY created_at DESC",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn get_tool_router(&self, id: Uuid) -> Result<Option<ToolRouterRow>> {
+        let row: Option<ToolRouterRow> = sqlx::query_as(
+            "SELECT id, user_id, name, description, system_prompt, model_id, is_active, created_at, updated_at FROM tool_routers WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn create_tool_router(&self, user_id: Uuid, name: &str, description: Option<&str>, system_prompt: &str, model_id: &str) -> Result<ToolRouterRow> {
+        let row: ToolRouterRow = sqlx::query_as(
+            "INSERT INTO tool_routers (user_id, name, description, system_prompt, model_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, user_id, name, description, system_prompt, model_id, is_active, created_at, updated_at",
+        )
+        .bind(user_id)
+        .bind(name)
+        .bind(description)
+        .bind(system_prompt)
+        .bind(model_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn update_tool_router(&self, id: Uuid, name: Option<&str>, description: Option<&str>, system_prompt: Option<&str>, model_id: Option<&str>, is_active: Option<bool>) -> Result<ToolRouterRow> {
+        let row: ToolRouterRow = sqlx::query_as(
+            r#"UPDATE tool_routers SET
+                name = COALESCE($2, name),
+                description = COALESCE($3, description),
+                system_prompt = COALESCE($4, system_prompt),
+                model_id = COALESCE($5, model_id),
+                is_active = COALESCE($6, is_active),
+                updated_at = NOW()
+            WHERE id = $1
+            RETURNING id, user_id, name, description, system_prompt, model_id, is_active, created_at, updated_at"#,
+        )
+        .bind(id)
+        .bind(name)
+        .bind(description)
+        .bind(system_prompt)
+        .bind(model_id)
+        .bind(is_active)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn delete_tool_router(&self, id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM tool_routers WHERE id = $1").bind(id).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    async fn get_router_tools(&self, router_id: Uuid) -> Result<Vec<ToolRow>> {
+        let rows: Vec<ToolRow> = sqlx::query_as(
+            "SELECT t.id, t.user_id, t.name, t.display_name, t.description, t.parameters, t.created_at FROM tools t INNER JOIN tool_router_tools trt ON t.id = trt.tool_id WHERE trt.router_id = $1 ORDER BY t.name",
+        )
+        .bind(router_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn set_router_tools(&self, router_id: Uuid, tool_ids: &[Uuid]) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query("DELETE FROM tool_router_tools WHERE router_id = $1").bind(router_id).execute(&mut *tx).await?;
+
+        for tool_id in tool_ids {
+            sqlx::query("INSERT INTO tool_router_tools (router_id, tool_id) VALUES ($1, $2)")
+                .bind(router_id)
+                .bind(tool_id)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        tx.commit().await?;
+        Ok(())
+    }
+}
+
+// ============================================================================
+// ContextStoreRepo
+// ============================================================================
+
+#[async_trait]
+impl ContextStoreRepo for PgRepo {
+    async fn add_context(&self, session_id: Uuid, source: &str, priority: f32, content: &str, metadata: Option<serde_json::Value>, expires_at: Option<DateTime<Utc>>) -> Result<ContextStoreRow> {
+        let row: ContextStoreRow = sqlx::query_as(
+            "INSERT INTO context_store (session_id, source, priority, content, metadata, expires_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, session_id, source, priority, content, metadata, status, created_at, expires_at",
+        )
+        .bind(session_id)
+        .bind(source)
+        .bind(priority)
+        .bind(content)
+        .bind(metadata)
+        .bind(expires_at)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn get_active_context(&self, session_id: Uuid, limit: u32) -> Result<Vec<ContextStoreRow>> {
+        let rows: Vec<ContextStoreRow> = sqlx::query_as(
+            "SELECT id, session_id, source, priority, content, metadata, status, created_at, expires_at FROM context_store WHERE session_id = $1 AND status = 'active' AND (expires_at IS NULL OR expires_at > NOW()) ORDER BY priority DESC LIMIT $2",
+        )
+        .bind(session_id)
+        .bind(limit as i64)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn update_context_status(&self, id: Uuid, status: &str) -> Result<()> {
+        sqlx::query("UPDATE context_store SET status = $2 WHERE id = $1")
+            .bind(id)
+            .bind(status)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn expire_stale_context(&self, session_id: Uuid) -> Result<u32> {
+        let result = sqlx::query("UPDATE context_store SET status = 'expired' WHERE session_id = $1 AND status = 'active' AND expires_at IS NOT NULL AND expires_at <= NOW()")
+            .bind(session_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected() as u32)
+    }
+}
+
+// ============================================================================
+// RouterRequestRepo
+// ============================================================================
+
+#[async_trait]
+impl RouterRequestRepo for PgRepo {
+    async fn create_router_request(&self, session_id: Uuid, agent_execution_id: Option<Uuid>, intent: &str, priority: &str, callback_hint: Option<&str>) -> Result<RouterRequestRow> {
+        let row: RouterRequestRow = sqlx::query_as(
+            "INSERT INTO router_requests (session_id, agent_execution_id, intent, priority, callback_hint) VALUES ($1, $2, $3, $4, $5) RETURNING id, session_id, agent_execution_id, intent, priority, callback_hint, routed_tool, routed_args, is_async, passdown, chain, status, result, created_at, completed_at",
+        )
+        .bind(session_id)
+        .bind(agent_execution_id)
+        .bind(intent)
+        .bind(priority)
+        .bind(callback_hint)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn update_router_request(&self, id: Uuid, routed_tool: Option<&str>, routed_args: Option<serde_json::Value>, is_async: bool, passdown: Option<&str>, chain: Option<serde_json::Value>, status: &str, result: Option<&str>) -> Result<RouterRequestRow> {
+        let row: RouterRequestRow = sqlx::query_as(
+            r#"UPDATE router_requests SET
+                routed_tool = $2, routed_args = $3, is_async = $4, passdown = $5,
+                chain = $6, status = $7, result = $8,
+                completed_at = CASE WHEN $7 IN ('completed', 'failed') THEN NOW() ELSE completed_at END
+            WHERE id = $1
+            RETURNING id, session_id, agent_execution_id, intent, priority, callback_hint, routed_tool, routed_args, is_async, passdown, chain, status, result, created_at, completed_at"#,
+        )
+        .bind(id)
+        .bind(routed_tool)
+        .bind(routed_args)
+        .bind(is_async)
+        .bind(passdown)
+        .bind(chain)
+        .bind(status)
+        .bind(result)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn get_router_request(&self, id: Uuid) -> Result<Option<RouterRequestRow>> {
+        let row: Option<RouterRequestRow> = sqlx::query_as(
+            "SELECT id, session_id, agent_execution_id, intent, priority, callback_hint, routed_tool, routed_args, is_async, passdown, chain, status, result, created_at, completed_at FROM router_requests WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn list_session_requests(&self, session_id: Uuid) -> Result<Vec<RouterRequestRow>> {
+        let rows: Vec<RouterRequestRow> = sqlx::query_as(
+            "SELECT id, session_id, agent_execution_id, intent, priority, callback_hint, routed_tool, routed_args, is_async, passdown, chain, status, result, created_at, completed_at FROM router_requests WHERE session_id = $1 ORDER BY created_at DESC",
+        )
+        .bind(session_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
     }
 }
 

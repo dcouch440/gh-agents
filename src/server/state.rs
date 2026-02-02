@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::agents::{AgentPool, AgentResponse, ClusterManager, Dispatcher, PipelineManager, RoleManager, ScheduleManager, ToolClusterIndex};
 use crate::db::pg_repo::PgRepo;
-use crate::db::traits::{AgentExecutionRepo, DocumentRepo, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, ServerRepo, TokenLedgerRepo, UserRepo, WorkflowRepo};
+use crate::db::traits::{AgentExecutionRepo, ContextStoreRepo, DocumentRepo, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, RouterRequestRepo, ServerRepo, TokenLedgerRepo, ToolRouterRepo, UserRepo, WorkflowRepo};
 use crate::llm::AnthropicClient;
 use crate::types::{AgentPoolConfig, AppConfig, UserId};
 
@@ -75,6 +75,12 @@ pub struct AppState {
     pub agent_execution_repo: Option<Arc<dyn AgentExecutionRepo>>,
     pub token_ledger_repo: Option<Arc<dyn TokenLedgerRepo>>,
     pub result_repo: Option<Arc<dyn ResultRepo>>,
+    /// Tool router repository (None in legacy/test mode)
+    pub tool_router_repo: Option<Arc<dyn ToolRouterRepo>>,
+    /// Context store repository (None in legacy/test mode)
+    pub context_store_repo: Option<Arc<dyn ContextStoreRepo>>,
+    /// Router request repository (None in legacy/test mode)
+    pub router_request_repo: Option<Arc<dyn RouterRequestRepo>>,
     /// Application configuration (mutable at runtime via API)
     pub config: Arc<RwLock<AppConfig>>,
     /// JWT secret for token signing
@@ -131,6 +137,9 @@ impl AppState {
         let agent_execution_repo: Arc<dyn AgentExecutionRepo> = Arc::new(PgRepo::new(db.clone()));
         let token_ledger_repo: Arc<dyn TokenLedgerRepo> = Arc::new(PgRepo::new(db.clone()));
         let result_repo: Arc<dyn ResultRepo> = Arc::new(PgRepo::new(db.clone()));
+        let tool_router_repo: Arc<dyn ToolRouterRepo> = Arc::new(PgRepo::new(db.clone()));
+        let context_store_repo: Arc<dyn ContextStoreRepo> = Arc::new(PgRepo::new(db.clone()));
+        let router_request_repo: Arc<dyn RouterRequestRepo> = Arc::new(PgRepo::new(db.clone()));
         let (mut state, rx) = Self::with_repo(Some(db), repo, config.clone());
         state.user_repo = Some(user_repo);
         state.doc_repo = Some(doc_repo);
@@ -141,6 +150,9 @@ impl AppState {
         state.agent_execution_repo = Some(agent_execution_repo);
         state.token_ledger_repo = Some(token_ledger_repo);
         state.result_repo = Some(result_repo);
+        state.tool_router_repo = Some(tool_router_repo);
+        state.context_store_repo = Some(context_store_repo);
+        state.router_request_repo = Some(router_request_repo);
 
         // Initialize role manager with current working directory as project root
         let project_root = std::env::current_dir().unwrap_or_default();
@@ -259,6 +271,9 @@ impl AppState {
                 agent_execution_repo: None,
                 token_ledger_repo: None,
                 result_repo: None,
+                tool_router_repo: None,
+                context_store_repo: None,
+                router_request_repo: None,
                 config: Arc::new(RwLock::new(config)),
                 jwt_secret,
                 orchestrator_tx,

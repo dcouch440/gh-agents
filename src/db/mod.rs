@@ -53,7 +53,7 @@ pub struct PipelineStageRow {
 }
 
 /// Row type for persisted tool definitions.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, sqlx::FromRow)]
 pub struct ToolRow {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -264,6 +264,54 @@ pub struct StageExecutionRow {
     pub duration_ms: i64,
     pub stage_member_id: Option<Uuid>,
     pub pipeline_id: Option<Uuid>,
+}
+
+/// Row type for tool router definitions.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct ToolRouterRow {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub system_prompt: String,
+    pub model_id: String,
+    pub is_active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Row type for context store entries.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct ContextStoreRow {
+    pub id: Uuid,
+    pub session_id: Uuid,
+    pub source: String,
+    pub priority: f32,
+    pub content: String,
+    pub metadata: Option<serde_json::Value>,
+    pub status: String,
+    pub created_at: DateTime<Utc>,
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
+/// Row type for router request logs.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct RouterRequestRow {
+    pub id: Uuid,
+    pub session_id: Uuid,
+    pub agent_execution_id: Option<Uuid>,
+    pub intent: String,
+    pub priority: String,
+    pub callback_hint: Option<String>,
+    pub routed_tool: Option<String>,
+    pub routed_args: Option<serde_json::Value>,
+    pub is_async: bool,
+    pub passdown: Option<String>,
+    pub chain: Option<serde_json::Value>,
+    pub status: String,
+    pub result: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
 }
 
 /// Type alias for the database pool
