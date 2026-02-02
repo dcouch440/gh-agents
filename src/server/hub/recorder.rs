@@ -95,9 +95,6 @@ impl<'a> ExecutionRecorder<'a> {
         status: &str,
         output: Option<String>,
         structured_output: Option<serde_json::Value>,
-        input_tokens: i64,
-        output_tokens: i64,
-        cost_usd: f32,
     ) -> Result<(), HubError> {
         let repo = self
             .agent_execution_repo
@@ -107,9 +104,6 @@ impl<'a> ExecutionRecorder<'a> {
             status,
             output,
             structured_output,
-            input_tokens,
-            output_tokens,
-            cost_usd,
         )
         .await
         .context("failed to update agent execution status")?;
@@ -146,7 +140,7 @@ impl<'a> ExecutionRecorder<'a> {
     pub async fn record_tokens(
         &self,
         user_id: Uuid,
-        agent_execution_id: Uuid,
+        agent_execution_id: Option<Uuid>,
         model_id: &str,
         input_tokens: i64,
         output_tokens: i64,
@@ -215,7 +209,7 @@ mod tests {
         let mock = MockServerRepo::new();
         let recorder = ExecutionRecorder::new(&mock, None, None);
         let result = recorder
-            .record_tokens(Uuid::new_v4(), Uuid::new_v4(), "claude-3", 100, 50, 0.01)
+            .record_tokens(Uuid::new_v4(), Some(Uuid::new_v4()), "claude-3", 100, 50, 0.01)
             .await;
         assert!(result.is_err());
     }
@@ -241,7 +235,7 @@ mod tests {
 
         let recorder = ExecutionRecorder::new(&mock, None, Some(&tl_mock));
         recorder
-            .record_tokens(Uuid::new_v4(), Uuid::new_v4(), "claude-3", 100, 50, 0.01)
+            .record_tokens(Uuid::new_v4(), Some(Uuid::new_v4()), "claude-3", 100, 50, 0.01)
             .await
             .unwrap();
     }

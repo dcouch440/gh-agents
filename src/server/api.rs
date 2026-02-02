@@ -2578,9 +2578,6 @@ impl From<crate::db::AgentExecutionRow> for AgentExecutionResponse {
             output: r.output,
             structured_output: r.structured_output,
             status: r.status,
-            input_tokens: 0,  // Deprecated: use token_ledger
-            output_tokens: 0, // Deprecated: use token_ledger
-            cost_usd: 0.0,   // Deprecated: use token_ledger
             started_at: r.started_at,
             completed_at: r.completed_at,
         }

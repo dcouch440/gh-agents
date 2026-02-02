@@ -185,9 +185,6 @@ pub struct AgentExecutionRow {
     pub output: Option<String>,
     pub structured_output: Option<serde_json::Value>,
     pub status: String,
-    pub input_tokens: i64,
-    pub output_tokens: i64,
-    pub cost_usd: f32,
     pub started_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
 }
@@ -222,7 +219,7 @@ pub struct ResultRow {
 pub struct TokenLedgerRow {
     pub id: Uuid,
     pub user_id: Uuid,
-    pub agent_execution_id: Uuid,
+    pub agent_execution_id: Option<Uuid>,
     pub model_id: String,
     pub input_tokens: i64,
     pub output_tokens: i64,

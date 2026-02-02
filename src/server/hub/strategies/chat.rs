@@ -162,7 +162,26 @@ impl ExecutionStrategy for ChatStrategy {
         tools::execute_tool(name, input, &self.state, self.user_id, self.session_id).await
     }
 
-    async fn on_complete(&self, response: &str, _usage: &TokenUsage) -> Result<(), HubError> {
+    async fn on_complete(&self, response: &str, usage: &TokenUsage) -> Result<(), HubError> {
+        // Record token usage to ledger
+        if let Some(tl_repo) = &self.state.token_ledger_repo {
+            let cost = super::compute_cost(
+                &self.config.model_id,
+                usage.input_tokens as i64,
+                usage.output_tokens as i64,
+            );
+            let _ = tl_repo
+                .insert_ledger_entry(
+                    self.user_id.0,
+                    None,
+                    &self.config.model_id,
+                    usage.input_tokens as i64,
+                    usage.output_tokens as i64,
+                    cost,
+                )
+                .await;
+        }
+
         // Save assistant response
         if !response.is_empty() {
             let response_id = Uuid::new_v4();
