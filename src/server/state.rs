@@ -14,7 +14,6 @@ use crate::db::traits::{AgentExecutionRepo, ContextStoreRepo, DocumentRepo, Outp
 use crate::llm::AnthropicClient;
 use crate::types::{AgentPoolConfig, AppConfig, UserId};
 
-use super::agent_mode::{AgentModeId, ModeRegistry};
 use super::hub::PromptRegistry;
 use super::ws::{AgentUpdate, FeedUpdate, PipelineUpdate, RoutingUpdate, SessionUpdate, TaskUpdate};
 
@@ -24,7 +23,7 @@ pub struct OrchestratorMessage {
     pub id: Uuid,
     pub user_id: UserId,
     pub session_id: Option<Uuid>,
-    pub mode_id: AgentModeId,
+    pub agent_id: Option<Uuid>,
     pub content: String,
     pub timestamp: DateTime<Utc>,
 }
@@ -120,8 +119,8 @@ pub struct AppState {
     pub pipeline_manager: Arc<RwLock<PipelineManager>>,
     /// Schedule manager for cron-like and event-driven agent execution
     pub schedule_manager: Arc<RwLock<ScheduleManager>>,
-    /// Registry of available agent modes
-    pub mode_registry: Arc<ModeRegistry>,
+    /// Default agent UUID (looked up at startup, agent with name "Home")
+    pub default_agent_id: Option<Uuid>,
     /// Tool-to-cluster index for routing tool calls to cluster agents
     pub cluster_index: Option<Arc<ToolClusterIndex>>,
     /// Prompt registry for core system/agent prompts loaded from prompts/ directory
@@ -186,6 +185,12 @@ impl AppState {
             // Reconstruct agents from DB
             let legacy_user = UserId(uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap());
             if let Ok(agent_rows) = state.repo.list_persisted_agents(legacy_user).await {
+                // Look up default agent (name = "Home")
+                if let Some(home) = agent_rows.iter().find(|r| r.name.eq_ignore_ascii_case("home")) {
+                    tracing::info!("Default agent: {} ({})", home.name, home.id);
+                    state.default_agent_id = Some(home.id);
+                }
+
                 for row in agent_rows {
                     let tier = match row.tier.as_deref().unwrap_or("worker") {
                         "orchestrator" => crate::types::AgentTier::Orchestrator,
@@ -314,7 +319,7 @@ impl AppState {
                 cluster_manager: Arc::new(RwLock::new(ClusterManager::new())),
                 pipeline_manager: Arc::new(RwLock::new(PipelineManager::new())),
                 schedule_manager: Arc::new(RwLock::new(ScheduleManager::new())),
-                mode_registry: Arc::new(ModeRegistry::new()),
+                default_agent_id: None,
                 cluster_index: None,
                 prompt_registry: Arc::new(PromptRegistry::empty()),
             },
@@ -491,7 +496,7 @@ mod tests {
             id: Uuid::new_v4(),
             user_id: UserId::new(),
             session_id: None,
-            mode_id: AgentModeId::new("home"),
+            agent_id: None,
             content: "do stuff".into(),
             timestamp: Utc::now(),
         };

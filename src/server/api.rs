@@ -763,7 +763,7 @@ pub async fn send_chat(State(state): State<AppState>, auth: auth::AuthUser, Json
             id: message_id,
             user_id: auth.user_id,
             session_id: None,
-            mode_id: crate::server::agent_mode::AgentModeId::new("home"),
+            agent_id: None,
             content: request.message,
             timestamp: Utc::now(),
         })
@@ -936,25 +936,27 @@ pub struct ModeInfo {
     pub description: String,
 }
 
-/// List available agent modes
-pub async fn list_modes(State(state): State<AppState>, _auth: auth::AuthUser) -> Json<Vec<ModeInfo>> {
-    let modes: Vec<ModeInfo> = state
-        .mode_registry
-        .list()
+/// List available agents (replaces legacy list_modes)
+pub async fn list_modes(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<ModeInfo>>, StatusCode> {
+    let agents = state.repo.list_persisted_agents(auth.user_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let modes: Vec<ModeInfo> = agents
         .into_iter()
-        .map(|m| ModeInfo {
-            id: m.id.0.clone(),
-            name: m.name.clone(),
-            description: m.description.clone(),
+        .map(|a| ModeInfo {
+            id: a.id.to_string(),
+            name: a.name,
+            description: a.system_prompt.chars().take(120).collect(),
         })
         .collect();
-    Json(modes)
+    Ok(Json(modes))
 }
 
 /// Request body for creating a session
 #[derive(Deserialize)]
 pub struct CreateSessionRequest {
+    #[serde(default)]
     pub mode_id: String,
+    #[serde(default)]
+    pub agent_id: Option<Uuid>,
     #[serde(default)]
     pub title: String,
 }
@@ -970,6 +972,7 @@ pub struct UpdateSessionRequest {
 pub struct SessionResponse {
     pub id: Uuid,
     pub mode_id: String,
+    pub agent_id: Option<Uuid>,
     pub title: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -977,18 +980,20 @@ pub struct SessionResponse {
 
 /// Create a new chat session
 pub async fn create_session(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateSessionRequest>) -> Result<(StatusCode, Json<SessionResponse>), StatusCode> {
-    // Validate mode exists
-    let mode_id = crate::server::agent_mode::AgentModeId::new(&request.mode_id);
-    if state.mode_registry.get(&mode_id).is_none() {
-        return Err(StatusCode::BAD_REQUEST);
+    // Validate agent exists if provided
+    if let Some(aid) = request.agent_id {
+        if state.repo.get_persisted_agent(aid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.is_none() {
+            return Err(StatusCode::BAD_REQUEST);
+        }
     }
 
     let session_id = Uuid::new_v4();
-    let title = if request.title.is_empty() { format!("New {} session", request.mode_id) } else { request.title };
+    let mode_id = if request.mode_id.is_empty() { "home".to_string() } else { request.mode_id };
+    let title = if request.title.is_empty() { "New session".to_string() } else { request.title };
 
     state
         .repo
-        .create_session(auth.user_id, session_id, &request.mode_id, &title)
+        .create_session(auth.user_id, session_id, &mode_id, &title, request.agent_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -1012,6 +1017,7 @@ pub async fn create_session(State(state): State<AppState>, auth: auth::AuthUser,
         Json(SessionResponse {
             id: session.id,
             mode_id: session.mode_id,
+            agent_id: session.agent_id,
             title: session.title,
             created_at: session.created_at,
             updated_at: session.updated_at,
@@ -1028,6 +1034,7 @@ pub async fn list_sessions(State(state): State<AppState>, auth: auth::AuthUser) 
         .map(|s| SessionResponse {
             id: s.id,
             mode_id: s.mode_id,
+            agent_id: s.agent_id,
             title: s.title,
             created_at: s.created_at,
             updated_at: s.updated_at,
@@ -1049,6 +1056,7 @@ pub async fn get_session(State(state): State<AppState>, auth: auth::AuthUser, Pa
     Ok(Json(SessionResponse {
         id: session.id,
         mode_id: session.mode_id,
+        agent_id: session.agent_id,
         title: session.title,
         created_at: session.created_at,
         updated_at: session.updated_at,
@@ -1105,6 +1113,7 @@ pub async fn update_session(State(state): State<AppState>, auth: auth::AuthUser,
     Ok(Json(SessionResponse {
         id: updated.id,
         mode_id: updated.mode_id,
+        agent_id: updated.agent_id,
         title: updated.title,
         created_at: updated.created_at,
         updated_at: updated.updated_at,
@@ -1147,7 +1156,7 @@ pub async fn send_session_chat(
             id: message_id,
             user_id: auth.user_id,
             session_id: Some(session_id),
-            mode_id: crate::server::agent_mode::AgentModeId::new(&session.mode_id),
+            agent_id: session.agent_id,
             content: request.message,
             timestamp: Utc::now(),
         })
@@ -3738,7 +3747,7 @@ mod tests {
         async fn upsert_pipeline_stage(&self, _stage: PipelineStageRow) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn create_session(&self, _user_id: UserId, _session_id: Uuid, _mode_id: &str, _title: &str) -> anyhow::Result<()> {
+        async fn create_session(&self, _user_id: UserId, _session_id: Uuid, _mode_id: &str, _title: &str, _agent_id: Option<Uuid>) -> anyhow::Result<()> {
             Ok(())
         }
         async fn list_sessions(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::SessionRow>> {
@@ -3785,6 +3794,15 @@ mod tests {
         }
         async fn list_stage_executions(&self, _run_id: Uuid) -> anyhow::Result<Vec<crate::db::StageExecutionRow>> {
             Ok(vec![])
+        }
+        async fn get_agent_modes(&self, _agent_id: Uuid) -> anyhow::Result<Vec<crate::db::AgentModeRow>> {
+            Ok(vec![])
+        }
+        async fn create_agent_mode(&self, _mode: &crate::db::AgentModeRow) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn delete_agent_mode(&self, _mode_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
         }
     }
 
