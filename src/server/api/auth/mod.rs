@@ -237,4 +237,5 @@ pub async fn auth_me(State(state): State<AppState>, auth: auth::AuthUser) -> Res
         token_expires: auth.claims.exp,
     }))
 }
+#[cfg(test)]
 mod tests;

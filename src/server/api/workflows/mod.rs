@@ -640,4 +640,5 @@ pub async fn list_step_documents(State(state): State<AppState>, auth: auth_utils
     ))
 }
 
+#[cfg(test)]
 mod tests;

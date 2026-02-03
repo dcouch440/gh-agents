@@ -243,4 +243,5 @@ pub async fn set_agent_tools(
         tools,
     }))
 }
+#[cfg(test)]
 mod tests;

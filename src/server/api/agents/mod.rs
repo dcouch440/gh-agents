@@ -230,4 +230,5 @@ pub async fn delete_agent(State(state): State<AppState>, _auth: auth_utils::Auth
 
     Ok(StatusCode::NO_CONTENT)
 }
+#[cfg(test)]
 mod tests;

@@ -126,4 +126,5 @@ pub async fn create_task(State(state): State<AppState>, auth: auth_utils::AuthUs
 
     Ok((StatusCode::CREATED, Json(task)))
 }
+#[cfg(test)]
 mod tests;

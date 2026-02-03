@@ -101,4 +101,5 @@ pub async fn delete_result(State(state): State<AppState>, auth: auth_utils::Auth
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[cfg(test)]
 mod tests;

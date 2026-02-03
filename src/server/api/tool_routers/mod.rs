@@ -203,4 +203,5 @@ pub async fn set_router_tools(State(state): State<AppState>, auth: auth_utils::A
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[cfg(test)]
 mod tests;

@@ -44,4 +44,5 @@ pub async fn list_session_requests(State(state): State<AppState>, _auth: auth_ut
     Ok(Json(rows))
 }
 
+#[cfg(test)]
 mod tests;

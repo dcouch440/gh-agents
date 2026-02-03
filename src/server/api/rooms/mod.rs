@@ -311,4 +311,5 @@ pub async fn close_room_session(State(state): State<AppState>, _auth: auth_utils
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[cfg(test)]
 mod tests;

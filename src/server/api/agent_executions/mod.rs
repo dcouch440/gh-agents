@@ -199,4 +199,5 @@ pub async fn approve_execution(
     Ok(Json(AgentExecutionResponse::from(updated)))
 }
 
+#[cfg(test)]
 mod tests;
