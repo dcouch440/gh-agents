@@ -3788,30 +3788,10 @@ pub struct FilePathContent {
         (status = 404, description = "Agent not found")
     )
 )]
-pub async fn submit_context_response(State(state): State<AppState>, _auth: auth::AuthUser, Json(request): Json<ContextResponseRequest>) -> Result<StatusCode, StatusCode> {
-    use crate::agents::{AgentCommand, AgentId, ContextResponse, FileContent};
-
-    let agent_id = AgentId(request.agent_id);
-
-    let files: Vec<FileContent> = request.files.into_iter().map(|f| FileContent { path: f.path, content: f.content }).collect();
-
-    let answers = if request.context.is_empty() { vec![] } else { vec![request.context] };
-
-    let dispatcher = state.dispatcher.as_ref().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
-    let disp = dispatcher.lock().await;
-    disp.send_to_agent(
-        &agent_id,
-        AgentCommand::ProvideContext(ContextResponse {
-            task_id: request.task_id,
-            files,
-            answers,
-            true_context: None,
-        }),
-    )
-    .await
-    .map_err(|_| StatusCode::NOT_FOUND)?;
-
-    Ok(StatusCode::OK)
+pub async fn submit_context_response(_state: State<AppState>, _auth: auth::AuthUser, _request: Json<ContextResponseRequest>) -> Result<StatusCode, StatusCode> {
+    // LEGACY: This endpoint used the old agent pool dispatcher which has been removed.
+    // Context is now provided through the workflow/session system.
+    Err(StatusCode::SERVICE_UNAVAILABLE)
 }
 
 // ============================================================================
@@ -4315,15 +4295,9 @@ pub async fn approve_pipeline_run(
                             mgr2.record_stage_task(run_uuid, next_stage.stage_number, new_task_id);
                         }
 
-                        if let Some(agent_id) = &resolved_agent_id {
-                            if let Some(disp) = &state.dispatcher {
-                                let disp = disp.lock().await;
-                                if let Err(e) = disp.send_to_agent(agent_id, AgentCommand::AssignTask(Box::new(assignment))).await {
-                                    tracing::error!("Gate resume dispatch failed: {}", e);
-                                    let mut mgr2 = state.pipeline_manager.write().await;
-                                    let _ = mgr2.fail_run(run_uuid, &e.to_string());
-                                }
-                            }
+                        // LEGACY: Dispatcher removed. Pipeline resumption now handled by workflow system.
+                        if let Some(_agent_id) = &resolved_agent_id {
+                            tracing::warn!("Pipeline gate resumption attempted but dispatcher is removed. Use workflow system instead.");
                         }
 
                         // Broadcast gate_resumed
