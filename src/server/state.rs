@@ -9,7 +9,7 @@ use tokio::sync::{broadcast, mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::agents::{PipelineManager, ToolClusterIndex};
+use crate::agents::ToolClusterIndex;
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::{
     AgentExecutionRepo, ContextStoreRepo, DocumentRepo, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, RoomRepo, RouterRequestRepo, ServerRepo, TokenLedgerRepo,
@@ -113,8 +113,6 @@ pub struct AppState {
     pub context_update_tx: broadcast::Sender<super::ws::ContextUpdateEvent>,
     /// Broadcast channel for room events
     pub room_update_tx: broadcast::Sender<RoomUpdateEvent>,
-    /// Pipeline manager for chained agent workflows
-    pub pipeline_manager: Arc<RwLock<PipelineManager>>,
     /// Default agent UUID (looked up at startup, agent with name "Home")
     pub default_agent_id: Option<Uuid>,
     /// Tool-to-cluster index for routing tool calls to cluster agents
@@ -197,31 +195,7 @@ impl AppState {
                 }
             }
 
-            // Reconstruct pipelines from DB
-            if let Ok(pipeline_rows) = state.repo.list_pipelines(legacy_user).await {
-                let mut mgr = state.pipeline_manager.write().await;
-                for row in pipeline_rows {
-                    let pid = crate::agents::PipelineId(row.id);
-                    mgr.create_pipeline_with_id(pid, row.name.clone());
-                    tracing::info!("Restored pipeline {} ({})", row.name, row.id);
-                    if let Ok(stages) = state.repo.list_pipeline_stages(row.id).await {
-                        for stage in stages {
-                            let _ = mgr.add_stage(
-                                pid,
-                                stage.agent_id.map(crate::agents::AgentId),
-                                stage.cluster_id, // LEGACY: cluster support removed
-                                stage.role,
-                                stage.approval_required.unwrap_or(false),
-                                stage.fan_out.unwrap_or(false),
-                                stage.stage_name,
-                                stage.input_definitions.unwrap_or_else(|| serde_json::json!([])),
-                                stage.output_description.unwrap_or_default(),
-                                stage.output_schema.unwrap_or_else(|| serde_json::json!({"fields": []})),
-                            );
-                        }
-                    }
-                }
-            }
+            // LEGACY: Pipeline reconstruction removed (workflows replaced pipelines)
         }
 
         (state, rx)
@@ -287,7 +261,6 @@ impl AppState {
                 router_request_tx,
                 context_update_tx,
                 room_update_tx,
-                pipeline_manager: Arc::new(RwLock::new(PipelineManager::new())),
                 default_agent_id: None,
                 cluster_index: None,
                 prompt_registry: Arc::new(PromptRegistry::empty()),
