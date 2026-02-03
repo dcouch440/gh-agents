@@ -147,8 +147,6 @@ use utoipa::OpenApi;
         // Session Context
         super::api::session_context::get_session_context,
         super::api::session_context::list_session_requests,
-        // Context Response
-        super::api::submit_context_response,
     ),
     components(schemas(
         // API response/request types
@@ -215,8 +213,6 @@ use utoipa::OpenApi;
         super::api::workflows::EdgeResponse,
         super::api::workflows::StepDocumentRequest,
         super::api::workflows::StepDocumentResponse,
-        super::api::ContextResponseRequest,
-        super::api::FilePathContent,
         super::api::tool_routers::CreateToolRouterRequest,
         super::api::tool_routers::UpdateToolRouterRequest,
         super::api::tool_routers::SetRouterToolsRequest,

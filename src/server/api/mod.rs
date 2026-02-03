@@ -141,44 +141,6 @@ pub async fn health_check(State(state): State<AppState>) -> Json<HealthResponse>
 }
 
 // ============================================================================
-// Context Response Endpoint (F6)
-// ============================================================================
-
-/// Request body for submitting a context response to an agent
-#[derive(Deserialize, utoipa::ToSchema)]
-pub struct ContextResponseRequest {
-    pub agent_id: Uuid,
-    pub task_id: Uuid,
-    pub context: String,
-    pub files: Vec<FilePathContent>,
-}
-
-/// A file with path and content for context responses
-#[derive(Deserialize, utoipa::ToSchema)]
-pub struct FilePathContent {
-    pub path: String,
-    pub content: String,
-}
-
-/// POST /api/context-response - Submit a human context response to an agent
-#[utoipa::path(
-    post,
-    path = "/api/context-response",
-    tag = "Agent Context",
-    security(("bearer_auth" = [])),
-    request_body = ContextResponseRequest,
-    responses(
-        (status = 200, description = "Context response submitted"),
-        (status = 404, description = "Agent not found")
-    )
-)]
-pub async fn submit_context_response(_state: State<AppState>, _auth: auth_utils::AuthUser, _request: Json<ContextResponseRequest>) -> Result<StatusCode, StatusCode> {
-    // LEGACY: This endpoint used the old agent pool dispatcher which has been removed.
-    // Context is now provided through the workflow/session system.
-    Err(StatusCode::SERVICE_UNAVAILABLE)
-}
-
-// ============================================================================
 // Cancellation Endpoints
 // ============================================================================
 
