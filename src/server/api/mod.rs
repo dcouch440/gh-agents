@@ -1,5 +1,13 @@
 //! REST API endpoint handlers
 
+pub mod auth;
+
+// Re-export auth handlers and types
+pub use auth::{
+    auth_login, auth_me, auth_register, auth_setup, AuthTokenResponse, LoginRequest, LoginResponse, MeResponse, RegisterRequest, SetupRequest,
+    SetupResponse, UserResponse,
+};
+
 use std::convert::Infallible;
 
 use axum::{
@@ -14,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
-use super::auth;
+use super::auth as auth_utils;
 use super::state::{AppState, ConsumerMessage, StreamChunk};
 use super::ws::SessionUpdate;
 use crate::constants::{MAX_CHAT_MESSAGE_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH};
@@ -79,7 +87,7 @@ pub struct TasksQuery {
         (status = 200, description = "List of tasks", body = Vec<Task>)
     )
 )]
-pub async fn list_tasks(State(state): State<AppState>, auth: auth::AuthUser, Query(query): Query<TasksQuery>) -> Result<Json<Vec<Task>>, StatusCode> {
+pub async fn list_tasks(State(state): State<AppState>, auth: auth_utils::AuthUser, Query(query): Query<TasksQuery>) -> Result<Json<Vec<Task>>, StatusCode> {
     let tasks = state.repo.list_tasks(auth.user_id, query.status, query.limit).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(tasks))
@@ -99,7 +107,7 @@ pub async fn list_tasks(State(state): State<AppState>, auth: auth::AuthUser, Que
         (status = 404, description = "Task not found")
     )
 )]
-pub async fn get_task(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<Task>, StatusCode> {
+pub async fn get_task(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<Task>, StatusCode> {
     let task = state
         .repo
         .get_task_by_uuid(auth.user_id, id)
@@ -134,7 +142,7 @@ pub struct CreateTaskRequest {
         (status = 400, description = "Invalid request")
     )
 )]
-pub async fn create_task(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateTaskRequest>) -> Result<(StatusCode, Json<Task>), StatusCode> {
+pub async fn create_task(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(request): Json<CreateTaskRequest>) -> Result<(StatusCode, Json<Task>), StatusCode> {
     if request.title.trim().is_empty() || request.title.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -254,7 +262,7 @@ pub struct UpdateAgentRequest {
         (status = 200, description = "List of agents with pool stats", body = AgentsListResponse)
     )
 )]
-pub async fn list_agents(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<AgentsListResponse>, StatusCode> {
+pub async fn list_agents(State(state): State<AppState>, auth: auth_utils::AuthUser) -> Result<Json<AgentsListResponse>, StatusCode> {
     let config = state.config.read().await;
     let pool_config = &config.pool;
 
@@ -286,7 +294,7 @@ pub async fn list_agents(State(state): State<AppState>, auth: auth::AuthUser) ->
         (status = 400, description = "Invalid request")
     )
 )]
-pub async fn create_agent(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateAgentRequest>) -> Result<(StatusCode, Json<AgentResponse>), StatusCode> {
+pub async fn create_agent(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(request): Json<CreateAgentRequest>) -> Result<(StatusCode, Json<AgentResponse>), StatusCode> {
     if request.model_id.trim().is_empty() {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -331,7 +339,7 @@ pub async fn create_agent(State(state): State<AppState>, auth: auth::AuthUser, J
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_agent(State(state): State<AppState>, _auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<AgentResponse>, StatusCode> {
+pub async fn get_agent(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<AgentResponse>, StatusCode> {
     let row = state.repo.get_persisted_agent(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     Ok(Json(AgentResponse::from_row(row)))
@@ -350,7 +358,7 @@ pub async fn get_agent(State(state): State<AppState>, _auth: auth::AuthUser, Pat
         (status = 404, description = "Not found")
     )
 )]
-pub async fn update_agent(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>, Json(request): Json<UpdateAgentRequest>) -> Result<Json<AgentResponse>, StatusCode> {
+pub async fn update_agent(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>, Json(request): Json<UpdateAgentRequest>) -> Result<Json<AgentResponse>, StatusCode> {
     let existing = state.repo.get_persisted_agent(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     let updated = crate::db::AgentRow {
@@ -385,7 +393,7 @@ pub async fn update_agent(State(state): State<AppState>, auth: auth::AuthUser, P
         (status = 404, description = "Not found")
     )
 )]
-pub async fn delete_agent(State(state): State<AppState>, _auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
+pub async fn delete_agent(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     state.repo.delete_persisted_agent(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::NO_CONTENT)
@@ -460,7 +468,7 @@ pub struct AgentToolsResponse {
         (status = 200, description = "List of tools", body = Vec<ToolResponse>)
     )
 )]
-pub async fn list_tools(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
+pub async fn list_tools(State(state): State<AppState>, auth: auth_utils::AuthUser) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
     let rows = state.repo.list_tools(auth.user_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let tools = rows.into_iter().map(ToolResponse::from_row).collect();
@@ -479,7 +487,7 @@ pub async fn list_tools(State(state): State<AppState>, auth: auth::AuthUser) -> 
         (status = 400, description = "Invalid request")
     )
 )]
-pub async fn create_tool(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateToolRequest>) -> Result<(StatusCode, Json<ToolResponse>), StatusCode> {
+pub async fn create_tool(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(request): Json<CreateToolRequest>) -> Result<(StatusCode, Json<ToolResponse>), StatusCode> {
     if request.name.trim().is_empty() {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -515,7 +523,7 @@ pub async fn create_tool(State(state): State<AppState>, auth: auth::AuthUser, Js
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_tool(State(state): State<AppState>, _auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<ToolResponse>, StatusCode> {
+pub async fn get_tool(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<ToolResponse>, StatusCode> {
     let row = state.repo.get_tool(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     Ok(Json(ToolResponse::from_row(row)))
@@ -534,7 +542,7 @@ pub async fn get_tool(State(state): State<AppState>, _auth: auth::AuthUser, Path
         (status = 404, description = "Not found")
     )
 )]
-pub async fn update_tool(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>, Json(request): Json<UpdateToolRequest>) -> Result<Json<ToolResponse>, StatusCode> {
+pub async fn update_tool(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>, Json(request): Json<UpdateToolRequest>) -> Result<Json<ToolResponse>, StatusCode> {
     let existing = state.repo.get_tool(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     let updated = crate::db::ToolRow {
@@ -565,7 +573,7 @@ pub async fn update_tool(State(state): State<AppState>, auth: auth::AuthUser, Pa
         (status = 404, description = "Not found")
     )
 )]
-pub async fn delete_tool(State(state): State<AppState>, _auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
+pub async fn delete_tool(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     state.repo.delete_tool(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::NO_CONTENT)
@@ -582,7 +590,7 @@ pub async fn delete_tool(State(state): State<AppState>, _auth: auth::AuthUser, P
         (status = 200, description = "Agent tools", body = AgentToolsResponse)
     )
 )]
-pub async fn get_agent_tools(State(state): State<AppState>, _auth: auth::AuthUser, Path(agent_id): Path<Uuid>) -> Result<Json<AgentToolsResponse>, StatusCode> {
+pub async fn get_agent_tools(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(agent_id): Path<Uuid>) -> Result<Json<AgentToolsResponse>, StatusCode> {
     let rows = state.repo.get_agent_tools(agent_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let tools = rows.into_iter().map(ToolResponse::from_row).collect();
@@ -608,7 +616,7 @@ pub async fn get_agent_tools(State(state): State<AppState>, _auth: auth::AuthUse
 )]
 pub async fn set_agent_tools(
     State(state): State<AppState>,
-    _auth: auth::AuthUser,
+    _auth: auth_utils::AuthUser,
     Path(agent_id): Path<Uuid>,
     Json(request): Json<SetAgentToolsRequest>,
 ) -> Result<Json<AgentToolsResponse>, StatusCode> {
@@ -654,7 +662,7 @@ pub struct AgentContextResponse {
         (status = 200, description = "Agent context documents", body = AgentContextResponse)
     )
 )]
-pub async fn get_agent_context(State(state): State<AppState>, _auth: auth::AuthUser, Path(agent_id): Path<Uuid>) -> Result<Json<AgentContextResponse>, StatusCode> {
+pub async fn get_agent_context(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(agent_id): Path<Uuid>) -> Result<Json<AgentContextResponse>, StatusCode> {
     let rows = state.repo.get_agent_context(agent_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let documents = rows
@@ -691,7 +699,7 @@ pub async fn get_agent_context(State(state): State<AppState>, _auth: auth::AuthU
 )]
 pub async fn set_agent_context(
     State(state): State<AppState>,
-    _auth: auth::AuthUser,
+    _auth: auth_utils::AuthUser,
     Path(agent_id): Path<Uuid>,
     Json(request): Json<SetAgentContextRequest>,
 ) -> Result<Json<AgentContextResponse>, StatusCode> {
@@ -878,7 +886,7 @@ pub struct ChatResponse {
         (status = 400, description = "Invalid message")
     )
 )]
-pub async fn send_chat(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<ChatRequest>) -> Result<(StatusCode, Json<ChatResponse>), StatusCode> {
+pub async fn send_chat(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(request): Json<ChatRequest>) -> Result<(StatusCode, Json<ChatResponse>), StatusCode> {
     if request.message.trim().is_empty() || request.message.len() > MAX_CHAT_MESSAGE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -948,7 +956,7 @@ pub struct ChatMessage {
         (status = 200, description = "Chat history", body = Vec<ChatMessage>)
     )
 )]
-pub async fn get_chat_history(State(state): State<AppState>, auth: auth::AuthUser, Query(query): Query<HistoryQuery>) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
+pub async fn get_chat_history(State(state): State<AppState>, auth: auth_utils::AuthUser, Query(query): Query<HistoryQuery>) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
     let limit = query.limit.unwrap_or(50);
     let offset = query.offset.unwrap_or(0);
 
@@ -1097,7 +1105,7 @@ fn chat_stream_inner(state: AppState, message_id: Uuid) -> Sse<impl Stream<Item 
         (status = 204, description = "Chat history cleared")
     )
 )]
-pub async fn clear_chat_history(State(state): State<AppState>, auth: auth::AuthUser) -> StatusCode {
+pub async fn clear_chat_history(State(state): State<AppState>, auth: auth_utils::AuthUser) -> StatusCode {
     match state.repo.clear_chat_history(auth.user_id).await {
         Ok(_) => StatusCode::NO_CONTENT,
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -1126,7 +1134,7 @@ pub struct ModeInfo {
         (status = 200, description = "List of available modes", body = Vec<ModeInfo>)
     )
 )]
-pub async fn list_modes(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<ModeInfo>>, StatusCode> {
+pub async fn list_modes(State(state): State<AppState>, auth: auth_utils::AuthUser) -> Result<Json<Vec<ModeInfo>>, StatusCode> {
     let agents = state.repo.list_persisted_agents(auth.user_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let modes: Vec<ModeInfo> = agents
         .into_iter()
@@ -1201,7 +1209,7 @@ pub struct CreateAgentModeRequest {
         (status = 200, description = "List of agent modes", body = Vec<AgentModeResponse>)
     )
 )]
-pub async fn list_agent_modes(State(state): State<AppState>, _auth: auth::AuthUser, Path(agent_id): Path<Uuid>) -> Result<Json<Vec<AgentModeResponse>>, StatusCode> {
+pub async fn list_agent_modes(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(agent_id): Path<Uuid>) -> Result<Json<Vec<AgentModeResponse>>, StatusCode> {
     let modes = state.repo.get_agent_modes(agent_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(modes.into_iter().map(AgentModeResponse::from).collect()))
 }
@@ -1220,7 +1228,7 @@ pub async fn list_agent_modes(State(state): State<AppState>, _auth: auth::AuthUs
 )]
 pub async fn create_agent_mode(
     State(state): State<AppState>,
-    _auth: auth::AuthUser,
+    _auth: auth_utils::AuthUser,
     Path(agent_id): Path<Uuid>,
     Json(req): Json<CreateAgentModeRequest>,
 ) -> Result<(StatusCode, Json<AgentModeResponse>), StatusCode> {
@@ -1253,7 +1261,7 @@ pub async fn create_agent_mode(
         (status = 204, description = "Mode deleted")
     )
 )]
-pub async fn delete_agent_mode(State(state): State<AppState>, _auth: auth::AuthUser, Path(mode_id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
+pub async fn delete_agent_mode(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(mode_id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     state.repo.delete_agent_mode(mode_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -1298,7 +1306,7 @@ pub struct SessionResponse {
         (status = 400, description = "Invalid agent ID")
     )
 )]
-pub async fn create_session(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateSessionRequest>) -> Result<(StatusCode, Json<SessionResponse>), StatusCode> {
+pub async fn create_session(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(request): Json<CreateSessionRequest>) -> Result<(StatusCode, Json<SessionResponse>), StatusCode> {
     // Validate agent exists if provided
     if let Some(aid) = request.agent_id {
         if state.repo.get_persisted_agent(aid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.is_none() {
@@ -1354,7 +1362,7 @@ pub async fn create_session(State(state): State<AppState>, auth: auth::AuthUser,
         (status = 200, description = "List of sessions", body = Vec<SessionResponse>)
     )
 )]
-pub async fn list_sessions(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<SessionResponse>>, StatusCode> {
+pub async fn list_sessions(State(state): State<AppState>, auth: auth_utils::AuthUser) -> Result<Json<Vec<SessionResponse>>, StatusCode> {
     let sessions = state.repo.list_sessions(auth.user_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let response: Vec<SessionResponse> = sessions
@@ -1384,7 +1392,7 @@ pub async fn list_sessions(State(state): State<AppState>, auth: auth::AuthUser) 
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_session(State(state): State<AppState>, auth: auth::AuthUser, Path(session_id): Path<Uuid>) -> Result<Json<SessionResponse>, StatusCode> {
+pub async fn get_session(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(session_id): Path<Uuid>) -> Result<Json<SessionResponse>, StatusCode> {
     let session = state.repo.get_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     // Verify ownership
@@ -1414,7 +1422,7 @@ pub async fn get_session(State(state): State<AppState>, auth: auth::AuthUser, Pa
         (status = 404, description = "Not found")
     )
 )]
-pub async fn delete_session(State(state): State<AppState>, auth: auth::AuthUser, Path(session_id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
+pub async fn delete_session(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(session_id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     // Verify ownership
     let session = state.repo.get_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
@@ -1448,7 +1456,7 @@ pub async fn delete_session(State(state): State<AppState>, auth: auth::AuthUser,
         (status = 404, description = "Not found")
     )
 )]
-pub async fn update_session(State(state): State<AppState>, auth: auth::AuthUser, Path(session_id): Path<Uuid>, Json(request): Json<UpdateSessionRequest>) -> Result<Json<SessionResponse>, StatusCode> {
+pub async fn update_session(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(session_id): Path<Uuid>, Json(request): Json<UpdateSessionRequest>) -> Result<Json<SessionResponse>, StatusCode> {
     let session = state.repo.get_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     if session.user_id != auth.user_id.0 {
@@ -1498,7 +1506,7 @@ pub async fn update_session(State(state): State<AppState>, auth: auth::AuthUser,
 )]
 pub async fn send_session_chat(
     State(state): State<AppState>,
-    auth: auth::AuthUser,
+    auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
     Json(request): Json<ChatRequest>,
 ) -> Result<(StatusCode, Json<ChatResponse>), StatusCode> {
@@ -1562,7 +1570,7 @@ pub async fn send_session_chat(
         (status = 404, description = "Session not found")
     )
 )]
-pub async fn get_session_history(State(state): State<AppState>, auth: auth::AuthUser, Path(session_id): Path<Uuid>, Query(query): Query<HistoryQuery>) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
+pub async fn get_session_history(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(session_id): Path<Uuid>, Query(query): Query<HistoryQuery>) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
     // Verify session ownership
     let session = state.repo.get_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
@@ -1584,232 +1592,6 @@ pub async fn get_session_history(State(state): State<AppState>, auth: auth::Auth
         .collect();
 
     Ok(Json(messages))
-}
-
-// ============================================================================
-// Auth Endpoints (Ticket 10.5)
-// ============================================================================
-
-/// Request body for auth setup
-#[derive(Deserialize, utoipa::ToSchema)]
-pub struct SetupRequest {
-    pub password: String,
-}
-
-/// Response for auth setup
-#[derive(Serialize, utoipa::ToSchema)]
-pub struct SetupResponse {
-    pub message: String,
-}
-
-/// POST /api/auth/setup - First-run password configuration
-///
-/// This endpoint is only available when no password has been configured yet.
-/// Once a password is set, this endpoint returns 409 Conflict.
-#[utoipa::path(
-    post,
-    path = "/api/auth/setup",
-    tag = "Auth",
-    request_body = SetupRequest,
-    responses(
-        (status = 200, description = "Password configured", body = SetupResponse),
-        (status = 400, description = "Password too short"),
-        (status = 409, description = "Password already configured")
-    )
-)]
-pub async fn auth_setup(State(state): State<AppState>, Json(request): Json<SetupRequest>) -> Result<Json<SetupResponse>, (StatusCode, String)> {
-    // Check if already setup
-    if state.repo.has_password().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))? {
-        return Err((StatusCode::CONFLICT, "Password already configured".to_string()));
-    }
-
-    // Validate password strength
-    if request.password.len() < 8 {
-        return Err((StatusCode::BAD_REQUEST, "Password must be at least 8 characters".to_string()));
-    }
-
-    // Hash and store
-    let hash = auth::hash_password(&request.password).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    state.repo.set_password(hash).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    Ok(Json(SetupResponse {
-        message: "Password configured successfully".to_string(),
-    }))
-}
-
-/// Request body for registration
-#[derive(Deserialize, utoipa::ToSchema)]
-pub struct RegisterRequest {
-    pub email: String,
-    pub password: String,
-}
-
-/// Response for registration
-#[derive(Serialize, utoipa::ToSchema)]
-pub struct AuthTokenResponse {
-    pub token: String,
-    pub expires_in: u64,
-    pub user: UserResponse,
-}
-
-/// User info in API responses
-#[derive(Serialize, utoipa::ToSchema)]
-pub struct UserResponse {
-    pub id: String,
-    pub email: String,
-    pub github_login: Option<String>,
-}
-
-/// POST /api/auth/register - Register a new user
-#[utoipa::path(
-    post,
-    path = "/api/auth/register",
-    tag = "Auth",
-    request_body = RegisterRequest,
-    responses(
-        (status = 201, description = "User registered", body = AuthTokenResponse),
-        (status = 400, description = "Invalid email or password"),
-        (status = 409, description = "Email already registered")
-    )
-)]
-pub async fn auth_register(State(state): State<AppState>, Json(request): Json<RegisterRequest>) -> Result<(StatusCode, Json<AuthTokenResponse>), (StatusCode, String)> {
-    // Validate
-    if request.email.trim().is_empty() || !request.email.contains('@') {
-        return Err((StatusCode::BAD_REQUEST, "Invalid email".into()));
-    }
-    if request.password.len() < 8 {
-        return Err((StatusCode::BAD_REQUEST, "Password must be at least 8 characters".into()));
-    }
-
-    let user_repo = state.user_repo.as_ref().ok_or((StatusCode::INTERNAL_SERVER_ERROR, "User service unavailable".into()))?;
-
-    // Check if email already exists
-    if user_repo
-        .get_user_by_email(&request.email)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .is_some()
-    {
-        return Err((StatusCode::CONFLICT, "Email already registered".into()));
-    }
-
-    let hash = auth::hash_password(&request.password).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    let user = user_repo.create_user(&request.email, &hash).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    // Seed built-in execution tools for the new user
-    let _ = state.repo.seed_builtin_tools(user.id).await;
-
-    let token = auth::create_token(&state.jwt_secret, 24, user.id, &user.email).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    Ok((
-        StatusCode::CREATED,
-        Json(AuthTokenResponse {
-            token,
-            expires_in: 86400,
-            user: UserResponse {
-                id: user.id.to_string(),
-                email: user.email,
-                github_login: user.github_login,
-            },
-        }),
-    ))
-}
-
-/// Request body for login
-#[derive(Deserialize, utoipa::ToSchema)]
-pub struct LoginRequest {
-    pub email: String,
-    pub password: String,
-}
-
-/// Response for successful login
-#[derive(Serialize, utoipa::ToSchema)]
-pub struct LoginResponse {
-    pub token: String,
-    pub expires_in: u64,
-}
-
-/// POST /api/auth/login - Authenticate and get JWT token
-///
-/// Verifies the provided password and returns a JWT token valid for 24 hours.
-#[utoipa::path(
-    post,
-    path = "/api/auth/login",
-    tag = "Auth",
-    request_body = LoginRequest,
-    responses(
-        (status = 200, description = "Login successful", body = LoginResponse),
-        (status = 401, description = "Invalid credentials")
-    )
-)]
-pub async fn auth_login(State(state): State<AppState>, Json(request): Json<LoginRequest>) -> Result<Json<LoginResponse>, StatusCode> {
-    let user_repo = state.user_repo.as_ref().ok_or_else(|| {
-        tracing::error!("user_repo is None");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    let user = user_repo
-        .get_user_by_email(&request.email)
-        .await
-        .map_err(|e| {
-            tracing::error!("Database error getting user: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .ok_or(StatusCode::UNAUTHORIZED)?;
-
-    let password_hash = user.password_hash.as_ref().ok_or(StatusCode::UNAUTHORIZED)?;
-    if !auth::verify_password(&request.password, password_hash) {
-        return Err(StatusCode::UNAUTHORIZED);
-    }
-
-    let token = auth::create_token(&state.jwt_secret, 24, user.id, &user.email).map_err(|e| {
-        tracing::error!("JWT token creation error: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    Ok(Json(LoginResponse { token, expires_in: 86400 }))
-}
-
-/// Response for /api/auth/me
-#[derive(Serialize, utoipa::ToSchema)]
-pub struct MeResponse {
-    pub id: String,
-    pub email: String,
-    pub github_login: Option<String>,
-    pub authenticated: bool,
-    pub token_expires: usize,
-}
-
-/// GET /api/auth/me - Get current user info from token
-///
-/// Requires a valid JWT token in Authorization header.
-#[utoipa::path(
-    get,
-    path = "/api/auth/me",
-    tag = "Auth",
-    security(("bearer_auth" = [])),
-    responses(
-        (status = 200, description = "Current user info", body = MeResponse)
-    )
-)]
-pub async fn auth_me(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<MeResponse>, StatusCode> {
-    let user_repo = state.user_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let user = user_repo
-        .get_user_by_id(auth.user_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::UNAUTHORIZED)?;
-
-    Ok(Json(MeResponse {
-        id: user.id.to_string(),
-        email: user.email,
-        github_login: user.github_login,
-        authenticated: true,
-        token_expires: auth.claims.exp,
-    }))
 }
 
 // ============================================================================
@@ -1877,7 +1659,7 @@ pub struct DocumentSearchQuery {
         (status = 200, description = "List of documents", body = Vec<DocumentListItem>)
     )
 )]
-pub async fn list_documents(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<DocumentListItem>>, StatusCode> {
+pub async fn list_documents(State(state): State<AppState>, auth: auth_utils::AuthUser) -> Result<Json<Vec<DocumentListItem>>, StatusCode> {
     let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let docs = doc_repo.list_documents(auth.user_id.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -1908,7 +1690,7 @@ pub async fn list_documents(State(state): State<AppState>, auth: auth::AuthUser)
         (status = 200, description = "Search results")
     )
 )]
-pub async fn search_documents(State(state): State<AppState>, auth: auth::AuthUser, Query(query): Query<DocumentSearchQuery>) -> Result<Json<Vec<crate::db::DocumentSearchResult>>, StatusCode> {
+pub async fn search_documents(State(state): State<AppState>, auth: auth_utils::AuthUser, Query(query): Query<DocumentSearchQuery>) -> Result<Json<Vec<crate::db::DocumentSearchResult>>, StatusCode> {
     let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let results = doc_repo.search_documents(auth.user_id.0, &query.q).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -1927,7 +1709,7 @@ pub async fn search_documents(State(state): State<AppState>, auth: auth::AuthUse
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_document(State(state): State<AppState>, auth: auth::AuthUser, Path(doc_id): Path<Uuid>) -> Result<Json<DocumentResponse>, StatusCode> {
+pub async fn get_document(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(doc_id): Path<Uuid>) -> Result<Json<DocumentResponse>, StatusCode> {
     let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let doc = doc_repo.get_document(doc_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
@@ -1962,7 +1744,7 @@ pub async fn get_document(State(state): State<AppState>, auth: auth::AuthUser, P
         (status = 400, description = "Invalid request")
     )
 )]
-pub async fn create_document(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateDocumentRequest>) -> Result<(StatusCode, Json<DocumentResponse>), StatusCode> {
+pub async fn create_document(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(request): Json<CreateDocumentRequest>) -> Result<(StatusCode, Json<DocumentResponse>), StatusCode> {
     if request.title.trim().is_empty() || request.title.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -2014,7 +1796,7 @@ pub async fn create_document(State(state): State<AppState>, auth: auth::AuthUser
         (status = 404, description = "Not found")
     )
 )]
-pub async fn update_document(State(state): State<AppState>, auth: auth::AuthUser, Path(doc_id): Path<Uuid>, Json(request): Json<UpdateDocumentRequest>) -> Result<Json<DocumentResponse>, StatusCode> {
+pub async fn update_document(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(doc_id): Path<Uuid>, Json(request): Json<UpdateDocumentRequest>) -> Result<Json<DocumentResponse>, StatusCode> {
     let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Verify ownership
@@ -2055,7 +1837,7 @@ pub async fn update_document(State(state): State<AppState>, auth: auth::AuthUser
         (status = 404, description = "Not found")
     )
 )]
-pub async fn delete_document(State(state): State<AppState>, auth: auth::AuthUser, Path(doc_id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
+pub async fn delete_document(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(doc_id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Verify ownership
@@ -2107,7 +1889,7 @@ pub struct UpdateOutputSchemaRequest {
         (status = 200, description = "List of output schemas", body = Vec<OutputSchemaResponse>)
     )
 )]
-pub async fn list_output_schemas(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<OutputSchemaResponse>>, StatusCode> {
+pub async fn list_output_schemas(State(state): State<AppState>, auth: auth_utils::AuthUser) -> Result<Json<Vec<OutputSchemaResponse>>, StatusCode> {
     let repo = state.output_schema_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo.list_output_schemas(auth.user_id.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let items = rows
@@ -2134,7 +1916,7 @@ pub async fn list_output_schemas(State(state): State<AppState>, auth: auth::Auth
         (status = 400, description = "Invalid request")
     )
 )]
-pub async fn create_output_schema(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateOutputSchemaRequest>) -> Result<(StatusCode, Json<OutputSchemaResponse>), StatusCode> {
+pub async fn create_output_schema(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(request): Json<CreateOutputSchemaRequest>) -> Result<(StatusCode, Json<OutputSchemaResponse>), StatusCode> {
     if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -2166,7 +1948,7 @@ pub async fn create_output_schema(State(state): State<AppState>, auth: auth::Aut
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_output_schema(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<OutputSchemaResponse>, StatusCode> {
+pub async fn get_output_schema(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<OutputSchemaResponse>, StatusCode> {
     let repo = state.output_schema_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo.get_output_schema(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if row.user_id != auth.user_id.0 {
@@ -2195,7 +1977,7 @@ pub async fn get_output_schema(State(state): State<AppState>, auth: auth::AuthUs
 )]
 pub async fn update_output_schema(
     State(state): State<AppState>,
-    auth: auth::AuthUser,
+    auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateOutputSchemaRequest>,
 ) -> Result<Json<OutputSchemaResponse>, StatusCode> {
@@ -2230,7 +2012,7 @@ pub async fn update_output_schema(
         (status = 404, description = "Not found")
     )
 )]
-pub async fn delete_output_schema(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
+pub async fn delete_output_schema(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     let repo = state.output_schema_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo.get_output_schema(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if existing.user_id != auth.user_id.0 {
@@ -2277,7 +2059,7 @@ pub struct UpdatePromptTemplateRequest {
         (status = 200, description = "List of prompt templates", body = Vec<PromptTemplateResponse>)
     )
 )]
-pub async fn list_prompt_templates(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<PromptTemplateResponse>>, StatusCode> {
+pub async fn list_prompt_templates(State(state): State<AppState>, auth: auth_utils::AuthUser) -> Result<Json<Vec<PromptTemplateResponse>>, StatusCode> {
     let repo = state.prompt_template_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo.list_prompt_templates(auth.user_id.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let items = rows
@@ -2306,7 +2088,7 @@ pub async fn list_prompt_templates(State(state): State<AppState>, auth: auth::Au
 )]
 pub async fn create_prompt_template(
     State(state): State<AppState>,
-    auth: auth::AuthUser,
+    auth: auth_utils::AuthUser,
     Json(request): Json<CreatePromptTemplateRequest>,
 ) -> Result<(StatusCode, Json<PromptTemplateResponse>), StatusCode> {
     if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
@@ -2343,7 +2125,7 @@ pub async fn create_prompt_template(
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_prompt_template(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<PromptTemplateResponse>, StatusCode> {
+pub async fn get_prompt_template(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<PromptTemplateResponse>, StatusCode> {
     let repo = state.prompt_template_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo.get_prompt_template(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if row.user_id != auth.user_id.0 {
@@ -2372,7 +2154,7 @@ pub async fn get_prompt_template(State(state): State<AppState>, auth: auth::Auth
 )]
 pub async fn update_prompt_template(
     State(state): State<AppState>,
-    auth: auth::AuthUser,
+    auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
     Json(request): Json<UpdatePromptTemplateRequest>,
 ) -> Result<Json<PromptTemplateResponse>, StatusCode> {
@@ -2412,7 +2194,7 @@ pub async fn update_prompt_template(
         (status = 404, description = "Not found")
     )
 )]
-pub async fn delete_prompt_template(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
+pub async fn delete_prompt_template(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     let repo = state.prompt_template_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo.get_prompt_template(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if existing.user_id != auth.user_id.0 {
@@ -2503,7 +2285,7 @@ impl From<crate::db::ExecutionMessageRow> for ExecutionMessageResponse {
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_agent_execution(State(state): State<AppState>, _auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<AgentExecutionResponse>, StatusCode> {
+pub async fn get_agent_execution(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<AgentExecutionResponse>, StatusCode> {
     let repo = state.agent_execution_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo.get_agent_execution(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     Ok(Json(AgentExecutionResponse::from(row)))
@@ -2520,7 +2302,7 @@ pub async fn get_agent_execution(State(state): State<AppState>, _auth: auth::Aut
         (status = 404, description = "Not found")
     )
 )]
-pub async fn list_execution_messages(State(state): State<AppState>, _auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<Vec<ExecutionMessageResponse>>, StatusCode> {
+pub async fn list_execution_messages(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<Vec<ExecutionMessageResponse>>, StatusCode> {
     let repo = state.agent_execution_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     // Verify execution exists
     repo.get_agent_execution(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -2558,7 +2340,7 @@ pub struct ApproveExecutionRequest {
 )]
 pub async fn send_execution_message(
     State(state): State<AppState>,
-    _auth: auth::AuthUser,
+    _auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
     Json(req): Json<SendMessageRequest>,
 ) -> Result<Json<ExecutionMessageResponse>, StatusCode> {
@@ -2597,7 +2379,7 @@ pub async fn send_execution_message(
 )]
 pub async fn approve_execution(
     State(state): State<AppState>,
-    _auth: auth::AuthUser,
+    _auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
     Json(req): Json<ApproveExecutionRequest>,
 ) -> Result<Json<AgentExecutionResponse>, StatusCode> {
@@ -2642,7 +2424,7 @@ pub struct CostResponse {
         (status = 200, description = "Cost breakdown", body = CostResponse)
     )
 )]
-pub async fn get_costs(State(state): State<AppState>, auth: auth::AuthUser, Query(q): Query<CostQuery>) -> Result<Json<CostResponse>, StatusCode> {
+pub async fn get_costs(State(state): State<AppState>, auth: auth_utils::AuthUser, Query(q): Query<CostQuery>) -> Result<Json<CostResponse>, StatusCode> {
     let repo = state.token_ledger_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let total_spend = repo.get_user_spend(auth.user_id.0, q.since).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let models = repo.get_model_breakdown(auth.user_id.0, q.since).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -2691,7 +2473,7 @@ pub struct ResultQuery {
         (status = 200, description = "List of results", body = Vec<ResultResponse>)
     )
 )]
-pub async fn list_results(State(state): State<AppState>, auth: auth::AuthUser, Query(q): Query<ResultQuery>) -> Result<Json<Vec<ResultResponse>>, StatusCode> {
+pub async fn list_results(State(state): State<AppState>, auth: auth_utils::AuthUser, Query(q): Query<ResultQuery>) -> Result<Json<Vec<ResultResponse>>, StatusCode> {
     let repo = state.result_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = match q.output_schema_id {
         Some(schema_id) => repo.list_results_by_schema(auth.user_id.0, schema_id).await,
@@ -2712,7 +2494,7 @@ pub async fn list_results(State(state): State<AppState>, auth: auth::AuthUser, Q
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_result(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<ResultResponse>, StatusCode> {
+pub async fn get_result(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<ResultResponse>, StatusCode> {
     let repo = state.result_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo.get_result(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if row.user_id != auth.user_id.0 {
@@ -2732,7 +2514,7 @@ pub async fn get_result(State(state): State<AppState>, auth: auth::AuthUser, Pat
         (status = 404, description = "Not found")
     )
 )]
-pub async fn delete_result(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
+pub async fn delete_result(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     let repo = state.result_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo.get_result(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if row.user_id != auth.user_id.0 {
@@ -2862,7 +2644,7 @@ fn step_response(r: crate::db::WorkflowStepRow) -> WorkflowStepResponse {
         (status = 200, description = "List of workflows", body = Vec<WorkflowResponse>)
     )
 )]
-pub async fn list_workflows(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<WorkflowResponse>>, StatusCode> {
+pub async fn list_workflows(State(state): State<AppState>, auth: auth_utils::AuthUser) -> Result<Json<Vec<WorkflowResponse>>, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo.list_workflows(auth.user_id.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let items = rows
@@ -2889,7 +2671,7 @@ pub async fn list_workflows(State(state): State<AppState>, auth: auth::AuthUser)
         (status = 400, description = "Invalid request")
     )
 )]
-pub async fn create_workflow(State(state): State<AppState>, auth: auth::AuthUser, Json(req): Json<CreateWorkflowRequest>) -> Result<(StatusCode, Json<WorkflowResponse>), StatusCode> {
+pub async fn create_workflow(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(req): Json<CreateWorkflowRequest>) -> Result<(StatusCode, Json<WorkflowResponse>), StatusCode> {
     if req.name.trim().is_empty() || req.name.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -2921,7 +2703,7 @@ pub async fn create_workflow(State(state): State<AppState>, auth: auth::AuthUser
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_workflow(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<WorkflowResponse>, StatusCode> {
+pub async fn get_workflow(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<WorkflowResponse>, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo.get_workflow(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if row.user_id != auth.user_id.0 {
@@ -2948,7 +2730,7 @@ pub async fn get_workflow(State(state): State<AppState>, auth: auth::AuthUser, P
         (status = 404, description = "Not found")
     )
 )]
-pub async fn update_workflow(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>, Json(req): Json<UpdateWorkflowRequest>) -> Result<Json<WorkflowResponse>, StatusCode> {
+pub async fn update_workflow(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>, Json(req): Json<UpdateWorkflowRequest>) -> Result<Json<WorkflowResponse>, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo.get_workflow(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if existing.user_id != auth.user_id.0 {
@@ -2980,7 +2762,7 @@ pub async fn update_workflow(State(state): State<AppState>, auth: auth::AuthUser
         (status = 404, description = "Not found")
     )
 )]
-pub async fn delete_workflow(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
+pub async fn delete_workflow(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo.get_workflow(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if existing.user_id != auth.user_id.0 {
@@ -3005,7 +2787,7 @@ pub async fn delete_workflow(State(state): State<AppState>, auth: auth::AuthUser
 )]
 pub async fn create_workflow_step(
     State(state): State<AppState>,
-    auth: auth::AuthUser,
+    auth: auth_utils::AuthUser,
     Path(wid): Path<Uuid>,
     Json(req): Json<CreateStepRequest>,
 ) -> Result<(StatusCode, Json<WorkflowStepResponse>), StatusCode> {
@@ -3046,7 +2828,7 @@ pub async fn create_workflow_step(
         (status = 404, description = "Not found")
     )
 )]
-pub async fn list_workflow_steps(State(state): State<AppState>, auth: auth::AuthUser, Path(wid): Path<Uuid>) -> Result<Json<Vec<WorkflowStepResponse>>, StatusCode> {
+pub async fn list_workflow_steps(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(wid): Path<Uuid>) -> Result<Json<Vec<WorkflowStepResponse>>, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo.get_workflow(wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if wf.user_id != auth.user_id.0 {
@@ -3071,7 +2853,7 @@ pub async fn list_workflow_steps(State(state): State<AppState>, auth: auth::Auth
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_workflow_step(State(state): State<AppState>, auth: auth::AuthUser, Path(p): Path<(Uuid, Uuid)>) -> Result<Json<WorkflowStepResponse>, StatusCode> {
+pub async fn get_workflow_step(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(p): Path<(Uuid, Uuid)>) -> Result<Json<WorkflowStepResponse>, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo.get_workflow(p.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if wf.user_id != auth.user_id.0 {
@@ -3108,7 +2890,7 @@ pub struct WorkflowStepPath {
 )]
 pub async fn update_workflow_step(
     State(state): State<AppState>,
-    auth: auth::AuthUser,
+    auth: auth_utils::AuthUser,
     Path(p): Path<WorkflowStepPath>,
     Json(req): Json<UpdateStepRequest>,
 ) -> Result<Json<WorkflowStepResponse>, StatusCode> {
@@ -3156,7 +2938,7 @@ pub async fn update_workflow_step(
         (status = 404, description = "Not found")
     )
 )]
-pub async fn delete_workflow_step(State(state): State<AppState>, auth: auth::AuthUser, Path(p): Path<WorkflowStepPath>) -> Result<StatusCode, StatusCode> {
+pub async fn delete_workflow_step(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(p): Path<WorkflowStepPath>) -> Result<StatusCode, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo.get_workflow(p.wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if wf.user_id != auth.user_id.0 {
@@ -3182,7 +2964,7 @@ pub async fn delete_workflow_step(State(state): State<AppState>, auth: auth::Aut
         (status = 404, description = "Not found")
     )
 )]
-pub async fn list_workflow_edges(State(state): State<AppState>, auth: auth::AuthUser, Path(wid): Path<Uuid>) -> Result<Json<Vec<EdgeResponse>>, StatusCode> {
+pub async fn list_workflow_edges(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(wid): Path<Uuid>) -> Result<Json<Vec<EdgeResponse>>, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo.get_workflow(wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if wf.user_id != auth.user_id.0 {
@@ -3212,7 +2994,7 @@ pub async fn list_workflow_edges(State(state): State<AppState>, auth: auth::Auth
         (status = 404, description = "Not found")
     )
 )]
-pub async fn add_workflow_edge(State(state): State<AppState>, auth: auth::AuthUser, Path(wid): Path<Uuid>, Json(req): Json<EdgeRequest>) -> Result<StatusCode, StatusCode> {
+pub async fn add_workflow_edge(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(wid): Path<Uuid>, Json(req): Json<EdgeRequest>) -> Result<StatusCode, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo.get_workflow(wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if wf.user_id != auth.user_id.0 {
@@ -3235,7 +3017,7 @@ pub async fn add_workflow_edge(State(state): State<AppState>, auth: auth::AuthUs
         (status = 404, description = "Not found")
     )
 )]
-pub async fn remove_workflow_edge(State(state): State<AppState>, auth: auth::AuthUser, Path(wid): Path<Uuid>, Json(req): Json<EdgeRequest>) -> Result<StatusCode, StatusCode> {
+pub async fn remove_workflow_edge(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(wid): Path<Uuid>, Json(req): Json<EdgeRequest>) -> Result<StatusCode, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo.get_workflow(wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if wf.user_id != auth.user_id.0 {
@@ -3261,7 +3043,7 @@ pub async fn remove_workflow_edge(State(state): State<AppState>, auth: auth::Aut
         (status = 404, description = "Not found")
     )
 )]
-pub async fn add_step_document(State(state): State<AppState>, auth: auth::AuthUser, Path(p): Path<WorkflowStepPath>, Json(req): Json<StepDocumentRequest>) -> Result<StatusCode, StatusCode> {
+pub async fn add_step_document(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(p): Path<WorkflowStepPath>, Json(req): Json<StepDocumentRequest>) -> Result<StatusCode, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo.get_workflow(p.wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if wf.user_id != auth.user_id.0 {
@@ -3291,7 +3073,7 @@ pub async fn add_step_document(State(state): State<AppState>, auth: auth::AuthUs
         (status = 404, description = "Not found")
     )
 )]
-pub async fn remove_step_document(State(state): State<AppState>, auth: auth::AuthUser, Path(p): Path<WorkflowStepPath>, Json(req): Json<StepDocumentRequest>) -> Result<StatusCode, StatusCode> {
+pub async fn remove_step_document(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(p): Path<WorkflowStepPath>, Json(req): Json<StepDocumentRequest>) -> Result<StatusCode, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo.get_workflow(p.wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if wf.user_id != auth.user_id.0 {
@@ -3320,7 +3102,7 @@ pub async fn remove_step_document(State(state): State<AppState>, auth: auth::Aut
         (status = 404, description = "Not found")
     )
 )]
-pub async fn list_step_documents(State(state): State<AppState>, auth: auth::AuthUser, Path(p): Path<WorkflowStepPath>) -> Result<Json<Vec<StepDocumentResponse>>, StatusCode> {
+pub async fn list_step_documents(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(p): Path<WorkflowStepPath>) -> Result<Json<Vec<StepDocumentResponse>>, StatusCode> {
     let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo.get_workflow(p.wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if wf.user_id != auth.user_id.0 {
@@ -3369,7 +3151,7 @@ pub struct FilePathContent {
         (status = 404, description = "Agent not found")
     )
 )]
-pub async fn submit_context_response(_state: State<AppState>, _auth: auth::AuthUser, _request: Json<ContextResponseRequest>) -> Result<StatusCode, StatusCode> {
+pub async fn submit_context_response(_state: State<AppState>, _auth: auth_utils::AuthUser, _request: Json<ContextResponseRequest>) -> Result<StatusCode, StatusCode> {
     // LEGACY: This endpoint used the old agent pool dispatcher which has been removed.
     // Context is now provided through the workflow/session system.
     Err(StatusCode::SERVICE_UNAVAILABLE)
@@ -3389,7 +3171,7 @@ pub async fn submit_context_response(_state: State<AppState>, _auth: auth::AuthU
         (status = 404, description = "Execution not found or no cancellation token registered")
     )
 )]
-pub async fn cancel_agent_execution(State(state): State<AppState>, _user: auth::AuthUser, Path(execution_id): Path<String>) -> Result<Json<serde_json::Value>, StatusCode> {
+pub async fn cancel_agent_execution(State(state): State<AppState>, _user: auth_utils::AuthUser, Path(execution_id): Path<String>) -> Result<Json<serde_json::Value>, StatusCode> {
     let exec_uuid = Uuid::parse_str(&execution_id).map_err(|_| StatusCode::BAD_REQUEST)?;
 
     let cancelled = state.cancel_execution(exec_uuid).await;
@@ -3419,7 +3201,7 @@ pub async fn cancel_agent_execution(State(state): State<AppState>, _user: auth::
         (status = 200, description = "List of tool routers")
     )
 )]
-pub async fn list_tool_routers(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<Vec<crate::db::ToolRouterRow>>, StatusCode> {
+pub async fn list_tool_routers(State(state): State<AppState>, auth: auth_utils::AuthUser) -> Result<Json<Vec<crate::db::ToolRouterRow>>, StatusCode> {
     let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo.list_tool_routers(auth.user_id.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(rows))
@@ -3446,7 +3228,7 @@ pub struct CreateToolRouterRequest {
         (status = 400, description = "Invalid request")
     )
 )]
-pub async fn create_tool_router(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateToolRouterRequest>) -> Result<(StatusCode, Json<crate::db::ToolRouterRow>), StatusCode> {
+pub async fn create_tool_router(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(request): Json<CreateToolRouterRequest>) -> Result<(StatusCode, Json<crate::db::ToolRouterRow>), StatusCode> {
     if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -3470,7 +3252,7 @@ pub async fn create_tool_router(State(state): State<AppState>, auth: auth::AuthU
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_tool_router(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<crate::db::ToolRouterRow>, StatusCode> {
+pub async fn get_tool_router(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<crate::db::ToolRouterRow>, StatusCode> {
     let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if row.user_id != auth.user_id.0 {
@@ -3504,7 +3286,7 @@ pub struct UpdateToolRouterRequest {
 )]
 pub async fn update_tool_router(
     State(state): State<AppState>,
-    auth: auth::AuthUser,
+    auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateToolRouterRequest>,
 ) -> Result<Json<crate::db::ToolRouterRow>, StatusCode> {
@@ -3537,7 +3319,7 @@ pub async fn update_tool_router(
         (status = 404, description = "Not found")
     )
 )]
-pub async fn delete_tool_router(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
+pub async fn delete_tool_router(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if existing.user_id != auth.user_id.0 {
@@ -3559,7 +3341,7 @@ pub async fn delete_tool_router(State(state): State<AppState>, auth: auth::AuthU
         (status = 404, description = "Router not found")
     )
 )]
-pub async fn get_router_tools(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
+pub async fn get_router_tools(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
     let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if existing.user_id != auth.user_id.0 {
@@ -3589,7 +3371,7 @@ pub struct SetRouterToolsRequest {
         (status = 404, description = "Router not found")
     )
 )]
-pub async fn set_router_tools(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>, Json(request): Json<SetRouterToolsRequest>) -> Result<StatusCode, StatusCode> {
+pub async fn set_router_tools(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>, Json(request): Json<SetRouterToolsRequest>) -> Result<StatusCode, StatusCode> {
     let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if existing.user_id != auth.user_id.0 {
@@ -3610,7 +3392,7 @@ pub async fn set_router_tools(State(state): State<AppState>, auth: auth::AuthUse
         (status = 200, description = "Session context entries")
     )
 )]
-pub async fn get_session_context(State(state): State<AppState>, _auth: auth::AuthUser, Path(session_id): Path<Uuid>) -> Result<Json<Vec<crate::db::ContextStoreRow>>, StatusCode> {
+pub async fn get_session_context(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(session_id): Path<Uuid>) -> Result<Json<Vec<crate::db::ContextStoreRow>>, StatusCode> {
     let repo = state.context_store_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo.get_active_context(session_id, 100).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(rows))
@@ -3627,7 +3409,7 @@ pub async fn get_session_context(State(state): State<AppState>, _auth: auth::Aut
         (status = 200, description = "List of router requests")
     )
 )]
-pub async fn list_session_requests(State(state): State<AppState>, _auth: auth::AuthUser, Path(session_id): Path<Uuid>) -> Result<Json<Vec<crate::db::RouterRequestRow>>, StatusCode> {
+pub async fn list_session_requests(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(session_id): Path<Uuid>) -> Result<Json<Vec<crate::db::RouterRequestRow>>, StatusCode> {
     let repo = state.router_request_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo.list_session_requests(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(rows))
@@ -3697,7 +3479,7 @@ pub struct RoomMessageRequest {
 }
 
 /// POST /api/rooms - Create a room.
-pub async fn create_room(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateRoomRequest>) -> Result<(StatusCode, Json<crate::db::RoomRow>), StatusCode> {
+pub async fn create_room(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(request): Json<CreateRoomRequest>) -> Result<(StatusCode, Json<crate::db::RoomRow>), StatusCode> {
     if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -3719,7 +3501,7 @@ pub async fn create_room(State(state): State<AppState>, auth: auth::AuthUser, Js
 }
 
 /// GET /api/rooms/:id - Get a room.
-pub async fn get_room(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<crate::db::RoomRow>, StatusCode> {
+pub async fn get_room(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<crate::db::RoomRow>, StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo.get_room(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if row.user_id != auth.user_id.0 {
@@ -3729,7 +3511,7 @@ pub async fn get_room(State(state): State<AppState>, auth: auth::AuthUser, Path(
 }
 
 /// PUT /api/rooms/:id - Update a room.
-pub async fn update_room(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>, Json(request): Json<UpdateRoomRequest>) -> Result<Json<crate::db::RoomRow>, StatusCode> {
+pub async fn update_room(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>, Json(request): Json<UpdateRoomRequest>) -> Result<Json<crate::db::RoomRow>, StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo.get_room(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if existing.user_id != auth.user_id.0 {
@@ -3756,7 +3538,7 @@ pub async fn update_room(State(state): State<AppState>, auth: auth::AuthUser, Pa
 }
 
 /// DELETE /api/rooms/:id - Delete a room.
-pub async fn delete_room(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
+pub async fn delete_room(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo.get_room(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if existing.user_id != auth.user_id.0 {
@@ -3767,14 +3549,14 @@ pub async fn delete_room(State(state): State<AppState>, auth: auth::AuthUser, Pa
 }
 
 /// GET /api/rooms/:id/members - List room members.
-pub async fn list_room_members(State(state): State<AppState>, _auth: auth::AuthUser, Path(room_id): Path<Uuid>) -> Result<Json<Vec<crate::db::RoomMemberRow>>, StatusCode> {
+pub async fn list_room_members(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(room_id): Path<Uuid>) -> Result<Json<Vec<crate::db::RoomMemberRow>>, StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo.list_room_members(room_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(rows))
 }
 
 /// POST /api/rooms/:id/members - Add a room member.
-pub async fn add_room_member(State(state): State<AppState>, _auth: auth::AuthUser, Path(room_id): Path<Uuid>, Json(request): Json<AddRoomMemberRequest>) -> Result<StatusCode, StatusCode> {
+pub async fn add_room_member(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(room_id): Path<Uuid>, Json(request): Json<AddRoomMemberRequest>) -> Result<StatusCode, StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     repo.add_room_member(room_id, request.agent_id, request.display_name, request.role_description, request.display_order)
         .await
@@ -3783,14 +3565,14 @@ pub async fn add_room_member(State(state): State<AppState>, _auth: auth::AuthUse
 }
 
 /// DELETE /api/rooms/:id/members/:agent_id - Remove a room member.
-pub async fn remove_room_member(State(state): State<AppState>, _auth: auth::AuthUser, Path((room_id, agent_id)): Path<(Uuid, Uuid)>) -> Result<StatusCode, StatusCode> {
+pub async fn remove_room_member(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path((room_id, agent_id)): Path<(Uuid, Uuid)>) -> Result<StatusCode, StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     repo.remove_room_member(room_id, agent_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// PUT /api/rooms/:id/members - Set all room members (replace).
-pub async fn set_room_members(State(state): State<AppState>, _auth: auth::AuthUser, Path(room_id): Path<Uuid>, Json(request): Json<SetRoomMembersRequest>) -> Result<StatusCode, StatusCode> {
+pub async fn set_room_members(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(room_id): Path<Uuid>, Json(request): Json<SetRoomMembersRequest>) -> Result<StatusCode, StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let members: Vec<crate::db::traits::RoomMemberInput> = request
         .members
@@ -3807,14 +3589,14 @@ pub async fn set_room_members(State(state): State<AppState>, _auth: auth::AuthUs
 }
 
 /// POST /api/rooms/:id/sessions - Start a room session.
-pub async fn create_room_session(State(state): State<AppState>, _auth: auth::AuthUser, Path(room_id): Path<Uuid>) -> Result<(StatusCode, Json<crate::db::RoomSessionRow>), StatusCode> {
+pub async fn create_room_session(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(room_id): Path<Uuid>) -> Result<(StatusCode, Json<crate::db::RoomSessionRow>), StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo.create_room_session(room_id, None).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok((StatusCode::CREATED, Json(row)))
 }
 
 /// GET /api/room-sessions/:id - Get room session.
-pub async fn get_room_session(State(state): State<AppState>, _auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<crate::db::RoomSessionRow>, StatusCode> {
+pub async fn get_room_session(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<crate::db::RoomSessionRow>, StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo.get_room_session(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     Ok(Json(row))
@@ -3827,7 +3609,7 @@ pub async fn get_room_session(State(state): State<AppState>, _auth: auth::AuthUs
 /// Returns immediately with turn status.
 pub async fn send_room_message(
     State(state): State<AppState>,
-    auth: auth::AuthUser,
+    auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
     Json(request): Json<RoomMessageRequest>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
@@ -3898,14 +3680,14 @@ pub async fn send_room_message(
 }
 
 /// GET /api/room-sessions/:id/transcript - Get full transcript.
-pub async fn get_room_transcript(State(state): State<AppState>, _auth: auth::AuthUser, Path(session_id): Path<Uuid>) -> Result<Json<Vec<crate::db::RoomTranscriptEntry>>, StatusCode> {
+pub async fn get_room_transcript(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(session_id): Path<Uuid>) -> Result<Json<Vec<crate::db::RoomTranscriptEntry>>, StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let entries = repo.get_room_transcript(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(entries))
 }
 
 /// POST /api/room-sessions/:id/close - Close a room session.
-pub async fn close_room_session(State(state): State<AppState>, _auth: auth::AuthUser, Path(session_id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
+pub async fn close_room_session(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(session_id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let session = repo.get_room_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if session.status != "active" {
@@ -5737,9 +5519,8 @@ mod tests {
     fn test_agent_response() -> AgentResponse {
         AgentResponse {
             id: "agent-1".to_string(),
-            tier: "worker".to_string(),
-            persona_name: "Test Agent".to_string(),
-            persona_prompt: "You are a test agent".to_string(),
+            name: "Test Agent".to_string(),
+            system_prompt: "You are a test agent".to_string(),
             persona_style: "casual".to_string(),
             model_provider: "anthropic".to_string(),
             model_id: "claude-sonnet-4-20250514".to_string(),
