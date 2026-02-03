@@ -8,7 +8,7 @@
 pub mod dag;
 pub mod engine;
 pub mod error;
-pub mod pipeline_advance;
+// LEGACY: pub mod pipeline_advance; (pipelines removed, use workflows)
 pub mod prompt_registry;
 pub mod recorder;
 pub mod strategies;
@@ -29,7 +29,7 @@ use strategies::router::RouterConfig;
 
 pub use engine::{ExecutionEngine, ExecutionResult};
 pub use error::HubError;
-pub use pipeline_advance::{advance_pipeline, PipelineAdvanceAction};
+// LEGACY: pub use pipeline_advance::{advance_pipeline, PipelineAdvanceAction};
 pub use prompt_registry::PromptRegistry;
 pub use recorder::ExecutionRecorder;
 pub use strategies::{ChatConfig, ChatStrategy, DagStepStrategy, RoomSpeakerConfig, RoomSpeakerStrategy, RouterStrategy};
