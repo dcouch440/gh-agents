@@ -85,11 +85,7 @@ pub fn parse_mentions(message: &str, roster: &[RoomMemberRow]) -> Vec<String> {
         let name = &cap[1];
         let name_lower = name.to_lowercase();
         for member in roster {
-            let member_name = member
-                .display_name
-                .as_deref()
-                .unwrap_or("")
-                .to_lowercase();
+            let member_name = member.display_name.as_deref().unwrap_or("").to_lowercase();
             if member_name == name_lower || member_name.starts_with(&name_lower) {
                 mentions.push(member_name);
                 break;
@@ -122,20 +118,12 @@ pub fn parse_gatekeeper_response(response: &str) -> Option<GatekeeperOutput> {
 }
 
 /// Fallback speaker order: all members in display_order, with mentioned agents first.
-pub fn fallback_speaker_order(
-    roster: &[RoomMemberRow],
-    mentions: &[String],
-    max_speakers: i32,
-) -> Vec<SpeakerSelection> {
+pub fn fallback_speaker_order(roster: &[RoomMemberRow], mentions: &[String], max_speakers: i32) -> Vec<SpeakerSelection> {
     let mut mentioned = Vec::new();
     let mut rest = Vec::new();
 
     for member in roster {
-        let member_name = member
-            .display_name
-            .as_deref()
-            .unwrap_or("")
-            .to_lowercase();
+        let member_name = member.display_name.as_deref().unwrap_or("").to_lowercase();
         let selection = SpeakerSelection {
             agent_id: member.agent_id,
             followup_context: String::new(),

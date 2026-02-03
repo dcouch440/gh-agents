@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use super::channels::{AgentCommand, AgentResponse};
 use crate::llm::LLMProvider;
-use crate::types::{AgentPersona, AgentStatus, AgentTier, ModelConfig};
+use crate::types::{AgentPersona, AgentStatus, ModelConfig};
 
 #[derive(Error, Debug)]
 pub enum AgentError {
@@ -44,8 +44,6 @@ impl Default for AgentId {
 pub struct Agent {
     /// Unique identifier
     pub id: AgentId,
-    /// Agent tier (Orchestrator, Worker, Utility)
-    pub tier: AgentTier,
     /// Persona defining behavior and communication style
     pub persona: AgentPersona,
     /// LLM configuration for this agent
@@ -69,7 +67,6 @@ pub struct Agent {
 impl Agent {
     /// Create a new agent with the specified configuration
     pub fn new(
-        tier: AgentTier,
         persona: AgentPersona,
         model_config: ModelConfig,
         llm_provider: Arc<dyn LLMProvider + Send + Sync>,
@@ -78,7 +75,6 @@ impl Agent {
     ) -> Self {
         Self {
             id: AgentId::new(),
-            tier,
             persona,
             model_config,
             current_task: None,
@@ -99,11 +95,6 @@ impl Agent {
     /// Get the agent's ID
     pub fn id(&self) -> &AgentId {
         &self.id
-    }
-
-    /// Get the agent's tier
-    pub fn tier(&self) -> AgentTier {
-        self.tier
     }
 
     /// Get the agent's current status
@@ -215,7 +206,7 @@ impl Agent {
     /// If the agent is working on a task, the task will be failed first.
     /// After shutdown, the agent should not be used.
     pub fn shutdown(&mut self) -> Result<(), AgentError> {
-        info!(agent_id = ?self.id, tier = ?self.tier, "Agent shutting down");
+        info!(agent_id = ?self.id, "Agent shutting down");
 
         // If working, fail the current task
         if self.current_task.is_some() {
@@ -268,7 +259,6 @@ impl Drop for Agent {
         if !self.is_shutdown {
             warn!(
                 agent_id = ?self.id,
-                tier = ?self.tier,
                 "Agent dropped without explicit shutdown"
             );
         }
@@ -315,7 +305,7 @@ mod tests {
         let provider = Arc::new(MockLLMProvider);
         let (_command_tx, command_rx) = mpsc::channel(32);
         let (response_tx, _response_rx) = mpsc::channel(32);
-        Agent::new(AgentTier::Worker, AgentPersona::default(), ModelConfig::default(), provider, command_rx, response_tx)
+        Agent::new(AgentPersona::default(), ModelConfig::default(), provider, command_rx, response_tx)
     }
 
     #[test]

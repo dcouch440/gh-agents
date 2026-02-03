@@ -59,9 +59,7 @@ mod tests {
             verbosity = "verbose"
 
             [pool]
-            max_orchestrators = 2
-            max_workers = 10
-            max_utilities = 4
+            max_agents = 12
         "#;
 
         fs::write(&config_path, config_content).unwrap();
@@ -70,7 +68,7 @@ mod tests {
         let config: GlobalConfig = toml::from_str(&content).unwrap();
 
         assert_eq!(config.verbosity, VerbosityLevel::Verbose);
-        assert_eq!(config.pool.max_workers, 10);
+        assert_eq!(config.pool.max_agents, 12);
     }
 
     #[test]
@@ -119,7 +117,6 @@ mod tests {
     #[test]
     fn global_config_default_has_expected_pool_values() {
         let config = GlobalConfig::default();
-        assert!(config.pool.max_workers > 0);
-        assert!(config.pool.max_orchestrators > 0);
+        assert!(config.pool.max_agents > 0);
     }
 }

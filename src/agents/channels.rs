@@ -7,7 +7,7 @@ use uuid::Uuid;
 use super::agent::AgentId;
 use super::roles::{CommunicationStyle, OutputFormat, RoleId};
 use crate::execution::ExecutionContext;
-use crate::types::{AgentTier, TaskStatus};
+use crate::types::TaskStatus;
 
 /// Commands sent to agents
 #[derive(Debug, Clone)]
@@ -206,13 +206,12 @@ pub struct ProgressUpdate {
 #[derive(Clone)]
 pub struct AgentHandle {
     pub agent_id: AgentId,
-    pub tier: AgentTier,
     command_tx: mpsc::Sender<AgentCommand>,
 }
 
 impl AgentHandle {
-    pub fn new(agent_id: AgentId, tier: AgentTier, command_tx: mpsc::Sender<AgentCommand>) -> Self {
-        Self { agent_id, tier, command_tx }
+    pub fn new(agent_id: AgentId, command_tx: mpsc::Sender<AgentCommand>) -> Self {
+        Self { agent_id, command_tx }
     }
 
     /// Send a command to the agent

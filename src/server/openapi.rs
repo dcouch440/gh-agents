@@ -173,7 +173,6 @@ use utoipa::OpenApi;
         super::api::AgentResponse,
         super::api::AgentsListResponse,
         super::api::AgentPoolStats,
-        super::api::TierStats,
         super::api::CreateAgentRequest,
         super::api::UpdateAgentRequest,
         super::api::ToolResponse,
@@ -184,8 +183,6 @@ use utoipa::OpenApi;
         super::api::SetAgentContextRequest,
         super::api::AgentContextResponse,
         super::api::ConfigResponse,
-        super::api::UpdateModelConfig,
-        super::api::UpdateModelsRequest,
         super::api::UpdatePoolRequest,
         super::api::UpdateConfigRequest,
         super::api::ChatRequest,
@@ -265,10 +262,8 @@ use utoipa::OpenApi;
         crate::types::Priority,
         crate::types::SliceId,
         crate::types::AgentId,
-        crate::types::AgentTier,
         crate::types::ModelConfig,
         crate::types::LLMProvider,
-        crate::types::TierModels,
         crate::types::AgentPoolConfig,
     ))
 )]
@@ -282,9 +277,7 @@ impl utoipa::Modify for SecurityAddon {
         if let Some(components) = openapi.components.as_mut() {
             components.add_security_scheme(
                 "bearer_auth",
-                utoipa::openapi::security::SecurityScheme::Http(
-                    utoipa::openapi::security::Http::new(utoipa::openapi::security::HttpAuthScheme::Bearer),
-                ),
+                utoipa::openapi::security::SecurityScheme::Http(utoipa::openapi::security::Http::new(utoipa::openapi::security::HttpAuthScheme::Bearer)),
             );
         }
     }

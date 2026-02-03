@@ -487,14 +487,6 @@ impl RoleManager {
         }
     }
 
-    /// Get default role for a tier (backwards compatibility)
-    pub fn default_role_for_tier(&self, tier: crate::types::AgentTier) -> Option<&Role> {
-        match tier {
-            crate::types::AgentTier::Orchestrator => self.library.get(&RoleId::new("orchestrator")),
-            crate::types::AgentTier::Worker => self.library.get(&RoleId::new("worker")),
-            crate::types::AgentTier::Utility => self.library.get(&RoleId::new("utility")),
-        }
-    }
 }
 
 /// Complete context for executing with a role
@@ -876,14 +868,6 @@ mod tests {
         let grouped = library.grouped_by_category();
         let total: usize = grouped.iter().map(|(_, roles)| roles.len()).sum();
         assert!(total >= 8);
-    }
-
-    #[tokio::test]
-    async fn role_manager_default_role_for_tier() {
-        let manager = RoleManager::new(PathBuf::from("."));
-        assert!(manager.default_role_for_tier(crate::types::AgentTier::Orchestrator).is_some());
-        assert!(manager.default_role_for_tier(crate::types::AgentTier::Worker).is_some());
-        assert!(manager.default_role_for_tier(crate::types::AgentTier::Utility).is_some());
     }
 
     #[tokio::test]

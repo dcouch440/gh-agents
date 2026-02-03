@@ -11,7 +11,10 @@ use uuid::Uuid;
 
 use crate::agents::{AgentPool, AgentResponse, ClusterManager, Dispatcher, PipelineManager, RoleManager, ScheduleManager, ToolClusterIndex};
 use crate::db::pg_repo::PgRepo;
-use crate::db::traits::{AgentExecutionRepo, ContextStoreRepo, DocumentRepo, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, RoomRepo, RouterRequestRepo, ServerRepo, TokenLedgerRepo, ToolRouterRepo, UserRepo, WorkflowRepo};
+use crate::db::traits::{
+    AgentExecutionRepo, ContextStoreRepo, DocumentRepo, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, RoomRepo, RouterRequestRepo, ServerRepo, TokenLedgerRepo,
+    ToolRouterRepo, UserRepo, WorkflowRepo,
+};
 use crate::llm::AnthropicClient;
 use crate::types::{AgentPoolConfig, AppConfig, UserId};
 
@@ -201,16 +204,11 @@ impl AppState {
                 }
 
                 for row in agent_rows {
-                    let tier = match row.tier.as_deref().unwrap_or("worker") {
-                        "orchestrator" => crate::types::AgentTier::Orchestrator,
-                        "utility" => crate::types::AgentTier::Utility,
-                        _ => crate::types::AgentTier::Worker,
-                    };
                     let persona = crate::types::AgentPersona {
                         name: row.name.clone(),
                         ..Default::default()
                     };
-                    match pool.spawn_agent_with_dispatcher(tier, persona, crate::types::ModelConfig::default(), &mut dispatcher) {
+                    match pool.spawn_agent_with_dispatcher(persona, crate::types::ModelConfig::default(), &mut dispatcher) {
                         Ok(id) => tracing::info!("Restored agent {} ({})", row.name, id.0),
                         Err(e) => {
                             tracing::warn!("Failed to restore agent {}: {}", row.name, e)

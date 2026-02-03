@@ -12,8 +12,8 @@ pub mod hub;
 pub mod openapi;
 pub mod orchestrator;
 pub mod room_executor;
-pub mod state;
 pub mod router_service;
+pub mod state;
 pub mod tools;
 pub mod ws;
 
@@ -29,8 +29,6 @@ use axum::{
     routing::{delete, get, post},
     Router,
 };
-use utoipa::OpenApi;
-use utoipa_swagger_ui::SwaggerUi;
 use sqlx::PgPool;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::GovernorLayer;
@@ -38,6 +36,8 @@ use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 use crate::constants::routes;
 use crate::types::AppConfig;

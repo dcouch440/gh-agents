@@ -101,7 +101,6 @@ mod tests {
         assert_eq!(config.autonomy, crate::types::AutonomyLevel::ApprovalGates);
         assert_eq!(config.git_strategy, crate::types::GitStrategy::default());
         assert_eq!(config.sandbox_mode, crate::types::SandboxMode::default());
-        assert!(config.models.is_none());
         assert!(config.pool.is_none());
     }
 

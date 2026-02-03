@@ -10,10 +10,7 @@ use futures::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
-use crate::llm::{
-    ContentBlock, LLMProvider, LLMRequest, Message, StreamAccumulator,
-    StreamChunk as LLMStreamChunk, StopReason, TokenUsage,
-};
+use crate::llm::{ContentBlock, LLMProvider, LLMRequest, Message, StopReason, StreamAccumulator, StreamChunk as LLMStreamChunk, TokenUsage};
 
 use super::error::HubError;
 use super::recorder::ExecutionRecorder;
@@ -77,10 +74,7 @@ impl ExecutionEngine {
             // Check context budget
             let char_count: usize = messages.iter().map(|m| m.estimated_chars()).sum();
             if char_count > budget {
-                return Err(HubError::ContextBudgetExceeded {
-                    chars: char_count,
-                    round,
-                });
+                return Err(HubError::ContextBudgetExceeded { chars: char_count, round });
             }
 
             // Build LLM request
@@ -96,11 +90,7 @@ impl ExecutionEngine {
             // Call LLM
             let response = if strategy.streaming() {
                 request = request.with_streaming();
-                let stream = self
-                    .provider
-                    .send_message_stream(request)
-                    .await
-                    .map_err(|e| HubError::LlmCallFailed { round, source: e })?;
+                let stream = self.provider.send_message_stream(request).await.map_err(|e| HubError::LlmCallFailed { round, source: e })?;
 
                 let mut accumulator = StreamAccumulator::new();
                 let mut pinned = std::pin::pin!(stream);
@@ -138,9 +128,7 @@ impl ExecutionEngine {
                     }
                 }
 
-                accumulator.build().ok_or_else(|| {
-                    HubError::Internal(anyhow::anyhow!("incomplete stream at round {}", round))
-                })?
+                accumulator.build().ok_or_else(|| HubError::Internal(anyhow::anyhow!("incomplete stream at round {}", round)))?
             } else if let Some(ct) = cancel {
                 tokio::select! {
                     biased;
@@ -152,10 +140,7 @@ impl ExecutionEngine {
                     }
                 }
             } else {
-                self.provider
-                    .send_message(request)
-                    .await
-                    .map_err(|e| HubError::LlmCallFailed { round, source: e })?
+                self.provider.send_message(request).await.map_err(|e| HubError::LlmCallFailed { round, source: e })?
             };
 
             total_input += response.usage.input_tokens as u64;
@@ -169,9 +154,7 @@ impl ExecutionEngine {
                         .content_blocks
                         .iter()
                         .filter_map(|b| match b {
-                            ContentBlock::ToolUse { id, name, input } => {
-                                Some((id.clone(), name.clone(), input.clone()))
-                            }
+                            ContentBlock::ToolUse { id, name, input } => Some((id.clone(), name.clone(), input.clone())),
                             _ => None,
                         })
                         .collect();
@@ -260,11 +243,7 @@ mod tests {
         async fn send_message(&self, _req: LLMRequest) -> Result<LLMResponse, LLMError> {
             Ok(self.response.clone())
         }
-        async fn send_message_stream(
-            &self,
-            _req: LLMRequest,
-        ) -> Result<Pin<Box<dyn Stream<Item = Result<LLMStreamChunk, LLMError>> + Send>>, LLMError>
-        {
+        async fn send_message_stream(&self, _req: LLMRequest) -> Result<Pin<Box<dyn Stream<Item = Result<LLMStreamChunk, LLMError>> + Send>>, LLMError> {
             Err(LLMError::StreamError("not implemented".into()))
         }
         fn provider_name(&self) -> &'static str {
@@ -341,10 +320,7 @@ mod tests {
                 content_blocks: vec![ContentBlock::Text { text: "Hello!".into() }],
                 model: "test-model".into(),
                 stop_reason: StopReason::EndTurn,
-                usage: TokenUsage {
-                    input_tokens: 10,
-                    output_tokens: 5,
-                },
+                usage: TokenUsage { input_tokens: 10, output_tokens: 5 },
             },
         });
 
@@ -381,13 +357,27 @@ mod tests {
 
         #[async_trait]
         impl ExecutionStrategy for TinyBudgetStrategy {
-            fn system_prompt(&self) -> &str { "sys" }
-            fn tools(&self) -> Vec<Tool> { vec![] }
-            fn model_id(&self) -> &str { "m" }
-            fn max_rounds(&self) -> u32 { 10 }
-            fn context_budget(&self) -> usize { 1 } // 1 char budget
-            fn streaming(&self) -> bool { false }
-            fn temperature(&self) -> f32 { 0.7 }
+            fn system_prompt(&self) -> &str {
+                "sys"
+            }
+            fn tools(&self) -> Vec<Tool> {
+                vec![]
+            }
+            fn model_id(&self) -> &str {
+                "m"
+            }
+            fn max_rounds(&self) -> u32 {
+                10
+            }
+            fn context_budget(&self) -> usize {
+                1
+            } // 1 char budget
+            fn streaming(&self) -> bool {
+                false
+            }
+            fn temperature(&self) -> f32 {
+                0.7
+            }
             async fn build_messages(&self, input: &str) -> Result<Vec<Message>, HubError> {
                 Ok(vec![Message::user(input)])
             }
@@ -441,15 +431,15 @@ mod tests {
                     })
                 }
             }
-            async fn send_message_stream(
-                &self,
-                _req: LLMRequest,
-            ) -> Result<Pin<Box<dyn Stream<Item = Result<LLMStreamChunk, LLMError>> + Send>>, LLMError>
-            {
+            async fn send_message_stream(&self, _req: LLMRequest) -> Result<Pin<Box<dyn Stream<Item = Result<LLMStreamChunk, LLMError>> + Send>>, LLMError> {
                 Err(LLMError::StreamError("not implemented".into()))
             }
-            fn provider_name(&self) -> &'static str { "tool-test" }
-            fn model_id(&self) -> &str { "m" }
+            fn provider_name(&self) -> &'static str {
+                "tool-test"
+            }
+            fn model_id(&self) -> &str {
+                "m"
+            }
         }
 
         let provider = Arc::new(ToolThenDone { calls: call_count_clone });
@@ -486,15 +476,15 @@ mod tests {
                     usage: TokenUsage { input_tokens: 5, output_tokens: 5 },
                 })
             }
-            async fn send_message_stream(
-                &self,
-                _req: LLMRequest,
-            ) -> Result<Pin<Box<dyn Stream<Item = Result<LLMStreamChunk, LLMError>> + Send>>, LLMError>
-            {
+            async fn send_message_stream(&self, _req: LLMRequest) -> Result<Pin<Box<dyn Stream<Item = Result<LLMStreamChunk, LLMError>> + Send>>, LLMError> {
                 Err(LLMError::StreamError("not implemented".into()))
             }
-            fn provider_name(&self) -> &'static str { "loop" }
-            fn model_id(&self) -> &str { "m" }
+            fn provider_name(&self) -> &'static str {
+                "loop"
+            }
+            fn model_id(&self) -> &str {
+                "m"
+            }
         }
 
         // Strategy with max_rounds = 3
@@ -502,13 +492,27 @@ mod tests {
 
         #[async_trait]
         impl ExecutionStrategy for LimitedStrategy {
-            fn system_prompt(&self) -> &str { "sys" }
-            fn tools(&self) -> Vec<Tool> { vec![] }
-            fn model_id(&self) -> &str { "m" }
-            fn max_rounds(&self) -> u32 { 3 }
-            fn context_budget(&self) -> usize { 480_000 }
-            fn streaming(&self) -> bool { false }
-            fn temperature(&self) -> f32 { 0.7 }
+            fn system_prompt(&self) -> &str {
+                "sys"
+            }
+            fn tools(&self) -> Vec<Tool> {
+                vec![]
+            }
+            fn model_id(&self) -> &str {
+                "m"
+            }
+            fn max_rounds(&self) -> u32 {
+                3
+            }
+            fn context_budget(&self) -> usize {
+                480_000
+            }
+            fn streaming(&self) -> bool {
+                false
+            }
+            fn temperature(&self) -> f32 {
+                0.7
+            }
             async fn build_messages(&self, input: &str) -> Result<Vec<Message>, HubError> {
                 Ok(vec![Message::user(input)])
             }
@@ -541,13 +545,27 @@ mod tests {
 
         #[async_trait]
         impl ExecutionStrategy for CallbackStrategy {
-            fn system_prompt(&self) -> &str { "sys" }
-            fn tools(&self) -> Vec<Tool> { vec![] }
-            fn model_id(&self) -> &str { "m" }
-            fn max_rounds(&self) -> u32 { 10 }
-            fn context_budget(&self) -> usize { 480_000 }
-            fn streaming(&self) -> bool { false }
-            fn temperature(&self) -> f32 { 0.7 }
+            fn system_prompt(&self) -> &str {
+                "sys"
+            }
+            fn tools(&self) -> Vec<Tool> {
+                vec![]
+            }
+            fn model_id(&self) -> &str {
+                "m"
+            }
+            fn max_rounds(&self) -> u32 {
+                10
+            }
+            fn context_budget(&self) -> usize {
+                480_000
+            }
+            fn streaming(&self) -> bool {
+                false
+            }
+            fn temperature(&self) -> f32 {
+                0.7
+            }
             async fn build_messages(&self, input: &str) -> Result<Vec<Message>, HubError> {
                 Ok(vec![Message::user(input)])
             }
@@ -589,7 +607,10 @@ mod tests {
                 content_blocks: vec![ContentBlock::Text { text: "partial response".into() }],
                 model: "m".into(),
                 stop_reason: StopReason::MaxTokens,
-                usage: TokenUsage { input_tokens: 100, output_tokens: 4096 },
+                usage: TokenUsage {
+                    input_tokens: 100,
+                    output_tokens: 4096,
+                },
             },
         });
 
@@ -624,9 +645,21 @@ mod tests {
                     Ok(LLMResponse {
                         content: String::new(),
                         content_blocks: vec![
-                            ContentBlock::ToolUse { id: "t1".into(), name: "search".into(), input: serde_json::json!({"q": "a"}) },
-                            ContentBlock::ToolUse { id: "t2".into(), name: "read".into(), input: serde_json::json!({"file": "b"}) },
-                            ContentBlock::ToolUse { id: "t3".into(), name: "write".into(), input: serde_json::json!({"data": "c"}) },
+                            ContentBlock::ToolUse {
+                                id: "t1".into(),
+                                name: "search".into(),
+                                input: serde_json::json!({"q": "a"}),
+                            },
+                            ContentBlock::ToolUse {
+                                id: "t2".into(),
+                                name: "read".into(),
+                                input: serde_json::json!({"file": "b"}),
+                            },
+                            ContentBlock::ToolUse {
+                                id: "t3".into(),
+                                name: "write".into(),
+                                input: serde_json::json!({"data": "c"}),
+                            },
                         ],
                         model: "m".into(),
                         stop_reason: StopReason::ToolUse,
@@ -642,15 +675,15 @@ mod tests {
                     })
                 }
             }
-            async fn send_message_stream(
-                &self,
-                _req: LLMRequest,
-            ) -> Result<Pin<Box<dyn Stream<Item = Result<LLMStreamChunk, LLMError>> + Send>>, LLMError>
-            {
+            async fn send_message_stream(&self, _req: LLMRequest) -> Result<Pin<Box<dyn Stream<Item = Result<LLMStreamChunk, LLMError>> + Send>>, LLMError> {
                 Err(LLMError::StreamError("not implemented".into()))
             }
-            fn provider_name(&self) -> &'static str { "multi-tool" }
-            fn model_id(&self) -> &str { "m" }
+            fn provider_name(&self) -> &'static str {
+                "multi-tool"
+            }
+            fn model_id(&self) -> &str {
+                "m"
+            }
         }
 
         struct ToolCountingStrategy {
@@ -659,13 +692,27 @@ mod tests {
 
         #[async_trait]
         impl ExecutionStrategy for ToolCountingStrategy {
-            fn system_prompt(&self) -> &str { "sys" }
-            fn tools(&self) -> Vec<Tool> { vec![] }
-            fn model_id(&self) -> &str { "m" }
-            fn max_rounds(&self) -> u32 { 10 }
-            fn context_budget(&self) -> usize { 480_000 }
-            fn streaming(&self) -> bool { false }
-            fn temperature(&self) -> f32 { 0.7 }
+            fn system_prompt(&self) -> &str {
+                "sys"
+            }
+            fn tools(&self) -> Vec<Tool> {
+                vec![]
+            }
+            fn model_id(&self) -> &str {
+                "m"
+            }
+            fn max_rounds(&self) -> u32 {
+                10
+            }
+            fn context_budget(&self) -> usize {
+                480_000
+            }
+            fn streaming(&self) -> bool {
+                false
+            }
+            fn temperature(&self) -> f32 {
+                0.7
+            }
             async fn build_messages(&self, input: &str) -> Result<Vec<Message>, HubError> {
                 Ok(vec![Message::user(input)])
             }
@@ -749,15 +796,15 @@ mod tests {
                     usage: TokenUsage { input_tokens: 5, output_tokens: 5 },
                 })
             }
-            async fn send_message_stream(
-                &self,
-                _req: LLMRequest,
-            ) -> Result<Pin<Box<dyn Stream<Item = Result<LLMStreamChunk, LLMError>> + Send>>, LLMError>
-            {
+            async fn send_message_stream(&self, _req: LLMRequest) -> Result<Pin<Box<dyn Stream<Item = Result<LLMStreamChunk, LLMError>> + Send>>, LLMError> {
                 Err(LLMError::StreamError("not implemented".into()))
             }
-            fn provider_name(&self) -> &'static str { "cancel-test" }
-            fn model_id(&self) -> &str { "m" }
+            fn provider_name(&self) -> &'static str {
+                "cancel-test"
+            }
+            fn model_id(&self) -> &str {
+                "m"
+            }
         }
 
         // Strategy that cancels the token after first tool execution
@@ -768,13 +815,27 @@ mod tests {
 
         #[async_trait]
         impl ExecutionStrategy for CancellingStrategy {
-            fn system_prompt(&self) -> &str { "sys" }
-            fn tools(&self) -> Vec<Tool> { vec![] }
-            fn model_id(&self) -> &str { "m" }
-            fn max_rounds(&self) -> u32 { 10 }
-            fn context_budget(&self) -> usize { 480_000 }
-            fn streaming(&self) -> bool { false }
-            fn temperature(&self) -> f32 { 0.7 }
+            fn system_prompt(&self) -> &str {
+                "sys"
+            }
+            fn tools(&self) -> Vec<Tool> {
+                vec![]
+            }
+            fn model_id(&self) -> &str {
+                "m"
+            }
+            fn max_rounds(&self) -> u32 {
+                10
+            }
+            fn context_budget(&self) -> usize {
+                480_000
+            }
+            fn streaming(&self) -> bool {
+                false
+            }
+            fn temperature(&self) -> f32 {
+                0.7
+            }
             async fn build_messages(&self, input: &str) -> Result<Vec<Message>, HubError> {
                 Ok(vec![Message::user(input)])
             }
@@ -791,7 +852,10 @@ mod tests {
 
         let provider = Arc::new(CancelAfterToolProvider { calls: call_count.clone() });
         let engine = ExecutionEngine::new(provider);
-        let strategy = CancellingStrategy { token: token_for_strategy, calls: call_count.clone() };
+        let strategy = CancellingStrategy {
+            token: token_for_strategy,
+            calls: call_count.clone(),
+        };
         let sink = NullSink;
         let (_mock, recorder) = make_mock_recorder();
 

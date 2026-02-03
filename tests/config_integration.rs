@@ -22,7 +22,6 @@ fn merge_uses_global_when_no_project() {
     let global = GlobalConfig::default();
     let merged = AppConfig::merge(global.clone(), None);
 
-    assert_eq!(merged.models, global.default_models);
     assert_eq!(merged.pool, global.pool);
 }
 
@@ -31,12 +30,11 @@ fn merge_partial_project_config() {
     let global = GlobalConfig::default();
     let project = ProjectConfig {
         autonomy: AutonomyLevel::Supervised,
-        // models is None, should use global
         ..Default::default()
     };
 
     let merged = AppConfig::merge(global.clone(), Some(project));
 
     assert_eq!(merged.autonomy, AutonomyLevel::Supervised);
-    assert_eq!(merged.models, global.default_models); // From global
+    assert_eq!(merged.pool, global.pool); // From global
 }

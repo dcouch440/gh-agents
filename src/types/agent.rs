@@ -19,19 +19,6 @@ impl Default for AgentId {
     }
 }
 
-/// Agent tier hierarchy
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, utoipa::ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum AgentTier {
-    /// Expensive AI for planning, review, decisions
-    Orchestrator,
-    /// Mid-tier AI for code implementation
-    #[default]
-    Worker,
-    /// Cheap AI for formatting, linting, boilerplate
-    Utility,
-}
-
 /// Agent operational status
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -109,7 +96,6 @@ impl Default for AgentPersona {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Agent {
     pub id: AgentId,
-    pub tier: AgentTier,
     pub persona: AgentPersona,
     pub model_config: ModelConfig,
     pub current_task: Option<super::task::TaskId>,
@@ -119,11 +105,6 @@ pub struct Agent {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn agent_tier_default_is_worker() {
-        assert_eq!(AgentTier::default(), AgentTier::Worker);
-    }
 
     #[test]
     fn agent_status_default_is_idle() {
