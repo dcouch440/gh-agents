@@ -4,7 +4,7 @@ use serde_json::{self, Value};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use super::agent::AgentId;
+use super::protocol::AgentId;
 use super::cluster::ClusterId;
 
 /// Unique identifier for a pipeline.

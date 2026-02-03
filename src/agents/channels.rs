@@ -4,7 +4,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use super::agent::AgentId;
+use super::protocol::AgentId;
 use super::roles::{CommunicationStyle, OutputFormat, RoleId};
 use crate::execution::ExecutionContext;
 use crate::types::TaskStatus;
@@ -81,9 +81,9 @@ pub struct TaskContext {
     /// When true, the agent receives only the `request_assistance` meta-tool
     /// instead of individual tools. Tool calls are routed to clusters.
     pub router_mode: bool,
-    /// Cluster routing context for dispatching tool calls to cluster agents.
-    /// Required when `router_mode` is true and tools have `cluster_id` set.
-    pub cluster_routing: Option<super::tool_router::ClusterRoutingContext>,
+    /// LEGACY: Cluster routing context removed (required pool/dispatcher).
+    /// Tool routing now handled by RouterStrategy in hub system.
+    pub cluster_routing: Option<()>,
     /// Raw context documents loaded from the agent_context junction table.
     /// Used by the True Context distiller to find `doc_type = "distiller"` templates.
     pub context_docs: Vec<crate::db::DocumentRow>,

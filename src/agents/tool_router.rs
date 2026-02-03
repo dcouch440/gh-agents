@@ -12,8 +12,9 @@ use serde_json::{json, Value};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use super::dispatcher::Dispatcher;
-use super::pool::AgentPool;
+// LEGACY imports removed (pool/dispatcher deleted):
+// use super::dispatcher::Dispatcher;
+// use super::pool::AgentPool;
 use super::router_agent::{self, ToolClusterIndex};
 use crate::db::ToolRow;
 use crate::llm::Tool;
@@ -47,7 +48,10 @@ pub fn request_assistance_tool() -> Tool {
     }
 }
 
-/// Context needed for cluster routing, passed from the executor.
+/// LEGACY STRUCT - NOT COMPILED
+/// This struct required pool/dispatcher which have been removed.
+/// Tool routing now handled by RouterStrategy.
+/*
 #[derive(Clone)]
 pub struct ClusterRoutingContext {
     pub cluster_index: Arc<ToolClusterIndex>,
@@ -61,11 +65,12 @@ impl std::fmt::Debug for ClusterRoutingContext {
         f.debug_struct("ClusterRoutingContext").finish_non_exhaustive()
     }
 }
+*/
 
-/// Execute a `request_assistance` tool call by routing to the appropriate tool/cluster.
-///
-/// For direct execution tools (cluster_id = None), delegates to `execute_execution_tool`.
-/// For cluster-routed tools, dispatches to a cluster agent and awaits the result.
+/// LEGACY FUNCTION - REMOVED
+/// This function required ClusterRoutingContext which has been removed.
+/// Tool routing now handled by RouterStrategy in hub system.
+/*
 pub async fn execute_request_assistance(
     input: &Value,
     tool_rows: &[ToolRow],
@@ -137,6 +142,7 @@ async fn route_to_cluster(cluster_id: Uuid, tool_name: &str, input: &Value, clus
     )
     .await
 }
+*/
 
 #[cfg(test)]
 mod tests {
