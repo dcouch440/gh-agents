@@ -231,6 +231,7 @@ pub async fn compose_prompt(
     prompt_template_repo: Option<&dyn crate::db::traits::PromptTemplateRepo>,
     doc_repo: Option<&dyn DocumentRepo>,
     workflow_repo: Option<&dyn WorkflowRepo>,
+    server_repo: &dyn crate::db::traits::ServerRepo,
     outputs: &HashMap<String, JsonValue>,
     prior_outputs: &HashMap<String, JsonValue>,
     for_each_element: Option<&JsonValue>,
@@ -262,14 +263,24 @@ pub async fn compose_prompt(
         resolve_variables(&raw_prompt, outputs, prior_outputs)
     };
 
-    // Append attached documents
     let mut full_prompt = prompt;
+
+    // Append agent context documents (global to agent)
+    if let Some(_d_repo) = doc_repo {
+        if let Ok(agent_docs) = server_repo.get_agent_context(step.agent_id).await {
+            for doc in &agent_docs {
+                full_prompt.push_str(&format!("\n\n---\n## {} (Agent Context)\n{}", doc.title, doc.content));
+            }
+        }
+    }
+
+    // Append step documents (specific to this workflow step)
     if let Some(wf_repo) = workflow_repo {
         if let Ok(step_docs) = wf_repo.list_step_documents(step.id).await {
             if let Some(d_repo) = doc_repo {
                 for sd in &step_docs {
                     if let Ok(Some(doc)) = d_repo.get_document(sd.document_id).await {
-                        full_prompt.push_str(&format!("\n\n---\n## {}\n{}", doc.title, doc.content));
+                        full_prompt.push_str(&format!("\n\n---\n## {} (Step Context)\n{}", doc.title, doc.content));
                     }
                 }
             }
@@ -690,6 +701,7 @@ pub async fn execute_workflow(
                     state.prompt_template_repo.as_deref(),
                     state.doc_repo.as_deref(),
                     state.workflow_repo.as_deref(),
+                    &*state.repo,
                     &current_outputs,
                     &ctx.prior_outputs,
                     Some(element),
@@ -746,6 +758,7 @@ pub async fn execute_workflow(
                 state.prompt_template_repo.as_deref(),
                 state.doc_repo.as_deref(),
                 state.workflow_repo.as_deref(),
+                &*state.repo,
                 &current_outputs,
                 &ctx.prior_outputs,
                 None,
@@ -1020,7 +1033,6 @@ fn broadcast_for_each_spawned(state: &AppState, run_id: Uuid, _stage_execution_i
 // ============================================================================
 // Tests
 // ============================================================================
-
 
 #[cfg(test)]
 mod tests;

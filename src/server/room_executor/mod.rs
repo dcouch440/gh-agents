@@ -239,9 +239,18 @@ pub async fn execute_room_turn(
             user_id: Some(user_id),
         });
 
-        // Build system prompt: agent base + room context
+        // Build system prompt: agent base + agent context documents + room context
         let room_context = build_room_context(room, &ma.member, &ma.agent, members);
-        let system_prompt = format!("{}\n\n{}", ma.agent.system_prompt, room_context);
+        let mut system_prompt = format!("{}\n\n{}", ma.agent.system_prompt, room_context);
+
+        // Append agent context documents (global knowledge for this agent)
+        if let Some(_doc_repo) = &state.doc_repo {
+            if let Ok(agent_docs) = state.repo.get_agent_context(selection.agent_id).await {
+                for doc in &agent_docs {
+                    system_prompt.push_str(&format!("\n\n---\n## {} (Agent Context)\n{}", doc.title, doc.content));
+                }
+            }
+        }
 
         // Build user prompt: transcript + user message + gatekeeper followup
         let user_prompt = build_speaker_prompt(user_message, &selection.followup_context, &transcript_block);
@@ -437,7 +446,6 @@ impl StreamSink for RoomStreamSink {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-
 
 #[cfg(test)]
 mod tests;

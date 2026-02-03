@@ -399,6 +399,5 @@ impl GrokResearchClient {
     }
 }
 
-
 #[cfg(test)]
 mod tests;

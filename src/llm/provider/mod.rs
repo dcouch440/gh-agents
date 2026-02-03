@@ -25,6 +25,5 @@ pub trait LLMProvider: Send + Sync {
     fn model_id(&self) -> &str;
 }
 
-
 #[cfg(test)]
 mod tests;

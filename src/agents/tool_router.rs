@@ -5,8 +5,8 @@
 //! resolves the request to a specific tool, finds the associated cluster,
 //! picks an agent, dispatches a sub-task, and returns the result.
 
-use serde_json::json;
 use crate::llm::Tool;
+use serde_json::json;
 
 /// Return the `request_assistance` meta-tool definition for router-mode agents.
 pub fn request_assistance_tool() -> Tool {

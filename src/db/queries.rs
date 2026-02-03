@@ -42,14 +42,13 @@ pub async fn insert_task(pool: &PgPool, user_id: UserId, task: &Task) -> Result<
 
 /// Get a task by ID
 pub async fn get_task(pool: &PgPool, user_id: UserId, id: &TaskId) -> Result<Option<Task>> {
-    let row: Option<TaskRow> = sqlx::query_as(
-        "SELECT id, slice_id, title, description, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks WHERE id = $1 AND user_id = $2",
-    )
-    .bind(id.0)
-    .bind(user_id.0)
-    .fetch_optional(pool)
-    .await
-    .context("Failed to fetch task")?;
+    let row: Option<TaskRow> =
+        sqlx::query_as("SELECT id, slice_id, title, description, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks WHERE id = $1 AND user_id = $2")
+            .bind(id.0)
+            .bind(user_id.0)
+            .fetch_optional(pool)
+            .await
+            .context("Failed to fetch task")?;
 
     match row {
         Some(row) => Ok(Some(row.into_task())),
@@ -77,7 +76,7 @@ pub async fn list_tasks_by_status(pool: &PgPool, status: TaskStatus) -> Result<V
     let status_str = format!("{:?}", status).to_lowercase();
 
     let rows: Vec<TaskRow> = sqlx::query_as(
-        "SELECT id, slice_id, title, description, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks WHERE status = $1 ORDER BY created_at DESC"
+        "SELECT id, slice_id, title, description, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks WHERE status = $1 ORDER BY created_at DESC",
     )
     .bind(&status_str)
     .fetch_all(pool)

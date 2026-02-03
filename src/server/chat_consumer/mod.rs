@@ -83,6 +83,5 @@ async fn handle_message(state: &AppState, provider: Arc<dyn LLMProvider + Send +
     Ok(())
 }
 
-
 #[cfg(test)]
 mod tests;

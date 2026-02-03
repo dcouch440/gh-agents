@@ -869,6 +869,5 @@ async fn execute_submit_ticket(input: &Value) -> Value {
     })
 }
 
-
 #[cfg(test)]
 mod tests;

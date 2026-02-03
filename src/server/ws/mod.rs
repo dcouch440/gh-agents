@@ -605,6 +605,5 @@ fn is_valid_channel(channel: &str) -> bool {
     matches!(channel, CHANNEL_FEED | CHANNEL_TASKS | CHANNEL_AGENTS | CHANNEL_SESSIONS | CHANNEL_PIPELINES | CHANNEL_ROUTING)
 }
 
-
 #[cfg(test)]
 mod tests;

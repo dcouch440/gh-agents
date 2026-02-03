@@ -512,6 +512,5 @@ impl LLMProvider for AnthropicClient {
     }
 }
 
-
 #[cfg(test)]
 mod tests;

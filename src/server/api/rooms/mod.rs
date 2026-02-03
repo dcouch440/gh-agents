@@ -255,18 +255,7 @@ pub async fn send_room_message(
     let user_message = request.content.clone();
     let user_id = auth.user_id.0;
     tokio::spawn(async move {
-        if let Err(e) = crate::server::room_executor::execute_room_turn(
-            &state_clone,
-            provider,
-            &room_clone,
-            &session_clone,
-            &members,
-            &user_message,
-            user_id,
-            None,
-        )
-        .await
-        {
+        if let Err(e) = crate::server::room_executor::execute_room_turn(&state_clone, provider, &room_clone, &session_clone, &members, &user_message, user_id, None).await {
             eprintln!("Room turn execution error: {}", e);
         }
     });

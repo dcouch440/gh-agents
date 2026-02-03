@@ -44,9 +44,6 @@ async fn router_on_complete_is_noop() {
         user_id: None,
     });
 
-    let usage = TokenUsage {
-        input_tokens: 100,
-        output_tokens: 50,
-    };
+    let usage = TokenUsage { input_tokens: 100, output_tokens: 50 };
     strategy.on_complete("{}", &usage).await.unwrap();
 }
