@@ -1,4 +1,4 @@
-import { useReducer } from 'react'
+import { useReducer, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '@/components/primitives'
 import { SplitPane } from '@/components/primitives/SplitPane'
@@ -8,9 +8,11 @@ import { EditorToolbar } from '@/components/primitives/EditorToolbar'
 import { ToggleGroup } from '@/components/primitives/ToggleGroup'
 import { ChatPanel } from '@/components/chat/ChatPanel'
 import { useSplitPane } from '@/hooks/useSplitPane'
+import { useSendSessionMessage } from '@/hooks/useChatMutations'
 import { api } from '@/api'
 import { ROUTES } from '@/constants'
 import type { ChatMessageData } from '@/components/chat/ChatPanel'
+import type { SSEEvent } from '@/api'
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -25,7 +27,10 @@ type WorkshopState = {
   editorMode: EditorMode
   messages: ChatMessageData[]
   streaming: boolean
+  sessionId: string | null
+  sessionLoading: boolean
   saving: boolean
+  dirty: boolean
   error: string | null
 }
 
@@ -37,7 +42,12 @@ type WorkshopAction =
   | { type: 'SET_TEMPERATURE'; value: number }
   | { type: 'SET_EDITOR_MODE'; value: EditorMode }
   | { type: 'ADD_MESSAGE'; message: ChatMessageData }
+  | { type: 'UPDATE_LAST_ASSISTANT'; content: string }
+  | { type: 'SET_STREAMING'; value: boolean }
+  | { type: 'SET_SESSION'; sessionId: string }
+  | { type: 'SET_SESSION_LOADING'; value: boolean }
   | { type: 'SET_SAVING'; value: boolean }
+  | { type: 'SET_DIRTY'; value: boolean }
   | { type: 'SET_ERROR'; value: string | null }
 
 const initialState: WorkshopState = {
@@ -49,34 +59,53 @@ const initialState: WorkshopState = {
   editorMode: 'edit',
   messages: [],
   streaming: false,
+  sessionId: null,
+  sessionLoading: true,
   saving: false,
+  dirty: false,
   error: null,
 }
 
 const reducer = (state: WorkshopState, action: WorkshopAction): WorkshopState => {
   switch (action.type) {
     case 'SET_NAME':
-      return { ...state, name: action.value }
+      return { ...state, name: action.value, dirty: true }
     case 'SET_SYSTEM_PROMPT':
-      return { ...state, systemPrompt: action.value }
+      return { ...state, systemPrompt: action.value, dirty: true }
     case 'SET_MODEL_ID':
-      return { ...state, modelId: action.value }
+      return { ...state, modelId: action.value, dirty: true }
     case 'SET_MAX_TOKENS':
-      return { ...state, maxTokens: action.value }
+      return { ...state, maxTokens: action.value, dirty: true }
     case 'SET_TEMPERATURE':
-      return { ...state, temperature: action.value }
+      return { ...state, temperature: action.value, dirty: true }
     case 'SET_EDITOR_MODE':
       return { ...state, editorMode: action.value }
     case 'ADD_MESSAGE':
       return { ...state, messages: [...state.messages, action.message] }
+    case 'UPDATE_LAST_ASSISTANT': {
+      const msgs = [...state.messages]
+      const lastIdx = msgs.length - 1
+      if (lastIdx >= 0 && msgs[lastIdx].role === 'assistant') {
+        msgs[lastIdx] = { ...msgs[lastIdx], content: action.content }
+      }
+      return { ...state, messages: msgs }
+    }
+    case 'SET_STREAMING':
+      return { ...state, streaming: action.value }
+    case 'SET_SESSION':
+      return { ...state, sessionId: action.sessionId, sessionLoading: false }
+    case 'SET_SESSION_LOADING':
+      return { ...state, sessionLoading: action.value }
     case 'SET_SAVING':
       return { ...state, saving: action.value }
+    case 'SET_DIRTY':
+      return { ...state, dirty: action.value }
     case 'SET_ERROR':
       return { ...state, error: action.value }
   }
 }
 
-// ── Editor mode toggle options ───────────────────────────────────────────────
+// ── Constants ────────────────────────────────────────────────────────────────
 
 const EDITOR_MODES = [
   { value: 'edit', label: 'Edit' },
@@ -89,14 +118,61 @@ function AgentWorkshopPage() {
   const navigate = useNavigate()
   const [state, dispatch] = useReducer(reducer, initialState)
   const { splitPercent, handleMouseDown } = useSplitPane({ initial: 40, min: 25, max: 75 })
+  const { send, streaming: sseStreaming } = useSendSessionMessage()
+  const contentRef = useRef('')
 
-  const handleSend = (message: string) => {
-    const id = `msg-${Date.now()}`
-    dispatch({ type: 'ADD_MESSAGE', message: { id, role: 'user', content: message } })
-    // TODO: Part 3 — wire to useSendSessionMessage for SSE streaming
-  }
+  // Create a session on mount
+  useEffect(() => {
+    let cancelled = false
+    api.sessions.create({ title: 'Agent Workshop' })
+      .then((session) => {
+        if (!cancelled) dispatch({ type: 'SET_SESSION', sessionId: session.id })
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          dispatch({ type: 'SET_SESSION_LOADING', value: false })
+          dispatch({ type: 'SET_ERROR', value: err instanceof Error ? err.message : 'Failed to create session' })
+        }
+      })
+    return () => { cancelled = true }
+  }, [])
 
-  const handleSave = () => {
+  // Warn on unsaved navigation
+  useEffect(() => {
+    if (!state.dirty) return
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault() }
+    window.addEventListener('beforeunload', handler)
+    return () => { window.removeEventListener('beforeunload', handler) }
+  }, [state.dirty])
+
+  const handleSend = useCallback((message: string) => {
+    if (!state.sessionId) return
+
+    // Add user message
+    const userMsgId = `msg-${Date.now()}`
+    dispatch({ type: 'ADD_MESSAGE', message: { id: userMsgId, role: 'user', content: message } })
+
+    // Add empty assistant message placeholder
+    const assistantMsgId = `msg-${Date.now() + 1}`
+    dispatch({ type: 'ADD_MESSAGE', message: { id: assistantMsgId, role: 'assistant', content: '' } })
+    dispatch({ type: 'SET_STREAMING', value: true })
+    contentRef.current = ''
+
+    const onEvent = (event: SSEEvent) => {
+      if (event.event === 'message' || event.event === 'content') {
+        contentRef.current += event.data
+        dispatch({ type: 'UPDATE_LAST_ASSISTANT', content: contentRef.current })
+      }
+    }
+
+    const onDone = () => {
+      dispatch({ type: 'SET_STREAMING', value: false })
+    }
+
+    void send(state.sessionId, { message }, onEvent, onDone)
+  }, [state.sessionId, send])
+
+  const handleSave = useCallback(() => {
     if (!state.name.trim()) return
     dispatch({ type: 'SET_SAVING', value: true })
     dispatch({ type: 'SET_ERROR', value: null })
@@ -107,12 +183,17 @@ function AgentWorkshopPage() {
       model_max_tokens: state.maxTokens,
       model_temperature: state.temperature,
     })
-      .then(() => { void navigate(ROUTES.AGENTS) })
+      .then(() => {
+        dispatch({ type: 'SET_DIRTY', value: false })
+        void navigate(ROUTES.AGENTS)
+      })
       .catch((err: unknown) => {
         dispatch({ type: 'SET_ERROR', value: err instanceof Error ? err.message : 'Failed to save agent' })
       })
       .finally(() => { dispatch({ type: 'SET_SAVING', value: false }) })
-  }
+  }, [state.name, state.systemPrompt, state.modelId, state.maxTokens, state.temperature, navigate])
+
+  const chatDisabled = state.saving || state.sessionLoading || !state.sessionId || sseStreaming
 
   return (
     <div className="workshop">
@@ -146,7 +227,7 @@ function AgentWorkshopPage() {
               messages={state.messages}
               onSend={handleSend}
               streaming={state.streaming}
-              disabled={state.saving}
+              disabled={chatDisabled}
             />
           }
           right={

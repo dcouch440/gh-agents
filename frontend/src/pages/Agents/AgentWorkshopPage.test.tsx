@@ -9,13 +9,28 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate }
 })
 
-const mockCreate = vi.hoisted(() => vi.fn())
+const { mockCreate, mockSessionCreate } = vi.hoisted(() => ({
+  mockCreate: vi.fn(),
+  mockSessionCreate: vi.fn(),
+}))
+
 vi.mock('@/api', () => ({
   api: {
-    agents: {
-      create: mockCreate,
-    },
+    agents: { create: mockCreate },
+    sessions: { create: mockSessionCreate },
   },
+}))
+
+const { mockSend } = vi.hoisted(() => ({ mockSend: vi.fn() }))
+
+vi.mock('@/hooks/useChatMutations', () => ({
+  useSendSessionMessage: () => ({
+    send: mockSend,
+    abort: vi.fn(),
+    loading: false,
+    streaming: false,
+    error: null,
+  }),
 }))
 
 vi.mock('@/components/primitives/CodeEditor', () => ({
@@ -39,6 +54,14 @@ const renderPage = () =>
 describe('AgentWorkshopPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockSessionCreate.mockResolvedValue({ id: 'session-001', title: 'Agent Workshop' })
+  })
+
+  it('creates a session on mount', async () => {
+    renderPage()
+    await waitFor(() => {
+      expect(mockSessionCreate).toHaveBeenCalledWith({ title: 'Agent Workshop' })
+    })
   })
 
   it('renders page header and split layout', () => {
@@ -102,6 +125,15 @@ describe('AgentWorkshopPage', () => {
     })
   })
 
+  it('displays error on session creation failure', async () => {
+    mockSessionCreate.mockRejectedValueOnce(new Error('Session failed'))
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('Session failed')).toBeInTheDocument()
+    })
+  })
+
   it('shows chat empty state', () => {
     renderPage()
     expect(screen.getByText('No messages yet')).toBeInTheDocument()
@@ -113,5 +145,29 @@ describe('AgentWorkshopPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
     expect(screen.queryByTestId('code-editor')).not.toBeInTheDocument()
+  })
+
+  it('sends a chat message after session is ready', async () => {
+    mockSend.mockResolvedValue('msg-id')
+    renderPage()
+
+    // Wait for session to be created
+    await waitFor(() => {
+      expect(mockSessionCreate).toHaveBeenCalled()
+    })
+
+    // Type and send a message via the chat input (the textarea inside chat-input)
+    const chatTextarea = document.querySelector('.chat-input__textarea') as HTMLTextAreaElement
+    fireEvent.change(chatTextarea, { target: { value: 'Hello agent' } })
+    fireEvent.keyDown(chatTextarea, { key: 'Enter' })
+
+    await waitFor(() => {
+      expect(mockSend).toHaveBeenCalledWith(
+        'session-001',
+        { message: 'Hello agent' },
+        expect.any(Function),
+        expect.any(Function),
+      )
+    })
   })
 })
