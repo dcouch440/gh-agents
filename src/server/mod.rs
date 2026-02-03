@@ -31,6 +31,7 @@ use axum::{
 };
 use sqlx::PgPool;
 use tower_governor::governor::GovernorConfigBuilder;
+use tower_governor::key_extractor::SmartIpKeyExtractor;
 use tower_governor::GovernorLayer;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
@@ -82,7 +83,12 @@ fn create_router(state: AppState) -> Router {
         build_public_routes()
     } else {
         // Rate limiter for auth routes: 10 requests per 60 seconds per IP
-        let auth_rate_limit = GovernorConfigBuilder::default().per_second(6).burst_size(10).finish().expect("valid governor config");
+        let auth_rate_limit = GovernorConfigBuilder::default()
+            .per_second(6)
+            .burst_size(10)
+            .key_extractor(SmartIpKeyExtractor)
+            .finish()
+            .expect("valid governor config");
         build_public_routes().layer(GovernorLayer {
             config: std::sync::Arc::new(auth_rate_limit),
         })
@@ -92,7 +98,12 @@ fn create_router(state: AppState) -> Router {
         build_protected_routes(state.clone())
     } else {
         // Rate limiter for general API routes: ~100 requests per minute per IP
-        let api_rate_limit = GovernorConfigBuilder::default().per_second(2).burst_size(50).finish().expect("valid governor config");
+        let api_rate_limit = GovernorConfigBuilder::default()
+            .per_second(2)
+            .burst_size(50)
+            .key_extractor(SmartIpKeyExtractor)
+            .finish()
+            .expect("valid governor config");
         build_protected_routes(state.clone()).layer(GovernorLayer {
             config: std::sync::Arc::new(api_rate_limit),
         })
