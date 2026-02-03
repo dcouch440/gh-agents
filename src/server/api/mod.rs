@@ -13,6 +13,7 @@ pub mod prompt_templates;
 pub mod results;
 pub mod sessions;
 pub mod tasks;
+pub mod tool_routers;
 pub mod tools;
 pub mod workflows;
 
@@ -92,6 +93,12 @@ pub use workflows::{
     remove_step_document, remove_workflow_edge, update_workflow, update_workflow_step, CreateStepRequest, CreateWorkflowRequest,
     EdgeRequest, EdgeResponse, StepDocumentRequest, StepDocumentResponse, UpdateStepRequest, UpdateWorkflowRequest,
     WorkflowResponse, WorkflowStepResponse,
+};
+
+// Re-export tool router handlers and types
+pub use tool_routers::{
+    create_tool_router, delete_tool_router, get_router_tools, get_tool_router, list_tool_routers, set_router_tools,
+    update_tool_router, CreateToolRouterRequest, SetRouterToolsRequest, UpdateToolRouterRequest,
 };
 
 use axum::{
@@ -209,200 +216,6 @@ pub async fn cancel_agent_execution(State(state): State<AppState>, _user: auth_u
     }
 
     Ok(Json(serde_json::json!({ "status": "cancelled" })))
-}
-
-// ============================================================================
-// Tool Router Endpoints
-// ============================================================================
-
-/// GET /api/tool-routers - List all tool routers for the authenticated user.
-#[utoipa::path(
-    get,
-    path = "/api/tool-routers",
-    tag = "Tool Routers",
-    security(("bearer_auth" = [])),
-    responses(
-        (status = 200, description = "List of tool routers")
-    )
-)]
-pub async fn list_tool_routers(State(state): State<AppState>, auth: auth_utils::AuthUser) -> Result<Json<Vec<crate::db::ToolRouterRow>>, StatusCode> {
-    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = repo.list_tool_routers(auth.user_id.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(rows))
-}
-
-/// Request body for creating a tool router.
-#[derive(Deserialize, utoipa::ToSchema)]
-pub struct CreateToolRouterRequest {
-    pub name: String,
-    pub description: Option<String>,
-    pub system_prompt: String,
-    pub model_id: String,
-}
-
-/// POST /api/tool-routers - Create a new tool router.
-#[utoipa::path(
-    post,
-    path = "/api/tool-routers",
-    tag = "Tool Routers",
-    security(("bearer_auth" = [])),
-    request_body = CreateToolRouterRequest,
-    responses(
-        (status = 201, description = "Tool router created"),
-        (status = 400, description = "Invalid request")
-    )
-)]
-pub async fn create_tool_router(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(request): Json<CreateToolRouterRequest>) -> Result<(StatusCode, Json<crate::db::ToolRouterRow>), StatusCode> {
-    if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let row = repo
-        .create_tool_router(auth.user_id.0, &request.name, request.description, &request.system_prompt, &request.model_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok((StatusCode::CREATED, Json(row)))
-}
-
-/// GET /api/tool-routers/:id - Get a tool router by ID.
-#[utoipa::path(
-    get,
-    path = "/api/tool-routers/{id}",
-    tag = "Tool Routers",
-    security(("bearer_auth" = [])),
-    params(("id" = Uuid, Path, description = "Tool router ID")),
-    responses(
-        (status = 200, description = "Tool router found"),
-        (status = 404, description = "Not found")
-    )
-)]
-pub async fn get_tool_router(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<crate::db::ToolRouterRow>, StatusCode> {
-    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let row = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
-    if row.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
-    }
-    Ok(Json(row))
-}
-
-/// Request body for updating a tool router.
-#[derive(Deserialize, utoipa::ToSchema)]
-pub struct UpdateToolRouterRequest {
-    pub name: Option<String>,
-    pub description: Option<String>,
-    pub system_prompt: Option<String>,
-    pub model_id: Option<String>,
-    pub is_active: Option<bool>,
-}
-
-/// PUT /api/tool-routers/:id - Update a tool router.
-#[utoipa::path(
-    put,
-    path = "/api/tool-routers/{id}",
-    tag = "Tool Routers",
-    security(("bearer_auth" = [])),
-    params(("id" = Uuid, Path, description = "Tool router ID")),
-    request_body = UpdateToolRouterRequest,
-    responses(
-        (status = 200, description = "Updated tool router"),
-        (status = 404, description = "Not found")
-    )
-)]
-pub async fn update_tool_router(
-    State(state): State<AppState>,
-    auth: auth_utils::AuthUser,
-    Path(id): Path<Uuid>,
-    Json(request): Json<UpdateToolRouterRequest>,
-) -> Result<Json<crate::db::ToolRouterRow>, StatusCode> {
-    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
-    if existing.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
-    }
-    if let Some(ref name) = request.name {
-        if name.trim().is_empty() || name.len() > MAX_TITLE_LENGTH {
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    }
-    let row = repo
-        .update_tool_router(id, request.name, request.description, request.system_prompt, request.model_id, request.is_active)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(row))
-}
-
-/// DELETE /api/tool-routers/:id - Delete a tool router.
-#[utoipa::path(
-    delete,
-    path = "/api/tool-routers/{id}",
-    tag = "Tool Routers",
-    security(("bearer_auth" = [])),
-    params(("id" = Uuid, Path, description = "Tool router ID")),
-    responses(
-        (status = 204, description = "Deleted successfully"),
-        (status = 404, description = "Not found")
-    )
-)]
-pub async fn delete_tool_router(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
-    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
-    if existing.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
-    }
-    repo.delete_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(StatusCode::NO_CONTENT)
-}
-
-/// GET /api/tool-routers/:id/tools - Get tools assigned to a router.
-#[utoipa::path(
-    get,
-    path = "/api/tool-routers/{id}/tools",
-    tag = "Tool Routers",
-    security(("bearer_auth" = [])),
-    params(("id" = Uuid, Path, description = "Tool router ID")),
-    responses(
-        (status = 200, description = "List of tools assigned to router", body = Vec<ToolResponse>),
-        (status = 404, description = "Router not found")
-    )
-)]
-pub async fn get_router_tools(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
-    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
-    if existing.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
-    }
-    let tools = repo.get_router_tools(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let tools = tools.into_iter().map(ToolResponse::from_row).collect();
-    Ok(Json(tools))
-}
-
-/// Request body for setting router tools.
-#[derive(Deserialize, utoipa::ToSchema)]
-pub struct SetRouterToolsRequest {
-    pub tool_ids: Vec<Uuid>,
-}
-
-/// PUT /api/tool-routers/:id/tools - Set tools for a router.
-#[utoipa::path(
-    put,
-    path = "/api/tool-routers/{id}/tools",
-    tag = "Tool Routers",
-    security(("bearer_auth" = [])),
-    params(("id" = Uuid, Path, description = "Tool router ID")),
-    request_body = SetRouterToolsRequest,
-    responses(
-        (status = 204, description = "Router tools updated"),
-        (status = 404, description = "Router not found")
-    )
-)]
-pub async fn set_router_tools(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>, Json(request): Json<SetRouterToolsRequest>) -> Result<StatusCode, StatusCode> {
-    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
-    if existing.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
-    }
-    repo.set_router_tools(id, &request.tool_ids).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(StatusCode::NO_CONTENT)
 }
 
 /// GET /api/sessions/:session_id/context - Get context entries for a session.
