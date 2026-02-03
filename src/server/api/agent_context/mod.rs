@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
 
-use super::DocumentListItem;
+use super::documents::DocumentListItem;
 
 /// Request to set agent context documents
 #[derive(Deserialize, utoipa::ToSchema)]
