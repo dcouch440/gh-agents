@@ -359,7 +359,12 @@ pub async fn delete_session(State(state): State<AppState>, auth: auth_utils::Aut
         (status = 404, description = "Not found")
     )
 )]
-pub async fn update_session(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(session_id): Path<Uuid>, Json(request): Json<UpdateSessionRequest>) -> Result<Json<SessionResponse>, StatusCode> {
+pub async fn update_session(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(session_id): Path<Uuid>,
+    Json(request): Json<UpdateSessionRequest>,
+) -> Result<Json<SessionResponse>, StatusCode> {
     let session = state.repo.get_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     if session.user_id != auth.user_id.0 {
@@ -473,7 +478,12 @@ pub async fn send_session_chat(
         (status = 404, description = "Session not found")
     )
 )]
-pub async fn get_session_history(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(session_id): Path<Uuid>, Query(query): Query<HistoryQuery>) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
+pub async fn get_session_history(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(session_id): Path<Uuid>,
+    Query(query): Query<HistoryQuery>,
+) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
     // Verify session ownership
     let session = state.repo.get_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
