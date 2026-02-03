@@ -2,6 +2,7 @@ import { AgentProvider, TaskProvider, PipelineProvider, FeedProvider, ChatProvid
 import { DashboardPage } from './pages/Dashboard/DashboardPage'
 import { AgentsPage } from './pages/Agents/AgentsPage'
 import { AgentDetailPage } from './pages/Agents/AgentDetailPage'
+import { CreateAgentPage } from './pages/Agents/CreateAgentPage'
 import { ChatPage } from './pages/Chat/ChatPage'
 import { ChatSessionPage } from './pages/Chat/ChatSessionPage'
 import { PipelinesPage } from './pages/Pipelines/PipelinesPage'
@@ -21,6 +22,14 @@ function AgentsWithProvider() {
   return (
     <AgentProvider>
       <AgentsPage />
+    </AgentProvider>
+  )
+}
+
+function CreateAgentWithProvider() {
+  return (
+    <AgentProvider>
+      <CreateAgentPage />
     </AgentProvider>
   )
 }
@@ -84,6 +93,7 @@ function ChatSessionWithProvider() {
 export {
   DashboardWithProviders,
   AgentsWithProvider,
+  CreateAgentWithProvider,
   AgentDetailWithProvider,
   ChatWithProvider,
   ChatSessionWithProvider,

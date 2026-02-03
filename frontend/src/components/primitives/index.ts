@@ -17,3 +17,6 @@ export type { PageHeaderProps } from './PageHeader'
 export type { CardProps } from './Card'
 export type { Column, SortDirection, DataTableProps } from './DataTable'
 export type { KeyValueProps } from './KeyValue'
+
+export { CodeEditor } from './CodeEditor'
+export type { CodeEditorProps } from './CodeEditor'
