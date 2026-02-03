@@ -15,8 +15,9 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use super::channels::{RoleContext, TaskAssignment, TaskConstraints, TaskContext};
-use super::dispatcher::Dispatcher;
-use super::pool::AgentPool;
+// LEGACY imports removed (pool/dispatcher deleted):
+// use super::dispatcher::Dispatcher;
+// use super::pool::AgentPool;
 use super::roles::{CommunicationStyle, OutputFormat, RoleId};
 use crate::db::{ClusterRow, ToolRow};
 
@@ -91,14 +92,12 @@ impl ToolClusterIndex {
     }
 }
 
-/// Route a tool call to a cluster agent and await the result.
-///
-/// 1. Finds the cluster owning `tool_name`
-/// 2. Builds a TaskAssignment scoped to that cluster's tools
-/// 3. Picks an available utility agent from the pool
-/// 4. Dispatches the task and waits for the result
-/// 5. Returns the agent's output as a JSON value
-pub async fn route_to_cluster_agent(
+/// LEGACY FUNCTION - REMOVED
+/// This function required the old pool/dispatcher system which has been removed.
+/// Tool routing now handled by RouterStrategy in hub/strategies/router.rs
+/*
+#[allow(dead_code)]
+async fn _legacy_route_to_cluster_agent(
     cluster: &ClusterEntry,
     tool_name: &str,
     request: &str,
@@ -217,6 +216,7 @@ pub async fn route_to_cluster_agent(
         )
     })
 }
+*/
 
 #[cfg(test)]
 mod tests {

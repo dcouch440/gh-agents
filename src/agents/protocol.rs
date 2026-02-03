@@ -7,12 +7,15 @@ use std::time::Duration;
 use tracing::warn;
 use uuid::Uuid;
 
-use super::agent::AgentId;
 use super::roles::RoleId;
 use crate::types::TaskStatus;
 
 /// Protocol version for compatibility checking
 pub const PROTOCOL_VERSION: &str = "1.0";
+
+/// Unique identifier for an agent (newtype wrapper around UUID)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct AgentId(pub Uuid);
 
 // =============================================================================
 // Slice 3.7.1: TaskAssignment Message Format
