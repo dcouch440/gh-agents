@@ -1875,7 +1875,9 @@ pub async fn auth_login(State(state): State<AppState>, Json(request): Json<Login
 /// Response for /api/auth/me
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct MeResponse {
-    pub user: String,
+    pub id: String,
+    pub email: String,
+    pub github_login: Option<String>,
     pub authenticated: bool,
     pub token_expires: usize,
 }
@@ -1892,12 +1894,22 @@ pub struct MeResponse {
         (status = 200, description = "Current user info", body = MeResponse)
     )
 )]
-pub async fn auth_me(auth: auth::AuthUser) -> Json<MeResponse> {
-    Json(MeResponse {
-        user: auth.user_id.to_string(),
+pub async fn auth_me(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<MeResponse>, StatusCode> {
+    let user_repo = state.user_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let user = user_repo
+        .get_user_by_id(auth.user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    Ok(Json(MeResponse {
+        id: user.id.to_string(),
+        email: user.email,
+        github_login: user.github_login,
         authenticated: true,
         token_expires: auth.claims.exp,
-    })
+    }))
 }
 
 // ============================================================================

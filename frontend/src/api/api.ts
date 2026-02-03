@@ -79,13 +79,13 @@ type WorkflowsResponse = ListResponse<Workflow>
 // ============================================================================
 
 const auth = {
-  login: (body: { username: string; password: string }, config?: RequestConfig) =>
-    baseApi.post<{ token: string }>(API.AUTH_LOGIN, body, config),
+  login: (body: { email: string; password: string }, config?: RequestConfig) =>
+    baseApi.post<{ token: string; expires_in: number }>(API.AUTH_LOGIN, body, config),
 
-  register: (body: { username: string; password: string }, config?: RequestConfig) =>
-    baseApi.post<{ token: string }>(API.AUTH_REGISTER, body, config),
+  register: (body: { email: string; password: string }, config?: RequestConfig) =>
+    baseApi.post<{ token: string; expires_in: number; user: { id: string; email: string; github_login: string | null } }>(API.AUTH_REGISTER, body, config),
 
-  me: (config?: RequestConfig) => baseApi.get<{ id: string; username: string }>(API.AUTH_ME, config),
+  me: (config?: RequestConfig) => baseApi.get<{ id: string; email: string; github_login: string | null; authenticated: boolean; token_expires: number }>(API.AUTH_ME, config),
 }
 
 const agents = {
