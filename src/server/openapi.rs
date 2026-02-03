@@ -66,8 +66,8 @@ use utoipa::OpenApi;
         super::api::tools::get_agent_tools,
         super::api::tools::set_agent_tools,
         // Agent Context
-        super::api::get_agent_context,
-        super::api::set_agent_context,
+        super::api::agent_context::get_agent_context,
+        super::api::agent_context::set_agent_context,
         // Config
         super::api::config::get_config,
         super::api::config::update_config,
@@ -165,8 +165,8 @@ use utoipa::OpenApi;
         super::api::tools::UpdateToolRequest,
         super::api::tools::SetAgentToolsRequest,
         super::api::tools::AgentToolsResponse,
-        super::api::SetAgentContextRequest,
-        super::api::AgentContextResponse,
+        super::api::agent_context::SetAgentContextRequest,
+        super::api::agent_context::AgentContextResponse,
         super::api::config::ConfigResponse,
         super::api::config::UpdatePoolRequest,
         super::api::config::UpdateConfigRequest,
