@@ -104,3 +104,4 @@ pub async fn set_agent_context(
         documents,
     }))
 }
+mod tests;

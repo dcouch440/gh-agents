@@ -266,3 +266,4 @@ pub async fn delete_document(State(state): State<AppState>, auth: auth_utils::Au
 
     Ok(StatusCode::NO_CONTENT)
 }
+mod tests;
