@@ -1,6 +1,6 @@
-//! Orchestrator consumer that processes chat messages via the unified hub.
+//! Chat consumer that processes chat messages via the unified hub.
 //!
-//! Reads messages from the orchestrator channel, calls run_chat() which uses
+//! Reads messages from the chat channel, calls run_chat() which uses
 //! the ExecutionEngine, and streams responses back through SSE.
 
 use std::sync::Arc;
@@ -10,22 +10,22 @@ use tracing::{error, info, warn};
 
 use crate::llm::{AnthropicClient, LLMProvider, RateLimitedProvider, RetryingProvider};
 
-use super::state::{AppState, OrchestratorMessage, StreamChunk};
+use super::state::{AppState, ConsumerMessage, StreamChunk};
 
-/// Spawn the orchestrator consumer as a background task.
-pub fn spawn_orchestrator(state: AppState, orchestrator_rx: mpsc::Receiver<OrchestratorMessage>) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(run_orchestrator(state, orchestrator_rx))
+/// Spawn the chat consumer as a background task.
+pub fn spawn_chat_consumer(state: AppState, chat_rx: mpsc::Receiver<ConsumerMessage>) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(run_chat_consumer(state, chat_rx))
 }
 
-async fn run_orchestrator(state: AppState, mut orchestrator_rx: mpsc::Receiver<OrchestratorMessage>) {
+async fn run_chat_consumer(state: AppState, mut chat_rx: mpsc::Receiver<ConsumerMessage>) {
     let provider: Arc<dyn LLMProvider + Send + Sync> = match AnthropicClient::from_env() {
         Ok(p) => {
-            info!("Orchestrator started with model: {}", p.model_id().to_string());
+            info!("Chat consumer started with model: {}", p.model_id().to_string());
             Arc::new(RetryingProvider::with_defaults(RateLimitedProvider::with_defaults(p)))
         }
         Err(e) => {
             error!("Failed to initialize LLM provider: {}. Chat will not work. Set ANTHROPIC_API_KEY.", e);
-            while let Some(msg) = orchestrator_rx.recv().await {
+            while let Some(msg) = chat_rx.recv().await {
                 state.send_stream_chunk(msg.id, StreamChunk::Error("LLM provider not configured. Set ANTHROPIC_API_KEY.".into())).await;
                 let cleanup_state = state.clone();
                 let mid = msg.id;
@@ -38,14 +38,14 @@ async fn run_orchestrator(state: AppState, mut orchestrator_rx: mpsc::Receiver<O
         }
     };
 
-    while let Some(msg) = orchestrator_rx.recv().await {
+    while let Some(msg) = chat_rx.recv().await {
         let state = state.clone();
         let provider = Arc::clone(&provider);
         let message_id = msg.id;
         tokio::spawn(async move {
             if let Err(e) = handle_message(&state, provider, msg).await {
-                warn!("Orchestrator message handling failed: {}", e);
-                state.send_stream_chunk(message_id, StreamChunk::Error(format!("Orchestrator error: {}", e))).await;
+                warn!("Chat message handling failed: {}", e);
+                state.send_stream_chunk(message_id, StreamChunk::Error(format!("Chat error: {}", e))).await;
                 let cleanup_state = state.clone();
                 tokio::spawn(async move {
                     tokio::time::sleep(std::time::Duration::from_secs(120)).await;
@@ -55,10 +55,10 @@ async fn run_orchestrator(state: AppState, mut orchestrator_rx: mpsc::Receiver<O
         });
     }
 
-    info!("Orchestrator consumer shutting down (channel closed)");
+    info!("Chat consumer shutting down (channel closed)");
 }
 
-async fn handle_message(state: &AppState, provider: Arc<dyn LLMProvider + Send + Sync>, msg: OrchestratorMessage) -> anyhow::Result<()> {
+async fn handle_message(state: &AppState, provider: Arc<dyn LLMProvider + Send + Sync>, msg: ConsumerMessage) -> anyhow::Result<()> {
     let message_id = msg.id;
     let agent_id = msg.agent_id.or(state.default_agent_id);
 
@@ -86,14 +86,14 @@ async fn handle_message(state: &AppState, provider: Arc<dyn LLMProvider + Send +
 mod tests {
     use super::*;
     use crate::db::traits::ServerRepo;
-    use crate::db::{ChatMessageRow, PipelineRow, PipelineStageRow, SessionRow};
+    use crate::db::{ConsumerMessageRow, PipelineRow, PipelineStageRow, SessionRow};
     use crate::types::{AppConfig, UserId};
     use chrono::{DateTime, Utc};
     use std::sync::Arc;
 
     /// Minimal in-memory repo for orchestrator tests
     struct TestRepo {
-        messages: std::sync::Mutex<Vec<ChatMessageRow>>,
+        messages: std::sync::Mutex<Vec<ConsumerMessageRow>>,
     }
 
     impl TestRepo {
@@ -119,7 +119,7 @@ mod tests {
             Ok(())
         }
         async fn insert_chat_message(&self, _user_id: UserId, id: Uuid, role: String, content: String) -> anyhow::Result<()> {
-            self.messages.lock().unwrap().push(ChatMessageRow {
+            self.messages.lock().unwrap().push(ConsumerMessageRow {
                 id,
                 role,
                 content,
@@ -127,7 +127,7 @@ mod tests {
             });
             Ok(())
         }
-        async fn get_chat_history(&self, _user_id: UserId, limit: u32, offset: u32) -> anyhow::Result<Vec<ChatMessageRow>> {
+        async fn get_chat_history(&self, _user_id: UserId, limit: u32, offset: u32) -> anyhow::Result<Vec<ConsumerMessageRow>> {
             let msgs = self.messages.lock().unwrap();
             Ok(msgs.iter().skip(offset as usize).take(limit as usize).cloned().collect())
         }
@@ -212,7 +212,7 @@ mod tests {
         async fn insert_session_message(&self, _user_id: UserId, _session_id: Uuid, _id: Uuid, _role: String, _content: String) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn get_session_history(&self, _session_id: Uuid, _limit: u32) -> anyhow::Result<Vec<ChatMessageRow>> {
+        async fn get_session_history(&self, _session_id: Uuid, _limit: u32) -> anyhow::Result<Vec<ConsumerMessageRow>> {
             Ok(vec![])
         }
         async fn update_session_title(&self, _session_id: Uuid, _title: &str) -> anyhow::Result<()> {
@@ -257,19 +257,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn orchestrator_sends_error_when_no_api_key() {
+    async fn chat_consumer_sends_error_when_no_api_key() {
         let saved = std::env::var(crate::constants::ENV_ANTHROPIC_API_KEY).ok();
         std::env::remove_var(crate::constants::ENV_ANTHROPIC_API_KEY);
 
         let repo: Arc<dyn ServerRepo> = Arc::new(TestRepo::new());
-        let (state, orchestrator_rx) = AppState::with_repo(None, repo, AppConfig::default());
+        let (state, chat_rx) = AppState::with_repo(None, repo, AppConfig::default());
 
         let msg_id = Uuid::new_v4();
         let (_buf, mut rx, _done) = state.get_response_stream(msg_id).await;
 
         state
-            .orchestrator_tx
-            .send(OrchestratorMessage {
+            .chat_tx
+            .send(ConsumerMessage {
                 id: msg_id,
                 user_id: UserId::new(),
                 session_id: None,
@@ -280,7 +280,7 @@ mod tests {
             .await
             .unwrap();
 
-        let _handle = spawn_orchestrator(state, orchestrator_rx);
+        let _handle = spawn_chat_consumer(state, chat_rx);
 
         let chunk = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
             .await

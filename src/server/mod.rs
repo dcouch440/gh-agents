@@ -7,10 +7,10 @@
 
 pub mod api;
 pub mod auth;
+pub mod chat_consumer;
 pub mod dag_executor;
 pub mod hub;
 pub mod openapi;
-pub mod orchestrator;
 pub mod room_executor;
 pub mod router_service;
 pub mod state;
@@ -53,10 +53,10 @@ pub use state::AppState;
 /// - Request tracing middleware
 /// - Graceful shutdown handling
 pub async fn start_server(db: PgPool, config: AppConfig, addr: SocketAddr) -> Result<()> {
-    let (state, orchestrator_rx) = AppState::new(db, config).await;
+    let (state, chat_rx) = AppState::new(db, config).await;
 
-    // Spawn the orchestrator consumer to process chat messages via LLM
-    let _orchestrator_handle = orchestrator::spawn_orchestrator(state.clone(), orchestrator_rx);
+    // Spawn the chat consumer to process chat messages via LLM
+    let _chat_consumer_handle = chat_consumer::spawn_chat_consumer(state.clone(), chat_rx);
 
     let app = create_router(state);
 
@@ -544,7 +544,7 @@ mod tests {
     fn setup_mock_state() -> AppState {
         let repo: Arc<dyn ServerRepo> = Arc::new(InMemoryServerRepo::new());
         let (state, rx) = AppState::with_repo(None, repo, AppConfig::default());
-        // Keep the receiver alive so orchestrator_tx.send() doesn't fail in tests
+        // Keep the receiver alive so chat_tx.send() doesn't fail in tests
         std::mem::forget(rx);
         state
     }

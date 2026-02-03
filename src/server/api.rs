@@ -15,7 +15,7 @@ use tokio::sync::broadcast;
 use uuid::Uuid;
 
 use super::auth;
-use super::state::{AppState, OrchestratorMessage, StreamChunk};
+use super::state::{AppState, ConsumerMessage, StreamChunk};
 use super::ws::SessionUpdate;
 use crate::constants::{MAX_CHAT_MESSAGE_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH};
 use crate::types::{AgentPoolConfig, Priority, Task};
@@ -896,10 +896,10 @@ pub async fn send_chat(State(state): State<AppState>, auth: auth::AuthUser, Json
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Queue message to orchestrator
+    // Queue message to chat consumer
     state
-        .orchestrator_tx
-        .send(OrchestratorMessage {
+        .chat_tx
+        .send(ConsumerMessage {
             id: message_id,
             user_id: auth.user_id,
             session_id: None,
@@ -1524,10 +1524,10 @@ pub async fn send_session_chat(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Queue to orchestrator with session context
+    // Queue to chat consumer with session context
     state
-        .orchestrator_tx
-        .send(OrchestratorMessage {
+        .chat_tx
+        .send(ConsumerMessage {
             id: message_id,
             user_id: auth.user_id,
             session_id: Some(session_id),
@@ -5330,7 +5330,7 @@ mod tests {
         let repo: Arc<dyn ServerRepo> = Arc::new(InMemoryServerRepo::new());
         let config = crate::types::AppConfig::default();
         let (mut state, rx) = AppState::with_repo(None, repo, config);
-        // Keep the receiver alive so orchestrator_tx.send() doesn't fail
+        // Keep the receiver alive so chat_tx.send() doesn't fail
         std::mem::forget(rx);
         if let Some(ur) = user_repo {
             state.user_repo = Some(ur);
