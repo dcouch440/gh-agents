@@ -6,7 +6,6 @@
 //! to the hub's `ExecutionEngine` instead of running its own react loop.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use anyhow::anyhow;
 use serde_json::Value as JsonValue;
@@ -15,7 +14,7 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::db::{AgentRow, WorkflowStepEdgeRow, WorkflowStepRow};
-use crate::llm::{LLMProvider, Tool};
+use crate::llm::Tool;
 use crate::server::state::AppState;
 
 use super::engine::ExecutionEngine;
@@ -196,7 +195,7 @@ async fn execute_single_step(
 
     // Store output in variable map
     if !output.variable_name.is_empty() {
-        if let Some(structured) = &output.structured_output {
+        if let Some(_structured) = &output.structured_output {
             // var_outputs is behind a mutable ref — safe to insert directly
             // (We'd need a different approach if we parallelize single steps)
         }

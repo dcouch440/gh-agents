@@ -3,11 +3,9 @@
 //! Handles interactive chat sessions: loads history, streams tokens, saves
 //! messages, auto-names sessions, and triggers compaction.
 
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use serde_json::Value;
-use tracing::{debug, error};
+use tracing::error;
 use uuid::Uuid;
 
 use crate::llm::{Message, Role, TokenUsage, Tool};
