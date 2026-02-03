@@ -4,8 +4,6 @@
 //! resolution, appends schema enforcement, executes execution tools (file ops,
 //! git, etc.), and records results to agent_executions.
 
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use serde_json::Value;
 use tracing::info;

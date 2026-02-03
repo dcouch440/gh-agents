@@ -15,10 +15,10 @@ use anyhow::{anyhow, Result};
 use chrono::Utc;
 use serde_json::Value as JsonValue;
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use crate::db::traits::{AgentExecutionRepo, DocumentRepo, TokenLedgerRepo, WorkflowRepo};
+use crate::db::traits::{DocumentRepo, WorkflowRepo};
 use crate::db::{AgentRow, WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::llm::{ContentBlock, LLMProvider, LLMRequest, Message, StopReason, Tool};
 
@@ -255,7 +255,7 @@ pub async fn compose_prompt(
     let prompt = if let Some(element) = for_each_element {
         // In for_each mode, `{var.content.$.name}` means current element's .name
         // We resolve $ by injecting the element into a special "__for_each_element" key
-        let mut augmented_outputs = outputs.clone();
+        let augmented_outputs = outputs.clone();
         // Replace $ references by pre-resolving them
         resolve_for_each_prompt(&raw_prompt, element, &augmented_outputs, prior_outputs)
     } else {
@@ -971,14 +971,14 @@ fn broadcast_agent_execution_update(
     state: &AppState,
     run_id: Uuid,
     ae_id: &Uuid,
-    step_id: Uuid,
+    _step_id: Uuid,
     agent_name: &str,
-    is_interactive: bool,
-    status: &str,
+    _is_interactive: bool,
+    _status: &str,
     structured_output: Option<&JsonValue>,
     input_tokens: i64,
     output_tokens: i64,
-    cost_usd: f32,
+    _cost_usd: f32,
 ) {
     // Use the pipeline broadcast channel for now
     let pipeline_id = Uuid::nil(); // Will be resolved by the frontend via run_id
@@ -999,7 +999,7 @@ fn broadcast_agent_execution_update(
     });
 }
 
-fn broadcast_for_each_spawned(state: &AppState, run_id: Uuid, stage_execution_id: Uuid, step_id: Uuid, agent_name: &str, count: usize) {
+fn broadcast_for_each_spawned(state: &AppState, run_id: Uuid, _stage_execution_id: Uuid, step_id: Uuid, agent_name: &str, count: usize) {
     state.broadcast_pipeline(PipelineUpdate {
         run_id,
         pipeline_id: Uuid::nil(),

@@ -5,7 +5,6 @@
 //! approval, mark completed, or mark failed.
 
 use chrono::Utc;
-use tracing::warn;
 use uuid::Uuid;
 
 use crate::server::state::AppState;

@@ -16,7 +16,7 @@ use crate::db::traits::{
     ToolRouterRepo, UserRepo, WorkflowRepo,
 };
 use crate::llm::AnthropicClient;
-use crate::types::{AgentPoolConfig, AppConfig, UserId};
+use crate::types::{AppConfig, UserId};
 
 use super::hub::PromptRegistry;
 use super::ws::{AgentUpdate, FeedUpdate, PipelineUpdate, RoomUpdateEvent, RoutingUpdate, SessionUpdate, TaskUpdate};
