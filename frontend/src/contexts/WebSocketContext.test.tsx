@@ -95,6 +95,7 @@ class MockWebSocket {
 }
 
 // @ts-expect-error - mocking WebSocket
+// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
 global.WebSocket = MockWebSocket
 
 // ── Test consumer ────────────────────────────────────────────────────────────
@@ -211,7 +212,7 @@ describe('WebSocketContext', () => {
       // Check subscription message was sent
       const sentMessages = (global as { mockWsSentMessages: string[] }).mockWsSentMessages
       expect(sentMessages.some((msg) => {
-        const parsed = JSON.parse(msg)
+        const parsed = JSON.parse(msg) as { type: string; channels: string[] }
         return parsed.type === 'subscribe' && parsed.channels.includes('feed')
       })).toBe(true)
 
@@ -308,7 +309,7 @@ describe('WebSocketContext', () => {
       })
 
       const sentMessages1 = [...(global as { mockWsSentMessages: string[] }).mockWsSentMessages]
-      expect(sentMessages1.some((msg) => JSON.parse(msg).channels?.includes('feed'))).toBe(true)
+      expect(sentMessages1.some((msg) => (JSON.parse(msg) as { channels?: string[] }).channels?.includes('feed'))).toBe(true)
 
       // Clear sent messages
       ;(global as { mockWsSentMessages: string[] }).mockWsSentMessages = []
@@ -332,7 +333,7 @@ describe('WebSocketContext', () => {
 
       // Check that subscription was re-sent
       const sentMessages2 = (global as { mockWsSentMessages: string[] }).mockWsSentMessages
-      expect(sentMessages2.some((msg) => JSON.parse(msg).channels?.includes('feed'))).toBe(true)
+      expect(sentMessages2.some((msg) => (JSON.parse(msg) as { channels?: string[] }).channels?.includes('feed'))).toBe(true)
 
       vi.useRealTimers()
     })

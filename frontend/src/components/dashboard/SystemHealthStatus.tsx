@@ -7,8 +7,8 @@ type SystemHealthStatusProps = {
 }
 
 function SystemHealthStatus({ config, agentStats, wsConnected }: SystemHealthStatusProps) {
-  const pool = agentStats
-  const poolStr = `${pool.orchestrators.total - pool.orchestrators.available}/${pool.orchestrators.max} orch  ${pool.workers.total - pool.workers.available}/${pool.workers.max} work  ${pool.utilities.total - pool.utilities.available}/${pool.utilities.max} util`
+  // AgentPoolStats structure is defined in types/agent.ts
+  const poolStr = `${agentStats.total - agentStats.available}/${agentStats.max} agents`
 
   return (
     <div className="sys-health">
