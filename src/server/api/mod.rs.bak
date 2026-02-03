@@ -11,6 +11,8 @@ pub mod documents;
 pub mod output_schemas;
 pub mod prompt_templates;
 pub mod results;
+pub mod rooms;
+pub mod session_context;
 pub mod sessions;
 pub mod tasks;
 pub mod tool_routers;
@@ -18,24 +20,17 @@ pub mod tools;
 pub mod workflows;
 
 // Re-export auth handlers and types
-pub use auth::{
-    auth_login, auth_me, auth_register, auth_setup, AuthTokenResponse, LoginRequest, LoginResponse, MeResponse, RegisterRequest, SetupRequest,
-    SetupResponse, UserResponse,
-};
+pub use auth::{auth_login, auth_me, auth_register, auth_setup, AuthTokenResponse, LoginRequest, LoginResponse, MeResponse, RegisterRequest, SetupRequest, SetupResponse, UserResponse};
 
 // Re-export task handlers and types
 pub use tasks::{create_task, get_task, list_tasks, CreateTaskRequest, TasksQuery};
 
 // Re-export agent handlers and types
-pub use agents::{
-    create_agent, delete_agent, get_agent, list_agents, update_agent, AgentPoolStats, AgentResponse, AgentsListResponse, CreateAgentRequest,
-    UpdateAgentRequest,
-};
+pub use agents::{create_agent, delete_agent, get_agent, list_agents, update_agent, AgentPoolStats, AgentResponse, AgentsListResponse, CreateAgentRequest, UpdateAgentRequest};
 
 // Re-export tool handlers and types
 pub use tools::{
-    create_tool, delete_tool, get_agent_tools, get_tool, list_tools, set_agent_tools, update_tool, AgentToolsResponse, CreateToolRequest,
-    SetAgentToolsRequest, ToolResponse, UpdateToolRequest,
+    create_tool, delete_tool, get_agent_tools, get_tool, list_tools, set_agent_tools, update_tool, AgentToolsResponse, CreateToolRequest, SetAgentToolsRequest, ToolResponse, UpdateToolRequest,
 };
 
 // Re-export config handlers and types
@@ -45,39 +40,34 @@ pub use config::{get_config, update_config, ConfigResponse, UpdateConfigRequest,
 pub use agent_context::{get_agent_context, set_agent_context, AgentContextResponse, SetAgentContextRequest};
 
 // Re-export chat handlers and types
-pub use chat::{
-    chat_stream, clear_chat_history, get_chat_history, send_chat, session_chat_stream, ChatMessage, ChatRequest, ChatResponse, HistoryQuery,
-};
+pub use chat::{chat_stream, clear_chat_history, get_chat_history, send_chat, session_chat_stream, ChatMessage, ChatRequest, ChatResponse, HistoryQuery};
 
 // Re-export document handlers and types
 pub use documents::{
-    create_document, delete_document, get_document, list_documents, search_documents, update_document, CreateDocumentRequest, DocumentListItem,
-    DocumentResponse, DocumentSearchQuery, UpdateDocumentRequest,
+    create_document, delete_document, get_document, list_documents, search_documents, update_document, CreateDocumentRequest, DocumentListItem, DocumentResponse, DocumentSearchQuery,
+    UpdateDocumentRequest,
 };
 
 // Re-export session handlers and types
 pub use sessions::{
-    create_agent_mode, create_session, delete_agent_mode, delete_session, get_session, get_session_history, list_agent_modes, list_modes,
-    list_sessions, send_session_chat, update_session, AgentModeResponse, CreateAgentModeRequest, CreateSessionRequest, ModeInfo, SessionResponse,
-    UpdateSessionRequest,
+    create_agent_mode, create_session, delete_agent_mode, delete_session, get_session, get_session_history, list_agent_modes, list_modes, list_sessions, send_session_chat, update_session,
+    AgentModeResponse, CreateAgentModeRequest, CreateSessionRequest, ModeInfo, SessionResponse, UpdateSessionRequest,
 };
 
 // Re-export output schema handlers and types
 pub use output_schemas::{
-    create_output_schema, delete_output_schema, get_output_schema, list_output_schemas, update_output_schema, CreateOutputSchemaRequest,
-    OutputSchemaResponse, UpdateOutputSchemaRequest,
+    create_output_schema, delete_output_schema, get_output_schema, list_output_schemas, update_output_schema, CreateOutputSchemaRequest, OutputSchemaResponse, UpdateOutputSchemaRequest,
 };
 
 // Re-export prompt template handlers and types
 pub use prompt_templates::{
-    create_prompt_template, delete_prompt_template, get_prompt_template, list_prompt_templates, update_prompt_template,
-    CreatePromptTemplateRequest, PromptTemplateResponse, UpdatePromptTemplateRequest,
+    create_prompt_template, delete_prompt_template, get_prompt_template, list_prompt_templates, update_prompt_template, CreatePromptTemplateRequest, PromptTemplateResponse,
+    UpdatePromptTemplateRequest,
 };
 
 // Re-export agent execution handlers and types
 pub use agent_executions::{
-    approve_execution, get_agent_execution, list_execution_messages, send_execution_message, AgentExecutionResponse,
-    ApproveExecutionRequest, ExecutionMessageResponse, SendMessageRequest,
+    approve_execution, get_agent_execution, list_execution_messages, send_execution_message, AgentExecutionResponse, ApproveExecutionRequest, ExecutionMessageResponse, SendMessageRequest,
 };
 
 // Re-export cost handlers and types
@@ -88,17 +78,25 @@ pub use results::{delete_result, get_result, list_results, ResultQuery, ResultRe
 
 // Re-export workflow handlers and types
 pub use workflows::{
-    add_step_document, add_workflow_edge, create_workflow, create_workflow_step, delete_workflow, delete_workflow_step,
-    get_workflow, get_workflow_step, list_step_documents, list_workflow_edges, list_workflow_steps, list_workflows,
-    remove_step_document, remove_workflow_edge, update_workflow, update_workflow_step, CreateStepRequest, CreateWorkflowRequest,
-    EdgeRequest, EdgeResponse, StepDocumentRequest, StepDocumentResponse, UpdateStepRequest, UpdateWorkflowRequest,
-    WorkflowResponse, WorkflowStepResponse,
+    add_step_document, add_workflow_edge, create_workflow, create_workflow_step, delete_workflow, delete_workflow_step, get_workflow, get_workflow_step, list_step_documents, list_workflow_edges,
+    list_workflow_steps, list_workflows, remove_step_document, remove_workflow_edge, update_workflow, update_workflow_step, CreateStepRequest, CreateWorkflowRequest, EdgeRequest, EdgeResponse,
+    StepDocumentRequest, StepDocumentResponse, UpdateStepRequest, UpdateWorkflowRequest, WorkflowResponse, WorkflowStepResponse,
 };
 
 // Re-export tool router handlers and types
 pub use tool_routers::{
-    create_tool_router, delete_tool_router, get_router_tools, get_tool_router, list_tool_routers, set_router_tools,
-    update_tool_router, CreateToolRouterRequest, SetRouterToolsRequest, UpdateToolRouterRequest,
+    create_tool_router, delete_tool_router, get_router_tools, get_tool_router, list_tool_routers, set_router_tools, update_tool_router, CreateToolRouterRequest, SetRouterToolsRequest,
+    UpdateToolRouterRequest,
+};
+
+// Re-export session context handlers
+pub use session_context::{get_session_context, list_session_requests};
+
+// Re-export room handlers and types
+pub use rooms::{
+    add_room_member, close_room_session, create_room, create_room_session, delete_room, get_room, get_room_session,
+    get_room_transcript, list_room_members, remove_room_member, send_room_message, set_room_members, update_room,
+    AddRoomMemberRequest, CreateRoomRequest, RoomMessageRequest, SetRoomMembersRequest, UpdateRoomRequest,
 };
 
 use axum::{
@@ -151,44 +149,6 @@ pub async fn health_check(State(state): State<AppState>) -> Json<HealthResponse>
 }
 
 // ============================================================================
-// Context Response Endpoint (F6)
-// ============================================================================
-
-/// Request body for submitting a context response to an agent
-#[derive(Deserialize, utoipa::ToSchema)]
-pub struct ContextResponseRequest {
-    pub agent_id: Uuid,
-    pub task_id: Uuid,
-    pub context: String,
-    pub files: Vec<FilePathContent>,
-}
-
-/// A file with path and content for context responses
-#[derive(Deserialize, utoipa::ToSchema)]
-pub struct FilePathContent {
-    pub path: String,
-    pub content: String,
-}
-
-/// POST /api/context-response - Submit a human context response to an agent
-#[utoipa::path(
-    post,
-    path = "/api/context-response",
-    tag = "Agent Context",
-    security(("bearer_auth" = [])),
-    request_body = ContextResponseRequest,
-    responses(
-        (status = 200, description = "Context response submitted"),
-        (status = 404, description = "Agent not found")
-    )
-)]
-pub async fn submit_context_response(_state: State<AppState>, _auth: auth_utils::AuthUser, _request: Json<ContextResponseRequest>) -> Result<StatusCode, StatusCode> {
-    // LEGACY: This endpoint used the old agent pool dispatcher which has been removed.
-    // Context is now provided through the workflow/session system.
-    Err(StatusCode::SERVICE_UNAVAILABLE)
-}
-
-// ============================================================================
 // Cancellation Endpoints
 // ============================================================================
 
@@ -218,233 +178,6 @@ pub async fn cancel_agent_execution(State(state): State<AppState>, _user: auth_u
     Ok(Json(serde_json::json!({ "status": "cancelled" })))
 }
 
-// ============================================================================
-// Tool Router Endpoints
-// ============================================================================
-
-/// GET /api/tool-routers - List all tool routers for the authenticated user.
-#[utoipa::path(
-    get,
-    path = "/api/tool-routers",
-    tag = "Tool Routers",
-    security(("bearer_auth" = [])),
-    responses(
-        (status = 200, description = "List of tool routers")
-    )
-)]
-pub async fn list_tool_routers(State(state): State<AppState>, auth: auth_utils::AuthUser) -> Result<Json<Vec<crate::db::ToolRouterRow>>, StatusCode> {
-    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = repo.list_tool_routers(auth.user_id.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(rows))
-}
-
-/// Request body for creating a tool router.
-#[derive(Deserialize, utoipa::ToSchema)]
-pub struct CreateToolRouterRequest {
-    pub name: String,
-    pub description: Option<String>,
-    pub system_prompt: String,
-    pub model_id: String,
-}
-
-/// POST /api/tool-routers - Create a new tool router.
-#[utoipa::path(
-    post,
-    path = "/api/tool-routers",
-    tag = "Tool Routers",
-    security(("bearer_auth" = [])),
-    request_body = CreateToolRouterRequest,
-    responses(
-        (status = 201, description = "Tool router created"),
-        (status = 400, description = "Invalid request")
-    )
-)]
-pub async fn create_tool_router(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(request): Json<CreateToolRouterRequest>) -> Result<(StatusCode, Json<crate::db::ToolRouterRow>), StatusCode> {
-    if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let row = repo
-        .create_tool_router(auth.user_id.0, &request.name, request.description, &request.system_prompt, &request.model_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok((StatusCode::CREATED, Json(row)))
-}
-
-/// GET /api/tool-routers/:id - Get a tool router by ID.
-#[utoipa::path(
-    get,
-    path = "/api/tool-routers/{id}",
-    tag = "Tool Routers",
-    security(("bearer_auth" = [])),
-    params(("id" = Uuid, Path, description = "Tool router ID")),
-    responses(
-        (status = 200, description = "Tool router found"),
-        (status = 404, description = "Not found")
-    )
-)]
-pub async fn get_tool_router(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<crate::db::ToolRouterRow>, StatusCode> {
-    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let row = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
-    if row.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
-    }
-    Ok(Json(row))
-}
-
-/// Request body for updating a tool router.
-#[derive(Deserialize, utoipa::ToSchema)]
-pub struct UpdateToolRouterRequest {
-    pub name: Option<String>,
-    pub description: Option<String>,
-    pub system_prompt: Option<String>,
-    pub model_id: Option<String>,
-    pub is_active: Option<bool>,
-}
-
-/// PUT /api/tool-routers/:id - Update a tool router.
-#[utoipa::path(
-    put,
-    path = "/api/tool-routers/{id}",
-    tag = "Tool Routers",
-    security(("bearer_auth" = [])),
-    params(("id" = Uuid, Path, description = "Tool router ID")),
-    request_body = UpdateToolRouterRequest,
-    responses(
-        (status = 200, description = "Updated tool router"),
-        (status = 404, description = "Not found")
-    )
-)]
-pub async fn update_tool_router(
-    State(state): State<AppState>,
-    auth: auth_utils::AuthUser,
-    Path(id): Path<Uuid>,
-    Json(request): Json<UpdateToolRouterRequest>,
-) -> Result<Json<crate::db::ToolRouterRow>, StatusCode> {
-    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
-    if existing.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
-    }
-    if let Some(ref name) = request.name {
-        if name.trim().is_empty() || name.len() > MAX_TITLE_LENGTH {
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    }
-    let row = repo
-        .update_tool_router(id, request.name, request.description, request.system_prompt, request.model_id, request.is_active)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(row))
-}
-
-/// DELETE /api/tool-routers/:id - Delete a tool router.
-#[utoipa::path(
-    delete,
-    path = "/api/tool-routers/{id}",
-    tag = "Tool Routers",
-    security(("bearer_auth" = [])),
-    params(("id" = Uuid, Path, description = "Tool router ID")),
-    responses(
-        (status = 204, description = "Deleted successfully"),
-        (status = 404, description = "Not found")
-    )
-)]
-pub async fn delete_tool_router(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
-    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
-    if existing.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
-    }
-    repo.delete_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(StatusCode::NO_CONTENT)
-}
-
-/// GET /api/tool-routers/:id/tools - Get tools assigned to a router.
-#[utoipa::path(
-    get,
-    path = "/api/tool-routers/{id}/tools",
-    tag = "Tool Routers",
-    security(("bearer_auth" = [])),
-    params(("id" = Uuid, Path, description = "Tool router ID")),
-    responses(
-        (status = 200, description = "List of tools assigned to router", body = Vec<ToolResponse>),
-        (status = 404, description = "Router not found")
-    )
-)]
-pub async fn get_router_tools(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
-    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
-    if existing.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
-    }
-    let tools = repo.get_router_tools(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let tools = tools.into_iter().map(ToolResponse::from_row).collect();
-    Ok(Json(tools))
-}
-
-/// Request body for setting router tools.
-#[derive(Deserialize, utoipa::ToSchema)]
-pub struct SetRouterToolsRequest {
-    pub tool_ids: Vec<Uuid>,
-}
-
-/// PUT /api/tool-routers/:id/tools - Set tools for a router.
-#[utoipa::path(
-    put,
-    path = "/api/tool-routers/{id}/tools",
-    tag = "Tool Routers",
-    security(("bearer_auth" = [])),
-    params(("id" = Uuid, Path, description = "Tool router ID")),
-    request_body = SetRouterToolsRequest,
-    responses(
-        (status = 204, description = "Router tools updated"),
-        (status = 404, description = "Router not found")
-    )
-)]
-pub async fn set_router_tools(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>, Json(request): Json<SetRouterToolsRequest>) -> Result<StatusCode, StatusCode> {
-    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
-    if existing.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
-    }
-    repo.set_router_tools(id, &request.tool_ids).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(StatusCode::NO_CONTENT)
-}
-
-/// GET /api/sessions/:session_id/context - Get context entries for a session.
-#[utoipa::path(
-    get,
-    path = "/api/sessions/{session_id}/context",
-    tag = "Session Context",
-    security(("bearer_auth" = [])),
-    params(("session_id" = Uuid, Path, description = "Session ID")),
-    responses(
-        (status = 200, description = "Session context entries")
-    )
-)]
-pub async fn get_session_context(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(session_id): Path<Uuid>) -> Result<Json<Vec<crate::db::ContextStoreRow>>, StatusCode> {
-    let repo = state.context_store_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = repo.get_active_context(session_id, 100).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(rows))
-}
-
-/// GET /api/sessions/:session_id/requests - List router requests for a session.
-#[utoipa::path(
-    get,
-    path = "/api/sessions/{session_id}/requests",
-    tag = "Session Context",
-    security(("bearer_auth" = [])),
-    params(("session_id" = Uuid, Path, description = "Session ID")),
-    responses(
-        (status = 200, description = "List of router requests")
-    )
-)]
-pub async fn list_session_requests(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(session_id): Path<Uuid>) -> Result<Json<Vec<crate::db::RouterRequestRow>>, StatusCode> {
-    let repo = state.router_request_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = repo.list_session_requests(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(rows))
-}
 // ============================================================================
 // Rooms
 // ============================================================================
