@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 use uuid::Uuid;
-
+use serde_json::json;
 use crate::db::{ClusterRow, ToolRow};
 
 /// Index mapping tool names to their owning clusters for fast lookup.
