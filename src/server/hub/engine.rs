@@ -67,7 +67,7 @@ impl ExecutionEngine {
 
         for round in 0..max_rounds {
             // Check cancellation
-            if cancel.map_or(false, |t| t.is_cancelled()) {
+            if cancel.is_some_and(|t| t.is_cancelled()) {
                 return Err(HubError::Cancelled);
             }
 
@@ -170,7 +170,7 @@ impl ExecutionEngine {
                     // Execute each tool and build result blocks
                     let mut result_blocks = Vec::new();
                     for (tool_id, tool_name, tool_input) in &tool_uses {
-                        if cancel.map_or(false, |t| t.is_cancelled()) {
+                        if cancel.is_some_and(|t| t.is_cancelled()) {
                             return Err(HubError::Cancelled);
                         }
                         debug!(round, tool = %tool_name, "executing tool");

@@ -58,7 +58,7 @@ pub async fn execute_workflow_via_engine(
         };
 
         // Check cancellation before each step
-        if cancel.map_or(false, |t| t.is_cancelled()) {
+        if cancel.is_some_and(|t| t.is_cancelled()) {
             return Err(HubError::Cancelled);
         }
 
@@ -235,7 +235,7 @@ async fn execute_for_each_step(
     let mut iteration_outputs = Vec::new();
 
     for (idx, element) in array.iter().enumerate() {
-        if cancel.map_or(false, |t| t.is_cancelled()) {
+        if cancel.is_some_and(|t| t.is_cancelled()) {
             return Err(HubError::Cancelled);
         }
         let _label = extract_for_each_label(element, label_field);

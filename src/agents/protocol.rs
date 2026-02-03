@@ -238,7 +238,7 @@ impl DelegationContext {
     pub fn delegated_from(parent_agent: AgentId, parent_role: RoleId, current_context: &DelegationContext) -> Self {
         let mut chain = current_context.delegation_chain.clone();
         chain.push(DelegationHop {
-            agent_id: parent_agent.clone(),
+            agent_id: parent_agent,
             role_id: parent_role.clone(),
             timestamp: Utc::now(),
         });

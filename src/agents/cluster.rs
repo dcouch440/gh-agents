@@ -96,7 +96,7 @@ impl ClusterManager {
         // Safety: cluster existence verified by contains_key check above
         let cluster = self.clusters.get_mut(&cluster_id).expect("cluster existence verified above");
         if !cluster.members.contains(&agent_id) {
-            cluster.members.push(agent_id.clone());
+            cluster.members.push(agent_id);
         }
         self.agent_to_cluster.insert(agent_id, cluster_id);
         Ok(())
