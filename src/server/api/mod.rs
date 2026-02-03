@@ -1,5 +1,6 @@
 //! REST API endpoint handlers
 
+pub mod agent_context;
 pub mod agents;
 pub mod auth;
 pub mod config;
@@ -29,6 +30,9 @@ pub use tools::{
 
 // Re-export config handlers and types
 pub use config::{get_config, update_config, ConfigResponse, UpdateConfigRequest, UpdatePoolRequest};
+
+// Re-export agent context handlers and types
+pub use agent_context::{get_agent_context, set_agent_context, AgentContextResponse, SetAgentContextRequest};
 
 use std::convert::Infallible;
 
@@ -83,100 +87,6 @@ pub async fn health_check(State(state): State<AppState>) -> Json<HealthResponse>
         version: env!("CARGO_PKG_VERSION").to_string(),
         db_connected,
     })
-}
-
-// ============================================================================
-// Agent Context (Document Linkage)
-// ============================================================================
-
-#[derive(Deserialize, utoipa::ToSchema)]
-pub struct SetAgentContextRequest {
-    pub document_ids: Vec<String>,
-}
-
-#[derive(Serialize, utoipa::ToSchema)]
-pub struct AgentContextResponse {
-    pub agent_id: String,
-    pub documents: Vec<DocumentListItem>,
-}
-
-/// Get context documents assigned to an agent
-#[utoipa::path(
-    get,
-    path = "/api/agents/{id}/context",
-    tag = "Agent Context",
-    security(("bearer_auth" = [])),
-    params(("id" = Uuid, Path, description = "Agent ID")),
-    responses(
-        (status = 200, description = "Agent context documents", body = AgentContextResponse)
-    )
-)]
-pub async fn get_agent_context(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(agent_id): Path<Uuid>) -> Result<Json<AgentContextResponse>, StatusCode> {
-    let rows = state.repo.get_agent_context(agent_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let documents = rows
-        .into_iter()
-        .map(|row| DocumentListItem {
-            id: row.id,
-            title: row.title,
-            summary: row.summary,
-            ref_tag: row.ref_tag,
-            tags: row.tags,
-            doc_type: row.doc_type,
-            updated_at: row.updated_at,
-        })
-        .collect();
-
-    Ok(Json(AgentContextResponse {
-        agent_id: agent_id.to_string(),
-        documents,
-    }))
-}
-
-/// Set context documents for an agent (replaces existing)
-#[utoipa::path(
-    put,
-    path = "/api/agents/{id}/context",
-    tag = "Agent Context",
-    security(("bearer_auth" = [])),
-    params(("id" = Uuid, Path, description = "Agent ID")),
-    request_body = SetAgentContextRequest,
-    responses(
-        (status = 200, description = "Agent context updated", body = AgentContextResponse),
-        (status = 400, description = "Invalid document IDs")
-    )
-)]
-pub async fn set_agent_context(
-    State(state): State<AppState>,
-    _auth: auth_utils::AuthUser,
-    Path(agent_id): Path<Uuid>,
-    Json(request): Json<SetAgentContextRequest>,
-) -> Result<Json<AgentContextResponse>, StatusCode> {
-    let document_ids: Result<Vec<Uuid>, _> = request.document_ids.iter().map(|s| Uuid::parse_str(s)).collect();
-
-    let document_ids = document_ids.map_err(|_| StatusCode::BAD_REQUEST)?;
-
-    state.repo.set_agent_context(agent_id, document_ids).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let rows = state.repo.get_agent_context(agent_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let documents = rows
-        .into_iter()
-        .map(|row| DocumentListItem {
-            id: row.id,
-            title: row.title,
-            summary: row.summary,
-            ref_tag: row.ref_tag,
-            tags: row.tags,
-            doc_type: row.doc_type,
-            updated_at: row.updated_at,
-        })
-        .collect();
-
-    Ok(Json(AgentContextResponse {
-        agent_id: agent_id.to_string(),
-        documents,
-    }))
 }
 
 // ============================================================================
