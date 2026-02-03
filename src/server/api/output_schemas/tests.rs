@@ -1,6 +1,1 @@
-//! Tests for output schema endpoints
-
-#[cfg(test)]
-mod tests {
-    // Output schema tests will be added here as they're extracted from api/mod.rs
-}
+// Output schema tests will be added here as they're extracted from api/mod.rs
