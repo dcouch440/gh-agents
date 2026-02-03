@@ -69,8 +69,8 @@ use utoipa::OpenApi;
         super::api::get_agent_context,
         super::api::set_agent_context,
         // Config
-        super::api::get_config,
-        super::api::update_config,
+        super::api::config::get_config,
+        super::api::config::update_config,
         // Chat
         super::api::send_chat,
         super::api::get_chat_history,
@@ -167,9 +167,9 @@ use utoipa::OpenApi;
         super::api::tools::AgentToolsResponse,
         super::api::SetAgentContextRequest,
         super::api::AgentContextResponse,
-        super::api::ConfigResponse,
-        super::api::UpdatePoolRequest,
-        super::api::UpdateConfigRequest,
+        super::api::config::ConfigResponse,
+        super::api::config::UpdatePoolRequest,
+        super::api::config::UpdateConfigRequest,
         super::api::ChatRequest,
         super::api::ChatResponse,
         super::api::HistoryQuery,
