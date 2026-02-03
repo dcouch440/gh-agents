@@ -12,11 +12,6 @@ vi.mock('@/api', () => ({
   createSSEStream: mockCreateSSE,
 }))
 
-vi.mock('@/constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
-  return { ...actual, USE_MOCK_DATA: false }
-})
-
 describe('useChatMutations', () => {
   beforeEach(() => {
     vi.clearAllMocks()

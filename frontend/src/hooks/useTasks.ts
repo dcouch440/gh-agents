@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { Task, TaskStatus } from '@/types/task'
-import { API, USE_MOCK_DATA } from '@/constants'
-import { mock } from '@/mock'
+import { API } from '@/constants'
 import { api } from '@/api'
 
 const useTasks = (statusFilter?: TaskStatus) => {
@@ -13,10 +12,11 @@ const useTasks = (statusFilter?: TaskStatus) => {
     setLoading(true)
     setError(null)
     try {
-      const data = USE_MOCK_DATA
-        ? await mock.getTasks()
-        : await api.get<Task[]>(statusFilter ? `${API.TASKS}?status=${statusFilter}` : API.TASKS)
-      setTasks(statusFilter && USE_MOCK_DATA ? data.filter((t) => t.status === statusFilter) : data)
+      const data = statusFilter
+        ? await api.get<Task[]>(`${API.TASKS}?status=${statusFilter}`)
+        : await api.tasks.list()
+      const items = Array.isArray(data) ? data : data.items
+      setTasks(items)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load tasks')
     } finally {
@@ -54,9 +54,7 @@ const useTask = (id: string | null) => {
       setLoading(true)
       setError(null)
       try {
-        const data = USE_MOCK_DATA
-          ? await mock.getTask(id)
-          : await api.get<Task>(API.TASK(id))
+        const data = await api.tasks.get(id)
         if (!cancelled) setTask(data)
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load task')

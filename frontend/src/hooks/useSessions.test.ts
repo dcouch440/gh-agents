@@ -2,14 +2,18 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { useSessions, useChatHistory, useModes } from './useSessions'
 import { mockSession, mockChatMessage, mockMode } from '@/test/fixtures'
 
-const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }))
+const { mockSessionsList, mockGetHistory, mockModesList } = vi.hoisted(() => ({
+  mockSessionsList: vi.fn(),
+  mockGetHistory: vi.fn(),
+  mockModesList: vi.fn(),
+}))
 
-vi.mock('@/api', () => ({ api: { get: mockGet } }))
-vi.mock('@/constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
-  return { ...actual, USE_MOCK_DATA: false }
-})
-
+vi.mock('@/api', () => ({
+  api: {
+    sessions: { list: mockSessionsList, getHistory: mockGetHistory },
+    modes: { list: mockModesList },
+  },
+}))
 describe('useSessions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -17,7 +21,7 @@ describe('useSessions', () => {
 
   describe('useSessions', () => {
     it('fetches and returns sessions', async () => {
-      mockGet.mockResolvedValue([mockSession])
+      mockSessionsList.mockResolvedValue({ items: [mockSession] })
       const { result } = renderHook(() => useSessions())
 
       await waitFor(() => {
@@ -28,7 +32,7 @@ describe('useSessions', () => {
     })
 
     it('sets error on failure', async () => {
-      mockGet.mockRejectedValue(new Error('Failed'))
+      mockSessionsList.mockRejectedValue(new Error('Failed'))
       const { result } = renderHook(() => useSessions())
 
       await waitFor(() => {
@@ -41,7 +45,7 @@ describe('useSessions', () => {
 
   describe('useChatHistory', () => {
     it('fetches messages for a session', async () => {
-      mockGet.mockResolvedValue([mockChatMessage])
+      mockGetHistory.mockResolvedValue({ messages: [mockChatMessage] })
       const { result } = renderHook(() => useChatHistory('session-001'))
 
       await waitFor(() => {
@@ -49,7 +53,7 @@ describe('useSessions', () => {
       })
 
       expect(result.current.messages).toEqual([mockChatMessage])
-      expect(mockGet).toHaveBeenCalledWith('/sessions/session-001/history')
+      expect(mockGetHistory).toHaveBeenCalledWith('session-001')
     })
 
     it('returns empty when sessionId is null', async () => {
@@ -60,13 +64,13 @@ describe('useSessions', () => {
       })
 
       expect(result.current.messages).toEqual([])
-      expect(mockGet).not.toHaveBeenCalled()
+      expect(mockGetHistory).not.toHaveBeenCalled()
     })
   })
 
   describe('useModes', () => {
     it('fetches and returns modes', async () => {
-      mockGet.mockResolvedValue([mockMode])
+      mockModesList.mockResolvedValue([mockMode])
       const { result } = renderHook(() => useModes())
 
       await waitFor(() => {

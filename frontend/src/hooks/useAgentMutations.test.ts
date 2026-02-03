@@ -11,11 +11,6 @@ const { mockGet, mockPost, mockPatch, mockDel, mockPut } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/api', () => ({ api: { get: mockGet, post: mockPost, patch: mockPatch, del: mockDel, put: mockPut } }))
-vi.mock('@/constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
-  return { ...actual, USE_MOCK_DATA: false }
-})
-
 describe('useAgentMutations', () => {
   beforeEach(() => {
     vi.clearAllMocks()

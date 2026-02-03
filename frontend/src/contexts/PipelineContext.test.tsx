@@ -17,16 +17,14 @@ vi.mock('@/hooks/useWebSocket', () => ({
   }),
 }))
 
-const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }))
-
-vi.mock('@/api', () => ({
-  api: { get: mockGet },
+const { mockPipelinesList, mockRunsList } = vi.hoisted(() => ({
+  mockPipelinesList: vi.fn(),
+  mockRunsList: vi.fn(),
 }))
 
-vi.mock('@/constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
-  return { ...actual, USE_MOCK_DATA: false }
-})
+vi.mock('@/api', () => ({
+  api: { pipelines: { list: mockPipelinesList }, pipelineRuns: { list: mockRunsList } },
+}))
 
 // ── Test consumer ────────────────────────────────────────────────────────────
 
@@ -53,11 +51,8 @@ describe('PipelineContext', () => {
     beforeEach(() => {
       wsHandler = null
       vi.clearAllMocks()
-      // First call returns pipelines, second returns runs
-      mockGet.mockImplementation((url: string) => {
-        if (url.includes('pipeline-runs')) return Promise.resolve([mockPipelineRun])
-        return Promise.resolve([mockPipeline])
-      })
+      mockPipelinesList.mockResolvedValue({ items: [mockPipeline] })
+      mockRunsList.mockResolvedValue({ items: [mockPipelineRun] })
     })
 
     it('fetches pipelines and runs on mount', async () => {
@@ -77,10 +72,8 @@ describe('PipelineContext', () => {
     })
 
     it('reloads runs on WS pipeline event', async () => {
-      mockGet.mockImplementation((url: string) => {
-        if (url.includes('pipeline-runs')) return Promise.resolve([])
-        return Promise.resolve([mockPipeline])
-      })
+      mockPipelinesList.mockResolvedValue({ items: [mockPipeline] })
+      mockRunsList.mockResolvedValue({ items: [] })
 
       render(
         <PipelineProvider>
@@ -93,10 +86,7 @@ describe('PipelineContext', () => {
       })
 
       // Now update mock to return a run and trigger WS event
-      mockGet.mockImplementation((url: string) => {
-        if (url.includes('pipeline-runs')) return Promise.resolve([mockPipelineRun])
-        return Promise.resolve([mockPipeline])
-      })
+      mockRunsList.mockResolvedValue({ items: [mockPipelineRun] })
 
       // Backend sends pipeline update event (partial data, not a PipelineRun)
       wsHandler?.({ run_id: 'run-001', pipeline_id: 'pipeline-001', event: 'stage_started' })

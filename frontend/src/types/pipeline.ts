@@ -37,15 +37,14 @@ type Pipeline = {
 type PipelineRun = {
   id: string
   pipeline_id: string
-  user_id: string
   status: string
   initial_task: string
   stage_outputs: Record<string, unknown> | null
   current_stage: number
   started_at: string
   completed_at: string | null
-  total_input_tokens: number | null
-  total_output_tokens: number | null
+  total_input_tokens: number
+  total_output_tokens: number
 }
 
 type StageExecution = {

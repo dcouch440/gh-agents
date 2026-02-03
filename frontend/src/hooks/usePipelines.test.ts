@@ -2,14 +2,20 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { usePipelines, usePipelineRuns, usePipelineRun } from './usePipelines'
 import { mockPipeline, mockPipelineRun, mockStageExecution } from '@/test/fixtures'
 
-const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }))
+const { mockPipelinesList, mockRunsList, mockRunGet, mockGet } = vi.hoisted(() => ({
+  mockPipelinesList: vi.fn(),
+  mockRunsList: vi.fn(),
+  mockRunGet: vi.fn(),
+  mockGet: vi.fn(),
+}))
 
-vi.mock('@/api', () => ({ api: { get: mockGet } }))
-vi.mock('@/constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
-  return { ...actual, USE_MOCK_DATA: false }
-})
-
+vi.mock('@/api', () => ({
+  api: {
+    pipelines: { list: mockPipelinesList },
+    pipelineRuns: { list: mockRunsList, get: mockRunGet },
+    get: mockGet,
+  },
+}))
 describe('usePipelines', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -17,7 +23,7 @@ describe('usePipelines', () => {
 
   describe('usePipelines', () => {
     it('fetches and returns pipelines', async () => {
-      mockGet.mockResolvedValue([mockPipeline])
+      mockPipelinesList.mockResolvedValue({ items: [mockPipeline] })
       const { result } = renderHook(() => usePipelines())
 
       await waitFor(() => {
@@ -28,7 +34,7 @@ describe('usePipelines', () => {
     })
 
     it('sets error on failure', async () => {
-      mockGet.mockRejectedValue(new Error('Failed'))
+      mockPipelinesList.mockRejectedValue(new Error('Failed'))
       const { result } = renderHook(() => usePipelines())
 
       await waitFor(() => {
@@ -41,7 +47,7 @@ describe('usePipelines', () => {
 
   describe('usePipelineRuns', () => {
     it('fetches runs without filter', async () => {
-      mockGet.mockResolvedValue([mockPipelineRun])
+      mockRunsList.mockResolvedValue({ items: [mockPipelineRun] })
       const { result } = renderHook(() => usePipelineRuns())
 
       await waitFor(() => {
@@ -49,7 +55,7 @@ describe('usePipelines', () => {
       })
 
       expect(result.current.runs).toEqual([mockPipelineRun])
-      expect(mockGet).toHaveBeenCalledWith('/pipeline-runs')
+      expect(mockRunsList).toHaveBeenCalled()
     })
 
     it('fetches runs with pipeline id filter', async () => {
@@ -64,7 +70,7 @@ describe('usePipelines', () => {
 
   describe('usePipelineRun', () => {
     it('fetches run with stage executions', async () => {
-      mockGet.mockResolvedValue({ ...mockPipelineRun, stage_executions: [mockStageExecution] })
+      mockRunGet.mockResolvedValue({ ...mockPipelineRun, stage_executions: [mockStageExecution] })
       const { result } = renderHook(() => usePipelineRun('run-001'))
 
       await waitFor(() => {
@@ -84,7 +90,7 @@ describe('usePipelines', () => {
 
       expect(result.current.run).toBeNull()
       expect(result.current.executions).toEqual([])
-      expect(mockGet).not.toHaveBeenCalled()
+      expect(mockRunGet).not.toHaveBeenCalled()
     })
   })
 })

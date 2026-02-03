@@ -1,5 +1,5 @@
 import { createContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react'
-import { ACTION, USE_MOCK_DATA, API } from '@/constants'
+import { ACTION } from '@/constants'
 import { api } from '@/api'
 import type { Result } from '@/types/result'
 
@@ -49,9 +49,8 @@ function ResultProvider({ children }: { children: ReactNode }) {
   const load = useCallback(async () => {
     dispatch({ type: ACTION.SET_LOADING, loading: true })
     try {
-      const results = USE_MOCK_DATA
-        ? []
-        : await api.get<Result[]>(API.RESULTS)
+      const data = await api.results.list()
+      const results = data.items
       if (mountedRef.current) dispatch({ type: ACTION.SET_ALL, results })
     } catch (e) {
       if (mountedRef.current) dispatch({ type: ACTION.SET_ERROR, error: e instanceof Error ? e.message : 'Failed to load results' })

@@ -1,5 +1,5 @@
 import { createContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react'
-import { ACTION, USE_MOCK_DATA, API } from '@/constants'
+import { ACTION } from '@/constants'
 import { api } from '@/api'
 import type { Workflow, WorkflowStep, WorkflowStepEdge, StepDocument } from '@/types/workflow'
 
@@ -78,9 +78,8 @@ function WorkflowProvider({ children }: { children: ReactNode }) {
   const load = useCallback(async () => {
     dispatch({ type: ACTION.SET_LOADING, loading: true })
     try {
-      const workflows = USE_MOCK_DATA
-        ? []
-        : await api.get<Workflow[]>(API.WORKFLOWS)
+      const data = await api.workflows.list()
+      const workflows = data.items
       if (mountedRef.current) dispatch({ type: ACTION.SET_ALL, workflows })
     } catch (e) {
       if (mountedRef.current) dispatch({ type: ACTION.SET_ERROR, error: e instanceof Error ? e.message : 'Failed to load workflows' })
@@ -90,14 +89,14 @@ function WorkflowProvider({ children }: { children: ReactNode }) {
   const loadWorkflow = useCallback(async (id: string) => {
     try {
       const [workflow, steps, edges] = await Promise.all([
-        api.get<Workflow>(API.WORKFLOW(id)),
-        api.get<WorkflowStep[]>(API.WORKFLOW_STEPS(id)),
-        api.get<WorkflowStepEdge[]>(API.WORKFLOW_EDGES(id)),
+        api.workflows.get(id),
+        api.workflows.listSteps(id),
+        api.workflows.listEdges(id),
       ])
 
       // Collect step documents for all steps concurrently
       const docArrays = await Promise.all(
-        steps.map((s) => api.get<StepDocument[]>(API.STEP_DOCUMENTS(id, s.id))),
+        steps.map((s) => api.workflows.listStepDocuments(id, s.id)),
       )
       const stepDocuments = docArrays.flat()
 

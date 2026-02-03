@@ -1,10 +1,9 @@
 type Result = {
   id: string
-  pipeline_run_id: string
-  stage_number: number
-  agent_execution_id: string | null
-  output: string | null
-  structured_output: Record<string, unknown> | null
+  agent_execution_id: string
+  output_schema_id: string | null
+  name: string
+  data: Record<string, unknown>
   created_at: string
 }
 

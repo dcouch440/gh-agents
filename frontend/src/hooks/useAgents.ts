@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Agent, AgentsResponse } from '@/types/agent'
-import { API, USE_MOCK_DATA } from '@/constants'
-import { mock } from '@/mock'
+import type { Agent } from '@/types/agent'
 import { api } from '@/api'
 
 const useAgents = () => {
@@ -13,10 +11,8 @@ const useAgents = () => {
     setLoading(true)
     setError(null)
     try {
-      const data = USE_MOCK_DATA
-        ? await mock.getAgents()
-        : (await api.get<AgentsResponse>(API.AGENTS)).agents
-      setAgents(data)
+      const data = await api.agents.list()
+      setAgents(data.agents)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load agents')
     } finally {
@@ -54,9 +50,7 @@ const useAgent = (id: string | null) => {
       setLoading(true)
       setError(null)
       try {
-        const data = USE_MOCK_DATA
-          ? await mock.getAgent(id)
-          : await api.get<Agent>(API.AGENT(id))
+        const data = await api.agents.get(id)
         if (!cancelled) setAgent(data)
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load agent')

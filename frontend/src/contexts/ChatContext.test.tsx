@@ -17,16 +17,11 @@ vi.mock('@/hooks/useWebSocket', () => ({
   }),
 }))
 
-const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }))
+const { mockGetHistory } = vi.hoisted(() => ({ mockGetHistory: vi.fn() }))
 
 vi.mock('@/api', () => ({
-  api: { get: mockGet },
+  api: { sessions: { getHistory: mockGetHistory } },
 }))
-
-vi.mock('@/constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
-  return { ...actual, USE_MOCK_DATA: false }
-})
 
 // ── Test consumer ────────────────────────────────────────────────────────────
 
@@ -52,7 +47,7 @@ describe('ChatContext', () => {
     beforeEach(() => {
       wsHandler = null
       vi.clearAllMocks()
-      mockGet.mockResolvedValue([mockChatMessage])
+      mockGetHistory.mockResolvedValue({ messages: [mockChatMessage] })
     })
 
     it('fetches chat history for session on mount', async () => {

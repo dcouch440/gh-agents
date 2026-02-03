@@ -5,16 +5,11 @@ import { mockWorkflow } from '@/test/fixtures'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }))
+const { mockList } = vi.hoisted(() => ({ mockList: vi.fn() }))
 
 vi.mock('@/api', () => ({
-  api: { get: mockGet },
+  api: { workflows: { list: mockList, get: vi.fn(), listSteps: vi.fn(), listEdges: vi.fn(), listStepDocuments: vi.fn() } },
 }))
-
-vi.mock('@/constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
-  return { ...actual, USE_MOCK_DATA: false }
-})
 
 // ── Test consumer ────────────────────────────────────────────────────────────
 
@@ -39,7 +34,7 @@ describe('WorkflowContext', () => {
   describe('WorkflowProvider', () => {
     beforeEach(() => {
       vi.clearAllMocks()
-      mockGet.mockResolvedValue([mockWorkflow])
+      mockList.mockResolvedValue({ items: [mockWorkflow] })
     })
 
     it('fetches workflows on mount and renders them', async () => {
@@ -57,7 +52,7 @@ describe('WorkflowContext', () => {
     })
 
     it('handles fetch error', async () => {
-      mockGet.mockRejectedValue(new Error('Network error'))
+      mockList.mockRejectedValue(new Error('Network error'))
 
       render(
         <WorkflowProvider>

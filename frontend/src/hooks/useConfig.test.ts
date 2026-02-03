@@ -2,14 +2,9 @@ import { renderHook, waitFor, act } from '@testing-library/react'
 import { useConfig } from './useConfig'
 import { mockConfig } from '@/test/fixtures'
 
-const { mockGet, mockPatch } = vi.hoisted(() => ({ mockGet: vi.fn(), mockPatch: vi.fn() }))
+const { mockGet, mockUpdate } = vi.hoisted(() => ({ mockGet: vi.fn(), mockUpdate: vi.fn() }))
 
-vi.mock('@/api', () => ({ api: { get: mockGet, patch: mockPatch } }))
-vi.mock('@/constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
-  return { ...actual, USE_MOCK_DATA: false }
-})
-
+vi.mock('@/api', () => ({ api: { config: { get: mockGet, update: mockUpdate } } }))
 describe('useConfig', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -30,7 +25,7 @@ describe('useConfig', () => {
   it('updates config via patch', async () => {
     mockGet.mockResolvedValue(mockConfig)
     const updated = { ...mockConfig, verbosity: 'verbose' }
-    mockPatch.mockResolvedValue(updated)
+    mockUpdate.mockResolvedValue(updated)
 
     const { result } = renderHook(() => useConfig())
 
@@ -42,7 +37,7 @@ describe('useConfig', () => {
       await result.current.updateConfig({ verbosity: 'verbose' })
     })
 
-    expect(mockPatch).toHaveBeenCalledWith('/config', { verbosity: 'verbose' })
+    expect(mockUpdate).toHaveBeenCalledWith({ verbosity: 'verbose' })
     expect(result.current.config).toEqual(updated)
   })
 
