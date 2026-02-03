@@ -247,6 +247,7 @@ function AgentWorkshopPage() {
                     language="markdown"
                     placeholder="Write the agent's system prompt..."
                     readOnly={state.saving}
+                    height="100%"
                   />
                 ) : (
                   <MarkdownPreview content={state.systemPrompt} />
