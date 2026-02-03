@@ -12,7 +12,9 @@ const useDocuments = () => {
     setError(null)
     try {
       const data = await api.documents.list()
-      setDocuments(data.items as unknown as Document[])
+      // Backend returns array directly, not wrapped in {items: [...]}
+      const docs = Array.isArray(data) ? data : (data as {items?: Document[]}).items ?? []
+      setDocuments(docs as unknown as Document[])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load documents')
     } finally {

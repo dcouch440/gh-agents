@@ -1,4 +1,4 @@
-import {useReducer, useEffect, useRef, useCallback} from "react";
+import {useReducer, useEffect, useRef, useCallback, useState} from "react";
 import {useNavigate} from "react-router-dom";
 import {PageHeader} from "@/components/primitives";
 import {SplitPane} from "@/components/primitives/SplitPane";
@@ -7,9 +7,9 @@ import {MarkdownPreview} from "@/components/primitives/MarkdownPreview";
 import {EditorToolbar} from "@/components/primitives/EditorToolbar";
 import {ToggleGroup} from "@/components/primitives/ToggleGroup";
 import {ChatPanel} from "@/components/chat/ChatPanel";
+import {DocumentSelector} from "@/components/DocumentSelector";
 import {useSplitPane} from "@/hooks/useSplitPane";
 import {useSendSessionMessage} from "@/hooks/useChatMutations";
-import {useDocuments} from "@/hooks/useDocuments";
 import {api} from "@/api";
 import {ROUTES} from "@/constants";
 import type {ChatMessageData} from "@/components/chat/ChatPanel";
@@ -43,7 +43,7 @@ type WorkshopAction =
   | {type: "SET_MODEL_ID"; value: string}
   | {type: "SET_MAX_TOKENS"; value: number}
   | {type: "SET_TEMPERATURE"; value: number}
-  | {type: "TOGGLE_DOCUMENT"; documentId: string}
+  | {type: "SET_SELECTED_DOCUMENTS"; documentIds: string[]}
   | {type: "SET_EDITOR_MODE"; value: EditorMode}
   | {type: "ADD_MESSAGE"; message: ChatMessageData}
   | {type: "UPDATE_LAST_ASSISTANT"; content: string}
@@ -88,12 +88,8 @@ const reducer = (
       return {...state, maxTokens: action.value, dirty: true};
     case "SET_TEMPERATURE":
       return {...state, temperature: action.value, dirty: true};
-    case "TOGGLE_DOCUMENT": {
-      const ids = state.selectedDocumentIds.includes(action.documentId)
-        ? state.selectedDocumentIds.filter((id) => id !== action.documentId)
-        : [...state.selectedDocumentIds, action.documentId];
-      return {...state, selectedDocumentIds: ids, dirty: true};
-    }
+    case "SET_SELECTED_DOCUMENTS":
+      return {...state, selectedDocumentIds: action.documentIds, dirty: true};
     case "SET_EDITOR_MODE":
       return {...state, editorMode: action.value};
     case "ADD_MESSAGE":
@@ -151,7 +147,7 @@ function AgentWorkshopPage() {
     max: 75,
   });
   const {send, streaming: sseStreaming} = useSendSessionMessage();
-  const {documents = []} = useDocuments();
+  const [showDocumentSelector, setShowDocumentSelector] = useState(false);
   const contentRef = useRef("");
   const savedRef = useRef(false);
 
@@ -452,36 +448,36 @@ function AgentWorkshopPage() {
                 </div>
                 <div className="workshop__config-field workshop__config-field--full">
                   <label className="form-label">
-                    Agent Context Documents ({state.selectedDocumentIds.length})
+                    Agent Context Documents
                   </label>
-                  <div className="workshop__documents">
-                    {documents.length === 0 ? (
-                      <div className="text-sm text-gray-500">No documents available</div>
-                    ) : (
-                      documents.map((doc) => (
-                        <label key={doc.id} className="workshop__document-item">
-                          <input
-                            type="checkbox"
-                            checked={state.selectedDocumentIds.includes(doc.id)}
-                            onChange={() =>
-                              dispatch({type: "TOGGLE_DOCUMENT", documentId: doc.id})
-                            }
-                            disabled={state.saving}
-                          />
-                          <span className="workshop__document-title">{doc.title}</span>
-                          {doc.doc_type ? (
-                            <span className="workshop__document-type">{doc.doc_type}</span>
-                          ) : null}
-                        </label>
-                      ))
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowDocumentSelector(true)}
+                    disabled={state.saving}
+                    className="btn btn--secondary"
+                    style={{width: "100%", marginTop: "8px"}}
+                  >
+                    {state.selectedDocumentIds.length > 0
+                      ? `${state.selectedDocumentIds.length} document${
+                          state.selectedDocumentIds.length === 1 ? "" : "s"
+                        } selected`
+                      : "Select documents"}
+                  </button>
                 </div>
               </div>
             </div>
           }
         />
       </div>
+
+      <DocumentSelector
+        selectedIds={state.selectedDocumentIds}
+        onSelectionChange={(ids) =>
+          dispatch({type: "SET_SELECTED_DOCUMENTS", documentIds: ids})
+        }
+        open={showDocumentSelector}
+        onClose={() => setShowDocumentSelector(false)}
+      />
     </div>
   );
 }
