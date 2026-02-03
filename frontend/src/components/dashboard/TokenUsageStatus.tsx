@@ -18,7 +18,6 @@ function TokenUsageStatus({ usage }: TokenUsageStatusProps) {
   return (
     <div className="token-usage">
       <div className="token-usage__row token-usage__row--header">
-        <span className="token-usage__cell token-usage__cell--tier">TIER</span>
         <span className="token-usage__cell token-usage__cell--model">MODEL</span>
         <span className="token-usage__cell token-usage__cell--num">CALLS</span>
         <span className="token-usage__cell token-usage__cell--num">IN</span>
@@ -26,8 +25,7 @@ function TokenUsageStatus({ usage }: TokenUsageStatusProps) {
       </div>
 
       {usage.map((row) => (
-        <div key={`${row.tier}-${row.model_id}`} className="token-usage__row">
-          <span className="token-usage__cell token-usage__cell--tier">{row.tier}</span>
+        <div key={row.model_id} className="token-usage__row">
           <span className="token-usage__cell token-usage__cell--model">{row.model_id}</span>
           <span className="token-usage__cell token-usage__cell--num">{row.call_count}</span>
           <span className="token-usage__cell token-usage__cell--num">{fmtTokens(row.total_input)}</span>
@@ -36,8 +34,7 @@ function TokenUsageStatus({ usage }: TokenUsageStatusProps) {
       ))}
 
       <div className="token-usage__row token-usage__row--total">
-        <span className="token-usage__cell token-usage__cell--tier">TOTAL</span>
-        <span className="token-usage__cell token-usage__cell--model" />
+        <span className="token-usage__cell token-usage__cell--model">TOTAL</span>
         <span className="token-usage__cell token-usage__cell--num">{totalCalls}</span>
         <span className="token-usage__cell token-usage__cell--num">{fmtTokens(totalInput)}</span>
         <span className="token-usage__cell token-usage__cell--num">{fmtTokens(totalOutput)}</span>

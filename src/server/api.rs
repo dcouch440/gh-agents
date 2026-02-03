@@ -177,9 +177,8 @@ pub async fn create_task(State(state): State<AppState>, auth: auth::AuthUser, Js
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct AgentResponse {
     pub id: String,
-    pub tier: String,
-    pub persona_name: String,
-    pub persona_prompt: String,
+    pub name: String,
+    pub system_prompt: String,
     pub persona_style: String,
     pub model_provider: String,
     pub model_id: String,
@@ -193,9 +192,8 @@ impl AgentResponse {
     fn from_row(row: crate::db::AgentRow) -> Self {
         Self {
             id: row.id.to_string(),
-            tier: row.tier.unwrap_or_else(|| "worker".to_string()),
-            persona_name: row.name,
-            persona_prompt: row.system_prompt,
+            name: row.name,
+            system_prompt: row.system_prompt,
             persona_style: row.persona_style.unwrap_or_else(|| "casual".to_string()),
             model_provider: row.model_provider,
             model_id: row.model_id,
@@ -225,9 +223,8 @@ pub struct AgentPoolStats {
 /// Request to create a new agent
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateAgentRequest {
-    pub tier: String,
-    pub persona_name: String,
-    pub persona_prompt: Option<String>,
+    pub name: String,
+    pub system_prompt: Option<String>,
     pub persona_style: Option<String>,
     pub model_provider: Option<String>,
     pub model_id: String,
@@ -238,9 +235,8 @@ pub struct CreateAgentRequest {
 /// Request to update an existing agent
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateAgentRequest {
-    pub tier: Option<String>,
-    pub persona_name: Option<String>,
-    pub persona_prompt: Option<String>,
+    pub name: Option<String>,
+    pub system_prompt: Option<String>,
     pub persona_style: Option<String>,
     pub model_provider: Option<String>,
     pub model_id: Option<String>,
@@ -291,13 +287,13 @@ pub async fn list_agents(State(state): State<AppState>, auth: auth::AuthUser) ->
     )
 )]
 pub async fn create_agent(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateAgentRequest>) -> Result<(StatusCode, Json<AgentResponse>), StatusCode> {
-    if request.tier.trim().is_empty() || request.model_id.trim().is_empty() {
+    if request.model_id.trim().is_empty() {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if request.persona_name.len() > MAX_TITLE_LENGTH {
+    if request.name.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if let Some(ref prompt) = request.persona_prompt {
+    if let Some(ref prompt) = request.system_prompt {
         if prompt.len() > MAX_PROMPT_LENGTH {
             return Err(StatusCode::BAD_REQUEST);
         }
@@ -305,9 +301,9 @@ pub async fn create_agent(State(state): State<AppState>, auth: auth::AuthUser, J
 
     let row = crate::db::AgentRow {
         id: Uuid::new_v4(),
-        tier: Some(request.tier.trim().to_lowercase()),
-        name: request.persona_name.trim().to_string(),
-        system_prompt: request.persona_prompt.unwrap_or_default(),
+        tier: None,
+        name: request.name.trim().to_string(),
+        system_prompt: request.system_prompt.unwrap_or_default(),
         persona_style: Some(request.persona_style.unwrap_or_else(|| "casual".to_string())),
         model_provider: request.model_provider.unwrap_or_else(|| "anthropic".to_string()),
         model_id: request.model_id.trim().to_string(),
@@ -359,9 +355,9 @@ pub async fn update_agent(State(state): State<AppState>, auth: auth::AuthUser, P
 
     let updated = crate::db::AgentRow {
         id: existing.id,
-        tier: request.tier.map(Some).unwrap_or(existing.tier),
-        name: request.persona_name.unwrap_or(existing.name),
-        system_prompt: request.persona_prompt.unwrap_or(existing.system_prompt),
+        tier: None,
+        name: request.name.unwrap_or(existing.name),
+        system_prompt: request.system_prompt.unwrap_or(existing.system_prompt),
         persona_style: request.persona_style.map(Some).unwrap_or(existing.persona_style),
         model_provider: request.model_provider.unwrap_or(existing.model_provider),
         model_id: request.model_id.unwrap_or(existing.model_id),

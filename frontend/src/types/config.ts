@@ -13,9 +13,7 @@ type Config = {
     utility: ModelConfig
   }
   pool: {
-    max_orchestrators: number
-    max_workers: number
-    max_utilities: number
+    max_agents: number
   }
   autonomy: string
   git_strategy: string
@@ -35,9 +33,7 @@ type UpdateModelsRequest = {
 }
 
 type UpdatePoolRequest = {
-  max_orchestrators?: number
-  max_workers?: number
-  max_utilities?: number
+  max_agents?: number
 }
 
 type UpdateConfigRequest = {

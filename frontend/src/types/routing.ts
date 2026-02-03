@@ -13,7 +13,6 @@ type RoutingEvent = {
   response: string | null
   error: string | null
   status: string
-  agent_tier: string | null
   model_id: string | null
   input_tokens: number
   output_tokens: number

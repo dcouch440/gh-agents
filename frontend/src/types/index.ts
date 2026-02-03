@@ -1,5 +1,5 @@
 export type { User } from './user'
-export type { Agent, AgentTier, AgentStatus, TierStats, AgentPoolStats, AgentsResponse, AgentToolsResponse, AgentContextResponse, CreateAgentRequest, UpdateAgentRequest } from './agent'
+export type { Agent, AgentStatus, AgentPoolStats, AgentsResponse, AgentToolsResponse, AgentContextResponse, CreateAgentRequest, UpdateAgentRequest } from './agent'
 export type { Task, TaskStatus, TaskPriority, CreateTaskRequest } from './task'
 export type { Session, ChatMessage, Mode, CreateSessionRequest, UpdateSessionRequest, SendMessageRequest } from './session'
 export type { Pipeline, PipelineStage, PipelineRun, StageExecution, StageMember, ApproveGateRequest, CreateSideTaskRequest, CreateStageMemberRequest, UpdateStageMemberRequest } from './pipeline'

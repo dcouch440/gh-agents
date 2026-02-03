@@ -272,7 +272,7 @@ impl ServerRepo for PgRepo {
 
     async fn list_persisted_agents(&self, user_id: UserId) -> Result<Vec<AgentRow>> {
         let rows = sqlx::query_as::<_, PgAgentRow>(
-            "SELECT id, tier, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, version FROM agents WHERE user_id = $1",
+            "SELECT id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, version FROM agents WHERE user_id = $1",
         )
         .bind(user_id.0)
         .fetch_all(&self.pool)
@@ -283,7 +283,7 @@ impl ServerRepo for PgRepo {
 
     async fn get_persisted_agent(&self, agent_id: Uuid) -> Result<Option<AgentRow>> {
         let row = sqlx::query_as::<_, PgAgentRow>(
-            "SELECT id, tier, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, version FROM agents WHERE id = $1",
+            "SELECT id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, version FROM agents WHERE id = $1",
         )
         .bind(agent_id)
         .fetch_optional(&self.pool)
@@ -295,10 +295,9 @@ impl ServerRepo for PgRepo {
     async fn upsert_agent(&self, user_id: UserId, agent: AgentRow) -> Result<()> {
         sqlx::query(
             r#"
-            INSERT INTO agents (id, user_id, tier, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            INSERT INTO agents (id, user_id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             ON CONFLICT (id) DO UPDATE SET
-                tier = EXCLUDED.tier,
                 name = EXCLUDED.name,
                 system_prompt = EXCLUDED.system_prompt,
                 persona_style = EXCLUDED.persona_style,
@@ -313,7 +312,6 @@ impl ServerRepo for PgRepo {
         )
         .bind(agent.id)
         .bind(user_id.0)
-        .bind(&agent.tier)
         .bind(&agent.name)
         .bind(&agent.system_prompt)
         .bind(&agent.persona_style)
@@ -739,7 +737,6 @@ impl ServerRepo for PgRepo {
 #[derive(sqlx::FromRow)]
 struct PgAgentRow {
     id: Uuid,
-    tier: Option<String>,
     name: String,
     system_prompt: String,
     persona_style: Option<String>,
@@ -755,7 +752,7 @@ struct PgAgentRow {
 fn agent_row_from_pg(r: PgAgentRow) -> AgentRow {
     AgentRow {
         id: r.id,
-        tier: r.tier,
+        tier: None,
         name: r.name,
         system_prompt: r.system_prompt,
         persona_style: r.persona_style,
