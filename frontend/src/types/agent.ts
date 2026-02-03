@@ -1,17 +1,9 @@
-type AgentTier = 'orchestrator' | 'worker' | 'utility'
-
 type AgentStatus = 'idle' | 'working' | 'waiting_for_context' | 'waiting_for_approval'
 
-type TierStats = {
+type AgentPoolStats = {
   total: number
   available: number
   max: number
-}
-
-type AgentPoolStats = {
-  orchestrators: TierStats
-  workers: TierStats
-  utilities: TierStats
 }
 
 type Agent = {
@@ -22,11 +14,8 @@ type Agent = {
   model_id: string
   model_max_tokens: number
   model_temperature: number
-  created_at: string
-  updated_at: string
-  // Dashboard fields (from WS updates)
-  status?: AgentStatus
-  tier?: AgentTier
+  status: string
+  version: number
 }
 
 type AgentsResponse = {
@@ -61,9 +50,7 @@ import type { DocumentListItem } from './document'
 
 export type {
   Agent,
-  AgentTier,
   AgentStatus,
-  TierStats,
   AgentPoolStats,
   AgentsResponse,
   AgentToolsResponse,

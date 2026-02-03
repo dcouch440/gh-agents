@@ -1,17 +1,9 @@
-import type { Agent, AgentPoolStats, AgentTier } from '@/types'
+import type { Agent, AgentPoolStats } from '@/types'
 
 type AgentPoolStatusProps = {
   agents: Agent[]
   stats: AgentPoolStats
 }
-
-type TierKey = 'orchestrators' | 'workers' | 'utilities'
-
-const TIER_MAP: { tier: AgentTier; key: TierKey; label: string }[] = [
-  { tier: 'orchestrator', key: 'orchestrators', label: 'ORCH' },
-  { tier: 'worker', key: 'workers', label: 'WORK' },
-  { tier: 'utility', key: 'utilities', label: 'UTIL' },
-]
 
 const STATUS_DOT: Record<string, string> = {
   idle: '\u25CB',
@@ -28,22 +20,17 @@ const buildBar = (active: number, max: number): string => {
 
 function AgentPoolStatus({ agents, stats }: AgentPoolStatusProps) {
   const busy = agents.filter((a) => a.status && a.status !== 'idle')
+  const active = stats.total - stats.available
 
   return (
     <div className="pool-status">
-      {TIER_MAP.map(({ key, label }) => {
-        const s = stats[key]
-        const active = s.total - s.available
-        return (
-          <div key={key} className="pool-status__tier">
-            <span className="pool-status__label">{label}</span>
-            <span className="pool-status__bar">
-              <span className="pool-status__bar-fill">{buildBar(active, s.max)}</span>
-            </span>
-            <span className="pool-status__count">{active}/{s.max}</span>
-          </div>
-        )
-      })}
+      <div className="pool-status__tier">
+        <span className="pool-status__label">AGENTS</span>
+        <span className="pool-status__bar">
+          <span className="pool-status__bar-fill">{buildBar(active, stats.max)}</span>
+        </span>
+        <span className="pool-status__count">{active}/{stats.max}</span>
+      </div>
 
       {busy.length > 0 ? (
         <div className="pool-status__agents">

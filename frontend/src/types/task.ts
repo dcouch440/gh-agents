@@ -7,7 +7,6 @@ type Task = {
   slice_id: string | null
   title: string
   description: string
-  assigned_tier: string
   assigned_agent: string | null
   status: TaskStatus
   priority: TaskPriority
@@ -25,7 +24,6 @@ type CreateTaskRequest = {
   title: string
   description?: string
   priority?: string
-  tier?: string
 }
 
 export type { Task, TaskStatus, TaskPriority, CreateTaskRequest }

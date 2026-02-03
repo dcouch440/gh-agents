@@ -22,10 +22,8 @@ export const mockAgent: Agent = {
   model_id: 'claude-sonnet-4-20250514',
   model_max_tokens: 8192,
   model_temperature: 0.7,
-  created_at: '2025-01-01T00:00:00Z',
-  updated_at: '2025-01-01T00:00:00Z',
   status: 'idle',
-  tier: 'worker',
+  version: 1,
 }
 
 export const mockAgentUpdated: Agent = {
@@ -38,7 +36,6 @@ export const mockTask: Task = {
   slice_id: null,
   title: 'Test task',
   description: 'A task for testing',
-  assigned_tier: 'worker',
   assigned_agent: null,
   status: 'pending',
   priority: 'normal',
@@ -88,7 +85,6 @@ export const mockFeedItem: FeedItem = {
 }
 
 export const mockUsageSummary: UsageSummary = {
-  tier: 'worker',
   model_id: 'claude-sonnet-4-20250514',
   total_input: 5000,
   total_output: 2000,
@@ -124,7 +120,6 @@ export const mockRoutingEvent: RoutingEvent = {
   response: null,
   error: null,
   status: 'pending',
-  agent_tier: 'worker',
   model_id: 'claude-sonnet-4-20250514',
   input_tokens: 100,
   output_tokens: 0,
@@ -227,7 +222,7 @@ export const mockConfig: Config = {
     worker: mockModelConfig,
     utility: { ...mockModelConfig, model_id: 'claude-3-5-haiku-20241022', max_tokens: 4096 },
   },
-  pool: { max_orchestrators: 1, max_workers: 3, max_utilities: 2 },
+  pool: { max_agents: 12 },
   autonomy: 'supervised',
   git_strategy: 'branch',
   sandbox_mode: 'docker',
