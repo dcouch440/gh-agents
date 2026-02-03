@@ -133,9 +133,9 @@ use utoipa::OpenApi;
         // Costs
         super::api::costs::get_costs,
         // Results
-        super::api::list_results,
-        super::api::get_result,
-        super::api::delete_result,
+        super::api::results::list_results,
+        super::api::results::get_result,
+        super::api::results::delete_result,
         // Tool Routers
         super::api::list_tool_routers,
         super::api::create_tool_router,
@@ -203,8 +203,8 @@ use utoipa::OpenApi;
         super::api::agent_executions::ApproveExecutionRequest,
         super::api::costs::CostQuery,
         super::api::costs::CostResponse,
-        super::api::ResultResponse,
-        super::api::ResultQuery,
+        super::api::results::ResultResponse,
+        super::api::results::ResultQuery,
         super::api::WorkflowResponse,
         super::api::CreateWorkflowRequest,
         super::api::UpdateWorkflowRequest,
