@@ -9,7 +9,7 @@ use tokio::sync::{broadcast, mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::agents::{AgentPool, AgentResponse, ClusterManager, Dispatcher, PipelineManager, RoleManager, ScheduleManager, ToolClusterIndex};
+use crate::agents::{AgentPool, ClusterManager, Dispatcher, PipelineManager, RoleManager, ToolClusterIndex};
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::{
     AgentExecutionRepo, ContextStoreRepo, DocumentRepo, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, RoomRepo, RouterRequestRepo, ServerRepo, TokenLedgerRepo,
@@ -117,16 +117,12 @@ pub struct AppState {
     pub pool: Option<Arc<tokio::sync::Mutex<AgentPool>>>,
     /// Dispatcher for routing commands to agents (None in tests)
     pub dispatcher: Option<Arc<tokio::sync::Mutex<Dispatcher>>>,
-    /// Task results from agents, keyed by task_id
-    pub task_results: Arc<RwLock<HashMap<Uuid, AgentResponse>>>,
     /// Role manager for building role-aware agent context
     pub role_manager: Option<Arc<RoleManager>>,
     /// Cluster manager for agent grouping
     pub cluster_manager: Arc<RwLock<ClusterManager>>,
     /// Pipeline manager for chained agent workflows
     pub pipeline_manager: Arc<RwLock<PipelineManager>>,
-    /// Schedule manager for cron-like and event-driven agent execution
-    pub schedule_manager: Arc<RwLock<ScheduleManager>>,
     /// Default agent UUID (looked up at startup, agent with name "Home")
     pub default_agent_id: Option<Uuid>,
     /// Tool-to-cluster index for routing tool calls to cluster agents
@@ -324,11 +320,9 @@ impl AppState {
                 room_update_tx,
                 pool: None,
                 dispatcher: None,
-                task_results: Arc::new(RwLock::new(HashMap::new())),
                 role_manager: None,
                 cluster_manager: Arc::new(RwLock::new(ClusterManager::new())),
                 pipeline_manager: Arc::new(RwLock::new(PipelineManager::new())),
-                schedule_manager: Arc::new(RwLock::new(ScheduleManager::new())),
                 default_agent_id: None,
                 cluster_index: None,
                 prompt_registry: Arc::new(PromptRegistry::empty()),

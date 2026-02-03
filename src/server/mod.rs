@@ -58,12 +58,6 @@ pub async fn start_server(db: PgPool, config: AppConfig, addr: SocketAddr) -> Re
     // Spawn the orchestrator consumer to process chat messages via LLM
     let _orchestrator_handle = orchestrator::spawn_orchestrator(state.clone(), orchestrator_rx);
 
-    // Spawn the response consumer to collect agent results
-    let _response_handle = orchestrator::spawn_response_consumer(state.clone());
-
-    // Spawn the schedule runner for periodic agent tasks
-    let _schedule_handle = orchestrator::spawn_schedule_runner(state.clone());
-
     let app = create_router(state);
 
     info!("Server listening on http://{}", addr);
