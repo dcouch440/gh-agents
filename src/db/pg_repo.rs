@@ -7,13 +7,13 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::db::traits::{
-    AgentExecutionRepo, ContextStoreRepo, DocumentRepo, MergeQueueRepo, ModelSpendRow, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, RouterRequestRepo, ServerRepo,
-    TokenLedgerRepo, ToolRouterRepo, UserRepo, WorkflowRepo,
+    AgentExecutionRepo, ContextStoreRepo, DocumentRepo, MergeQueueRepo, ModelSpendRow, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, RoomMemberInput, RoomRepo,
+    RouterRequestRepo, ServerRepo, TokenLedgerRepo, ToolRouterRepo, UserRepo, WorkflowRepo,
 };
 use crate::db::{
     AgentExecutionRow, AgentModeRow, AgentRow, ChatMessageRow, ContextStoreRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PipelineRow, PipelineRunRow,
-    PipelineStageMemberRow, PipelineStageRow, PromptTemplateRow, ResultRow, RouterRequestRow, SessionRow, StageExecutionRow, StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow, WorkflowRow,
-    WorkflowStepEdgeRow, WorkflowStepRow,
+    PipelineStageMemberRow, PipelineStageRow, PromptTemplateRow, ResultRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry, RouterRequestRow, SessionRow, StageExecutionRow,
+    StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -1386,9 +1386,11 @@ impl AgentExecutionRepo for PgRepo {
         system_prompt_rendered: &str,
         input: &str,
         selected_mode_id: Option<Uuid>,
+        room_session_id: Option<Uuid>,
+        speaker_order: Option<i32>,
     ) -> Result<AgentExecutionRow> {
         let row = sqlx::query_as::<_, AgentExecutionRow>(
-            "INSERT INTO agent_executions (stage_execution_id, agent_id, workflow_step_id, is_interactive, parent_agent_execution_id, system_prompt_rendered, input, selected_mode_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *",
+            "INSERT INTO agent_executions (stage_execution_id, agent_id, workflow_step_id, is_interactive, parent_agent_execution_id, system_prompt_rendered, input, selected_mode_id, room_session_id, speaker_order) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *",
         )
         .bind(stage_execution_id)
         .bind(agent_id)
@@ -1398,6 +1400,8 @@ impl AgentExecutionRepo for PgRepo {
         .bind(system_prompt_rendered)
         .bind(input)
         .bind(selected_mode_id)
+        .bind(room_session_id)
+        .bind(speaker_order)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -1772,6 +1776,237 @@ impl RouterRequestRepo for PgRepo {
             "SELECT id, session_id, agent_execution_id, intent, priority, callback_hint, routed_tool, routed_args, is_async, passdown, chain, status, result, created_at, completed_at FROM router_requests WHERE session_id = $1 ORDER BY created_at DESC",
         )
         .bind(session_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+}
+
+// ============================================================================
+// Room Repository
+// ============================================================================
+
+#[async_trait]
+impl RoomRepo for PgRepo {
+    async fn create_room(
+        &self,
+        user_id: Uuid,
+        pipeline_id: Uuid,
+        name: &str,
+        gatekeeper_enabled: bool,
+        gatekeeper_model_id: &str,
+        max_speakers_per_turn: i32,
+        max_turns: i32,
+        tools_enabled: bool,
+    ) -> Result<RoomRow> {
+        let row = sqlx::query_as::<_, RoomRow>(
+            "INSERT INTO rooms (user_id, pipeline_id, name, gatekeeper_enabled, gatekeeper_model_id, max_speakers_per_turn, max_turns, tools_enabled) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *",
+        )
+        .bind(user_id)
+        .bind(pipeline_id)
+        .bind(name)
+        .bind(gatekeeper_enabled)
+        .bind(gatekeeper_model_id)
+        .bind(max_speakers_per_turn)
+        .bind(max_turns)
+        .bind(tools_enabled)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn get_room(&self, id: Uuid) -> Result<Option<RoomRow>> {
+        let row = sqlx::query_as::<_, RoomRow>("SELECT * FROM rooms WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row)
+    }
+
+    async fn list_rooms_for_pipeline(&self, pipeline_id: Uuid) -> Result<Vec<RoomRow>> {
+        let rows = sqlx::query_as::<_, RoomRow>("SELECT * FROM rooms WHERE pipeline_id = $1 ORDER BY created_at ASC")
+            .bind(pipeline_id)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows)
+    }
+
+    async fn update_room(
+        &self,
+        id: Uuid,
+        name: Option<String>,
+        gatekeeper_enabled: Option<bool>,
+        gatekeeper_model_id: Option<String>,
+        max_speakers_per_turn: Option<i32>,
+        max_turns: Option<i32>,
+        tools_enabled: Option<bool>,
+    ) -> Result<RoomRow> {
+        let row = sqlx::query_as::<_, RoomRow>(
+            "UPDATE rooms SET \
+                name = COALESCE($2, name), \
+                gatekeeper_enabled = COALESCE($3, gatekeeper_enabled), \
+                gatekeeper_model_id = COALESCE($4, gatekeeper_model_id), \
+                max_speakers_per_turn = COALESCE($5, max_speakers_per_turn), \
+                max_turns = COALESCE($6, max_turns), \
+                tools_enabled = COALESCE($7, tools_enabled), \
+                updated_at = NOW() \
+            WHERE id = $1 RETURNING *",
+        )
+        .bind(id)
+        .bind(name)
+        .bind(gatekeeper_enabled)
+        .bind(gatekeeper_model_id)
+        .bind(max_speakers_per_turn)
+        .bind(max_turns)
+        .bind(tools_enabled)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn delete_room(&self, id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM rooms WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    // --- Room members ---
+
+    async fn list_room_members(&self, room_id: Uuid) -> Result<Vec<RoomMemberRow>> {
+        let rows = sqlx::query_as::<_, RoomMemberRow>(
+            "SELECT room_id, agent_id, display_name, role_description, display_order FROM room_members WHERE room_id = $1 ORDER BY display_order ASC",
+        )
+        .bind(room_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn add_room_member(&self, room_id: Uuid, agent_id: Uuid, display_name: Option<String>, role_description: String, display_order: i32) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO room_members (room_id, agent_id, display_name, role_description, display_order) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
+        )
+        .bind(room_id)
+        .bind(agent_id)
+        .bind(display_name)
+        .bind(role_description)
+        .bind(display_order)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn remove_room_member(&self, room_id: Uuid, agent_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM room_members WHERE room_id = $1 AND agent_id = $2")
+            .bind(room_id)
+            .bind(agent_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn set_room_members(&self, room_id: Uuid, members: &[RoomMemberInput]) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query("DELETE FROM room_members WHERE room_id = $1")
+            .bind(room_id)
+            .execute(&mut *tx)
+            .await?;
+
+        for member in members {
+            sqlx::query(
+                "INSERT INTO room_members (room_id, agent_id, display_name, role_description, display_order) VALUES ($1, $2, $3, $4, $5)",
+            )
+            .bind(room_id)
+            .bind(member.agent_id)
+            .bind(member.display_name.as_deref())
+            .bind(&member.role_description)
+            .bind(member.display_order)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    // --- Room sessions ---
+
+    async fn create_room_session(&self, room_id: Uuid, run_id: Option<Uuid>) -> Result<RoomSessionRow> {
+        let row = sqlx::query_as::<_, RoomSessionRow>(
+            "INSERT INTO room_sessions (room_id, run_id) VALUES ($1, $2) RETURNING *",
+        )
+        .bind(room_id)
+        .bind(run_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn get_room_session(&self, id: Uuid) -> Result<Option<RoomSessionRow>> {
+        let row = sqlx::query_as::<_, RoomSessionRow>("SELECT * FROM room_sessions WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row)
+    }
+
+    async fn update_room_session_status(&self, id: Uuid, status: &str) -> Result<()> {
+        let completed_at = if status == "completed" || status == "cancelled" {
+            Some(Utc::now())
+        } else {
+            None
+        };
+        sqlx::query("UPDATE room_sessions SET status = $2, completed_at = COALESCE($3, completed_at) WHERE id = $1")
+            .bind(id)
+            .bind(status)
+            .bind(completed_at)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn increment_room_session_turn(&self, id: Uuid) -> Result<i32> {
+        let row: (i32,) = sqlx::query_as(
+            "UPDATE room_sessions SET current_turn = current_turn + 1 WHERE id = $1 RETURNING current_turn",
+        )
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row.0)
+    }
+
+    async fn set_transcript_summary(&self, id: Uuid, summary: &str) -> Result<()> {
+        sqlx::query("UPDATE room_sessions SET transcript_summary = $2 WHERE id = $1")
+            .bind(id)
+            .bind(summary)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    // --- Room transcript ---
+
+    async fn get_room_transcript(&self, room_session_id: Uuid) -> Result<Vec<RoomTranscriptEntry>> {
+        let rows = sqlx::query_as::<_, RoomTranscriptEntry>(
+            "SELECT \
+                COALESCE(rm.display_name, a.name) AS agent_name, \
+                COALESCE(rm.role_description, '') AS role_description, \
+                em.content, \
+                ae.speaker_order, \
+                em.created_at \
+            FROM execution_messages em \
+            JOIN agent_executions ae ON em.agent_execution_id = ae.id \
+            JOIN agents a ON ae.agent_id = a.id \
+            LEFT JOIN room_members rm ON rm.agent_id = ae.agent_id \
+                AND rm.room_id = (SELECT room_id FROM room_sessions WHERE id = $1) \
+            WHERE ae.room_session_id = $1 \
+                AND em.role IN ('user', 'assistant') \
+            ORDER BY em.created_at ASC",
+        )
+        .bind(room_session_id)
         .fetch_all(&self.pool)
         .await?;
         Ok(rows)

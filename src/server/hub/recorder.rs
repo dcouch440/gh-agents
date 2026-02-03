@@ -84,6 +84,8 @@ impl<'a> ExecutionRecorder<'a> {
                 system_prompt,
                 user_prompt,
                 selected_mode_id,
+                None,
+                None,
             )
             .await
             .context("failed to create agent execution")?;

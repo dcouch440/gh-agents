@@ -351,7 +351,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                 if let Some(ae_repo) = &state.agent_execution_repo {
                                     if let Some(aid) = &resolved_agent_id {
                                         let rendered = stage_exec.rendered_prompt.as_deref().unwrap_or("");
-                                        let _ = ae_repo.create_agent_execution(stage_exec.id, aid.0, None, false, None, &initial_task, rendered, None).await;
+                                        let _ = ae_repo.create_agent_execution(stage_exec.id, aid.0, None, false, None, &initial_task, rendered, None, None, None).await;
                                     }
                                 }
 

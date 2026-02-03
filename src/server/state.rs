@@ -11,12 +11,12 @@ use uuid::Uuid;
 
 use crate::agents::{AgentPool, AgentResponse, ClusterManager, Dispatcher, PipelineManager, RoleManager, ScheduleManager, ToolClusterIndex};
 use crate::db::pg_repo::PgRepo;
-use crate::db::traits::{AgentExecutionRepo, ContextStoreRepo, DocumentRepo, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, RouterRequestRepo, ServerRepo, TokenLedgerRepo, ToolRouterRepo, UserRepo, WorkflowRepo};
+use crate::db::traits::{AgentExecutionRepo, ContextStoreRepo, DocumentRepo, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, RoomRepo, RouterRequestRepo, ServerRepo, TokenLedgerRepo, ToolRouterRepo, UserRepo, WorkflowRepo};
 use crate::llm::AnthropicClient;
 use crate::types::{AgentPoolConfig, AppConfig, UserId};
 
 use super::hub::PromptRegistry;
-use super::ws::{AgentUpdate, FeedUpdate, PipelineUpdate, RoutingUpdate, SessionUpdate, TaskUpdate};
+use super::ws::{AgentUpdate, FeedUpdate, PipelineUpdate, RoomUpdateEvent, RoutingUpdate, SessionUpdate, TaskUpdate};
 
 /// Message sent to the orchestrator
 #[derive(Debug, Clone)]
@@ -82,6 +82,8 @@ pub struct AppState {
     pub context_store_repo: Option<Arc<dyn ContextStoreRepo>>,
     /// Router request repository (None in legacy/test mode)
     pub router_request_repo: Option<Arc<dyn RouterRequestRepo>>,
+    /// Room repository for agent room management (None in legacy/test mode)
+    pub room_repo: Option<Arc<dyn RoomRepo>>,
     /// Application configuration (mutable at runtime via API)
     pub config: Arc<RwLock<AppConfig>>,
     /// JWT secret for token signing
@@ -106,6 +108,8 @@ pub struct AppState {
     pub router_request_tx: broadcast::Sender<super::ws::RouterRequestEvent>,
     /// Broadcast channel for context store updates
     pub context_update_tx: broadcast::Sender<super::ws::ContextUpdateEvent>,
+    /// Broadcast channel for room events
+    pub room_update_tx: broadcast::Sender<RoomUpdateEvent>,
     /// Agent pool for managing agents (None in tests that don't need agents)
     pub pool: Option<Arc<tokio::sync::Mutex<AgentPool>>>,
     /// Dispatcher for routing commands to agents (None in tests)
@@ -149,6 +153,7 @@ impl AppState {
         let tool_router_repo: Arc<dyn ToolRouterRepo> = Arc::new(PgRepo::new(db.clone()));
         let context_store_repo: Arc<dyn ContextStoreRepo> = Arc::new(PgRepo::new(db.clone()));
         let router_request_repo: Arc<dyn RouterRequestRepo> = Arc::new(PgRepo::new(db.clone()));
+        let room_repo: Arc<dyn RoomRepo> = Arc::new(PgRepo::new(db.clone()));
         let (mut state, rx) = Self::with_repo(Some(db), repo, config.clone());
 
         // Load prompt registry from prompts/ directory
@@ -174,6 +179,7 @@ impl AppState {
         state.tool_router_repo = Some(tool_router_repo);
         state.context_store_repo = Some(context_store_repo);
         state.router_request_repo = Some(router_request_repo);
+        state.room_repo = Some(room_repo);
 
         // Initialize role manager with current working directory as project root
         let project_root = std::env::current_dir().unwrap_or_default();
@@ -270,6 +276,7 @@ impl AppState {
         let (routing_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST_HIGH);
         let (router_request_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
         let (context_update_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST_LOW);
+        let (room_update_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
 
         // JWT secret: require via env var, fall back to random for dev only
         let jwt_secret = match std::env::var(crate::constants::ENV_JWT_SECRET) {
@@ -303,6 +310,7 @@ impl AppState {
                 tool_router_repo: None,
                 context_store_repo: None,
                 router_request_repo: None,
+                room_repo: None,
                 config: Arc::new(RwLock::new(config)),
                 jwt_secret,
                 orchestrator_tx,
@@ -315,6 +323,7 @@ impl AppState {
                 routing_tx,
                 router_request_tx,
                 context_update_tx,
+                room_update_tx,
                 pool: None,
                 dispatcher: None,
                 task_results: Arc::new(RwLock::new(HashMap::new())),
@@ -409,6 +418,16 @@ impl AppState {
     /// Broadcast a context update event
     pub fn broadcast_context_update(&self, event: super::ws::ContextUpdateEvent) {
         let _ = self.context_update_tx.send(event);
+    }
+
+    /// Subscribe to room events
+    pub fn subscribe_room_updates(&self) -> broadcast::Receiver<RoomUpdateEvent> {
+        self.room_update_tx.subscribe()
+    }
+
+    /// Broadcast a room event
+    pub fn broadcast_room_update(&self, event: RoomUpdateEvent) {
+        let _ = self.room_update_tx.send(event);
     }
 
     /// Ensure a response stream exists for this message (creates if missing).
