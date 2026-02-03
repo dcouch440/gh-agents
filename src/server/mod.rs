@@ -192,7 +192,6 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         .route(routes::COSTS, get(api::get_costs))
         .route(routes::RESULTS, get(api::list_results))
         .route(routes::RESULT, get(api::get_result).delete(api::delete_result))
-        .route(routes::CONTEXT_RESPONSE, post(api::submit_context_response))
         .route(routes::TOOL_ROUTERS, get(api::list_tool_routers).post(api::create_tool_router))
         .route(routes::TOOL_ROUTER, get(api::get_tool_router).put(api::update_tool_router).delete(api::delete_tool_router))
         .route(routes::TOOL_ROUTER_TOOLS, get(api::get_router_tools).put(api::set_router_tools))
