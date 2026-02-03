@@ -131,7 +131,7 @@ use utoipa::OpenApi;
         super::api::agent_executions::send_execution_message,
         super::api::agent_executions::approve_execution,
         // Costs
-        super::api::get_costs,
+        super::api::costs::get_costs,
         // Results
         super::api::list_results,
         super::api::get_result,
@@ -201,8 +201,8 @@ use utoipa::OpenApi;
         super::api::agent_executions::ExecutionMessageResponse,
         super::api::agent_executions::SendMessageRequest,
         super::api::agent_executions::ApproveExecutionRequest,
-        super::api::CostQuery,
-        super::api::CostResponse,
+        super::api::costs::CostQuery,
+        super::api::costs::CostResponse,
         super::api::ResultResponse,
         super::api::ResultQuery,
         super::api::WorkflowResponse,
