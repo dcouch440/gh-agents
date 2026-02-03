@@ -21,9 +21,9 @@ use crate::types::{AppConfig, UserId};
 use super::hub::PromptRegistry;
 use super::ws::{AgentUpdate, FeedUpdate, PipelineUpdate, RoomUpdateEvent, RoutingUpdate, SessionUpdate, TaskUpdate};
 
-/// Message sent to the orchestrator
+/// Message sent to the chat consumer
 #[derive(Debug, Clone)]
-pub struct OrchestratorMessage {
+pub struct ConsumerMessage {
     pub id: Uuid,
     pub user_id: UserId,
     pub session_id: Option<Uuid>,
@@ -92,7 +92,7 @@ pub struct AppState {
     /// JWT secret for token signing
     pub jwt_secret: Vec<u8>,
     /// Channel to send messages to the orchestrator
-    pub orchestrator_tx: mpsc::Sender<OrchestratorMessage>,
+    pub chat_tx: mpsc::Sender<ConsumerMessage>,
     /// Map of message IDs to buffered response streams
     response_streams: Arc<RwLock<HashMap<Uuid, Arc<RwLock<BufferedStream>>>>>,
     /// Broadcast channel for feed updates
@@ -130,7 +130,7 @@ impl AppState {
     /// so it can be passed to the orchestrator consumer task.
     ///
     /// Loads persisted agents and clusters from the database on startup.
-    pub async fn new(db: PgPool, config: AppConfig) -> (Self, mpsc::Receiver<OrchestratorMessage>) {
+    pub async fn new(db: PgPool, config: AppConfig) -> (Self, mpsc::Receiver<ConsumerMessage>) {
         let repo: Arc<dyn ServerRepo> = Arc::new(PgRepo::new(db.clone()));
         let user_repo: Arc<dyn UserRepo> = Arc::new(PgRepo::new(db.clone()));
         let doc_repo: Arc<dyn DocumentRepo> = Arc::new(PgRepo::new(db.clone()));
@@ -229,8 +229,8 @@ impl AppState {
 
     /// Create application state with a custom repo (for testing).
     /// Returns the state and the orchestrator message receiver.
-    pub fn with_repo(db: Option<PgPool>, repo: Arc<dyn ServerRepo>, config: AppConfig) -> (Self, mpsc::Receiver<OrchestratorMessage>) {
-        let (orchestrator_tx, orchestrator_rx) = mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
+    pub fn with_repo(db: Option<PgPool>, repo: Arc<dyn ServerRepo>, config: AppConfig) -> (Self, mpsc::Receiver<ConsumerMessage>) {
+        let (chat_tx, orchestrator_rx) = mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
         let (feed_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST_HIGH);
         let (task_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
         let (agent_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST_LOW);
@@ -276,7 +276,7 @@ impl AppState {
                 room_repo: None,
                 config: Arc::new(RwLock::new(config)),
                 jwt_secret,
-                orchestrator_tx,
+                chat_tx,
                 response_streams: Arc::new(RwLock::new(HashMap::new())),
                 feed_tx,
                 task_tx,
@@ -507,7 +507,7 @@ mod tests {
 
     #[test]
     fn orchestrator_message_construction() {
-        let msg = OrchestratorMessage {
+        let msg = ConsumerMessage {
             id: Uuid::new_v4(),
             user_id: UserId::new(),
             session_id: None,
