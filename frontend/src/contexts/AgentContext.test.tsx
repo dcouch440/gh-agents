@@ -33,7 +33,7 @@ function TestConsumer() {
     <div>
       {agents.map((a) => (
         <div key={a.id} data-testid={`agent-${a.id}`}>
-          {a.persona_name}:{a.status}
+          {a.name}:{a.status}
         </div>
       ))}
     </div>

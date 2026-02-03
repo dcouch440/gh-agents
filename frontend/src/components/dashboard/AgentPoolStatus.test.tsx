@@ -10,9 +10,9 @@ const stats: AgentPoolStats = {
 }
 
 const agents: Agent[] = [
-  { id: 'a1', tier: 'orchestrator', persona_name: 'Atlas', persona_prompt: '', persona_style: '', model_provider: 'anthropic', model_id: 'opus', model_max_tokens: 16384, model_temperature: 0.7, status: 'working' },
-  { id: 'a2', tier: 'worker', persona_name: 'Forge', persona_prompt: '', persona_style: '', model_provider: 'anthropic', model_id: 'sonnet', model_max_tokens: 8192, model_temperature: 0.7, status: 'idle' },
-  { id: 'a3', tier: 'worker', persona_name: 'Shield', persona_prompt: '', persona_style: '', model_provider: 'anthropic', model_id: 'sonnet', model_max_tokens: 8192, model_temperature: 0.7, status: 'waiting_for_context' },
+  { id: 'a1', name: 'Atlas', system_prompt: '', model_provider: 'anthropic', model_id: 'opus', model_max_tokens: 16384, model_temperature: 0.7, created_at: '', updated_at: '', tier: 'orchestrator', status: 'working' },
+  { id: 'a2', name: 'Forge', system_prompt: '', model_provider: 'anthropic', model_id: 'sonnet', model_max_tokens: 8192, model_temperature: 0.7, created_at: '', updated_at: '', tier: 'worker', status: 'idle' },
+  { id: 'a3', name: 'Shield', system_prompt: '', model_provider: 'anthropic', model_id: 'sonnet', model_max_tokens: 8192, model_temperature: 0.7, created_at: '', updated_at: '', tier: 'worker', status: 'waiting_for_context' },
 ]
 
 describe('AgentPoolStatus', () => {

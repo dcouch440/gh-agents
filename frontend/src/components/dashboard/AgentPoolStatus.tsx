@@ -27,7 +27,7 @@ const buildBar = (active: number, max: number): string => {
 }
 
 function AgentPoolStatus({ agents, stats }: AgentPoolStatusProps) {
-  const busy = agents.filter((a) => a.status !== 'idle')
+  const busy = agents.filter((a) => a.status && a.status !== 'idle')
 
   return (
     <div className="pool-status">
@@ -48,9 +48,9 @@ function AgentPoolStatus({ agents, stats }: AgentPoolStatusProps) {
       {busy.length > 0 ? (
         <div className="pool-status__agents">
           {busy.map((a) => (
-            <div key={a.id} className={`pool-status__agent pool-status__agent--${a.status.replace('waiting_for_', 'waiting-')}`}>
-              <span className="pool-status__dot">{STATUS_DOT[a.status] ?? '\u25CB'}</span>{' '}
-              {a.persona_name}
+            <div key={a.id} className={`pool-status__agent pool-status__agent--${(a.status ?? 'idle').replace('waiting_for_', 'waiting-')}`}>
+              <span className="pool-status__dot">{STATUS_DOT[a.status ?? 'idle'] ?? '\u25CB'}</span>{' '}
+              {a.name}
             </div>
           ))}
         </div>

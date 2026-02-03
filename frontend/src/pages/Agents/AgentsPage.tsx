@@ -6,7 +6,7 @@ function AgentsPage() {
   return (
     <div>
       <PageHeader title="Agents">
-        <Link to={ROUTES.AGENT_CREATE} className="btn btn--primary">Create Agent</Link>
+        <Link to={ROUTES.AGENT_WORKSHOP} className="btn btn--primary">Workshop</Link>
       </PageHeader>
     </div>
   )

@@ -2,7 +2,7 @@ import { createContext, useReducer, useEffect, useCallback, useRef, type ReactNo
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { ACTION, WS_CHANNEL } from '@/constants'
 import { api } from '@/api'
-import type { Agent } from '@/types/agent'
+import type { Agent, AgentStatus } from '@/types/agent'
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -46,7 +46,7 @@ const reducer = (state: AgentState, action: AgentAction): AgentState => {
         ...state,
         agents: state.agents.map((a) =>
           a.id === action.update.id
-            ? { ...a, status: action.update.status as Agent['status'] }
+            ? { ...a, status: action.update.status as AgentStatus }
             : a,
         ),
       }
