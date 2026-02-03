@@ -18,7 +18,7 @@ use super::auth;
 use super::state::{AppState, OrchestratorMessage, StreamChunk};
 use super::ws::SessionUpdate;
 use crate::constants::{MAX_CHAT_MESSAGE_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH};
-use crate::types::{AgentPoolConfig, AgentTier, Priority, Task, TierModels};
+use crate::types::{AgentPoolConfig, Priority, Task};
 
 // ============================================================================
 // Health Endpoint (Slice 10.2.1)
@@ -144,17 +144,6 @@ pub async fn create_task(State(state): State<AppState>, auth: auth::AuthUser, Js
         }
     }
 
-    // Parse tier (default to Worker)
-    let tier = request
-        .tier
-        .as_ref()
-        .map(|t| match t.to_lowercase().as_str() {
-            "orchestrator" => AgentTier::Orchestrator,
-            "utility" => AgentTier::Utility,
-            _ => AgentTier::Worker,
-        })
-        .unwrap_or(AgentTier::Worker);
-
     // Parse priority (default to Normal)
     let priority = request
         .priority
@@ -168,7 +157,7 @@ pub async fn create_task(State(state): State<AppState>, auth: auth::AuthUser, Js
         .unwrap_or(Priority::Normal);
 
     // Create the task
-    let mut task = Task::new(request.title.trim(), tier);
+    let mut task = Task::new(request.title.trim());
     task.description = request.description.unwrap_or_default();
     task.priority = priority;
     task.created_at = Utc::now();
@@ -228,14 +217,6 @@ pub struct AgentsListResponse {
 /// Agent pool statistics
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct AgentPoolStats {
-    pub orchestrators: TierStats,
-    pub workers: TierStats,
-    pub utilities: TierStats,
-}
-
-/// Statistics for a single tier
-#[derive(Serialize, utoipa::ToSchema)]
-pub struct TierStats {
     pub total: usize,
     pub available: usize,
     pub max: u8,
@@ -285,25 +266,11 @@ pub async fn list_agents(State(state): State<AppState>, auth: auth::AuthUser) ->
 
     let agents: Vec<AgentResponse> = rows.into_iter().map(AgentResponse::from_row).collect();
 
-    let count_tier = |tier: &str| agents.iter().filter(|a| a.tier == tier).count();
-
     let response = AgentsListResponse {
         stats: AgentPoolStats {
-            orchestrators: TierStats {
-                total: count_tier("orchestrator"),
-                available: count_tier("orchestrator"),
-                max: pool_config.max_orchestrators,
-            },
-            workers: TierStats {
-                total: count_tier("worker"),
-                available: count_tier("worker"),
-                max: pool_config.max_workers,
-            },
-            utilities: TierStats {
-                total: count_tier("utility"),
-                available: count_tier("utility"),
-                max: pool_config.max_utilities,
-            },
+            total: agents.len(),
+            available: agents.iter().filter(|a| a.status == "idle").count(),
+            max: pool_config.max_agents,
         },
         agents,
     };
@@ -767,7 +734,6 @@ pub async fn set_agent_context(
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct ConfigResponse {
     pub verbosity: String,
-    pub models: TierModels,
     pub pool: AgentPoolConfig,
     pub autonomy: String,
     pub git_strategy: String,
@@ -788,7 +754,6 @@ pub async fn get_config(State(state): State<AppState>) -> Json<ConfigResponse> {
 
     Json(ConfigResponse {
         verbosity: format!("{:?}", config.verbosity).to_lowercase(),
-        models: config.models.clone(),
         pool: config.pool.clone(),
         autonomy: format!("{:?}", config.autonomy).to_lowercase(),
         git_strategy: format!("{:?}", config.git_strategy).to_lowercase(),
@@ -796,35 +761,16 @@ pub async fn get_config(State(state): State<AppState>) -> Json<ConfigResponse> {
     })
 }
 
-/// Request body for updating a single model tier's config
-#[derive(Deserialize, utoipa::ToSchema)]
-pub struct UpdateModelConfig {
-    pub model_id: Option<String>,
-    pub max_tokens: Option<u32>,
-    pub temperature: Option<f32>,
-}
-
-/// Request body for updating model configs by tier
-#[derive(Deserialize, utoipa::ToSchema)]
-pub struct UpdateModelsRequest {
-    pub orchestrator: Option<UpdateModelConfig>,
-    pub worker: Option<UpdateModelConfig>,
-    pub utility: Option<UpdateModelConfig>,
-}
-
 /// Request body for updating pool sizes
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdatePoolRequest {
-    pub max_orchestrators: Option<u8>,
-    pub max_workers: Option<u8>,
-    pub max_utilities: Option<u8>,
+    pub max_agents: Option<u8>,
 }
 
 /// Request body for updating configuration
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateConfigRequest {
     pub verbosity: Option<String>,
-    pub models: Option<UpdateModelsRequest>,
     pub pool: Option<UpdatePoolRequest>,
     pub autonomy: Option<String>,
     pub git_strategy: Option<String>,
@@ -857,40 +803,10 @@ pub async fn update_config(State(state): State<AppState>, Json(request): Json<Up
         }
     }
 
-    // Models
-    if let Some(ref models) = request.models {
-        fn apply_model(target: &mut crate::types::ModelConfig, update: &UpdateModelConfig) {
-            if let Some(ref id) = update.model_id {
-                target.model_id = id.clone();
-            }
-            if let Some(tokens) = update.max_tokens {
-                target.max_tokens = tokens;
-            }
-            if let Some(temp) = update.temperature {
-                target.temperature = temp;
-            }
-        }
-        if let Some(ref o) = models.orchestrator {
-            apply_model(&mut config.models.orchestrator, o);
-        }
-        if let Some(ref w) = models.worker {
-            apply_model(&mut config.models.worker, w);
-        }
-        if let Some(ref u) = models.utility {
-            apply_model(&mut config.models.utility, u);
-        }
-    }
-
     // Pool
     if let Some(ref pool) = request.pool {
-        if let Some(v) = pool.max_orchestrators {
-            config.pool.max_orchestrators = v;
-        }
-        if let Some(v) = pool.max_workers {
-            config.pool.max_workers = v;
-        }
-        if let Some(v) = pool.max_utilities {
-            config.pool.max_utilities = v;
+        if let Some(v) = pool.max_agents {
+            config.pool.max_agents = v;
         }
     }
 
@@ -925,7 +841,6 @@ pub async fn update_config(State(state): State<AppState>, Json(request): Json<Up
 
     let resp = ConfigResponse {
         verbosity: format!("{:?}", config.verbosity).to_lowercase(),
-        models: config.models.clone(),
         pool: config.pool.clone(),
         autonomy: format!("{:?}", config.autonomy).to_lowercase(),
         git_strategy: format!("{:?}", config.git_strategy).to_lowercase(),
@@ -5114,7 +5029,6 @@ mod tests {
     fn config_response_serializes() {
         let response = ConfigResponse {
             verbosity: "normal".to_string(),
-            models: TierModels::default(),
             pool: AgentPoolConfig::default(),
             autonomy: "approval_gates".to_string(),
             git_strategy: "branch_per_slice".to_string(),
@@ -5135,13 +5049,14 @@ mod tests {
     #[test]
     fn agent_pool_stats_serializes() {
         let stats = AgentPoolStats {
-            orchestrators: TierStats { total: 1, available: 1, max: 2 },
-            workers: TierStats { total: 3, available: 2, max: 6 },
-            utilities: TierStats { total: 2, available: 2, max: 4 },
+            total: 6,
+            available: 5,
+            max: 12,
         };
         let json = serde_json::to_string(&stats).unwrap();
-        assert!(json.contains("\"orchestrators\""));
-        assert!(json.contains("\"workers\""));
+        assert!(json.contains("\"total\""));
+        assert!(json.contains("\"available\""));
+        assert!(json.contains("\"max\""));
     }
 
     // Chat endpoint tests
@@ -5594,103 +5509,7 @@ mod tests {
         assert!(body_str.contains("\"db_connected\":true"));
     }
 
-    // === Tier and priority parsing tests ===
-
-    #[tokio::test]
-    async fn create_task_with_orchestrator_tier() {
-        let (app, jwt_secret) = setup_test_app();
-        let token = create_test_token(&jwt_secret);
-
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/api/tasks")
-                    .header("content-type", "application/json")
-                    .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(r#"{"title":"Tier test","tier":"orchestrator"}"#))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let body_str = String::from_utf8(body.to_vec()).unwrap();
-        assert!(body_str.contains("\"assigned_tier\":\"orchestrator\""));
-    }
-
-    #[tokio::test]
-    async fn create_task_with_utility_tier() {
-        let (app, jwt_secret) = setup_test_app();
-        let token = create_test_token(&jwt_secret);
-
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/api/tasks")
-                    .header("content-type", "application/json")
-                    .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(r#"{"title":"Util test","tier":"utility"}"#))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let body_str = String::from_utf8(body.to_vec()).unwrap();
-        assert!(body_str.contains("\"assigned_tier\":\"utility\""));
-    }
-
-    #[tokio::test]
-    async fn create_task_with_unknown_tier_defaults_to_worker() {
-        let (app, jwt_secret) = setup_test_app();
-        let token = create_test_token(&jwt_secret);
-
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/api/tasks")
-                    .header("content-type", "application/json")
-                    .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(r#"{"title":"Default tier","tier":"nonexistent"}"#))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let body_str = String::from_utf8(body.to_vec()).unwrap();
-        assert!(body_str.contains("\"assigned_tier\":\"worker\""));
-    }
-
-    #[tokio::test]
-    async fn create_task_with_no_tier_defaults_to_worker() {
-        let (app, jwt_secret) = setup_test_app();
-        let token = create_test_token(&jwt_secret);
-
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/api/tasks")
-                    .header("content-type", "application/json")
-                    .header("authorization", format!("Bearer {}", token))
-                    .body(Body::from(r#"{"title":"No tier"}"#))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let body_str = String::from_utf8(body.to_vec()).unwrap();
-        assert!(body_str.contains("\"assigned_tier\":\"worker\""));
-    }
+    // === Priority parsing tests ===
 
     #[tokio::test]
     async fn create_task_with_low_priority() {
@@ -6045,9 +5864,9 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(resp["agents"].is_array());
-        assert!(resp["stats"]["orchestrators"].is_object());
-        assert!(resp["stats"]["workers"].is_object());
-        assert!(resp["stats"]["utilities"].is_object());
+        assert!(resp["stats"]["total"].is_number());
+        assert!(resp["stats"]["available"].is_number());
+        assert!(resp["stats"]["max"].is_number());
     }
 
     // === Agent CRUD tests ===
@@ -6645,7 +6464,6 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(resp["verbosity"].is_string());
-        assert!(resp["models"].is_object());
         assert!(resp["pool"].is_object());
         assert!(resp["autonomy"].is_string());
         assert!(resp["git_strategy"].is_string());
@@ -6976,12 +6794,14 @@ mod tests {
     #[test]
     fn me_response_serializes() {
         let response = MeResponse {
-            user: "admin".to_string(),
+            id: "user-123".to_string(),
+            email: "admin@example.com".to_string(),
+            github_login: None,
             authenticated: true,
             token_expires: 99999,
         };
         let json = serde_json::to_string(&response).unwrap();
-        assert!(json.contains("\"user\":\"admin\""));
+        assert!(json.contains("\"id\":\"user-123\""));
         assert!(json.contains("\"authenticated\":true"));
         assert!(json.contains("\"token_expires\":99999"));
     }
@@ -7007,14 +6827,14 @@ mod tests {
         let response = AgentsListResponse {
             agents: vec![test_agent_response()],
             stats: AgentPoolStats {
-                orchestrators: TierStats { total: 0, available: 0, max: 1 },
-                workers: TierStats { total: 1, available: 1, max: 4 },
-                utilities: TierStats { total: 0, available: 0, max: 2 },
+                total: 1,
+                available: 1,
+                max: 12,
             },
         };
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("\"agent-1\""));
-        assert!(json.contains("\"workers\""));
+        assert!(json.contains("\"total\""));
     }
 
     #[test]

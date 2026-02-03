@@ -23,7 +23,7 @@ pub use channels::{
 pub use cluster::{Cluster, ClusterContext, ClusterError, ClusterId, ClusterManager};
 pub use dispatcher::{DispatchError, Dispatcher};
 pub use pipeline::{Pipeline, PipelineError, PipelineId, PipelineManager, PipelineRun, PipelineRunStatus, PipelineStage};
-pub use pool::{AgentPool, PoolError, PoolStats, PoolTierStats};
+pub use pool::{AgentPool, PoolError, PoolStats};
 pub use roles::{CommunicationStyle, LoadedFile, OutputFormat, RequiredReadingLoader, Role, RoleCategory, RoleId, RoleLibrary, RoleManager, RoleTemplate, TemplateVariable, VariableType};
 pub use router_agent::{ClusterEntry, ToolClusterIndex};
 pub use schedule::{Schedule, ScheduleError, ScheduleId, ScheduleManager, Trigger, TriggerEvent, TriggerId};

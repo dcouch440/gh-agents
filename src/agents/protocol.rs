@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use super::agent::AgentId;
 use super::roles::RoleId;
-use crate::types::{AgentTier, TaskStatus};
+use crate::types::TaskStatus;
 
 /// Protocol version for compatibility checking
 pub const PROTOCOL_VERSION: &str = "1.0";
@@ -37,8 +37,6 @@ pub struct TaskAssignment {
     pub timeout_secs: u64,
     /// When this assignment was created
     pub created_at: DateTime<Utc>,
-    /// Target agent tier (informational)
-    pub target_tier: AgentTier,
     /// Role the agent should assume for this task
     pub role_id: RoleId,
     /// Delegation context (tracks hierarchy depth and parent)
@@ -47,7 +45,7 @@ pub struct TaskAssignment {
 
 impl TaskAssignment {
     /// Create a new task assignment
-    pub fn new(task_id: Uuid, title: impl Into<String>, description: impl Into<String>, target_tier: AgentTier) -> Self {
+    pub fn new(task_id: Uuid, title: impl Into<String>, description: impl Into<String>) -> Self {
         Self {
             version: PROTOCOL_VERSION.to_string(),
             task_id,
@@ -57,7 +55,6 @@ impl TaskAssignment {
             constraints: TaskConstraints::default(),
             timeout_secs: crate::constants::DEFAULT_TIMEOUT_SECS,
             created_at: Utc::now(),
-            target_tier,
             role_id: RoleId::new("worker"),
             delegation: DelegationContext::default(),
         }
@@ -1112,7 +1109,7 @@ mod tests {
     // Slice 3.7.1 tests
     #[test]
     fn task_assignment_serialization() {
-        let assignment = TaskAssignment::new(Uuid::new_v4(), "Implement feature", "Add a new button to the UI", AgentTier::Worker);
+        let assignment = TaskAssignment::new(Uuid::new_v4(), "Implement feature", "Add a new button to the UI");
 
         // Serialize to JSON
         let json = serde_json::to_string(&assignment).unwrap();
@@ -1239,14 +1236,14 @@ mod tests {
     // Slice 3.7.5 tests
     #[test]
     fn valid_task_assignment_passes() {
-        let assignment = TaskAssignment::new(Uuid::new_v4(), "Valid title", "Valid description", AgentTier::Worker);
+        let assignment = TaskAssignment::new(Uuid::new_v4(), "Valid title", "Valid description");
 
         assert!(assignment.validate().is_ok());
     }
 
     #[test]
     fn empty_title_fails_validation() {
-        let assignment = TaskAssignment::new(Uuid::new_v4(), "", "Valid description", AgentTier::Worker);
+        let assignment = TaskAssignment::new(Uuid::new_v4(), "", "Valid description");
 
         let errors = assignment.validate().unwrap_err();
         assert!(errors.iter().any(|e| e.field == "title"));
@@ -1254,7 +1251,7 @@ mod tests {
 
     #[test]
     fn zero_timeout_fails_validation() {
-        let mut assignment = TaskAssignment::new(Uuid::new_v4(), "Title", "Description", AgentTier::Worker);
+        let mut assignment = TaskAssignment::new(Uuid::new_v4(), "Title", "Description");
         assignment.timeout_secs = 0;
 
         let errors = assignment.validate().unwrap_err();
@@ -1263,7 +1260,7 @@ mod tests {
 
     #[test]
     fn exceeded_delegation_depth_fails_validation() {
-        let mut assignment = TaskAssignment::new(Uuid::new_v4(), "Title", "Description", AgentTier::Worker);
+        let mut assignment = TaskAssignment::new(Uuid::new_v4(), "Title", "Description");
         assignment.delegation.depth = 5;
         assignment.delegation.max_depth = 2;
 
@@ -1333,7 +1330,7 @@ mod tests {
             conventions: "use fmt".into(),
             metadata: HashMap::new(),
         };
-        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker).with_context(ctx);
+        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D").with_context(ctx);
         assert_eq!(a.context.files.len(), 1);
         assert_eq!(a.context.conventions, "use fmt");
     }
@@ -1347,7 +1344,7 @@ mod tests {
             require_review: false,
             extra: HashMap::new(),
         };
-        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker).with_constraints(c);
+        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D").with_constraints(c);
         assert_eq!(a.constraints.max_files_modified, Some(5));
         assert!(a.constraints.require_tests);
         assert!(!a.constraints.require_review);
@@ -1355,14 +1352,14 @@ mod tests {
 
     #[test]
     fn task_assignment_with_timeout() {
-        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker).with_timeout(Duration::from_secs(600));
+        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D").with_timeout(Duration::from_secs(600));
         assert_eq!(a.timeout_secs, 600);
         assert_eq!(a.timeout(), Duration::from_secs(600));
     }
 
     #[test]
     fn task_assignment_with_role() {
-        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker).with_role(RoleId::new("reviewer"));
+        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D").with_role(RoleId::new("reviewer"));
         assert_eq!(a.role_id, RoleId::new("reviewer"));
     }
 
@@ -1373,7 +1370,7 @@ mod tests {
         let parent = DelegationContext::from_user();
         let del = DelegationContext::delegated_from(agent.clone(), role, &parent);
 
-        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker).with_delegation(del);
+        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D").with_delegation(del);
         assert_eq!(a.delegation.depth, 1);
         assert_eq!(a.delegation.parent_agent, Some(agent));
     }
@@ -1657,13 +1654,13 @@ mod tests {
 
     #[test]
     fn validate_message_fn() {
-        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker);
+        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D");
         assert!(validate_message(&a).is_ok());
     }
 
     #[test]
     fn task_assignment_excessive_timeout_fails() {
-        let mut a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker);
+        let mut a = TaskAssignment::new(Uuid::new_v4(), "T", "D");
         a.timeout_secs = 3600 * 24 + 1;
         let errs = a.validate().unwrap_err();
         assert!(errs.iter().any(|e| e.field == "timeout_secs"));
@@ -1677,7 +1674,7 @@ mod tests {
             conventions: String::new(),
             metadata: HashMap::new(),
         };
-        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D", AgentTier::Worker).with_context(ctx);
+        let a = TaskAssignment::new(Uuid::new_v4(), "T", "D").with_context(ctx);
         let errs = a.validate().unwrap_err();
         assert!(errs.iter().any(|e| e.field.contains("context.files")));
     }

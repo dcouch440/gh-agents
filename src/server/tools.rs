@@ -14,7 +14,7 @@ use crate::agents::{AgentCommand, AgentResponse, CommunicationStyle, OutputForma
 use crate::db::traits::DocumentRepo;
 use crate::db::{AgentRow, PipelineRow, PipelineStageRow};
 use crate::llm::{AnthropicClient, AnthropicConfig, LLMProvider, LLMRequest, Message as LlmMessage, Tool};
-use crate::types::{AgentPersona, AgentTier, ModelConfig, UserId};
+use crate::types::{AgentPersona, ModelConfig, UserId};
 
 use super::state::AppState;
 use super::ws::PipelineUpdate;
@@ -511,21 +511,9 @@ async fn execute_list_agents(state: &AppState) -> Value {
     let stats = pool.stats();
 
     json!({
-        "orchestrators": {
-            "total": stats.orchestrators.total,
-            "available": stats.orchestrators.available,
-            "max": stats.orchestrators.max
-        },
-        "workers": {
-            "total": stats.workers.total,
-            "available": stats.workers.available,
-            "max": stats.workers.max
-        },
-        "utilities": {
-            "total": stats.utilities.total,
-            "available": stats.utilities.available,
-            "max": stats.utilities.max
-        }
+        "total": stats.total,
+        "available": stats.available,
+        "max": stats.max
     })
 }
 
@@ -566,15 +554,7 @@ async fn execute_create_agent(input: &Value, state: &AppState, user_id: UserId) 
         return json!({ "error": "Dispatcher not initialized" });
     };
 
-    let tier_str = input["tier"].as_str().unwrap_or("worker");
-    let tier = match tier_str {
-        "orchestrator" => AgentTier::Orchestrator,
-        "worker" => AgentTier::Worker,
-        "utility" => AgentTier::Utility,
-        other => return json!({ "error": format!("Invalid tier: {}", other) }),
-    };
-
-    let name = input["name"].as_str().unwrap_or(tier_str).to_string();
+    let name = input["name"].as_str().unwrap_or("agent").to_string();
 
     let persona = AgentPersona {
         name: name.clone(),
@@ -585,7 +565,7 @@ async fn execute_create_agent(input: &Value, state: &AppState, user_id: UserId) 
     let mut pool = pool.lock().await;
     let mut dispatcher = dispatcher.lock().await;
 
-    match pool.spawn_agent_with_dispatcher(tier, persona, model_config.clone(), &mut dispatcher) {
+    match pool.spawn_agent_with_dispatcher(persona, model_config.clone(), &mut dispatcher) {
         Ok(agent_id) => {
             // Persist to DB
             if let Err(e) = state
@@ -594,7 +574,7 @@ async fn execute_create_agent(input: &Value, state: &AppState, user_id: UserId) 
                     user_id,
                     AgentRow {
                         id: agent_id.0,
-                        tier: Some(tier_str.to_string()),
+                        tier: None,
                         name: name.clone(),
                         system_prompt: String::new(),
                         persona_style: Some("casual".to_string()),
@@ -614,7 +594,6 @@ async fn execute_create_agent(input: &Value, state: &AppState, user_id: UserId) 
 
             json!({
                 "agent_id": agent_id.0.to_string(),
-                "tier": tier_str,
                 "name": name,
                 "status": "created"
             })
@@ -641,18 +620,7 @@ async fn execute_create_agents(input: &Value, state: &AppState, user_id: UserId)
     let mut errors = Vec::new();
 
     for agent_def in agents_arr {
-        let tier_str = agent_def["tier"].as_str().unwrap_or("worker");
-        let tier = match tier_str {
-            "orchestrator" => AgentTier::Orchestrator,
-            "worker" => AgentTier::Worker,
-            "utility" => AgentTier::Utility,
-            other => {
-                errors.push(json!({ "error": format!("Invalid tier: {}", other) }));
-                continue;
-            }
-        };
-
-        let name = agent_def["name"].as_str().unwrap_or(tier_str).to_string();
+        let name = agent_def["name"].as_str().unwrap_or("agent").to_string();
 
         let persona = AgentPersona {
             name: name.clone(),
@@ -661,7 +629,7 @@ async fn execute_create_agents(input: &Value, state: &AppState, user_id: UserId)
 
         let model_config = ModelConfig::default();
 
-        match pool.spawn_agent_with_dispatcher(tier, persona, model_config.clone(), &mut dispatcher) {
+        match pool.spawn_agent_with_dispatcher(persona, model_config.clone(), &mut dispatcher) {
             Ok(agent_id) => {
                 if let Err(e) = state
                     .repo
@@ -669,7 +637,7 @@ async fn execute_create_agents(input: &Value, state: &AppState, user_id: UserId)
                         user_id,
                         AgentRow {
                             id: agent_id.0,
-                            tier: Some(tier_str.to_string()),
+                            tier: None,
                             name: name.clone(),
                             system_prompt: String::new(),
                             persona_style: Some("casual".to_string()),
@@ -688,7 +656,6 @@ async fn execute_create_agents(input: &Value, state: &AppState, user_id: UserId)
                 }
                 created.push(json!({
                     "agent_id": agent_id.0.to_string(),
-                    "tier": tier_str,
                     "name": name,
                     "status": "created"
                 }));

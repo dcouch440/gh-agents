@@ -5,11 +5,10 @@ use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::types::{AgentTier, Priority, Task, TaskId, TaskStatus, UserId};
+use crate::types::{Priority, Task, TaskId, TaskStatus, UserId};
 
 /// Insert a new task into the database
 pub async fn insert_task(pool: &PgPool, user_id: UserId, task: &Task) -> Result<()> {
-    let tier = format!("{:?}", task.assigned_tier).to_lowercase();
     let agent_id = task.assigned_agent.as_ref().map(|a| a.0);
     let status = format!("{:?}", task.status).to_lowercase();
     let priority = format!("{:?}", task.priority).to_lowercase();
@@ -18,8 +17,8 @@ pub async fn insert_task(pool: &PgPool, user_id: UserId, task: &Task) -> Result<
 
     sqlx::query(
         r#"
-        INSERT INTO tasks (id, user_id, slice_id, title, description, assigned_tier, assigned_agent, status, priority, context_files, metadata, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        INSERT INTO tasks (id, user_id, slice_id, title, description, assigned_agent, status, priority, context_files, metadata, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         "#,
     )
     .bind(task.id.0)
@@ -27,7 +26,6 @@ pub async fn insert_task(pool: &PgPool, user_id: UserId, task: &Task) -> Result<
     .bind(task.slice_id.as_ref().map(|s| s.0))
     .bind(&task.title)
     .bind(&task.description)
-    .bind(&tier)
     .bind(agent_id)
     .bind(&status)
     .bind(&priority)
@@ -45,7 +43,7 @@ pub async fn insert_task(pool: &PgPool, user_id: UserId, task: &Task) -> Result<
 /// Get a task by ID
 pub async fn get_task(pool: &PgPool, user_id: UserId, id: &TaskId) -> Result<Option<Task>> {
     let row: Option<TaskRow> = sqlx::query_as(
-        "SELECT id, slice_id, title, description, assigned_tier, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks WHERE id = $1 AND user_id = $2",
+        "SELECT id, slice_id, title, description, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks WHERE id = $1 AND user_id = $2",
     )
     .bind(id.0)
     .bind(user_id.0)
@@ -79,7 +77,7 @@ pub async fn list_tasks_by_status(pool: &PgPool, status: TaskStatus) -> Result<V
     let status_str = format!("{:?}", status).to_lowercase();
 
     let rows: Vec<TaskRow> = sqlx::query_as(
-        "SELECT id, slice_id, title, description, assigned_tier, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks WHERE status = $1 ORDER BY created_at DESC"
+        "SELECT id, slice_id, title, description, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks WHERE status = $1 ORDER BY created_at DESC"
     )
     .bind(&status_str)
     .fetch_all(pool)
@@ -95,7 +93,7 @@ pub async fn list_tasks(pool: &PgPool, user_id: UserId, status: Option<&str>, li
 
     let rows: Vec<TaskRow> = if let Some(status_filter) = status {
         sqlx::query_as(
-            "SELECT id, slice_id, title, description, assigned_tier, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks WHERE status = $1 AND user_id = $2 ORDER BY created_at DESC LIMIT $3"
+            "SELECT id, slice_id, title, description, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks WHERE status = $1 AND user_id = $2 ORDER BY created_at DESC LIMIT $3"
         )
         .bind(status_filter)
         .bind(user_id.0)
@@ -105,7 +103,7 @@ pub async fn list_tasks(pool: &PgPool, user_id: UserId, status: Option<&str>, li
         .context("Failed to list tasks")?
     } else {
         sqlx::query_as(
-            "SELECT id, slice_id, title, description, assigned_tier, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2"
+            "SELECT id, slice_id, title, description, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2"
         )
         .bind(user_id.0)
         .bind(limit)
@@ -130,7 +128,6 @@ struct TaskRow {
     slice_id: Option<Uuid>,
     title: String,
     description: String,
-    assigned_tier: String,
     assigned_agent: Option<Uuid>,
     status: String,
     priority: String,
@@ -145,13 +142,6 @@ struct TaskRow {
 
 impl TaskRow {
     fn into_task(self) -> Task {
-        let assigned_tier = match self.assigned_tier.as_str() {
-            "orchestrator" => AgentTier::Orchestrator,
-            "worker" => AgentTier::Worker,
-            "utility" => AgentTier::Utility,
-            _ => AgentTier::Worker,
-        };
-
         let status = match self.status.as_str() {
             "pending" => TaskStatus::Pending,
             "inprogress" | "in_progress" => TaskStatus::InProgress,
@@ -177,7 +167,6 @@ impl TaskRow {
             slice_id: self.slice_id.map(crate::types::SliceId),
             title: self.title,
             description: self.description,
-            assigned_tier,
             assigned_agent: self.assigned_agent.map(crate::types::AgentId),
             status,
             priority,
@@ -297,11 +286,12 @@ pub async fn create_session_with_pipeline(pool: &PgPool, user_id: UserId, sessio
 
 /// List sessions for a user
 pub async fn list_sessions(pool: &PgPool, user_id: UserId) -> Result<Vec<SessionRow>> {
-    let rows: Vec<SessionRow> = sqlx::query_as("SELECT id, user_id, mode_id, title, summary, pipeline_id, agent_id, created_at, updated_at FROM chat_sessions WHERE user_id = $1 ORDER BY updated_at DESC")
-        .bind(user_id.0)
-        .fetch_all(pool)
-        .await
-        .context("Failed to list sessions")?;
+    let rows: Vec<SessionRow> =
+        sqlx::query_as("SELECT id, user_id, mode_id, title, summary, pipeline_id, agent_id, created_at, updated_at FROM chat_sessions WHERE user_id = $1 ORDER BY updated_at DESC")
+            .bind(user_id.0)
+            .fetch_all(pool)
+            .await
+            .context("Failed to list sessions")?;
     Ok(rows)
 }
 
@@ -517,20 +507,18 @@ pub async fn list_agent_modes(pool: &PgPool, agent_id: Uuid) -> Result<Vec<Agent
 
 /// Create an agent mode.
 pub async fn create_agent_mode(pool: &PgPool, mode: &AgentModeRow) -> Result<()> {
-    sqlx::query(
-        "INSERT INTO agent_modes (id, agent_id, name, system_prompt_suffix, temperature_override, model_override, tool_overrides, classifier_hint) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-    )
-    .bind(mode.id)
-    .bind(mode.agent_id)
-    .bind(&mode.name)
-    .bind(&mode.system_prompt_suffix)
-    .bind(mode.temperature_override)
-    .bind(&mode.model_override)
-    .bind(&mode.tool_overrides)
-    .bind(&mode.classifier_hint)
-    .execute(pool)
-    .await
-    .context("Failed to create agent mode")?;
+    sqlx::query("INSERT INTO agent_modes (id, agent_id, name, system_prompt_suffix, temperature_override, model_override, tool_overrides, classifier_hint) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
+        .bind(mode.id)
+        .bind(mode.agent_id)
+        .bind(&mode.name)
+        .bind(&mode.system_prompt_suffix)
+        .bind(mode.temperature_override)
+        .bind(&mode.model_override)
+        .bind(&mode.tool_overrides)
+        .bind(&mode.classifier_hint)
+        .execute(pool)
+        .await
+        .context("Failed to create agent mode")?;
     Ok(())
 }
 
@@ -561,7 +549,6 @@ mod tests {
             slice_id: None,
             title: "Test task".to_string(),
             description: "A test task".to_string(),
-            assigned_tier: AgentTier::Worker,
             assigned_agent: None,
             status: TaskStatus::Pending,
             priority: Priority::Normal,

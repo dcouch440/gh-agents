@@ -19,7 +19,6 @@ use super::dispatcher::Dispatcher;
 use super::pool::AgentPool;
 use super::roles::{CommunicationStyle, OutputFormat, RoleId};
 use crate::db::{ClusterRow, ToolRow};
-use crate::types::AgentTier;
 
 /// Index mapping tool names to their owning clusters for fast lookup.
 #[derive(Debug, Clone)]
@@ -165,15 +164,15 @@ pub async fn route_to_cluster_agent(
         role_id: RoleId::new("utility"),
     };
 
-    // Find an available utility agent
+    // Find an available agent
     let agent_id = {
         let p = pool.lock().await;
-        match p.get_available_agent_id(AgentTier::Utility) {
+        match p.get_available_agent_id() {
             Some(id) => id,
             None => {
-                warn!("No available utility agent for cluster routing");
+                warn!("No available agent for cluster routing");
                 return json!({
-                    "error": "No available agent to handle this request. All utility agents are busy."
+                    "error": "No available agent to handle this request. All agents are busy."
                 });
             }
         }

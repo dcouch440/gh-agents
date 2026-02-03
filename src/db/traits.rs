@@ -394,13 +394,7 @@ pub trait AgentExecutionRepo: Send + Sync {
     ) -> Result<AgentExecutionRow>;
     async fn get_agent_execution(&self, id: Uuid) -> Result<Option<AgentExecutionRow>>;
     async fn list_agent_executions_by_stage(&self, stage_execution_id: Uuid) -> Result<Vec<AgentExecutionRow>>;
-    async fn update_agent_execution_status(
-        &self,
-        id: Uuid,
-        status: &str,
-        output: Option<String>,
-        structured_output: Option<serde_json::Value>,
-    ) -> Result<AgentExecutionRow>;
+    async fn update_agent_execution_status(&self, id: Uuid, status: &str, output: Option<String>, structured_output: Option<serde_json::Value>) -> Result<AgentExecutionRow>;
 
     // --- Execution Messages ---
     async fn create_execution_message(&self, agent_execution_id: Uuid, role: &str, content: &str, tool_call_id: Option<String>, input_tokens: i64, output_tokens: i64) -> Result<ExecutionMessageRow>;
@@ -461,7 +455,15 @@ pub trait ToolRouterRepo: Send + Sync {
     /// Create a new tool router.
     async fn create_tool_router(&self, user_id: Uuid, name: &str, description: Option<String>, system_prompt: &str, model_id: &str) -> Result<ToolRouterRow>;
     /// Update a tool router.
-    async fn update_tool_router(&self, id: Uuid, name: Option<String>, description: Option<String>, system_prompt: Option<String>, model_id: Option<String>, is_active: Option<bool>) -> Result<ToolRouterRow>;
+    async fn update_tool_router(
+        &self,
+        id: Uuid,
+        name: Option<String>,
+        description: Option<String>,
+        system_prompt: Option<String>,
+        model_id: Option<String>,
+        is_active: Option<bool>,
+    ) -> Result<ToolRouterRow>;
     /// Delete a tool router.
     async fn delete_tool_router(&self, id: Uuid) -> Result<()>;
     /// Get all tools assigned to a router.
@@ -499,7 +501,17 @@ pub trait RouterRequestRepo: Send + Sync {
     /// Create a new router request log entry.
     async fn create_router_request(&self, session_id: Uuid, agent_execution_id: Option<Uuid>, intent: &str, priority: &str, callback_hint: Option<String>) -> Result<RouterRequestRow>;
     /// Update a router request with routing decision and result.
-    async fn update_router_request(&self, id: Uuid, routed_tool: Option<String>, routed_args: Option<serde_json::Value>, is_async: bool, passdown: Option<String>, chain: Option<serde_json::Value>, status: &str, result: Option<String>) -> Result<RouterRequestRow>;
+    async fn update_router_request(
+        &self,
+        id: Uuid,
+        routed_tool: Option<String>,
+        routed_args: Option<serde_json::Value>,
+        is_async: bool,
+        passdown: Option<String>,
+        chain: Option<serde_json::Value>,
+        status: &str,
+        result: Option<String>,
+    ) -> Result<RouterRequestRow>;
     /// Get a router request by ID.
     async fn get_router_request(&self, id: Uuid) -> Result<Option<RouterRequestRow>>;
     /// List all router requests for a session.

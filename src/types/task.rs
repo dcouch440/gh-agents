@@ -89,7 +89,6 @@ pub struct Task {
     pub slice_id: Option<SliceId>,
     pub title: String,
     pub description: String,
-    pub assigned_tier: super::agent::AgentTier,
     pub assigned_agent: Option<AgentId>,
     pub status: TaskStatus,
     pub priority: Priority,
@@ -111,13 +110,12 @@ pub struct Task {
 
 impl Task {
     /// Create a new task with default values
-    pub fn new(title: impl Into<String>, tier: super::agent::AgentTier) -> Self {
+    pub fn new(title: impl Into<String>) -> Self {
         Self {
             id: TaskId::new(),
             slice_id: None,
             title: title.into(),
             description: String::new(),
-            assigned_tier: tier,
             assigned_agent: None,
             status: TaskStatus::Pending,
             priority: Priority::Normal,
@@ -223,7 +221,7 @@ mod tests {
 
     #[test]
     fn task_new_defaults() {
-        let task = Task::new("Test task", super::super::agent::AgentTier::Worker);
+        let task = Task::new("Test task");
         assert_eq!(task.title, "Test task");
         assert_eq!(task.description, "");
         assert_eq!(task.status, TaskStatus::Pending);
@@ -241,7 +239,7 @@ mod tests {
     #[test]
     fn task_with_dependency() {
         let dep = TaskId::new();
-        let task = Task::new("t", super::super::agent::AgentTier::Worker).with_dependency(dep.clone());
+        let task = Task::new("t").with_dependency(dep.clone());
         assert_eq!(task.depends_on.len(), 1);
         assert_eq!(task.depends_on[0], dep);
     }
@@ -250,9 +248,7 @@ mod tests {
     fn task_with_dependencies_replaces() {
         let dep1 = TaskId::new();
         let dep2 = TaskId::new();
-        let task = Task::new("t", super::super::agent::AgentTier::Worker)
-            .with_dependency(TaskId::new())
-            .with_dependencies(vec![dep1.clone(), dep2.clone()]);
+        let task = Task::new("t").with_dependency(TaskId::new()).with_dependencies(vec![dep1.clone(), dep2.clone()]);
         assert_eq!(task.depends_on.len(), 2);
         assert_eq!(task.depends_on[0], dep1);
     }

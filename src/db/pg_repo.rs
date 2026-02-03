@@ -1423,13 +1423,7 @@ impl AgentExecutionRepo for PgRepo {
         Ok(rows)
     }
 
-    async fn update_agent_execution_status(
-        &self,
-        id: Uuid,
-        status: &str,
-        output: Option<String>,
-        structured_output: Option<serde_json::Value>,
-    ) -> Result<AgentExecutionRow> {
+    async fn update_agent_execution_status(&self, id: Uuid, status: &str, output: Option<String>, structured_output: Option<serde_json::Value>) -> Result<AgentExecutionRow> {
         let row = sqlx::query_as::<_, AgentExecutionRow>(
             "UPDATE agent_executions SET status = $2, output = COALESCE($3, output), structured_output = COALESCE($4, structured_output), completed_at = CASE WHEN $2 IN ('completed', 'failed', 'cancelled') THEN NOW() ELSE completed_at END WHERE id = $1 RETURNING *",
         )
@@ -1580,22 +1574,19 @@ impl ResultRepo for PgRepo {
 #[async_trait]
 impl ToolRouterRepo for PgRepo {
     async fn list_tool_routers(&self, user_id: Uuid) -> Result<Vec<ToolRouterRow>> {
-        let rows: Vec<ToolRouterRow> = sqlx::query_as(
-            "SELECT id, user_id, name, description, system_prompt, model_id, is_active, created_at, updated_at FROM tool_routers WHERE user_id = $1 ORDER BY created_at DESC",
-        )
-        .bind(user_id)
-        .fetch_all(&self.pool)
-        .await?;
+        let rows: Vec<ToolRouterRow> =
+            sqlx::query_as("SELECT id, user_id, name, description, system_prompt, model_id, is_active, created_at, updated_at FROM tool_routers WHERE user_id = $1 ORDER BY created_at DESC")
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await?;
         Ok(rows)
     }
 
     async fn get_tool_router(&self, id: Uuid) -> Result<Option<ToolRouterRow>> {
-        let row: Option<ToolRouterRow> = sqlx::query_as(
-            "SELECT id, user_id, name, description, system_prompt, model_id, is_active, created_at, updated_at FROM tool_routers WHERE id = $1",
-        )
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await?;
+        let row: Option<ToolRouterRow> = sqlx::query_as("SELECT id, user_id, name, description, system_prompt, model_id, is_active, created_at, updated_at FROM tool_routers WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
         Ok(row)
     }
 
@@ -1613,7 +1604,15 @@ impl ToolRouterRepo for PgRepo {
         Ok(row)
     }
 
-    async fn update_tool_router(&self, id: Uuid, name: Option<String>, description: Option<String>, system_prompt: Option<String>, model_id: Option<String>, is_active: Option<bool>) -> Result<ToolRouterRow> {
+    async fn update_tool_router(
+        &self,
+        id: Uuid,
+        name: Option<String>,
+        description: Option<String>,
+        system_prompt: Option<String>,
+        model_id: Option<String>,
+        is_active: Option<bool>,
+    ) -> Result<ToolRouterRow> {
         let row: ToolRouterRow = sqlx::query_as(
             r#"UPDATE tool_routers SET
                 name = COALESCE($2, name),
@@ -1702,11 +1701,7 @@ impl ContextStoreRepo for PgRepo {
     }
 
     async fn update_context_status(&self, id: Uuid, status: &str) -> Result<()> {
-        sqlx::query("UPDATE context_store SET status = $2 WHERE id = $1")
-            .bind(id)
-            .bind(status)
-            .execute(&self.pool)
-            .await?;
+        sqlx::query("UPDATE context_store SET status = $2 WHERE id = $1").bind(id).bind(status).execute(&self.pool).await?;
         Ok(())
     }
 
@@ -1739,7 +1734,17 @@ impl RouterRequestRepo for PgRepo {
         Ok(row)
     }
 
-    async fn update_router_request(&self, id: Uuid, routed_tool: Option<String>, routed_args: Option<serde_json::Value>, is_async: bool, passdown: Option<String>, chain: Option<serde_json::Value>, status: &str, result: Option<String>) -> Result<RouterRequestRow> {
+    async fn update_router_request(
+        &self,
+        id: Uuid,
+        routed_tool: Option<String>,
+        routed_args: Option<serde_json::Value>,
+        is_async: bool,
+        passdown: Option<String>,
+        chain: Option<serde_json::Value>,
+        status: &str,
+        result: Option<String>,
+    ) -> Result<RouterRequestRow> {
         let row: RouterRequestRow = sqlx::query_as(
             r#"UPDATE router_requests SET
                 routed_tool = $2, routed_args = $3, is_async = $4, passdown = $5,
@@ -1816,10 +1821,7 @@ impl RoomRepo for PgRepo {
     }
 
     async fn get_room(&self, id: Uuid) -> Result<Option<RoomRow>> {
-        let row = sqlx::query_as::<_, RoomRow>("SELECT * FROM rooms WHERE id = $1")
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?;
+        let row = sqlx::query_as::<_, RoomRow>("SELECT * FROM rooms WHERE id = $1").bind(id).fetch_optional(&self.pool).await?;
         Ok(row)
     }
 
@@ -1865,36 +1867,29 @@ impl RoomRepo for PgRepo {
     }
 
     async fn delete_room(&self, id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM rooms WHERE id = $1")
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
+        sqlx::query("DELETE FROM rooms WHERE id = $1").bind(id).execute(&self.pool).await?;
         Ok(())
     }
 
     // --- Room members ---
 
     async fn list_room_members(&self, room_id: Uuid) -> Result<Vec<RoomMemberRow>> {
-        let rows = sqlx::query_as::<_, RoomMemberRow>(
-            "SELECT room_id, agent_id, display_name, role_description, display_order FROM room_members WHERE room_id = $1 ORDER BY display_order ASC",
-        )
-        .bind(room_id)
-        .fetch_all(&self.pool)
-        .await?;
+        let rows = sqlx::query_as::<_, RoomMemberRow>("SELECT room_id, agent_id, display_name, role_description, display_order FROM room_members WHERE room_id = $1 ORDER BY display_order ASC")
+            .bind(room_id)
+            .fetch_all(&self.pool)
+            .await?;
         Ok(rows)
     }
 
     async fn add_room_member(&self, room_id: Uuid, agent_id: Uuid, display_name: Option<String>, role_description: String, display_order: i32) -> Result<()> {
-        sqlx::query(
-            "INSERT INTO room_members (room_id, agent_id, display_name, role_description, display_order) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
-        )
-        .bind(room_id)
-        .bind(agent_id)
-        .bind(display_name)
-        .bind(role_description)
-        .bind(display_order)
-        .execute(&self.pool)
-        .await?;
+        sqlx::query("INSERT INTO room_members (room_id, agent_id, display_name, role_description, display_order) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING")
+            .bind(room_id)
+            .bind(agent_id)
+            .bind(display_name)
+            .bind(role_description)
+            .bind(display_order)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
@@ -1910,22 +1905,17 @@ impl RoomRepo for PgRepo {
     async fn set_room_members(&self, room_id: Uuid, members: &[RoomMemberInput]) -> Result<()> {
         let mut tx = self.pool.begin().await?;
 
-        sqlx::query("DELETE FROM room_members WHERE room_id = $1")
-            .bind(room_id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query("DELETE FROM room_members WHERE room_id = $1").bind(room_id).execute(&mut *tx).await?;
 
         for member in members {
-            sqlx::query(
-                "INSERT INTO room_members (room_id, agent_id, display_name, role_description, display_order) VALUES ($1, $2, $3, $4, $5)",
-            )
-            .bind(room_id)
-            .bind(member.agent_id)
-            .bind(member.display_name.as_deref())
-            .bind(&member.role_description)
-            .bind(member.display_order)
-            .execute(&mut *tx)
-            .await?;
+            sqlx::query("INSERT INTO room_members (room_id, agent_id, display_name, role_description, display_order) VALUES ($1, $2, $3, $4, $5)")
+                .bind(room_id)
+                .bind(member.agent_id)
+                .bind(member.display_name.as_deref())
+                .bind(&member.role_description)
+                .bind(member.display_order)
+                .execute(&mut *tx)
+                .await?;
         }
 
         tx.commit().await?;
@@ -1935,13 +1925,11 @@ impl RoomRepo for PgRepo {
     // --- Room sessions ---
 
     async fn create_room_session(&self, room_id: Uuid, run_id: Option<Uuid>) -> Result<RoomSessionRow> {
-        let row = sqlx::query_as::<_, RoomSessionRow>(
-            "INSERT INTO room_sessions (room_id, run_id) VALUES ($1, $2) RETURNING *",
-        )
-        .bind(room_id)
-        .bind(run_id)
-        .fetch_one(&self.pool)
-        .await?;
+        let row = sqlx::query_as::<_, RoomSessionRow>("INSERT INTO room_sessions (room_id, run_id) VALUES ($1, $2) RETURNING *")
+            .bind(room_id)
+            .bind(run_id)
+            .fetch_one(&self.pool)
+            .await?;
         Ok(row)
     }
 
@@ -1954,11 +1942,7 @@ impl RoomRepo for PgRepo {
     }
 
     async fn update_room_session_status(&self, id: Uuid, status: &str) -> Result<()> {
-        let completed_at = if status == "completed" || status == "cancelled" {
-            Some(Utc::now())
-        } else {
-            None
-        };
+        let completed_at = if status == "completed" || status == "cancelled" { Some(Utc::now()) } else { None };
         sqlx::query("UPDATE room_sessions SET status = $2, completed_at = COALESCE($3, completed_at) WHERE id = $1")
             .bind(id)
             .bind(status)
@@ -1969,12 +1953,10 @@ impl RoomRepo for PgRepo {
     }
 
     async fn increment_room_session_turn(&self, id: Uuid) -> Result<i32> {
-        let row: (i32,) = sqlx::query_as(
-            "UPDATE room_sessions SET current_turn = current_turn + 1 WHERE id = $1 RETURNING current_turn",
-        )
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await?;
+        let row: (i32,) = sqlx::query_as("UPDATE room_sessions SET current_turn = current_turn + 1 WHERE id = $1 RETURNING current_turn")
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await?;
         Ok(row.0)
     }
 
@@ -2017,7 +1999,7 @@ impl RoomRepo for PgRepo {
 mod tests {
     use super::*;
     use crate::db::test_utils::TestDb;
-    use crate::types::{AgentTier, Priority, Task, TaskId, TaskStatus};
+    use crate::types::{Priority, Task, TaskId, TaskStatus};
 
     #[tokio::test]
     #[ignore = "requires running Postgres"]
@@ -2263,7 +2245,6 @@ mod tests {
             slice_id: None,
             title: "Test Task".to_string(),
             description: "Test Description".to_string(),
-            assigned_tier: AgentTier::Worker,
             assigned_agent: None,
             status: TaskStatus::Pending,
             priority: Priority::Normal,

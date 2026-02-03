@@ -18,7 +18,6 @@ use crate::agents::{AgentCommand, AgentResponse, CommunicationStyle, FileContent
 use super::state::{AppState, OrchestratorMessage, StreamChunk};
 use super::ws::{AgentUpdate, FeedUpdate, PipelineUpdate, TaskUpdate};
 
-
 /// Spawn a background task that drains agent responses from the dispatcher
 /// and stores them in `state.task_results` for retrieval by `get_task_result`.
 pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandle<()>> {
@@ -219,11 +218,7 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
 
                     // Pipeline auto-advance (delegated to hub::advance_pipeline)
                     if let Some((run_id, completed_stage_number, prev_output, succeeded, stage_input_tokens, stage_output_tokens, stage_duration_ms)) = pipeline_advance {
-                        let stage_output = if succeeded && !prev_output.is_empty() {
-                            Some(prev_output.clone())
-                        } else {
-                            None
-                        };
+                        let stage_output = if succeeded && !prev_output.is_empty() { Some(prev_output.clone()) } else { None };
 
                         match super::hub::advance_pipeline(
                             &state,
@@ -251,13 +246,8 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                 };
                                 let next_stage_info = {
                                     let mgr = state.pipeline_manager.read().await;
-                                    mgr.get_run_pipeline_id(run_id).and_then(|pid| {
-                                        mgr.get_pipeline(&pid).and_then(|p| {
-                                            p.stages.get(stage_number as usize).map(|s| {
-                                                (s.agent_id.clone(), s.role.clone())
-                                            })
-                                        })
-                                    })
+                                    mgr.get_run_pipeline_id(run_id)
+                                        .and_then(|pid| mgr.get_pipeline(&pid).and_then(|p| p.stages.get(stage_number as usize).map(|s| (s.agent_id.clone(), s.role.clone()))))
                                 };
                                 let pipeline_id_opt = {
                                     let mgr = state.pipeline_manager.read().await;
@@ -275,9 +265,14 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                                 None
                                             }
                                         }
-                                        Err(e) => { warn!("Failed to load pipeline stages: {}", e); None }
+                                        Err(e) => {
+                                            warn!("Failed to load pipeline stages: {}", e);
+                                            None
+                                        }
                                     }
-                                } else { None };
+                                } else {
+                                    None
+                                };
 
                                 let description = rendered_prompt.unwrap_or_else(|| format!("{}\n\nPrevious stage output:\n{}", initial_task, prev_output));
                                 let rendered_prompt_copy = description.clone();
@@ -342,10 +337,16 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                     agent_id: resolved_agent_id.as_ref().map(|a| a.0),
                                     status: "running".to_string(),
                                     rendered_prompt: Some(rendered_prompt_copy),
-                                    output: None, structured_output: None, user_input: None,
-                                    input_tokens: 0, output_tokens: 0,
-                                    started_at: chrono::Utc::now(), completed_at: None, duration_ms: 0,
-                                    stage_member_id: None, pipeline_id: None,
+                                    output: None,
+                                    structured_output: None,
+                                    user_input: None,
+                                    input_tokens: 0,
+                                    output_tokens: 0,
+                                    started_at: chrono::Utc::now(),
+                                    completed_at: None,
+                                    duration_ms: 0,
+                                    stage_member_id: None,
+                                    pipeline_id: None,
                                 };
                                 let _ = state.repo.create_stage_execution(&stage_exec).await;
                                 if let Some(ae_repo) = &state.agent_execution_repo {
@@ -364,24 +365,31 @@ pub fn spawn_response_consumer(state: AppState) -> Option<tokio::task::JoinHandl
                                             let _ = mgr.fail_run(run_id, &e.to_string());
                                         } else {
                                             state.broadcast_feed(FeedUpdate {
-                                                id: run_id, agent_id: "pipeline".into(),
+                                                id: run_id,
+                                                agent_id: "pipeline".into(),
                                                 content: format!("Pipeline advanced to stage {}", stage_number),
                                                 item_type: "pipeline_progress".into(),
-                                                timestamp: chrono::Utc::now(), user_id: None,
+                                                timestamp: chrono::Utc::now(),
+                                                user_id: None,
                                             });
                                             let pipeline_id = {
                                                 let mgr = state.pipeline_manager.read().await;
                                                 mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
                                             };
                                             state.broadcast_pipeline(PipelineUpdate {
-                                                run_id, pipeline_id,
+                                                run_id,
+                                                pipeline_id,
                                                 event: "stage_started".into(),
                                                 stage_number: Some(stage_number),
                                                 stage_name: Some(stage_name),
                                                 agent_id: resolved_agent_id.as_ref().map(|a| a.0.to_string()),
-                                                output: None, input_tokens: None, output_tokens: None,
-                                                duration_ms: None, user_input: None,
-                                                timestamp: chrono::Utc::now(), user_id: None,
+                                                output: None,
+                                                input_tokens: None,
+                                                output_tokens: None,
+                                                duration_ms: None,
+                                                user_input: None,
+                                                timestamp: chrono::Utc::now(),
+                                                user_id: None,
                                             });
                                         }
                                     }
@@ -594,16 +602,14 @@ async fn handle_message(state: &AppState, provider: Arc<dyn LLMProvider + Send +
     let agent_id = msg.agent_id.or(state.default_agent_id);
 
     match agent_id {
-        Some(aid) => {
-            match super::hub::run_chat(state, provider, aid, msg.session_id, message_id, &msg.content, msg.user_id, None).await {
-                Ok(_) => {}
-                Err(e) => {
-                    warn!("Chat error for {}: {}", message_id, e);
-                    state.send_stream_chunk(message_id, StreamChunk::Error(format!("{}", e))).await;
-                    state.send_stream_chunk(message_id, StreamChunk::Done).await;
-                }
+        Some(aid) => match super::hub::run_chat(state, provider, aid, msg.session_id, message_id, &msg.content, msg.user_id, None).await {
+            Ok(_) => {}
+            Err(e) => {
+                warn!("Chat error for {}: {}", message_id, e);
+                state.send_stream_chunk(message_id, StreamChunk::Error(format!("{}", e))).await;
+                state.send_stream_chunk(message_id, StreamChunk::Done).await;
             }
-        }
+        },
         None => {
             warn!("No agent_id and no default agent configured for message {}", message_id);
             state.send_stream_chunk(message_id, StreamChunk::Error("No agent configured".into())).await;

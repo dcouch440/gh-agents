@@ -95,7 +95,7 @@ impl Agent {
     ///
     /// This is the primary entry point for agent execution. It should be
     /// spawned as a tokio task.
-    #[instrument(skip(self), fields(agent_id = ?self.id, tier = ?self.tier))]
+    #[instrument(skip(self), fields(agent_id = ?self.id))]
     pub async fn run(mut self) -> Result<(), AgentError> {
         info!("Agent starting run loop");
 
@@ -878,7 +878,7 @@ mod tests {
     use crate::agents::channels::*;
     use crate::agents::roles::{CommunicationStyle, OutputFormat, RoleId};
     use crate::llm::{LLMProvider, LLMRequest, LLMResponse, StopReason, StreamChunk, TokenUsage};
-    use crate::types::{AgentPersona, AgentStatus, AgentTier, ModelConfig, TaskStatus};
+    use crate::types::{AgentPersona, AgentStatus, ModelConfig, TaskStatus};
     use async_trait::async_trait;
     use futures::Stream;
     use std::pin::Pin;
@@ -990,7 +990,7 @@ mod tests {
     fn create_test_agent_with_channels(provider: Arc<dyn LLMProvider + Send + Sync>) -> (Agent, mpsc::Sender<AgentCommand>, mpsc::Receiver<AgentResponse>) {
         let (command_tx, command_rx) = mpsc::channel(32);
         let (response_tx, response_rx) = mpsc::channel(32);
-        let agent = Agent::new(AgentTier::Worker, AgentPersona::default(), ModelConfig::default(), provider, command_rx, response_tx);
+        let agent = Agent::new(AgentPersona::default(), ModelConfig::default(), provider, command_rx, response_tx);
         (agent, command_tx, response_rx)
     }
 

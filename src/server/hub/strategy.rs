@@ -6,7 +6,7 @@
 use async_trait::async_trait;
 use serde_json::Value;
 
-use crate::llm::{Message, Tool, TokenUsage};
+use crate::llm::{Message, TokenUsage, Tool};
 
 use super::error::HubError;
 

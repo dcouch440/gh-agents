@@ -26,9 +26,8 @@ use super::streaming::NullSink;
 
 // Re-export pure DAG functions from the existing dag_executor
 pub use crate::server::dag_executor::{
-    compose_prompt, extract_for_each_label, find_entry_steps, get_child_steps, get_parent_steps,
-    resolve_for_each_array, resolve_variables, topological_sort, StepOutput,
-    WorkflowExecutionContext, WorkflowExecutionResult,
+    compose_prompt, extract_for_each_label, find_entry_steps, get_child_steps, get_parent_steps, resolve_for_each_array, resolve_variables, topological_sort, StepOutput, WorkflowExecutionContext,
+    WorkflowExecutionResult,
 };
 
 /// Execute a complete workflow DAG using the unified ExecutionEngine.
@@ -87,9 +86,7 @@ pub async fn execute_workflow_via_engine(
             // Room execution — create a session and pause the pipeline.
             // The user interacts with the room via POST /api/room-sessions/:id/messages.
             // When the session completes, the pipeline continues.
-            let room_id = step.room_id.ok_or_else(|| {
-                HubError::Internal(anyhow!("step {} has execution_mode='room' but no room_id", step.id))
-            })?;
+            let room_id = step.room_id.ok_or_else(|| HubError::Internal(anyhow!("step {} has execution_mode='room' but no room_id", step.id)))?;
             let room_repo = state.room_repo.as_ref().ok_or(HubError::ProviderNotConfigured)?;
             let session = room_repo
                 .create_room_session(room_id, Some(ctx.run_id))
@@ -156,10 +153,7 @@ pub async fn execute_workflow_via_engine(
         }
     }
 
-    let final_outputs: HashMap<String, StepOutput> = completed
-        .into_iter()
-        .map(|(id, out)| (id.to_string(), out))
-        .collect();
+    let final_outputs: HashMap<String, StepOutput> = completed.into_iter().map(|(id, out)| (id.to_string(), out)).collect();
 
     Ok(WorkflowExecutionResult {
         outputs: final_outputs,
@@ -194,8 +188,7 @@ async fn execute_single_step(
     )
     .await;
 
-    let (output, in_tok, out_tok, cost) =
-        run_step_via_engine(engine, state, ctx, step, agent, &prompt, cancel).await?;
+    let (output, in_tok, out_tok, cost) = run_step_via_engine(engine, state, ctx, step, agent, &prompt, cancel).await?;
 
     *total_input_tokens += in_tok;
     *total_output_tokens += out_tok;
@@ -228,15 +221,9 @@ async fn execute_for_each_step(
     total_cost_usd: &mut f32,
     cancel: Option<&CancellationToken>,
 ) -> Result<(), HubError> {
-    let for_each_ref = step
-        .for_each_ref
-        .as_deref()
-        .ok_or_else(|| anyhow::anyhow!("for_each step {} missing for_each_ref", step.id))?;
+    let for_each_ref = step.for_each_ref.as_deref().ok_or_else(|| anyhow::anyhow!("for_each step {} missing for_each_ref", step.id))?;
 
-    let array = resolve_for_each_array(for_each_ref, var_outputs, &ctx.prior_outputs)
-        .ok_or_else(|| HubError::ForEachNotArray {
-            reference: for_each_ref.to_string(),
-        })?;
+    let array = resolve_for_each_array(for_each_ref, var_outputs, &ctx.prior_outputs).ok_or_else(|| HubError::ForEachNotArray { reference: for_each_ref.to_string() })?;
 
     let label_field = step.for_each_label_field.as_deref();
 
@@ -307,10 +294,7 @@ async fn run_step_via_engine(
     prompt: &str,
     cancel: Option<&CancellationToken>,
 ) -> Result<(StepOutput, i64, i64, f32), HubError> {
-    let ae_repo = state
-        .agent_execution_repo
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("agent_execution_repo not configured"))?;
+    let ae_repo = state.agent_execution_repo.as_ref().ok_or_else(|| anyhow::anyhow!("agent_execution_repo not configured"))?;
 
     // Build system prompt with optional schema enforcement
     let mut system_prompt = agent.system_prompt.clone();
@@ -331,28 +315,13 @@ async fn run_step_via_engine(
 
     // Create agent_execution row
     let ae_row = ae_repo
-        .create_agent_execution(
-            ctx.stage_execution_id,
-            agent.id,
-            Some(step.id),
-            false,
-            None,
-            &system_prompt,
-            prompt,
-            None,
-            None,
-            None,
-        )
+        .create_agent_execution(ctx.stage_execution_id, agent.id, Some(step.id), false, None, &system_prompt, prompt, None, None, None)
         .await
         .map_err(|e| anyhow::anyhow!("failed to create agent execution: {}", e))?;
 
     // Record initial messages
-    let _ = ae_repo
-        .create_execution_message(ae_row.id, "system", &system_prompt, None, 0, 0)
-        .await;
-    let _ = ae_repo
-        .create_execution_message(ae_row.id, "user", prompt, None, 0, 0)
-        .await;
+    let _ = ae_repo.create_execution_message(ae_row.id, "system", &system_prompt, None, 0, 0).await;
+    let _ = ae_repo.create_execution_message(ae_row.id, "user", prompt, None, 0, 0).await;
 
     // Build strategy
     let config = DagStepConfig {
@@ -370,22 +339,14 @@ async fn run_step_via_engine(
     let strategy = DagStepStrategy::new(config, state.clone());
 
     // Build recorder (strategy handles its own recording in on_complete)
-    let recorder = ExecutionRecorder::new(
-        state.repo.as_ref(),
-        state.agent_execution_repo.as_deref(),
-        state.token_ledger_repo.as_deref(),
-    );
+    let recorder = ExecutionRecorder::new(state.repo.as_ref(), state.agent_execution_repo.as_deref(), state.token_ledger_repo.as_deref());
 
     let sink = NullSink;
 
     // Execute
     let result = engine.execute(&strategy, prompt, &sink, &recorder, cancel).await?;
 
-    let cost = compute_cost(
-        &agent.model_id,
-        result.input_tokens as i64,
-        result.output_tokens as i64,
-    );
+    let cost = compute_cost(&agent.model_id, result.input_tokens as i64, result.output_tokens as i64);
 
     let variable_name = step.output_variable_name.clone().unwrap_or_default();
     let structured = super::strategies::dag_step::DagStepStrategy::parse_output(&result.content);
@@ -420,7 +381,7 @@ async fn resolve_agent_tools(state: &AppState, agent_id: Uuid) -> Vec<Tool> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::server::dag_executor::{topological_sort, resolve_variables};
+    use crate::server::dag_executor::{resolve_variables, topological_sort};
 
     #[test]
     fn topo_sort_linear() {
@@ -460,10 +421,7 @@ mod tests {
                 room_id: None,
             },
         ];
-        let edges = vec![WorkflowStepEdgeRow {
-            from_step_id: s1,
-            to_step_id: s2,
-        }];
+        let edges = vec![WorkflowStepEdgeRow { from_step_id: s1, to_step_id: s2 }];
 
         let sorted = topological_sort(&steps, &edges).unwrap();
         assert_eq!(sorted[0], s1);
@@ -476,24 +434,39 @@ mod tests {
         let s2 = Uuid::new_v4();
         let steps = vec![
             WorkflowStepRow {
-                id: s1, workflow_id: Uuid::new_v4(), agent_id: Uuid::new_v4(),
-                execution_mode: "single".into(), for_each_ref: None,
-                prompt_template_id: None, prompt_template: "p".into(),
-                output_schema_id: None, output_variable_name: None,
-                interactive_agent_id: None, for_each_label_field: None, display_order: 0, version: 1, room_id: None,
+                id: s1,
+                workflow_id: Uuid::new_v4(),
+                agent_id: Uuid::new_v4(),
+                execution_mode: "single".into(),
+                for_each_ref: None,
+                prompt_template_id: None,
+                prompt_template: "p".into(),
+                output_schema_id: None,
+                output_variable_name: None,
+                interactive_agent_id: None,
+                for_each_label_field: None,
+                display_order: 0,
+                version: 1,
+                room_id: None,
             },
             WorkflowStepRow {
-                id: s2, workflow_id: Uuid::new_v4(), agent_id: Uuid::new_v4(),
-                execution_mode: "single".into(), for_each_ref: None,
-                prompt_template_id: None, prompt_template: "p".into(),
-                output_schema_id: None, output_variable_name: None,
-                interactive_agent_id: None, for_each_label_field: None, display_order: 1, version: 1, room_id: None,
+                id: s2,
+                workflow_id: Uuid::new_v4(),
+                agent_id: Uuid::new_v4(),
+                execution_mode: "single".into(),
+                for_each_ref: None,
+                prompt_template_id: None,
+                prompt_template: "p".into(),
+                output_schema_id: None,
+                output_variable_name: None,
+                interactive_agent_id: None,
+                for_each_label_field: None,
+                display_order: 1,
+                version: 1,
+                room_id: None,
             },
         ];
-        let edges = vec![
-            WorkflowStepEdgeRow { from_step_id: s1, to_step_id: s2 },
-            WorkflowStepEdgeRow { from_step_id: s2, to_step_id: s1 },
-        ];
+        let edges = vec![WorkflowStepEdgeRow { from_step_id: s1, to_step_id: s2 }, WorkflowStepEdgeRow { from_step_id: s2, to_step_id: s1 }];
 
         assert!(topological_sort(&steps, &edges).is_err());
     }
@@ -510,10 +483,7 @@ mod tests {
     #[test]
     fn resolve_variables_dot_path() {
         let mut outputs = HashMap::new();
-        outputs.insert(
-            "user".to_string(),
-            serde_json::json!({"name": "Bob", "age": 30}),
-        );
+        outputs.insert("user".to_string(), serde_json::json!({"name": "Bob", "age": 30}));
 
         let result = resolve_variables("Name: {user.name}, Age: {user.age}", &outputs, &HashMap::new());
         assert_eq!(result, "Name: Bob, Age: 30");
@@ -528,10 +498,7 @@ mod tests {
     #[test]
     fn resolve_for_each_array_basic() {
         let mut outputs = HashMap::new();
-        outputs.insert(
-            "items".to_string(),
-            serde_json::json!([{"name": "a"}, {"name": "b"}]),
-        );
+        outputs.insert("items".to_string(), serde_json::json!([{"name": "a"}, {"name": "b"}]));
 
         let arr = resolve_for_each_array("items", &outputs, &HashMap::new()).unwrap();
         assert_eq!(arr.len(), 2);
@@ -540,10 +507,7 @@ mod tests {
     #[test]
     fn resolve_for_each_array_nested() {
         let mut outputs = HashMap::new();
-        outputs.insert(
-            "result".to_string(),
-            serde_json::json!({"data": {"items": [1, 2, 3]}}),
-        );
+        outputs.insert("result".to_string(), serde_json::json!({"data": {"items": [1, 2, 3]}}));
 
         let arr = resolve_for_each_array("result.data.items", &outputs, &HashMap::new()).unwrap();
         assert_eq!(arr.len(), 3);

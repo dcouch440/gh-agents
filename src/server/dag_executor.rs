@@ -500,12 +500,7 @@ async fn execute_step(
 
     // Update agent_execution with results
     let _ = ae_repo
-        .update_agent_execution_status(
-            ae_row.id,
-            "completed",
-            Some(final_content.clone()),
-            structured_output.clone(),
-        )
+        .update_agent_execution_status(ae_row.id, "completed", Some(final_content.clone()), structured_output.clone())
         .await;
 
     // Broadcast completed status
@@ -550,7 +545,18 @@ async fn execute_interactive_review(
 
     // Create interactive agent_execution
     let iae_row = ae_repo
-        .create_agent_execution(ctx.stage_execution_id, interactive_agent.id, Some(step.id), true, Some(parent_ae_id), &system_prompt, &review_prompt, None, None, None)
+        .create_agent_execution(
+            ctx.stage_execution_id,
+            interactive_agent.id,
+            Some(step.id),
+            true,
+            Some(parent_ae_id),
+            &system_prompt,
+            &review_prompt,
+            None,
+            None,
+            None,
+        )
         .await?;
 
     // Record messages
@@ -585,9 +591,7 @@ async fn execute_interactive_review(
     }
 
     // Set status to awaiting_user — the user will chat and approve via the API
-    let _ = ae_repo
-        .update_agent_execution_status(iae_row.id, "awaiting_user", Some(response.content.clone()), None)
-        .await;
+    let _ = ae_repo.update_agent_execution_status(iae_row.id, "awaiting_user", Some(response.content.clone()), None).await;
 
     // Broadcast awaiting_user
     broadcast_agent_execution_update(

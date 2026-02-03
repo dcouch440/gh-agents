@@ -10,16 +10,11 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::agents::gatekeeper::{
-    self, GatekeeperInput, RosterEntry, SpeakerSelection,
-};
+use crate::agents::gatekeeper::{self, GatekeeperInput, RosterEntry, SpeakerSelection};
 use crate::db::{AgentRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry};
 use crate::llm::{LLMProvider, LLMRequest, Message, Tool};
-use crate::server::hub::{
-    ExecutionEngine, ExecutionRecorder, HubError,
-    RoomSpeakerConfig, RoomSpeakerStrategy,
-};
 use crate::server::hub::streaming::StreamSink;
+use crate::server::hub::{ExecutionEngine, ExecutionRecorder, HubError, RoomSpeakerConfig, RoomSpeakerStrategy};
 use crate::server::state::AppState;
 use crate::server::ws::RoomUpdateEvent;
 
@@ -57,19 +52,10 @@ pub struct RoomTurnResult {
 // ---------------------------------------------------------------------------
 
 /// Build the room context preamble injected into each speaker's system prompt.
-fn build_room_context(
-    room: &RoomRow,
-    member: &RoomMemberRow,
-    agent: &AgentRow,
-    members: &[RoomMemberWithAgent],
-) -> String {
+fn build_room_context(room: &RoomRow, member: &RoomMemberRow, agent: &AgentRow, members: &[RoomMemberWithAgent]) -> String {
     let mut ctx = String::new();
     ctx.push_str("## Room Context\n\n");
-    ctx.push_str(&format!(
-        "You are **{}** in the room \"{}\".\n",
-        member.display_name.as_deref().unwrap_or(&agent.name),
-        room.name
-    ));
+    ctx.push_str(&format!("You are **{}** in the room \"{}\".\n", member.display_name.as_deref().unwrap_or(&agent.name), room.name));
     ctx.push_str(&format!("Your role: {}\n\n", member.role_description));
     ctx.push_str("Other participants:\n");
     for m in members {
@@ -86,10 +72,7 @@ fn build_room_context(
 }
 
 /// Format transcript entries for injection into a speaker's prompt.
-fn format_transcript(
-    transcript: &[RoomTranscriptEntry],
-    summary: Option<&str>,
-) -> String {
+fn format_transcript(transcript: &[RoomTranscriptEntry], summary: Option<&str>) -> String {
     let mut out = String::new();
 
     if let Some(s) = summary {
@@ -106,20 +89,13 @@ fn format_transcript(
 
     out.push_str("## Recent Discussion\n\n");
     for entry in transcript {
-        out.push_str(&format!(
-            "**{}** ({}): {}\n\n",
-            entry.agent_name, entry.role_description, entry.content
-        ));
+        out.push_str(&format!("**{}** ({}): {}\n\n", entry.agent_name, entry.role_description, entry.content));
     }
     out
 }
 
 /// Build the full user prompt for a speaker: transcript + original message + gatekeeper context.
-fn build_speaker_prompt(
-    user_message: &str,
-    followup_context: &str,
-    transcript_block: &str,
-) -> String {
+fn build_speaker_prompt(user_message: &str, followup_context: &str, transcript_block: &str) -> String {
     let mut prompt = String::new();
     if !transcript_block.is_empty() {
         prompt.push_str(transcript_block);
@@ -127,10 +103,7 @@ fn build_speaker_prompt(
     }
     prompt.push_str(&format!("**User message**: {}\n", user_message));
     if !followup_context.is_empty() {
-        prompt.push_str(&format!(
-            "\n**Facilitator note**: {}\n",
-            followup_context
-        ));
+        prompt.push_str(&format!("\n**Facilitator note**: {}\n", followup_context));
     }
     prompt
 }
@@ -152,11 +125,7 @@ async fn call_gatekeeper(
         .iter()
         .map(|m| RosterEntry {
             agent_id: m.member.agent_id,
-            name: m
-                .member
-                .display_name
-                .clone()
-                .unwrap_or_else(|| m.agent.name.clone()),
+            name: m.member.display_name.clone().unwrap_or_else(|| m.agent.name.clone()),
             role_description: m.member.role_description.clone(),
         })
         .collect();
@@ -175,10 +144,7 @@ async fn call_gatekeeper(
         .with_system(gatekeeper::GATEKEEPER_SYSTEM_PROMPT)
         .with_max_tokens(1024);
 
-    let response = provider
-        .send_message(request)
-        .await
-        .map_err(|e| HubError::LlmCallFailed { round: 0, source: e })?;
+    let response = provider.send_message(request).await.map_err(|e| HubError::LlmCallFailed { round: 0, source: e })?;
 
     match gatekeeper::parse_gatekeeper_response(&response.content) {
         Some(output) => {
@@ -187,13 +153,8 @@ async fn call_gatekeeper(
         }
         None => {
             warn!("Gatekeeper response parse failed, using fallback order");
-            let roster_rows: Vec<RoomMemberRow> =
-                members.iter().map(|m| m.member.clone()).collect();
-            Ok(gatekeeper::fallback_speaker_order(
-                &roster_rows,
-                mentions,
-                room.max_speakers_per_turn,
-            ))
+            let roster_rows: Vec<RoomMemberRow> = members.iter().map(|m| m.member.clone()).collect();
+            Ok(gatekeeper::fallback_speaker_order(&roster_rows, mentions, room.max_speakers_per_turn))
         }
     }
 }
@@ -218,10 +179,7 @@ pub async fn execute_room_turn(
     user_id: Uuid,
     cancel: Option<&CancellationToken>,
 ) -> Result<RoomTurnResult, HubError> {
-    let room_repo = state
-        .room_repo
-        .as_ref()
-        .ok_or_else(|| HubError::Internal(anyhow::anyhow!("room_repo not configured")))?;
+    let room_repo = state.room_repo.as_ref().ok_or_else(|| HubError::Internal(anyhow::anyhow!("room_repo not configured")))?;
     let ae_repo = state
         .agent_execution_repo
         .as_ref()
@@ -232,30 +190,15 @@ pub async fn execute_room_turn(
     let mentions = gatekeeper::parse_mentions(user_message, &roster_rows);
 
     // 2. Load transcript so far
-    let transcript = room_repo
-        .get_room_transcript(session.id)
-        .await
-        .unwrap_or_default();
+    let transcript = room_repo.get_room_transcript(session.id).await.unwrap_or_default();
 
     let transcript_block = format_transcript(&transcript, session.transcript_summary.as_deref());
 
     // 3. Determine speaker order
     let speakers = if room.gatekeeper_enabled {
-        call_gatekeeper(
-            &provider,
-            room,
-            members,
-            user_message,
-            &mentions,
-            &transcript_block,
-        )
-        .await?
+        call_gatekeeper(&provider, room, members, user_message, &mentions, &transcript_block).await?
     } else {
-        gatekeeper::fallback_speaker_order(
-            &roster_rows,
-            &mentions,
-            room.max_speakers_per_turn,
-        )
+        gatekeeper::fallback_speaker_order(&roster_rows, &mentions, room.max_speakers_per_turn)
     };
 
     // 4. Execute each speaker sequentially
@@ -274,20 +217,13 @@ pub async fn execute_room_turn(
         }
 
         // Find the member+agent for this speaker
-        let member_agent = members
-            .iter()
-            .find(|m| m.member.agent_id == selection.agent_id);
+        let member_agent = members.iter().find(|m| m.member.agent_id == selection.agent_id);
         let Some(ma) = member_agent else {
             warn!(agent_id = %selection.agent_id, "Gatekeeper selected unknown agent, skipping");
             continue;
         };
 
-        let speaker_name = ma
-            .member
-            .display_name
-            .as_deref()
-            .unwrap_or(&ma.agent.name)
-            .to_string();
+        let speaker_name = ma.member.display_name.as_deref().unwrap_or(&ma.agent.name).to_string();
 
         // Broadcast speaker_start
         state.broadcast_room_update(RoomUpdateEvent {
@@ -308,19 +244,11 @@ pub async fn execute_room_turn(
         let system_prompt = format!("{}\n\n{}", ma.agent.system_prompt, room_context);
 
         // Build user prompt: transcript + user message + gatekeeper followup
-        let user_prompt = build_speaker_prompt(
-            user_message,
-            &selection.followup_context,
-            &transcript_block,
-        );
+        let user_prompt = build_speaker_prompt(user_message, &selection.followup_context, &transcript_block);
 
         // Resolve tools (empty if room.tools_enabled is false)
         let (tools, tool_names) = if room.tools_enabled {
-            let tool_rows = state
-                .repo
-                .get_agent_tools(selection.agent_id)
-                .await
-                .unwrap_or_default();
+            let tool_rows = state.repo.get_agent_tools(selection.agent_id).await.unwrap_or_default();
             let names: Vec<String> = tool_rows.iter().map(|t| t.name.clone()).collect();
             let llm_tools: Vec<Tool> = tool_rows
                 .iter()
@@ -340,25 +268,21 @@ pub async fn execute_room_turn(
             .create_agent_execution(
                 stage_execution_id,
                 selection.agent_id,
-                None,    // workflow_step_id
-                false,   // is_interactive
-                None,    // parent_agent_execution_id
+                None,  // workflow_step_id
+                false, // is_interactive
+                None,  // parent_agent_execution_id
                 &system_prompt,
                 &user_prompt,
-                None,    // selected_mode_id
-                Some(session.id),   // room_session_id
-                Some(i as i32),     // speaker_order
+                None,             // selected_mode_id
+                Some(session.id), // room_session_id
+                Some(i as i32),   // speaker_order
             )
             .await
             .map_err(|e| HubError::Internal(e.into()))?;
 
         // Record initial messages
-        let _ = ae_repo
-            .create_execution_message(ae_row.id, "system", &system_prompt, None, 0, 0)
-            .await;
-        let _ = ae_repo
-            .create_execution_message(ae_row.id, "user", &user_prompt, None, 0, 0)
-            .await;
+        let _ = ae_repo.create_execution_message(ae_row.id, "system", &system_prompt, None, 0, 0).await;
+        let _ = ae_repo.create_execution_message(ae_row.id, "user", &user_prompt, None, 0, 0).await;
 
         // Build strategy and execute
         let strategy = RoomSpeakerStrategy::new(
@@ -387,28 +311,15 @@ pub async fn execute_room_turn(
             user_id,
         };
 
-        let recorder = ExecutionRecorder::new(
-            state.repo.as_ref(),
-            state.agent_execution_repo.as_deref(),
-            state.token_ledger_repo.as_deref(),
-        );
+        let recorder = ExecutionRecorder::new(state.repo.as_ref(), state.agent_execution_repo.as_deref(), state.token_ledger_repo.as_deref());
 
-        let exec_result = engine
-            .execute(&strategy, user_message, &sink, &recorder, cancel)
-            .await;
+        let exec_result = engine.execute(&strategy, user_message, &sink, &recorder, cancel).await;
 
         match exec_result {
             Ok(result) => {
                 // Record the assistant response as an execution message
                 let _ = ae_repo
-                    .create_execution_message(
-                        ae_row.id,
-                        "assistant",
-                        &result.content,
-                        None,
-                        result.input_tokens as i64,
-                        result.output_tokens as i64,
-                    )
+                    .create_execution_message(ae_row.id, "assistant", &result.content, None, result.input_tokens as i64, result.output_tokens as i64)
                     .await;
 
                 // Broadcast speaker_end
@@ -438,37 +349,25 @@ pub async fn execute_room_turn(
             Err(e) => {
                 warn!(agent = %speaker_name, error = %e, "Speaker execution failed, continuing");
                 // Update execution as failed
-                let _ = ae_repo
-                    .update_agent_execution_status(ae_row.id, "failed", None, None)
-                    .await;
+                let _ = ae_repo.update_agent_execution_status(ae_row.id, "failed", None, None).await;
             }
         }
     }
 
     // 5. Increment turn counter
-    let new_turn = room_repo
-        .increment_room_session_turn(session.id)
-        .await
-        .unwrap_or(session.current_turn + 1);
+    let new_turn = room_repo.increment_room_session_turn(session.id).await.unwrap_or(session.current_turn + 1);
 
     // 6. Check turn limit
     let session_completed = new_turn >= room.max_turns;
     if session_completed {
-        let _ = room_repo
-            .update_room_session_status(session.id, "completed")
-            .await;
+        let _ = room_repo.update_room_session_status(session.id, "completed").await;
     }
 
     // Broadcast turn_complete
     state.broadcast_room_update(RoomUpdateEvent {
         room_session_id: session.id,
         run_id: session.run_id,
-        event: if session_completed {
-            "session_complete"
-        } else {
-            "turn_complete"
-        }
-        .into(),
+        event: if session_completed { "session_complete" } else { "turn_complete" }.into(),
         agent_id: None,
         agent_name: None,
         content: None,
@@ -597,8 +496,14 @@ mod tests {
         let room = make_room();
 
         let members = vec![
-            RoomMemberWithAgent { member: m1.clone(), agent: a1.clone() },
-            RoomMemberWithAgent { member: m2.clone(), agent: a2.clone() },
+            RoomMemberWithAgent {
+                member: m1.clone(),
+                agent: a1.clone(),
+            },
+            RoomMemberWithAgent {
+                member: m2.clone(),
+                agent: a2.clone(),
+            },
         ];
 
         let ctx = build_room_context(&room, &m1, &a1, &members);

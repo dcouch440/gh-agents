@@ -2,8 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::agent::ModelConfig;
-
 /// Production mode for the scheduler (legacy — pending removal).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -45,59 +43,22 @@ impl ProductionMode {
 use super::message::VerbosityLevel;
 use crate::constants::*;
 
-/// Model configuration for each agent tier
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
-pub struct TierModels {
-    pub orchestrator: ModelConfig,
-    pub worker: ModelConfig,
-    pub utility: ModelConfig,
-}
-
-impl Default for TierModels {
-    fn default() -> Self {
-        Self {
-            orchestrator: ModelConfig {
-                model_id: MODEL_OPUS.to_string(),
-                max_tokens: DEFAULT_MAX_TOKENS_ORCHESTRATOR,
-                ..Default::default()
-            },
-            worker: ModelConfig {
-                model_id: MODEL_SONNET.to_string(),
-                max_tokens: DEFAULT_MAX_TOKENS_WORKER,
-                ..Default::default()
-            },
-            utility: ModelConfig {
-                model_id: MODEL_HAIKU.to_string(),
-                max_tokens: DEFAULT_MAX_TOKENS_UTILITY,
-                ..Default::default()
-            },
-        }
-    }
-}
-
 /// Agent pool size configuration
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct AgentPoolConfig {
-    pub max_orchestrators: u8,
-    pub max_workers: u8,
-    pub max_utilities: u8,
+    /// Maximum total agents in the pool
+    pub max_agents: u8,
 }
 
 impl Default for AgentPoolConfig {
     fn default() -> Self {
-        Self {
-            max_orchestrators: 2,
-            max_workers: 6,
-            max_utilities: 4,
-        }
+        Self { max_agents: 12 }
     }
 }
 
 /// Global configuration (from ~/.config/nexor/config.toml)
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct GlobalConfig {
-    #[serde(default)]
-    pub default_models: TierModels,
     #[serde(default)]
     pub verbosity: VerbosityLevel,
     #[serde(default)]
@@ -215,8 +176,6 @@ impl Default for PrMergeConfig {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ProjectConfig {
     #[serde(default)]
-    pub models: Option<TierModels>,
-    #[serde(default)]
     pub autonomy: AutonomyLevel,
     #[serde(default)]
     pub approval_gates: ApprovalGates,
@@ -236,7 +195,6 @@ pub const DEFAULT_DATABASE_URL: &str = "postgres://nexor:nexor@localhost:5432/ne
 /// Merged configuration (global + project)
 #[derive(Debug, Clone, PartialEq)]
 pub struct AppConfig {
-    pub models: TierModels,
     pub verbosity: VerbosityLevel,
     pub autonomy: AutonomyLevel,
     pub approval_gates: ApprovalGates,
@@ -250,7 +208,6 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            models: TierModels::default(),
             verbosity: VerbosityLevel::default(),
             autonomy: AutonomyLevel::default(),
             approval_gates: ApprovalGates::default(),
@@ -270,7 +227,6 @@ impl AppConfig {
 
         match project {
             Some(proj) => Self {
-                models: proj.models.unwrap_or(global.default_models),
                 verbosity: global.verbosity,
                 autonomy: proj.autonomy,
                 approval_gates: proj.approval_gates,
@@ -281,7 +237,6 @@ impl AppConfig {
                 database_url,
             },
             None => Self {
-                models: global.default_models,
                 verbosity: global.verbosity,
                 autonomy: AutonomyLevel::default(),
                 approval_gates: ApprovalGates::default(),
@@ -324,7 +279,7 @@ mod tests {
     fn config_merge_uses_global_when_no_project() {
         let global = GlobalConfig::default();
         let merged = AppConfig::merge(global.clone(), None);
-        assert_eq!(merged.models, global.default_models);
+        assert_eq!(merged.pool, global.pool);
     }
 
     #[test]
@@ -425,71 +380,21 @@ mod tests {
     fn config_merge_project_pool_overrides_global() {
         let global = GlobalConfig::default();
         let project = ProjectConfig {
-            pool: Some(AgentPoolConfig {
-                max_orchestrators: 1,
-                max_workers: 2,
-                max_utilities: 3,
-            }),
+            pool: Some(AgentPoolConfig { max_agents: 5 }),
             ..Default::default()
         };
         let merged = AppConfig::merge(global, Some(project));
-        assert_eq!(merged.pool.max_orchestrators, 1);
-        assert_eq!(merged.pool.max_workers, 2);
-        assert_eq!(merged.pool.max_utilities, 3);
+        assert_eq!(merged.pool.max_agents, 5);
     }
 
     #[test]
     fn config_merge_no_project_pool_uses_global() {
         let global = GlobalConfig {
-            pool: AgentPoolConfig {
-                max_orchestrators: 5,
-                max_workers: 10,
-                max_utilities: 8,
-            },
+            pool: AgentPoolConfig { max_agents: 20 },
             ..Default::default()
         };
         let merged = AppConfig::merge(global, None);
-        assert_eq!(merged.pool.max_orchestrators, 5);
-        assert_eq!(merged.pool.max_workers, 10);
-        assert_eq!(merged.pool.max_utilities, 8);
-    }
-
-    #[test]
-    fn config_merge_project_models_override_global() {
-        let global = GlobalConfig::default();
-        let custom_models = TierModels {
-            orchestrator: ModelConfig {
-                model_id: "custom-model".to_string(),
-                max_tokens: 1000,
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let project = ProjectConfig {
-            models: Some(custom_models.clone()),
-            ..Default::default()
-        };
-        let merged = AppConfig::merge(global, Some(project));
-        assert_eq!(merged.models.orchestrator.model_id, "custom-model");
-        assert_eq!(merged.models.orchestrator.max_tokens, 1000);
-    }
-
-    #[test]
-    fn config_merge_no_project_models_uses_global() {
-        let global = GlobalConfig {
-            default_models: TierModels {
-                orchestrator: ModelConfig {
-                    model_id: "global-model".to_string(),
-                    max_tokens: 9999,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let project = ProjectConfig { models: None, ..Default::default() };
-        let merged = AppConfig::merge(global, Some(project));
-        assert_eq!(merged.models.orchestrator.model_id, "global-model");
+        assert_eq!(merged.pool.max_agents, 20);
     }
 
     #[test]
@@ -506,20 +411,8 @@ mod tests {
     }
 
     #[test]
-    fn tier_models_default_values() {
-        let models = TierModels::default();
-        assert!(models.orchestrator.model_id.contains("opus"));
-        assert!(models.worker.model_id.contains("sonnet"));
-        assert!(models.utility.model_id.contains("haiku"));
-        assert!(models.orchestrator.max_tokens > models.worker.max_tokens);
-        assert!(models.worker.max_tokens > models.utility.max_tokens);
-    }
-
-    #[test]
     fn agent_pool_config_default_values() {
         let pool = AgentPoolConfig::default();
-        assert_eq!(pool.max_orchestrators, 2);
-        assert_eq!(pool.max_workers, 6);
-        assert_eq!(pool.max_utilities, 4);
+        assert_eq!(pool.max_agents, 12);
     }
 }

@@ -17,15 +17,9 @@ use super::error::HubError;
 #[derive(Debug, Clone)]
 pub enum PipelineAdvanceAction {
     /// Advanced to the next stage, which is now running.
-    NextStage {
-        stage_number: i32,
-        stage_name: String,
-    },
+    NextStage { stage_number: i32, stage_name: String },
     /// Next stage requires approval before running.
-    AwaitingApproval {
-        stage_number: i32,
-        stage_name: String,
-    },
+    AwaitingApproval { stage_number: i32, stage_name: String },
     /// All stages are complete — the pipeline run is finished.
     Completed,
     /// The pipeline failed at the given stage.
@@ -54,21 +48,10 @@ pub async fn advance_pipeline(
 
     // Update stage execution row
     if let Ok(execs) = state.repo.list_stage_executions(run_id).await {
-        if let Some(exec) = execs
-            .into_iter()
-            .find(|e| e.stage_number == completed_stage_number)
-        {
+        if let Some(exec) = execs.into_iter().find(|e| e.stage_number == completed_stage_number) {
             let mut updated = exec;
-            updated.status = if succeeded {
-                "completed".to_string()
-            } else {
-                "failed".to_string()
-            };
-            updated.output = if succeeded {
-                stage_output.clone()
-            } else {
-                None
-            };
+            updated.status = if succeeded { "completed".to_string() } else { "failed".to_string() };
+            updated.output = if succeeded { stage_output.clone() } else { None };
             updated.input_tokens = input_tokens;
             updated.output_tokens = output_tokens;
             updated.duration_ms = duration_ms;
@@ -92,20 +75,14 @@ pub async fn advance_pipeline(
     // Get pipeline_id for broadcasts
     let pipeline_id = {
         let mgr = state.pipeline_manager.read().await;
-        mgr.get_run_pipeline_id(run_id)
-            .map(|p| p.0)
-            .unwrap_or(run_id)
+        mgr.get_run_pipeline_id(run_id).map(|p| p.0).unwrap_or(run_id)
     };
 
     // Broadcast stage completion/failure
     state.broadcast_pipeline(PipelineUpdate {
         run_id,
         pipeline_id,
-        event: if succeeded {
-            "stage_completed".into()
-        } else {
-            "stage_failed".into()
-        },
+        event: if succeeded { "stage_completed".into() } else { "stage_failed".into() },
         stage_number: Some(completed_stage_number),
         stage_name: None,
         agent_id: None,
@@ -161,14 +138,9 @@ pub async fn advance_pipeline(
         if let (Some(pid), Some(sname)) = (p_id, s_name) {
             let output_schema = mgr
                 .get_pipeline(&pid)
-                .and_then(|p| {
-                    p.stages
-                        .get(completed_stage_number as usize)
-                        .map(|s| s.output_schema.clone())
-                })
+                .and_then(|p| p.stages.get(completed_stage_number as usize).map(|s| s.output_schema.clone()))
                 .unwrap_or_else(|| serde_json::json!({"fields": []}));
-            let parsed =
-                crate::agents::pipeline::parse_stage_output(output_str, &output_schema);
+            let parsed = crate::agents::pipeline::parse_stage_output(output_str, &output_schema);
             mgr.record_stage_output(run_id, sname, parsed);
         }
     }
@@ -214,19 +186,14 @@ pub async fn advance_pipeline(
 
             if let Some(ae_repo) = &state.agent_execution_repo {
                 if let Some(aid) = gate_exec.agent_id {
-                    let _ = ae_repo
-                        .create_agent_execution(gate_exec.id, aid, None, false, None, "", "", None, None, None)
-                        .await;
+                    let _ = ae_repo.create_agent_execution(gate_exec.id, aid, None, false, None, "", "", None, None, None).await;
                 }
             }
 
             state.broadcast_feed(FeedUpdate {
                 id: run_id,
                 agent_id: "pipeline".into(),
-                content: format!(
-                    "Pipeline waiting for approval at stage {}",
-                    next.stage_number
-                ),
+                content: format!("Pipeline waiting for approval at stage {}", next.stage_number),
                 item_type: "pipeline_approval".into(),
                 timestamp: now,
                 user_id: None,
@@ -265,8 +232,7 @@ pub async fn advance_pipeline(
                 // Persist final stage outputs
                 let mgr = state.pipeline_manager.read().await;
                 if let Some(outputs) = mgr.get_stage_outputs(run_id) {
-                    run_row.stage_outputs =
-                        Some(serde_json::to_value(outputs).unwrap_or_default());
+                    run_row.stage_outputs = Some(serde_json::to_value(outputs).unwrap_or_default());
                 }
                 drop(mgr);
                 let _ = state.repo.update_pipeline_run(&run_row).await;
@@ -325,9 +291,7 @@ mod tests {
         let done = PipelineAdvanceAction::Completed;
         assert!(matches!(done, PipelineAdvanceAction::Completed));
 
-        let fail = PipelineAdvanceAction::Failed {
-            reason: "timeout".into(),
-        };
+        let fail = PipelineAdvanceAction::Failed { reason: "timeout".into() };
         assert!(matches!(fail, PipelineAdvanceAction::Failed { .. }));
     }
 }
