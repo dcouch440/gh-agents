@@ -9,7 +9,7 @@ use tokio::sync::{broadcast, mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::agents::{ClusterManager, PipelineManager, RoleManager, ToolClusterIndex};
+use crate::agents::{PipelineManager, ToolClusterIndex};
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::{
     AgentExecutionRepo, ContextStoreRepo, DocumentRepo, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, RoomRepo, RouterRequestRepo, ServerRepo, TokenLedgerRepo,
@@ -113,10 +113,6 @@ pub struct AppState {
     pub context_update_tx: broadcast::Sender<super::ws::ContextUpdateEvent>,
     /// Broadcast channel for room events
     pub room_update_tx: broadcast::Sender<RoomUpdateEvent>,
-    /// Role manager for building role-aware agent context
-    pub role_manager: Option<Arc<RoleManager>>,
-    /// Cluster manager for agent grouping
-    pub cluster_manager: Arc<RwLock<ClusterManager>>,
     /// Pipeline manager for chained agent workflows
     pub pipeline_manager: Arc<RwLock<PipelineManager>>,
     /// Default agent UUID (looked up at startup, agent with name "Home")
@@ -175,10 +171,6 @@ impl AppState {
         state.context_store_repo = Some(context_store_repo);
         state.router_request_repo = Some(router_request_repo);
         state.room_repo = Some(room_repo);
-
-        // Initialize role manager with current working directory as project root
-        let project_root = std::env::current_dir().unwrap_or_default();
-        state.role_manager = Some(Arc::new(RoleManager::new(project_root.clone())));
 
         // Look up default agent from DB (for workflow system)
         let legacy_user = UserId(uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap());
@@ -295,8 +287,6 @@ impl AppState {
                 router_request_tx,
                 context_update_tx,
                 room_update_tx,
-                role_manager: None,
-                cluster_manager: Arc::new(RwLock::new(ClusterManager::new())),
                 pipeline_manager: Arc::new(RwLock::new(PipelineManager::new())),
                 default_agent_id: None,
                 cluster_index: None,
