@@ -80,18 +80,29 @@ fn create_router(state: AppState) -> Router {
     let static_dir = std::env::var(crate::constants::ENV_NEXOR_STATIC_DIR).unwrap_or_else(|_| "ui/dist".to_string());
     let cors = build_cors_layer();
 
-    // Rate limiter for auth routes: 10 requests per 60 seconds per IP
-    let auth_rate_limit = GovernorConfigBuilder::default().per_second(6).burst_size(10).finish().expect("valid governor config");
+    // Check if we should skip rate limiting (dev mode behind proxy)
+    let skip_rate_limit = std::env::var("NEXOR_SKIP_RATE_LIMIT").map(|v| v == "1" || v.eq_ignore_ascii_case("true")).unwrap_or(false);
 
-    // Rate limiter for general API routes: ~100 requests per minute per IP
-    let api_rate_limit = GovernorConfigBuilder::default().per_second(2).burst_size(50).finish().expect("valid governor config");
+    let public_routes = if skip_rate_limit {
+        info!("Rate limiting disabled (NEXOR_SKIP_RATE_LIMIT=1)");
+        build_public_routes()
+    } else {
+        // Rate limiter for auth routes: 10 requests per 60 seconds per IP
+        let auth_rate_limit = GovernorConfigBuilder::default().per_second(6).burst_size(10).finish().expect("valid governor config");
+        build_public_routes().layer(GovernorLayer {
+            config: std::sync::Arc::new(auth_rate_limit),
+        })
+    };
 
-    let public_routes = build_public_routes().layer(GovernorLayer {
-        config: std::sync::Arc::new(auth_rate_limit),
-    });
-    let protected_routes = build_protected_routes(state.clone()).layer(GovernorLayer {
-        config: std::sync::Arc::new(api_rate_limit),
-    });
+    let protected_routes = if skip_rate_limit {
+        build_protected_routes(state.clone())
+    } else {
+        // Rate limiter for general API routes: ~100 requests per minute per IP
+        let api_rate_limit = GovernorConfigBuilder::default().per_second(2).burst_size(50).finish().expect("valid governor config");
+        build_protected_routes(state.clone()).layer(GovernorLayer {
+            config: std::sync::Arc::new(api_rate_limit),
+        })
+    };
 
     let serve_dir = ServeDir::new(&static_dir).not_found_service(ServeFile::new(format!("{}/index.html", static_dir)));
 

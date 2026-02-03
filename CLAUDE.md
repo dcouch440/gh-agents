@@ -4,6 +4,11 @@
 
 Rust backend + React frontend + Ink CLI that orchestrates AI agents for software engineering tasks on GitHub repos.
 
+# DB Login
+
+Email: user@example.com
+Password: password123
+
 ## Architecture
 
 ```
@@ -64,7 +69,6 @@ decomp/                # Ticket breakdowns by milestone
 - Unit tests in `#[cfg(test)]` modules, integration tests in `tests/`
 - Commit format: `type(scope): description` (feat, fix, docs, refactor, test, chore)
 
-
 ## Off-limits directories
 
 Do NOT read, modify, or reference files in these directories:
@@ -113,18 +117,19 @@ docker exec -it gh-agents-postgres-1 psql -U nexor -d nexor              # Inter
 **ALWAYS use the typed endpoints from `api.ts`.** Never call raw HTTP methods unless absolutely necessary.
 
 ```typescript
-import { api } from '@/api'
+import {api} from "@/api";
 
 // ✅ CORRECT: Use typed endpoints
-const { agents } = await api.agents.list()
-const agent = await api.agents.get(id)
-await api.tasks.create({ title, description })
+const {agents} = await api.agents.list();
+const agent = await api.agents.get(id);
+await api.tasks.create({title, description});
 
 // ❌ WRONG: Don't use raw HTTP methods
-const agents = await api.get('/agents')  // No! Use api.agents.list()
+const agents = await api.get("/agents"); // No! Use api.agents.list()
 ```
 
 **Features:**
+
 - Typed endpoints for all resources (agents, tasks, tools, documents, sessions, etc.)
 - Automatic retry with exponential backoff
 - Request deduplication (prevents duplicate in-flight GET requests)
@@ -133,35 +138,37 @@ const agents = await api.get('/agents')  // No! Use api.agents.list()
 - Comprehensive error handling with typed errors
 
 **Error handling:**
+
 ```typescript
-import { api, ApiError } from '@/api'
+import {api, ApiError} from "@/api";
 
 try {
-  const agent = await api.agents.get(id)
+  const agent = await api.agents.get(id);
 } catch (error) {
   if (error instanceof ApiError) {
     switch (error.type) {
-      case 'http_error': // 4xx/5xx errors
-        if (error.status === 404) console.log('Not found')
-        break
-      case 'network_error': // Connection failed
-      case 'timeout_error': // Request timed out
-      case 'abort_error':   // Request cancelled
-        break
+      case "http_error": // 4xx/5xx errors
+        if (error.status === 404) console.log("Not found");
+        break;
+      case "network_error": // Connection failed
+      case "timeout_error": // Request timed out
+      case "abort_error": // Request cancelled
+        break;
     }
   }
 }
 ```
 
 **Request configuration:**
+
 ```typescript
 // Custom timeout, retries, headers, cancellation
 const agent = await api.agents.get(id, {
   timeout: 5000,
   retries: 3,
   signal: abortController.signal,
-  headers: { 'X-Custom': 'value' },
-})
+  headers: {"X-Custom": "value"},
+});
 ```
 
 **Only use raw HTTP methods** (`api.get`, `api.post`, etc.) **for truly custom endpoints** not covered by typed methods. This is rare.
@@ -181,6 +188,7 @@ npx vitest                                  # Watch mode
 **Strategy:** Unit + integration. Reducers tested through providers, hooks tested with `renderHook`.
 
 **File structure:**
+
 ```
 frontend/src/
 ├── test/
@@ -197,6 +205,7 @@ frontend/src/
 ```
 
 **Conventions:**
+
 - **Colocated tests** — `Foo.test.tsx` next to `Foo.tsx`
 - **Nested `describe`/`it`** blocks grouped by unit (reducer, provider, hook variant)
 - **Shared fixtures** in `src/test/fixtures.ts` — reusable typed mock objects
