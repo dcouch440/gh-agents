@@ -1745,12 +1745,18 @@ pub struct LoginResponse {
     )
 )]
 pub async fn auth_login(State(state): State<AppState>, Json(request): Json<LoginRequest>) -> Result<Json<LoginResponse>, StatusCode> {
-    let user_repo = state.user_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let user_repo = state.user_repo.as_ref().ok_or_else(|| {
+        tracing::error!("user_repo is None");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     let user = user_repo
         .get_user_by_email(&request.email)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|e| {
+            tracing::error!("Database error getting user: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
     let password_hash = user.password_hash.as_ref().ok_or(StatusCode::UNAUTHORIZED)?;
@@ -1758,7 +1764,10 @@ pub async fn auth_login(State(state): State<AppState>, Json(request): Json<Login
         return Err(StatusCode::UNAUTHORIZED);
     }
 
-    let token = auth::create_token(&state.jwt_secret, 24, user.id, &user.email).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let token = auth::create_token(&state.jwt_secret, 24, user.id, &user.email).map_err(|e| {
+        tracing::error!("JWT token creation error: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     Ok(Json(LoginResponse { token, expires_in: 86400 }))
 }
