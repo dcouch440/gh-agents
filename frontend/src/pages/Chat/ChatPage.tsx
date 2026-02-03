@@ -1,7 +1,7 @@
-import { AgentActivityDemo } from '@/components/chat'
+import {AgentActivityDemo} from "../../../../archive/chat";
 
 function ChatPage() {
-  return <AgentActivityDemo />
+  return <AgentActivityDemo />;
 }
 
-export { ChatPage }
+export {ChatPage};
