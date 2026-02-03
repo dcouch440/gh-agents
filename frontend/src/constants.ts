@@ -41,6 +41,7 @@ export const STATS_POLL_INTERVAL_MS = 5000;
 
 // Routes
 export const ROUTES = {
+  LOGIN: "/login",
   DASHBOARD: "/",
   CHAT: "/chat",
   CHAT_SESSION: "/chat/:sessionId",

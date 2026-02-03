@@ -3,6 +3,7 @@ import {ROUTES} from "./constants";
 import {AppLayout} from "./components/layout/AppLayout";
 import {DocumentsPage} from "./pages/Documents/DocumentsPage";
 import {SettingsPage} from "./pages/Settings/SettingsPage";
+import {LoginPage} from "./pages/Auth/LoginPage";
 import {
   DashboardWithProviders,
   AgentsWithProvider,
@@ -17,6 +18,10 @@ import {
 } from "./RouteWrappers";
 
 export const router = createBrowserRouter([
+  {
+    path: ROUTES.LOGIN,
+    element: <LoginPage />,
+  },
   {
     element: <AppLayout />,
     children: [
