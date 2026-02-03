@@ -36,29 +36,6 @@ npx eslint .                                # Lint (must pass, zero warnings)
 npx vite build                              # Production build
 ```
 
-## Key Source Layout
-
-```
-src/
-├── main.rs            # Entry point
-├── lib.rs             # Library root
-├── types/             # Core types (Task, Agent, Message, etc.)
-├── config/            # Config loading
-├── db/                # PostgreSQL operations
-├── llm/               # LLM provider clients
-├── agents/            # Agent runtime & execution
-├── orchestration/     # Task planning, routing, scheduling
-├── prompts/           # Prompt templates
-├── execution/         # File/git/test operations
-├── github/            # GitHub API integration
-└── cli.rs             # CLI arg parsing
-frontend/              # React frontend (Vite) — active development
-ui/                    # Legacy frontend (deprecated)
-cli/                   # Ink terminal CLI
-migrations/            # PostgreSQL migrations
-decomp/                # Ticket breakdowns by milestone
-```
-
 ## Conventions
 
 - `cargo fmt` and `cargo clippy` before committing Rust code
@@ -120,9 +97,7 @@ docker exec -it gh-agents-postgres-1 psql -U nexor -d nexor              # Inter
 
 - Always write tests when completing a ticket
 - Verify with `cargo check` and `cargo test` before committing
-- Save notes to `doc/` when requested
-- Stay out of /cli and /archive
-- In frontend/ always prefer reusable components.
+- In frontend/ always prefer reusable components
 
 ## Frontend Conventions (frontend/)
 
