@@ -16,15 +16,17 @@ type AgentPoolStats = {
 
 type Agent = {
   id: string
-  tier: AgentTier
-  persona_name: string
-  persona_prompt: string
-  persona_style: string
+  name: string
+  system_prompt: string
   model_provider: string
   model_id: string
   model_max_tokens: number
   model_temperature: number
-  status: AgentStatus
+  created_at: string
+  updated_at: string
+  // Dashboard fields (from WS updates)
+  status?: AgentStatus
+  tier?: AgentTier
 }
 
 type AgentsResponse = {
@@ -43,12 +45,10 @@ type AgentContextResponse = {
 }
 
 type CreateAgentRequest = {
-  tier: string
-  persona_name: string
-  persona_prompt?: string
-  persona_style?: string
+  name: string
+  system_prompt?: string
   model_provider?: string
-  model_id: string
+  model_id?: string
   model_max_tokens?: number
   model_temperature?: number
 }

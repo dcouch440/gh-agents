@@ -16,15 +16,16 @@ import type { Workflow, WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 
 export const mockAgent: Agent = {
   id: 'agent-001',
-  tier: 'worker',
-  persona_name: 'TestBot',
-  persona_prompt: 'You are a test agent.',
-  persona_style: 'concise',
+  name: 'TestBot',
+  system_prompt: 'You are a test agent.',
   model_provider: 'anthropic',
   model_id: 'claude-sonnet-4-20250514',
   model_max_tokens: 8192,
   model_temperature: 0.7,
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
   status: 'idle',
+  tier: 'worker',
 }
 
 export const mockAgentUpdated: Agent = {

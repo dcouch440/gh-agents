@@ -6,7 +6,7 @@ import {SettingsPage} from "./pages/Settings/SettingsPage";
 import {
   DashboardWithProviders,
   AgentsWithProvider,
-  CreateAgentWithProvider,
+  AgentWorkshopWithProvider,
   AgentDetailWithProvider,
   ChatWithProvider,
   ChatSessionWithProvider,
@@ -24,7 +24,7 @@ export const router = createBrowserRouter([
       {path: ROUTES.CHAT, element: <ChatWithProvider />},
       {path: ROUTES.CHAT_SESSION, element: <ChatSessionWithProvider />},
       {path: ROUTES.AGENTS, element: <AgentsWithProvider />},
-      {path: ROUTES.AGENT_CREATE, element: <CreateAgentWithProvider />},
+      {path: ROUTES.AGENT_WORKSHOP, element: <AgentWorkshopWithProvider />},
       {path: ROUTES.AGENT_DETAIL, element: <AgentDetailWithProvider />},
       {path: ROUTES.PIPELINES, element: <PipelinesWithProvider />},
       {path: ROUTES.PIPELINE_DETAIL, element: <PipelineDetailWithProvider />},

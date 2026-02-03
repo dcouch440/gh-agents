@@ -23,7 +23,7 @@ describe('useAgentMutations', () => {
 
       let agent: unknown
       await act(async () => {
-        agent = await result.current.mutate({ persona_name: 'TestBot', tier: 'worker', persona_prompt: '', persona_style: 'concise', model_provider: 'anthropic', model_id: 'claude-sonnet-4-20250514', model_max_tokens: 8192, model_temperature: 0.7 })
+        agent = await result.current.mutate({ name: 'TestBot', model_provider: 'anthropic', model_id: 'claude-sonnet-4-20250514', model_max_tokens: 8192, model_temperature: 0.7 })
       })
 
       expect(agent).toEqual(mockAgent)
@@ -36,7 +36,7 @@ describe('useAgentMutations', () => {
       const { result } = renderHook(() => useCreateAgent())
 
       await act(async () => {
-        await expect(result.current.mutate({ persona_name: 'TestBot', tier: 'worker', persona_prompt: '', persona_style: 'concise', model_provider: 'anthropic', model_id: 'claude-sonnet-4-20250514', model_max_tokens: 8192, model_temperature: 0.7 })).rejects.toThrow('Create failed')
+        await expect(result.current.mutate({ name: 'TestBot', model_provider: 'anthropic', model_id: 'claude-sonnet-4-20250514', model_max_tokens: 8192, model_temperature: 0.7 })).rejects.toThrow('Create failed')
       })
 
       expect(result.current.error).toBe('Create failed')
@@ -51,7 +51,7 @@ describe('useAgentMutations', () => {
 
       let agent: unknown
       await act(async () => {
-        agent = await result.current.mutate('agent-001', { persona_name: 'Updated' })
+        agent = await result.current.mutate('agent-001', { name: 'Updated' })
       })
 
       expect(agent).toEqual(mockAgent)
@@ -64,7 +64,7 @@ describe('useAgentMutations', () => {
       const { result } = renderHook(() => useUpdateAgent())
 
       await act(async () => {
-        await expect(result.current.mutate('agent-001', { persona_name: 'Updated' })).rejects.toThrow('Update failed')
+        await expect(result.current.mutate('agent-001', { name: 'Updated' })).rejects.toThrow('Update failed')
       })
 
       expect(result.current.error).toBe('Update failed')
