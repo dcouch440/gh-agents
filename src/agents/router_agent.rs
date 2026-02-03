@@ -6,19 +6,8 @@
 //! available utility agent, and returns the result.
 
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
-
-use serde_json::{json, Value};
-use tokio::sync::Mutex;
-use tracing::{info, warn};
 use uuid::Uuid;
 
-use super::channels::{RoleContext, TaskAssignment, TaskConstraints, TaskContext};
-// LEGACY imports removed (pool/dispatcher deleted):
-// use super::dispatcher::Dispatcher;
-// use super::pool::AgentPool;
-use super::roles::{CommunicationStyle, OutputFormat, RoleId};
 use crate::db::{ClusterRow, ToolRow};
 
 /// Index mapping tool names to their owning clusters for fast lookup.

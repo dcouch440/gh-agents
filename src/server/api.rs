@@ -4259,7 +4259,7 @@ pub async fn approve_pipeline_run(
                             None
                         };
 
-                        use crate::agents::{AgentCommand, CommunicationStyle, OutputFormat, RoleContext, RoleId, TaskAssignment, TaskConstraints, TaskContext};
+                        use crate::agents::{CommunicationStyle, OutputFormat, RoleContext, RoleId, TaskAssignment, TaskConstraints, TaskContext};
 
                         let role_str = next_stage.role.as_deref().unwrap_or("worker");
                         let assignment = TaskAssignment {
