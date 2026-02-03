@@ -1290,16 +1290,8 @@ pub struct CreateAgentModeRequest {
         (status = 200, description = "List of agent modes", body = Vec<AgentModeResponse>)
     )
 )]
-pub async fn list_agent_modes(
-    State(state): State<AppState>,
-    _auth: auth::AuthUser,
-    Path(agent_id): Path<Uuid>,
-) -> Result<Json<Vec<AgentModeResponse>>, StatusCode> {
-    let modes = state
-        .repo
-        .get_agent_modes(agent_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn list_agent_modes(State(state): State<AppState>, _auth: auth::AuthUser, Path(agent_id): Path<Uuid>) -> Result<Json<Vec<AgentModeResponse>>, StatusCode> {
+    let modes = state.repo.get_agent_modes(agent_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(modes.into_iter().map(AgentModeResponse::from).collect()))
 }
 
@@ -1334,11 +1326,7 @@ pub async fn create_agent_mode(
         version: 1,
     };
 
-    state
-        .repo
-        .create_agent_mode(&mode)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state.repo.create_agent_mode(&mode).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok((StatusCode::CREATED, Json(AgentModeResponse::from(mode))))
 }
@@ -1354,16 +1342,8 @@ pub async fn create_agent_mode(
         (status = 204, description = "Mode deleted")
     )
 )]
-pub async fn delete_agent_mode(
-    State(state): State<AppState>,
-    _auth: auth::AuthUser,
-    Path(mode_id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
-    state
-        .repo
-        .delete_agent_mode(mode_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn delete_agent_mode(State(state): State<AppState>, _auth: auth::AuthUser, Path(mode_id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
+    state.repo.delete_agent_mode(mode_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -4470,7 +4450,6 @@ pub async fn approve_pipeline_run(
     Ok(Json(serde_json::json!({ "status": "resumed" })))
 }
 
-
 // ============================================================================
 // Cancellation Endpoints
 // ============================================================================
@@ -4486,11 +4465,7 @@ pub async fn approve_pipeline_run(
         (status = 409, description = "Pipeline run not in a cancellable state")
     )
 )]
-pub async fn cancel_pipeline_run(
-    State(state): State<AppState>,
-    _user: auth::AuthUser,
-    Path(run_id): Path<String>,
-) -> Result<Json<serde_json::Value>, StatusCode> {
+pub async fn cancel_pipeline_run(State(state): State<AppState>, _user: auth::AuthUser, Path(run_id): Path<String>) -> Result<Json<serde_json::Value>, StatusCode> {
     let run_uuid = Uuid::parse_str(&run_id).map_err(|_| StatusCode::BAD_REQUEST)?;
 
     let run = state
@@ -4528,9 +4503,7 @@ pub async fn cancel_pipeline_run(
     // Broadcast cancellation
     let pipeline_id = {
         let mgr = state.pipeline_manager.read().await;
-        mgr.get_run_pipeline_id(run_uuid)
-            .map(|p| p.0)
-            .unwrap_or(run_uuid)
+        mgr.get_run_pipeline_id(run_uuid).map(|p| p.0).unwrap_or(run_uuid)
     };
 
     state.broadcast_pipeline(super::ws::PipelineUpdate {
@@ -4562,11 +4535,7 @@ pub async fn cancel_pipeline_run(
         (status = 404, description = "Execution not found or no cancellation token registered")
     )
 )]
-pub async fn cancel_agent_execution(
-    State(state): State<AppState>,
-    _user: auth::AuthUser,
-    Path(execution_id): Path<String>,
-) -> Result<Json<serde_json::Value>, StatusCode> {
+pub async fn cancel_agent_execution(State(state): State<AppState>, _user: auth::AuthUser, Path(execution_id): Path<String>) -> Result<Json<serde_json::Value>, StatusCode> {
     let exec_uuid = Uuid::parse_str(&execution_id).map_err(|_| StatusCode::BAD_REQUEST)?;
 
     let cancelled = state.cancel_execution(exec_uuid).await;
@@ -4576,9 +4545,7 @@ pub async fn cancel_agent_execution(
 
     // Update execution status in DB
     if let Some(ae_repo) = &state.agent_execution_repo {
-        let _ = ae_repo
-            .update_agent_execution_status(exec_uuid, "cancelled", None, None)
-            .await;
+        let _ = ae_repo.update_agent_execution_status(exec_uuid, "cancelled", None, None).await;
     }
 
     Ok(Json(serde_json::json!({ "status": "cancelled" })))
@@ -4876,11 +4843,7 @@ pub struct RoomMessageRequest {
 }
 
 /// POST /api/rooms - Create a room.
-pub async fn create_room(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Json(request): Json<CreateRoomRequest>,
-) -> Result<(StatusCode, Json<crate::db::RoomRow>), StatusCode> {
+pub async fn create_room(State(state): State<AppState>, auth: auth::AuthUser, Json(request): Json<CreateRoomRequest>) -> Result<(StatusCode, Json<crate::db::RoomRow>), StatusCode> {
     if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -4902,11 +4865,7 @@ pub async fn create_room(
 }
 
 /// GET /api/rooms/:id - Get a room.
-pub async fn get_room(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Path(id): Path<Uuid>,
-) -> Result<Json<crate::db::RoomRow>, StatusCode> {
+pub async fn get_room(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<crate::db::RoomRow>, StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo.get_room(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if row.user_id != auth.user_id.0 {
@@ -4916,12 +4875,7 @@ pub async fn get_room(
 }
 
 /// PUT /api/rooms/:id - Update a room.
-pub async fn update_room(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Path(id): Path<Uuid>,
-    Json(request): Json<UpdateRoomRequest>,
-) -> Result<Json<crate::db::RoomRow>, StatusCode> {
+pub async fn update_room(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>, Json(request): Json<UpdateRoomRequest>) -> Result<Json<crate::db::RoomRow>, StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo.get_room(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if existing.user_id != auth.user_id.0 {
@@ -4948,11 +4902,7 @@ pub async fn update_room(
 }
 
 /// DELETE /api/rooms/:id - Delete a room.
-pub async fn delete_room(
-    State(state): State<AppState>,
-    auth: auth::AuthUser,
-    Path(id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
+pub async fn delete_room(State(state): State<AppState>, auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo.get_room(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if existing.user_id != auth.user_id.0 {
@@ -4963,65 +4913,37 @@ pub async fn delete_room(
 }
 
 /// GET /api/pipelines/:id/rooms - List rooms for a pipeline.
-pub async fn list_pipeline_rooms(
-    State(state): State<AppState>,
-    _auth: auth::AuthUser,
-    Path(pipeline_id): Path<Uuid>,
-) -> Result<Json<Vec<crate::db::RoomRow>>, StatusCode> {
+pub async fn list_pipeline_rooms(State(state): State<AppState>, _auth: auth::AuthUser, Path(pipeline_id): Path<Uuid>) -> Result<Json<Vec<crate::db::RoomRow>>, StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo.list_rooms_for_pipeline(pipeline_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(rows))
 }
 
 /// GET /api/rooms/:id/members - List room members.
-pub async fn list_room_members(
-    State(state): State<AppState>,
-    _auth: auth::AuthUser,
-    Path(room_id): Path<Uuid>,
-) -> Result<Json<Vec<crate::db::RoomMemberRow>>, StatusCode> {
+pub async fn list_room_members(State(state): State<AppState>, _auth: auth::AuthUser, Path(room_id): Path<Uuid>) -> Result<Json<Vec<crate::db::RoomMemberRow>>, StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo.list_room_members(room_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(rows))
 }
 
 /// POST /api/rooms/:id/members - Add a room member.
-pub async fn add_room_member(
-    State(state): State<AppState>,
-    _auth: auth::AuthUser,
-    Path(room_id): Path<Uuid>,
-    Json(request): Json<AddRoomMemberRequest>,
-) -> Result<StatusCode, StatusCode> {
+pub async fn add_room_member(State(state): State<AppState>, _auth: auth::AuthUser, Path(room_id): Path<Uuid>, Json(request): Json<AddRoomMemberRequest>) -> Result<StatusCode, StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    repo.add_room_member(
-        room_id,
-        request.agent_id,
-        request.display_name,
-        request.role_description,
-        request.display_order,
-    )
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    repo.add_room_member(room_id, request.agent_id, request.display_name, request.role_description, request.display_order)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::CREATED)
 }
 
 /// DELETE /api/rooms/:id/members/:agent_id - Remove a room member.
-pub async fn remove_room_member(
-    State(state): State<AppState>,
-    _auth: auth::AuthUser,
-    Path((room_id, agent_id)): Path<(Uuid, Uuid)>,
-) -> Result<StatusCode, StatusCode> {
+pub async fn remove_room_member(State(state): State<AppState>, _auth: auth::AuthUser, Path((room_id, agent_id)): Path<(Uuid, Uuid)>) -> Result<StatusCode, StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     repo.remove_room_member(room_id, agent_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// PUT /api/rooms/:id/members - Set all room members (replace).
-pub async fn set_room_members(
-    State(state): State<AppState>,
-    _auth: auth::AuthUser,
-    Path(room_id): Path<Uuid>,
-    Json(request): Json<SetRoomMembersRequest>,
-) -> Result<StatusCode, StatusCode> {
+pub async fn set_room_members(State(state): State<AppState>, _auth: auth::AuthUser, Path(room_id): Path<Uuid>, Json(request): Json<SetRoomMembersRequest>) -> Result<StatusCode, StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let members: Vec<crate::db::traits::RoomMemberInput> = request
         .members
@@ -5038,22 +4960,14 @@ pub async fn set_room_members(
 }
 
 /// POST /api/rooms/:id/sessions - Start a room session.
-pub async fn create_room_session(
-    State(state): State<AppState>,
-    _auth: auth::AuthUser,
-    Path(room_id): Path<Uuid>,
-) -> Result<(StatusCode, Json<crate::db::RoomSessionRow>), StatusCode> {
+pub async fn create_room_session(State(state): State<AppState>, _auth: auth::AuthUser, Path(room_id): Path<Uuid>) -> Result<(StatusCode, Json<crate::db::RoomSessionRow>), StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo.create_room_session(room_id, None).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok((StatusCode::CREATED, Json(row)))
 }
 
 /// GET /api/room-sessions/:id - Get room session.
-pub async fn get_room_session(
-    State(state): State<AppState>,
-    _auth: auth::AuthUser,
-    Path(id): Path<Uuid>,
-) -> Result<Json<crate::db::RoomSessionRow>, StatusCode> {
+pub async fn get_room_session(State(state): State<AppState>, _auth: auth::AuthUser, Path(id): Path<Uuid>) -> Result<Json<crate::db::RoomSessionRow>, StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo.get_room_session(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     Ok(Json(row))
@@ -5088,17 +5002,10 @@ pub async fn send_room_message(
     }
 
     // Load room
-    let room = room_repo
-        .get_room(session.room_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let room = room_repo.get_room(session.room_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     // Load members + agents
-    let member_rows = room_repo
-        .list_room_members(room.id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let member_rows = room_repo.list_room_members(room.id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let mut members = Vec::new();
     for m in member_rows {
@@ -5112,29 +5019,17 @@ pub async fn send_room_message(
     }
 
     // Create LLM provider
-    let provider: std::sync::Arc<dyn crate::llm::LLMProvider + Send + Sync> =
-        match crate::llm::AnthropicClient::from_env() {
-            Ok(p) => std::sync::Arc::new(p),
-            Err(_) => return Err(StatusCode::SERVICE_UNAVAILABLE),
-        };
+    let provider: std::sync::Arc<dyn crate::llm::LLMProvider + Send + Sync> = match crate::llm::AnthropicClient::from_env() {
+        Ok(p) => std::sync::Arc::new(p),
+        Err(_) => return Err(StatusCode::SERVICE_UNAVAILABLE),
+    };
 
     // Spawn the room turn in background so the HTTP response returns immediately
     let user_id = auth.user_id.0;
     let content = request.content;
     let state_clone = state.clone();
     tokio::spawn(async move {
-        match super::room_executor::execute_room_turn(
-            &state_clone,
-            provider,
-            &room,
-            &session,
-            &members,
-            &content,
-            user_id,
-            None,
-        )
-        .await
-        {
+        match super::room_executor::execute_room_turn(&state_clone, provider, &room, &session, &members, &content, user_id, None).await {
             Ok(result) => {
                 tracing::info!(
                     session_id = %session_id,
@@ -5156,22 +5051,14 @@ pub async fn send_room_message(
 }
 
 /// GET /api/room-sessions/:id/transcript - Get full transcript.
-pub async fn get_room_transcript(
-    State(state): State<AppState>,
-    _auth: auth::AuthUser,
-    Path(session_id): Path<Uuid>,
-) -> Result<Json<Vec<crate::db::RoomTranscriptEntry>>, StatusCode> {
+pub async fn get_room_transcript(State(state): State<AppState>, _auth: auth::AuthUser, Path(session_id): Path<Uuid>) -> Result<Json<Vec<crate::db::RoomTranscriptEntry>>, StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let entries = repo.get_room_transcript(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(entries))
 }
 
 /// POST /api/room-sessions/:id/close - Close a room session.
-pub async fn close_room_session(
-    State(state): State<AppState>,
-    _auth: auth::AuthUser,
-    Path(session_id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
+pub async fn close_room_session(State(state): State<AppState>, _auth: auth::AuthUser, Path(session_id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     let repo = state.room_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let session = repo.get_room_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if session.status != "active" {
