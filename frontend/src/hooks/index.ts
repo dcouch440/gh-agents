@@ -1,6 +1,7 @@
 export { useAuth } from './useAuth'
 export { useWebSocket } from './useWebSocket'
 export { useAgents, useAgent } from './useAgents'
+export { useAgentDocuments } from './useAgentDocuments'
 export { useTasks, useTask } from './useTasks'
 export { usePipelines, usePipelineRuns, usePipelineRun } from './usePipelines'
 export { useSessions, useChatHistory, useModes } from './useSessions'
