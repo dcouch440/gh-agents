@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::protocol::AgentId;
-use super::cluster::ClusterId;
 
 /// Unique identifier for a pipeline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -28,7 +27,7 @@ impl PipelineId {
 pub struct PipelineStage {
     pub stage_number: u32,
     pub agent_id: Option<AgentId>,
-    pub cluster_id: Option<ClusterId>,
+    pub cluster_id: Option<Uuid>, // LEGACY: was ClusterId
     pub role: Option<String>,
     pub approval_required: bool,
     pub fan_out: bool,
@@ -106,7 +105,7 @@ impl PipelineManager {
         &mut self,
         pipeline_id: PipelineId,
         agent_id: Option<AgentId>,
-        cluster_id: Option<ClusterId>,
+        cluster_id: Option<Uuid>,
         role: Option<String>,
         approval_required: bool,
         fan_out: bool,

@@ -209,7 +209,7 @@ impl AppState {
                             let _ = mgr.add_stage(
                                 pid,
                                 stage.agent_id.map(crate::agents::AgentId),
-                                stage.cluster_id.map(crate::agents::ClusterId),
+                                stage.cluster_id, // LEGACY: cluster support removed
                                 stage.role,
                                 stage.approval_required.unwrap_or(false),
                                 stage.fan_out.unwrap_or(false),
