@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
+use uuid::Uuid;
 
 use crate::llm::{AnthropicClient, LLMProvider, RateLimitedProvider, RetryingProvider};
 
