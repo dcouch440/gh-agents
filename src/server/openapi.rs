@@ -42,7 +42,7 @@ use utoipa::OpenApi;
     ),
     paths(
         // Health & Auth
-        super::api::health_check,
+        super::api::health::health_check,
         super::api::auth::auth_setup,
         super::api::auth::auth_login,
         super::api::auth::auth_register,
@@ -150,7 +150,7 @@ use utoipa::OpenApi;
     ),
     components(schemas(
         // API response/request types
-        super::api::HealthResponse,
+        super::api::health::HealthResponse,
         super::api::tasks::TasksQuery,
         super::api::tasks::CreateTaskRequest,
         super::api::agents::AgentResponse,
