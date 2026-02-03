@@ -4,10 +4,12 @@ pub mod agent_context;
 pub mod agent_executions;
 pub mod agents;
 pub mod auth;
+pub mod cancellation;
 pub mod chat;
 pub mod config;
 pub mod costs;
 pub mod documents;
+pub mod health;
 pub mod output_schemas;
 pub mod prompt_templates;
 pub mod results;
@@ -99,6 +101,12 @@ pub use rooms::{
     AddRoomMemberRequest, CreateRoomRequest, RoomMessageRequest, SetRoomMembersRequest, UpdateRoomRequest,
 };
 
+// Re-export health handler and type
+pub use health::{health_check, HealthResponse};
+
+// Re-export cancellation handler
+pub use cancellation::cancel_agent_execution;
+
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -114,72 +122,6 @@ use crate::constants::{MAX_DESCRIPTION_LENGTH, MAX_PROMPT_LENGTH, MAX_TITLE_LENG
 
 #[cfg(test)]
 use crate::types::{AgentPoolConfig, Task};
-
-// ============================================================================
-// Health Endpoint (Slice 10.2.1)
-// ============================================================================
-
-/// Health check response
-#[derive(Serialize, utoipa::ToSchema)]
-pub struct HealthResponse {
-    pub status: String,
-    pub version: String,
-    pub db_connected: bool,
-}
-
-/// Enhanced health check endpoint
-///
-/// Returns JSON with status details including version and database connectivity.
-#[utoipa::path(
-    get,
-    path = "/api/health",
-    tag = "Health",
-    responses(
-        (status = 200, description = "Server health status", body = HealthResponse)
-    )
-)]
-pub async fn health_check(State(state): State<AppState>) -> Json<HealthResponse> {
-    let db_connected = state.repo.health_check().await;
-
-    Json(HealthResponse {
-        status: "ok".to_string(),
-        version: env!("CARGO_PKG_VERSION").to_string(),
-        db_connected,
-    })
-}
-
-// ============================================================================
-// Cancellation Endpoints
-// ============================================================================
-
-/// POST /agent-executions/:execution_id/cancel - Cancel a running agent execution.
-#[utoipa::path(
-    post,
-    path = "/agent-executions/{execution_id}/cancel",
-    params(("execution_id" = String, Path, description = "Agent execution UUID")),
-    responses(
-        (status = 200, description = "Execution cancelled"),
-        (status = 404, description = "Execution not found or no cancellation token registered")
-    )
-)]
-pub async fn cancel_agent_execution(State(state): State<AppState>, _user: auth_utils::AuthUser, Path(execution_id): Path<String>) -> Result<Json<serde_json::Value>, StatusCode> {
-    let exec_uuid = Uuid::parse_str(&execution_id).map_err(|_| StatusCode::BAD_REQUEST)?;
-
-    let cancelled = state.cancel_execution(exec_uuid).await;
-    if !cancelled {
-        return Err(StatusCode::NOT_FOUND);
-    }
-
-    // Update execution status in DB
-    if let Some(ae_repo) = &state.agent_execution_repo {
-        let _ = ae_repo.update_agent_execution_status(exec_uuid, "cancelled", None, None).await;
-    }
-
-    Ok(Json(serde_json::json!({ "status": "cancelled" })))
-}
-
-// ============================================================================
-// Tests
 // ============================================================================
 
 #[cfg(test)]
