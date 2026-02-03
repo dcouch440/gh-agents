@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
-use uuid::Uuid;
 
 use crate::llm::{AnthropicClient, LLMProvider, RateLimitedProvider, RetryingProvider};
 
@@ -87,14 +86,14 @@ async fn handle_message(state: &AppState, provider: Arc<dyn LLMProvider + Send +
 mod tests {
     use super::*;
     use crate::db::traits::ServerRepo;
-    use crate::db::{ConsumerMessageRow, PipelineRow, PipelineStageRow, SessionRow};
+    use crate::db::{ChatMessageRow, PipelineRow, PipelineStageRow, SessionRow};
     use crate::types::{AppConfig, UserId};
     use chrono::{DateTime, Utc};
     use std::sync::Arc;
 
     /// Minimal in-memory repo for orchestrator tests
     struct TestRepo {
-        messages: std::sync::Mutex<Vec<ConsumerMessageRow>>,
+        messages: std::sync::Mutex<Vec<ChatMessageRow>>,
     }
 
     impl TestRepo {
@@ -120,7 +119,7 @@ mod tests {
             Ok(())
         }
         async fn insert_chat_message(&self, _user_id: UserId, id: Uuid, role: String, content: String) -> anyhow::Result<()> {
-            self.messages.lock().unwrap().push(ConsumerMessageRow {
+            self.messages.lock().unwrap().push(ChatMessageRow {
                 id,
                 role,
                 content,
@@ -128,7 +127,7 @@ mod tests {
             });
             Ok(())
         }
-        async fn get_chat_history(&self, _user_id: UserId, limit: u32, offset: u32) -> anyhow::Result<Vec<ConsumerMessageRow>> {
+        async fn get_chat_history(&self, _user_id: UserId, limit: u32, offset: u32) -> anyhow::Result<Vec<ChatMessageRow>> {
             let msgs = self.messages.lock().unwrap();
             Ok(msgs.iter().skip(offset as usize).take(limit as usize).cloned().collect())
         }
@@ -213,7 +212,7 @@ mod tests {
         async fn insert_session_message(&self, _user_id: UserId, _session_id: Uuid, _id: Uuid, _role: String, _content: String) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn get_session_history(&self, _session_id: Uuid, _limit: u32) -> anyhow::Result<Vec<ConsumerMessageRow>> {
+        async fn get_session_history(&self, _session_id: Uuid, _limit: u32) -> anyhow::Result<Vec<ChatMessageRow>> {
             Ok(vec![])
         }
         async fn update_session_title(&self, _session_id: Uuid, _title: &str) -> anyhow::Result<()> {
