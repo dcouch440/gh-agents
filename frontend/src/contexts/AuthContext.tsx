@@ -1,6 +1,6 @@
 import { createContext, useState, useCallback, useEffect, type ReactNode } from 'react'
 import { api } from '@/api'
-import { LS_AUTH_TOKEN, API } from '@/constants'
+import { LS_AUTH_TOKEN } from '@/constants'
 import type { User } from '@/types/user'
 
 type AuthState = {
@@ -10,11 +10,6 @@ type AuthState = {
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string) => Promise<void>
   logout: () => void
-}
-
-type AuthResponse = {
-  token: string
-  user: User
 }
 
 const AuthContext = createContext<AuthState | null>(null)
@@ -40,15 +35,28 @@ function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = useCallback(async (email: string, password: string) => {
-    const res = await api.post<AuthResponse>(API.AUTH_LOGIN, { email, password })
+    const res = await api.auth.login({ email, password })
     saveToken(res.token)
-    setUser(res.user)
+    const meResponse = await api.auth.me()
+    setUser({
+      id: meResponse.id,
+      email: meResponse.email,
+      github_login: meResponse.github_login,
+      created_at: '',
+      updated_at: '',
+    })
   }, [saveToken])
 
   const register = useCallback(async (email: string, password: string) => {
-    const res = await api.post<AuthResponse>(API.AUTH_REGISTER, { email, password })
+    const res = await api.auth.register({ email, password })
     saveToken(res.token)
-    setUser(res.user)
+    setUser({
+      id: res.user.id,
+      email: res.user.email,
+      github_login: res.user.github_login,
+      created_at: '',
+      updated_at: '',
+    })
   }, [saveToken])
 
   const logout = useCallback(() => {
@@ -60,8 +68,18 @@ function AuthProvider({ children }: { children: ReactNode }) {
     if (!token) return
 
     let cancelled = false
-    api.get<User>(API.AUTH_ME)
-      .then((u) => { if (!cancelled) setUser(u) })
+    api.auth.me()
+      .then((meResponse) => {
+        if (!cancelled) {
+          setUser({
+            id: meResponse.id,
+            email: meResponse.email,
+            github_login: meResponse.github_login,
+            created_at: '',
+            updated_at: '',
+          })
+        }
+      })
       .catch(() => { if (!cancelled) clearToken() })
       .finally(() => { if (!cancelled) setLoading(false) })
 
