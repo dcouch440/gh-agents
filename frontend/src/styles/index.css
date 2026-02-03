@@ -1,4 +1,12 @@
+/* MUI CssBaseline + theme handles CSS resets and typography */
+/* Roboto font is loaded automatically by MUI */
+
+/* Keep variables for now during gradual migration */
 @import './variables.css';
-@import './reset.css';
+
+/* MUI CssBaseline replaces reset.css */
+/* @import './reset.css'; */
+
+/* Keep component styles for non-MUI components (for now) */
 @import './components.css';
 @import './utilities.css';

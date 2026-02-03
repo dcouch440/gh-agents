@@ -1,5 +1,6 @@
 export { useAuth } from './useAuth'
 export { useWebSocket } from './useWebSocket'
+export { useNavigation } from './useNavigation'
 export { useAgents, useAgent } from './useAgents'
 export { useAgentDocuments } from './useAgentDocuments'
 export { useTasks, useTask } from './useTasks'
