@@ -48,9 +48,9 @@ use utoipa::OpenApi;
         super::api::auth::auth_register,
         super::api::auth::auth_me,
         // Tasks
-        super::api::list_tasks,
-        super::api::get_task,
-        super::api::create_task,
+        super::api::tasks::list_tasks,
+        super::api::tasks::get_task,
+        super::api::tasks::create_task,
         // Agents
         super::api::list_agents,
         super::api::create_agent,
@@ -153,8 +153,8 @@ use utoipa::OpenApi;
     components(schemas(
         // API response/request types
         super::api::HealthResponse,
-        super::api::TasksQuery,
-        super::api::CreateTaskRequest,
+        super::api::tasks::TasksQuery,
+        super::api::tasks::CreateTaskRequest,
         super::api::AgentResponse,
         super::api::AgentsListResponse,
         super::api::AgentPoolStats,
