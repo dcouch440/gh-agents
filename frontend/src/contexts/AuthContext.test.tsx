@@ -33,8 +33,8 @@ function TestConsumer() {
       {loading && <div>loading</div>}
       {token && <div data-testid="token">{token}</div>}
       {user && <div data-testid="user">{user.email}</div>}
-      <button onClick={() => login('test@example.com', 'password')}>login</button>
-      <button onClick={() => register('new@example.com', 'password')}>register</button>
+      <button onClick={() => { void login('test@example.com', 'password') }}>login</button>
+      <button onClick={() => { void register('new@example.com', 'password') }}>register</button>
       <button onClick={logout}>logout</button>
     </div>
   )
@@ -57,7 +57,7 @@ describe('AuthContext', () => {
   })
 
   describe('AuthProvider', () => {
-    it('initializes with no token and no user', async () => {
+    it('initializes with no token and no user', () => {
       render(
         <AuthProvider>
           <TestConsumer />
@@ -123,7 +123,7 @@ describe('AuthContext', () => {
         </AuthProvider>,
       )
 
-      await act(async () => {
+      act(() => {
         screen.getByText('login').click()
       })
 
@@ -159,7 +159,7 @@ describe('AuthContext', () => {
         </AuthProvider>,
       )
 
-      await act(async () => {
+      act(() => {
         screen.getByText('register').click()
       })
 
@@ -189,7 +189,7 @@ describe('AuthContext', () => {
         expect(screen.getByTestId('token')).toBeInTheDocument()
       })
 
-      await act(async () => {
+      act(() => {
         screen.getByText('logout').click()
       })
 
