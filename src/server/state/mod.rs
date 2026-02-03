@@ -182,7 +182,6 @@ impl AppState {
 
         // Build tool-to-cluster index for routing (if API key available)
         if AnthropicClient::from_env().is_ok() {
-
             // Build tool-to-cluster index for routing
             match crate::db::list_clusters_with_tools(state.db.as_ref().unwrap()).await {
                 Ok(pairs) => {
@@ -448,7 +447,6 @@ impl AppState {
         tokens.remove(&id);
     }
 }
-
 
 #[cfg(test)]
 mod tests;

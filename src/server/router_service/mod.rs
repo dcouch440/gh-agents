@@ -298,6 +298,5 @@ fn truncate(s: &str, max: usize) -> String {
 
 // ── Tests ───────────────────────────────────────────────────────────────────
 
-
 #[cfg(test)]
 mod tests;

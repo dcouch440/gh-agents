@@ -91,6 +91,5 @@ impl FromRequestParts<AppState> for AuthUser {
     }
 }
 
-
 #[cfg(test)]
 mod tests;

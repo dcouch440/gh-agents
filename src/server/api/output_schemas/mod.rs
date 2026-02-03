@@ -73,7 +73,11 @@ pub async fn list_output_schemas(State(state): State<AppState>, auth: auth_utils
         (status = 400, description = "Invalid request")
     )
 )]
-pub async fn create_output_schema(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(request): Json<CreateOutputSchemaRequest>) -> Result<(StatusCode, Json<OutputSchemaResponse>), StatusCode> {
+pub async fn create_output_schema(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Json(request): Json<CreateOutputSchemaRequest>,
+) -> Result<(StatusCode, Json<OutputSchemaResponse>), StatusCode> {
     if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }

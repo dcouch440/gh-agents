@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::constants::{MAX_TITLE_LENGTH};
+use crate::constants::MAX_TITLE_LENGTH;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
 

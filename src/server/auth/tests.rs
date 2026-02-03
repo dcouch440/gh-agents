@@ -15,8 +15,7 @@ fn test_hash_and_verify_password() {
 fn test_create_and_verify_token() {
     let secret = b"test_secret_key_123";
     let user_id = UserId::new();
-    let token = create_token(secret, 24, user_id, "test@example.com")
-        .expect("Failed to create token");
+    let token = create_token(secret, 24, user_id, "test@example.com").expect("Failed to create token");
 
     let claims = verify_token(&token, secret).expect("Failed to verify token");
     assert!(uuid::Uuid::parse_str(&claims.sub).is_ok());
@@ -29,8 +28,7 @@ fn test_verify_token_wrong_secret() {
     let secret = b"test_secret_key_123";
     let wrong_secret = b"wrong_secret_key";
     let user_id = UserId::new();
-    let token = create_token(secret, 24, user_id, "test@example.com")
-        .expect("Failed to create token");
+    let token = create_token(secret, 24, user_id, "test@example.com").expect("Failed to create token");
 
     assert!(verify_token(&token, wrong_secret).is_err());
 }

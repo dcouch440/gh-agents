@@ -211,7 +211,12 @@ pub async fn create_document(State(state): State<AppState>, auth: auth_utils::Au
         (status = 404, description = "Not found")
     )
 )]
-pub async fn update_document(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(doc_id): Path<Uuid>, Json(request): Json<UpdateDocumentRequest>) -> Result<Json<DocumentResponse>, StatusCode> {
+pub async fn update_document(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(doc_id): Path<Uuid>,
+    Json(request): Json<UpdateDocumentRequest>,
+) -> Result<Json<DocumentResponse>, StatusCode> {
     let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Verify ownership

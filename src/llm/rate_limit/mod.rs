@@ -229,6 +229,5 @@ impl<P: LLMProvider + 'static> LLMProvider for RateLimitedProvider<P> {
     }
 }
 
-
 #[cfg(test)]
 mod tests;

@@ -1,9 +1,6 @@
 //! Tests for execution engine
 
-use crate::llm::{
-    ContentBlock, LLMError, LLMProvider, LLMRequest, LLMResponse, Message, StopReason,
-    StreamChunk, TokenUsage,
-};
+use crate::llm::{ContentBlock, LLMError, LLMProvider, LLMRequest, LLMResponse, Message, StopReason, StreamChunk, TokenUsage};
 use crate::server::hub::{
     engine::{ExecutionEngine, ExecutionResult},
     error::HubError,
@@ -27,10 +24,7 @@ impl LLMProvider for FixedProvider {
     async fn send_message(&self, _req: LLMRequest) -> Result<LLMResponse, LLMError> {
         Ok(self.response.clone())
     }
-    async fn send_message_stream(
-        &self,
-        _req: LLMRequest,
-    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError> {
+    async fn send_message_stream(&self, _req: LLMRequest) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError> {
         Err(LLMError::StreamError("not implemented".into()))
     }
     fn provider_name(&self) -> &'static str {
@@ -82,11 +76,7 @@ impl ExecutionStrategy for TestStrategy {
     async fn build_messages(&self, input: &str) -> Result<Vec<Message>, HubError> {
         Ok(vec![Message::user(input)])
     }
-    async fn execute_tool(
-        &self,
-        _name: &str,
-        _input: &serde_json::Value,
-    ) -> serde_json::Value {
+    async fn execute_tool(&self, _name: &str, _input: &serde_json::Value) -> serde_json::Value {
         serde_json::json!({"error": "no tools"})
     }
     async fn on_complete(&self, _response: &str, _usage: &TokenUsage) -> Result<(), HubError> {
@@ -108,15 +98,10 @@ async fn execute_simple_response() {
     let provider = Arc::new(FixedProvider {
         response: LLMResponse {
             content: "Hello!".into(),
-            content_blocks: vec![ContentBlock::Text {
-                text: "Hello!".into(),
-            }],
+            content_blocks: vec![ContentBlock::Text { text: "Hello!".into() }],
             model: "test-model".into(),
             stop_reason: StopReason::EndTurn,
-            usage: TokenUsage {
-                input_tokens: 10,
-                output_tokens: 5,
-            },
+            usage: TokenUsage { input_tokens: 10, output_tokens: 5 },
         },
     });
 
@@ -125,10 +110,7 @@ async fn execute_simple_response() {
     let sink = NullSink;
     let (_mock, recorder) = make_mock_recorder();
 
-    let result = engine
-        .execute(&strategy, "Hi", &sink, &recorder, None)
-        .await
-        .unwrap();
+    let result = engine.execute(&strategy, "Hi", &sink, &recorder, None).await.unwrap();
     assert_eq!(result.content, "Hello!");
     assert_eq!(result.input_tokens, 10);
     assert_eq!(result.output_tokens, 5);
@@ -188,13 +170,8 @@ async fn execute_context_budget_exceeded() {
         }
     }
 
-    let result = engine
-        .execute(&TinyBudgetStrategy, "Hello world", &sink, &recorder, None)
-        .await;
-    assert!(matches!(
-        result,
-        Err(HubError::ContextBudgetExceeded { .. })
-    ));
+    let result = engine.execute(&TinyBudgetStrategy, "Hello world", &sink, &recorder, None).await;
+    assert!(matches!(result, Err(HubError::ContextBudgetExceeded { .. })));
 }
 
 #[tokio::test]
@@ -223,31 +200,19 @@ async fn execute_with_tool_use() {
                     }],
                     model: "m".into(),
                     stop_reason: StopReason::ToolUse,
-                    usage: TokenUsage {
-                        input_tokens: 10,
-                        output_tokens: 5,
-                    },
+                    usage: TokenUsage { input_tokens: 10, output_tokens: 5 },
                 })
             } else {
                 Ok(LLMResponse {
                     content: "Done!".into(),
-                    content_blocks: vec![ContentBlock::Text {
-                        text: "Done!".into(),
-                    }],
+                    content_blocks: vec![ContentBlock::Text { text: "Done!".into() }],
                     model: "m".into(),
                     stop_reason: StopReason::EndTurn,
-                    usage: TokenUsage {
-                        input_tokens: 20,
-                        output_tokens: 10,
-                    },
+                    usage: TokenUsage { input_tokens: 20, output_tokens: 10 },
                 })
             }
         }
-        async fn send_message_stream(
-            &self,
-            _req: LLMRequest,
-        ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError>
-        {
+        async fn send_message_stream(&self, _req: LLMRequest) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError> {
             Err(LLMError::StreamError("not implemented".into()))
         }
         fn provider_name(&self) -> &'static str {
@@ -258,18 +223,13 @@ async fn execute_with_tool_use() {
         }
     }
 
-    let provider = Arc::new(ToolThenDone {
-        calls: call_count_clone,
-    });
+    let provider = Arc::new(ToolThenDone { calls: call_count_clone });
     let engine = ExecutionEngine::new(provider);
     let strategy = TestStrategy::new();
     let sink = NullSink;
     let (_mock, recorder) = make_mock_recorder();
 
-    let result = engine
-        .execute(&strategy, "search for test", &sink, &recorder, None)
-        .await
-        .unwrap();
+    let result = engine.execute(&strategy, "search for test", &sink, &recorder, None).await.unwrap();
     assert_eq!(result.content, "Done!");
     assert_eq!(result.rounds_used, 2);
     assert_eq!(result.input_tokens, 30);
@@ -294,17 +254,10 @@ async fn execute_max_rounds_exhausted() {
                 }],
                 model: "m".into(),
                 stop_reason: StopReason::ToolUse,
-                usage: TokenUsage {
-                    input_tokens: 5,
-                    output_tokens: 5,
-                },
+                usage: TokenUsage { input_tokens: 5, output_tokens: 5 },
             })
         }
-        async fn send_message_stream(
-            &self,
-            _req: LLMRequest,
-        ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError>
-        {
+        async fn send_message_stream(&self, _req: LLMRequest) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError> {
             Err(LLMError::StreamError("not implemented".into()))
         }
         fn provider_name(&self) -> &'static str {
@@ -356,9 +309,7 @@ async fn execute_max_rounds_exhausted() {
     let sink = NullSink;
     let (_mock, recorder) = make_mock_recorder();
 
-    let result = engine
-        .execute(&LimitedStrategy, "go", &sink, &recorder, None)
-        .await;
+    let result = engine.execute(&LimitedStrategy, "go", &sink, &recorder, None).await;
     assert!(matches!(result, Err(HubError::MaxRoundsExhausted { max: 3 })));
 }
 
@@ -413,29 +364,19 @@ async fn execute_on_complete_called() {
     let provider = Arc::new(FixedProvider {
         response: LLMResponse {
             content: "callback test".into(),
-            content_blocks: vec![ContentBlock::Text {
-                text: "callback test".into(),
-            }],
+            content_blocks: vec![ContentBlock::Text { text: "callback test".into() }],
             model: "m".into(),
             stop_reason: StopReason::EndTurn,
-            usage: TokenUsage {
-                input_tokens: 10,
-                output_tokens: 5,
-            },
+            usage: TokenUsage { input_tokens: 10, output_tokens: 5 },
         },
     });
 
     let engine = ExecutionEngine::new(provider);
-    let strategy = CallbackStrategy {
-        completed: completed_clone,
-    };
+    let strategy = CallbackStrategy { completed: completed_clone };
     let sink = NullSink;
     let (_mock, recorder) = make_mock_recorder();
 
-    engine
-        .execute(&strategy, "test", &sink, &recorder, None)
-        .await
-        .unwrap();
+    engine.execute(&strategy, "test", &sink, &recorder, None).await.unwrap();
     assert!(completed.load(Ordering::SeqCst));
 }
 
@@ -444,9 +385,7 @@ async fn execute_max_tokens_stop_reason() {
     let provider = Arc::new(FixedProvider {
         response: LLMResponse {
             content: "partial response".into(),
-            content_blocks: vec![ContentBlock::Text {
-                text: "partial response".into(),
-            }],
+            content_blocks: vec![ContentBlock::Text { text: "partial response".into() }],
             model: "m".into(),
             stop_reason: StopReason::MaxTokens,
             usage: TokenUsage {
@@ -461,10 +400,7 @@ async fn execute_max_tokens_stop_reason() {
     let sink = NullSink;
     let (_mock, recorder) = make_mock_recorder();
 
-    let result = engine
-        .execute(&strategy, "long question", &sink, &recorder, None)
-        .await
-        .unwrap();
+    let result = engine.execute(&strategy, "long question", &sink, &recorder, None).await.unwrap();
     assert_eq!(result.content, "partial response");
     assert_eq!(result.rounds_used, 1);
     assert_eq!(result.output_tokens, 4096);
@@ -508,31 +444,19 @@ async fn execute_multiple_tools_single_round() {
                     ],
                     model: "m".into(),
                     stop_reason: StopReason::ToolUse,
-                    usage: TokenUsage {
-                        input_tokens: 50,
-                        output_tokens: 30,
-                    },
+                    usage: TokenUsage { input_tokens: 50, output_tokens: 30 },
                 })
             } else {
                 Ok(LLMResponse {
                     content: "All done".into(),
-                    content_blocks: vec![ContentBlock::Text {
-                        text: "All done".into(),
-                    }],
+                    content_blocks: vec![ContentBlock::Text { text: "All done".into() }],
                     model: "m".into(),
                     stop_reason: StopReason::EndTurn,
-                    usage: TokenUsage {
-                        input_tokens: 80,
-                        output_tokens: 20,
-                    },
+                    usage: TokenUsage { input_tokens: 80, output_tokens: 20 },
                 })
             }
         }
-        async fn send_message_stream(
-            &self,
-            _req: LLMRequest,
-        ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError>
-        {
+        async fn send_message_stream(&self, _req: LLMRequest) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError> {
             Err(LLMError::StreamError("not implemented".into()))
         }
         fn provider_name(&self) -> &'static str {
@@ -584,16 +508,11 @@ async fn execute_multiple_tools_single_round() {
 
     let provider = Arc::new(MultiToolProvider { calls: call_count });
     let engine = ExecutionEngine::new(provider);
-    let strategy = ToolCountingStrategy {
-        count: tool_exec_clone,
-    };
+    let strategy = ToolCountingStrategy { count: tool_exec_clone };
     let sink = NullSink;
     let (_mock, recorder) = make_mock_recorder();
 
-    let result = engine
-        .execute(&strategy, "do things", &sink, &recorder, None)
-        .await
-        .unwrap();
+    let result = engine.execute(&strategy, "do things", &sink, &recorder, None).await.unwrap();
     assert_eq!(result.content, "All done");
     assert_eq!(result.rounds_used, 2);
     assert_eq!(result.input_tokens, 130); // 50 + 80
@@ -627,9 +546,7 @@ async fn execute_cancelled_before_start() {
     let token = CancellationToken::new();
     token.cancel();
 
-    let result = engine
-        .execute(&strategy, "Hi", &sink, &recorder, Some(&token))
-        .await;
+    let result = engine.execute(&strategy, "Hi", &sink, &recorder, Some(&token)).await;
     assert!(matches!(result, Err(HubError::Cancelled)));
 }
 
@@ -657,17 +574,10 @@ async fn execute_cancelled_between_tool_rounds() {
                 }],
                 model: "m".into(),
                 stop_reason: StopReason::ToolUse,
-                usage: TokenUsage {
-                    input_tokens: 5,
-                    output_tokens: 5,
-                },
+                usage: TokenUsage { input_tokens: 5, output_tokens: 5 },
             })
         }
-        async fn send_message_stream(
-            &self,
-            _req: LLMRequest,
-        ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError>
-        {
+        async fn send_message_stream(&self, _req: LLMRequest) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError> {
             Err(LLMError::StreamError("not implemented".into()))
         }
         fn provider_name(&self) -> &'static str {
@@ -721,9 +631,7 @@ async fn execute_cancelled_between_tool_rounds() {
         }
     }
 
-    let provider = Arc::new(CancelAfterToolProvider {
-        calls: call_count.clone(),
-    });
+    let provider = Arc::new(CancelAfterToolProvider { calls: call_count.clone() });
     let engine = ExecutionEngine::new(provider);
     let strategy = CancellingStrategy {
         token: token_for_strategy,
@@ -732,8 +640,6 @@ async fn execute_cancelled_between_tool_rounds() {
     let sink = NullSink;
     let (_mock, recorder) = make_mock_recorder();
 
-    let result = engine
-        .execute(&strategy, "go", &sink, &recorder, Some(&token))
-        .await;
+    let result = engine.execute(&strategy, "go", &sink, &recorder, Some(&token)).await;
     assert!(matches!(result, Err(HubError::Cancelled)));
 }

@@ -43,10 +43,7 @@ fn parse_decision_async_with_passdown() {
     let json = r#"{"tool": "analyze_repo", "tool_args": {}, "is_async": true, "passdown": "Analyzing the repo now...", "reason": "heavy"}"#;
     let decision = parse_router_decision(json).unwrap();
     assert!(decision.is_async);
-    assert_eq!(
-        decision.passdown.as_deref(),
-        Some("Analyzing the repo now...")
-    );
+    assert_eq!(decision.passdown.as_deref(), Some("Analyzing the repo now..."));
 }
 
 #[test]

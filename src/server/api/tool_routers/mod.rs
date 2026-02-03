@@ -9,9 +9,9 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::constants::MAX_TITLE_LENGTH;
+use crate::server::api::tools::ToolResponse;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
-use crate::server::api::tools::ToolResponse;
 
 /// Request body for creating a tool router.
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -66,7 +66,11 @@ pub async fn list_tool_routers(State(state): State<AppState>, auth: auth_utils::
         (status = 400, description = "Invalid request")
     )
 )]
-pub async fn create_tool_router(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(request): Json<CreateToolRouterRequest>) -> Result<(StatusCode, Json<crate::db::ToolRouterRow>), StatusCode> {
+pub async fn create_tool_router(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Json(request): Json<CreateToolRouterRequest>,
+) -> Result<(StatusCode, Json<crate::db::ToolRouterRow>), StatusCode> {
     if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }

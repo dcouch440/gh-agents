@@ -365,6 +365,5 @@ impl<P: LLMProvider + 'static> LLMProvider for RetryingProvider<P> {
     }
 }
 
-
 #[cfg(test)]
 mod tests;

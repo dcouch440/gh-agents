@@ -472,6 +472,5 @@ impl StreamAccumulator {
     }
 }
 
-
 #[cfg(test)]
 mod tests;

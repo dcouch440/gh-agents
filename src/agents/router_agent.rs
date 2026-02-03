@@ -5,10 +5,10 @@
 //! builds a sub-task scoped to that cluster's tools, dispatches it to an
 //! available utility agent, and returns the result.
 
-use std::collections::HashMap;
-use serde_json::json;
-use uuid::Uuid;
 use crate::db::{ClusterRow, ToolRow};
+use serde_json::json;
+use std::collections::HashMap;
+use uuid::Uuid;
 
 /// Index mapping tool names to their owning clusters for fast lookup.
 #[derive(Debug, Clone)]
