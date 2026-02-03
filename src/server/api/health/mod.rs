@@ -34,4 +34,5 @@ pub async fn health_check(State(state): State<AppState>) -> Json<HealthResponse>
     })
 }
 
+#[cfg(test)]
 mod tests;

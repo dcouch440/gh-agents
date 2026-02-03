@@ -39,4 +39,5 @@ pub async fn get_costs(State(state): State<AppState>, auth: auth_utils::AuthUser
     Ok(Json(CostResponse { total_spend, models }))
 }
 
+#[cfg(test)]
 mod tests;

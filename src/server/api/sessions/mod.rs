@@ -506,4 +506,5 @@ pub async fn get_session_history(
 
     Ok(Json(messages))
 }
+#[cfg(test)]
 mod tests;

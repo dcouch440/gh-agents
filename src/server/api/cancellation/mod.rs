@@ -36,4 +36,5 @@ pub async fn cancel_agent_execution(State(state): State<AppState>, _user: auth_u
     Ok(Json(serde_json::json!({ "status": "cancelled" })))
 }
 
+#[cfg(test)]
 mod tests;

@@ -104,4 +104,5 @@ pub async fn set_agent_context(
         documents,
     }))
 }
+#[cfg(test)]
 mod tests;

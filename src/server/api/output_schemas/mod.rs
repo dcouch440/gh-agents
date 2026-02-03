@@ -179,4 +179,5 @@ pub async fn delete_output_schema(State(state): State<AppState>, auth: auth_util
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[cfg(test)]
 mod tests;

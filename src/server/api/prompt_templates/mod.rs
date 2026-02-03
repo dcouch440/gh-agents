@@ -191,4 +191,5 @@ pub async fn delete_prompt_template(State(state): State<AppState>, auth: auth_ut
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[cfg(test)]
 mod tests;

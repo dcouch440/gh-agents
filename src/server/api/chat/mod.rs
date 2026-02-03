@@ -271,4 +271,5 @@ pub async fn clear_chat_history(State(state): State<AppState>, auth: auth_utils:
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
+#[cfg(test)]
 mod tests;
