@@ -55,16 +55,16 @@ pub async fn run_chat(
         .repo
         .get_persisted_agent(agent_id)
         .await
-        .map_err(|e| HubError::Internal(e))?
+        .map_err(HubError::Internal)?
         .ok_or_else(|| HubError::Internal(anyhow::anyhow!("Agent {agent_id} not found")))?;
 
     // Load agent tools
-    let tools = state.repo.get_agent_tools(agent_id).await.map_err(|e| HubError::Internal(e))?;
+    let tools = state.repo.get_agent_tools(agent_id).await.map_err(HubError::Internal)?;
 
     let tool_names: Vec<String> = tools.into_iter().map(|t| t.name).collect();
 
     // Load agent modes and classify if applicable
-    let modes = state.repo.get_agent_modes(agent_id).await.map_err(|e| HubError::Internal(e))?;
+    let modes = state.repo.get_agent_modes(agent_id).await.map_err(HubError::Internal)?;
 
     let active_mode = if modes.is_empty() {
         None

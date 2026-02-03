@@ -4254,7 +4254,7 @@ pub async fn approve_pipeline_run(
                                     });
                                 }
                             }
-                            Some(aid.clone())
+                            Some(aid)
                         } else {
                             None
                         };

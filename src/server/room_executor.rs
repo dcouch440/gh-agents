@@ -212,7 +212,7 @@ pub async fn execute_room_turn(
     let stage_execution_id = session.run_id.unwrap_or_else(Uuid::nil);
 
     for (i, selection) in speakers.iter().enumerate() {
-        if cancel.map_or(false, |t| t.is_cancelled()) {
+        if cancel.is_some_and(|t| t.is_cancelled()) {
             return Err(HubError::Cancelled);
         }
 
@@ -278,7 +278,7 @@ pub async fn execute_room_turn(
                 Some(i as i32),   // speaker_order
             )
             .await
-            .map_err(|e| HubError::Internal(e.into()))?;
+            .map_err(HubError::Internal)?;
 
         // Record initial messages
         let _ = ae_repo.create_execution_message(ae_row.id, "system", &system_prompt, None, 0, 0).await;
