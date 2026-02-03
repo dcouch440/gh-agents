@@ -69,6 +69,39 @@ decomp/                # Ticket breakdowns by milestone
 - Unit tests in `#[cfg(test)]` modules, integration tests in `tests/`
 - Commit format: `type(scope): description` (feat, fix, docs, refactor, test, chore)
 
+## API Module Extraction Pattern
+
+When extracting domains from `src/server/api/mod.rs` into separate modules:
+
+1. **Create module structure:**
+   ```bash
+   mkdir -p src/server/api/<domain>
+   # Create mod.rs with handlers and types
+   # Create tests.rs placeholder with `mod tests;` declaration in mod.rs
+   ```
+
+2. **Update `src/server/api/mod.rs`:**
+   - Add module declaration: `pub mod <domain>;`
+   - Add re-exports: `pub use <domain>::{handlers, types};`
+   - Delete the extracted section
+
+3. **Update `src/server/openapi.rs`:**
+   - Change `super::api::handler` → `super::api::<domain>::handler`
+   - Change `super::api::Type` → `super::api::<domain>::Type`
+
+4. **Verify:**
+   ```bash
+   ~/.cargo/bin/cargo check
+   ~/.cargo/bin/cargo test --lib  # Must have 1193 passed, 9 pre-existing failures
+   ```
+
+5. **Commit:**
+   ```bash
+   git add -A && git commit -m "refactor(api): extract <domain> domain"
+   ```
+
+**Extracted domains so far:** auth, tasks, agents, tools, config, agent_context, chat, documents, sessions, output_schemas, prompt_templates, agent_executions, costs, results, workflows
+
 ## Off-limits directories
 
 Do NOT read, modify, or reference files in these directories:
