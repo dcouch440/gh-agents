@@ -149,6 +149,7 @@ pub struct WorkflowStepRow {
     pub output_variable_name: Option<String>,
     pub interactive_agent_id: Option<Uuid>,
     pub for_each_label_field: Option<String>,
+    pub room_id: Option<Uuid>,
     pub display_order: i32,
     pub version: i32,
 }
@@ -191,6 +192,8 @@ pub struct AgentExecutionRow {
     pub output: Option<String>,
     pub structured_output: Option<serde_json::Value>,
     pub selected_mode_id: Option<Uuid>,
+    pub room_session_id: Option<Uuid>,
+    pub speaker_order: Option<i32>,
     pub status: String,
     pub started_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
@@ -316,6 +319,55 @@ pub struct RouterRequestRow {
     pub result: Option<String>,
     pub created_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
+}
+
+/// Row type for room definitions (pipeline-scoped).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct RoomRow {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub pipeline_id: Uuid,
+    pub name: String,
+    pub gatekeeper_enabled: bool,
+    pub gatekeeper_model_id: String,
+    pub max_speakers_per_turn: i32,
+    pub max_turns: i32,
+    pub tools_enabled: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Row type for room membership (join table).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct RoomMemberRow {
+    pub room_id: Uuid,
+    pub agent_id: Uuid,
+    pub display_name: Option<String>,
+    pub role_description: String,
+    pub display_order: i32,
+}
+
+/// Row type for room session records (runtime).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct RoomSessionRow {
+    pub id: Uuid,
+    pub room_id: Uuid,
+    pub run_id: Option<Uuid>,
+    pub status: String,
+    pub current_turn: i32,
+    pub transcript_summary: Option<String>,
+    pub started_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+/// Labeled entry from a room transcript (cross-execution join).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct RoomTranscriptEntry {
+    pub agent_name: String,
+    pub role_description: String,
+    pub content: String,
+    pub speaker_order: Option<i32>,
+    pub created_at: DateTime<Utc>,
 }
 
 /// Type alias for the database pool

@@ -10,8 +10,8 @@ use uuid::Uuid;
 
 use crate::db::{
     AgentExecutionRow, AgentModeRow, AgentRow, ChatMessageRow, ContextStoreRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PipelineRow, PipelineRunRow,
-    PipelineStageMemberRow, PipelineStageRow, PromptTemplateRow, ResultRow, RouterRequestRow, SessionRow, StageExecutionRow, StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow, WorkflowRow,
-    WorkflowStepEdgeRow, WorkflowStepRow,
+    PipelineStageMemberRow, PipelineStageRow, PromptTemplateRow, ResultRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry, RouterRequestRow, SessionRow, StageExecutionRow,
+    StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -389,6 +389,8 @@ pub trait AgentExecutionRepo: Send + Sync {
         system_prompt_rendered: &str,
         input: &str,
         selected_mode_id: Option<Uuid>,
+        room_session_id: Option<Uuid>,
+        speaker_order: Option<i32>,
     ) -> Result<AgentExecutionRow>;
     async fn get_agent_execution(&self, id: Uuid) -> Result<Option<AgentExecutionRow>>;
     async fn list_agent_executions_by_stage(&self, stage_execution_id: Uuid) -> Result<Vec<AgentExecutionRow>>;
@@ -502,4 +504,94 @@ pub trait RouterRequestRepo: Send + Sync {
     async fn get_router_request(&self, id: Uuid) -> Result<Option<RouterRequestRow>>;
     /// List all router requests for a session.
     async fn list_session_requests(&self, session_id: Uuid) -> Result<Vec<RouterRequestRow>>;
+}
+
+// ============================================================================
+// Room Repository
+// ============================================================================
+
+/// Input type for setting room members in bulk.
+#[derive(Debug, Clone)]
+pub struct RoomMemberInput {
+    pub agent_id: Uuid,
+    pub display_name: Option<String>,
+    pub role_description: String,
+    pub display_order: i32,
+}
+
+/// Database operations for rooms, room members, and room sessions.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait RoomRepo: Send + Sync {
+    // --- Room CRUD ---
+
+    /// Create a new room within a pipeline.
+    async fn create_room(
+        &self,
+        user_id: Uuid,
+        pipeline_id: Uuid,
+        name: &str,
+        gatekeeper_enabled: bool,
+        gatekeeper_model_id: &str,
+        max_speakers_per_turn: i32,
+        max_turns: i32,
+        tools_enabled: bool,
+    ) -> Result<RoomRow>;
+
+    /// Get a room by ID.
+    async fn get_room(&self, id: Uuid) -> Result<Option<RoomRow>>;
+
+    /// List all rooms for a pipeline.
+    async fn list_rooms_for_pipeline(&self, pipeline_id: Uuid) -> Result<Vec<RoomRow>>;
+
+    /// Update a room's configuration.
+    async fn update_room(
+        &self,
+        id: Uuid,
+        name: Option<String>,
+        gatekeeper_enabled: Option<bool>,
+        gatekeeper_model_id: Option<String>,
+        max_speakers_per_turn: Option<i32>,
+        max_turns: Option<i32>,
+        tools_enabled: Option<bool>,
+    ) -> Result<RoomRow>;
+
+    /// Delete a room by ID.
+    async fn delete_room(&self, id: Uuid) -> Result<()>;
+
+    // --- Room members (join table) ---
+
+    /// List all members of a room, ordered by display_order.
+    async fn list_room_members(&self, room_id: Uuid) -> Result<Vec<RoomMemberRow>>;
+
+    /// Add a single member to a room.
+    async fn add_room_member(&self, room_id: Uuid, agent_id: Uuid, display_name: Option<String>, role_description: String, display_order: i32) -> Result<()>;
+
+    /// Remove a single member from a room.
+    async fn remove_room_member(&self, room_id: Uuid, agent_id: Uuid) -> Result<()>;
+
+    /// Replace all members of a room atomically.
+    async fn set_room_members(&self, room_id: Uuid, members: &[RoomMemberInput]) -> Result<()>;
+
+    // --- Room sessions (runtime) ---
+
+    /// Start a new room session.
+    async fn create_room_session(&self, room_id: Uuid, run_id: Option<Uuid>) -> Result<RoomSessionRow>;
+
+    /// Get a room session by ID.
+    async fn get_room_session(&self, id: Uuid) -> Result<Option<RoomSessionRow>>;
+
+    /// Update room session status.
+    async fn update_room_session_status(&self, id: Uuid, status: &str) -> Result<()>;
+
+    /// Increment turn counter and return new value.
+    async fn increment_room_session_turn(&self, id: Uuid) -> Result<i32>;
+
+    /// Set the compressed transcript summary for older turns.
+    async fn set_transcript_summary(&self, id: Uuid, summary: &str) -> Result<()>;
+
+    // --- Room transcript ---
+
+    /// Load the full room transcript (cross-execution message join).
+    async fn get_room_transcript(&self, room_session_id: Uuid) -> Result<Vec<RoomTranscriptEntry>>;
 }

@@ -6,6 +6,7 @@ pub mod cluster;
 mod dispatcher;
 pub mod execution_tools;
 mod executor;
+pub mod gatekeeper;
 pub mod pipeline;
 mod pool;
 pub mod protocol;

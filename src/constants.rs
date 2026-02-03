@@ -288,6 +288,18 @@ pub mod routes {
     // Context response
     pub const CONTEXT_RESPONSE: &str = "/context-response";
 
+    // Rooms
+    pub const ROOMS: &str = "/rooms";
+    pub const ROOM: &str = "/rooms/:id";
+    pub const PIPELINE_ROOMS: &str = "/pipelines/:id/rooms";
+    pub const ROOM_MEMBERS: &str = "/rooms/:id/members";
+    pub const ROOM_MEMBER: &str = "/rooms/:id/members/:agent_id";
+    pub const ROOM_SESSIONS: &str = "/rooms/:id/sessions";
+    pub const ROOM_SESSION: &str = "/room-sessions/:id";
+    pub const ROOM_SESSION_MESSAGES: &str = "/room-sessions/:id/messages";
+    pub const ROOM_SESSION_TRANSCRIPT: &str = "/room-sessions/:id/transcript";
+    pub const ROOM_SESSION_CLOSE: &str = "/room-sessions/:id/close";
+
     // WebSocket
     pub const WS: &str = "/ws";
 }

@@ -32,7 +32,7 @@ pub use error::HubError;
 pub use pipeline_advance::{advance_pipeline, PipelineAdvanceAction};
 pub use prompt_registry::PromptRegistry;
 pub use recorder::ExecutionRecorder;
-pub use strategies::{ChatConfig, ChatStrategy, DagStepStrategy, RouterStrategy};
+pub use strategies::{ChatConfig, ChatStrategy, DagStepStrategy, RoomSpeakerConfig, RoomSpeakerStrategy, RouterStrategy};
 pub use streaming::{NullSink, StreamSink};
 pub use strategy::ExecutionStrategy;
 

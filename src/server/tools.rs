@@ -1233,7 +1233,7 @@ async fn execute_start_pipeline(input: &Value, state: &AppState, user_id: UserId
     if let Some(ae_repo) = &state.agent_execution_repo {
         let rendered = stage_exec.rendered_prompt.as_deref().unwrap_or("");
         let _ = ae_repo
-            .create_agent_execution(stage_exec.id, first_agent_id.0, None, false, None, &run_row.initial_task, rendered, None)
+            .create_agent_execution(stage_exec.id, first_agent_id.0, None, false, None, &run_row.initial_task, rendered, None, None, None)
             .await;
     }
 

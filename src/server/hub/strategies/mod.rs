@@ -2,10 +2,12 @@
 
 pub mod chat;
 pub mod dag_step;
+pub mod room_speaker;
 pub mod router;
 
 pub use chat::{ChatConfig, ChatStrategy};
 pub use dag_step::DagStepStrategy;
+pub use room_speaker::{RoomSpeakerConfig, RoomSpeakerStrategy};
 pub use router::RouterStrategy;
 
 /// Approximate cost computation per model ($/1M tokens).

@@ -93,6 +93,9 @@ pub enum ServerMessage {
     /// New context arrived for a session
     #[serde(rename = "context_update")]
     ContextUpdate { data: ContextUpdateEvent },
+    /// Room event (speaker start/end, tokens, turn complete)
+    #[serde(rename = "room_update")]
+    RoomUpdate { data: RoomUpdateEvent },
     /// Error message
     #[serde(rename = "error")]
     Error { message: String },
@@ -198,6 +201,23 @@ pub struct ContextUpdateEvent {
     pub source: String,
     pub priority: f32,
     pub content_preview: String,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    #[serde(default)]
+    pub user_id: Option<Uuid>,
+}
+
+/// Room event (speaker lifecycle, tokens, turn management).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoomUpdateEvent {
+    pub room_session_id: Uuid,
+    pub run_id: Option<Uuid>,
+    /// Event type: "speaker_start", "speaker_token", "speaker_end", "turn_complete", "session_complete"
+    pub event: String,
+    pub agent_id: Option<Uuid>,
+    pub agent_name: Option<String>,
+    pub content: Option<String>,
+    pub speaker_order: Option<i32>,
+    pub turn_number: Option<i32>,
     pub timestamp: chrono::DateTime<chrono::Utc>,
     #[serde(default)]
     pub user_id: Option<Uuid>,

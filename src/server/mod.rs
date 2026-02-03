@@ -11,6 +11,7 @@ pub mod dag_executor;
 pub mod hub;
 pub mod openapi;
 pub mod orchestrator;
+pub mod room_executor;
 pub mod state;
 pub mod router_service;
 pub mod tools;
@@ -179,6 +180,16 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         .route(routes::TOOL_ROUTER_TOOLS, get(api::get_router_tools).put(api::set_router_tools))
         .route(routes::SESSION_CONTEXT, get(api::get_session_context))
         .route(routes::SESSION_REQUESTS, get(api::list_session_requests))
+        .route(routes::ROOMS, post(api::create_room))
+        .route(routes::ROOM, get(api::get_room).put(api::update_room).delete(api::delete_room))
+        .route(routes::PIPELINE_ROOMS, get(api::list_pipeline_rooms))
+        .route(routes::ROOM_MEMBERS, get(api::list_room_members).post(api::add_room_member).put(api::set_room_members))
+        .route(routes::ROOM_MEMBER, delete(api::remove_room_member))
+        .route(routes::ROOM_SESSIONS, post(api::create_room_session))
+        .route(routes::ROOM_SESSION, get(api::get_room_session))
+        .route(routes::ROOM_SESSION_MESSAGES, post(api::send_room_message))
+        .route(routes::ROOM_SESSION_TRANSCRIPT, get(api::get_room_transcript))
+        .route(routes::ROOM_SESSION_CLOSE, post(api::close_room_session))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth))
 }
 
