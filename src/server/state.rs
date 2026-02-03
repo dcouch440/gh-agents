@@ -9,7 +9,7 @@ use tokio::sync::{broadcast, mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::agents::{AgentPool, ClusterManager, Dispatcher, PipelineManager, RoleManager, ToolClusterIndex};
+use crate::agents::{ClusterManager, PipelineManager, RoleManager, ToolClusterIndex};
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::{
     AgentExecutionRepo, ContextStoreRepo, DocumentRepo, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, RoomRepo, RouterRequestRepo, ServerRepo, TokenLedgerRepo,
@@ -113,10 +113,6 @@ pub struct AppState {
     pub context_update_tx: broadcast::Sender<super::ws::ContextUpdateEvent>,
     /// Broadcast channel for room events
     pub room_update_tx: broadcast::Sender<RoomUpdateEvent>,
-    /// Agent pool for managing agents (None in tests that don't need agents)
-    pub pool: Option<Arc<tokio::sync::Mutex<AgentPool>>>,
-    /// Dispatcher for routing commands to agents (None in tests)
-    pub dispatcher: Option<Arc<tokio::sync::Mutex<Dispatcher>>>,
     /// Role manager for building role-aware agent context
     pub role_manager: Option<Arc<RoleManager>>,
     /// Cluster manager for agent grouping
@@ -184,37 +180,18 @@ impl AppState {
         let project_root = std::env::current_dir().unwrap_or_default();
         state.role_manager = Some(Arc::new(RoleManager::new(project_root.clone())));
 
-        // Initialize agent pool + dispatcher if API key is available
-        if let Ok(provider) = AnthropicClient::from_env() {
-            let provider = Arc::new(provider);
-            let mut pool = AgentPool::new(AgentPoolConfig::default(), provider);
-            let mut dispatcher = Dispatcher::new(64);
-
-            // Reconstruct agents from DB
-            let legacy_user = UserId(uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap());
-            if let Ok(agent_rows) = state.repo.list_persisted_agents(legacy_user).await {
-                // Look up default agent (name = "Home")
-                if let Some(home) = agent_rows.iter().find(|r| r.name.eq_ignore_ascii_case("home")) {
-                    tracing::info!("Default agent: {} ({})", home.name, home.id);
-                    state.default_agent_id = Some(home.id);
-                }
-
-                for row in agent_rows {
-                    let persona = crate::types::AgentPersona {
-                        name: row.name.clone(),
-                        ..Default::default()
-                    };
-                    match pool.spawn_agent_with_dispatcher(persona, crate::types::ModelConfig::default(), &mut dispatcher) {
-                        Ok(id) => tracing::info!("Restored agent {} ({})", row.name, id.0),
-                        Err(e) => {
-                            tracing::warn!("Failed to restore agent {}: {}", row.name, e)
-                        }
-                    }
-                }
+        // Look up default agent from DB (for workflow system)
+        let legacy_user = UserId(uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap());
+        if let Ok(agent_rows) = state.repo.list_persisted_agents(legacy_user).await {
+            // Look up default agent (name = "Home")
+            if let Some(home) = agent_rows.iter().find(|r| r.name.eq_ignore_ascii_case("home")) {
+                tracing::info!("Default agent: {} ({})", home.name, home.id);
+                state.default_agent_id = Some(home.id);
             }
+        }
 
-            state.pool = Some(Arc::new(tokio::sync::Mutex::new(pool)));
-            state.dispatcher = Some(Arc::new(tokio::sync::Mutex::new(dispatcher)));
+        // Build tool-to-cluster index for routing (if API key available)
+        if AnthropicClient::from_env().is_ok() {
 
             // Build tool-to-cluster index for routing
             match crate::db::list_clusters_with_tools(state.db.as_ref().unwrap()).await {
@@ -318,8 +295,6 @@ impl AppState {
                 router_request_tx,
                 context_update_tx,
                 room_update_tx,
-                pool: None,
-                dispatcher: None,
                 role_manager: None,
                 cluster_manager: Arc::new(RwLock::new(ClusterManager::new())),
                 pipeline_manager: Arc::new(RwLock::new(PipelineManager::new())),
