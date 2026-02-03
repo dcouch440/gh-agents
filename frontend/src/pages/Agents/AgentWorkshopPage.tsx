@@ -9,6 +9,7 @@ import {ToggleGroup} from "@/components/primitives/ToggleGroup";
 import {ChatPanel} from "@/components/chat/ChatPanel";
 import {useSplitPane} from "@/hooks/useSplitPane";
 import {useSendSessionMessage} from "@/hooks/useChatMutations";
+import {useDocuments} from "@/hooks/useDocuments";
 import {api} from "@/api";
 import {ROUTES} from "@/constants";
 import type {ChatMessageData} from "@/components/chat/ChatPanel";
@@ -24,6 +25,7 @@ type WorkshopState = {
   modelId: string;
   maxTokens: number;
   temperature: number;
+  selectedDocumentIds: string[];
   editorMode: EditorMode;
   messages: ChatMessageData[];
   streaming: boolean;
@@ -41,6 +43,7 @@ type WorkshopAction =
   | {type: "SET_MODEL_ID"; value: string}
   | {type: "SET_MAX_TOKENS"; value: number}
   | {type: "SET_TEMPERATURE"; value: number}
+  | {type: "TOGGLE_DOCUMENT"; documentId: string}
   | {type: "SET_EDITOR_MODE"; value: EditorMode}
   | {type: "ADD_MESSAGE"; message: ChatMessageData}
   | {type: "UPDATE_LAST_ASSISTANT"; content: string}
@@ -58,6 +61,7 @@ const initialState: WorkshopState = {
   modelId: "sonnet",
   maxTokens: 4096,
   temperature: 0.7,
+  selectedDocumentIds: [],
   editorMode: "edit",
   messages: [],
   streaming: false,
@@ -84,6 +88,12 @@ const reducer = (
       return {...state, maxTokens: action.value, dirty: true};
     case "SET_TEMPERATURE":
       return {...state, temperature: action.value, dirty: true};
+    case "TOGGLE_DOCUMENT": {
+      const ids = state.selectedDocumentIds.includes(action.documentId)
+        ? state.selectedDocumentIds.filter((id) => id !== action.documentId)
+        : [...state.selectedDocumentIds, action.documentId];
+      return {...state, selectedDocumentIds: ids, dirty: true};
+    }
     case "SET_EDITOR_MODE":
       return {...state, editorMode: action.value};
     case "ADD_MESSAGE":
@@ -127,7 +137,7 @@ const MODEL_ID_MAP: Record<string, string> = {
 };
 
 const getFullModelId = (shorthand: string): string => {
-  return MODEL_ID_MAP[shorthand] || shorthand;
+  return MODEL_ID_MAP[shorthand] ?? shorthand;
 };
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -141,6 +151,7 @@ function AgentWorkshopPage() {
     max: 75,
   });
   const {send, streaming: sseStreaming} = useSendSessionMessage();
+  const {documents = []} = useDocuments();
   const contentRef = useRef("");
   const savedRef = useRef(false);
 
@@ -259,7 +270,7 @@ function AgentWorkshopPage() {
           let text = event.data;
           try {
             // Try to parse as JSON in case it's double-encoded
-            const parsed = JSON.parse(text);
+            const parsed = JSON.parse(text) as unknown;
             if (typeof parsed === "string") {
               text = parsed;
             }
@@ -294,6 +305,12 @@ function AgentWorkshopPage() {
         name: state.name.trim(),
       })
       .then(() => {
+        // Save agent context documents
+        if (state.selectedDocumentIds.length > 0) {
+          return api.agents.setContext(state.tempAgentId, state.selectedDocumentIds);
+        }
+      })
+      .then(() => {
         savedRef.current = true;
         dispatch({type: "SET_DIRTY", value: false});
         void navigate(ROUTES.AGENTS);
@@ -307,7 +324,7 @@ function AgentWorkshopPage() {
       .finally(() => {
         dispatch({type: "SET_SAVING", value: false});
       });
-  }, [state.name, state.tempAgentId, navigate]);
+  }, [state.name, state.tempAgentId, state.selectedDocumentIds, navigate]);
 
   const chatDisabled =
     state.saving || state.sessionLoading || !state.sessionId || sseStreaming;
@@ -432,6 +449,33 @@ function AgentWorkshopPage() {
                     }
                     disabled={state.saving}
                   />
+                </div>
+                <div className="workshop__config-field workshop__config-field--full">
+                  <label className="form-label">
+                    Agent Context Documents ({state.selectedDocumentIds.length})
+                  </label>
+                  <div className="workshop__documents">
+                    {documents.length === 0 ? (
+                      <div className="text-sm text-gray-500">No documents available</div>
+                    ) : (
+                      documents.map((doc) => (
+                        <label key={doc.id} className="workshop__document-item">
+                          <input
+                            type="checkbox"
+                            checked={state.selectedDocumentIds.includes(doc.id)}
+                            onChange={() =>
+                              dispatch({type: "TOGGLE_DOCUMENT", documentId: doc.id})
+                            }
+                            disabled={state.saving}
+                          />
+                          <span className="workshop__document-title">{doc.title}</span>
+                          {doc.doc_type ? (
+                            <span className="workshop__document-type">{doc.doc_type}</span>
+                          ) : null}
+                        </label>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
