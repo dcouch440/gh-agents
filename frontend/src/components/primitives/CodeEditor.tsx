@@ -3,8 +3,8 @@ import { EditorView, placeholder as cmPlaceholder, keymap } from '@codemirror/vi
 import { EditorState, type Extension } from '@codemirror/state'
 import { markdown } from '@codemirror/lang-markdown'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
-import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
-import { oneDark } from '@codemirror/theme-one-dark'
+import { syntaxHighlighting } from '@codemirror/language'
+import { oneDarkTheme, oneDarkHighlightStyle } from '@codemirror/theme-one-dark'
 
 type CodeEditorProps = {
   value: string
@@ -53,8 +53,8 @@ function CodeEditor({
     const baseExtensions: Extension[] = [
       keymap.of([...defaultKeymap, ...historyKeymap]),
       history(),
-      syntaxHighlighting(defaultHighlightStyle),
-      oneDark,
+      oneDarkTheme,
+      syntaxHighlighting(oneDarkHighlightStyle),
       EditorView.lineWrapping,
       updateListener,
       ...getLanguageExtension(),
