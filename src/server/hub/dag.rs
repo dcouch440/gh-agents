@@ -83,7 +83,46 @@ pub async fn execute_workflow_via_engine(
                 agent_id: step.agent_id,
             })?;
 
-        if step.execution_mode == "for_each" {
+        if step.execution_mode == "room" {
+            // Room execution — create a session and pause the pipeline.
+            // The user interacts with the room via POST /api/room-sessions/:id/messages.
+            // When the session completes, the pipeline continues.
+            let room_id = step.room_id.ok_or_else(|| {
+                HubError::Internal(anyhow!("step {} has execution_mode='room' but no room_id", step.id))
+            })?;
+            let room_repo = state.room_repo.as_ref().ok_or(HubError::ProviderNotConfigured)?;
+            let session = room_repo
+                .create_room_session(room_id, Some(ctx.run_id))
+                .await
+                .map_err(|e| HubError::Internal(anyhow!("failed to create room session: {}", e)))?;
+
+            info!(
+                step_id = %step.id,
+                room_id = %room_id,
+                session_id = %session.id,
+                "Room step paused — awaiting interactive room conversation"
+            );
+
+            // Store a placeholder output so downstream steps can reference the session
+            let output = StepOutput {
+                variable_name: step.output_variable_name.clone().unwrap_or_default(),
+                raw_output: format!("{{\"room_session_id\":\"{}\",\"status\":\"awaiting_room\"}}", session.id),
+                structured_output: Some(serde_json::json!({
+                    "room_session_id": session.id.to_string(),
+                    "status": "awaiting_room"
+                })),
+            };
+            if let Some(ref var_name) = step.output_variable_name {
+                var_outputs.insert(var_name.clone(), output.structured_output.clone().unwrap_or_default());
+            }
+            completed.insert(step.id, output);
+
+            // Signal that this pipeline is awaiting user interaction
+            return Err(HubError::AwaitingUser {
+                step_id: step.id,
+                execution_id: session.id,
+            });
+        } else if step.execution_mode == "for_each" {
             execute_for_each_step(
                 engine,
                 state,
