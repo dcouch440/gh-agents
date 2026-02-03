@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 
 use std::sync::Arc;
 
-use crate::agents::{AgentCommand, AgentResponse, CommunicationStyle, OutputFormat, PipelineId, RoleContext, RoleId, TaskAssignment, TaskConstraints, TaskContext};
+use crate::agents::{AgentCommand, CommunicationStyle, OutputFormat, PipelineId, RoleContext, RoleId, TaskAssignment, TaskConstraints, TaskContext};
 use crate::db::traits::DocumentRepo;
 use crate::db::{AgentRow, PipelineRow, PipelineStageRow};
 use crate::llm::{AnthropicClient, AnthropicConfig, LLMProvider, LLMRequest, Message as LlmMessage, Tool};
@@ -836,70 +836,16 @@ async fn execute_assign_task(input: &Value, state: &AppState, session_id: Option
     }
 }
 
-async fn execute_get_task_result(input: &Value, state: &AppState) -> Value {
-    let Some(id_str) = input["task_id"].as_str() else {
-        return json!({ "error": "task_id is required" });
-    };
-    let Ok(task_id) = uuid::Uuid::parse_str(id_str) else {
-        return json!({ "error": format!("Invalid UUID: {}", id_str) });
-    };
-
-    let results = state.task_results.read().await;
-    match results.get(&task_id) {
-        None => json!({ "status": "pending", "task_id": id_str }),
-        Some(AgentResponse::TaskStarted { .. }) => {
-            json!({ "status": "started", "task_id": id_str })
-        }
-        Some(AgentResponse::TaskCompleted { result, .. }) => {
-            json!({
-                "status": "completed",
-                "task_id": id_str,
-                "output": result.output,
-                "files_modified": result.files_modified,
-            })
-        }
-        Some(AgentResponse::TaskFailed { result, .. }) => {
-            json!({
-                "status": "failed",
-                "task_id": id_str,
-                "errors": result.errors,
-                "output": result.output,
-            })
-        }
-        Some(AgentResponse::ProgressUpdate { update, .. }) => {
-            json!({
-                "status": "in_progress",
-                "task_id": id_str,
-                "message": update.message,
-                "progress_percent": update.progress_percent,
-            })
-        }
-        Some(_) => json!({ "status": "unknown", "task_id": id_str }),
-    }
+async fn execute_get_task_result(_input: &Value, _state: &AppState) -> Value {
+    // LEGACY: This tool relied on the old agent pool system which has been removed.
+    // Use the chat/session API for agent interactions instead.
+    json!({ "error": "get_task_result is deprecated. This tool was part of the legacy agent pool system." })
 }
 
-async fn execute_list_pending_approvals(state: &AppState) -> Value {
-    let results = state.task_results.read().await;
-    let pending: Vec<Value> = results
-        .values()
-        .filter_map(|resp| {
-            if let AgentResponse::ApprovalRequest { agent_id, request } = resp {
-                Some(json!({
-                    "agent_id": agent_id.0.to_string(),
-                    "task_id": request.task_id.to_string(),
-                    "action": request.action,
-                    "details": request.details,
-                }))
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    json!({
-        "pending_approvals": pending,
-        "count": pending.len()
-    })
+async fn execute_list_pending_approvals(_state: &AppState) -> Value {
+    // LEGACY: This tool relied on the old agent pool system which has been removed.
+    // Use the chat/session API for agent interactions instead.
+    json!({ "error": "list_pending_approvals is deprecated. This tool was part of the legacy agent pool system." })
 }
 
 async fn execute_respond_to_approval(input: &Value, state: &AppState) -> Value {
@@ -1263,23 +1209,15 @@ async fn execute_get_pipeline_status(input: &Value, state: &AppState) -> Value {
     };
 
     // Collect per-stage results
-    let results = state.task_results.read().await;
+    // LEGACY: task_results removed with old agent pool system. Stage status now tracked in DB.
     let stage_results: Vec<Value> = run
         .stage_task_ids
         .iter()
         .map(|(stage_num, task_id)| {
-            let status = match results.get(task_id) {
-                None => "pending".to_string(),
-                Some(AgentResponse::TaskStarted { .. }) => "started".to_string(),
-                Some(AgentResponse::TaskCompleted { .. }) => "completed".to_string(),
-                Some(AgentResponse::TaskFailed { .. }) => "failed".to_string(),
-                Some(AgentResponse::ProgressUpdate { .. }) => "in_progress".to_string(),
-                Some(_) => "unknown".to_string(),
-            };
             json!({
                 "stage": stage_num,
                 "task_id": task_id.to_string(),
-                "status": status
+                "status": "unknown"
             })
         })
         .collect();
