@@ -11,10 +11,6 @@ const { mockPost, mockPut, mockDel } = vi.hoisted(() => ({
 const mockReload = vi.fn()
 
 vi.mock('@/api', () => ({ api: { post: mockPost, put: mockPut, del: mockDel } }))
-vi.mock('@/constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
-  return { ...actual, USE_MOCK_DATA: false }
-})
 vi.mock('@/hooks/useOutputSchemaContext', () => ({
   useOutputSchemaContext: () => ({ reload: mockReload }),
 }))

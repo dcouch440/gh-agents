@@ -5,16 +5,11 @@ import { mockResult } from '@/test/fixtures'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }))
+const { mockList } = vi.hoisted(() => ({ mockList: vi.fn() }))
 
 vi.mock('@/api', () => ({
-  api: { get: mockGet },
+  api: { results: { list: mockList } },
 }))
-
-vi.mock('@/constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
-  return { ...actual, USE_MOCK_DATA: false }
-})
 
 // ── Test consumer ────────────────────────────────────────────────────────────
 
@@ -40,7 +35,7 @@ describe('ResultContext', () => {
   describe('ResultProvider', () => {
     beforeEach(() => {
       vi.clearAllMocks()
-      mockGet.mockResolvedValue([mockResult])
+      mockList.mockResolvedValue({ items: [mockResult] })
     })
 
     it('fetches results on mount', async () => {

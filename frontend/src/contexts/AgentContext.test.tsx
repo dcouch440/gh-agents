@@ -17,16 +17,11 @@ vi.mock('@/hooks/useWebSocket', () => ({
   }),
 }))
 
-const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }))
+const { mockList } = vi.hoisted(() => ({ mockList: vi.fn() }))
 
 vi.mock('@/api', () => ({
-  api: { get: mockGet },
+  api: { agents: { list: mockList } },
 }))
-
-vi.mock('@/constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
-  return { ...actual, USE_MOCK_DATA: false }
-})
 
 // ── Test consumer ────────────────────────────────────────────────────────────
 
@@ -56,7 +51,7 @@ describe('AgentContext', () => {
     beforeEach(() => {
       wsHandler = null
       vi.clearAllMocks()
-      mockGet.mockResolvedValue({ agents: [mockAgent] })
+      mockList.mockResolvedValue({ agents: [mockAgent] })
     })
 
     it('fetches agents on mount and renders them', async () => {

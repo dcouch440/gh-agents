@@ -1,7 +1,6 @@
 import { createContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react'
-import { ACTION, USE_MOCK_DATA, API } from '@/constants'
+import { ACTION } from '@/constants'
 import { api } from '@/api'
-import { mock } from '@/mock'
 import type { CostResponse } from '@/types/cost'
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -46,9 +45,7 @@ function CostProvider({ children }: { children: ReactNode }) {
 
   const load = useCallback(async () => {
     try {
-      const costs = USE_MOCK_DATA
-        ? await mock.getCosts()
-        : await api.get<CostResponse>(API.COSTS)
+      const costs = await api.costs.list()
       if (mountedRef.current) dispatch({ type: ACTION.SET_ALL, costs })
     } catch (e) {
       if (mountedRef.current) dispatch({ type: ACTION.SET_ERROR, error: e instanceof Error ? e.message : 'Failed to load costs' })

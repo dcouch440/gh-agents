@@ -190,7 +190,7 @@ const useDeleteEdge = () => {
     setLoading(true)
     setError(null)
     try {
-      await api.del(`/workflows/${workflowId}/edges/${edgeId}`)
+      await api.del(API.WORKFLOW_EDGE(workflowId, edgeId))
       await loadWorkflow(workflowId)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to delete edge'

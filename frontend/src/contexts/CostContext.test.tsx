@@ -5,16 +5,11 @@ import { mockCostResponse } from '@/test/fixtures'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }))
+const { mockList } = vi.hoisted(() => ({ mockList: vi.fn() }))
 
 vi.mock('@/api', () => ({
-  api: { get: mockGet },
+  api: { costs: { list: mockList } },
 }))
-
-vi.mock('@/constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
-  return { ...actual, USE_MOCK_DATA: false }
-})
 
 // ── Test consumer ────────────────────────────────────────────────────────────
 
@@ -41,7 +36,7 @@ describe('CostContext', () => {
   describe('CostProvider', () => {
     beforeEach(() => {
       vi.clearAllMocks()
-      mockGet.mockResolvedValue(mockCostResponse)
+      mockList.mockResolvedValue(mockCostResponse)
     })
 
     it('fetches costs on mount', async () => {

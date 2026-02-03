@@ -2,14 +2,9 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { useDocuments, useDocument } from './useDocuments'
 import { mockDocument } from '@/test/fixtures'
 
-const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }))
+const { mockList, mockGet } = vi.hoisted(() => ({ mockList: vi.fn(), mockGet: vi.fn() }))
 
-vi.mock('@/api', () => ({ api: { get: mockGet } }))
-vi.mock('@/constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
-  return { ...actual, USE_MOCK_DATA: false }
-})
-
+vi.mock('@/api', () => ({ api: { documents: { list: mockList, get: mockGet } } }))
 describe('useDocuments', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -17,7 +12,7 @@ describe('useDocuments', () => {
 
   describe('useDocuments', () => {
     it('fetches and returns documents', async () => {
-      mockGet.mockResolvedValue([mockDocument])
+      mockList.mockResolvedValue({ items: [mockDocument] })
       const { result } = renderHook(() => useDocuments())
 
       await waitFor(() => {
@@ -28,7 +23,7 @@ describe('useDocuments', () => {
     })
 
     it('sets error on failure', async () => {
-      mockGet.mockRejectedValue(new Error('Failed'))
+      mockList.mockRejectedValue(new Error('Failed'))
       const { result } = renderHook(() => useDocuments())
 
       await waitFor(() => {

@@ -2,14 +2,15 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { useTasks, useTask } from './useTasks'
 import { mockTask } from '@/test/fixtures'
 
-const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }))
+const { mockList, mockGetOne, mockGet } = vi.hoisted(() => ({
+  mockList: vi.fn(),
+  mockGetOne: vi.fn(),
+  mockGet: vi.fn(),
+}))
 
-vi.mock('@/api', () => ({ api: { get: mockGet } }))
-vi.mock('@/constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
-  return { ...actual, USE_MOCK_DATA: false }
-})
-
+vi.mock('@/api', () => ({
+  api: { tasks: { list: mockList, get: mockGetOne }, get: mockGet },
+}))
 describe('useTasks', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -17,7 +18,7 @@ describe('useTasks', () => {
 
   describe('useTasks', () => {
     it('fetches and returns tasks', async () => {
-      mockGet.mockResolvedValue([mockTask])
+      mockList.mockResolvedValue({ items: [mockTask] })
       const { result } = renderHook(() => useTasks())
 
       await waitFor(() => {
@@ -38,7 +39,7 @@ describe('useTasks', () => {
     })
 
     it('sets error on failure', async () => {
-      mockGet.mockRejectedValue(new Error('Server error'))
+      mockList.mockRejectedValue(new Error('Server error'))
       const { result } = renderHook(() => useTasks())
 
       await waitFor(() => {
@@ -51,7 +52,7 @@ describe('useTasks', () => {
 
   describe('useTask', () => {
     it('fetches a single task by id', async () => {
-      mockGet.mockResolvedValue(mockTask)
+      mockGetOne.mockResolvedValue(mockTask)
       const { result } = renderHook(() => useTask('task-001'))
 
       await waitFor(() => {
@@ -69,7 +70,7 @@ describe('useTasks', () => {
       })
 
       expect(result.current.task).toBeNull()
-      expect(mockGet).not.toHaveBeenCalled()
+      expect(mockGetOne).not.toHaveBeenCalled()
     })
   })
 })

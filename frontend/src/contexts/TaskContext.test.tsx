@@ -17,16 +17,11 @@ vi.mock('@/hooks/useWebSocket', () => ({
   }),
 }))
 
-const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }))
+const { mockList } = vi.hoisted(() => ({ mockList: vi.fn() }))
 
 vi.mock('@/api', () => ({
-  api: { get: mockGet },
+  api: { tasks: { list: mockList } },
 }))
-
-vi.mock('@/constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
-  return { ...actual, USE_MOCK_DATA: false }
-})
 
 // ── Test consumer ────────────────────────────────────────────────────────────
 
@@ -52,7 +47,7 @@ describe('TaskContext', () => {
     beforeEach(() => {
       wsHandler = null
       vi.clearAllMocks()
-      mockGet.mockResolvedValue([mockTask])
+      mockList.mockResolvedValue({ items: [mockTask] })
     })
 
     it('fetches tasks on mount', async () => {

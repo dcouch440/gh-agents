@@ -2,14 +2,9 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { useAgents, useAgent } from './useAgents'
 import { mockAgent } from '@/test/fixtures'
 
-const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }))
+const { mockList, mockGet } = vi.hoisted(() => ({ mockList: vi.fn(), mockGet: vi.fn() }))
 
-vi.mock('@/api', () => ({ api: { get: mockGet } }))
-vi.mock('@/constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
-  return { ...actual, USE_MOCK_DATA: false }
-})
-
+vi.mock('@/api', () => ({ api: { agents: { list: mockList, get: mockGet } } }))
 describe('useAgents', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -17,7 +12,7 @@ describe('useAgents', () => {
 
   describe('useAgents', () => {
     it('fetches and returns agents', async () => {
-      mockGet.mockResolvedValue({ agents: [mockAgent] })
+      mockList.mockResolvedValue({ agents: [mockAgent] })
       const { result } = renderHook(() => useAgents())
 
       expect(result.current.loading).toBe(true)
@@ -31,7 +26,7 @@ describe('useAgents', () => {
     })
 
     it('sets error on failure', async () => {
-      mockGet.mockRejectedValue(new Error('Network error'))
+      mockList.mockRejectedValue(new Error('Network error'))
       const { result } = renderHook(() => useAgents())
 
       await waitFor(() => {

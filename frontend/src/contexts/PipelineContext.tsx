@@ -1,8 +1,7 @@
 import { createContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { useWebSocket } from '@/hooks/useWebSocket'
-import { ACTION, WS_CHANNEL, USE_MOCK_DATA, API } from '@/constants'
+import { ACTION, WS_CHANNEL } from '@/constants'
 import { api } from '@/api'
-import { mock } from '@/mock'
 import type { Pipeline, PipelineRun } from '@/types/pipeline'
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -61,9 +60,8 @@ function PipelineProvider({ children }: { children: ReactNode }) {
   const load = useCallback(async () => {
     dispatch({ type: ACTION.SET_LOADING, loading: true })
     try {
-      const pipelines = USE_MOCK_DATA
-        ? await mock.getPipelines()
-        : await api.get<Pipeline[]>(API.PIPELINES)
+      const data = await api.pipelines.list()
+      const pipelines = data.items
       if (mountedRef.current) dispatch({ type: ACTION.SET_PIPELINES, pipelines })
     } catch (e) {
       if (mountedRef.current) dispatch({ type: ACTION.SET_ERROR, error: e instanceof Error ? e.message : 'Failed to load pipelines' })
@@ -72,7 +70,8 @@ function PipelineProvider({ children }: { children: ReactNode }) {
 
   const loadRuns = useCallback(async () => {
     try {
-      const runs = await api.get<PipelineRun[]>(API.PIPELINE_RUNS)
+      const data = await api.pipelineRuns.list()
+      const runs = data.items
       if (mountedRef.current) dispatch({ type: ACTION.SET_RUNS, runs })
     } catch {
       // Runs reload is best-effort

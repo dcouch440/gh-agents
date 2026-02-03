@@ -11,10 +11,6 @@ const mockReload = vi.fn()
 const mockLoadWorkflow = vi.fn()
 
 vi.mock('@/api', () => ({ api: { post: mockPost, del: mockDel } }))
-vi.mock('@/constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
-  return { ...actual, USE_MOCK_DATA: false }
-})
 vi.mock('@/hooks/useWorkflowContext', () => ({
   useWorkflowContext: () => ({ reload: mockReload, loadWorkflow: mockLoadWorkflow }),
 }))

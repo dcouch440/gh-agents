@@ -6,11 +6,6 @@ const { mockPatch } = vi.hoisted(() => ({ mockPatch: vi.fn() }))
 
 vi.mock('@/api', () => ({ api: { patch: mockPatch } }))
 
-vi.mock('@/constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
-  return { ...actual, USE_MOCK_DATA: false }
-})
-
 describe('useUpdateConfig', () => {
   beforeEach(() => {
     vi.clearAllMocks()

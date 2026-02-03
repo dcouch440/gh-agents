@@ -2,21 +2,16 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { useTools } from './useTools'
 import { mockTool } from '@/test/fixtures'
 
-const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }))
+const { mockList } = vi.hoisted(() => ({ mockList: vi.fn() }))
 
-vi.mock('@/api', () => ({ api: { get: mockGet } }))
-vi.mock('@/constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
-  return { ...actual, USE_MOCK_DATA: false }
-})
-
+vi.mock('@/api', () => ({ api: { tools: { list: mockList } } }))
 describe('useTools', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
   it('fetches and returns tools', async () => {
-    mockGet.mockResolvedValue([mockTool])
+    mockList.mockResolvedValue({ items: [mockTool] })
     const { result } = renderHook(() => useTools())
 
     await waitFor(() => {
@@ -28,7 +23,7 @@ describe('useTools', () => {
   })
 
   it('sets error on failure', async () => {
-    mockGet.mockRejectedValue(new Error('Failed'))
+    mockList.mockRejectedValue(new Error('Failed'))
     const { result } = renderHook(() => useTools())
 
     await waitFor(() => {

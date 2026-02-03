@@ -1,5 +1,5 @@
 import { createContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react'
-import { ACTION, USE_MOCK_DATA, API } from '@/constants'
+import { ACTION } from '@/constants'
 import { api } from '@/api'
 import type { PromptTemplate } from '@/types/template'
 
@@ -60,9 +60,8 @@ function PromptTemplateProvider({ children }: { children: ReactNode }) {
   const load = useCallback(async () => {
     dispatch({ type: ACTION.SET_LOADING, loading: true })
     try {
-      const templates = USE_MOCK_DATA
-        ? []
-        : await api.get<PromptTemplate[]>(API.PROMPT_TEMPLATES)
+      const data = await api.promptTemplates.list()
+      const templates = data.items
       if (mountedRef.current) dispatch({ type: ACTION.SET_ALL, templates })
     } catch (e) {
       if (mountedRef.current) dispatch({ type: ACTION.SET_ERROR, error: e instanceof Error ? e.message : 'Failed to load prompt templates' })

@@ -1,8 +1,7 @@
 import { createContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { useWebSocket } from '@/hooks/useWebSocket'
-import { ACTION, WS_CHANNEL, USE_MOCK_DATA, API } from '@/constants'
+import { ACTION, WS_CHANNEL } from '@/constants'
 import { api } from '@/api'
-import { mock } from '@/mock'
 import type { Agent } from '@/types/agent'
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -66,11 +65,6 @@ const AgentContext = createContext<AgentContextValue | null>(null)
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 
-type AgentsResponse = {
-  stats: { orchestrators: number; workers: number; utilities: number }
-  agents: Agent[]
-}
-
 function AgentProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
   const { subscribe } = useWebSocket()
@@ -79,9 +73,7 @@ function AgentProvider({ children }: { children: ReactNode }) {
   const load = useCallback(async () => {
     dispatch({ type: ACTION.SET_LOADING, loading: true })
     try {
-      const agents = USE_MOCK_DATA
-        ? await mock.getAgents()
-        : (await api.get<AgentsResponse>(API.AGENTS)).agents
+      const agents = (await api.agents.list()).agents
       if (mountedRef.current) dispatch({ type: ACTION.SET_ALL, agents })
     } catch (e) {
       if (mountedRef.current) dispatch({ type: ACTION.SET_ERROR, error: e instanceof Error ? e.message : 'Failed to load agents' })

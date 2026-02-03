@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Config } from '@/types/config'
-import { API, USE_MOCK_DATA } from '@/constants'
-import { mock } from '@/mock'
+import type { Config, UpdateConfigRequest } from '@/types/config'
 import { api } from '@/api'
 
 const useConfig = () => {
@@ -13,9 +11,7 @@ const useConfig = () => {
     setLoading(true)
     setError(null)
     try {
-      const data = USE_MOCK_DATA
-        ? await mock.getConfig()
-        : await api.get<Config>(API.CONFIG)
+      const data = await api.config.get()
       setConfig(data)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load config')
@@ -34,12 +30,8 @@ const useConfig = () => {
     return () => { cancelled = true }
   }, [load])
 
-  const updateConfig = useCallback(async (patch: Partial<Config>) => {
-    if (USE_MOCK_DATA) {
-      setConfig((prev) => prev ? { ...prev, ...patch } : null)
-      return
-    }
-    const updated = await api.patch<Config>(API.CONFIG, patch)
+  const updateConfig = useCallback(async (patch: UpdateConfigRequest) => {
+    const updated = await api.config.update(patch)
     setConfig(updated)
   }, [])
 

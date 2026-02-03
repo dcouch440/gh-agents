@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { Pipeline, PipelineRun, StageExecution } from '@/types/pipeline'
-import { API, USE_MOCK_DATA } from '@/constants'
-import { mock } from '@/mock'
 import { api } from '@/api'
 
 const usePipelines = () => {
@@ -13,10 +11,8 @@ const usePipelines = () => {
     setLoading(true)
     setError(null)
     try {
-      const data = USE_MOCK_DATA
-        ? await mock.getPipelines()
-        : await api.get<Pipeline[]>(API.PIPELINES)
-      setPipelines(data)
+      const data = await api.pipelines.list()
+      setPipelines(data.items)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load pipelines')
     } finally {
@@ -46,10 +42,11 @@ const usePipelineRuns = (pipelineId?: string) => {
     setLoading(true)
     setError(null)
     try {
-      const data = USE_MOCK_DATA
-        ? await mock.getPipelineRuns(pipelineId)
-        : await api.get<PipelineRun[]>(pipelineId ? `${API.PIPELINE_RUNS}?pipeline_id=${pipelineId}` : API.PIPELINE_RUNS)
-      setRuns(data)
+      const data = pipelineId
+        ? await api.get<PipelineRun[]>(`${'/pipeline-runs'}?pipeline_id=${pipelineId}`)
+        : await api.pipelineRuns.list()
+      const items = Array.isArray(data) ? data : data.items
+      setRuns(items)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load pipeline runs')
     } finally {
@@ -89,22 +86,11 @@ const usePipelineRun = (id: string | null) => {
       setLoading(true)
       setError(null)
       try {
-        if (USE_MOCK_DATA) {
-          const [r, e] = await Promise.all([
-            mock.getPipelineRun(id),
-            mock.getStageExecutions(id),
-          ])
-          if (!cancelled) {
-            setRun(r)
-            setExecutions(e)
-          }
-        } else {
-          const data = await api.get<PipelineRun & { stage_executions?: StageExecution[] }>(API.PIPELINE_RUN(id))
-          if (!cancelled) {
-            const { stage_executions, ...rest } = data
-            setRun(rest)
-            setExecutions(stage_executions ?? [])
-          }
+        const data = await api.pipelineRuns.get(id) as PipelineRun & { stage_executions?: StageExecution[] }
+        if (!cancelled) {
+          const { stage_executions, ...rest } = data
+          setRun(rest)
+          setExecutions(stage_executions ?? [])
         }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load pipeline run')

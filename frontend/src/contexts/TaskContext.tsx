@@ -1,8 +1,7 @@
 import { createContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { useWebSocket } from '@/hooks/useWebSocket'
-import { ACTION, WS_CHANNEL, USE_MOCK_DATA, API } from '@/constants'
+import { ACTION, WS_CHANNEL } from '@/constants'
 import { api } from '@/api'
-import { mock } from '@/mock'
 import type { Task } from '@/types/task'
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -78,9 +77,8 @@ function TaskProvider({ children }: { children: ReactNode }) {
   const load = useCallback(async () => {
     dispatch({ type: ACTION.SET_LOADING, loading: true })
     try {
-      const tasks = USE_MOCK_DATA
-        ? await mock.getTasks()
-        : await api.get<Task[]>(API.TASKS)
+      const data = await api.tasks.list()
+      const tasks = data.items
       if (mountedRef.current) dispatch({ type: ACTION.SET_ALL, tasks })
     } catch (e) {
       if (mountedRef.current) dispatch({ type: ACTION.SET_ERROR, error: e instanceof Error ? e.message : 'Failed to load tasks' })

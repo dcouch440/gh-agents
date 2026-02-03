@@ -9,6 +9,7 @@ type AgentExecution = {
   input: string
   output: string | null
   structured_output: Record<string, unknown> | null
+  selected_mode_id: string | null
   status: AgentExecutionStatus
   started_at: string
   completed_at: string | null

@@ -9,11 +9,6 @@ const { mockPost, mockPut, mockDel } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/api', () => ({ api: { post: mockPost, put: mockPut, del: mockDel } }))
-vi.mock('@/constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
-  return { ...actual, USE_MOCK_DATA: false }
-})
-
 describe('usePromptTemplateMutations', () => {
   beforeEach(() => {
     vi.clearAllMocks()

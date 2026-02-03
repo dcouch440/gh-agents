@@ -5,16 +5,11 @@ import { mockPromptTemplate } from '@/test/fixtures'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }))
+const { mockList } = vi.hoisted(() => ({ mockList: vi.fn() }))
 
 vi.mock('@/api', () => ({
-  api: { get: mockGet },
+  api: { promptTemplates: { list: mockList } },
 }))
-
-vi.mock('@/constants', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@/constants')
-  return { ...actual, USE_MOCK_DATA: false }
-})
 
 // ── Test consumer ────────────────────────────────────────────────────────────
 
@@ -39,7 +34,7 @@ describe('PromptTemplateContext', () => {
   describe('PromptTemplateProvider', () => {
     beforeEach(() => {
       vi.clearAllMocks()
-      mockGet.mockResolvedValue([mockPromptTemplate])
+      mockList.mockResolvedValue({ items: [mockPromptTemplate] })
     })
 
     it('fetches prompt templates on mount and renders them', async () => {
@@ -57,7 +52,7 @@ describe('PromptTemplateContext', () => {
     })
 
     it('handles fetch error', async () => {
-      mockGet.mockRejectedValue(new Error('Network error'))
+      mockList.mockRejectedValue(new Error('Network error'))
 
       render(
         <PromptTemplateProvider>

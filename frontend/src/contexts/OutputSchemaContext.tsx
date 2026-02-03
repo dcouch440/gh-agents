@@ -1,5 +1,5 @@
 import { createContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react'
-import { ACTION, USE_MOCK_DATA, API } from '@/constants'
+import { ACTION } from '@/constants'
 import { api } from '@/api'
 import type { OutputSchema } from '@/types/schema'
 
@@ -60,9 +60,8 @@ function OutputSchemaProvider({ children }: { children: ReactNode }) {
   const load = useCallback(async () => {
     dispatch({ type: ACTION.SET_LOADING, loading: true })
     try {
-      const schemas = USE_MOCK_DATA
-        ? []
-        : await api.get<OutputSchema[]>(API.OUTPUT_SCHEMAS)
+      const data = await api.outputSchemas.list()
+      const schemas = data.items
       if (mountedRef.current) dispatch({ type: ACTION.SET_ALL, schemas })
     } catch (e) {
       if (mountedRef.current) dispatch({ type: ACTION.SET_ERROR, error: e instanceof Error ? e.message : 'Failed to load output schemas' })

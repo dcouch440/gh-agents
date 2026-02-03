@@ -156,6 +156,7 @@ export const API = {
   WORKFLOW_STEPS: (wid: string) => `/workflows/${wid}/steps`,
   WORKFLOW_STEP: (wid: string, sid: string) => `/workflows/${wid}/steps/${sid}`,
   WORKFLOW_EDGES: (wid: string) => `/workflows/${wid}/edges`,
+  WORKFLOW_EDGE: (wid: string, eid: string) => `/workflows/${wid}/edges/${eid}`,
   STEP_DOCUMENTS: (wid: string, sid: string) =>
     `/workflows/${wid}/steps/${sid}/documents`,
   STEP_DOCUMENT: (wid: string, sid: string, did: string) =>
@@ -194,9 +195,6 @@ export const API = {
   // Context Response
   CONTEXT_RESPONSE: "/context-response",
 } as const;
-
-// Mock Data
-export const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === "true";
 
 // Local Storage
 export const LS_AUTH_TOKEN = "nexor_auth_token";
