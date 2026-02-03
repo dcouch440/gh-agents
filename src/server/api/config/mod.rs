@@ -123,3 +123,4 @@ pub async fn update_config(State(state): State<AppState>, Json(request): Json<Up
 
     Ok(Json(resp))
 }
+mod tests;

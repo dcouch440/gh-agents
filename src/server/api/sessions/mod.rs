@@ -496,3 +496,4 @@ pub async fn get_session_history(State(state): State<AppState>, auth: auth_utils
 
     Ok(Json(messages))
 }
+mod tests;

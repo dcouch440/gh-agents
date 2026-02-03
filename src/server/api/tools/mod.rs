@@ -243,3 +243,4 @@ pub async fn set_agent_tools(
         tools,
     }))
 }
+mod tests;
