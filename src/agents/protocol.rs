@@ -17,6 +17,19 @@ pub const PROTOCOL_VERSION: &str = "1.0";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AgentId(pub Uuid);
 
+impl AgentId {
+    /// Create a new random agent ID
+    pub fn new() -> Self {
+        Self(Uuid::new_v4())
+    }
+}
+
+impl Default for AgentId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // =============================================================================
 // Slice 3.7.1: TaskAssignment Message Format
 // =============================================================================
