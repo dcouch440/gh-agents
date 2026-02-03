@@ -11,6 +11,7 @@ pub mod documents;
 pub mod output_schemas;
 pub mod prompt_templates;
 pub mod results;
+pub mod session_context;
 pub mod sessions;
 pub mod tasks;
 pub mod tool_routers;
@@ -18,24 +19,17 @@ pub mod tools;
 pub mod workflows;
 
 // Re-export auth handlers and types
-pub use auth::{
-    auth_login, auth_me, auth_register, auth_setup, AuthTokenResponse, LoginRequest, LoginResponse, MeResponse, RegisterRequest, SetupRequest,
-    SetupResponse, UserResponse,
-};
+pub use auth::{auth_login, auth_me, auth_register, auth_setup, AuthTokenResponse, LoginRequest, LoginResponse, MeResponse, RegisterRequest, SetupRequest, SetupResponse, UserResponse};
 
 // Re-export task handlers and types
 pub use tasks::{create_task, get_task, list_tasks, CreateTaskRequest, TasksQuery};
 
 // Re-export agent handlers and types
-pub use agents::{
-    create_agent, delete_agent, get_agent, list_agents, update_agent, AgentPoolStats, AgentResponse, AgentsListResponse, CreateAgentRequest,
-    UpdateAgentRequest,
-};
+pub use agents::{create_agent, delete_agent, get_agent, list_agents, update_agent, AgentPoolStats, AgentResponse, AgentsListResponse, CreateAgentRequest, UpdateAgentRequest};
 
 // Re-export tool handlers and types
 pub use tools::{
-    create_tool, delete_tool, get_agent_tools, get_tool, list_tools, set_agent_tools, update_tool, AgentToolsResponse, CreateToolRequest,
-    SetAgentToolsRequest, ToolResponse, UpdateToolRequest,
+    create_tool, delete_tool, get_agent_tools, get_tool, list_tools, set_agent_tools, update_tool, AgentToolsResponse, CreateToolRequest, SetAgentToolsRequest, ToolResponse, UpdateToolRequest,
 };
 
 // Re-export config handlers and types
@@ -45,39 +39,34 @@ pub use config::{get_config, update_config, ConfigResponse, UpdateConfigRequest,
 pub use agent_context::{get_agent_context, set_agent_context, AgentContextResponse, SetAgentContextRequest};
 
 // Re-export chat handlers and types
-pub use chat::{
-    chat_stream, clear_chat_history, get_chat_history, send_chat, session_chat_stream, ChatMessage, ChatRequest, ChatResponse, HistoryQuery,
-};
+pub use chat::{chat_stream, clear_chat_history, get_chat_history, send_chat, session_chat_stream, ChatMessage, ChatRequest, ChatResponse, HistoryQuery};
 
 // Re-export document handlers and types
 pub use documents::{
-    create_document, delete_document, get_document, list_documents, search_documents, update_document, CreateDocumentRequest, DocumentListItem,
-    DocumentResponse, DocumentSearchQuery, UpdateDocumentRequest,
+    create_document, delete_document, get_document, list_documents, search_documents, update_document, CreateDocumentRequest, DocumentListItem, DocumentResponse, DocumentSearchQuery,
+    UpdateDocumentRequest,
 };
 
 // Re-export session handlers and types
 pub use sessions::{
-    create_agent_mode, create_session, delete_agent_mode, delete_session, get_session, get_session_history, list_agent_modes, list_modes,
-    list_sessions, send_session_chat, update_session, AgentModeResponse, CreateAgentModeRequest, CreateSessionRequest, ModeInfo, SessionResponse,
-    UpdateSessionRequest,
+    create_agent_mode, create_session, delete_agent_mode, delete_session, get_session, get_session_history, list_agent_modes, list_modes, list_sessions, send_session_chat, update_session,
+    AgentModeResponse, CreateAgentModeRequest, CreateSessionRequest, ModeInfo, SessionResponse, UpdateSessionRequest,
 };
 
 // Re-export output schema handlers and types
 pub use output_schemas::{
-    create_output_schema, delete_output_schema, get_output_schema, list_output_schemas, update_output_schema, CreateOutputSchemaRequest,
-    OutputSchemaResponse, UpdateOutputSchemaRequest,
+    create_output_schema, delete_output_schema, get_output_schema, list_output_schemas, update_output_schema, CreateOutputSchemaRequest, OutputSchemaResponse, UpdateOutputSchemaRequest,
 };
 
 // Re-export prompt template handlers and types
 pub use prompt_templates::{
-    create_prompt_template, delete_prompt_template, get_prompt_template, list_prompt_templates, update_prompt_template,
-    CreatePromptTemplateRequest, PromptTemplateResponse, UpdatePromptTemplateRequest,
+    create_prompt_template, delete_prompt_template, get_prompt_template, list_prompt_templates, update_prompt_template, CreatePromptTemplateRequest, PromptTemplateResponse,
+    UpdatePromptTemplateRequest,
 };
 
 // Re-export agent execution handlers and types
 pub use agent_executions::{
-    approve_execution, get_agent_execution, list_execution_messages, send_execution_message, AgentExecutionResponse,
-    ApproveExecutionRequest, ExecutionMessageResponse, SendMessageRequest,
+    approve_execution, get_agent_execution, list_execution_messages, send_execution_message, AgentExecutionResponse, ApproveExecutionRequest, ExecutionMessageResponse, SendMessageRequest,
 };
 
 // Re-export cost handlers and types
@@ -88,18 +77,19 @@ pub use results::{delete_result, get_result, list_results, ResultQuery, ResultRe
 
 // Re-export workflow handlers and types
 pub use workflows::{
-    add_step_document, add_workflow_edge, create_workflow, create_workflow_step, delete_workflow, delete_workflow_step,
-    get_workflow, get_workflow_step, list_step_documents, list_workflow_edges, list_workflow_steps, list_workflows,
-    remove_step_document, remove_workflow_edge, update_workflow, update_workflow_step, CreateStepRequest, CreateWorkflowRequest,
-    EdgeRequest, EdgeResponse, StepDocumentRequest, StepDocumentResponse, UpdateStepRequest, UpdateWorkflowRequest,
-    WorkflowResponse, WorkflowStepResponse,
+    add_step_document, add_workflow_edge, create_workflow, create_workflow_step, delete_workflow, delete_workflow_step, get_workflow, get_workflow_step, list_step_documents, list_workflow_edges,
+    list_workflow_steps, list_workflows, remove_step_document, remove_workflow_edge, update_workflow, update_workflow_step, CreateStepRequest, CreateWorkflowRequest, EdgeRequest, EdgeResponse,
+    StepDocumentRequest, StepDocumentResponse, UpdateStepRequest, UpdateWorkflowRequest, WorkflowResponse, WorkflowStepResponse,
 };
 
 // Re-export tool router handlers and types
 pub use tool_routers::{
-    create_tool_router, delete_tool_router, get_router_tools, get_tool_router, list_tool_routers, set_router_tools,
-    update_tool_router, CreateToolRouterRequest, SetRouterToolsRequest, UpdateToolRouterRequest,
+    create_tool_router, delete_tool_router, get_router_tools, get_tool_router, list_tool_routers, set_router_tools, update_tool_router, CreateToolRouterRequest, SetRouterToolsRequest,
+    UpdateToolRouterRequest,
 };
+
+// Re-export session context handlers
+pub use session_context::{get_session_context, list_session_requests};
 
 use axum::{
     extract::{Path, Query, State},
@@ -218,39 +208,6 @@ pub async fn cancel_agent_execution(State(state): State<AppState>, _user: auth_u
     Ok(Json(serde_json::json!({ "status": "cancelled" })))
 }
 
-/// GET /api/sessions/:session_id/context - Get context entries for a session.
-#[utoipa::path(
-    get,
-    path = "/api/sessions/{session_id}/context",
-    tag = "Session Context",
-    security(("bearer_auth" = [])),
-    params(("session_id" = Uuid, Path, description = "Session ID")),
-    responses(
-        (status = 200, description = "Session context entries")
-    )
-)]
-pub async fn get_session_context(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(session_id): Path<Uuid>) -> Result<Json<Vec<crate::db::ContextStoreRow>>, StatusCode> {
-    let repo = state.context_store_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = repo.get_active_context(session_id, 100).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(rows))
-}
-
-/// GET /api/sessions/:session_id/requests - List router requests for a session.
-#[utoipa::path(
-    get,
-    path = "/api/sessions/{session_id}/requests",
-    tag = "Session Context",
-    security(("bearer_auth" = [])),
-    params(("session_id" = Uuid, Path, description = "Session ID")),
-    responses(
-        (status = 200, description = "List of router requests")
-    )
-)]
-pub async fn list_session_requests(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(session_id): Path<Uuid>) -> Result<Json<Vec<crate::db::RouterRequestRow>>, StatusCode> {
-    let repo = state.router_request_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = repo.list_session_requests(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(rows))
-}
 // ============================================================================
 // Rooms
 // ============================================================================

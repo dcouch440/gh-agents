@@ -145,8 +145,8 @@ use utoipa::OpenApi;
         super::api::tool_routers::get_router_tools,
         super::api::tool_routers::set_router_tools,
         // Session Context
-        super::api::get_session_context,
-        super::api::list_session_requests,
+        super::api::session_context::get_session_context,
+        super::api::session_context::list_session_requests,
         // Context Response
         super::api::submit_context_response,
     ),
