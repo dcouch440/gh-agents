@@ -236,6 +236,8 @@ function AgentWorkshopPage() {
           content: msg.content,
         }));
 
+        console.log("[Workshop] Loading session with", messages.length, "messages");
+
         // Hydrate state
         dispatch({
           type: "HYDRATE_SESSION",
@@ -438,6 +440,7 @@ function AgentWorkshopPage() {
         dispatch({type: "SET_DIRTY", value: false});
         // If we don't have a sessionId in URL yet, update URL without reload
         if (!urlSessionId && state.sessionId) {
+          console.log("[Workshop] Navigating to session URL, current message count:", state.messages.length);
           justNavigatedRef.current = true;
           void navigate(`/agents/workshop/${state.sessionId}`, {replace: true});
         }
