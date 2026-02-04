@@ -106,11 +106,6 @@ impl<'a> ExecutionRecorder<'a> {
         Ok(())
     }
 
-    /// Update a stage execution row.
-    pub async fn record_stage_update(&self, exec: &crate::db::StageExecutionRow) -> Result<(), HubError> {
-        self.repo.update_stage_execution(exec).await.context("failed to update stage execution")?;
-        Ok(())
-    }
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────

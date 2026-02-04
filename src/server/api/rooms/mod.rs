@@ -263,7 +263,6 @@ pub async fn send_room_message(
     Ok(Json(serde_json::json!({
         "status": "processing",
         "session_id": session_id,
-        "run_id": session.run_id,
     })))
 }
 
@@ -286,7 +285,7 @@ pub async fn close_room_session(State(state): State<AppState>, _auth: auth_utils
 
     state.broadcast_room_update(crate::server::ws::RoomUpdateEvent {
         room_session_id: session_id,
-        run_id: session.run_id,
+        run_id: None,
         event: "session_complete".into(),
         agent_id: None,
         agent_name: None,
