@@ -12,4 +12,5 @@ pub mod llm;
 pub mod logging;
 pub mod prompts;
 pub mod server;
+pub mod tools;
 pub mod types;
