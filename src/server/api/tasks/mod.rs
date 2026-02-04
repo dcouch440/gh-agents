@@ -46,8 +46,16 @@ pub struct CreateTaskRequest {
         (status = 200, description = "List of tasks", body = Vec<Task>)
     )
 )]
-pub async fn list_tasks(State(state): State<AppState>, auth: auth_utils::AuthUser, Query(query): Query<TasksQuery>) -> Result<Json<Vec<Task>>, StatusCode> {
-    let tasks = state.repo.list_tasks(auth.user_id, query.status, query.limit).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn list_tasks(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Query(query): Query<TasksQuery>,
+) -> Result<Json<Vec<Task>>, StatusCode> {
+    let tasks = state
+        .repo
+        .list_tasks(auth.user_id, query.status, query.limit)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(tasks))
 }
@@ -66,7 +74,11 @@ pub async fn list_tasks(State(state): State<AppState>, auth: auth_utils::AuthUse
         (status = 404, description = "Task not found")
     )
 )]
-pub async fn get_task(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<Task>, StatusCode> {
+pub async fn get_task(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Task>, StatusCode> {
     let task = state
         .repo
         .get_task_by_uuid(auth.user_id, id)
@@ -92,7 +104,11 @@ pub async fn get_task(State(state): State<AppState>, auth: auth_utils::AuthUser,
         (status = 400, description = "Invalid request")
     )
 )]
-pub async fn create_task(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(request): Json<CreateTaskRequest>) -> Result<(StatusCode, Json<Task>), StatusCode> {
+pub async fn create_task(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Json(request): Json<CreateTaskRequest>,
+) -> Result<(StatusCode, Json<Task>), StatusCode> {
     if request.title.trim().is_empty() || request.title.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -122,7 +138,11 @@ pub async fn create_task(State(state): State<AppState>, auth: auth_utils::AuthUs
     task.updated_at = Utc::now();
 
     // Insert into database
-    state.repo.insert_task(auth.user_id, task.clone()).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state
+        .repo
+        .insert_task(auth.user_id, task.clone())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok((StatusCode::CREATED, Json(task)))
 }

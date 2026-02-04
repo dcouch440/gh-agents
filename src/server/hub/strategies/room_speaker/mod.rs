@@ -96,7 +96,13 @@ impl ExecutionStrategy for RoomSpeakerStrategy {
                     tool = %name,
                     "Room speaker tool call"
                 );
-                execution_tools::execute_execution_tool(name, input, exec_ctx, Some(&self.config.tool_names)).await
+                execution_tools::execute_execution_tool(
+                    name,
+                    input,
+                    exec_ctx,
+                    Some(&self.config.tool_names),
+                )
+                .await
             }
             None => {
                 serde_json::json!({ "error": "No execution context available for tool calls" })
@@ -107,7 +113,11 @@ impl ExecutionStrategy for RoomSpeakerStrategy {
     async fn on_complete(&self, response: &str, usage: &TokenUsage) -> Result<(), HubError> {
         // Record token usage
         if let Some(tl_repo) = &self.state.token_ledger_repo {
-            let cost = super::compute_cost(&self.config.agent.model_id, usage.input_tokens as i64, usage.output_tokens as i64);
+            let cost = super::compute_cost(
+                &self.config.agent.model_id,
+                usage.input_tokens as i64,
+                usage.output_tokens as i64,
+            );
             let _ = tl_repo
                 .insert_ledger_entry(
                     self.config.user_id,
@@ -123,7 +133,12 @@ impl ExecutionStrategy for RoomSpeakerStrategy {
         // Update agent_execution with final status
         if let Some(ae_repo) = &self.state.agent_execution_repo {
             let _ = ae_repo
-                .update_agent_execution_status(self.config.agent_execution_id, "completed", Some(response.to_string()), None)
+                .update_agent_execution_status(
+                    self.config.agent_execution_id,
+                    "completed",
+                    Some(response.to_string()),
+                    None,
+                )
                 .await;
         }
 

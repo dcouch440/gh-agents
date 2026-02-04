@@ -19,7 +19,9 @@ fn login_request_deserializes() {
 
 #[test]
 fn setup_response_serializes() {
-    let response = SetupResponse { message: "ok".to_string() };
+    let response = SetupResponse {
+        message: "ok".to_string(),
+    };
     let json = serde_json::to_string(&response).unwrap();
     assert!(json.contains("\"message\":\"ok\""));
 }

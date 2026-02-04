@@ -56,7 +56,13 @@ pub struct ChatStrategy {
 }
 
 impl ChatStrategy {
-    pub fn new(config: ChatConfig, state: AppState, user_id: UserId, session_id: Option<Uuid>, message_id: Uuid) -> Self {
+    pub fn new(
+        config: ChatConfig,
+        state: AppState,
+        user_id: UserId,
+        session_id: Option<Uuid>,
+        message_id: Uuid,
+    ) -> Self {
         Self {
             config,
             state,
@@ -121,10 +127,16 @@ impl ExecutionStrategy for ChatStrategy {
             // Inject prior context from session summary via distiller
             if let Ok(Some(session)) = self.state.repo.get_session(session_id).await {
                 if !session.summary.is_empty() {
-                    if let Some(targeted) = tools::haiku_extract_context(&session.summary, input).await {
+                    if let Some(targeted) =
+                        tools::haiku_extract_context(&session.summary, input).await
+                    {
                         if !targeted.contains("No prior context needed") {
-                            messages.insert(0, Message::user(format!("[Prior context] {}", targeted)));
-                            messages.insert(1, Message::assistant("Understood, I have the relevant context."));
+                            messages
+                                .insert(0, Message::user(format!("[Prior context] {}", targeted)));
+                            messages.insert(
+                                1,
+                                Message::assistant("Understood, I have the relevant context."),
+                            );
                         }
                     }
                 }
@@ -132,7 +144,10 @@ impl ExecutionStrategy for ChatStrategy {
         }
 
         // Ensure the current message is included
-        if !messages.iter().any(|m| m.role == Role::User && m.text() == input) {
+        if !messages
+            .iter()
+            .any(|m| m.role == Role::User && m.text() == input)
+        {
             messages.push(Message::user(input));
         }
         if messages.is_empty() {
@@ -149,9 +164,20 @@ impl ExecutionStrategy for ChatStrategy {
     async fn on_complete(&self, response: &str, usage: &TokenUsage) -> Result<(), HubError> {
         // Record token usage to ledger
         if let Some(tl_repo) = &self.state.token_ledger_repo {
-            let cost = super::compute_cost(&self.config.model_id, usage.input_tokens as i64, usage.output_tokens as i64);
+            let cost = super::compute_cost(
+                &self.config.model_id,
+                usage.input_tokens as i64,
+                usage.output_tokens as i64,
+            );
             let _ = tl_repo
-                .insert_ledger_entry(self.user_id.0, None, &self.config.model_id, usage.input_tokens as i64, usage.output_tokens as i64, cost)
+                .insert_ledger_entry(
+                    self.user_id.0,
+                    None,
+                    &self.config.model_id,
+                    usage.input_tokens as i64,
+                    usage.output_tokens as i64,
+                    cost,
+                )
                 .await;
         }
 
@@ -161,10 +187,24 @@ impl ExecutionStrategy for ChatStrategy {
             let save_result = if let Some(session_id) = self.session_id {
                 self.state
                     .repo
-                    .insert_session_message(self.user_id, session_id, response_id, "assistant".to_string(), response.to_string())
+                    .insert_session_message(
+                        self.user_id,
+                        session_id,
+                        response_id,
+                        "assistant".to_string(),
+                        response.to_string(),
+                    )
                     .await
             } else {
-                self.state.repo.insert_chat_message(self.user_id, response_id, "assistant".to_string(), response.to_string()).await
+                self.state
+                    .repo
+                    .insert_chat_message(
+                        self.user_id,
+                        response_id,
+                        "assistant".to_string(),
+                        response.to_string(),
+                    )
+                    .await
             };
             if let Err(e) = save_result {
                 error!("Failed to save assistant message: {}", e);
@@ -180,7 +220,12 @@ impl ExecutionStrategy for ChatStrategy {
                 tokio::spawn(async move {
                     if let Ok(Some(session)) = state.repo.get_session(session_id).await {
                         if session.title.starts_with("New ") {
-                            if let Some(title) = tools::haiku_summarize_title(&format!("Conversation opener: {}", input_preview)).await {
+                            if let Some(title) = tools::haiku_summarize_title(&format!(
+                                "Conversation opener: {}",
+                                input_preview
+                            ))
+                            .await
+                            {
                                 let _ = state.repo.update_session_title(session_id, &title).await;
                                 state.broadcast_session(crate::server::ws::SessionUpdate {
                                     id: session_id,
@@ -199,14 +244,36 @@ impl ExecutionStrategy for ChatStrategy {
             if let Some(session_id) = self.session_id {
                 let state = self.state.clone();
                 tokio::spawn(async move {
-                    let count = state.repo.count_session_messages(session_id).await.unwrap_or(0);
+                    let count = state
+                        .repo
+                        .count_session_messages(session_id)
+                        .await
+                        .unwrap_or(0);
                     if count > crate::constants::SUMMARIZE_THRESHOLD as u32 {
-                        let history = state.repo.get_session_history(session_id, count).await.unwrap_or_default();
-                        let older_messages: Vec<_> = history.iter().take((count as usize).saturating_sub(crate::constants::SUMMARIZE_KEEP_RECENT)).collect();
+                        let history = state
+                            .repo
+                            .get_session_history(session_id, count)
+                            .await
+                            .unwrap_or_default();
+                        let older_messages: Vec<_> = history
+                            .iter()
+                            .take(
+                                (count as usize)
+                                    .saturating_sub(crate::constants::SUMMARIZE_KEEP_RECENT),
+                            )
+                            .collect();
                         if !older_messages.is_empty() {
-                            let conversation_text = older_messages.iter().map(|m| format!("{}: {}", m.role, m.content)).collect::<Vec<_>>().join("\n");
-                            if let Some(summary) = tools::haiku_summarize(&conversation_text).await {
-                                let _ = state.repo.update_session_summary(session_id, &summary).await;
+                            let conversation_text = older_messages
+                                .iter()
+                                .map(|m| format!("{}: {}", m.role, m.content))
+                                .collect::<Vec<_>>()
+                                .join("\n");
+                            if let Some(summary) = tools::haiku_summarize(&conversation_text).await
+                            {
+                                let _ = state
+                                    .repo
+                                    .update_session_summary(session_id, &summary)
+                                    .await;
                             }
                         }
                     }

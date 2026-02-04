@@ -63,7 +63,12 @@ impl PrBodyGenerator {
         self
     }
 
-    pub fn with_issue(mut self, owner: impl Into<String>, repo: impl Into<String>, number: u32) -> Self {
+    pub fn with_issue(
+        mut self,
+        owner: impl Into<String>,
+        repo: impl Into<String>,
+        number: u32,
+    ) -> Self {
         self.issue_ref = Some((owner.into(), repo.into(), number));
         self
     }
@@ -71,7 +76,12 @@ impl PrBodyGenerator {
     pub fn from_ticket_source(slice: &VerticalSlice, source: &TicketSource) -> Self {
         let mut gen = Self::from_slice(slice);
 
-        if let TicketSource::GitHub { owner, repo, issue_number } = source {
+        if let TicketSource::GitHub {
+            owner,
+            repo,
+            issue_number,
+        } = source
+        {
             gen = gen.with_issue(owner, repo, *issue_number);
         }
 
@@ -138,10 +148,20 @@ impl PrService {
     }
 
     /// Create a PR for a completed slice
-    pub async fn create_pr_for_slice(&self, slice: &VerticalSlice, ticket: &Ticket, branch_info: &BranchInfo, files_modified: Vec<String>) -> Result<PrResult, PrError> {
+    pub async fn create_pr_for_slice(
+        &self,
+        slice: &VerticalSlice,
+        ticket: &Ticket,
+        branch_info: &BranchInfo,
+        files_modified: Vec<String>,
+    ) -> Result<PrResult, PrError> {
         // Extract repo info from ticket source
         let (owner, repo, issue_number) = match &ticket.source {
-            TicketSource::GitHub { owner, repo, issue_number } => (owner.clone(), repo.clone(), Some(*issue_number)),
+            TicketSource::GitHub {
+                owner,
+                repo,
+                issue_number,
+            } => (owner.clone(), repo.clone(), Some(*issue_number)),
             TicketSource::Manual => {
                 return Err(PrError::ManualTicket);
             }
@@ -151,7 +171,11 @@ impl PrService {
         let title = slice.title.clone();
 
         // Determine base branch: use parent branch if known, otherwise fallback
-        let base_branch = branch_info.parent_branch.as_ref().cloned().unwrap_or_else(|| self.fallback_base.clone());
+        let base_branch = branch_info
+            .parent_branch
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| self.fallback_base.clone());
 
         // Generate PR body
         let mut body_gen = PrBodyGenerator::from_slice(slice).with_files(files_modified);
@@ -179,7 +203,10 @@ impl PrService {
             "Creating pull request"
         );
 
-        let pr: GitHubPullRequest = self.client.create_pull_request(&owner, &repo, &request).await?;
+        let pr: GitHubPullRequest = self
+            .client
+            .create_pull_request(&owner, &repo, &request)
+            .await?;
 
         tracing::info!(
             pr_number = pr.number,
@@ -195,7 +222,15 @@ impl PrService {
     }
 
     /// Create a simple PR without slice context
-    pub async fn create_simple_pr(&self, owner: &str, repo: &str, title: &str, body: &str, head: &str, base: &str) -> Result<PrResult, PrError> {
+    pub async fn create_simple_pr(
+        &self,
+        owner: &str,
+        repo: &str,
+        title: &str,
+        body: &str,
+        head: &str,
+        base: &str,
+    ) -> Result<PrResult, PrError> {
         let request = CreatePullRequest {
             title: title.to_string(),
             body: body.to_string(),
@@ -204,7 +239,10 @@ impl PrService {
             draft: None,
         };
 
-        let pr = self.client.create_pull_request(owner, repo, &request).await?;
+        let pr = self
+            .client
+            .create_pull_request(owner, repo, &request)
+            .await?;
 
         Ok(PrResult {
             number: pr.number,
@@ -283,7 +321,9 @@ mod tests {
     #[test]
     fn pr_body_generator_with_issue_link() {
         let slice = mock_slice();
-        let body = PrBodyGenerator::from_slice(&slice).with_issue("owner", "repo", 42).generate();
+        let body = PrBodyGenerator::from_slice(&slice)
+            .with_issue("owner", "repo", 42)
+            .generate();
 
         assert!(body.contains("Fixes owner/repo#42"));
     }
@@ -291,7 +331,9 @@ mod tests {
     #[test]
     fn pr_body_generator_with_files() {
         let slice = mock_slice();
-        let body = PrBodyGenerator::from_slice(&slice).with_files(vec!["src/auth.rs".to_string(), "src/main.rs".to_string()]).generate();
+        let body = PrBodyGenerator::from_slice(&slice)
+            .with_files(vec!["src/auth.rs".to_string(), "src/main.rs".to_string()])
+            .generate();
 
         assert!(body.contains("## Files Modified"));
         assert!(body.contains("`src/auth.rs`"));
@@ -300,7 +342,9 @@ mod tests {
 
     #[test]
     fn pr_body_generator_with_tasks() {
-        let body = PrBodyGenerator::new("Summary here").with_tasks(vec!["Task 1".to_string(), "Task 2".to_string()]).generate();
+        let body = PrBodyGenerator::new("Summary here")
+            .with_tasks(vec!["Task 1".to_string(), "Task 2".to_string()])
+            .generate();
 
         assert!(body.contains("## Changes"));
         assert!(body.contains("- Task 1"));
@@ -333,8 +377,14 @@ mod tests {
     #[test]
     fn pr_body_generator_full_builder_chain_from_new() {
         let body = PrBodyGenerator::new("Implement login endpoint")
-            .with_tasks(vec!["Add login route".to_string(), "Add JWT middleware".to_string()])
-            .with_files(vec!["src/routes/login.rs".to_string(), "src/middleware/auth.rs".to_string()])
+            .with_tasks(vec![
+                "Add login route".to_string(),
+                "Add JWT middleware".to_string(),
+            ])
+            .with_files(vec![
+                "src/routes/login.rs".to_string(),
+                "src/middleware/auth.rs".to_string(),
+            ])
             .with_issue("myorg", "myrepo", 99)
             .generate();
 
@@ -383,7 +433,11 @@ mod tests {
         let slice = mock_slice();
         let ticket = mock_ticket_github();
         let body = PrBodyGenerator::from_ticket_source(&slice, &ticket.source)
-            .with_tasks(vec!["Task A".to_string(), "Task B".to_string(), "Task C".to_string()])
+            .with_tasks(vec![
+                "Task A".to_string(),
+                "Task B".to_string(),
+                "Task C".to_string(),
+            ])
             .with_files(vec!["file1.rs".to_string(), "file2.rs".to_string()])
             .generate();
 
@@ -407,7 +461,10 @@ mod tests {
     #[test]
     fn pr_error_display_manual_ticket() {
         let err = PrError::ManualTicket;
-        assert_eq!(err.to_string(), "cannot create PR for manually created ticket - no GitHub repository associated");
+        assert_eq!(
+            err.to_string(),
+            "cannot create PR for manually created ticket - no GitHub repository associated"
+        );
     }
 
     #[test]
@@ -457,7 +514,9 @@ mod tests {
         let ticket = mock_ticket_manual();
         let branch = mock_branch_info();
 
-        let result = svc.create_pr_for_slice(&slice, &ticket, &branch, vec![]).await;
+        let result = svc
+            .create_pr_for_slice(&slice, &ticket, &branch, vec![])
+            .await;
         assert!(matches!(result.unwrap_err(), PrError::ManualTicket));
     }
 
@@ -485,13 +544,18 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = GitHubClient::with_token("test").unwrap().with_base_url(server.uri());
+        let client = GitHubClient::with_token("test")
+            .unwrap()
+            .with_base_url(server.uri());
         let svc = PrService::new(client);
         let slice = mock_slice();
         let ticket = mock_ticket_github();
         let branch = mock_branch_info();
 
-        let result = svc.create_pr_for_slice(&slice, &ticket, &branch, vec!["src/auth.rs".to_string()]).await.unwrap();
+        let result = svc
+            .create_pr_for_slice(&slice, &ticket, &branch, vec!["src/auth.rs".to_string()])
+            .await
+            .unwrap();
 
         assert_eq!(result.number, 55);
         assert_eq!(result.url, "https://github.com/owner/repo/pull/55");
@@ -523,7 +587,9 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = GitHubClient::with_token("test").unwrap().with_base_url(server.uri());
+        let client = GitHubClient::with_token("test")
+            .unwrap()
+            .with_base_url(server.uri());
         let svc = PrService::new(client).with_fallback_base("develop");
         let slice = mock_slice();
         let ticket = mock_ticket_github();
@@ -533,7 +599,10 @@ mod tests {
             base_commit: "abc123".to_string(),
         };
 
-        let result = svc.create_pr_for_slice(&slice, &ticket, &branch, vec![]).await.unwrap();
+        let result = svc
+            .create_pr_for_slice(&slice, &ticket, &branch, vec![])
+            .await
+            .unwrap();
         assert_eq!(result.number, 60);
     }
 
@@ -549,13 +618,17 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = GitHubClient::with_token("test").unwrap().with_base_url(server.uri());
+        let client = GitHubClient::with_token("test")
+            .unwrap()
+            .with_base_url(server.uri());
         let svc = PrService::new(client);
         let slice = mock_slice();
         let ticket = mock_ticket_github();
         let branch = mock_branch_info();
 
-        let result = svc.create_pr_for_slice(&slice, &ticket, &branch, vec![]).await;
+        let result = svc
+            .create_pr_for_slice(&slice, &ticket, &branch, vec![])
+            .await;
         assert!(matches!(result.unwrap_err(), PrError::GitHubError(_)));
     }
 
@@ -583,10 +656,15 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = GitHubClient::with_token("test").unwrap().with_base_url(server.uri());
+        let client = GitHubClient::with_token("test")
+            .unwrap()
+            .with_base_url(server.uri());
         let svc = PrService::new(client);
 
-        let result = svc.create_simple_pr("org", "project", "Quick fix", "fix stuff", "hotfix", "main").await.unwrap();
+        let result = svc
+            .create_simple_pr("org", "project", "Quick fix", "fix stuff", "hotfix", "main")
+            .await
+            .unwrap();
 
         assert_eq!(result.number, 77);
         assert_eq!(result.title, "Quick fix");
@@ -605,10 +683,14 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = GitHubClient::with_token("test").unwrap().with_base_url(server.uri());
+        let client = GitHubClient::with_token("test")
+            .unwrap()
+            .with_base_url(server.uri());
         let svc = PrService::new(client);
 
-        let result = svc.create_simple_pr("org", "project", "title", "body", "head", "base").await;
+        let result = svc
+            .create_simple_pr("org", "project", "title", "body", "head", "base")
+            .await;
         assert!(matches!(result.unwrap_err(), PrError::GitHubError(_)));
     }
 

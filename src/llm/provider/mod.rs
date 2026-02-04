@@ -16,7 +16,10 @@ pub trait LLMProvider: Send + Sync {
     async fn send_message(&self, request: LLMRequest) -> LLMResult<LLMResponse>;
 
     /// Send a message and receive streaming response
-    async fn send_message_stream(&self, request: LLMRequest) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>>;
+    async fn send_message_stream(
+        &self,
+        request: LLMRequest,
+    ) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>>;
 
     /// Get the provider name for logging/debugging
     fn provider_name(&self) -> &'static str;

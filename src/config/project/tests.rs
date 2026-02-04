@@ -34,7 +34,10 @@ fn parses_valid_project_config() {
     let config: ProjectConfig = toml::from_str(&content).unwrap();
 
     assert_eq!(config.autonomy, crate::types::AutonomyLevel::FullAuto);
-    assert_eq!(config.git_strategy, crate::types::GitStrategy::BranchPerTicket);
+    assert_eq!(
+        config.git_strategy,
+        crate::types::GitStrategy::BranchPerTicket
+    );
     assert!(config.approval_gates.before_commit);
 }
 

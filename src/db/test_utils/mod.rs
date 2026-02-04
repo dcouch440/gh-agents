@@ -10,7 +10,8 @@ use tokio::sync::{OnceCell, OwnedSemaphorePermit, Semaphore};
 use uuid::Uuid;
 
 fn admin_url() -> String {
-    std::env::var(crate::constants::ENV_DATABASE_URL).unwrap_or_else(|_| "postgres://nexor:nexor@localhost:5432/nexor".to_string())
+    std::env::var(crate::constants::ENV_DATABASE_URL)
+        .unwrap_or_else(|_| "postgres://nexor:nexor@localhost:5432/nexor".to_string())
 }
 
 /// Shared admin pool across all tests to avoid connection exhaustion.
@@ -19,7 +20,8 @@ static ADMIN_POOL: OnceCell<PgPool> = OnceCell::const_new();
 /// Limit concurrent test DBs to stay under Postgres max_connections (100).
 /// Each test holds 1 connection + the shared admin pool uses up to 5,
 /// so we allow up to 80 concurrent tests as a safe margin.
-static DB_SEMAPHORE: once_cell::sync::Lazy<std::sync::Arc<Semaphore>> = once_cell::sync::Lazy::new(|| std::sync::Arc::new(Semaphore::new(80)));
+static DB_SEMAPHORE: once_cell::sync::Lazy<std::sync::Arc<Semaphore>> =
+    once_cell::sync::Lazy::new(|| std::sync::Arc::new(Semaphore::new(80)));
 
 async fn shared_admin_pool() -> &'static PgPool {
     ADMIN_POOL
@@ -46,12 +48,18 @@ pub struct TestDb {
 impl TestDb {
     /// Create a fresh test database with all migrations applied.
     pub async fn new() -> Self {
-        let permit = std::sync::Arc::clone(&DB_SEMAPHORE).acquire_owned().await.unwrap();
+        let permit = std::sync::Arc::clone(&DB_SEMAPHORE)
+            .acquire_owned()
+            .await
+            .unwrap();
 
         let admin_pool = shared_admin_pool().await;
         let db_name = format!("nexor_test_{}", Uuid::new_v4().simple());
 
-        sqlx::query(&format!("CREATE DATABASE \"{}\"", db_name)).execute(admin_pool).await.unwrap();
+        sqlx::query(&format!("CREATE DATABASE \"{}\"", db_name))
+            .execute(admin_pool)
+            .await
+            .unwrap();
 
         let test_url = replace_db_name(&admin_url(), &db_name);
 
@@ -65,7 +73,11 @@ impl TestDb {
 
         sqlx::migrate!().run(&pool).await.unwrap();
 
-        Self { pool, db_name, _permit: permit }
+        Self {
+            pool,
+            db_name,
+            _permit: permit,
+        }
     }
 
     /// Drop the test database. Must be called at the end of each test.
@@ -75,12 +87,18 @@ impl TestDb {
         let admin_pool = shared_admin_pool().await;
 
         // Terminate any remaining connections to the test database
-        sqlx::query(&format!("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{}'", self.db_name))
+        sqlx::query(&format!(
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{}'",
+            self.db_name
+        ))
+        .execute(admin_pool)
+        .await
+        .ok();
+
+        sqlx::query(&format!("DROP DATABASE IF EXISTS \"{}\"", self.db_name))
             .execute(admin_pool)
             .await
             .ok();
-
-        sqlx::query(&format!("DROP DATABASE IF EXISTS \"{}\"", self.db_name)).execute(admin_pool).await.ok();
 
         // _permit is dropped here, releasing a slot for another test
     }
@@ -91,7 +109,10 @@ fn replace_db_name(url: &str, new_db: &str) -> String {
     // URL format: postgres://user:pass@host:port/dbname
     if let Some(pos) = url.rfind('/') {
         let base = &url[..pos];
-        let after_db = url[pos + 1..].find('?').map(|q| &url[pos + 1 + q..]).unwrap_or("");
+        let after_db = url[pos + 1..]
+            .find('?')
+            .map(|q| &url[pos + 1 + q..])
+            .unwrap_or("");
         if after_db.is_empty() {
             format!("{}/{}", base, new_db)
         } else {

@@ -64,7 +64,10 @@ pub async fn get_config(State(state): State<AppState>) -> Json<ConfigResponse> {
         (status = 400, description = "Invalid value")
     )
 )]
-pub async fn update_config(State(state): State<AppState>, Json(request): Json<UpdateConfigRequest>) -> Result<Json<ConfigResponse>, StatusCode> {
+pub async fn update_config(
+    State(state): State<AppState>,
+    Json(request): Json<UpdateConfigRequest>,
+) -> Result<Json<ConfigResponse>, StatusCode> {
     let mut config = state.config.write().await;
 
     // Verbosity

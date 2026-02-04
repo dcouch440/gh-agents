@@ -37,8 +37,16 @@ pub struct AgentContextResponse {
         (status = 200, description = "Agent context documents", body = AgentContextResponse)
     )
 )]
-pub async fn get_agent_context(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(agent_id): Path<Uuid>) -> Result<Json<AgentContextResponse>, StatusCode> {
-    let rows = state.repo.get_agent_context(agent_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn get_agent_context(
+    State(state): State<AppState>,
+    _auth: auth_utils::AuthUser,
+    Path(agent_id): Path<Uuid>,
+) -> Result<Json<AgentContextResponse>, StatusCode> {
+    let rows = state
+        .repo
+        .get_agent_context(agent_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let documents = rows
         .into_iter()
@@ -78,13 +86,25 @@ pub async fn set_agent_context(
     Path(agent_id): Path<Uuid>,
     Json(request): Json<SetAgentContextRequest>,
 ) -> Result<Json<AgentContextResponse>, StatusCode> {
-    let document_ids: Result<Vec<Uuid>, _> = request.document_ids.iter().map(|s| Uuid::parse_str(s)).collect();
+    let document_ids: Result<Vec<Uuid>, _> = request
+        .document_ids
+        .iter()
+        .map(|s| Uuid::parse_str(s))
+        .collect();
 
     let document_ids = document_ids.map_err(|_| StatusCode::BAD_REQUEST)?;
 
-    state.repo.set_agent_context(agent_id, document_ids).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state
+        .repo
+        .set_agent_context(agent_id, document_ids)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let rows = state.repo.get_agent_context(agent_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = state
+        .repo
+        .get_agent_context(agent_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let documents = rows
         .into_iter()

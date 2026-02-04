@@ -62,7 +62,11 @@ pub struct ChatMessage {
         (status = 400, description = "Invalid message")
     )
 )]
-pub async fn send_chat(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(request): Json<ChatRequest>) -> Result<(StatusCode, Json<ChatResponse>), StatusCode> {
+pub async fn send_chat(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Json(request): Json<ChatRequest>,
+) -> Result<(StatusCode, Json<ChatResponse>), StatusCode> {
     if request.message.trim().is_empty() || request.message.len() > MAX_CHAT_MESSAGE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -76,7 +80,12 @@ pub async fn send_chat(State(state): State<AppState>, auth: auth_utils::AuthUser
     // Store the user message in the database
     state
         .repo
-        .insert_chat_message(auth.user_id, message_id, "user".to_string(), request.message.clone())
+        .insert_chat_message(
+            auth.user_id,
+            message_id,
+            "user".to_string(),
+            request.message.clone(),
+        )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -116,11 +125,19 @@ pub async fn send_chat(State(state): State<AppState>, auth: auth_utils::AuthUser
         (status = 200, description = "Chat history", body = Vec<ChatMessage>)
     )
 )]
-pub async fn get_chat_history(State(state): State<AppState>, auth: auth_utils::AuthUser, Query(query): Query<HistoryQuery>) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
+pub async fn get_chat_history(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Query(query): Query<HistoryQuery>,
+) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
     let limit = query.limit.unwrap_or(50);
     let offset = query.offset.unwrap_or(0);
 
-    let rows = state.repo.get_chat_history(auth.user_id, limit, offset).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = state
+        .repo
+        .get_chat_history(auth.user_id, limit, offset)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let messages: Vec<ChatMessage> = rows
         .into_iter()
@@ -148,7 +165,10 @@ pub async fn get_chat_history(State(state): State<AppState>, auth: auth_utils::A
         (status = 200, description = "SSE event stream")
     )
 )]
-pub async fn chat_stream(State(state): State<AppState>, Path(message_id): Path<Uuid>) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+pub async fn chat_stream(
+    State(state): State<AppState>,
+    Path(message_id): Path<Uuid>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     chat_stream_inner(state, message_id)
 }
 
@@ -168,11 +188,17 @@ pub async fn chat_stream(State(state): State<AppState>, Path(message_id): Path<U
         (status = 200, description = "SSE event stream")
     )
 )]
-pub async fn session_chat_stream(State(state): State<AppState>, Path((_session_id, message_id)): Path<(Uuid, Uuid)>) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+pub async fn session_chat_stream(
+    State(state): State<AppState>,
+    Path((_session_id, message_id)): Path<(Uuid, Uuid)>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     chat_stream_inner(state, message_id)
 }
 
-fn chat_stream_inner(state: AppState, message_id: Uuid) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+fn chat_stream_inner(
+    state: AppState,
+    message_id: Uuid,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let stream = async_stream::stream! {
         let (buffered, mut rx, already_done) = state.get_response_stream(message_id).await;
 
@@ -265,7 +291,10 @@ fn chat_stream_inner(state: AppState, message_id: Uuid) -> Sse<impl Stream<Item 
         (status = 204, description = "Chat history cleared")
     )
 )]
-pub async fn clear_chat_history(State(state): State<AppState>, auth: auth_utils::AuthUser) -> StatusCode {
+pub async fn clear_chat_history(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+) -> StatusCode {
     match state.repo.clear_chat_history(auth.user_id).await {
         Ok(_) => StatusCode::NO_CONTENT,
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,

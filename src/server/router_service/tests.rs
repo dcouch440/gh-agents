@@ -24,7 +24,8 @@ fn extract_json_raw() {
 
 #[test]
 fn parse_decision_no_tool() {
-    let json = r#"{"tool": null, "tool_args": null, "is_async": false, "reason": "nothing relevant"}"#;
+    let json =
+        r#"{"tool": null, "tool_args": null, "is_async": false, "reason": "nothing relevant"}"#;
     let decision = parse_router_decision(json).unwrap();
     assert!(decision.tool.is_none());
     assert_eq!(decision.reason.as_deref(), Some("nothing relevant"));
@@ -43,7 +44,10 @@ fn parse_decision_async_with_passdown() {
     let json = r#"{"tool": "analyze_repo", "tool_args": {}, "is_async": true, "passdown": "Analyzing the repo now...", "reason": "heavy"}"#;
     let decision = parse_router_decision(json).unwrap();
     assert!(decision.is_async);
-    assert_eq!(decision.passdown.as_deref(), Some("Analyzing the repo now..."));
+    assert_eq!(
+        decision.passdown.as_deref(),
+        Some("Analyzing the repo now...")
+    );
 }
 
 #[test]

@@ -76,8 +76,15 @@ pub struct AgentToolsResponse {
         (status = 200, description = "List of tools", body = Vec<ToolResponse>)
     )
 )]
-pub async fn list_tools(State(state): State<AppState>, auth: auth_utils::AuthUser) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
-    let rows = state.repo.list_tools(auth.user_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn list_tools(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
+    let rows = state
+        .repo
+        .list_tools(auth.user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let tools = rows.into_iter().map(ToolResponse::from_row).collect();
     Ok(Json(tools))
@@ -95,7 +102,11 @@ pub async fn list_tools(State(state): State<AppState>, auth: auth_utils::AuthUse
         (status = 400, description = "Invalid request")
     )
 )]
-pub async fn create_tool(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(request): Json<CreateToolRequest>) -> Result<(StatusCode, Json<ToolResponse>), StatusCode> {
+pub async fn create_tool(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Json(request): Json<CreateToolRequest>,
+) -> Result<(StatusCode, Json<ToolResponse>), StatusCode> {
     if request.name.trim().is_empty() {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -114,7 +125,11 @@ pub async fn create_tool(State(state): State<AppState>, auth: auth_utils::AuthUs
         version: 1,
     };
 
-    state.repo.upsert_tool(auth.user_id, row.clone()).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state
+        .repo
+        .upsert_tool(auth.user_id, row.clone())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok((StatusCode::CREATED, Json(ToolResponse::from_row(row))))
 }
@@ -131,8 +146,17 @@ pub async fn create_tool(State(state): State<AppState>, auth: auth_utils::AuthUs
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_tool(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<ToolResponse>, StatusCode> {
-    let row = state.repo.get_tool(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn get_tool(
+    State(state): State<AppState>,
+    _auth: auth_utils::AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<ToolResponse>, StatusCode> {
+    let row = state
+        .repo
+        .get_tool(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     Ok(Json(ToolResponse::from_row(row)))
 }
@@ -150,8 +174,18 @@ pub async fn get_tool(State(state): State<AppState>, _auth: auth_utils::AuthUser
         (status = 404, description = "Not found")
     )
 )]
-pub async fn update_tool(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>, Json(request): Json<UpdateToolRequest>) -> Result<Json<ToolResponse>, StatusCode> {
-    let existing = state.repo.get_tool(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn update_tool(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(id): Path<Uuid>,
+    Json(request): Json<UpdateToolRequest>,
+) -> Result<Json<ToolResponse>, StatusCode> {
+    let existing = state
+        .repo
+        .get_tool(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     let updated = crate::db::ToolRow {
         id: existing.id,
@@ -164,7 +198,11 @@ pub async fn update_tool(State(state): State<AppState>, auth: auth_utils::AuthUs
         version: existing.version,
     };
 
-    state.repo.upsert_tool(auth.user_id, updated.clone()).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state
+        .repo
+        .upsert_tool(auth.user_id, updated.clone())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(ToolResponse::from_row(updated)))
 }
@@ -181,8 +219,16 @@ pub async fn update_tool(State(state): State<AppState>, auth: auth_utils::AuthUs
         (status = 404, description = "Not found")
     )
 )]
-pub async fn delete_tool(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
-    state.repo.delete_tool(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn delete_tool(
+    State(state): State<AppState>,
+    _auth: auth_utils::AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, StatusCode> {
+    state
+        .repo
+        .delete_tool(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -198,8 +244,16 @@ pub async fn delete_tool(State(state): State<AppState>, _auth: auth_utils::AuthU
         (status = 200, description = "Agent tools", body = AgentToolsResponse)
     )
 )]
-pub async fn get_agent_tools(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(agent_id): Path<Uuid>) -> Result<Json<AgentToolsResponse>, StatusCode> {
-    let rows = state.repo.get_agent_tools(agent_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn get_agent_tools(
+    State(state): State<AppState>,
+    _auth: auth_utils::AuthUser,
+    Path(agent_id): Path<Uuid>,
+) -> Result<Json<AgentToolsResponse>, StatusCode> {
+    let rows = state
+        .repo
+        .get_agent_tools(agent_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let tools = rows.into_iter().map(ToolResponse::from_row).collect();
 
@@ -228,13 +282,25 @@ pub async fn set_agent_tools(
     Path(agent_id): Path<Uuid>,
     Json(request): Json<SetAgentToolsRequest>,
 ) -> Result<Json<AgentToolsResponse>, StatusCode> {
-    let tool_ids: Result<Vec<Uuid>, _> = request.tool_ids.iter().map(|s| Uuid::parse_str(s)).collect();
+    let tool_ids: Result<Vec<Uuid>, _> = request
+        .tool_ids
+        .iter()
+        .map(|s| Uuid::parse_str(s))
+        .collect();
 
     let tool_ids = tool_ids.map_err(|_| StatusCode::BAD_REQUEST)?;
 
-    state.repo.set_agent_tools(agent_id, tool_ids).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state
+        .repo
+        .set_agent_tools(agent_id, tool_ids)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let rows = state.repo.get_agent_tools(agent_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = state
+        .repo
+        .get_agent_tools(agent_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let tools = rows.into_iter().map(ToolResponse::from_row).collect();
 

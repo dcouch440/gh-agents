@@ -33,8 +33,15 @@ pub struct ModeInfo {
         (status = 200, description = "List of available modes", body = Vec<ModeInfo>)
     )
 )]
-pub async fn list_modes(State(state): State<AppState>, auth: auth_utils::AuthUser) -> Result<Json<Vec<ModeInfo>>, StatusCode> {
-    let agents = state.repo.list_persisted_agents(auth.user_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn list_modes(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+) -> Result<Json<Vec<ModeInfo>>, StatusCode> {
+    let agents = state
+        .repo
+        .list_persisted_agents(auth.user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let modes: Vec<ModeInfo> = agents
         .into_iter()
         .map(|a| ModeInfo {
@@ -108,9 +115,19 @@ pub struct CreateAgentModeRequest {
         (status = 200, description = "List of agent modes", body = Vec<AgentModeResponse>)
     )
 )]
-pub async fn list_agent_modes(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(agent_id): Path<Uuid>) -> Result<Json<Vec<AgentModeResponse>>, StatusCode> {
-    let modes = state.repo.get_agent_modes(agent_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(modes.into_iter().map(AgentModeResponse::from).collect()))
+pub async fn list_agent_modes(
+    State(state): State<AppState>,
+    _auth: auth_utils::AuthUser,
+    Path(agent_id): Path<Uuid>,
+) -> Result<Json<Vec<AgentModeResponse>>, StatusCode> {
+    let modes = state
+        .repo
+        .get_agent_modes(agent_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(
+        modes.into_iter().map(AgentModeResponse::from).collect(),
+    ))
 }
 
 /// Create a new mode for an agent
@@ -144,7 +161,11 @@ pub async fn create_agent_mode(
         version: 1,
     };
 
-    state.repo.create_agent_mode(&mode).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state
+        .repo
+        .create_agent_mode(&mode)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok((StatusCode::CREATED, Json(AgentModeResponse::from(mode))))
 }
@@ -160,8 +181,16 @@ pub async fn create_agent_mode(
         (status = 204, description = "Mode deleted")
     )
 )]
-pub async fn delete_agent_mode(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(mode_id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
-    state.repo.delete_agent_mode(mode_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn delete_agent_mode(
+    State(state): State<AppState>,
+    _auth: auth_utils::AuthUser,
+    Path(mode_id): Path<Uuid>,
+) -> Result<StatusCode, StatusCode> {
+    state
+        .repo
+        .delete_agent_mode(mode_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -209,17 +238,35 @@ pub struct SessionResponse {
         (status = 400, description = "Invalid agent ID")
     )
 )]
-pub async fn create_session(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(request): Json<CreateSessionRequest>) -> Result<(StatusCode, Json<SessionResponse>), StatusCode> {
+pub async fn create_session(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Json(request): Json<CreateSessionRequest>,
+) -> Result<(StatusCode, Json<SessionResponse>), StatusCode> {
     // Validate agent exists if provided
     if let Some(aid) = request.agent_id {
-        if state.repo.get_persisted_agent(aid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.is_none() {
+        if state
+            .repo
+            .get_persisted_agent(aid)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .is_none()
+        {
             return Err(StatusCode::BAD_REQUEST);
         }
     }
 
     let session_id = Uuid::new_v4();
-    let mode_id = if request.mode_id.is_empty() { "home".to_string() } else { request.mode_id };
-    let title = if request.title.is_empty() { "New session".to_string() } else { request.title };
+    let mode_id = if request.mode_id.is_empty() {
+        "home".to_string()
+    } else {
+        request.mode_id
+    };
+    let title = if request.title.is_empty() {
+        "New session".to_string()
+    } else {
+        request.title
+    };
 
     state
         .repo
@@ -265,8 +312,15 @@ pub async fn create_session(State(state): State<AppState>, auth: auth_utils::Aut
         (status = 200, description = "List of sessions", body = Vec<SessionResponse>)
     )
 )]
-pub async fn list_sessions(State(state): State<AppState>, auth: auth_utils::AuthUser) -> Result<Json<Vec<SessionResponse>>, StatusCode> {
-    let sessions = state.repo.list_sessions(auth.user_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn list_sessions(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+) -> Result<Json<Vec<SessionResponse>>, StatusCode> {
+    let sessions = state
+        .repo
+        .list_sessions(auth.user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let response: Vec<SessionResponse> = sessions
         .into_iter()
@@ -295,8 +349,17 @@ pub async fn list_sessions(State(state): State<AppState>, auth: auth_utils::Auth
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_session(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(session_id): Path<Uuid>) -> Result<Json<SessionResponse>, StatusCode> {
-    let session = state.repo.get_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn get_session(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(session_id): Path<Uuid>,
+) -> Result<Json<SessionResponse>, StatusCode> {
+    let session = state
+        .repo
+        .get_session(session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     // Verify ownership
     if session.user_id != auth.user_id.0 {
@@ -325,15 +388,28 @@ pub async fn get_session(State(state): State<AppState>, auth: auth_utils::AuthUs
         (status = 404, description = "Not found")
     )
 )]
-pub async fn delete_session(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(session_id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
+pub async fn delete_session(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(session_id): Path<Uuid>,
+) -> Result<StatusCode, StatusCode> {
     // Verify ownership
-    let session = state.repo.get_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let session = state
+        .repo
+        .get_session(session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     if session.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
 
-    state.repo.delete_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state
+        .repo
+        .delete_session(session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     state.broadcast_session(SessionUpdate {
         id: session_id,
@@ -365,13 +441,22 @@ pub async fn update_session(
     Path(session_id): Path<Uuid>,
     Json(request): Json<UpdateSessionRequest>,
 ) -> Result<Json<SessionResponse>, StatusCode> {
-    let session = state.repo.get_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let session = state
+        .repo
+        .get_session(session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     if session.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
 
-    state.repo.update_session_title(session_id, &request.title).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state
+        .repo
+        .update_session_title(session_id, &request.title)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let updated = state
         .repo
@@ -423,7 +508,12 @@ pub async fn send_session_chat(
     }
 
     // Verify session exists and belongs to user
-    let session = state.repo.get_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let session = state
+        .repo
+        .get_session(session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     if session.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
@@ -436,7 +526,13 @@ pub async fn send_session_chat(
     // Store user message scoped to session
     state
         .repo
-        .insert_session_message(auth.user_id, session_id, message_id, "user".to_string(), request.message.clone())
+        .insert_session_message(
+            auth.user_id,
+            session_id,
+            message_id,
+            "user".to_string(),
+            request.message.clone(),
+        )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -485,14 +581,23 @@ pub async fn get_session_history(
     Query(query): Query<HistoryQuery>,
 ) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
     // Verify session ownership
-    let session = state.repo.get_session(session_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let session = state
+        .repo
+        .get_session(session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     if session.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
 
     let limit = query.limit.unwrap_or(50);
-    let rows = state.repo.get_session_history(session_id, limit).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = state
+        .repo
+        .get_session_history(session_id, limit)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let messages: Vec<ChatMessage> = rows
         .into_iter()

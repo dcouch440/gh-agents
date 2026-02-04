@@ -6,17 +6,27 @@ use super::*;
 #[ignore = "requires running Postgres"]
 async fn test_db_creates_and_cleans_up() {
     let db = TestDb::new().await;
-    let row: (i32,) = sqlx::query_as("SELECT 1").fetch_one(&db.pool).await.unwrap();
+    let row: (i32,) = sqlx::query_as("SELECT 1")
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
     assert_eq!(row.0, 1);
     let name = db.db_name.clone();
     db.cleanup().await;
 
     // Verify the database was dropped
-    let admin_pool = PgPoolOptions::new().max_connections(1).connect(&admin_url()).await.unwrap();
-    let exists: (bool,) = sqlx::query_as(&format!("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = '{}')", name))
-        .fetch_one(&admin_pool)
+    let admin_pool = PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&admin_url())
         .await
         .unwrap();
+    let exists: (bool,) = sqlx::query_as(&format!(
+        "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = '{}')",
+        name
+    ))
+    .fetch_one(&admin_pool)
+    .await
+    .unwrap();
     assert!(!exists.0);
     admin_pool.close().await;
 }
@@ -33,9 +43,15 @@ async fn multiple_test_dbs_coexist() {
 
 #[test]
 fn replace_db_name_works() {
-    assert_eq!(replace_db_name("postgres://user:pass@localhost:5432/mydb", "newdb"), "postgres://user:pass@localhost:5432/newdb");
     assert_eq!(
-        replace_db_name("postgres://user:pass@localhost:5432/mydb?sslmode=require", "newdb"),
+        replace_db_name("postgres://user:pass@localhost:5432/mydb", "newdb"),
+        "postgres://user:pass@localhost:5432/newdb"
+    );
+    assert_eq!(
+        replace_db_name(
+            "postgres://user:pass@localhost:5432/mydb?sslmode=require",
+            "newdb"
+        ),
         "postgres://user:pass@localhost:5432/newdb?sslmode=require"
     );
 }

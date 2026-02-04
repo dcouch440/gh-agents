@@ -82,9 +82,20 @@ impl ExecutionStrategy for RouterStrategy {
         // Record token usage to ledger if state is available
         if let (Some(state), Some(user_id)) = (&self.config.state, &self.config.user_id) {
             if let Some(tl_repo) = &state.token_ledger_repo {
-                let cost = super::compute_cost(&self.config.model_id, usage.input_tokens as i64, usage.output_tokens as i64);
+                let cost = super::compute_cost(
+                    &self.config.model_id,
+                    usage.input_tokens as i64,
+                    usage.output_tokens as i64,
+                );
                 let _ = tl_repo
-                    .insert_ledger_entry(user_id.0, None, &self.config.model_id, usage.input_tokens as i64, usage.output_tokens as i64, cost)
+                    .insert_ledger_entry(
+                        user_id.0,
+                        None,
+                        &self.config.model_id,
+                        usage.input_tokens as i64,
+                        usage.output_tokens as i64,
+                        cost,
+                    )
                     .await;
             }
         }

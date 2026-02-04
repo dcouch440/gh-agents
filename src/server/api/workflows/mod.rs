@@ -159,9 +159,18 @@ fn step_response(r: crate::db::WorkflowStepRow) -> WorkflowStepResponse {
         (status = 200, description = "List of workflows", body = Vec<WorkflowResponse>)
     )
 )]
-pub async fn list_workflows(State(state): State<AppState>, auth: auth_utils::AuthUser) -> Result<Json<Vec<WorkflowResponse>>, StatusCode> {
-    let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = repo.list_workflows(auth.user_id.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn list_workflows(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+) -> Result<Json<Vec<WorkflowResponse>>, StatusCode> {
+    let repo = state
+        .workflow_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = repo
+        .list_workflows(auth.user_id.0)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let items = rows
         .into_iter()
         .map(|r| WorkflowResponse {
@@ -186,13 +195,24 @@ pub async fn list_workflows(State(state): State<AppState>, auth: auth_utils::Aut
         (status = 400, description = "Invalid request")
     )
 )]
-pub async fn create_workflow(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(req): Json<CreateWorkflowRequest>) -> Result<(StatusCode, Json<WorkflowResponse>), StatusCode> {
+pub async fn create_workflow(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Json(req): Json<CreateWorkflowRequest>,
+) -> Result<(StatusCode, Json<WorkflowResponse>), StatusCode> {
     if req.name.trim().is_empty() || req.name.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = state
+        .workflow_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo
-        .create_workflow(auth.user_id.0, req.name, req.description.unwrap_or_default())
+        .create_workflow(
+            auth.user_id.0,
+            req.name,
+            req.description.unwrap_or_default(),
+        )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok((
@@ -218,9 +238,20 @@ pub async fn create_workflow(State(state): State<AppState>, auth: auth_utils::Au
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_workflow(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<WorkflowResponse>, StatusCode> {
-    let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let row = repo.get_workflow(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn get_workflow(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<WorkflowResponse>, StatusCode> {
+    let repo = state
+        .workflow_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = repo
+        .get_workflow(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if row.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
@@ -245,9 +276,21 @@ pub async fn get_workflow(State(state): State<AppState>, auth: auth_utils::AuthU
         (status = 404, description = "Not found")
     )
 )]
-pub async fn update_workflow(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>, Json(req): Json<UpdateWorkflowRequest>) -> Result<Json<WorkflowResponse>, StatusCode> {
-    let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let existing = repo.get_workflow(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn update_workflow(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(id): Path<Uuid>,
+    Json(req): Json<UpdateWorkflowRequest>,
+) -> Result<Json<WorkflowResponse>, StatusCode> {
+    let repo = state
+        .workflow_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let existing = repo
+        .get_workflow(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if existing.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
@@ -256,7 +299,10 @@ pub async fn update_workflow(State(state): State<AppState>, auth: auth_utils::Au
             return Err(StatusCode::BAD_REQUEST);
         }
     }
-    let row = repo.update_workflow(id, req.name, req.description).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = repo
+        .update_workflow(id, req.name, req.description)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(WorkflowResponse {
         id: row.id,
         name: row.name,
@@ -277,13 +323,26 @@ pub async fn update_workflow(State(state): State<AppState>, auth: auth_utils::Au
         (status = 404, description = "Not found")
     )
 )]
-pub async fn delete_workflow(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
-    let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let existing = repo.get_workflow(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn delete_workflow(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, StatusCode> {
+    let repo = state
+        .workflow_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let existing = repo
+        .get_workflow(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if existing.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
-    repo.delete_workflow(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    repo.delete_workflow(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -310,8 +369,15 @@ pub async fn create_workflow_step(
     Path(wid): Path<Uuid>,
     Json(req): Json<CreateStepRequest>,
 ) -> Result<(StatusCode, Json<WorkflowStepResponse>), StatusCode> {
-    let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let wf = repo.get_workflow(wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let repo = state
+        .workflow_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let wf = repo
+        .get_workflow(wid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if wf.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
@@ -332,7 +398,10 @@ pub async fn create_workflow_step(
         display_order: req.display_order.unwrap_or(0),
         version: 1,
     };
-    let row = repo.create_step(step).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = repo
+        .create_step(step)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok((StatusCode::CREATED, Json(step_response(row))))
 }
 
@@ -348,13 +417,27 @@ pub async fn create_workflow_step(
         (status = 404, description = "Not found")
     )
 )]
-pub async fn list_workflow_steps(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(wid): Path<Uuid>) -> Result<Json<Vec<WorkflowStepResponse>>, StatusCode> {
-    let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let wf = repo.get_workflow(wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn list_workflow_steps(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(wid): Path<Uuid>,
+) -> Result<Json<Vec<WorkflowStepResponse>>, StatusCode> {
+    let repo = state
+        .workflow_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let wf = repo
+        .get_workflow(wid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if wf.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
-    let rows = repo.list_steps(wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = repo
+        .list_steps(wid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(rows.into_iter().map(step_response).collect()))
 }
 
@@ -373,13 +456,28 @@ pub async fn list_workflow_steps(State(state): State<AppState>, auth: auth_utils
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_workflow_step(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(p): Path<(Uuid, Uuid)>) -> Result<Json<WorkflowStepResponse>, StatusCode> {
-    let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let wf = repo.get_workflow(p.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn get_workflow_step(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(p): Path<(Uuid, Uuid)>,
+) -> Result<Json<WorkflowStepResponse>, StatusCode> {
+    let repo = state
+        .workflow_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let wf = repo
+        .get_workflow(p.0)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if wf.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
-    let step = repo.get_step(p.1).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let step = repo
+        .get_step(p.1)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if step.workflow_id != p.0 {
         return Err(StatusCode::NOT_FOUND);
     }
@@ -408,12 +506,23 @@ pub async fn update_workflow_step(
     Path(p): Path<WorkflowStepPath>,
     Json(req): Json<UpdateStepRequest>,
 ) -> Result<Json<WorkflowStepResponse>, StatusCode> {
-    let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let wf = repo.get_workflow(p.wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let repo = state
+        .workflow_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let wf = repo
+        .get_workflow(p.wid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if wf.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
-    let existing = repo.get_step(p.sid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let existing = repo
+        .get_step(p.sid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if existing.workflow_id != p.wid {
         return Err(StatusCode::NOT_FOUND);
     }
@@ -434,7 +543,10 @@ pub async fn update_workflow_step(
         display_order: req.display_order.unwrap_or(existing.display_order),
         version: existing.version,
     };
-    let row = repo.update_step(step).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = repo
+        .update_step(step)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(step_response(row)))
 }
 
@@ -453,17 +565,34 @@ pub async fn update_workflow_step(
         (status = 404, description = "Not found")
     )
 )]
-pub async fn delete_workflow_step(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(p): Path<WorkflowStepPath>) -> Result<StatusCode, StatusCode> {
-    let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let wf = repo.get_workflow(p.wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn delete_workflow_step(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(p): Path<WorkflowStepPath>,
+) -> Result<StatusCode, StatusCode> {
+    let repo = state
+        .workflow_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let wf = repo
+        .get_workflow(p.wid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if wf.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
-    let existing = repo.get_step(p.sid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let existing = repo
+        .get_step(p.sid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if existing.workflow_id != p.wid {
         return Err(StatusCode::NOT_FOUND);
     }
-    repo.delete_step(p.sid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    repo.delete_step(p.sid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -483,13 +612,27 @@ pub async fn delete_workflow_step(State(state): State<AppState>, auth: auth_util
         (status = 404, description = "Not found")
     )
 )]
-pub async fn list_workflow_edges(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(wid): Path<Uuid>) -> Result<Json<Vec<EdgeResponse>>, StatusCode> {
-    let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let wf = repo.get_workflow(wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn list_workflow_edges(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(wid): Path<Uuid>,
+) -> Result<Json<Vec<EdgeResponse>>, StatusCode> {
+    let repo = state
+        .workflow_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let wf = repo
+        .get_workflow(wid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if wf.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
-    let rows = repo.list_edges(wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = repo
+        .list_edges(wid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(
         rows.into_iter()
             .map(|e| EdgeResponse {
@@ -513,13 +656,27 @@ pub async fn list_workflow_edges(State(state): State<AppState>, auth: auth_utils
         (status = 404, description = "Not found")
     )
 )]
-pub async fn add_workflow_edge(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(wid): Path<Uuid>, Json(req): Json<EdgeRequest>) -> Result<StatusCode, StatusCode> {
-    let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let wf = repo.get_workflow(wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn add_workflow_edge(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(wid): Path<Uuid>,
+    Json(req): Json<EdgeRequest>,
+) -> Result<StatusCode, StatusCode> {
+    let repo = state
+        .workflow_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let wf = repo
+        .get_workflow(wid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if wf.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
-    repo.add_edge(req.from_step_id, req.to_step_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    repo.add_edge(req.from_step_id, req.to_step_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::CREATED)
 }
 
@@ -536,13 +693,27 @@ pub async fn add_workflow_edge(State(state): State<AppState>, auth: auth_utils::
         (status = 404, description = "Not found")
     )
 )]
-pub async fn remove_workflow_edge(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(wid): Path<Uuid>, Json(req): Json<EdgeRequest>) -> Result<StatusCode, StatusCode> {
-    let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let wf = repo.get_workflow(wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn remove_workflow_edge(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(wid): Path<Uuid>,
+    Json(req): Json<EdgeRequest>,
+) -> Result<StatusCode, StatusCode> {
+    let repo = state
+        .workflow_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let wf = repo
+        .get_workflow(wid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if wf.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
-    repo.remove_edge(req.from_step_id, req.to_step_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    repo.remove_edge(req.from_step_id, req.to_step_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -566,17 +737,35 @@ pub async fn remove_workflow_edge(State(state): State<AppState>, auth: auth_util
         (status = 404, description = "Not found")
     )
 )]
-pub async fn add_step_document(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(p): Path<WorkflowStepPath>, Json(req): Json<StepDocumentRequest>) -> Result<StatusCode, StatusCode> {
-    let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let wf = repo.get_workflow(p.wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn add_step_document(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(p): Path<WorkflowStepPath>,
+    Json(req): Json<StepDocumentRequest>,
+) -> Result<StatusCode, StatusCode> {
+    let repo = state
+        .workflow_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let wf = repo
+        .get_workflow(p.wid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if wf.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
-    let existing = repo.get_step(p.sid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let existing = repo
+        .get_step(p.sid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if existing.workflow_id != p.wid {
         return Err(StatusCode::NOT_FOUND);
     }
-    repo.add_step_document(p.sid, req.document_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    repo.add_step_document(p.sid, req.document_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::CREATED)
 }
 
@@ -596,17 +785,35 @@ pub async fn add_step_document(State(state): State<AppState>, auth: auth_utils::
         (status = 404, description = "Not found")
     )
 )]
-pub async fn remove_step_document(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(p): Path<WorkflowStepPath>, Json(req): Json<StepDocumentRequest>) -> Result<StatusCode, StatusCode> {
-    let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let wf = repo.get_workflow(p.wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn remove_step_document(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(p): Path<WorkflowStepPath>,
+    Json(req): Json<StepDocumentRequest>,
+) -> Result<StatusCode, StatusCode> {
+    let repo = state
+        .workflow_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let wf = repo
+        .get_workflow(p.wid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if wf.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
-    let existing = repo.get_step(p.sid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let existing = repo
+        .get_step(p.sid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if existing.workflow_id != p.wid {
         return Err(StatusCode::NOT_FOUND);
     }
-    repo.remove_step_document(p.sid, req.document_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    repo.remove_step_document(p.sid, req.document_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -625,13 +832,27 @@ pub async fn remove_step_document(State(state): State<AppState>, auth: auth_util
         (status = 404, description = "Not found")
     )
 )]
-pub async fn list_step_documents(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(p): Path<WorkflowStepPath>) -> Result<Json<Vec<StepDocumentResponse>>, StatusCode> {
-    let repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let wf = repo.get_workflow(p.wid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn list_step_documents(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(p): Path<WorkflowStepPath>,
+) -> Result<Json<Vec<StepDocumentResponse>>, StatusCode> {
+    let repo = state
+        .workflow_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let wf = repo
+        .get_workflow(p.wid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if wf.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
-    let rows = repo.list_step_documents(p.sid).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = repo
+        .list_step_documents(p.sid)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(
         rows.into_iter()
             .map(|r| StepDocumentResponse {

@@ -26,7 +26,12 @@ pub fn init_logging_with_file(log_dir: Option<&Path>) -> Result<Option<WorkerGua
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     // Console layer - always enabled
-    let console_layer = fmt::layer().with_target(true).with_thread_ids(false).with_thread_names(false).with_file(false).with_line_number(false);
+    let console_layer = fmt::layer()
+        .with_target(true)
+        .with_thread_ids(false)
+        .with_thread_names(false)
+        .with_file(false)
+        .with_line_number(false);
 
     match log_dir {
         Some(dir) => {
@@ -46,12 +51,19 @@ pub fn init_logging_with_file(log_dir: Option<&Path>) -> Result<Option<WorkerGua
                 .with_ansi(false)
                 .with_writer(non_blocking);
 
-            tracing_subscriber::registry().with(env_filter).with(console_layer).with(file_layer).init();
+            tracing_subscriber::registry()
+                .with(env_filter)
+                .with(console_layer)
+                .with(file_layer)
+                .init();
 
             Ok(Some(guard))
         }
         None => {
-            tracing_subscriber::registry().with(env_filter).with(console_layer).init();
+            tracing_subscriber::registry()
+                .with(env_filter)
+                .with(console_layer)
+                .init();
 
             Ok(None)
         }
@@ -134,7 +146,10 @@ mod tests {
         // These macros just call tracing macros, verify they compile
         log_agent_report!("agent-1", "Task completed successfully");
         log_milestone!("Milestone 1 complete");
-        log_error!(std::io::Error::new(std::io::ErrorKind::Other, "test"), "Something failed");
+        log_error!(
+            std::io::Error::new(std::io::ErrorKind::Other, "test"),
+            "Something failed"
+        );
     }
 
     #[test]

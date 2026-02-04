@@ -11,7 +11,10 @@ struct MockProvider {
 
 impl MockProvider {
     fn new(call_count: Arc<AtomicU32>, fail_until: u32) -> Self {
-        Self { call_count, fail_until }
+        Self {
+            call_count,
+            fail_until,
+        }
     }
 
     fn always_ok(call_count: Arc<AtomicU32>) -> Self {
@@ -31,16 +34,24 @@ impl LLMProvider for MockProvider {
             content_blocks: vec![],
             model: "mock".into(),
             stop_reason: super::super::types::StopReason::EndTurn,
-            usage: super::super::types::TokenUsage { input_tokens: 1, output_tokens: 1 },
+            usage: super::super::types::TokenUsage {
+                input_tokens: 1,
+                output_tokens: 1,
+            },
         })
     }
 
-    async fn send_message_stream(&self, _request: LLMRequest) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
+    async fn send_message_stream(
+        &self,
+        _request: LLMRequest,
+    ) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
         let n = self.call_count.fetch_add(1, Ordering::SeqCst);
         if n < self.fail_until {
             return Err(LLMError::RateLimited { retry_after_ms: 10 });
         }
-        Ok(Box::pin(futures::stream::iter(vec![Ok(StreamChunk::MessageStop)])))
+        Ok(Box::pin(futures::stream::iter(vec![Ok(
+            StreamChunk::MessageStop,
+        )])))
     }
 
     fn provider_name(&self) -> &'static str {
@@ -86,10 +97,16 @@ async fn test_semaphore_limits_concurrency() {
                 content_blocks: vec![],
                 model: "mock".into(),
                 stop_reason: super::super::types::StopReason::EndTurn,
-                usage: super::super::types::TokenUsage { input_tokens: 1, output_tokens: 1 },
+                usage: super::super::types::TokenUsage {
+                    input_tokens: 1,
+                    output_tokens: 1,
+                },
             })
         }
-        async fn send_message_stream(&self, _req: LLMRequest) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
+        async fn send_message_stream(
+            &self,
+            _req: LLMRequest,
+        ) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
             Ok(Box::pin(futures::stream::empty()))
         }
         fn provider_name(&self) -> &'static str {
@@ -192,7 +209,8 @@ async fn test_global_backoff_clears_on_success() {
 #[tokio::test]
 async fn test_streaming_respects_rate_limit() {
     let count = Arc::new(AtomicU32::new(0));
-    let provider = RateLimitedProvider::new(MockProvider::new(count.clone(), 1), test_config(10, 0));
+    let provider =
+        RateLimitedProvider::new(MockProvider::new(count.clone(), 1), test_config(10, 0));
 
     // First stream call triggers 429
     let result = provider.send_message_stream(dummy_request()).await;
@@ -211,7 +229,10 @@ async fn test_passthrough_non_429_errors() {
         async fn send_message(&self, _req: LLMRequest) -> LLMResult<LLMResponse> {
             Err(LLMError::AuthError("bad key".into()))
         }
-        async fn send_message_stream(&self, _req: LLMRequest) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
+        async fn send_message_stream(
+            &self,
+            _req: LLMRequest,
+        ) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
             Err(LLMError::AuthError("bad key".into()))
         }
         fn provider_name(&self) -> &'static str {

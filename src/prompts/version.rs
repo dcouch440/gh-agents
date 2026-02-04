@@ -54,8 +54,18 @@ impl PromptVersion {
     /// Get a unique identifier for this version
     pub fn id(&self) -> String {
         match &self.commit {
-            Some(c) => format!("{}-{}.{}.{}-{}", self.family, self.major, self.minor, self.patch, &c[..7.min(c.len())]),
-            None => format!("{}-{}.{}.{}", self.family, self.major, self.minor, self.patch),
+            Some(c) => format!(
+                "{}-{}.{}.{}-{}",
+                self.family,
+                self.major,
+                self.minor,
+                self.patch,
+                &c[..7.min(c.len())]
+            ),
+            None => format!(
+                "{}-{}.{}.{}",
+                self.family, self.major, self.minor, self.patch
+            ),
         }
     }
 
@@ -134,7 +144,10 @@ impl PromptRegistry {
 
     /// Get all versions for a prompt family
     pub fn versions_for_family(&self, family: &str) -> Vec<&RegisteredPrompt> {
-        self.versions.values().filter(|p| p.version.family == family).collect()
+        self.versions
+            .values()
+            .filter(|p| p.version.family == family)
+            .collect()
     }
 
     /// Get the latest version for a prompt family (non-deprecated)
@@ -142,12 +155,22 @@ impl PromptRegistry {
         self.versions_for_family(family)
             .into_iter()
             .filter(|p| !p.deprecated)
-            .max_by(|a, b| (a.version.major, a.version.minor, a.version.patch).cmp(&(b.version.major, b.version.minor, b.version.patch)))
+            .max_by(|a, b| {
+                (a.version.major, a.version.minor, a.version.patch).cmp(&(
+                    b.version.major,
+                    b.version.minor,
+                    b.version.patch,
+                ))
+            })
     }
 
     /// Get all prompt families
     pub fn families(&self) -> Vec<String> {
-        let mut families: Vec<_> = self.versions.values().map(|p| p.version.family.clone()).collect();
+        let mut families: Vec<_> = self
+            .versions
+            .values()
+            .map(|p| p.version.family.clone())
+            .collect();
         families.sort();
         families.dedup();
         families
@@ -300,11 +323,20 @@ mod tests {
     fn test_prompt_registry() {
         let mut registry = PromptRegistry::new();
 
-        registry.register(RegisteredPrompt::new(PromptVersion::new("decomposition", 1, 0, 0), "Initial decomposition prompt"));
+        registry.register(RegisteredPrompt::new(
+            PromptVersion::new("decomposition", 1, 0, 0),
+            "Initial decomposition prompt",
+        ));
 
-        registry.register(RegisteredPrompt::new(PromptVersion::new("decomposition", 1, 1, 0), "Improved decomposition prompt"));
+        registry.register(RegisteredPrompt::new(
+            PromptVersion::new("decomposition", 1, 1, 0),
+            "Improved decomposition prompt",
+        ));
 
-        registry.register(RegisteredPrompt::new(PromptVersion::new("decomposition", 1, 2, 0), "Old version").deprecated());
+        registry.register(
+            RegisteredPrompt::new(PromptVersion::new("decomposition", 1, 2, 0), "Old version")
+                .deprecated(),
+        );
 
         assert_eq!(registry.len(), 3);
         assert!(registry.contains("decomposition-1.0.0"));
@@ -315,9 +347,17 @@ mod tests {
     fn test_prompt_registry_latest() {
         let mut registry = PromptRegistry::new();
 
-        registry.register(RegisteredPrompt::new(PromptVersion::new("test", 1, 0, 0), "v1"));
-        registry.register(RegisteredPrompt::new(PromptVersion::new("test", 1, 1, 0), "v1.1"));
-        registry.register(RegisteredPrompt::new(PromptVersion::new("test", 2, 0, 0), "v2").deprecated());
+        registry.register(RegisteredPrompt::new(
+            PromptVersion::new("test", 1, 0, 0),
+            "v1",
+        ));
+        registry.register(RegisteredPrompt::new(
+            PromptVersion::new("test", 1, 1, 0),
+            "v1.1",
+        ));
+        registry.register(
+            RegisteredPrompt::new(PromptVersion::new("test", 2, 0, 0), "v2").deprecated(),
+        );
 
         let latest = registry.latest("test").unwrap();
         assert_eq!(latest.version.semver(), "1.1.0"); // v2 is deprecated
@@ -327,8 +367,14 @@ mod tests {
     fn test_prompt_registry_families() {
         let mut registry = PromptRegistry::new();
 
-        registry.register(RegisteredPrompt::new(PromptVersion::new("decomposition", 1, 0, 0), "decomp"));
-        registry.register(RegisteredPrompt::new(PromptVersion::new("review", 1, 0, 0), "review"));
+        registry.register(RegisteredPrompt::new(
+            PromptVersion::new("decomposition", 1, 0, 0),
+            "decomp",
+        ));
+        registry.register(RegisteredPrompt::new(
+            PromptVersion::new("review", 1, 0, 0),
+            "review",
+        ));
 
         let families = registry.families();
         assert_eq!(families, vec!["decomposition", "review"]);
@@ -337,7 +383,8 @@ mod tests {
     #[test]
     fn test_prompt_execution() {
         let version = PromptVersion::new("test", 1, 0, 0);
-        let mut execution = PromptExecution::new(version, "Test prompt".to_string()).with_task("task-123");
+        let mut execution =
+            PromptExecution::new(version, "Test prompt".to_string()).with_task("task-123");
 
         assert!(!execution.is_complete());
         assert_eq!(execution.task_id, Some("task-123".to_string()));

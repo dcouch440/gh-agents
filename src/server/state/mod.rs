@@ -12,14 +12,18 @@ use uuid::Uuid;
 use crate::agents::ToolClusterIndex;
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::{
-    AgentExecutionRepo, ContextStoreRepo, DocumentRepo, OutputSchemaRepo, PromptTemplateRepo, ResultRepo, RoomRepo, RouterRequestRepo, ServerRepo, TokenLedgerRepo, ToolRouterRepo, UserRepo,
+    AgentExecutionRepo, ContextStoreRepo, DocumentRepo, OutputSchemaRepo, PromptTemplateRepo,
+    ResultRepo, RoomRepo, RouterRequestRepo, ServerRepo, TokenLedgerRepo, ToolRouterRepo, UserRepo,
     WorkflowRepo,
 };
 use crate::llm::AnthropicClient;
 use crate::types::{AppConfig, UserId};
 
 use super::hub::PromptRegistry;
-use super::ws::{AgentUpdate, FeedUpdate, PipelineUpdate, RoomUpdateEvent, RoutingUpdate, SessionUpdate, TaskUpdate};
+use super::ws::{
+    AgentUpdate, FeedUpdate, PipelineUpdate, RoomUpdateEvent, RoutingUpdate, SessionUpdate,
+    TaskUpdate,
+};
 
 /// Message sent to the chat consumer
 #[derive(Debug, Clone)]
@@ -146,11 +150,19 @@ impl AppState {
         let prompts_dir = std::env::current_dir().unwrap_or_default().join("prompts");
         match PromptRegistry::load_from_dir(&prompts_dir) {
             Ok(registry) => {
-                tracing::info!("Loaded {} prompts from {}", registry.len(), prompts_dir.display());
+                tracing::info!(
+                    "Loaded {} prompts from {}",
+                    registry.len(),
+                    prompts_dir.display()
+                );
                 state.prompt_registry = Arc::new(registry);
             }
             Err(e) => {
-                tracing::warn!("Failed to load prompts from {}: {} — using empty registry", prompts_dir.display(), e);
+                tracing::warn!(
+                    "Failed to load prompts from {}: {} — using empty registry",
+                    prompts_dir.display(),
+                    e
+                );
             }
         }
         state.user_repo = Some(user_repo);
@@ -167,10 +179,14 @@ impl AppState {
         state.room_repo = Some(room_repo);
 
         // Look up default agent from DB (for workflow system)
-        let legacy_user = UserId(uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap());
+        let legacy_user =
+            UserId(uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap());
         if let Ok(agent_rows) = state.repo.list_persisted_agents(legacy_user).await {
             // Look up default agent (name = "Home")
-            if let Some(home) = agent_rows.iter().find(|r| r.name.eq_ignore_ascii_case("home")) {
+            if let Some(home) = agent_rows
+                .iter()
+                .find(|r| r.name.eq_ignore_ascii_case("home"))
+            {
                 tracing::info!("Default agent: {} ({})", home.name, home.id);
                 state.default_agent_id = Some(home.id);
             }
@@ -182,7 +198,11 @@ impl AppState {
             match crate::db::list_clusters_with_tools(state.db.as_ref().unwrap()).await {
                 Ok(pairs) => {
                     let tool_count: usize = pairs.iter().map(|(_, tools)| tools.len()).sum();
-                    tracing::info!("Built ToolClusterIndex: {} clusters, {} tools", pairs.len(), tool_count);
+                    tracing::info!(
+                        "Built ToolClusterIndex: {} clusters, {} tools",
+                        pairs.len(),
+                        tool_count
+                    );
                     state.cluster_index = Some(Arc::new(ToolClusterIndex::new(pairs)));
                 }
                 Err(e) => {
@@ -198,7 +218,11 @@ impl AppState {
 
     /// Create application state with a custom repo (for testing).
     /// Returns the state and the orchestrator message receiver.
-    pub fn with_repo(db: Option<PgPool>, repo: Arc<dyn ServerRepo>, config: AppConfig) -> (Self, mpsc::Receiver<ConsumerMessage>) {
+    pub fn with_repo(
+        db: Option<PgPool>,
+        repo: Arc<dyn ServerRepo>,
+        config: AppConfig,
+    ) -> (Self, mpsc::Receiver<ConsumerMessage>) {
         let (chat_tx, orchestrator_rx) = mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
         let (feed_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST_HIGH);
         let (task_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
@@ -213,15 +237,27 @@ impl AppState {
         // JWT secret: require via env var, fall back to random for dev only
         let jwt_secret = match std::env::var(crate::constants::ENV_JWT_SECRET) {
             Ok(s) if !s.is_empty() => {
-                tracing::info!("{} loaded from environment", crate::constants::ENV_JWT_SECRET);
+                tracing::info!(
+                    "{} loaded from environment",
+                    crate::constants::ENV_JWT_SECRET
+                );
                 s.into_bytes()
             }
             _ => {
-                let is_production = std::env::var(crate::constants::ENV_RUST_ENV).map(|v| v.eq_ignore_ascii_case("production")).unwrap_or(false);
+                let is_production = std::env::var(crate::constants::ENV_RUST_ENV)
+                    .map(|v| v.eq_ignore_ascii_case("production"))
+                    .unwrap_or(false);
                 if is_production {
-                    panic!("{} must be set in production ({}=production)", crate::constants::ENV_JWT_SECRET, crate::constants::ENV_RUST_ENV);
+                    panic!(
+                        "{} must be set in production ({}=production)",
+                        crate::constants::ENV_JWT_SECRET,
+                        crate::constants::ENV_RUST_ENV
+                    );
                 }
-                tracing::warn!("{} not set — using random secret. Tokens will not survive restarts.", crate::constants::ENV_JWT_SECRET);
+                tracing::warn!(
+                    "{} not set — using random secret. Tokens will not survive restarts.",
+                    crate::constants::ENV_JWT_SECRET
+                );
                 rand::random::<[u8; 32]>().to_vec()
             }
         };
@@ -362,7 +398,11 @@ impl AppState {
         let mut streams = self.response_streams.write().await;
         streams.entry(message_id).or_insert_with(|| {
             let (tx, _) = broadcast::channel(100);
-            Arc::new(RwLock::new(BufferedStream { tx, buffer: Vec::new(), done: false }))
+            Arc::new(RwLock::new(BufferedStream {
+                tx,
+                buffer: Vec::new(),
+                done: false,
+            }))
         });
     }
 
@@ -371,11 +411,18 @@ impl AppState {
     /// The caller should replay the buffer first, then listen on the receiver.
     /// Holding the inner read lock while snapshotting + subscribing guarantees
     /// no chunks are missed or duplicated.
-    pub async fn get_response_stream(&self, message_id: Uuid) -> (Vec<StreamChunk>, broadcast::Receiver<StreamChunk>, bool) {
+    pub async fn get_response_stream(
+        &self,
+        message_id: Uuid,
+    ) -> (Vec<StreamChunk>, broadcast::Receiver<StreamChunk>, bool) {
         let mut streams = self.response_streams.write().await;
         let entry = streams.entry(message_id).or_insert_with(|| {
             let (tx, _) = broadcast::channel(100);
-            Arc::new(RwLock::new(BufferedStream { tx, buffer: Vec::new(), done: false }))
+            Arc::new(RwLock::new(BufferedStream {
+                tx,
+                buffer: Vec::new(),
+                done: false,
+            }))
         });
         let inner = entry.read().await;
         let rx = inner.tx.subscribe();
@@ -418,7 +465,11 @@ impl AppState {
 
     /// Create a child cancellation token linked to a parent.
     /// Cancelling the parent automatically cancels all children.
-    pub async fn register_child_cancellation(&self, id: Uuid, parent: &CancellationToken) -> CancellationToken {
+    pub async fn register_child_cancellation(
+        &self,
+        id: Uuid,
+        parent: &CancellationToken,
+    ) -> CancellationToken {
         let child = parent.child_token();
         let mut tokens = self.cancellation_tokens.write().await;
         tokens.insert(id, child.clone());

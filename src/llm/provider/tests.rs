@@ -28,17 +28,29 @@ impl LLMProvider for MockProvider {
             content_blocks: vec![],
             model: self.model.clone(),
             stop_reason: StopReason::EndTurn,
-            usage: TokenUsage { input_tokens: 10, output_tokens: 20 },
+            usage: TokenUsage {
+                input_tokens: 10,
+                output_tokens: 20,
+            },
         })
     }
 
-    async fn send_message_stream(&self, _request: LLMRequest) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
+    async fn send_message_stream(
+        &self,
+        _request: LLMRequest,
+    ) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
         let content = self.response_content.clone();
         let model = self.model.clone();
 
         let stream = futures::stream::iter(vec![
-            Ok(StreamChunk::MessageStart { model, input_tokens: 10 }),
-            Ok(StreamChunk::ContentDelta { text: content, index: 0 }),
+            Ok(StreamChunk::MessageStart {
+                model,
+                input_tokens: 10,
+            }),
+            Ok(StreamChunk::ContentDelta {
+                text: content,
+                index: 0,
+            }),
             Ok(StreamChunk::MessageDelta {
                 stop_reason: Some(StopReason::EndTurn),
                 output_tokens: Some(20),

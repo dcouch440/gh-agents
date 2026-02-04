@@ -46,7 +46,10 @@ fn topo_sort_linear() {
             room_id: None,
         },
     ];
-    let edges = vec![WorkflowStepEdgeRow { from_step_id: s1, to_step_id: s2 }];
+    let edges = vec![WorkflowStepEdgeRow {
+        from_step_id: s1,
+        to_step_id: s2,
+    }];
 
     let sorted = topological_sort(&steps, &edges).unwrap();
     assert_eq!(sorted[0], s1);
@@ -93,7 +96,16 @@ fn topo_sort_cycle_detected() {
             room_id: None,
         },
     ];
-    let edges = vec![WorkflowStepEdgeRow { from_step_id: s1, to_step_id: s2 }, WorkflowStepEdgeRow { from_step_id: s2, to_step_id: s1 }];
+    let edges = vec![
+        WorkflowStepEdgeRow {
+            from_step_id: s1,
+            to_step_id: s2,
+        },
+        WorkflowStepEdgeRow {
+            from_step_id: s2,
+            to_step_id: s1,
+        },
+    ];
 
     assert!(topological_sort(&steps, &edges).is_err());
 }
@@ -110,9 +122,16 @@ fn resolve_variables_basic() {
 #[test]
 fn resolve_variables_dot_path() {
     let mut outputs = HashMap::new();
-    outputs.insert("user".to_string(), serde_json::json!({"name": "Bob", "age": 30}));
+    outputs.insert(
+        "user".to_string(),
+        serde_json::json!({"name": "Bob", "age": 30}),
+    );
 
-    let result = resolve_variables("Name: {user.name}, Age: {user.age}", &outputs, &HashMap::new());
+    let result = resolve_variables(
+        "Name: {user.name}, Age: {user.age}",
+        &outputs,
+        &HashMap::new(),
+    );
     assert_eq!(result, "Name: Bob, Age: 30");
 }
 
@@ -125,7 +144,10 @@ fn resolve_variables_unresolved_left_as_is() {
 #[test]
 fn resolve_for_each_array_basic() {
     let mut outputs = HashMap::new();
-    outputs.insert("items".to_string(), serde_json::json!([{"name": "a"}, {"name": "b"}]));
+    outputs.insert(
+        "items".to_string(),
+        serde_json::json!([{"name": "a"}, {"name": "b"}]),
+    );
 
     let arr = resolve_for_each_array("items", &outputs, &HashMap::new()).unwrap();
     assert_eq!(arr.len(), 2);
@@ -134,7 +156,10 @@ fn resolve_for_each_array_basic() {
 #[test]
 fn resolve_for_each_array_nested() {
     let mut outputs = HashMap::new();
-    outputs.insert("result".to_string(), serde_json::json!({"data": {"items": [1, 2, 3]}}));
+    outputs.insert(
+        "result".to_string(),
+        serde_json::json!({"data": {"items": [1, 2, 3]}}),
+    );
 
     let arr = resolve_for_each_array("result.data.items", &outputs, &HashMap::new()).unwrap();
     assert_eq!(arr.len(), 3);

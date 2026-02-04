@@ -118,7 +118,11 @@ pub fn parse_gatekeeper_response(response: &str) -> Option<GatekeeperOutput> {
 }
 
 /// Fallback speaker order: all members in display_order, with mentioned agents first.
-pub fn fallback_speaker_order(roster: &[RoomMemberRow], mentions: &[String], max_speakers: i32) -> Vec<SpeakerSelection> {
+pub fn fallback_speaker_order(
+    roster: &[RoomMemberRow],
+    mentions: &[String],
+    max_speakers: i32,
+) -> Vec<SpeakerSelection> {
     let mut mentioned = Vec::new();
     let mut rest = Vec::new();
 

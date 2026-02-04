@@ -206,7 +206,8 @@ pub mod routes {
     // Pipeline stages
     pub const PIPELINE_STAGE_RENDER: &str = "/pipelines/:id/stages/:stage_number/render";
     pub const PIPELINE_STAGE_SIDE_TASKS: &str = "/pipelines/:id/stages/:stage_number/side-tasks";
-    pub const PIPELINE_STAGE_SIDE_TASK: &str = "/pipelines/:id/stages/:stage_number/side-tasks/:side_task_id";
+    pub const PIPELINE_STAGE_SIDE_TASK: &str =
+        "/pipelines/:id/stages/:stage_number/side-tasks/:side_task_id";
 
     // Pipeline runs
     pub const PIPELINE_RUNS: &str = "/pipeline-runs";

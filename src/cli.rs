@@ -44,7 +44,11 @@ impl Args {
 
 impl Default for Args {
     fn default() -> Self {
-        Self { port: 3000, config: None, verbose: 0 }
+        Self {
+            port: 3000,
+            config: None,
+            verbose: 0,
+        }
     }
 }
 
@@ -68,15 +72,46 @@ mod tests {
 
     #[test]
     fn log_level_increases_with_verbosity() {
-        assert_eq!(Args { verbose: 0, ..Default::default() }.log_level(), tracing::Level::INFO);
-        assert_eq!(Args { verbose: 1, ..Default::default() }.log_level(), tracing::Level::DEBUG);
-        assert_eq!(Args { verbose: 2, ..Default::default() }.log_level(), tracing::Level::TRACE);
-        assert_eq!(Args { verbose: 3, ..Default::default() }.log_level(), tracing::Level::TRACE);
+        assert_eq!(
+            Args {
+                verbose: 0,
+                ..Default::default()
+            }
+            .log_level(),
+            tracing::Level::INFO
+        );
+        assert_eq!(
+            Args {
+                verbose: 1,
+                ..Default::default()
+            }
+            .log_level(),
+            tracing::Level::DEBUG
+        );
+        assert_eq!(
+            Args {
+                verbose: 2,
+                ..Default::default()
+            }
+            .log_level(),
+            tracing::Level::TRACE
+        );
+        assert_eq!(
+            Args {
+                verbose: 3,
+                ..Default::default()
+            }
+            .log_level(),
+            tracing::Level::TRACE
+        );
     }
 
     #[test]
     fn custom_port() {
-        let args = Args { port: 8080, ..Default::default() };
+        let args = Args {
+            port: 8080,
+            ..Default::default()
+        };
         assert_eq!(args.port, 8080);
         assert!(args.validate().is_ok());
     }
@@ -122,7 +157,11 @@ mod tests {
         let args1 = Args::default();
         assert!(args1.validate().is_ok());
 
-        let args2 = Args { port: 0, config: None, verbose: 255 };
+        let args2 = Args {
+            port: 0,
+            config: None,
+            verbose: 255,
+        };
         assert!(args2.validate().is_ok());
 
         let args3 = Args {
@@ -135,25 +174,37 @@ mod tests {
 
     #[test]
     fn log_level_info_at_zero_verbosity() {
-        let args = Args { verbose: 0, ..Default::default() };
+        let args = Args {
+            verbose: 0,
+            ..Default::default()
+        };
         assert_eq!(args.log_level(), tracing::Level::INFO);
     }
 
     #[test]
     fn log_level_debug_at_one_verbosity() {
-        let args = Args { verbose: 1, ..Default::default() };
+        let args = Args {
+            verbose: 1,
+            ..Default::default()
+        };
         assert_eq!(args.log_level(), tracing::Level::DEBUG);
     }
 
     #[test]
     fn log_level_trace_at_high_verbosity() {
-        let args = Args { verbose: 100, ..Default::default() };
+        let args = Args {
+            verbose: 100,
+            ..Default::default()
+        };
         assert_eq!(args.log_level(), tracing::Level::TRACE);
     }
 
     #[test]
     fn config_path_can_be_none() {
-        let args = Args { config: None, ..Default::default() };
+        let args = Args {
+            config: None,
+            ..Default::default()
+        };
         assert!(args.config.is_none());
     }
 
@@ -172,19 +223,31 @@ mod tests {
             config: Some(PathBuf::from("/etc/nexor/config.toml")),
             ..Default::default()
         };
-        assert_eq!(args.config.unwrap().to_str(), Some("/etc/nexor/config.toml"));
+        assert_eq!(
+            args.config.unwrap().to_str(),
+            Some("/etc/nexor/config.toml")
+        );
     }
 
     #[test]
     fn port_range_values() {
         // Test common port values
-        let args_min = Args { port: 1, ..Default::default() };
+        let args_min = Args {
+            port: 1,
+            ..Default::default()
+        };
         assert_eq!(args_min.port, 1);
 
-        let args_standard = Args { port: 3000, ..Default::default() };
+        let args_standard = Args {
+            port: 3000,
+            ..Default::default()
+        };
         assert_eq!(args_standard.port, 3000);
 
-        let args_max = Args { port: 65535, ..Default::default() };
+        let args_max = Args {
+            port: 65535,
+            ..Default::default()
+        };
         assert_eq!(args_max.port, 65535);
     }
 }

@@ -88,7 +88,11 @@ impl FileOps {
     ///
     /// # Errors
     /// * `PathOutsideProject` if path escapes project directory
-    pub async fn write_file(&self, path: impl AsRef<Path>, content: impl AsRef<str>) -> Result<(), FileError> {
+    pub async fn write_file(
+        &self,
+        path: impl AsRef<Path>,
+        content: impl AsRef<str>,
+    ) -> Result<(), FileError> {
         let path = self.resolve_path(path.as_ref())?;
 
         // Create parent directories if needed
@@ -150,7 +154,11 @@ impl FileOps {
 
     /// Resolve a path relative to project root and validate it
     fn resolve_path(&self, path: &Path) -> Result<PathBuf, FileError> {
-        let full_path = if path.is_absolute() { path.to_path_buf() } else { self.ctx.project_root.join(path) };
+        let full_path = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            self.ctx.project_root.join(path)
+        };
 
         if !self.ctx.is_path_allowed(&full_path) {
             return Err(FileError::PathOutsideProject { path: full_path });
@@ -216,7 +224,9 @@ mod tests {
         let ctx = ExecutionContext::new(tmp.path().to_path_buf());
         let ops = FileOps::new(ctx);
 
-        ops.write_file("deep/nested/dir/file.txt", "content").await.unwrap();
+        ops.write_file("deep/nested/dir/file.txt", "content")
+            .await
+            .unwrap();
 
         assert!(tmp.path().join("deep/nested/dir/file.txt").exists());
     }

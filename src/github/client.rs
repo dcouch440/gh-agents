@@ -1,7 +1,10 @@
 //! GitHub REST API client
 
 use crate::config::CredentialsStore;
-use crate::github::types::{CreateIssueComment, CreatePullRequest, GitHubComment, GitHubError, GitHubIssue, GitHubPullRequest, GitHubRepository, IssueFilters, RateLimitInfo};
+use crate::github::types::{
+    CreateIssueComment, CreatePullRequest, GitHubComment, GitHubError, GitHubIssue,
+    GitHubPullRequest, GitHubRepository, IssueFilters, RateLimitInfo,
+};
 use chrono::{DateTime, Utc};
 use reqwest::{header, Client, Response, StatusCode};
 use serde::de::DeserializeOwned;
@@ -17,9 +20,11 @@ impl GitHubClient {
     /// Create a new client, loading token from credentials store or env var
     pub fn new() -> Result<Self, GitHubError> {
         let store = CredentialsStore::new();
-        let token = store
-            .get_github_token()
-            .ok_or_else(|| GitHubError::ConfigError("No GitHub token found. Set GITHUB_TOKEN or run 'nexor auth login'".to_string()))?;
+        let token = store.get_github_token().ok_or_else(|| {
+            GitHubError::ConfigError(
+                "No GitHub token found. Set GITHUB_TOKEN or run 'nexor auth login'".to_string(),
+            )
+        })?;
 
         Self::with_token(&token)
     }
@@ -30,16 +35,28 @@ impl GitHubClient {
 
         headers.insert(
             header::AUTHORIZATION,
-            header::HeaderValue::from_str(&format!("Bearer {}", token)).map_err(|_| GitHubError::ConfigError("Invalid token format".to_string()))?,
+            header::HeaderValue::from_str(&format!("Bearer {}", token))
+                .map_err(|_| GitHubError::ConfigError("Invalid token format".to_string()))?,
         );
-        headers.insert(header::ACCEPT, header::HeaderValue::from_static("application/vnd.github+json"));
-        headers.insert(header::USER_AGENT, header::HeaderValue::from_static("nexor/0.1"));
-        headers.insert("X-GitHub-Api-Version", header::HeaderValue::from_static("2022-11-28"));
+        headers.insert(
+            header::ACCEPT,
+            header::HeaderValue::from_static("application/vnd.github+json"),
+        );
+        headers.insert(
+            header::USER_AGENT,
+            header::HeaderValue::from_static("nexor/0.1"),
+        );
+        headers.insert(
+            "X-GitHub-Api-Version",
+            header::HeaderValue::from_static("2022-11-28"),
+        );
 
         let client = Client::builder()
             .default_headers(headers)
             .build()
-            .map_err(|e| GitHubError::ConfigError(format!("Failed to create HTTP client: {}", e)))?;
+            .map_err(|e| {
+                GitHubError::ConfigError(format!("Failed to create HTTP client: {}", e))
+            })?;
 
         Ok(Self {
             client,
@@ -62,11 +79,23 @@ impl GitHubClient {
     fn check_rate_limit(&self, response: &Response) -> Option<RateLimitInfo> {
         let headers = response.headers();
 
-        let limit = headers.get("x-ratelimit-limit").and_then(|v| v.to_str().ok()).and_then(|v| v.parse().ok()).unwrap_or(0);
+        let limit = headers
+            .get("x-ratelimit-limit")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
 
-        let remaining = headers.get("x-ratelimit-remaining").and_then(|v| v.to_str().ok()).and_then(|v| v.parse().ok()).unwrap_or(0);
+        let remaining = headers
+            .get("x-ratelimit-remaining")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
 
-        let reset_timestamp = headers.get("x-ratelimit-reset").and_then(|v| v.to_str().ok()).and_then(|v| v.parse::<i64>().ok()).unwrap_or(0);
+        let reset_timestamp = headers
+            .get("x-ratelimit-reset")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse::<i64>().ok())
+            .unwrap_or(0);
 
         let reset = DateTime::from_timestamp(reset_timestamp, 0).unwrap_or_else(Utc::now);
 
@@ -76,16 +105,25 @@ impl GitHubClient {
             tracing::warn!("GitHub rate limit exhausted, resets at {}", reset);
         }
 
-        Some(RateLimitInfo { limit, remaining, reset })
+        Some(RateLimitInfo {
+            limit,
+            remaining,
+            reset,
+        })
     }
 
     /// Handle response and parse JSON
-    async fn handle_response<T: DeserializeOwned>(&self, response: Response) -> Result<T, GitHubError> {
+    async fn handle_response<T: DeserializeOwned>(
+        &self,
+        response: Response,
+    ) -> Result<T, GitHubError> {
         let rate_limit = self.check_rate_limit(&response);
         let status = response.status();
 
         match status {
-            s if s.is_success() => response.json().await.map_err(|e| GitHubError::RequestFailed(format!("Failed to parse response: {}", e))),
+            s if s.is_success() => response.json().await.map_err(|e| {
+                GitHubError::RequestFailed(format!("Failed to parse response: {}", e))
+            }),
 
             StatusCode::FORBIDDEN => {
                 if let Some(info) = rate_limit {
@@ -94,7 +132,10 @@ impl GitHubClient {
                     }
                 }
                 let message = response.text().await.unwrap_or_default();
-                Err(GitHubError::ApiError { status: 403, message })
+                Err(GitHubError::ApiError {
+                    status: 403,
+                    message,
+                })
             }
 
             StatusCode::UNAUTHORIZED => Err(GitHubError::Unauthorized),
@@ -106,7 +147,10 @@ impl GitHubClient {
 
             _ => {
                 let message = response.text().await.unwrap_or_default();
-                Err(GitHubError::ApiError { status: status.as_u16(), message })
+                Err(GitHubError::ApiError {
+                    status: status.as_u16(),
+                    message,
+                })
             }
         }
     }
@@ -116,18 +160,36 @@ impl GitHubClient {
     // =========================================================================
 
     /// Get a single issue by number
-    pub async fn get_issue(&self, owner: &str, repo: &str, number: u32) -> Result<GitHubIssue, GitHubError> {
-        let url = format!("{}/repos/{}/{}/issues/{}", self.base_url, owner, repo, number);
+    pub async fn get_issue(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u32,
+    ) -> Result<GitHubIssue, GitHubError> {
+        let url = format!(
+            "{}/repos/{}/{}/issues/{}",
+            self.base_url, owner, repo, number
+        );
 
         tracing::debug!(url = %url, "Fetching issue");
 
-        let response = self.client.get(&url).send().await.map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
+        let response = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
 
         self.handle_response(response).await
     }
 
     /// List issues with optional filters
-    pub async fn list_issues(&self, owner: &str, repo: &str, filters: &IssueFilters) -> Result<Vec<GitHubIssue>, GitHubError> {
+    pub async fn list_issues(
+        &self,
+        owner: &str,
+        repo: &str,
+        filters: &IssueFilters,
+    ) -> Result<Vec<GitHubIssue>, GitHubError> {
         let mut url = format!("{}/repos/{}/{}/issues", self.base_url, owner, repo);
 
         // Build query parameters
@@ -158,7 +220,12 @@ impl GitHubClient {
 
         tracing::debug!(url = %url, "Listing issues");
 
-        let response = self.client.get(&url).send().await.map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
+        let response = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
 
         self.handle_response(response).await
     }
@@ -168,12 +235,25 @@ impl GitHubClient {
     // =========================================================================
 
     /// Get a single pull request by number
-    pub async fn get_pull_request(&self, owner: &str, repo: &str, number: u32) -> Result<GitHubPullRequest, GitHubError> {
-        let url = format!("{}/repos/{}/{}/pulls/{}", self.base_url, owner, repo, number);
+    pub async fn get_pull_request(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u32,
+    ) -> Result<GitHubPullRequest, GitHubError> {
+        let url = format!(
+            "{}/repos/{}/{}/pulls/{}",
+            self.base_url, owner, repo, number
+        );
 
         tracing::debug!(url = %url, "Fetching pull request");
 
-        let response = self.client.get(&url).send().await.map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
+        let response = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
 
         self.handle_response(response).await
     }
@@ -193,18 +273,34 @@ impl GitHubClient {
 
         tracing::debug!(url = %url, "Listing pull requests");
 
-        let response = self.client.get(&url).send().await.map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
+        let response = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
 
         self.handle_response(response).await
     }
 
     /// Create a pull request
-    pub async fn create_pull_request(&self, owner: &str, repo: &str, pr: &CreatePullRequest) -> Result<GitHubPullRequest, GitHubError> {
+    pub async fn create_pull_request(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr: &CreatePullRequest,
+    ) -> Result<GitHubPullRequest, GitHubError> {
         let url = format!("{}/repos/{}/{}/pulls", self.base_url, owner, repo);
 
         tracing::debug!(url = %url, title = %pr.title, "Creating pull request");
 
-        let response = self.client.post(&url).json(pr).send().await.map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
+        let response = self
+            .client
+            .post(&url)
+            .json(pr)
+            .send()
+            .await
+            .map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
 
         self.handle_response(response).await
     }
@@ -214,34 +310,77 @@ impl GitHubClient {
     // =========================================================================
 
     /// Add a comment to an issue or PR
-    pub async fn create_issue_comment(&self, owner: &str, repo: &str, issue_number: u32, comment: &CreateIssueComment) -> Result<GitHubComment, GitHubError> {
-        let url = format!("{}/repos/{}/{}/issues/{}/comments", self.base_url, owner, repo, issue_number);
+    pub async fn create_issue_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        issue_number: u32,
+        comment: &CreateIssueComment,
+    ) -> Result<GitHubComment, GitHubError> {
+        let url = format!(
+            "{}/repos/{}/{}/issues/{}/comments",
+            self.base_url, owner, repo, issue_number
+        );
 
         tracing::debug!(url = %url, "Creating comment");
 
-        let response = self.client.post(&url).json(comment).send().await.map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
+        let response = self
+            .client
+            .post(&url)
+            .json(comment)
+            .send()
+            .await
+            .map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
 
         self.handle_response(response).await
     }
 
     /// List comments on an issue or PR
-    pub async fn list_issue_comments(&self, owner: &str, repo: &str, issue_number: u32) -> Result<Vec<GitHubComment>, GitHubError> {
-        let url = format!("{}/repos/{}/{}/issues/{}/comments", self.base_url, owner, repo, issue_number);
+    pub async fn list_issue_comments(
+        &self,
+        owner: &str,
+        repo: &str,
+        issue_number: u32,
+    ) -> Result<Vec<GitHubComment>, GitHubError> {
+        let url = format!(
+            "{}/repos/{}/{}/issues/{}/comments",
+            self.base_url, owner, repo, issue_number
+        );
 
         tracing::debug!(url = %url, "Listing comments");
 
-        let response = self.client.get(&url).send().await.map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
+        let response = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
 
         self.handle_response(response).await
     }
 
     /// Update an existing comment
-    pub async fn update_issue_comment(&self, owner: &str, repo: &str, comment_id: u64, comment: &CreateIssueComment) -> Result<GitHubComment, GitHubError> {
-        let url = format!("{}/repos/{}/{}/issues/comments/{}", self.base_url, owner, repo, comment_id);
+    pub async fn update_issue_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        comment_id: u64,
+        comment: &CreateIssueComment,
+    ) -> Result<GitHubComment, GitHubError> {
+        let url = format!(
+            "{}/repos/{}/{}/issues/comments/{}",
+            self.base_url, owner, repo, comment_id
+        );
 
         tracing::debug!(url = %url, comment_id, "Updating comment");
 
-        let response = self.client.patch(&url).json(comment).send().await.map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
+        let response = self
+            .client
+            .patch(&url)
+            .json(comment)
+            .send()
+            .await
+            .map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
 
         self.handle_response(response).await
     }
@@ -251,12 +390,21 @@ impl GitHubClient {
     // =========================================================================
 
     /// Get repository info
-    pub async fn get_repository(&self, owner: &str, repo: &str) -> Result<GitHubRepository, GitHubError> {
+    pub async fn get_repository(
+        &self,
+        owner: &str,
+        repo: &str,
+    ) -> Result<GitHubRepository, GitHubError> {
         let url = format!("{}/repos/{}/{}", self.base_url, owner, repo);
 
         tracing::debug!(url = %url, "Fetching repository");
 
-        let response = self.client.get(&url).send().await.map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
+        let response = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
 
         self.handle_response(response).await
     }
@@ -266,8 +414,16 @@ impl GitHubClient {
     // =========================================================================
 
     /// Get the files changed in a pull request
-    pub async fn get_pr_files(&self, owner: &str, repo: &str, number: u32) -> Result<Vec<crate::github::types::PrFile>, GitHubError> {
-        let url = format!("{}/repos/{}/{}/pulls/{}/files", self.base_url, owner, repo, number);
+    pub async fn get_pr_files(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u32,
+    ) -> Result<Vec<crate::github::types::PrFile>, GitHubError> {
+        let url = format!(
+            "{}/repos/{}/{}/pulls/{}/files",
+            self.base_url, owner, repo, number
+        );
 
         // GitHub paginates this - get all pages
         let mut all_files = Vec::new();
@@ -278,7 +434,12 @@ impl GitHubClient {
 
             tracing::debug!(url = %page_url, "Fetching PR files page {}", page);
 
-            let response = self.client.get(&page_url).send().await.map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
+            let response = self
+                .client
+                .get(&page_url)
+                .send()
+                .await
+                .map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
 
             let files: Vec<crate::github::types::PrFile> = self.handle_response(response).await?;
 
@@ -296,13 +457,22 @@ impl GitHubClient {
             }
         }
 
-        tracing::debug!(pr = number, file_count = all_files.len(), "Retrieved PR files");
+        tracing::debug!(
+            pr = number,
+            file_count = all_files.len(),
+            "Retrieved PR files"
+        );
 
         Ok(all_files)
     }
 
     /// Get a summary of changes in a PR
-    pub async fn get_pr_change_summary(&self, owner: &str, repo: &str, number: u32) -> Result<crate::github::types::PrChangeSummary, GitHubError> {
+    pub async fn get_pr_change_summary(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u32,
+    ) -> Result<crate::github::types::PrChangeSummary, GitHubError> {
         use crate::github::types::{FileStatus, PrChangeSummary};
 
         let files = self.get_pr_files(owner, repo, number).await?;
@@ -331,18 +501,39 @@ impl GitHubClient {
     // =========================================================================
 
     /// Submit a review on a pull request
-    pub async fn create_review(&self, owner: &str, repo: &str, number: u32, review: &crate::github::types::CreateReviewRequest) -> Result<crate::github::types::GitHubReview, GitHubError> {
-        let url = format!("{}/repos/{}/{}/pulls/{}/reviews", self.base_url, owner, repo, number);
+    pub async fn create_review(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u32,
+        review: &crate::github::types::CreateReviewRequest,
+    ) -> Result<crate::github::types::GitHubReview, GitHubError> {
+        let url = format!(
+            "{}/repos/{}/{}/pulls/{}/reviews",
+            self.base_url, owner, repo, number
+        );
 
         tracing::debug!(url = %url, event = ?review.event, "Submitting PR review");
 
-        let response = self.client.post(&url).json(review).send().await.map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
+        let response = self
+            .client
+            .post(&url)
+            .json(review)
+            .send()
+            .await
+            .map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
 
         self.handle_response(response).await
     }
 
     /// Approve a PR with optional comment
-    pub async fn approve_pr(&self, owner: &str, repo: &str, number: u32, comment: Option<&str>) -> Result<crate::github::types::GitHubReview, GitHubError> {
+    pub async fn approve_pr(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u32,
+        comment: Option<&str>,
+    ) -> Result<crate::github::types::GitHubReview, GitHubError> {
         use crate::github::types::{CreateReviewRequest, ReviewEvent};
 
         self.create_review(
@@ -360,7 +551,13 @@ impl GitHubClient {
     }
 
     /// Request changes on a PR
-    pub async fn request_pr_changes(&self, owner: &str, repo: &str, number: u32, reason: &str) -> Result<crate::github::types::GitHubReview, GitHubError> {
+    pub async fn request_pr_changes(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u32,
+        reason: &str,
+    ) -> Result<crate::github::types::GitHubReview, GitHubError> {
         use crate::github::types::{CreateReviewRequest, ReviewEvent};
 
         self.create_review(
@@ -378,12 +575,25 @@ impl GitHubClient {
     }
 
     /// List reviews on a PR
-    pub async fn list_pr_reviews(&self, owner: &str, repo: &str, number: u32) -> Result<Vec<crate::github::types::GitHubReview>, GitHubError> {
-        let url = format!("{}/repos/{}/{}/pulls/{}/reviews", self.base_url, owner, repo, number);
+    pub async fn list_pr_reviews(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u32,
+    ) -> Result<Vec<crate::github::types::GitHubReview>, GitHubError> {
+        let url = format!(
+            "{}/repos/{}/{}/pulls/{}/reviews",
+            self.base_url, owner, repo, number
+        );
 
         tracing::debug!(url = %url, "Listing PR reviews");
 
-        let response = self.client.get(&url).send().await.map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
+        let response = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
 
         self.handle_response(response).await
     }
@@ -393,10 +603,19 @@ impl GitHubClient {
     // =========================================================================
 
     /// Merge a pull request
-    pub async fn merge_pr(&self, owner: &str, repo: &str, number: u32, request: &crate::github::merge::MergePrRequest) -> Result<crate::github::merge::MergePrResult, GitHubError> {
+    pub async fn merge_pr(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u32,
+        request: &crate::github::merge::MergePrRequest,
+    ) -> Result<crate::github::merge::MergePrResult, GitHubError> {
         use crate::github::merge::{MergePrResponse, MergePrResult};
 
-        let url = format!("{}/repos/{}/{}/pulls/{}/merge", self.base_url, owner, repo, number);
+        let url = format!(
+            "{}/repos/{}/{}/pulls/{}/merge",
+            self.base_url, owner, repo, number
+        );
 
         tracing::debug!(
             url = %url,
@@ -404,11 +623,20 @@ impl GitHubClient {
             "Merging PR"
         );
 
-        let response = self.client.put(&url).json(request).send().await.map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
+        let response = self
+            .client
+            .put(&url)
+            .json(request)
+            .send()
+            .await
+            .map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
 
         match response.status() {
             reqwest::StatusCode::OK => {
-                let result: MergePrResponse = response.json().await.map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
+                let result: MergePrResponse = response
+                    .json()
+                    .await
+                    .map_err(|e| GitHubError::RequestFailed(e.to_string()))?;
 
                 tracing::info!(
                     pr = number,
@@ -456,13 +684,25 @@ impl GitHubClient {
     }
 
     /// Merge PR with simple options
-    pub async fn merge_pr_simple(&self, owner: &str, repo: &str, number: u32, method: crate::github::merge::MergeMethod) -> Result<crate::github::merge::MergePrResult, GitHubError> {
+    pub async fn merge_pr_simple(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u32,
+        method: crate::github::merge::MergeMethod,
+    ) -> Result<crate::github::merge::MergePrResult, GitHubError> {
         use crate::github::merge::MergePrRequest;
-        self.merge_pr(owner, repo, number, &MergePrRequest::new(method)).await
+        self.merge_pr(owner, repo, number, &MergePrRequest::new(method))
+            .await
     }
 
     /// Get the current mergeable status of a PR
-    pub async fn get_mergeable_status(&self, owner: &str, repo: &str, number: u32) -> Result<crate::github::merge::MergeableStatus, GitHubError> {
+    pub async fn get_mergeable_status(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u32,
+    ) -> Result<crate::github::merge::MergeableStatus, GitHubError> {
         use crate::github::merge::MergeableStatus;
 
         let pr = self.get_pull_request(owner, repo, number).await?;
@@ -480,8 +720,12 @@ impl GitHubClient {
         match (pr.mergeable, pr.mergeable_state.as_deref()) {
             (Some(true), _) => Ok(MergeableStatus::Mergeable),
             (Some(false), Some("dirty")) => Ok(MergeableStatus::HasConflicts),
-            (Some(false), Some(state)) => Ok(MergeableStatus::Blocked { reason: state.to_string() }),
-            (Some(false), None) => Ok(MergeableStatus::Blocked { reason: "unknown".to_string() }),
+            (Some(false), Some(state)) => Ok(MergeableStatus::Blocked {
+                reason: state.to_string(),
+            }),
+            (Some(false), None) => Ok(MergeableStatus::Blocked {
+                reason: "unknown".to_string(),
+            }),
             (None, _) => Ok(MergeableStatus::Unknown),
         }
     }
@@ -513,7 +757,11 @@ impl GitHubClient {
                         return Ok(MergeableStatus::Unknown);
                     }
 
-                    tracing::debug!(pr = number, "Mergeable status unknown, retrying in {:?}", poll_interval);
+                    tracing::debug!(
+                        pr = number,
+                        "Mergeable status unknown, retrying in {:?}",
+                        poll_interval
+                    );
 
                     tokio::time::sleep(poll_interval).await;
                 }
@@ -551,7 +799,9 @@ mod tests {
 
     #[test]
     fn base_url_can_be_overridden() {
-        let client = GitHubClient::with_token("test-token").unwrap().with_base_url("https://github.example.com/api/v3");
+        let client = GitHubClient::with_token("test-token")
+            .unwrap()
+            .with_base_url("https://github.example.com/api/v3");
 
         assert_eq!(client.base_url(), "https://github.example.com/api/v3");
     }
@@ -579,7 +829,9 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = GitHubClient::with_token("test-token").unwrap().with_base_url(mock_server.uri());
+        let client = GitHubClient::with_token("test-token")
+            .unwrap()
+            .with_base_url(mock_server.uri());
 
         let repo = client.get_repository("owner", "repo").await.unwrap();
         assert_eq!(repo.name, "repo");
@@ -601,7 +853,9 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = GitHubClient::with_token("test-token").unwrap().with_base_url(mock_server.uri());
+        let client = GitHubClient::with_token("test-token")
+            .unwrap()
+            .with_base_url(mock_server.uri());
 
         let result = client.get_repository("owner", "nonexistent").await;
         assert!(result.is_err());
@@ -635,9 +889,14 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = GitHubClient::with_token("test-token").unwrap().with_base_url(mock_server.uri());
+        let client = GitHubClient::with_token("test-token")
+            .unwrap()
+            .with_base_url(mock_server.uri());
 
-        let prs = client.list_pull_requests("owner", "repo", None).await.unwrap();
+        let prs = client
+            .list_pull_requests("owner", "repo", None)
+            .await
+            .unwrap();
         assert_eq!(prs.len(), 1);
         assert_eq!(prs[0].number, 42);
         assert_eq!(prs[0].title, "Fix bug");
@@ -664,9 +923,21 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = GitHubClient::with_token("test-token").unwrap().with_base_url(mock_server.uri());
+        let client = GitHubClient::with_token("test-token")
+            .unwrap()
+            .with_base_url(mock_server.uri());
 
-        let comment = client.create_issue_comment("owner", "repo", 1, &CreateIssueComment { body: "Nice work!".into() }).await.unwrap();
+        let comment = client
+            .create_issue_comment(
+                "owner",
+                "repo",
+                1,
+                &CreateIssueComment {
+                    body: "Nice work!".into(),
+                },
+            )
+            .await
+            .unwrap();
         assert_eq!(comment.body, "Nice work!");
     }
 
@@ -695,7 +966,9 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = GitHubClient::with_token("test-token").unwrap().with_base_url(mock_server.uri());
+        let client = GitHubClient::with_token("test-token")
+            .unwrap()
+            .with_base_url(mock_server.uri());
 
         let pr = client.get_pull_request("owner", "repo", 10).await.unwrap();
         assert_eq!(pr.title, "Add feature");
@@ -715,7 +988,9 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = GitHubClient::with_token("bad-token").unwrap().with_base_url(mock_server.uri());
+        let client = GitHubClient::with_token("bad-token")
+            .unwrap()
+            .with_base_url(mock_server.uri());
 
         let result = client.get_repository("owner", "repo").await;
         assert!(matches!(result.unwrap_err(), GitHubError::Unauthorized));
@@ -775,7 +1050,9 @@ mod tests {
     }
 
     async fn mock_client(server: &wiremock::MockServer) -> GitHubClient {
-        GitHubClient::with_token("test-token").unwrap().with_base_url(server.uri())
+        GitHubClient::with_token("test-token")
+            .unwrap()
+            .with_base_url(server.uri())
     }
 
     #[tokio::test]
@@ -786,12 +1063,18 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/repos/owner/repo/issues"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([mock_issue_json(1, "Issue one"), mock_issue_json(2, "Issue two"),])))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                mock_issue_json(1, "Issue one"),
+                mock_issue_json(2, "Issue two"),
+            ])))
             .mount(&server)
             .await;
 
         let client = mock_client(&server).await;
-        let issues = client.list_issues("owner", "repo", &IssueFilters::default()).await.unwrap();
+        let issues = client
+            .list_issues("owner", "repo", &IssueFilters::default())
+            .await
+            .unwrap();
         assert_eq!(issues.len(), 2);
         assert_eq!(issues[0].title, "Issue one");
     }
@@ -808,12 +1091,18 @@ mod tests {
             .and(query_param("state", "closed"))
             .and(query_param("labels", "bug,urgent"))
             .and(query_param("assignee", "alice"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([mock_issue_json(3, "Bug fix")])))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!([mock_issue_json(3, "Bug fix")])),
+            )
             .mount(&server)
             .await;
 
         let client = mock_client(&server).await;
-        let filters = IssueFilters::new().state(IssueState::Closed).labels(vec!["bug".into(), "urgent".into()]).assignee("alice");
+        let filters = IssueFilters::new()
+            .state(IssueState::Closed)
+            .labels(vec!["bug".into(), "urgent".into()])
+            .assignee("alice");
         let issues = client.list_issues("owner", "repo", &filters).await.unwrap();
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].number, 3);
@@ -858,12 +1147,18 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/repos/owner/repo/issues/5/comments"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([mock_comment_json(10, "First comment"), mock_comment_json(11, "Second comment"),])))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                mock_comment_json(10, "First comment"),
+                mock_comment_json(11, "Second comment"),
+            ])))
             .mount(&server)
             .await;
 
         let client = mock_client(&server).await;
-        let comments = client.list_issue_comments("owner", "repo", 5).await.unwrap();
+        let comments = client
+            .list_issue_comments("owner", "repo", 5)
+            .await
+            .unwrap();
         assert_eq!(comments.len(), 2);
         assert_eq!(comments[0].body, "First comment");
         assert_eq!(comments[1].id, 11);
@@ -877,12 +1172,24 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("PATCH"))
             .and(path("/repos/owner/repo/issues/comments/42"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(mock_comment_json(42, "Updated body")))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(mock_comment_json(42, "Updated body")),
+            )
             .mount(&server)
             .await;
 
         let client = mock_client(&server).await;
-        let comment = client.update_issue_comment("owner", "repo", 42, &CreateIssueComment { body: "Updated body".into() }).await.unwrap();
+        let comment = client
+            .update_issue_comment(
+                "owner",
+                "repo",
+                42,
+                &CreateIssueComment {
+                    body: "Updated body".into(),
+                },
+            )
+            .await
+            .unwrap();
         assert_eq!(comment.id, 42);
         assert_eq!(comment.body, "Updated body");
     }
@@ -898,14 +1205,16 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/repos/owner/repo/pulls/7/files"))
             .and(query_param("page", "1"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([{
-                "filename": "src/main.rs",
-                "status": "modified",
-                "additions": 10,
-                "deletions": 2,
-                "changes": 12,
-                "patch": "@@ -1,5 +1,13 @@"
-            }])))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!([{
+                    "filename": "src/main.rs",
+                    "status": "modified",
+                    "additions": 10,
+                    "deletions": 2,
+                    "changes": 12,
+                    "patch": "@@ -1,5 +1,13 @@"
+                }])),
+            )
             .mount(&server)
             .await;
 
@@ -932,15 +1241,24 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/repos/owner/repo/pulls/3/reviews"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([mock_review_json(1, "APPROVED"), mock_review_json(2, "CHANGES_REQUESTED"),])))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                mock_review_json(1, "APPROVED"),
+                mock_review_json(2, "CHANGES_REQUESTED"),
+            ])))
             .mount(&server)
             .await;
 
         let client = mock_client(&server).await;
         let reviews = client.list_pr_reviews("owner", "repo", 3).await.unwrap();
         assert_eq!(reviews.len(), 2);
-        assert_eq!(reviews[0].state, crate::github::types::ReviewState::Approved);
-        assert_eq!(reviews[1].state, crate::github::types::ReviewState::ChangesRequested);
+        assert_eq!(
+            reviews[0].state,
+            crate::github::types::ReviewState::Approved
+        );
+        assert_eq!(
+            reviews[1].state,
+            crate::github::types::ReviewState::ChangesRequested
+        );
     }
 
     #[tokio::test]
@@ -952,7 +1270,9 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/repos/owner/repo/pulls/4/reviews"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(mock_review_json(10, "APPROVED")))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(mock_review_json(10, "APPROVED")),
+            )
             .mount(&server)
             .await;
 
@@ -992,7 +1312,15 @@ mod tests {
             .await;
 
         let client = mock_client(&server).await;
-        let result = client.merge_pr("owner", "repo", 1, &MergePrRequest::new(MergeMethod::Squash)).await.unwrap();
+        let result = client
+            .merge_pr(
+                "owner",
+                "repo",
+                1,
+                &MergePrRequest::new(MergeMethod::Squash),
+            )
+            .await
+            .unwrap();
         assert!(matches!(result, MergePrResult::Merged { sha, .. } if sha == "abc123"));
     }
 
@@ -1010,7 +1338,10 @@ mod tests {
             .await;
 
         let client = mock_client(&server).await;
-        let result = client.merge_pr("owner", "repo", 2, &MergePrRequest::new(MergeMethod::Merge)).await.unwrap();
+        let result = client
+            .merge_pr("owner", "repo", 2, &MergePrRequest::new(MergeMethod::Merge))
+            .await
+            .unwrap();
         assert!(matches!(result, MergePrResult::AlreadyMerged));
     }
 
@@ -1023,12 +1354,17 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("PUT"))
             .and(path("/repos/owner/repo/pulls/2/merge"))
-            .respond_with(ResponseTemplate::new(405).set_body_string("Required status check missing"))
+            .respond_with(
+                ResponseTemplate::new(405).set_body_string("Required status check missing"),
+            )
             .mount(&server)
             .await;
 
         let client = mock_client(&server).await;
-        let result = client.merge_pr("owner", "repo", 2, &MergePrRequest::new(MergeMethod::Merge)).await.unwrap();
+        let result = client
+            .merge_pr("owner", "repo", 2, &MergePrRequest::new(MergeMethod::Merge))
+            .await
+            .unwrap();
         assert!(matches!(result, MergePrResult::NotMergeable { .. }));
     }
 
@@ -1065,7 +1401,10 @@ mod tests {
             .await;
 
         let client = mock_client(&server).await;
-        let result = client.merge_pr("owner", "repo", 3, &MergePrRequest::new(MergeMethod::Merge)).await.unwrap();
+        let result = client
+            .merge_pr("owner", "repo", 3, &MergePrRequest::new(MergeMethod::Merge))
+            .await
+            .unwrap();
         assert!(matches!(result, MergePrResult::HasConflicts));
     }
 
@@ -1083,7 +1422,10 @@ mod tests {
             .await;
 
         let client = mock_client(&server).await;
-        let result = client.merge_pr("owner", "repo", 4, &MergePrRequest::new(MergeMethod::Merge)).await.unwrap();
+        let result = client
+            .merge_pr("owner", "repo", 4, &MergePrRequest::new(MergeMethod::Merge))
+            .await
+            .unwrap();
         assert!(matches!(result, MergePrResult::Failed { status: 500, .. }));
     }
 
@@ -1107,7 +1449,10 @@ mod tests {
 
         let client = mock_client(&server).await;
         let result = client.get_repository("owner", "repo").await;
-        assert!(matches!(result.unwrap_err(), GitHubError::RateLimited { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            GitHubError::RateLimited { .. }
+        ));
     }
 
     #[tokio::test]
@@ -1183,7 +1528,10 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/repos/owner/repo/issues"))
             .and(query_param("per_page", "10"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([mock_issue_json(1, "Issue")])))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!([mock_issue_json(1, "Issue")])),
+            )
             .mount(&server)
             .await;
 
@@ -1202,12 +1550,18 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/repos/owner/repo/pulls"))
             .and(query_param("state", "closed"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([mock_pr_json(5, "Closed PR")])))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!([mock_pr_json(5, "Closed PR")])),
+            )
             .mount(&server)
             .await;
 
         let client = mock_client(&server).await;
-        let prs = client.list_pull_requests("owner", "repo", Some("closed")).await.unwrap();
+        let prs = client
+            .list_pull_requests("owner", "repo", Some("closed"))
+            .await
+            .unwrap();
         assert_eq!(prs.len(), 1);
         assert_eq!(prs[0].title, "Closed PR");
     }
@@ -1244,7 +1598,10 @@ mod tests {
             .await;
 
         let client = mock_client(&server).await;
-        let summary = client.get_pr_change_summary("owner", "repo", 1).await.unwrap();
+        let summary = client
+            .get_pr_change_summary("owner", "repo", 1)
+            .await
+            .unwrap();
 
         assert_eq!(summary.total_files, 7);
         assert_eq!(summary.files_added, 1);
@@ -1263,12 +1620,17 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/repos/owner/repo/pulls/5/reviews"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(mock_review_json(20, "APPROVED")))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(mock_review_json(20, "APPROVED")),
+            )
             .mount(&server)
             .await;
 
         let client = mock_client(&server).await;
-        let review = client.approve_pr("owner", "repo", 5, Some("LGTM")).await.unwrap();
+        let review = client
+            .approve_pr("owner", "repo", 5, Some("LGTM"))
+            .await
+            .unwrap();
         assert_eq!(review.state, crate::github::types::ReviewState::Approved);
     }
 
@@ -1280,7 +1642,9 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/repos/owner/repo/pulls/5/reviews"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(mock_review_json(21, "APPROVED")))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(mock_review_json(21, "APPROVED")),
+            )
             .mount(&server)
             .await;
 
@@ -1297,13 +1661,21 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/repos/owner/repo/pulls/6/reviews"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(mock_review_json(30, "CHANGES_REQUESTED")))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(mock_review_json(30, "CHANGES_REQUESTED")),
+            )
             .mount(&server)
             .await;
 
         let client = mock_client(&server).await;
-        let review = client.request_pr_changes("owner", "repo", 6, "Please fix").await.unwrap();
-        assert_eq!(review.state, crate::github::types::ReviewState::ChangesRequested);
+        let review = client
+            .request_pr_changes("owner", "repo", 6, "Please fix")
+            .await
+            .unwrap();
+        assert_eq!(
+            review.state,
+            crate::github::types::ReviewState::ChangesRequested
+        );
     }
 
     #[tokio::test]
@@ -1324,7 +1696,10 @@ mod tests {
             .await;
 
         let client = mock_client(&server).await;
-        let result = client.merge_pr_simple("owner", "repo", 10, MergeMethod::Rebase).await.unwrap();
+        let result = client
+            .merge_pr_simple("owner", "repo", 10, MergeMethod::Rebase)
+            .await
+            .unwrap();
         assert!(matches!(result, MergePrResult::Merged { sha, .. } if sha == "def456"));
     }
 
@@ -1336,8 +1711,12 @@ mod tests {
 
         let server = MockServer::start().await;
         let mut pr = mock_pr_json(1, "PR");
-        pr.as_object_mut().unwrap().insert("merged".into(), serde_json::json!(true));
-        pr.as_object_mut().unwrap().insert("state".into(), serde_json::json!("closed"));
+        pr.as_object_mut()
+            .unwrap()
+            .insert("merged".into(), serde_json::json!(true));
+        pr.as_object_mut()
+            .unwrap()
+            .insert("state".into(), serde_json::json!("closed"));
 
         Mock::given(method("GET"))
             .and(path("/repos/owner/repo/pulls/1"))
@@ -1346,7 +1725,10 @@ mod tests {
             .await;
 
         let client = mock_client(&server).await;
-        let status = client.get_mergeable_status("owner", "repo", 1).await.unwrap();
+        let status = client
+            .get_mergeable_status("owner", "repo", 1)
+            .await
+            .unwrap();
         assert_eq!(status, MergeableStatus::Merged);
     }
 
@@ -1358,8 +1740,12 @@ mod tests {
 
         let server = MockServer::start().await;
         let mut pr = mock_pr_json(2, "Closed PR");
-        pr.as_object_mut().unwrap().insert("state".into(), serde_json::json!("closed"));
-        pr.as_object_mut().unwrap().insert("merged".into(), serde_json::json!(false));
+        pr.as_object_mut()
+            .unwrap()
+            .insert("state".into(), serde_json::json!("closed"));
+        pr.as_object_mut()
+            .unwrap()
+            .insert("merged".into(), serde_json::json!(false));
 
         Mock::given(method("GET"))
             .and(path("/repos/owner/repo/pulls/2"))
@@ -1368,7 +1754,10 @@ mod tests {
             .await;
 
         let client = mock_client(&server).await;
-        let status = client.get_mergeable_status("owner", "repo", 2).await.unwrap();
+        let status = client
+            .get_mergeable_status("owner", "repo", 2)
+            .await
+            .unwrap();
         assert_eq!(status, MergeableStatus::Closed);
     }
 
@@ -1380,8 +1769,12 @@ mod tests {
 
         let server = MockServer::start().await;
         let mut pr = mock_pr_json(3, "Mergeable PR");
-        pr.as_object_mut().unwrap().insert("mergeable".into(), serde_json::json!(true));
-        pr.as_object_mut().unwrap().insert("mergeable_state".into(), serde_json::json!("clean"));
+        pr.as_object_mut()
+            .unwrap()
+            .insert("mergeable".into(), serde_json::json!(true));
+        pr.as_object_mut()
+            .unwrap()
+            .insert("mergeable_state".into(), serde_json::json!("clean"));
 
         Mock::given(method("GET"))
             .and(path("/repos/owner/repo/pulls/3"))
@@ -1390,7 +1783,10 @@ mod tests {
             .await;
 
         let client = mock_client(&server).await;
-        let status = client.get_mergeable_status("owner", "repo", 3).await.unwrap();
+        let status = client
+            .get_mergeable_status("owner", "repo", 3)
+            .await
+            .unwrap();
         assert_eq!(status, MergeableStatus::Mergeable);
     }
 
@@ -1402,8 +1798,12 @@ mod tests {
 
         let server = MockServer::start().await;
         let mut pr = mock_pr_json(4, "Conflicted PR");
-        pr.as_object_mut().unwrap().insert("mergeable".into(), serde_json::json!(false));
-        pr.as_object_mut().unwrap().insert("mergeable_state".into(), serde_json::json!("dirty"));
+        pr.as_object_mut()
+            .unwrap()
+            .insert("mergeable".into(), serde_json::json!(false));
+        pr.as_object_mut()
+            .unwrap()
+            .insert("mergeable_state".into(), serde_json::json!("dirty"));
 
         Mock::given(method("GET"))
             .and(path("/repos/owner/repo/pulls/4"))
@@ -1412,7 +1812,10 @@ mod tests {
             .await;
 
         let client = mock_client(&server).await;
-        let status = client.get_mergeable_status("owner", "repo", 4).await.unwrap();
+        let status = client
+            .get_mergeable_status("owner", "repo", 4)
+            .await
+            .unwrap();
         assert_eq!(status, MergeableStatus::HasConflicts);
     }
 
@@ -1424,8 +1827,12 @@ mod tests {
 
         let server = MockServer::start().await;
         let mut pr = mock_pr_json(5, "Blocked PR");
-        pr.as_object_mut().unwrap().insert("mergeable".into(), serde_json::json!(false));
-        pr.as_object_mut().unwrap().insert("mergeable_state".into(), serde_json::json!("blocked"));
+        pr.as_object_mut()
+            .unwrap()
+            .insert("mergeable".into(), serde_json::json!(false));
+        pr.as_object_mut()
+            .unwrap()
+            .insert("mergeable_state".into(), serde_json::json!("blocked"));
 
         Mock::given(method("GET"))
             .and(path("/repos/owner/repo/pulls/5"))
@@ -1434,8 +1841,16 @@ mod tests {
             .await;
 
         let client = mock_client(&server).await;
-        let status = client.get_mergeable_status("owner", "repo", 5).await.unwrap();
-        assert_eq!(status, MergeableStatus::Blocked { reason: "blocked".to_string() });
+        let status = client
+            .get_mergeable_status("owner", "repo", 5)
+            .await
+            .unwrap();
+        assert_eq!(
+            status,
+            MergeableStatus::Blocked {
+                reason: "blocked".to_string()
+            }
+        );
     }
 
     #[tokio::test]
@@ -1446,7 +1861,9 @@ mod tests {
 
         let server = MockServer::start().await;
         let mut pr = mock_pr_json(6, "Blocked PR no state");
-        pr.as_object_mut().unwrap().insert("mergeable".into(), serde_json::json!(false));
+        pr.as_object_mut()
+            .unwrap()
+            .insert("mergeable".into(), serde_json::json!(false));
 
         Mock::given(method("GET"))
             .and(path("/repos/owner/repo/pulls/6"))
@@ -1455,8 +1872,16 @@ mod tests {
             .await;
 
         let client = mock_client(&server).await;
-        let status = client.get_mergeable_status("owner", "repo", 6).await.unwrap();
-        assert_eq!(status, MergeableStatus::Blocked { reason: "unknown".to_string() });
+        let status = client
+            .get_mergeable_status("owner", "repo", 6)
+            .await
+            .unwrap();
+        assert_eq!(
+            status,
+            MergeableStatus::Blocked {
+                reason: "unknown".to_string()
+            }
+        );
     }
 
     #[tokio::test]
@@ -1474,7 +1899,10 @@ mod tests {
             .await;
 
         let client = mock_client(&server).await;
-        let status = client.get_mergeable_status("owner", "repo", 7).await.unwrap();
+        let status = client
+            .get_mergeable_status("owner", "repo", 7)
+            .await
+            .unwrap();
         assert_eq!(status, MergeableStatus::Unknown);
     }
 
@@ -1493,7 +1921,10 @@ mod tests {
         let client = mock_client(&server).await;
         let result = client.get_repository("owner", "repo").await;
         // With no rate limit headers, remaining defaults to 0 which triggers RateLimited
-        assert!(matches!(result.unwrap_err(), GitHubError::RateLimited { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            GitHubError::RateLimited { .. }
+        ));
     }
 
     #[tokio::test]

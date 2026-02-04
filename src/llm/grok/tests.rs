@@ -88,7 +88,10 @@ fn build_request_body_web_only() {
     let body = client.build_request_body(&req);
     assert_eq!(body.tools.len(), 1);
     assert_eq!(body.tools[0]["type"], "web_search");
-    assert_eq!(body.tools[0]["filters"]["allowed_domains"][0], "rust-lang.org");
+    assert_eq!(
+        body.tools[0]["filters"]["allowed_domains"][0],
+        "rust-lang.org"
+    );
 }
 
 #[test]
@@ -139,7 +142,10 @@ fn parse_response_extracts_text() {
                 },
             ],
         }],
-        usage: XAIUsage { input_tokens: 50, output_tokens: 100 },
+        usage: XAIUsage {
+            input_tokens: 50,
+            output_tokens: 100,
+        },
     };
 
     let result = GrokResearchClient::parse_response(api_response);
@@ -177,7 +183,8 @@ fn parse_response_skips_non_message_items() {
 
 #[test]
 fn handle_error_auth() {
-    let err = GrokResearchClient::handle_error(401, r#"{"error":{"message":"Invalid API key"}}"#, None);
+    let err =
+        GrokResearchClient::handle_error(401, r#"{"error":{"message":"Invalid API key"}}"#, None);
     match err {
         LLMError::AuthError(msg) => assert!(msg.contains("Invalid API key")),
         other => panic!("Expected AuthError, got: {:?}", other),
@@ -186,7 +193,11 @@ fn handle_error_auth() {
 
 #[test]
 fn handle_error_rate_limited() {
-    let err = GrokResearchClient::handle_error(429, r#"{"error":{"message":"Rate limited"}}"#, Some(5000));
+    let err = GrokResearchClient::handle_error(
+        429,
+        r#"{"error":{"message":"Rate limited"}}"#,
+        Some(5000),
+    );
     match err {
         LLMError::RateLimited { retry_after_ms } => assert_eq!(retry_after_ms, 5000),
         other => panic!("Expected RateLimited, got: {:?}", other),
@@ -195,7 +206,8 @@ fn handle_error_rate_limited() {
 
 #[test]
 fn handle_error_generic() {
-    let err = GrokResearchClient::handle_error(500, r#"{"error":{"message":"Internal error"}}"#, None);
+    let err =
+        GrokResearchClient::handle_error(500, r#"{"error":{"message":"Internal error"}}"#, None);
     match err {
         LLMError::ApiError { status, message } => {
             assert_eq!(status, 500);

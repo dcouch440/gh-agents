@@ -52,8 +52,12 @@ pub enum ParameterType {
     String,
     Number,
     Boolean,
-    Array { item_type: Box<ParameterType> },
-    Object { properties: HashMap<String, ParameterType> },
+    Array {
+        item_type: Box<ParameterType>,
+    },
+    Object {
+        properties: HashMap<String, ParameterType>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -111,7 +115,10 @@ impl ToolDefinition {
             .iter()
             .map(|p| {
                 let required = if p.required { " (required)" } else { "" };
-                format!("  - {}: {}{} - {}", p.name, p.param_type, required, p.description)
+                format!(
+                    "  - {}: {}{} - {}",
+                    p.name, p.param_type, required, p.description
+                )
             })
             .collect();
 
@@ -137,10 +144,14 @@ Requires approval: {}"#,
 
     /// Check if this tool is safe (no destructive side effects)
     pub fn is_safe(&self) -> bool {
-        !self
-            .side_effects
-            .iter()
-            .any(|e| matches!(e, SideEffect::ModifiesFilesystem | SideEffect::ModifiesGit | SideEffect::ExecutesCommands))
+        !self.side_effects.iter().any(|e| {
+            matches!(
+                e,
+                SideEffect::ModifiesFilesystem
+                    | SideEffect::ModifiesGit
+                    | SideEffect::ExecutesCommands
+            )
+        })
     }
 }
 
@@ -186,7 +197,11 @@ impl ToolRegistry {
     pub fn by_side_effect(&self, effect: SideEffect) -> Vec<&ToolDefinition> {
         self.tools
             .values()
-            .filter(|t: &&ToolDefinition| t.side_effects.iter().any(|e| std::mem::discriminant(e) == std::mem::discriminant(&effect)))
+            .filter(|t: &&ToolDefinition| {
+                t.side_effects
+                    .iter()
+                    .any(|e| std::mem::discriminant(e) == std::mem::discriminant(&effect))
+            })
             .collect()
     }
 
@@ -197,7 +212,11 @@ impl ToolRegistry {
 
     /// Generate a summary for prompt inclusion
     pub fn to_prompt_summary(&self) -> String {
-        let summaries: Vec<String> = self.tools.values().map(|t| format!("- **{}**: {}", t.name, t.description)).collect();
+        let summaries: Vec<String> = self
+            .tools
+            .values()
+            .map(|t| format!("- **{}**: {}", t.name, t.description))
+            .collect();
 
         summaries.join("\n")
     }
@@ -220,7 +239,12 @@ pub mod file_tools {
             }],
             returns: ToolReturn {
                 return_type: ParameterType::Object {
-                    properties: [("content".to_string(), ParameterType::String), ("exists".to_string(), ParameterType::Boolean)].into_iter().collect(),
+                    properties: [
+                        ("content".to_string(), ParameterType::String),
+                        ("exists".to_string(), ParameterType::Boolean),
+                    ]
+                    .into_iter()
+                    .collect(),
                 },
                 description: "File content and existence status".to_string(),
             },
@@ -230,7 +254,9 @@ pub mod file_tools {
                 description: "Read a source file".to_string(),
                 invocation: ToolInvocation {
                     tool: "read_file".to_string(),
-                    params: [("path".to_string(), serde_json::json!("src/main.rs"))].into_iter().collect(),
+                    params: [("path".to_string(), serde_json::json!("src/main.rs"))]
+                        .into_iter()
+                        .collect(),
                 },
                 expected_result: r#"{"content": "fn main() {...}", "exists": true}"#.to_string(),
             }],
@@ -259,9 +285,12 @@ pub mod file_tools {
             ],
             returns: ToolReturn {
                 return_type: ParameterType::Object {
-                    properties: [("success".to_string(), ParameterType::Boolean), ("bytes_written".to_string(), ParameterType::Number)]
-                        .into_iter()
-                        .collect(),
+                    properties: [
+                        ("success".to_string(), ParameterType::Boolean),
+                        ("bytes_written".to_string(), ParameterType::Number),
+                    ]
+                    .into_iter()
+                    .collect(),
                 },
                 description: "Success status and bytes written".to_string(),
             },
@@ -271,9 +300,12 @@ pub mod file_tools {
                 description: "Create a new file".to_string(),
                 invocation: ToolInvocation {
                     tool: "write_file".to_string(),
-                    params: [("path".to_string(), serde_json::json!("src/lib.rs")), ("content".to_string(), serde_json::json!("// New library\n"))]
-                        .into_iter()
-                        .collect(),
+                    params: [
+                        ("path".to_string(), serde_json::json!("src/lib.rs")),
+                        ("content".to_string(), serde_json::json!("// New library\n")),
+                    ]
+                    .into_iter()
+                    .collect(),
                 },
                 expected_result: r#"{"success": true, "bytes_written": 15}"#.to_string(),
             }],
@@ -303,7 +335,12 @@ pub mod file_tools {
             returns: ToolReturn {
                 return_type: ParameterType::Array {
                     item_type: Box::new(ParameterType::Object {
-                        properties: [("name".to_string(), ParameterType::String), ("is_dir".to_string(), ParameterType::Boolean)].into_iter().collect(),
+                        properties: [
+                            ("name".to_string(), ParameterType::String),
+                            ("is_dir".to_string(), ParameterType::Boolean),
+                        ]
+                        .into_iter()
+                        .collect(),
                     }),
                 },
                 description: "List of files and directories".to_string(),
@@ -314,9 +351,13 @@ pub mod file_tools {
                 description: "List source directory".to_string(),
                 invocation: ToolInvocation {
                     tool: "list_dir".to_string(),
-                    params: [("path".to_string(), serde_json::json!("src"))].into_iter().collect(),
+                    params: [("path".to_string(), serde_json::json!("src"))]
+                        .into_iter()
+                        .collect(),
                 },
-                expected_result: r#"[{"name": "main.rs", "is_dir": false}, {"name": "lib.rs", "is_dir": false}]"#.to_string(),
+                expected_result:
+                    r#"[{"name": "main.rs", "is_dir": false}, {"name": "lib.rs", "is_dir": false}]"#
+                        .to_string(),
             }],
         }
     }
@@ -385,7 +426,8 @@ pub mod git_tools {
                 ToolParameter {
                     name: "staged".to_string(),
                     param_type: ParameterType::Boolean,
-                    description: "Whether to show staged changes (true) or unstaged (false)".to_string(),
+                    description: "Whether to show staged changes (true) or unstaged (false)"
+                        .to_string(),
                     required: false,
                     default: Some("false".to_string()),
                 },
@@ -429,16 +471,20 @@ pub mod git_tools {
                 ToolParameter {
                     name: "stage_all".to_string(),
                     param_type: ParameterType::Boolean,
-                    description: "Whether to stage all modified files before committing".to_string(),
+                    description: "Whether to stage all modified files before committing"
+                        .to_string(),
                     required: false,
                     default: Some("false".to_string()),
                 },
             ],
             returns: ToolReturn {
                 return_type: ParameterType::Object {
-                    properties: [("success".to_string(), ParameterType::Boolean), ("commit_hash".to_string(), ParameterType::String)]
-                        .into_iter()
-                        .collect(),
+                    properties: [
+                        ("success".to_string(), ParameterType::Boolean),
+                        ("commit_hash".to_string(), ParameterType::String),
+                    ]
+                    .into_iter()
+                    .collect(),
                 },
                 description: "Commit result with hash".to_string(),
             },
@@ -448,7 +494,12 @@ pub mod git_tools {
                 description: "Commit staged changes".to_string(),
                 invocation: ToolInvocation {
                     tool: "git_commit".to_string(),
-                    params: [("message".to_string(), serde_json::json!("Add user validation"))].into_iter().collect(),
+                    params: [(
+                        "message".to_string(),
+                        serde_json::json!("Add user validation"),
+                    )]
+                    .into_iter()
+                    .collect(),
                 },
                 expected_result: r#"{"success": true, "commit_hash": "abc123"}"#.to_string(),
             }],
@@ -477,9 +528,12 @@ pub mod git_tools {
             ],
             returns: ToolReturn {
                 return_type: ParameterType::Object {
-                    properties: [("success".to_string(), ParameterType::Boolean), ("current_branch".to_string(), ParameterType::String)]
-                        .into_iter()
-                        .collect(),
+                    properties: [
+                        ("success".to_string(), ParameterType::Boolean),
+                        ("current_branch".to_string(), ParameterType::String),
+                    ]
+                    .into_iter()
+                    .collect(),
                 },
                 description: "Branch operation result".to_string(),
             },
@@ -489,11 +543,15 @@ pub mod git_tools {
                 description: "Create and switch to feature branch".to_string(),
                 invocation: ToolInvocation {
                     tool: "git_branch".to_string(),
-                    params: [("name".to_string(), serde_json::json!("feature/user-auth")), ("create".to_string(), serde_json::json!(true))]
-                        .into_iter()
-                        .collect(),
+                    params: [
+                        ("name".to_string(), serde_json::json!("feature/user-auth")),
+                        ("create".to_string(), serde_json::json!(true)),
+                    ]
+                    .into_iter()
+                    .collect(),
                 },
-                expected_result: r#"{"success": true, "current_branch": "feature/user-auth"}"#.to_string(),
+                expected_result: r#"{"success": true, "current_branch": "feature/user-auth"}"#
+                    .to_string(),
             }],
         }
     }
@@ -627,7 +685,8 @@ impl ToolInvocationParser {
 
         // Look for tool invocation blocks
         for block in Self::extract_tool_blocks(text) {
-            let invocation: ToolInvocation = serde_json::from_str(&block).map_err(|e| InvocationParseError::InvalidJson(e.to_string()))?;
+            let invocation: ToolInvocation = serde_json::from_str(&block)
+                .map_err(|e| InvocationParseError::InvalidJson(e.to_string()))?;
             invocations.push(invocation);
         }
 
@@ -639,20 +698,31 @@ impl ToolInvocationParser {
     }
 
     /// Validate an invocation against a tool definition.
-    pub fn validate(invocation: &ToolInvocation, registry: &ToolRegistry) -> Result<(), InvocationValidationError> {
-        let tool = registry.get(&invocation.tool).ok_or(InvocationValidationError::UnknownTool(invocation.tool.clone()))?;
+    pub fn validate(
+        invocation: &ToolInvocation,
+        registry: &ToolRegistry,
+    ) -> Result<(), InvocationValidationError> {
+        let tool = registry
+            .get(&invocation.tool)
+            .ok_or(InvocationValidationError::UnknownTool(
+                invocation.tool.clone(),
+            ))?;
 
         // Check required parameters
         for param in &tool.parameters {
             if param.required && !invocation.params.contains_key(&param.name) {
-                return Err(InvocationValidationError::MissingRequired(param.name.clone()));
+                return Err(InvocationValidationError::MissingRequired(
+                    param.name.clone(),
+                ));
             }
         }
 
         // Check for unknown parameters
         for param_name in invocation.params.keys() {
             if !tool.parameters.iter().any(|p| &p.name == param_name) {
-                return Err(InvocationValidationError::UnknownParameter(param_name.clone()));
+                return Err(InvocationValidationError::UnknownParameter(
+                    param_name.clone(),
+                ));
             }
         }
 
@@ -933,7 +1003,13 @@ mod tests {
             .to_string(),
             "array<string>"
         );
-        assert_eq!(ParameterType::Object { properties: HashMap::new() }.to_string(), "object");
+        assert_eq!(
+            ParameterType::Object {
+                properties: HashMap::new()
+            }
+            .to_string(),
+            "object"
+        );
     }
 
     #[test]
@@ -1092,7 +1168,10 @@ Then I'll modify it."#;
         let result = ToolInvocationParser::parse(text).unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].tool, "read_file");
-        assert_eq!(result[0].params.get("path"), Some(&serde_json::json!("src/main.rs")));
+        assert_eq!(
+            result[0].params.get("path"),
+            Some(&serde_json::json!("src/main.rs"))
+        );
     }
 
     #[test]
@@ -1120,7 +1199,10 @@ Then write the changes:
     fn test_parse_no_invocations() {
         let text = "Just some text without any tool blocks";
         let result = ToolInvocationParser::parse(text);
-        assert!(matches!(result, Err(InvocationParseError::NoInvocationsFound)));
+        assert!(matches!(
+            result,
+            Err(InvocationParseError::NoInvocationsFound)
+        ));
     }
 
     #[test]
@@ -1134,7 +1216,10 @@ Then write the changes:
         };
 
         let result = ToolInvocationParser::validate(&invocation, &registry);
-        assert!(matches!(result, Err(InvocationValidationError::MissingRequired(_))));
+        assert!(matches!(
+            result,
+            Err(InvocationValidationError::MissingRequired(_))
+        ));
     }
 
     #[test]
@@ -1147,7 +1232,10 @@ Then write the changes:
         };
 
         let result = ToolInvocationParser::validate(&invocation, &registry);
-        assert!(matches!(result, Err(InvocationValidationError::UnknownTool(_))));
+        assert!(matches!(
+            result,
+            Err(InvocationValidationError::UnknownTool(_))
+        ));
     }
 
     #[test]
@@ -1157,13 +1245,19 @@ Then write the changes:
 
         let invocation = ToolInvocation {
             tool: "read_file".to_string(),
-            params: [("path".to_string(), serde_json::json!("src/main.rs")), ("invalid_param".to_string(), serde_json::json!("value"))]
-                .into_iter()
-                .collect(),
+            params: [
+                ("path".to_string(), serde_json::json!("src/main.rs")),
+                ("invalid_param".to_string(), serde_json::json!("value")),
+            ]
+            .into_iter()
+            .collect(),
         };
 
         let result = ToolInvocationParser::validate(&invocation, &registry);
-        assert!(matches!(result, Err(InvocationValidationError::UnknownParameter(_))));
+        assert!(matches!(
+            result,
+            Err(InvocationValidationError::UnknownParameter(_))
+        ));
     }
 
     #[test]
@@ -1173,7 +1267,9 @@ Then write the changes:
 
         let invocation = ToolInvocation {
             tool: "read_file".to_string(),
-            params: [("path".to_string(), serde_json::json!("src/main.rs"))].into_iter().collect(),
+            params: [("path".to_string(), serde_json::json!("src/main.rs"))]
+                .into_iter()
+                .collect(),
         };
 
         let result = ToolInvocationParser::validate(&invocation, &registry);

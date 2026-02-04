@@ -11,7 +11,9 @@ use std::pin::Pin;
 use std::time::Duration;
 
 use super::provider::{LLMProvider, LLMResult};
-use super::types::{LLMError, LLMRequest, LLMResponse, Message, Role, StopReason, StreamChunk, TokenUsage};
+use super::types::{
+    LLMError, LLMRequest, LLMResponse, Message, Role, StopReason, StreamChunk, TokenUsage,
+};
 
 /// Anthropic API version header value
 const ANTHROPIC_VERSION: &str = "2023-06-01";
@@ -41,9 +43,15 @@ pub struct AnthropicConfig {
 impl AnthropicConfig {
     /// Create config from environment
     pub fn from_env() -> Result<Self, LLMError> {
-        let api_key = std::env::var(crate::constants::ENV_ANTHROPIC_API_KEY).map_err(|_| LLMError::AuthError(format!("{} not set", crate::constants::ENV_ANTHROPIC_API_KEY)))?;
+        let api_key = std::env::var(crate::constants::ENV_ANTHROPIC_API_KEY).map_err(|_| {
+            LLMError::AuthError(format!(
+                "{} not set",
+                crate::constants::ENV_ANTHROPIC_API_KEY
+            ))
+        })?;
 
-        let model = std::env::var(crate::constants::ENV_ANTHROPIC_MODEL).unwrap_or_else(|_| crate::constants::DEFAULT_MODEL.to_string());
+        let model = std::env::var(crate::constants::ENV_ANTHROPIC_MODEL)
+            .unwrap_or_else(|_| crate::constants::DEFAULT_MODEL.to_string());
 
         Ok(Self {
             api_key,
@@ -98,9 +106,13 @@ impl AnthropicClient {
         let mut headers = HeaderMap::new();
         headers.insert(
             "x-api-key",
-            HeaderValue::from_str(&config.api_key).map_err(|_| LLMError::AuthError("Invalid API key format".to_string()))?,
+            HeaderValue::from_str(&config.api_key)
+                .map_err(|_| LLMError::AuthError("Invalid API key format".to_string()))?,
         );
-        headers.insert("anthropic-version", HeaderValue::from_static(ANTHROPIC_VERSION));
+        headers.insert(
+            "anthropic-version",
+            HeaderValue::from_static(ANTHROPIC_VERSION),
+        );
         headers.insert("content-type", HeaderValue::from_static("application/json"));
 
         // Build HTTP client
@@ -132,7 +144,11 @@ impl AnthropicClient {
     /// Convert LLMRequest to Anthropic API format
     fn build_request(&self, request: &LLMRequest) -> AnthropicRequest {
         AnthropicRequest {
-            model: if request.model.is_empty() { self.config.model.clone() } else { request.model.clone() },
+            model: if request.model.is_empty() {
+                self.config.model.clone()
+            } else {
+                request.model.clone()
+            },
             messages: request.messages.iter().map(|m| m.into()).collect(),
             max_tokens: request.max_tokens,
             system: request.system.clone(),
@@ -161,10 +177,16 @@ impl AnthropicClient {
                 429 => LLMError::RateLimited {
                     retry_after_ms: retry_after_ms.unwrap_or(60000),
                 },
-                _ => LLMError::ApiError { status, message: error.error.message },
+                _ => LLMError::ApiError {
+                    status,
+                    message: error.error.message,
+                },
             }
         } else {
-            LLMError::ApiError { status, message: body.to_string() }
+            LLMError::ApiError {
+                status,
+                message: body.to_string(),
+            }
         }
     }
 
@@ -200,7 +222,10 @@ impl AnthropicClient {
                         model: message.model,
                         input_tokens: message.usage.input_tokens,
                     },
-                    SSEData::ContentBlockStart { index, content_block } => {
+                    SSEData::ContentBlockStart {
+                        index,
+                        content_block,
+                    } => {
                         // Check if this is a tool_use content block
                         if let Some(ref cb) = content_block {
                             if cb.block_type == "tool_use" {
@@ -219,7 +244,10 @@ impl AnthropicClient {
                         if let Some(text) = delta.text {
                             StreamChunk::ContentDelta { text, index }
                         } else if let Some(partial_json) = delta.partial_json {
-                            StreamChunk::InputJsonDelta { index, partial_json }
+                            StreamChunk::InputJsonDelta {
+                                index,
+                                partial_json,
+                            }
                         } else {
                             return None;
                         }
@@ -232,7 +260,10 @@ impl AnthropicClient {
                     SSEData::MessageStop => StreamChunk::MessageStop,
                     SSEData::Ping => StreamChunk::Ping,
                     SSEData::Error { error } => {
-                        return Some(Err(LLMError::ApiError { status: 500, message: error.message }));
+                        return Some(Err(LLMError::ApiError {
+                            status: 500,
+                            message: error.message,
+                        }));
                     }
                 };
                 Some(Ok(chunk))
@@ -272,7 +303,9 @@ impl From<&Message> for AnthropicMessage {
     fn from(msg: &Message) -> Self {
         let content = match &msg.content {
             super::types::MessageContent::Text(s) => serde_json::Value::String(s.clone()),
-            super::types::MessageContent::Blocks(blocks) => serde_json::to_value(blocks).unwrap_or(serde_json::Value::Array(vec![])),
+            super::types::MessageContent::Blocks(blocks) => {
+                serde_json::to_value(blocks).unwrap_or(serde_json::Value::Array(vec![]))
+            }
         };
         Self {
             role: match msg.role {
@@ -336,7 +369,10 @@ enum SSEData {
     MessageStart { message: MessageStartData },
 
     #[serde(rename = "content_block_start")]
-    ContentBlockStart { index: usize, content_block: Option<ContentBlockStartData> },
+    ContentBlockStart {
+        index: usize,
+        content_block: Option<ContentBlockStartData>,
+    },
 
     #[serde(rename = "content_block_delta")]
     ContentBlockDelta { index: usize, delta: DeltaData },
@@ -345,7 +381,10 @@ enum SSEData {
     ContentBlockStop { index: usize },
 
     #[serde(rename = "message_delta")]
-    MessageDelta { delta: MessageDeltaData, usage: Option<DeltaUsage> },
+    MessageDelta {
+        delta: MessageDeltaData,
+        usage: Option<DeltaUsage>,
+    },
 
     #[serde(rename = "message_stop")]
     MessageStop,
@@ -400,7 +439,12 @@ impl LLMProvider for AnthropicClient {
     async fn send_message(&self, request: LLMRequest) -> LLMResult<LLMResponse> {
         let api_request = self.build_request(&request);
 
-        let response = self.client.post(self.messages_url()).json(&api_request).send().await?;
+        let response = self
+            .client
+            .post(self.messages_url())
+            .json(&api_request)
+            .send()
+            .await?;
 
         let status = response.status().as_u16();
 
@@ -410,7 +454,10 @@ impl LLMProvider for AnthropicClient {
             return Err(Self::handle_error_response(status, &body, retry_after));
         }
 
-        let api_response: AnthropicResponse = response.json().await.map_err(|e| LLMError::ParseError(e.to_string()))?;
+        let api_response: AnthropicResponse = response
+            .json()
+            .await
+            .map_err(|e| LLMError::ParseError(e.to_string()))?;
 
         // Build content blocks and extract text
         let mut text_parts = Vec::new();
@@ -421,11 +468,14 @@ impl LLMProvider for AnthropicClient {
                 "text" => {
                     if let Some(text) = &block.text {
                         text_parts.push(text.clone());
-                        content_blocks.push(super::types::ContentBlock::Text { text: text.clone() });
+                        content_blocks
+                            .push(super::types::ContentBlock::Text { text: text.clone() });
                     }
                 }
                 "tool_use" => {
-                    if let (Some(id), Some(name), Some(input)) = (&block.id, &block.name, &block.input) {
+                    if let (Some(id), Some(name), Some(input)) =
+                        (&block.id, &block.name, &block.input)
+                    {
                         content_blocks.push(super::types::ContentBlock::ToolUse {
                             id: id.clone(),
                             name: name.clone(),
@@ -449,11 +499,19 @@ impl LLMProvider for AnthropicClient {
         })
     }
 
-    async fn send_message_stream(&self, request: LLMRequest) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
+    async fn send_message_stream(
+        &self,
+        request: LLMRequest,
+    ) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
         let mut api_request = self.build_request(&request);
         api_request.stream = true;
 
-        let response = self.client.post(self.messages_url()).json(&api_request).send().await?;
+        let response = self
+            .client
+            .post(self.messages_url())
+            .json(&api_request)
+            .send()
+            .await?;
 
         let status = response.status().as_u16();
 

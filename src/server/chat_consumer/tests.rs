@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::db::traits::ServerRepo;
-use crate::db::{ChatMessageRow, PipelineRow, PipelineStageRow, SessionRow};
+use crate::db::{ChatMessageRow, SessionRow};
 use crate::types::{AppConfig, UserId};
 use chrono::{DateTime, Utc};
 use std::sync::Arc;
@@ -25,16 +25,31 @@ impl ServerRepo for TestRepo {
     async fn health_check(&self) -> bool {
         true
     }
-    async fn list_tasks(&self, _user_id: UserId, _: Option<String>, _: Option<u32>) -> anyhow::Result<Vec<crate::types::Task>> {
+    async fn list_tasks(
+        &self,
+        _user_id: UserId,
+        _: Option<String>,
+        _: Option<u32>,
+    ) -> anyhow::Result<Vec<crate::types::Task>> {
         Ok(vec![])
     }
-    async fn get_task_by_uuid(&self, _user_id: UserId, _: Uuid) -> anyhow::Result<Option<crate::types::Task>> {
+    async fn get_task_by_uuid(
+        &self,
+        _user_id: UserId,
+        _: Uuid,
+    ) -> anyhow::Result<Option<crate::types::Task>> {
         Ok(None)
     }
     async fn insert_task(&self, _user_id: UserId, _: crate::types::Task) -> anyhow::Result<()> {
         Ok(())
     }
-    async fn insert_chat_message(&self, _user_id: UserId, id: Uuid, role: String, content: String) -> anyhow::Result<()> {
+    async fn insert_chat_message(
+        &self,
+        _user_id: UserId,
+        id: Uuid,
+        role: String,
+        content: String,
+    ) -> anyhow::Result<()> {
         self.messages.lock().unwrap().push(ChatMessageRow {
             id,
             role,
@@ -43,9 +58,19 @@ impl ServerRepo for TestRepo {
         });
         Ok(())
     }
-    async fn get_chat_history(&self, _user_id: UserId, limit: u32, offset: u32) -> anyhow::Result<Vec<ChatMessageRow>> {
+    async fn get_chat_history(
+        &self,
+        _user_id: UserId,
+        limit: u32,
+        offset: u32,
+    ) -> anyhow::Result<Vec<ChatMessageRow>> {
         let msgs = self.messages.lock().unwrap();
-        Ok(msgs.iter().skip(offset as usize).take(limit as usize).cloned().collect())
+        Ok(msgs
+            .iter()
+            .skip(offset as usize)
+            .take(limit as usize)
+            .cloned()
+            .collect())
     }
     async fn clear_chat_history(&self, _user_id: UserId) -> anyhow::Result<()> {
         Ok(())
@@ -59,13 +84,23 @@ impl ServerRepo for TestRepo {
     async fn get_password(&self) -> anyhow::Result<Option<String>> {
         Ok(None)
     }
-    async fn list_persisted_agents(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::AgentRow>> {
+    async fn list_persisted_agents(
+        &self,
+        _user_id: UserId,
+    ) -> anyhow::Result<Vec<crate::db::AgentRow>> {
         Ok(vec![])
     }
-    async fn get_persisted_agent(&self, _agent_id: Uuid) -> anyhow::Result<Option<crate::db::AgentRow>> {
+    async fn get_persisted_agent(
+        &self,
+        _agent_id: Uuid,
+    ) -> anyhow::Result<Option<crate::db::AgentRow>> {
         Ok(None)
     }
-    async fn upsert_agent(&self, _user_id: UserId, _agent: crate::db::AgentRow) -> anyhow::Result<()> {
+    async fn upsert_agent(
+        &self,
+        _user_id: UserId,
+        _agent: crate::db::AgentRow,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
     async fn delete_persisted_agent(&self, _agent_id: Uuid) -> anyhow::Result<()> {
@@ -92,28 +127,27 @@ impl ServerRepo for TestRepo {
     async fn set_agent_tools(&self, _agent_id: Uuid, _tool_ids: Vec<Uuid>) -> anyhow::Result<()> {
         Ok(())
     }
-    async fn get_agent_context(&self, _agent_id: Uuid) -> anyhow::Result<Vec<crate::db::DocumentRow>> {
+    async fn get_agent_context(
+        &self,
+        _agent_id: Uuid,
+    ) -> anyhow::Result<Vec<crate::db::DocumentRow>> {
         Ok(vec![])
     }
-    async fn set_agent_context(&self, _agent_id: Uuid, _document_ids: Vec<Uuid>) -> anyhow::Result<()> {
+    async fn set_agent_context(
+        &self,
+        _agent_id: Uuid,
+        _document_ids: Vec<Uuid>,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
-    async fn list_pipelines(&self, _user_id: UserId) -> anyhow::Result<Vec<PipelineRow>> {
-        Ok(vec![])
-    }
-    async fn upsert_pipeline(&self, _user_id: UserId, _pipeline: PipelineRow) -> anyhow::Result<()> {
-        Ok(())
-    }
-    async fn delete_pipeline(&self, _pipeline_id: Uuid) -> anyhow::Result<()> {
-        Ok(())
-    }
-    async fn list_pipeline_stages(&self, _pipeline_id: Uuid) -> anyhow::Result<Vec<PipelineStageRow>> {
-        Ok(vec![])
-    }
-    async fn upsert_pipeline_stage(&self, _stage: PipelineStageRow) -> anyhow::Result<()> {
-        Ok(())
-    }
-    async fn create_session(&self, _user_id: UserId, _session_id: Uuid, _mode_id: &str, _title: &str, _agent_id: Option<Uuid>) -> anyhow::Result<()> {
+    async fn create_session(
+        &self,
+        _user_id: UserId,
+        _session_id: Uuid,
+        _mode_id: &str,
+        _title: &str,
+        _agent_id: Option<Uuid>,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
     async fn list_sessions(&self, _user_id: UserId) -> anyhow::Result<Vec<SessionRow>> {
@@ -125,43 +159,40 @@ impl ServerRepo for TestRepo {
     async fn delete_session(&self, _session_id: Uuid) -> anyhow::Result<()> {
         Ok(())
     }
-    async fn insert_session_message(&self, _user_id: UserId, _session_id: Uuid, _id: Uuid, _role: String, _content: String) -> anyhow::Result<()> {
+    async fn insert_session_message(
+        &self,
+        _user_id: UserId,
+        _session_id: Uuid,
+        _id: Uuid,
+        _role: String,
+        _content: String,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
-    async fn get_session_history(&self, _session_id: Uuid, _limit: u32) -> anyhow::Result<Vec<ChatMessageRow>> {
+    async fn get_session_history(
+        &self,
+        _session_id: Uuid,
+        _limit: u32,
+    ) -> anyhow::Result<Vec<ChatMessageRow>> {
         Ok(vec![])
     }
     async fn update_session_title(&self, _session_id: Uuid, _title: &str) -> anyhow::Result<()> {
         Ok(())
     }
-    async fn update_session_summary(&self, _session_id: Uuid, _summary: &str) -> anyhow::Result<()> {
+    async fn update_session_summary(
+        &self,
+        _session_id: Uuid,
+        _summary: &str,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
     async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> {
         Ok(0)
     }
-    async fn create_pipeline_run(&self, _run: &crate::db::PipelineRunRow) -> anyhow::Result<()> {
-        Ok(())
-    }
-    async fn update_pipeline_run(&self, _run: &crate::db::PipelineRunRow) -> anyhow::Result<()> {
-        Ok(())
-    }
-    async fn get_pipeline_run(&self, _run_id: Uuid) -> anyhow::Result<Option<crate::db::PipelineRunRow>> {
-        Ok(None)
-    }
-    async fn list_pipeline_runs(&self, _pipeline_id: Uuid) -> anyhow::Result<Vec<crate::db::PipelineRunRow>> {
-        Ok(vec![])
-    }
-    async fn create_stage_execution(&self, _exec: &crate::db::StageExecutionRow) -> anyhow::Result<()> {
-        Ok(())
-    }
-    async fn update_stage_execution(&self, _exec: &crate::db::StageExecutionRow) -> anyhow::Result<()> {
-        Ok(())
-    }
-    async fn list_stage_executions(&self, _run_id: Uuid) -> anyhow::Result<Vec<crate::db::StageExecutionRow>> {
-        Ok(vec![])
-    }
-    async fn get_agent_modes(&self, _agent_id: Uuid) -> anyhow::Result<Vec<crate::db::AgentModeRow>> {
+    async fn get_agent_modes(
+        &self,
+        _agent_id: Uuid,
+    ) -> anyhow::Result<Vec<crate::db::AgentModeRow>> {
         Ok(vec![])
     }
     async fn create_agent_mode(&self, _mode: &crate::db::AgentModeRow) -> anyhow::Result<()> {

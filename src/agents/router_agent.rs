@@ -46,12 +46,17 @@ impl ToolClusterIndex {
             });
         }
 
-        Self { clusters, tool_to_cluster }
+        Self {
+            clusters,
+            tool_to_cluster,
+        }
     }
 
     /// Find the cluster that owns a given tool.
     pub fn find_cluster(&self, tool_name: &str) -> Option<&ClusterEntry> {
-        self.tool_to_cluster.get(tool_name).and_then(|&idx| self.clusters.get(idx))
+        self.tool_to_cluster
+            .get(tool_name)
+            .and_then(|&idx| self.clusters.get(idx))
     }
 
     /// Build a summary of all clusters and their tools for the router agent's

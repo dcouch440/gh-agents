@@ -19,7 +19,11 @@ fn test_agent_response() -> AgentResponse {
 
 #[test]
 fn agent_pool_stats_serializes() {
-    let stats = AgentPoolStats { total: 6, available: 5, max: 12 };
+    let stats = AgentPoolStats {
+        total: 6,
+        available: 5,
+        max: 12,
+    };
     let json = serde_json::to_string(&stats).unwrap();
     assert!(json.contains("\"total\""));
     assert!(json.contains("\"available\""));
@@ -30,7 +34,11 @@ fn agent_pool_stats_serializes() {
 fn agents_list_response_serializes() {
     let response = AgentsListResponse {
         agents: vec![test_agent_response()],
-        stats: AgentPoolStats { total: 1, available: 1, max: 12 },
+        stats: AgentPoolStats {
+            total: 1,
+            available: 1,
+            max: 12,
+        },
     };
     let json = serde_json::to_string(&response).unwrap();
     assert!(json.contains("\"agent-1\""));

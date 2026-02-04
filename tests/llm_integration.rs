@@ -20,7 +20,11 @@ async fn test_send_message_basic() {
 
     let client = AnthropicClient::from_env().expect("Failed to create client");
 
-    let request = LLMRequest::new("claude-3-haiku-20240307", vec![Message::user("Say 'hello' and nothing else.")]).with_max_tokens(50);
+    let request = LLMRequest::new(
+        "claude-3-haiku-20240307",
+        vec![Message::user("Say 'hello' and nothing else.")],
+    )
+    .with_max_tokens(50);
 
     let response = client.send_message(request).await.expect("Request failed");
 
@@ -38,9 +42,12 @@ async fn test_send_message_with_system() {
 
     let client = AnthropicClient::from_env().expect("Failed to create client");
 
-    let request = LLMRequest::new("claude-3-haiku-20240307", vec![Message::user("What are you?")])
-        .with_system("You are a helpful pirate. Always respond like a pirate.")
-        .with_max_tokens(100);
+    let request = LLMRequest::new(
+        "claude-3-haiku-20240307",
+        vec![Message::user("What are you?")],
+    )
+    .with_system("You are a helpful pirate. Always respond like a pirate.")
+    .with_max_tokens(100);
 
     let response = client.send_message(request).await.expect("Request failed");
 
@@ -67,11 +74,17 @@ async fn test_send_message_streaming() {
 
     let client = AnthropicClient::from_env().expect("Failed to create client");
 
-    let request = LLMRequest::new("claude-3-haiku-20240307", vec![Message::user("Count from 1 to 5, one number per line.")])
-        .with_max_tokens(100)
-        .with_streaming();
+    let request = LLMRequest::new(
+        "claude-3-haiku-20240307",
+        vec![Message::user("Count from 1 to 5, one number per line.")],
+    )
+    .with_max_tokens(100)
+    .with_streaming();
 
-    let mut stream = client.send_message_stream(request).await.expect("Failed to start stream");
+    let mut stream = client
+        .send_message_stream(request)
+        .await
+        .expect("Failed to start stream");
 
     let mut content = String::new();
     let mut chunk_count = 0;
@@ -83,7 +96,10 @@ async fn test_send_message_streaming() {
         chunk_count += 1;
 
         match chunk {
-            StreamChunk::MessageStart { model, input_tokens } => {
+            StreamChunk::MessageStart {
+                model,
+                input_tokens,
+            } => {
                 got_message_start = true;
                 assert!(!model.is_empty());
                 assert!(input_tokens > 0);

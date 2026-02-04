@@ -26,7 +26,9 @@ use tracing::warn;
 
 use crate::constants;
 use crate::db::DocumentRow;
-use crate::llm::{AnthropicClient, AnthropicConfig, ContentBlock, LLMProvider, LLMRequest, Message};
+use crate::llm::{
+    AnthropicClient, AnthropicConfig, ContentBlock, LLMProvider, LLMRequest, Message,
+};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -88,7 +90,12 @@ Respond with ONLY this format, no other text:
 ///
 /// Returns `None` if the API key is missing, the call fails, or parsing fails —
 /// the caller should proceed without context rather than blocking.
-pub async fn distill_true_context(messages: &[Message], task_title: &str, task_description: &str, context_docs: &[DocumentRow]) -> Option<TrueContext> {
+pub async fn distill_true_context(
+    messages: &[Message],
+    task_title: &str,
+    task_description: &str,
+    context_docs: &[DocumentRow],
+) -> Option<TrueContext> {
     let (template, tag_names) = find_distiller_template_with_tags(context_docs);
     let formatted_messages = format_messages(messages);
 
@@ -126,13 +133,20 @@ pub async fn distill_true_context(messages: &[Message], task_title: &str, task_d
 /// with a `tags:` field, those tag names are used. Otherwise falls back to
 /// `DEFAULT_TAGS`.
 fn find_distiller_template_with_tags(docs: &[DocumentRow]) -> (String, Vec<String>) {
-    match docs.iter().find(|d| d.doc_type.as_deref() == Some(DISTILLER_DOC_TYPE)) {
+    match docs
+        .iter()
+        .find(|d| d.doc_type.as_deref() == Some(DISTILLER_DOC_TYPE))
+    {
         Some(doc) => {
-            let tag_names = parse_front_matter(&doc.content).unwrap_or_else(|| DEFAULT_TAGS.iter().map(|s| (*s).to_string()).collect());
+            let tag_names = parse_front_matter(&doc.content)
+                .unwrap_or_else(|| DEFAULT_TAGS.iter().map(|s| (*s).to_string()).collect());
             let body = strip_front_matter(&doc.content);
             (body, tag_names)
         }
-        None => (DEFAULT_DISTILLER_PROMPT.to_string(), DEFAULT_TAGS.iter().map(|s| (*s).to_string()).collect()),
+        None => (
+            DEFAULT_DISTILLER_PROMPT.to_string(),
+            DEFAULT_TAGS.iter().map(|s| (*s).to_string()).collect(),
+        ),
     }
 }
 
@@ -163,7 +177,11 @@ fn parse_front_matter(content: &str) -> Option<Vec<String>> {
         if trimmed.starts_with("tags:") {
             let value = trimmed.strip_prefix("tags:")?.trim();
             let inner = value.trim_start_matches('[').trim_end_matches(']');
-            let tags: Vec<String> = inner.split(',').map(|s| s.trim().trim_matches('"').trim_matches('\'').to_string()).filter(|s| !s.is_empty()).collect();
+            let tags: Vec<String> = inner
+                .split(',')
+                .map(|s| s.trim().trim_matches('"').trim_matches('\'').to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
             if tags.is_empty() {
                 return None;
             }
@@ -495,7 +513,10 @@ mod tests {
 
     #[test]
     fn extract_between_basic() {
-        assert_eq!(extract_between("a<b>hello</b>c", "<b>", "</b>"), Some("hello"));
+        assert_eq!(
+            extract_between("a<b>hello</b>c", "<b>", "</b>"),
+            Some("hello")
+        );
     }
 
     #[test]

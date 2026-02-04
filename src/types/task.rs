@@ -31,7 +31,9 @@ impl std::fmt::Display for TaskId {
 }
 
 /// Task lifecycle status
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, utoipa::ToSchema)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, utoipa::ToSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskStatus {
     #[default]
@@ -43,7 +45,9 @@ pub enum TaskStatus {
 }
 
 /// Task priority levels
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, utoipa::ToSchema)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, utoipa::ToSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Priority {
     Low,
@@ -248,14 +252,22 @@ mod tests {
     fn task_with_dependencies_replaces() {
         let dep1 = TaskId::new();
         let dep2 = TaskId::new();
-        let task = Task::new("t").with_dependency(TaskId::new()).with_dependencies(vec![dep1.clone(), dep2.clone()]);
+        let task = Task::new("t")
+            .with_dependency(TaskId::new())
+            .with_dependencies(vec![dep1.clone(), dep2.clone()]);
         assert_eq!(task.depends_on.len(), 2);
         assert_eq!(task.depends_on[0], dep1);
     }
 
     #[test]
     fn task_status_serde_roundtrip() {
-        let variants = [TaskStatus::Pending, TaskStatus::InProgress, TaskStatus::Review, TaskStatus::Completed, TaskStatus::Failed];
+        let variants = [
+            TaskStatus::Pending,
+            TaskStatus::InProgress,
+            TaskStatus::Review,
+            TaskStatus::Completed,
+            TaskStatus::Failed,
+        ];
         for v in &variants {
             let json = serde_json::to_string(v).unwrap();
             let parsed: TaskStatus = serde_json::from_str(&json).unwrap();
@@ -265,7 +277,12 @@ mod tests {
 
     #[test]
     fn priority_serde_roundtrip() {
-        let variants = [Priority::Low, Priority::Normal, Priority::High, Priority::Urgent];
+        let variants = [
+            Priority::Low,
+            Priority::Normal,
+            Priority::High,
+            Priority::Urgent,
+        ];
         for v in &variants {
             let json = serde_json::to_string(v).unwrap();
             let parsed: Priority = serde_json::from_str(&json).unwrap();

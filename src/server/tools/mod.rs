@@ -8,7 +8,9 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 
 use crate::db::traits::DocumentRepo;
-use crate::llm::{AnthropicClient, AnthropicConfig, LLMProvider, LLMRequest, Message as LlmMessage, Tool};
+use crate::llm::{
+    AnthropicClient, AnthropicConfig, LLMProvider, LLMRequest, Message as LlmMessage, Tool,
+};
 use crate::types::UserId;
 
 use super::state::AppState;
@@ -20,7 +22,9 @@ pub fn filtered_tools(allowed: &[String]) -> Vec<Tool> {
     if allowed.is_empty() {
         return all;
     }
-    all.into_iter().filter(|t| allowed.iter().any(|a| a == &t.name)).collect()
+    all.into_iter()
+        .filter(|t| allowed.iter().any(|a| a == &t.name))
+        .collect()
 }
 
 /// Return tool definitions for the Anthropic API.
@@ -223,7 +227,13 @@ pub fn agent_tools() -> Vec<Tool> {
 /// Execute a tool by name with the given JSON input.
 ///
 /// Returns a JSON value describing the result.
-pub async fn execute_tool(name: &str, input: &Value, state: &AppState, user_id: UserId, _session_id: Option<uuid::Uuid>) -> Value {
+pub async fn execute_tool(
+    name: &str,
+    input: &Value,
+    state: &AppState,
+    user_id: UserId,
+    _session_id: Option<uuid::Uuid>,
+) -> Value {
     match name {
         // LEGACY tools removed: list_agents, list_roles, create_agent, create_agents, assign_task,
         // get_task_result, list_pending_approvals, respond_to_approval, remove_agent,
@@ -284,7 +294,10 @@ async fn execute_read_file(input: &Value) -> Value {
                     }
 
                     // Large files: summarize with Haiku
-                    let truncated_for_haiku: String = content.chars().take(crate::constants::TRUNCATE_SUMMARIZE_INPUT).collect();
+                    let truncated_for_haiku: String = content
+                        .chars()
+                        .take(crate::constants::TRUNCATE_SUMMARIZE_INPUT)
+                        .collect();
                     let focus_instruction = match focus {
                         Some(f) => format!("Focus on: {}. Extract the most relevant code sections, function signatures, and logic related to this focus area.", f),
                         None => "Extract the key structures, function signatures, imports, and overall purpose of this file.".to_string(),
@@ -305,7 +318,10 @@ async fn execute_read_file(input: &Value) -> Value {
                         }),
                         None => {
                             // Haiku failed — fall back to truncated content
-                            let fallback: String = content.chars().take(crate::constants::TRUNCATE_SMALL_FILE).collect();
+                            let fallback: String = content
+                                .chars()
+                                .take(crate::constants::TRUNCATE_SMALL_FILE)
+                                .collect();
                             json!({
                                 "path": path_str,
                                 "content": fallback,
@@ -328,7 +344,11 @@ async fn execute_list_files(input: &Value) -> Value {
     let path_str = input["path"].as_str().unwrap_or(".");
 
     let cwd = std::env::current_dir().unwrap_or_default();
-    let dir_path = if path_str.is_empty() || path_str == "." { cwd.clone() } else { cwd.join(path_str) };
+    let dir_path = if path_str.is_empty() || path_str == "." {
+        cwd.clone()
+    } else {
+        cwd.join(path_str)
+    };
 
     match dir_path.canonicalize() {
         Ok(canonical) => {
@@ -373,10 +393,16 @@ async fn execute_search_files(input: &Value) -> Value {
         return json!({ "error": "Missing required parameter: pattern" });
     };
     let path_str = input["path"].as_str().unwrap_or(".");
-    let max_results = input["max_results"].as_u64().unwrap_or(crate::constants::DEFAULT_SEARCH_RESULTS as u64) as usize;
+    let max_results = input["max_results"]
+        .as_u64()
+        .unwrap_or(crate::constants::DEFAULT_SEARCH_RESULTS as u64) as usize;
 
     let cwd = std::env::current_dir().unwrap_or_default();
-    let search_dir = if path_str.is_empty() || path_str == "." { cwd.clone() } else { cwd.join(path_str) };
+    let search_dir = if path_str.is_empty() || path_str == "." {
+        cwd.clone()
+    } else {
+        cwd.join(path_str)
+    };
 
     // Validate path
     match search_dir.canonicalize() {
@@ -495,10 +521,16 @@ pub async fn haiku_summarize(content: &str) -> Option<String> {
     let config = AnthropicConfig::from_env().ok()?;
     let client = AnthropicClient::new(config).ok()?;
 
-    let truncated: String = content.chars().take(crate::constants::TRUNCATE_SUMMARY_INPUT).collect();
-    let request = LLMRequest::new(crate::constants::MODEL_HAIKU, vec![LlmMessage::user(truncated)])
-        .with_system("Summarize this document in 2-3 sentences for search indexing. Be concise.")
-        .with_max_tokens(crate::constants::MAX_TOKENS_SUMMARIZE);
+    let truncated: String = content
+        .chars()
+        .take(crate::constants::TRUNCATE_SUMMARY_INPUT)
+        .collect();
+    let request = LLMRequest::new(
+        crate::constants::MODEL_HAIKU,
+        vec![LlmMessage::user(truncated)],
+    )
+    .with_system("Summarize this document in 2-3 sentences for search indexing. Be concise.")
+    .with_max_tokens(crate::constants::MAX_TOKENS_SUMMARIZE);
 
     match client.send_message(request).await {
         Ok(resp) => Some(resp.content),
@@ -514,7 +546,10 @@ pub async fn haiku_summarize_title(content: &str) -> Option<String> {
     let config = AnthropicConfig::from_env().ok()?;
     let client = AnthropicClient::new(config).ok()?;
 
-    let truncated: String = content.chars().take(crate::constants::TRUNCATE_TITLE_INPUT).collect();
+    let truncated: String = content
+        .chars()
+        .take(crate::constants::TRUNCATE_TITLE_INPUT)
+        .collect();
     let request = LLMRequest::new(crate::constants::MODEL_HAIKU, vec![LlmMessage::user(truncated)])
         .with_system("Generate a short title (3-6 words) for this conversation. Return ONLY the title, no quotes, no punctuation at the end.")
         .with_max_tokens(crate::constants::MAX_TOKENS_TITLE);
@@ -541,7 +576,10 @@ pub async fn haiku_extract_context(summary: &str, current_message: &str) -> Opti
     let config = AnthropicConfig::from_env().ok()?;
     let client = AnthropicClient::new(config).ok()?;
 
-    let user_text = format!("Summary:\n{}\n\nCurrent message:\n{}", summary, current_message);
+    let user_text = format!(
+        "Summary:\n{}\n\nCurrent message:\n{}",
+        summary, current_message
+    );
     let request = LLMRequest::new(
         crate::constants::MODEL_HAIKU,
         vec![LlmMessage::user(user_text)],
@@ -583,7 +621,11 @@ async fn execute_create_doc(input: &Value, state: &AppState, user_id: UserId) ->
 
     let tags: Vec<String> = input["tags"]
         .as_array()
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
 
     let ref_tag = title_to_ref_tag(title);
@@ -628,9 +670,16 @@ async fn execute_update_doc(input: &Value, state: &AppState) -> Value {
 
     let content = input["content"].as_str().map(String::from);
     let title = input["title"].as_str().map(String::from);
-    let tags: Option<Vec<String>> = input["tags"].as_array().map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
+    let tags: Option<Vec<String>> = input["tags"].as_array().map(|arr| {
+        arr.iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect()
+    });
 
-    match doc_repo.update_document(doc_id, content.clone(), title.clone(), tags).await {
+    match doc_repo
+        .update_document(doc_id, content.clone(), title.clone(), tags)
+        .await
+    {
         Ok(row) => {
             // Spawn background summary regeneration using updated content
             let summary_content = content.unwrap_or(row.content.clone());
@@ -718,7 +767,10 @@ async fn execute_submit_prd(input: &Value, state: &AppState, user_id: UserId) ->
                 errors.push(format!("milestones[{}] missing name", i));
             }
             if m["deliverables"].as_array().is_none_or(|a| a.is_empty()) {
-                errors.push(format!("milestones[{}] must have at least 1 deliverable", i));
+                errors.push(format!(
+                    "milestones[{}] must have at least 1 deliverable",
+                    i
+                ));
             }
         }
     }
@@ -740,7 +792,10 @@ async fn execute_submit_prd(input: &Value, state: &AppState, user_id: UserId) ->
     let milestones_arr = milestones.unwrap();
 
     let mut md = format!("# PRD: {}\n\n## Status: APPROVED\n\n", title);
-    md.push_str(&format!("## Problem Statement\n\n{}\n\n", problem_statement));
+    md.push_str(&format!(
+        "## Problem Statement\n\n{}\n\n",
+        problem_statement
+    ));
 
     md.push_str("## Goals\n\n");
     for g in goals_arr {
@@ -757,7 +812,10 @@ async fn execute_submit_prd(input: &Value, state: &AppState, user_id: UserId) ->
         md.push_str(&format!("- {}\n", us.as_str().unwrap_or("")));
     }
 
-    md.push_str(&format!("\n## Technical Approach\n\n{}\n\n", technical_approach));
+    md.push_str(&format!(
+        "\n## Technical Approach\n\n{}\n\n",
+        technical_approach
+    ));
 
     md.push_str("## Milestones\n\n");
     for m in milestones_arr {
@@ -800,7 +858,15 @@ async fn execute_submit_prd(input: &Value, state: &AppState, user_id: UserId) ->
     let ref_tag = title_to_ref_tag(title);
 
     match doc_repo
-        .create_document(user_id.0, None, title.to_string(), md.clone(), "prd".to_string(), ref_tag.clone(), vec!["prd".to_string()])
+        .create_document(
+            user_id.0,
+            None,
+            title.to_string(),
+            md.clone(),
+            "prd".to_string(),
+            ref_tag.clone(),
+            vec!["prd".to_string()],
+        )
         .await
     {
         Ok(row) => {
@@ -852,7 +918,11 @@ async fn execute_submit_ticket(input: &Value) -> Value {
 
     let dependencies: Vec<String> = input["dependencies"]
         .as_array()
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
 
     json!({

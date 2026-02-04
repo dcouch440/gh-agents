@@ -107,7 +107,11 @@ impl GlobalBackoff {
         let delay = retry_after_ms.max(our_delay);
         self.until = Some(Instant::now() + Duration::from_millis(delay));
         self.current_delay_ms = (our_delay * 2).min(self.max_delay_ms);
-        tracing::warn!("Global rate limit backoff set for {}ms (server asked {}ms)", delay, retry_after_ms);
+        tracing::warn!(
+            "Global rate limit backoff set for {}ms (server asked {}ms)",
+            delay,
+            retry_after_ms
+        );
     }
 
     fn record_success(&mut self) {
@@ -142,7 +146,9 @@ pub struct RateLimitedProvider<P: LLMProvider> {
 impl<P: LLMProvider + 'static> RateLimitedProvider<P> {
     pub fn new(provider: P, config: RateLimitConfig) -> Self {
         let token_bucket = if config.requests_per_minute > 0 {
-            Some(Arc::new(Mutex::new(TokenBucket::new(config.requests_per_minute))))
+            Some(Arc::new(Mutex::new(TokenBucket::new(
+                config.requests_per_minute,
+            ))))
         } else {
             None
         };
@@ -151,7 +157,10 @@ impl<P: LLMProvider + 'static> RateLimitedProvider<P> {
             inner: Arc::new(provider),
             semaphore: Arc::new(Semaphore::new(config.max_concurrent_calls)),
             token_bucket,
-            global_backoff: Arc::new(RwLock::new(GlobalBackoff::new(config.global_backoff_initial_ms, config.global_backoff_max_ms))),
+            global_backoff: Arc::new(RwLock::new(GlobalBackoff::new(
+                config.global_backoff_initial_ms,
+                config.global_backoff_max_ms,
+            ))),
         }
     }
 
@@ -174,7 +183,10 @@ impl<P: LLMProvider + 'static> RateLimitedProvider<P> {
     }
 
     async fn on_rate_limited(&self, retry_after_ms: u64) {
-        self.global_backoff.write().await.record_rate_limit(retry_after_ms);
+        self.global_backoff
+            .write()
+            .await
+            .record_rate_limit(retry_after_ms);
     }
 
     async fn on_success(&self) {
@@ -202,7 +214,10 @@ impl<P: LLMProvider + 'static> LLMProvider for RateLimitedProvider<P> {
         }
     }
 
-    async fn send_message_stream(&self, request: LLMRequest) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
+    async fn send_message_stream(
+        &self,
+        request: LLMRequest,
+    ) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
         self.wait_for_backoff().await;
         let _permit = self.semaphore.acquire().await.expect("semaphore closed");
         self.acquire_rpm_token().await;

@@ -10,7 +10,10 @@ use futures::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
-use crate::llm::{ContentBlock, LLMProvider, LLMRequest, Message, StopReason, StreamAccumulator, StreamChunk as LLMStreamChunk, TokenUsage};
+use crate::llm::{
+    ContentBlock, LLMProvider, LLMRequest, Message, StopReason, StreamAccumulator,
+    StreamChunk as LLMStreamChunk, TokenUsage,
+};
 
 use super::error::HubError;
 use super::recorder::ExecutionRecorder;
@@ -74,7 +77,10 @@ impl ExecutionEngine {
             // Check context budget
             let char_count: usize = messages.iter().map(|m| m.estimated_chars()).sum();
             if char_count > budget {
-                return Err(HubError::ContextBudgetExceeded { chars: char_count, round });
+                return Err(HubError::ContextBudgetExceeded {
+                    chars: char_count,
+                    round,
+                });
             }
 
             // Build LLM request
@@ -90,7 +96,11 @@ impl ExecutionEngine {
             // Call LLM
             let response = if strategy.streaming() {
                 request = request.with_streaming();
-                let stream = self.provider.send_message_stream(request).await.map_err(|e| HubError::LlmCallFailed { round, source: e })?;
+                let stream = self
+                    .provider
+                    .send_message_stream(request)
+                    .await
+                    .map_err(|e| HubError::LlmCallFailed { round, source: e })?;
 
                 let mut accumulator = StreamAccumulator::new();
                 let mut pinned = std::pin::pin!(stream);
@@ -114,7 +124,10 @@ impl ExecutionEngine {
                             if let LLMStreamChunk::ContentDelta { ref text, .. } = chunk {
                                 sink.token(text).await;
                             }
-                            if let LLMStreamChunk::ToolUseStart { ref name, ref id, .. } = chunk {
+                            if let LLMStreamChunk::ToolUseStart {
+                                ref name, ref id, ..
+                            } = chunk
+                            {
                                 sink.tool_start(name, id).await;
                             }
                             accumulator.apply(&chunk);
@@ -128,7 +141,9 @@ impl ExecutionEngine {
                     }
                 }
 
-                accumulator.build().ok_or_else(|| HubError::Internal(anyhow::anyhow!("incomplete stream at round {}", round)))?
+                accumulator.build().ok_or_else(|| {
+                    HubError::Internal(anyhow::anyhow!("incomplete stream at round {}", round))
+                })?
             } else if let Some(ct) = cancel {
                 tokio::select! {
                     biased;
@@ -140,7 +155,10 @@ impl ExecutionEngine {
                     }
                 }
             } else {
-                self.provider.send_message(request).await.map_err(|e| HubError::LlmCallFailed { round, source: e })?
+                self.provider
+                    .send_message(request)
+                    .await
+                    .map_err(|e| HubError::LlmCallFailed { round, source: e })?
             };
 
             total_input += response.usage.input_tokens as u64;
@@ -154,18 +172,25 @@ impl ExecutionEngine {
                         .content_blocks
                         .iter()
                         .filter_map(|b| match b {
-                            ContentBlock::ToolUse { id, name, input } => Some((id.clone(), name.clone(), input.clone())),
+                            ContentBlock::ToolUse { id, name, input } => {
+                                Some((id.clone(), name.clone(), input.clone()))
+                            }
                             _ => None,
                         })
                         .collect();
 
                     if tool_uses.is_empty() {
-                        warn!("StopReason::ToolUse but no tool_use blocks at round {}", round);
+                        warn!(
+                            "StopReason::ToolUse but no tool_use blocks at round {}",
+                            round
+                        );
                         break;
                     }
 
                     // Append assistant message with all blocks
-                    messages.push(Message::assistant_with_blocks(response.content_blocks.clone()));
+                    messages.push(Message::assistant_with_blocks(
+                        response.content_blocks.clone(),
+                    ));
 
                     // Execute each tool and build result blocks
                     let mut result_blocks = Vec::new();

@@ -20,7 +20,11 @@ use crate::server::state::AppState;
         (status = 404, description = "Execution not found or no cancellation token registered")
     )
 )]
-pub async fn cancel_agent_execution(State(state): State<AppState>, _user: auth_utils::AuthUser, Path(execution_id): Path<String>) -> Result<Json<serde_json::Value>, StatusCode> {
+pub async fn cancel_agent_execution(
+    State(state): State<AppState>,
+    _user: auth_utils::AuthUser,
+    Path(execution_id): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
     let exec_uuid = Uuid::parse_str(&execution_id).map_err(|_| StatusCode::BAD_REQUEST)?;
 
     let cancelled = state.cancel_execution(exec_uuid).await;
@@ -30,7 +34,9 @@ pub async fn cancel_agent_execution(State(state): State<AppState>, _user: auth_u
 
     // Update execution status in DB
     if let Some(ae_repo) = &state.agent_execution_repo {
-        let _ = ae_repo.update_agent_execution_status(exec_uuid, "cancelled", None, None).await;
+        let _ = ae_repo
+            .update_agent_execution_status(exec_uuid, "cancelled", None, None)
+            .await;
     }
 
     Ok(Json(serde_json::json!({ "status": "cancelled" })))

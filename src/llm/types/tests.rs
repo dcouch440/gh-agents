@@ -40,7 +40,10 @@ fn request_defaults_are_sensible() {
 
 #[test]
 fn token_usage_total() {
-    let usage = TokenUsage { input_tokens: 100, output_tokens: 50 };
+    let usage = TokenUsage {
+        input_tokens: 100,
+        output_tokens: 50,
+    };
     assert_eq!(usage.total(), 150);
 }
 
@@ -51,8 +54,14 @@ fn accumulator_builds_response() {
         model: "claude-3".to_string(),
         input_tokens: 10,
     });
-    acc.apply(&StreamChunk::ContentDelta { text: "Hello ".to_string(), index: 0 });
-    acc.apply(&StreamChunk::ContentDelta { text: "world!".to_string(), index: 0 });
+    acc.apply(&StreamChunk::ContentDelta {
+        text: "Hello ".to_string(),
+        index: 0,
+    });
+    acc.apply(&StreamChunk::ContentDelta {
+        text: "world!".to_string(),
+        index: 0,
+    });
     acc.apply(&StreamChunk::MessageDelta {
         stop_reason: Some(StopReason::EndTurn),
         output_tokens: Some(5),
