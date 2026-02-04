@@ -13,9 +13,9 @@ use crate::db::{
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
     DocumentSearchResult, ExecutionMessageRow, ExecutionVariableRow, OutputSchemaRow,
     PromptTemplateRow, ResultRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry,
-    RouterRequestRow, SessionRow, StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow,
-    WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
-    WorkflowStepEdgeRow, WorkflowStepRow,
+    RouterRequestRow, SessionRow, StepDocumentRow, TokenLedgerRow, ToolRouterModeRow,
+    ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow,
+    WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -606,6 +606,53 @@ pub trait ToolRouterRepo: Send + Sync {
     async fn get_router_tools(&self, router_id: Uuid) -> Result<Vec<ToolRow>>;
     /// Set the full tool list for a router (replaces existing).
     async fn set_router_tools(&self, router_id: Uuid, tool_ids: &[Uuid]) -> Result<()>;
+
+    // --- Router Modes ---
+
+    /// List all modes for a router, ordered by display_order.
+    async fn list_router_modes(&self, router_id: Uuid) -> Result<Vec<ToolRouterModeRow>>;
+    /// Get a router mode by ID.
+    async fn get_router_mode(&self, id: Uuid) -> Result<Option<ToolRouterModeRow>>;
+    /// Get a router mode by its key within a router.
+    async fn get_router_mode_by_key(
+        &self,
+        router_id: Uuid,
+        mode_key: &str,
+    ) -> Result<Option<ToolRouterModeRow>>;
+    /// Create a new router mode.
+    async fn create_router_mode(
+        &self,
+        router_id: Uuid,
+        mode_key: &str,
+        display_name: &str,
+        description: &str,
+        system_prompt: &str,
+        temperature: f32,
+        max_tokens: i32,
+        append_to_agent_system_prompt: bool,
+        append_to_agent_tools: bool,
+        display_order: i32,
+    ) -> Result<ToolRouterModeRow>;
+    /// Update a router mode (all fields optional for partial updates).
+    async fn update_router_mode(
+        &self,
+        id: Uuid,
+        mode_key: Option<String>,
+        display_name: Option<String>,
+        description: Option<String>,
+        system_prompt: Option<String>,
+        temperature: Option<f32>,
+        max_tokens: Option<i32>,
+        append_to_agent_system_prompt: Option<bool>,
+        append_to_agent_tools: Option<bool>,
+        display_order: Option<i32>,
+    ) -> Result<ToolRouterModeRow>;
+    /// Delete a router mode.
+    async fn delete_router_mode(&self, id: Uuid) -> Result<()>;
+    /// Get all tools assigned to a mode.
+    async fn get_mode_tools(&self, mode_id: Uuid) -> Result<Vec<ToolRow>>;
+    /// Set the full tool list for a mode (replaces existing).
+    async fn set_mode_tools(&self, mode_id: Uuid, tool_ids: &[Uuid]) -> Result<()>;
 }
 
 // ============================================================================
