@@ -1,3 +1,5 @@
+import { Box, CircularProgress } from '@mui/material'
+
 type SpinnerSize = 'sm' | 'md' | 'lg'
 
 type LoadingSpinnerProps = {
@@ -5,11 +7,28 @@ type LoadingSpinnerProps = {
   centered?: boolean
 }
 
+const SIZE_MAP = {
+  sm: 20,
+  md: 40,
+  lg: 60,
+} as const
+
 function LoadingSpinner({ size = 'md', centered = false }: LoadingSpinnerProps) {
-  const spinner = <div className={`spinner spinner--${size}`} />
+  const spinner = <CircularProgress size={SIZE_MAP[size]} />
 
   if (centered) {
-    return <div className="spinner-container">{spinner}</div>
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          p: 2,
+        }}
+      >
+        {spinner}
+      </Box>
+    )
   }
 
   return spinner

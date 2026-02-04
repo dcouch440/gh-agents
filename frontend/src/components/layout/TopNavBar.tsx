@@ -13,9 +13,19 @@ const renderNavItem = (item: NavItem & { isActive: boolean }) => (
     key={item.path}
     component={RouterLink}
     to={item.path}
-    color={item.isActive ? 'primary' : 'inherit'}
+    variant="text"
+    color="inherit"
     sx={{
+      fontSize: '0.9375rem',
       fontWeight: item.isActive ? 600 : 400,
+      color: item.isActive ? 'primary.main' : 'text.primary',
+      textTransform: 'none',
+      padding: '6px 16px',
+      minWidth: 'auto',
+      '&:hover': {
+        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+        color: item.isActive ? 'primary.main' : 'primary.light',
+      },
     }}
   >
     {item.label}
@@ -28,16 +38,21 @@ function TopNavBar() {
 
   return (
     <AppBar position="fixed" color="default">
-      <Toolbar>
+      <Toolbar sx={{ minHeight: 56, py: 0 }}>
         <Typography
           variant="h6"
           component="div"
-          sx={{ mr: 4, fontWeight: 600 }}
+          sx={{
+            mr: 5,
+            fontWeight: 700,
+            fontSize: '1.25rem',
+            letterSpacing: '-0.02em',
+          }}
         >
           nexor
         </Typography>
 
-        <Box sx={{ display: 'flex', gap: 1, flexGrow: 1 }}>
+        <Box sx={{ display: 'flex', gap: 0.5, flexGrow: 1 }}>
           {navItems.map(renderNavItem)}
         </Box>
 

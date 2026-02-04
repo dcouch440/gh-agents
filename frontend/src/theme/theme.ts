@@ -125,7 +125,7 @@ export const theme = createTheme({
     '0px 8px 16px rgba(0, 0, 0, 0.2)',
     '0px 12px 24px rgba(0, 0, 0, 0.2)',
     '0px 16px 32px rgba(0, 0, 0, 0.2)',
-  ],
+  ] as unknown as undefined,
   components: {
     MuiCssBaseline: {
       styleOverrides: {

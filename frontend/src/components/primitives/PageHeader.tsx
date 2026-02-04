@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Box, Typography } from '@mui/material'
 
 type PageHeaderProps = {
   title: string
@@ -7,10 +8,23 @@ type PageHeaderProps = {
 
 function PageHeader({ title, children }: PageHeaderProps) {
   return (
-    <div className="page-header">
-      <h1 className="page-header__title">{title}</h1>
-      {children ? <div className="page-header__actions">{children}</div> : null}
-    </div>
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        mb: 3,
+      }}
+    >
+      <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
+        {title}
+      </Typography>
+      {children ? (
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          {children}
+        </Box>
+      ) : null}
+    </Box>
   )
 }
 

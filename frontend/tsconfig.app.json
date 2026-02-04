@@ -36,9 +36,6 @@
     }
   },
   "include": [
-    "src",
-    "../archive/chat",
-    "../archive/Showcase",
-    "../archive/tree-renderer"
+    "src"
   ]
 }

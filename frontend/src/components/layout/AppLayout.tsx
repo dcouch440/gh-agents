@@ -4,7 +4,7 @@ import { TopNavBar } from './TopNavBar';
 
 // Base-level constant: Layout spacing configuration
 const LAYOUT_SPACING = {
-  topPadding: 10,    // 80px (AppBar 64px + 16px margin)
+  topPadding: 9,    // 72px (AppBar 56px + 16px margin)
   horizontalPadding: 3,
   bottomPadding: 3,
 } as const;

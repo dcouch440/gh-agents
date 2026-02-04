@@ -1,1 +1,0 @@
-export { GothicPanel } from './GothicPanel';
