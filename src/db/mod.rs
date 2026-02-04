@@ -31,29 +31,6 @@ pub struct AgentRow {
     pub version: i32,
 }
 
-/// Row type for persisted pipeline definitions.
-#[derive(Debug, Clone)]
-pub struct PipelineRow {
-    pub id: Uuid,
-    pub name: String,
-}
-
-/// Row type for persisted pipeline stages.
-#[derive(Debug, Clone)]
-pub struct PipelineStageRow {
-    pub pipeline_id: Uuid,
-    pub stage_number: i32,
-    pub agent_id: Option<Uuid>,
-    pub cluster_id: Option<Uuid>,
-    pub role: Option<String>,
-    pub approval_required: Option<bool>,
-    pub fan_out: Option<bool>,
-    pub stage_name: String,
-    pub input_definitions: Option<serde_json::Value>,
-    pub output_description: Option<String>,
-    pub output_schema: Option<serde_json::Value>,
-}
-
 /// Row type for persisted tool definitions.
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct ToolRow {
@@ -248,21 +225,10 @@ pub struct StepDocumentRow {
     pub document_id: Uuid,
 }
 
-/// Row type for a pipeline stage member (workflow assigned to a stage).
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
-pub struct PipelineStageMemberRow {
-    pub id: Uuid,
-    pub pipeline_id: Uuid,
-    pub stage_number: i32,
-    pub workflow_id: Uuid,
-    pub display_order: i32,
-}
-
 /// Row type for agent execution records.
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct AgentExecutionRow {
     pub id: Uuid,
-    pub stage_execution_id: Uuid,
     pub agent_id: Uuid,
     pub workflow_step_id: Option<Uuid>,
     pub workflow_execution_id: Option<Uuid>,
@@ -318,42 +284,6 @@ pub struct TokenLedgerRow {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, sqlx::FromRow)]
-pub struct PipelineRunRow {
-    pub id: Uuid,
-    pub pipeline_id: Uuid,
-    pub user_id: Uuid,
-    pub status: String,
-    pub initial_task: String,
-    pub stage_outputs: Option<serde_json::Value>,
-    pub current_stage: i32,
-    pub started_at: DateTime<Utc>,
-    pub completed_at: Option<DateTime<Utc>>,
-    pub total_input_tokens: Option<i64>,
-    pub total_output_tokens: Option<i64>,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow)]
-pub struct StageExecutionRow {
-    pub id: Uuid,
-    pub run_id: Uuid,
-    pub stage_number: i32,
-    pub stage_name: String,
-    pub agent_id: Option<Uuid>,
-    pub status: String,
-    pub rendered_prompt: Option<String>,
-    pub output: Option<String>,
-    pub structured_output: Option<serde_json::Value>,
-    pub user_input: Option<String>,
-    pub input_tokens: i64,
-    pub output_tokens: i64,
-    pub started_at: DateTime<Utc>,
-    pub completed_at: Option<DateTime<Utc>>,
-    pub duration_ms: i64,
-    pub stage_member_id: Option<Uuid>,
-    pub pipeline_id: Option<Uuid>,
-}
-
 /// Row type for tool router definitions.
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct ToolRouterRow {
@@ -407,7 +337,7 @@ pub struct RouterRequestRow {
 pub struct RoomRow {
     pub id: Uuid,
     pub user_id: Uuid,
-    pub pipeline_id: Uuid,
+    pub collection_id: Option<Uuid>,
     pub name: String,
     pub gatekeeper_enabled: bool,
     pub gatekeeper_model_id: String,
@@ -433,7 +363,6 @@ pub struct RoomMemberRow {
 pub struct RoomSessionRow {
     pub id: Uuid,
     pub room_id: Uuid,
-    pub run_id: Option<Uuid>,
     pub status: String,
     pub current_turn: i32,
     pub transcript_summary: Option<String>,

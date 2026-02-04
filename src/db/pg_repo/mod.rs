@@ -7,13 +7,13 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::db::traits::{
-    AgentExecutionRepo, ContextStoreRepo, DocumentRepo, MergeQueueRepo, ModelSpendRow, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, RoomMemberInput, RoomRepo,
+    AgentExecutionRepo, ContextStoreRepo, DocumentRepo, MergeQueueRepo, ModelSpendRow, OutputSchemaRepo, PromptTemplateRepo, ResultRepo, RoomMemberInput, RoomRepo,
     RouterRequestRepo, ServerRepo, TokenLedgerRepo, ToolRouterRepo, UserRepo, WorkflowCollectionRepo, WorkflowRepo, WorkflowStepAgentRepo,
 };
 use crate::db::{
     AgentExecutionRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow, CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow, DocumentSearchResult,
-    ExecutionMessageRow, ExecutionVariableRow, OutputSchemaRow, PipelineRow, PipelineRunRow, PipelineStageMemberRow, PipelineStageRow, PromptTemplateRow, ResultRow, RoomMemberRow, RoomRow,
-    RoomSessionRow, RoomTranscriptEntry, RouterRequestRow, SessionRow, StageExecutionRow, StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow,
+    ExecutionMessageRow, ExecutionVariableRow, OutputSchemaRow, PromptTemplateRow, ResultRow, RoomMemberRow, RoomRow,
+    RoomSessionRow, RoomTranscriptEntry, RouterRequestRow, SessionRow, StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow,
     WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
