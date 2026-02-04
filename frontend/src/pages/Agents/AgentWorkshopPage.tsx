@@ -208,11 +208,15 @@ function AgentWorkshopPage() {
 
     const loadExistingSession = async () => {
       try {
+        console.log("[Workshop] Loading session:", urlSessionId);
         // Fetch session, agent, history, and context in parallel
         const [session, history] = await Promise.all([
           api.sessions.get(urlSessionId!),
           api.sessions.getHistory(urlSessionId!),
         ]);
+
+        console.log("[Workshop] Session data:", session);
+        console.log("[Workshop] History response:", history);
 
         if (cancelled) return;
 
@@ -365,6 +369,8 @@ function AgentWorkshopPage() {
   const handleSend = useCallback(
     (message: string) => {
       if (!state.sessionId) return;
+
+      console.log("[Workshop] Sending message to session:", state.sessionId);
 
       // Add user message
       const userMsgId = `msg-${Date.now()}`;
