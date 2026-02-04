@@ -44,16 +44,6 @@ pub struct ToolRow {
     pub version: i32,
 }
 
-/// Row type for persisted clusters.
-#[derive(Debug, Clone)]
-pub struct ClusterRow {
-    pub id: Uuid,
-    pub name: String,
-    pub description: String,
-    pub conventions: String,
-    pub shared_files: serde_json::Value,
-}
-
 /// Row type for persisted documents.
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct DocumentRow {

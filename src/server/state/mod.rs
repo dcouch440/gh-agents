@@ -9,14 +9,12 @@ use tokio::sync::{broadcast, mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::agents::ToolClusterIndex;
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::{
     AgentExecutionRepo, ContextStoreRepo, DocumentRepo, OutputSchemaRepo, PromptTemplateRepo,
     ResultRepo, RoomRepo, RouterRequestRepo, ServerRepo, TokenLedgerRepo, ToolRouterRepo, UserRepo,
     WorkflowRepo,
 };
-use crate::llm::AnthropicClient;
 use crate::types::{AppConfig, UserId};
 
 use super::hub::PromptRegistry;
@@ -117,8 +115,6 @@ pub struct AppState {
     pub room_update_tx: broadcast::Sender<RoomUpdateEvent>,
     /// Default agent UUID (looked up at startup, agent with name "Home")
     pub default_agent_id: Option<Uuid>,
-    /// Tool-to-cluster index for routing tool calls to cluster agents
-    pub cluster_index: Option<Arc<ToolClusterIndex>>,
     /// Prompt registry for core system/agent prompts loaded from prompts/ directory
     pub prompt_registry: Arc<PromptRegistry>,
     /// Cancellation tokens for running pipelines and agent executions
@@ -190,27 +186,6 @@ impl AppState {
                 tracing::info!("Default agent: {} ({})", home.name, home.id);
                 state.default_agent_id = Some(home.id);
             }
-        }
-
-        // Build tool-to-cluster index for routing (if API key available)
-        if AnthropicClient::from_env().is_ok() {
-            // Build tool-to-cluster index for routing
-            match crate::db::list_clusters_with_tools(state.db.as_ref().unwrap()).await {
-                Ok(pairs) => {
-                    let tool_count: usize = pairs.iter().map(|(_, tools)| tools.len()).sum();
-                    tracing::info!(
-                        "Built ToolClusterIndex: {} clusters, {} tools",
-                        pairs.len(),
-                        tool_count
-                    );
-                    state.cluster_index = Some(Arc::new(ToolClusterIndex::new(pairs)));
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to build ToolClusterIndex: {}", e);
-                }
-            }
-
-            // LEGACY: Pipeline reconstruction removed (workflows replaced pipelines)
         }
 
         (state, rx)
@@ -292,7 +267,6 @@ impl AppState {
                 context_update_tx,
                 room_update_tx,
                 default_agent_id: None,
-                cluster_index: None,
                 prompt_registry: Arc::new(PromptRegistry::empty()),
                 cancellation_tokens: Arc::new(RwLock::new(HashMap::new())),
             },

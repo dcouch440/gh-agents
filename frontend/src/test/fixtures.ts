@@ -90,9 +90,6 @@ export const mockRoutingEvent: RoutingEvent = {
   session_id: 'session-001',
   task_id: null,
   router_agent_id: 'agent-001',
-  cluster_agent_id: 'agent-002',
-  cluster_id: null,
-  cluster_name: 'codebase',
   tool_name: 'search_files',
   request: 'Find the auth module',
   parameters: {},
@@ -154,7 +151,6 @@ export const mockTool: Tool = {
   parameter_schema: {},
   output_schema: {},
   enabled: true,
-  cluster_id: null,
   is_builtin: true,
 }
 

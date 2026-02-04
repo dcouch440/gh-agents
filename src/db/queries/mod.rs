@@ -491,41 +491,6 @@ struct ToolRowDb {
     version: i32,
 }
 
-/// List all clusters (tools are no longer cluster-scoped).
-///
-/// Deprecated: clusters are being removed. This function returns clusters with empty tool lists
-/// for backwards compatibility until the cluster system is fully removed.
-pub async fn list_clusters_with_tools(
-    pool: &PgPool,
-) -> Result<Vec<(super::ClusterRow, Vec<super::ToolRow>)>> {
-    let cluster_rows: Vec<ClusterRowDb> =
-        sqlx::query_as("SELECT id, name, description, conventions, shared_files FROM clusters")
-            .fetch_all(pool)
-            .await
-            .context("Failed to list clusters")?;
-
-    let mut results = Vec::new();
-    for cr in cluster_rows {
-        let cluster = super::ClusterRow {
-            id: cr.id,
-            name: cr.name,
-            description: cr.description,
-            conventions: cr.conventions,
-            shared_files: cr.shared_files,
-        };
-        results.push((cluster, vec![]));
-    }
-    Ok(results)
-}
-
-#[derive(sqlx::FromRow)]
-struct ClusterRowDb {
-    id: Uuid,
-    name: String,
-    description: String,
-    conventions: String,
-    shared_files: serde_json::Value,
-}
 
 // ============================================================================
 // Agent Mode Queries

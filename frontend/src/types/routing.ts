@@ -4,9 +4,6 @@ type RoutingEvent = {
   session_id: string | null
   task_id: string | null
   router_agent_id: string
-  cluster_agent_id: string | null
-  cluster_id: string | null
-  cluster_name: string
   tool_name: string
   request: string
   parameters: Record<string, unknown>
