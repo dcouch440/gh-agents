@@ -13,6 +13,7 @@ fn test_agent_response() -> AgentResponse {
         model_max_tokens: 4096,
         model_temperature: 0.7,
         status: "idle".to_string(),
+        output_schema_id: None,
         version: 1,
     }
 }

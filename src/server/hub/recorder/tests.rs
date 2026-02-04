@@ -97,8 +97,7 @@ async fn record_agent_execution_without_repo_fails() {
     let result = recorder
         .record_agent_execution(
             Uuid::new_v4(),
-            Uuid::new_v4(),
-            None,
+            Some(Uuid::new_v4()),
             false,
             None,
             "system prompt",
