@@ -126,6 +126,7 @@ function DocumentSelector({
               tabIndex={-1}
               disableRipple
               onChange={() => handleToggle(doc.id)}
+              onClick={(e) => e.stopPropagation()}
             />
           </ListItemIcon>
           <ListItemText

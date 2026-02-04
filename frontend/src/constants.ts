@@ -46,7 +46,7 @@ export const ROUTES = {
   CHAT: "/chat",
   CHAT_SESSION: "/chat/:sessionId",
   AGENTS: "/agents",
-  AGENT_WORKSHOP: "/agents/workshop",
+  AGENT_WORKSHOP: "/agents/workshop/:sessionId?",
   AGENT_DETAIL: "/agents/:id",
   PIPELINES: "/pipelines",
   PIPELINE_DETAIL: "/pipelines/:id",

@@ -59,8 +59,7 @@ function ChatProvider({ sessionId, children }: ChatProviderProps) {
   const load = useCallback(async () => {
     dispatch({ type: ACTION.SET_LOADING, loading: true })
     try {
-      const data = await api.sessions.getHistory(sessionId)
-      const messages = data.messages
+      const messages = await api.sessions.getHistory(sessionId)
       if (mountedRef.current) dispatch({ type: ACTION.SET_ALL, messages })
     } catch (e) {
       if (mountedRef.current) dispatch({ type: ACTION.SET_ERROR, error: e instanceof Error ? e.message : 'Failed to load chat history' })
