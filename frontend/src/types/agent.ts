@@ -15,6 +15,7 @@ type Agent = {
   model_max_tokens: number
   model_temperature: number
   status: string
+  output_schema_id: string | null
   version: number
 }
 
@@ -40,6 +41,7 @@ type CreateAgentRequest = {
   model_id?: string
   model_max_tokens?: number
   model_temperature?: number
+  output_schema_id?: string
 }
 
 type UpdateAgentRequest = Partial<CreateAgentRequest>

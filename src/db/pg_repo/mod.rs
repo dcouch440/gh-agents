@@ -273,7 +273,7 @@ impl ServerRepo for PgRepo {
 
     async fn list_persisted_agents(&self, user_id: UserId) -> Result<Vec<AgentRow>> {
         let rows = sqlx::query_as::<_, PgAgentRow>(
-            "SELECT id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, version FROM agents WHERE user_id = $1",
+            "SELECT id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, output_schema_id, version FROM agents WHERE user_id = $1",
         )
         .bind(user_id.0)
         .fetch_all(&self.pool)
@@ -284,7 +284,7 @@ impl ServerRepo for PgRepo {
 
     async fn get_persisted_agent(&self, agent_id: Uuid) -> Result<Option<AgentRow>> {
         let row = sqlx::query_as::<_, PgAgentRow>(
-            "SELECT id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, version FROM agents WHERE id = $1",
+            "SELECT id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, output_schema_id, version FROM agents WHERE id = $1",
         )
         .bind(agent_id)
         .fetch_optional(&self.pool)
@@ -296,8 +296,8 @@ impl ServerRepo for PgRepo {
     async fn upsert_agent(&self, user_id: UserId, agent: AgentRow) -> Result<()> {
         sqlx::query(
             r#"
-            INSERT INTO agents (id, user_id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            INSERT INTO agents (id, user_id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, output_schema_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
                 system_prompt = EXCLUDED.system_prompt,
@@ -308,6 +308,7 @@ impl ServerRepo for PgRepo {
                 model_temperature = EXCLUDED.model_temperature,
                 status = EXCLUDED.status,
                 router_mode = EXCLUDED.router_mode,
+                output_schema_id = EXCLUDED.output_schema_id,
                 version = agents.version + 1
         "#,
         )
@@ -322,6 +323,7 @@ impl ServerRepo for PgRepo {
         .bind(agent.model_temperature)
         .bind(&agent.status)
         .bind(agent.router_mode)
+        .bind(agent.output_schema_id)
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -747,6 +749,7 @@ struct PgAgentRow {
     model_temperature: f32,
     status: Option<String>,
     router_mode: Option<bool>,
+    output_schema_id: Option<Uuid>,
     version: i32,
 }
 
@@ -763,6 +766,7 @@ fn agent_row_from_pg(r: PgAgentRow) -> AgentRow {
         model_temperature: r.model_temperature,
         status: r.status,
         router_mode: r.router_mode,
+        output_schema_id: r.output_schema_id,
         version: r.version,
     }
 }
@@ -2082,7 +2086,11 @@ impl WorkflowCollectionRepo for PgRepo {
     }
 
     async fn remove_collection_workflow(&self, collection_id: Uuid, workflow_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM collection_workflows WHERE collection_id = $1 AND workflow_id = $2").bind(collection_id).bind(workflow_id).execute(&self.pool).await?;
+        sqlx::query("DELETE FROM collection_workflows WHERE collection_id = $1 AND workflow_id = $2")
+            .bind(collection_id)
+            .bind(workflow_id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
@@ -2109,7 +2117,10 @@ impl WorkflowCollectionRepo for PgRepo {
         let mut tx = self.pool.begin().await?;
 
         // Delete existing edges
-        sqlx::query("DELETE FROM collection_workflow_edges WHERE collection_id = $1").bind(collection_id).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM collection_workflow_edges WHERE collection_id = $1")
+            .bind(collection_id)
+            .execute(&mut *tx)
+            .await?;
 
         // Insert new edges
         for edge in edges {
@@ -2169,7 +2180,10 @@ impl WorkflowCollectionRepo for PgRepo {
     }
 
     async fn get_collection_run(&self, id: Uuid) -> Result<Option<CollectionRunRow>> {
-        let row = sqlx::query_as::<_, CollectionRunRow>("SELECT * FROM collection_runs WHERE id = $1").bind(id).fetch_optional(&self.pool).await?;
+        let row = sqlx::query_as::<_, CollectionRunRow>("SELECT * FROM collection_runs WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
         Ok(row)
     }
 
@@ -2215,7 +2229,10 @@ impl WorkflowCollectionRepo for PgRepo {
     }
 
     async fn get_workflow_execution(&self, id: Uuid) -> Result<Option<WorkflowExecutionRow>> {
-        let row = sqlx::query_as::<_, WorkflowExecutionRow>("SELECT * FROM workflow_executions WHERE id = $1").bind(id).fetch_optional(&self.pool).await?;
+        let row = sqlx::query_as::<_, WorkflowExecutionRow>("SELECT * FROM workflow_executions WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
         Ok(row)
     }
 
@@ -2322,7 +2339,11 @@ impl WorkflowStepAgentRepo for PgRepo {
     }
 
     async fn remove_step_agent(&self, step_id: Uuid, agent_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM workflow_step_agents WHERE step_id = $1 AND agent_id = $2").bind(step_id).bind(agent_id).execute(&self.pool).await?;
+        sqlx::query("DELETE FROM workflow_step_agents WHERE step_id = $1 AND agent_id = $2")
+            .bind(step_id)
+            .bind(agent_id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 

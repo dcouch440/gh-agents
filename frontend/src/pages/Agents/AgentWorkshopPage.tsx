@@ -20,6 +20,7 @@ import {ChatPanel} from "@/components/chat/ChatPanel";
 import {DocumentSelector} from "@/components/DocumentSelector";
 import {useSplitPane} from "@/hooks/useSplitPane";
 import {useSendSessionMessage} from "@/hooks/useChatMutations";
+import {useOutputSchemaContext} from "@/hooks/useOutputSchemaContext";
 import {api} from "@/api";
 import type {ChatMessageData} from "@/components/chat/ChatPanel";
 import type {SSEEvent} from "@/api";
@@ -34,6 +35,7 @@ type WorkshopState = {
   modelId: string;
   maxTokens: number;
   temperature: number;
+  outputSchemaId: string | null;
   selectedDocumentIds: string[];
   editorMode: EditorMode;
   messages: ChatMessageData[];
@@ -52,6 +54,7 @@ type WorkshopAction =
   | {type: "SET_MODEL_ID"; value: string}
   | {type: "SET_MAX_TOKENS"; value: number}
   | {type: "SET_TEMPERATURE"; value: number}
+  | {type: "SET_OUTPUT_SCHEMA"; schemaId: string | null}
   | {type: "SET_SELECTED_DOCUMENTS"; documentIds: string[]}
   | {type: "SET_EDITOR_MODE"; value: EditorMode}
   | {type: "ADD_MESSAGE"; message: ChatMessageData}
@@ -71,6 +74,7 @@ type WorkshopAction =
         modelId: string;
         maxTokens: number;
         temperature: number;
+        outputSchemaId: string | null;
         selectedDocumentIds: string[];
         messages: ChatMessageData[];
         sessionId: string;
@@ -84,6 +88,7 @@ const initialState: WorkshopState = {
   modelId: "sonnet",
   maxTokens: 4096,
   temperature: 0.7,
+  outputSchemaId: null,
   selectedDocumentIds: [],
   editorMode: "edit",
   messages: [],
@@ -111,6 +116,8 @@ const reducer = (
       return {...state, maxTokens: action.value, dirty: true};
     case "SET_TEMPERATURE":
       return {...state, temperature: action.value, dirty: true};
+    case "SET_OUTPUT_SCHEMA":
+      return {...state, outputSchemaId: action.schemaId, dirty: true};
     case "SET_SELECTED_DOCUMENTS":
       return {...state, selectedDocumentIds: action.documentIds, dirty: true};
     case "SET_EDITOR_MODE":
@@ -188,6 +195,7 @@ function AgentWorkshopPage() {
     max: 75,
   });
   const {send, streaming: sseStreaming} = useSendSessionMessage();
+  const {schemas} = useOutputSchemaContext();
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
   const contentRef = useRef("");
   const savedRef = useRef(false);
@@ -237,6 +245,7 @@ function AgentWorkshopPage() {
             modelId: getShorthandModelId(agent.model_id),
             maxTokens: agent.model_max_tokens,
             temperature: agent.model_temperature,
+            outputSchemaId: agent.output_schema_id,
             selectedDocumentIds: contextDocs.documents.map((d) => d.id),
             messages,
             sessionId: session.id,
@@ -323,6 +332,7 @@ function AgentWorkshopPage() {
         model_id: getFullModelId(state.modelId),
         model_max_tokens: state.maxTokens,
         model_temperature: state.temperature,
+        output_schema_id: state.outputSchemaId ?? undefined,
       });
     }, 500);
 
@@ -335,6 +345,7 @@ function AgentWorkshopPage() {
     state.modelId,
     state.maxTokens,
     state.temperature,
+    state.outputSchemaId,
   ]);
 
   // Warn on unsaved navigation
@@ -606,6 +617,33 @@ function AgentWorkshopPage() {
                   disabled={state.saving}
                   fullWidth
                 />
+                <FormControl size="small" fullWidth sx={{gridColumn: "1 / -1"}}>
+                  <InputLabel id="ws-schema-label">
+                    Output Schema (Optional)
+                  </InputLabel>
+                  <Select
+                    labelId="ws-schema-label"
+                    id="ws-schema"
+                    value={state.outputSchemaId ?? ""}
+                    label="Output Schema (Optional)"
+                    onChange={(e) =>
+                      dispatch({
+                        type: "SET_OUTPUT_SCHEMA",
+                        schemaId: e.target.value || null,
+                      })
+                    }
+                    disabled={state.saving}
+                  >
+                    <MenuItem value="">
+                      <em>None</em>
+                    </MenuItem>
+                    {schemas.map((schema) => (
+                      <MenuItem key={schema.id} value={schema.id}>
+                        {schema.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
                 <Box sx={{gridColumn: "1 / -1"}}>
                   <FormControl fullWidth>
                     <InputLabel
