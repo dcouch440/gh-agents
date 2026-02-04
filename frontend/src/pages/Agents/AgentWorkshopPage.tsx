@@ -1,5 +1,15 @@
 import {useReducer, useEffect, useRef, useCallback, useState} from "react";
 import {useNavigate} from "react-router-dom";
+import {
+  Box,
+  TextField,
+  Button,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Alert,
+} from "@mui/material";
 import {PageHeader} from "@/components/primitives";
 import {SplitPane} from "@/components/primitives/SplitPane";
 import {CodeEditor} from "@/components/primitives/CodeEditor";
@@ -326,29 +336,31 @@ function AgentWorkshopPage() {
     state.saving || state.sessionLoading || !state.sessionId || sseStreaming;
 
   return (
-    <div className="workshop">
+    <Box sx={{display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)'}}>
       <PageHeader title="Agent Workshop">
-        <input
-          className="form-input workshop__name-input"
-          type="text"
-          placeholder="Agent name..."
-          value={state.name}
-          onChange={(e) => dispatch({type: "SET_NAME", value: e.target.value})}
-          disabled={state.saving}
-        />
-        <button
-          type="button"
-          className="btn btn--primary"
-          onClick={handleSave}
-          disabled={state.saving || !state.name.trim()}
-        >
-          {state.saving ? "Saving..." : "Save"}
-        </button>
+        <Box sx={{display: 'flex', gap: 2, alignItems: 'center'}}>
+          <TextField
+            size="small"
+            placeholder="Agent name..."
+            value={state.name}
+            onChange={(e) => dispatch({type: "SET_NAME", value: e.target.value})}
+            disabled={state.saving}
+            sx={{minWidth: 200}}
+          />
+          <Button
+            variant="contained"
+            onClick={handleSave}
+            disabled={state.saving || !state.name.trim()}
+            size="small"
+          >
+            {state.saving ? "Saving..." : "Save"}
+          </Button>
+        </Box>
       </PageHeader>
 
-      {state.error ? <div className="error-message">{state.error}</div> : null}
+      {state.error ? <Alert severity="error" sx={{mb: 2}}>{state.error}</Alert> : null}
 
-      <div className="workshop__body">
+      <Box sx={{flex: 1, display: "flex", minHeight: 0}}>
         <SplitPane
           splitPercent={splitPercent}
           onMouseDown={handleMouseDown}
@@ -361,7 +373,7 @@ function AgentWorkshopPage() {
             />
           }
           right={
-            <div className="workshop__editor">
+            <Box sx={{display: "flex", flexDirection: "column", height: "100%"}}>
               <EditorToolbar>
                 <ToggleGroup
                   options={EDITOR_MODES}
@@ -371,7 +383,7 @@ function AgentWorkshopPage() {
                   }
                 />
               </EditorToolbar>
-              <div className="workshop__editor-content">
+              <Box sx={{flex: 1, overflow: "auto"}}>
                 {state.editorMode === "edit" ? (
                   <CodeEditor
                     value={state.systemPrompt}
@@ -386,89 +398,93 @@ function AgentWorkshopPage() {
                 ) : (
                   <MarkdownPreview content={state.systemPrompt} />
                 )}
-              </div>
-              <div className="workshop__config">
-                <div className="workshop__config-field">
-                  <label className="form-label" htmlFor="ws-model">
-                    Model
-                  </label>
-                  <select
+              </Box>
+              <Box
+                sx={{
+                  p: 2.5,
+                  borderTop: 1,
+                  borderColor: "divider",
+                  bgcolor: "background.paper",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, 1fr)",
+                  gap: 2,
+                  flexShrink: 0,
+                }}
+              >
+                <FormControl size="small" fullWidth>
+                  <InputLabel id="ws-model-label">Model</InputLabel>
+                  <Select
+                    labelId="ws-model-label"
                     id="ws-model"
-                    className="form-select"
                     value={state.modelId}
+                    label="Model"
                     onChange={(e) =>
                       dispatch({type: "SET_MODEL_ID", value: e.target.value})
                     }
                     disabled={state.saving}
                   >
-                    <option value="opus">Opus</option>
-                    <option value="sonnet">Sonnet</option>
-                    <option value="haiku">Haiku</option>
-                  </select>
-                </div>
-                <div className="workshop__config-field">
-                  <label className="form-label" htmlFor="ws-tokens">
-                    Max Tokens
-                  </label>
-                  <input
-                    id="ws-tokens"
-                    className="form-input"
-                    type="number"
-                    min={1}
-                    value={state.maxTokens}
-                    onChange={(e) =>
-                      dispatch({
-                        type: "SET_MAX_TOKENS",
-                        value: Number(e.target.value),
-                      })
-                    }
-                    disabled={state.saving}
-                  />
-                </div>
-                <div className="workshop__config-field">
-                  <label className="form-label" htmlFor="ws-temp">
-                    Temperature
-                  </label>
-                  <input
-                    id="ws-temp"
-                    className="form-input"
-                    type="number"
-                    min={0}
-                    max={2}
-                    step={0.1}
-                    value={state.temperature}
-                    onChange={(e) =>
-                      dispatch({
-                        type: "SET_TEMPERATURE",
-                        value: Number(e.target.value),
-                      })
-                    }
-                    disabled={state.saving}
-                  />
-                </div>
-                <div className="workshop__config-field workshop__config-field--full">
-                  <label className="form-label">
-                    Agent Context Documents
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowDocumentSelector(true)}
-                    disabled={state.saving}
-                    className="btn btn--secondary"
-                    style={{width: "100%", marginTop: "8px"}}
-                  >
-                    {state.selectedDocumentIds.length > 0
-                      ? `${state.selectedDocumentIds.length} document${
-                          state.selectedDocumentIds.length === 1 ? "" : "s"
-                        } selected`
-                      : "Select documents"}
-                  </button>
-                </div>
-              </div>
-            </div>
+                    <MenuItem value="opus">Opus</MenuItem>
+                    <MenuItem value="sonnet">Sonnet</MenuItem>
+                    <MenuItem value="haiku">Haiku</MenuItem>
+                  </Select>
+                </FormControl>
+                <TextField
+                  id="ws-tokens"
+                  label="Max Tokens"
+                  type="number"
+                  size="small"
+                  inputProps={{min: 1}}
+                  value={state.maxTokens}
+                  onChange={(e) =>
+                    dispatch({
+                      type: "SET_MAX_TOKENS",
+                      value: Number(e.target.value),
+                    })
+                  }
+                  disabled={state.saving}
+                  fullWidth
+                />
+                <TextField
+                  id="ws-temp"
+                  label="Temperature"
+                  type="number"
+                  size="small"
+                  inputProps={{min: 0, max: 2, step: 0.1}}
+                  value={state.temperature}
+                  onChange={(e) =>
+                    dispatch({
+                      type: "SET_TEMPERATURE",
+                      value: Number(e.target.value),
+                    })
+                  }
+                  disabled={state.saving}
+                  fullWidth
+                />
+                <Box sx={{gridColumn: "1 / -1"}}>
+                  <FormControl fullWidth>
+                    <InputLabel shrink sx={{position: "relative", transform: "none", mb: 1}}>
+                      Agent Context Documents
+                    </InputLabel>
+                    <Button
+                      variant="outlined"
+                      onClick={() => setShowDocumentSelector(true)}
+                      disabled={state.saving}
+                      fullWidth
+                      size="small"
+                    >
+                      {state.selectedDocumentIds.length > 0
+                        ? `${state.selectedDocumentIds.length} document${
+                            state.selectedDocumentIds.length === 1 ? "" : "s"
+                          } selected`
+                        : "Select documents"}
+                    </Button>
+                  </FormControl>
+                </Box>
+              </Box>
+            </Box>
           }
         />
-      </div>
+      </Box>
 
       <DocumentSelector
         selectedIds={state.selectedDocumentIds}
@@ -478,7 +494,7 @@ function AgentWorkshopPage() {
         open={showDocumentSelector}
         onClose={() => setShowDocumentSelector(false)}
       />
-    </div>
+    </Box>
   );
 }
 
