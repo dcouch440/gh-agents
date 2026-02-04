@@ -1,45 +1,77 @@
-import { useRef, useEffect } from 'react'
-import { ChatMessage } from './ChatMessage'
-import { ChatInput } from './ChatInput'
+import {useRef, useEffect} from "react";
+import {Box, Typography} from "@mui/material";
+import {ChatMessage} from "./ChatMessage";
+import {ChatInput} from "./ChatInput";
 
 export type ChatMessageData = {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-}
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+};
 
 export type ChatPanelProps = {
-  messages: ChatMessageData[]
-  onSend: (message: string) => void
-  streaming?: boolean
-  disabled?: boolean
-  className?: string
-}
+  messages: ChatMessageData[];
+  onSend: (message: string) => void;
+  streaming?: boolean;
+  disabled?: boolean;
+  className?: string;
+};
 
-export function ChatPanel({ messages, onSend, streaming, disabled, className }: ChatPanelProps) {
-  const messagesRef = useRef<HTMLDivElement>(null)
+export function ChatPanel({
+  messages,
+  onSend,
+  streaming,
+  disabled,
+}: ChatPanelProps) {
+  const messagesRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const el = messagesRef.current
-    if (!el) return
+    const el = messagesRef.current;
+    if (!el) return;
 
-    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 50
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 50;
     if (isNearBottom) {
-      el.scrollTop = el.scrollHeight
+      el.scrollTop = el.scrollHeight;
     }
-  }, [messages])
-
-  const panelClassName = ['chat-panel', className].filter(Boolean).join(' ')
+  }, [messages]);
 
   return (
-    <div className={panelClassName}>
-      <div className="chat-panel__messages" ref={messagesRef}>
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        bgcolor: "background.default",
+      }}
+    >
+      <Box
+        ref={messagesRef}
+        sx={{
+          flex: 1,
+          overflowY: "auto",
+          p: 2,
+          display: "flex",
+          flexDirection: "column",
+          gap: 1,
+        }}
+      >
         {messages.length === 0 ? (
-          <div className="chat-panel__empty">No messages yet</div>
+          <Box
+            sx={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Typography variant="body2" color="text.secondary">
+              No messages yet
+            </Typography>
+          </Box>
         ) : (
           messages.map((message, index) => {
             const isLastAssistant =
-              message.role === 'assistant' && index === messages.length - 1
+              message.role === "assistant" && index === messages.length - 1;
             return (
               <ChatMessage
                 key={message.id}
@@ -47,11 +79,11 @@ export function ChatPanel({ messages, onSend, streaming, disabled, className }: 
                 content={message.content}
                 streaming={isLastAssistant ? streaming : undefined}
               />
-            )
+            );
           })
         )}
-      </div>
+      </Box>
       <ChatInput onSend={onSend} disabled={disabled} />
-    </div>
-  )
+    </Box>
+  );
 }

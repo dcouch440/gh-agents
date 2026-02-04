@@ -348,6 +348,7 @@ function AgentWorkshopPage() {
         display: "flex",
         flexDirection: "column",
         height: "calc(100vh - 120px)",
+        pt: 2
       }}
     >
       <PageHeader title="Agent Workshop">
@@ -380,7 +381,12 @@ function AgentWorkshopPage() {
       ) : null}
 
       <Box
-        sx={{flex: 1, display: "flex", minHeight: 0, flexDirection: "column"}}
+        sx={{
+          flex: 1,
+          display: "flex",
+          minHeight: 0,
+          flexDirection: "column",
+        }}
       >
         <SplitPane
           splitPercent={splitPercent}
