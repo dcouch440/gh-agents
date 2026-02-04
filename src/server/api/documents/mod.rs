@@ -74,9 +74,18 @@ pub struct DocumentSearchQuery {
         (status = 200, description = "List of documents", body = Vec<DocumentListItem>)
     )
 )]
-pub async fn list_documents(State(state): State<AppState>, auth: auth_utils::AuthUser) -> Result<Json<Vec<DocumentListItem>>, StatusCode> {
-    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let docs = doc_repo.list_documents(auth.user_id.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn list_documents(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+) -> Result<Json<Vec<DocumentListItem>>, StatusCode> {
+    let doc_repo = state
+        .doc_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let docs = doc_repo
+        .list_documents(auth.user_id.0)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let items: Vec<DocumentListItem> = docs
         .into_iter()
@@ -105,9 +114,19 @@ pub async fn list_documents(State(state): State<AppState>, auth: auth_utils::Aut
         (status = 200, description = "Search results")
     )
 )]
-pub async fn search_documents(State(state): State<AppState>, auth: auth_utils::AuthUser, Query(query): Query<DocumentSearchQuery>) -> Result<Json<Vec<crate::db::DocumentSearchResult>>, StatusCode> {
-    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let results = doc_repo.search_documents(auth.user_id.0, &query.q).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn search_documents(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Query(query): Query<DocumentSearchQuery>,
+) -> Result<Json<Vec<crate::db::DocumentSearchResult>>, StatusCode> {
+    let doc_repo = state
+        .doc_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let results = doc_repo
+        .search_documents(auth.user_id.0, &query.q)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(results))
 }
@@ -124,9 +143,20 @@ pub async fn search_documents(State(state): State<AppState>, auth: auth_utils::A
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_document(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(doc_id): Path<Uuid>) -> Result<Json<DocumentResponse>, StatusCode> {
-    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let doc = doc_repo.get_document(doc_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn get_document(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(doc_id): Path<Uuid>,
+) -> Result<Json<DocumentResponse>, StatusCode> {
+    let doc_repo = state
+        .doc_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc = doc_repo
+        .get_document(doc_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     // Verify ownership
     if doc.user_id != auth.user_id.0 {
@@ -159,7 +189,11 @@ pub async fn get_document(State(state): State<AppState>, auth: auth_utils::AuthU
         (status = 400, description = "Invalid request")
     )
 )]
-pub async fn create_document(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(request): Json<CreateDocumentRequest>) -> Result<(StatusCode, Json<DocumentResponse>), StatusCode> {
+pub async fn create_document(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Json(request): Json<CreateDocumentRequest>,
+) -> Result<(StatusCode, Json<DocumentResponse>), StatusCode> {
     if request.title.trim().is_empty() || request.title.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -167,14 +201,19 @@ pub async fn create_document(State(state): State<AppState>, auth: auth_utils::Au
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc_repo = state
+        .doc_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let doc = doc_repo
         .create_document(
             auth.user_id.0,
             request.session_id,
             request.title,
             request.content,
-            request.doc_type.unwrap_or_else(|| "architecture".to_string()),
+            request
+                .doc_type
+                .unwrap_or_else(|| "architecture".to_string()),
             String::new(),
             request.tags.unwrap_or_default(),
         )
@@ -217,10 +256,17 @@ pub async fn update_document(
     Path(doc_id): Path<Uuid>,
     Json(request): Json<UpdateDocumentRequest>,
 ) -> Result<Json<DocumentResponse>, StatusCode> {
-    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc_repo = state
+        .doc_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Verify ownership
-    let existing = doc_repo.get_document(doc_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let existing = doc_repo
+        .get_document(doc_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     if existing.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
@@ -257,17 +303,31 @@ pub async fn update_document(
         (status = 404, description = "Not found")
     )
 )]
-pub async fn delete_document(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(doc_id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
-    let doc_repo = state.doc_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn delete_document(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(doc_id): Path<Uuid>,
+) -> Result<StatusCode, StatusCode> {
+    let doc_repo = state
+        .doc_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Verify ownership
-    let existing = doc_repo.get_document(doc_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let existing = doc_repo
+        .get_document(doc_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     if existing.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
 
-    doc_repo.delete_document(doc_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    doc_repo
+        .delete_document(doc_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::NO_CONTENT)
 }

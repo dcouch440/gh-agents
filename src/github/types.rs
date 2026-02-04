@@ -322,7 +322,10 @@ mod tests {
 
     #[test]
     fn issue_filters_builder() {
-        let filters = IssueFilters::new().state(IssueState::Open).labels(vec!["bug".to_string()]).per_page(50);
+        let filters = IssueFilters::new()
+            .state(IssueState::Open)
+            .labels(vec!["bug".to_string()])
+            .per_page(50);
 
         assert_eq!(filters.state, Some(IssueState::Open));
         assert_eq!(filters.labels, vec!["bug"]);

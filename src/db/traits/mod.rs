@@ -9,9 +9,13 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::db::{
-    AgentExecutionRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow, CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow, DocumentSearchResult,
-    ExecutionMessageRow, ExecutionVariableRow, OutputSchemaRow, PromptTemplateRow, ResultRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry, RouterRequestRow, SessionRow,
-    StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepRow,
+    AgentExecutionRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow,
+    CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
+    DocumentSearchResult, ExecutionMessageRow, ExecutionVariableRow, OutputSchemaRow,
+    PromptTemplateRow, ResultRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry,
+    RouterRequestRow, SessionRow, StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow,
+    WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
+    WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -25,31 +29,78 @@ use crate::types::{Task, User, UserId};
 #[async_trait]
 pub trait MergeQueueRepo: Send + Sync {
     /// Insert or update a queue entry (upsert).
-    async fn insert_queue_entry(&self, id: Uuid, owner: String, repo: String, pr_number: u32, position: u32, now: DateTime<Utc>) -> Result<(), MergeQueueError>;
+    async fn insert_queue_entry(
+        &self,
+        id: Uuid,
+        owner: String,
+        repo: String,
+        pr_number: u32,
+        position: u32,
+        now: DateTime<Utc>,
+    ) -> Result<(), MergeQueueError>;
 
     /// Get the next queue position for a repo.
     async fn get_next_position(&self, owner: String, repo: String) -> Result<u32, MergeQueueError>;
 
     /// Delete a queue entry. Returns true if a row was deleted.
-    async fn delete_queue_entry(&self, owner: String, repo: String, pr_number: u32) -> Result<bool, MergeQueueError>;
+    async fn delete_queue_entry(
+        &self,
+        owner: String,
+        repo: String,
+        pr_number: u32,
+    ) -> Result<bool, MergeQueueError>;
 
     /// Get all queue entries for a repo, ordered by position.
-    async fn get_queue_entries(&self, owner: String, repo: String) -> Result<Vec<PrQueueEntry>, MergeQueueError>;
+    async fn get_queue_entries(
+        &self,
+        owner: String,
+        repo: String,
+    ) -> Result<Vec<PrQueueEntry>, MergeQueueError>;
 
     /// Update the status (and optional error message) of a queue entry.
-    async fn update_entry_status(&self, owner: String, repo: String, pr_number: u32, status: String, error_message: Option<String>, now: DateTime<Utc>) -> Result<bool, MergeQueueError>;
+    async fn update_entry_status(
+        &self,
+        owner: String,
+        repo: String,
+        pr_number: u32,
+        status: String,
+        error_message: Option<String>,
+        now: DateTime<Utc>,
+    ) -> Result<bool, MergeQueueError>;
 
     /// Set conflict info on a queue entry.
-    async fn set_entry_conflict(&self, owner: String, repo: String, pr_number: u32, conflict_json: String, now: DateTime<Utc>) -> Result<bool, MergeQueueError>;
+    async fn set_entry_conflict(
+        &self,
+        owner: String,
+        repo: String,
+        pr_number: u32,
+        conflict_json: String,
+        now: DateTime<Utc>,
+    ) -> Result<bool, MergeQueueError>;
 
     /// Update the position of a queue entry by ID.
-    async fn update_entry_position(&self, id: Uuid, position: u32, now: DateTime<Utc>) -> Result<(), MergeQueueError>;
+    async fn update_entry_position(
+        &self,
+        id: Uuid,
+        position: u32,
+        now: DateTime<Utc>,
+    ) -> Result<(), MergeQueueError>;
 
     /// Reset in_progress entries back to pending.
-    async fn reset_interrupted(&self, owner: String, repo: String, now: DateTime<Utc>) -> Result<u32, MergeQueueError>;
+    async fn reset_interrupted(
+        &self,
+        owner: String,
+        repo: String,
+        now: DateTime<Utc>,
+    ) -> Result<u32, MergeQueueError>;
 
     /// Delete merged/skipped entries older than cutoff.
-    async fn cleanup_old(&self, owner: String, repo: String, cutoff: DateTime<Utc>) -> Result<u32, MergeQueueError>;
+    async fn cleanup_old(
+        &self,
+        owner: String,
+        repo: String,
+        cutoff: DateTime<Utc>,
+    ) -> Result<u32, MergeQueueError>;
 }
 
 // ============================================================================
@@ -64,7 +115,12 @@ pub trait ServerRepo: Send + Sync {
     async fn health_check(&self) -> bool;
 
     /// List tasks with optional status filter and limit.
-    async fn list_tasks(&self, user_id: UserId, status: Option<String>, limit: Option<u32>) -> Result<Vec<Task>>;
+    async fn list_tasks(
+        &self,
+        user_id: UserId,
+        status: Option<String>,
+        limit: Option<u32>,
+    ) -> Result<Vec<Task>>;
 
     /// Get a single task by UUID.
     async fn get_task_by_uuid(&self, user_id: UserId, id: Uuid) -> Result<Option<Task>>;
@@ -73,10 +129,21 @@ pub trait ServerRepo: Send + Sync {
     async fn insert_task(&self, user_id: UserId, task: Task) -> Result<()>;
 
     /// Insert a chat message.
-    async fn insert_chat_message(&self, user_id: UserId, id: Uuid, role: String, content: String) -> Result<()>;
+    async fn insert_chat_message(
+        &self,
+        user_id: UserId,
+        id: Uuid,
+        role: String,
+        content: String,
+    ) -> Result<()>;
 
     /// Get chat history with pagination.
-    async fn get_chat_history(&self, user_id: UserId, limit: u32, offset: u32) -> Result<Vec<ChatMessageRow>>;
+    async fn get_chat_history(
+        &self,
+        user_id: UserId,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<ChatMessageRow>>;
 
     /// Clear all chat history.
     async fn clear_chat_history(&self, user_id: UserId) -> Result<()>;
@@ -138,7 +205,14 @@ pub trait ServerRepo: Send + Sync {
     // --- Session management ---
 
     /// Create a new chat session.
-    async fn create_session(&self, user_id: UserId, session_id: Uuid, mode_id: &str, title: &str, agent_id: Option<Uuid>) -> Result<()>;
+    async fn create_session(
+        &self,
+        user_id: UserId,
+        session_id: Uuid,
+        mode_id: &str,
+        title: &str,
+        agent_id: Option<Uuid>,
+    ) -> Result<()>;
 
     /// List sessions for a user.
     async fn list_sessions(&self, user_id: UserId) -> Result<Vec<SessionRow>>;
@@ -150,10 +224,21 @@ pub trait ServerRepo: Send + Sync {
     async fn delete_session(&self, session_id: Uuid) -> Result<()>;
 
     /// Insert a chat message scoped to a session.
-    async fn insert_session_message(&self, user_id: UserId, session_id: Uuid, id: Uuid, role: String, content: String) -> Result<()>;
+    async fn insert_session_message(
+        &self,
+        user_id: UserId,
+        session_id: Uuid,
+        id: Uuid,
+        role: String,
+        content: String,
+    ) -> Result<()>;
 
     /// Get chat history for a session.
-    async fn get_session_history(&self, session_id: Uuid, limit: u32) -> Result<Vec<ChatMessageRow>>;
+    async fn get_session_history(
+        &self,
+        session_id: Uuid,
+        limit: u32,
+    ) -> Result<Vec<ChatMessageRow>>;
 
     /// Update the title for a session.
     async fn update_session_title(&self, session_id: Uuid, title: &str) -> Result<()>;
@@ -193,9 +278,21 @@ pub trait UserRepo: Send + Sync {
     /// Get a user by GitHub ID.
     async fn get_user_by_github_id(&self, github_id: i64) -> Result<Option<User>>;
     /// Link GitHub account to existing user.
-    async fn link_github(&self, user_id: UserId, github_id: i64, github_login: &str, token_encrypted: &str) -> Result<()>;
+    async fn link_github(
+        &self,
+        user_id: UserId,
+        github_id: i64,
+        github_login: &str,
+        token_encrypted: &str,
+    ) -> Result<()>;
     /// Create a new user from GitHub OAuth.
-    async fn create_github_user(&self, email: &str, github_id: i64, github_login: &str, token_encrypted: &str) -> Result<User>;
+    async fn create_github_user(
+        &self,
+        email: &str,
+        github_id: i64,
+        github_login: &str,
+        token_encrypted: &str,
+    ) -> Result<User>;
 }
 
 // ============================================================================
@@ -207,10 +304,25 @@ pub trait UserRepo: Send + Sync {
 #[async_trait]
 pub trait DocumentRepo: Send + Sync {
     /// Create a new document.
-    async fn create_document(&self, user_id: Uuid, session_id: Option<Uuid>, title: String, content: String, doc_type: String, ref_tag: String, tags: Vec<String>) -> Result<DocumentRow>;
+    async fn create_document(
+        &self,
+        user_id: Uuid,
+        session_id: Option<Uuid>,
+        title: String,
+        content: String,
+        doc_type: String,
+        ref_tag: String,
+        tags: Vec<String>,
+    ) -> Result<DocumentRow>;
 
     /// Update a document's content, title, and tags.
-    async fn update_document(&self, doc_id: Uuid, content: Option<String>, title: Option<String>, tags: Option<Vec<String>>) -> Result<DocumentRow>;
+    async fn update_document(
+        &self,
+        doc_id: Uuid,
+        content: Option<String>,
+        title: Option<String>,
+        tags: Option<Vec<String>>,
+    ) -> Result<DocumentRow>;
 
     /// Update a document's summary.
     async fn update_document_summary(&self, doc_id: Uuid, summary: String) -> Result<()>;
@@ -228,7 +340,11 @@ pub trait DocumentRepo: Send + Sync {
     async fn list_session_documents(&self, session_id: Uuid) -> Result<Vec<DocumentRow>>;
 
     /// Full-text search documents for a user.
-    async fn search_documents(&self, user_id: Uuid, query: &str) -> Result<Vec<DocumentSearchResult>>;
+    async fn search_documents(
+        &self,
+        user_id: Uuid,
+        query: &str,
+    ) -> Result<Vec<DocumentSearchResult>>;
 
     /// Delete a document by ID.
     async fn delete_document(&self, doc_id: Uuid) -> Result<()>;
@@ -243,7 +359,12 @@ pub trait DocumentRepo: Send + Sync {
 #[async_trait]
 pub trait OutputSchemaRepo: Send + Sync {
     /// Create a new output schema.
-    async fn create_output_schema(&self, user_id: Uuid, name: String, schema: serde_json::Value) -> Result<OutputSchemaRow>;
+    async fn create_output_schema(
+        &self,
+        user_id: Uuid,
+        name: String,
+        schema: serde_json::Value,
+    ) -> Result<OutputSchemaRow>;
 
     /// Get an output schema by ID.
     async fn get_output_schema(&self, id: Uuid) -> Result<Option<OutputSchemaRow>>;
@@ -252,7 +373,12 @@ pub trait OutputSchemaRepo: Send + Sync {
     async fn list_output_schemas(&self, user_id: Uuid) -> Result<Vec<OutputSchemaRow>>;
 
     /// Update an output schema's name and/or schema.
-    async fn update_output_schema(&self, id: Uuid, name: Option<String>, schema: Option<serde_json::Value>) -> Result<OutputSchemaRow>;
+    async fn update_output_schema(
+        &self,
+        id: Uuid,
+        name: Option<String>,
+        schema: Option<serde_json::Value>,
+    ) -> Result<OutputSchemaRow>;
 
     /// Delete an output schema by ID.
     async fn delete_output_schema(&self, id: Uuid) -> Result<()>;
@@ -267,7 +393,12 @@ pub trait OutputSchemaRepo: Send + Sync {
 #[async_trait]
 pub trait PromptTemplateRepo: Send + Sync {
     /// Create a new prompt template.
-    async fn create_prompt_template(&self, user_id: Uuid, name: String, content: String) -> Result<PromptTemplateRow>;
+    async fn create_prompt_template(
+        &self,
+        user_id: Uuid,
+        name: String,
+        content: String,
+    ) -> Result<PromptTemplateRow>;
 
     /// Get a prompt template by ID.
     async fn get_prompt_template(&self, id: Uuid) -> Result<Option<PromptTemplateRow>>;
@@ -276,7 +407,12 @@ pub trait PromptTemplateRepo: Send + Sync {
     async fn list_prompt_templates(&self, user_id: Uuid) -> Result<Vec<PromptTemplateRow>>;
 
     /// Update a prompt template's name and/or content.
-    async fn update_prompt_template(&self, id: Uuid, name: Option<String>, content: Option<String>) -> Result<PromptTemplateRow>;
+    async fn update_prompt_template(
+        &self,
+        id: Uuid,
+        name: Option<String>,
+        content: Option<String>,
+    ) -> Result<PromptTemplateRow>;
 
     /// Delete a prompt template by ID.
     async fn delete_prompt_template(&self, id: Uuid) -> Result<()>;
@@ -291,10 +427,20 @@ pub trait PromptTemplateRepo: Send + Sync {
 #[async_trait]
 pub trait WorkflowRepo: Send + Sync {
     // --- Workflows ---
-    async fn create_workflow(&self, user_id: Uuid, name: String, description: String) -> Result<WorkflowRow>;
+    async fn create_workflow(
+        &self,
+        user_id: Uuid,
+        name: String,
+        description: String,
+    ) -> Result<WorkflowRow>;
     async fn get_workflow(&self, id: Uuid) -> Result<Option<WorkflowRow>>;
     async fn list_workflows(&self, user_id: Uuid) -> Result<Vec<WorkflowRow>>;
-    async fn update_workflow(&self, id: Uuid, name: Option<String>, description: Option<String>) -> Result<WorkflowRow>;
+    async fn update_workflow(
+        &self,
+        id: Uuid,
+        name: Option<String>,
+        description: Option<String>,
+    ) -> Result<WorkflowRow>;
     async fn delete_workflow(&self, id: Uuid) -> Result<()>;
 
     // --- Steps ---
@@ -338,11 +484,28 @@ pub trait AgentExecutionRepo: Send + Sync {
         speaker_order: Option<i32>,
     ) -> Result<AgentExecutionRow>;
     async fn get_agent_execution(&self, id: Uuid) -> Result<Option<AgentExecutionRow>>;
-    async fn update_agent_execution_status(&self, id: Uuid, status: &str, output: Option<String>, structured_output: Option<serde_json::Value>) -> Result<AgentExecutionRow>;
+    async fn update_agent_execution_status(
+        &self,
+        id: Uuid,
+        status: &str,
+        output: Option<String>,
+        structured_output: Option<serde_json::Value>,
+    ) -> Result<AgentExecutionRow>;
 
     // --- Execution Messages ---
-    async fn create_execution_message(&self, agent_execution_id: Uuid, role: &str, content: &str, tool_call_id: Option<String>, input_tokens: i64, output_tokens: i64) -> Result<ExecutionMessageRow>;
-    async fn list_execution_messages(&self, agent_execution_id: Uuid) -> Result<Vec<ExecutionMessageRow>>;
+    async fn create_execution_message(
+        &self,
+        agent_execution_id: Uuid,
+        role: &str,
+        content: &str,
+        tool_call_id: Option<String>,
+        input_tokens: i64,
+        output_tokens: i64,
+    ) -> Result<ExecutionMessageRow>;
+    async fn list_execution_messages(
+        &self,
+        agent_execution_id: Uuid,
+    ) -> Result<Vec<ExecutionMessageRow>>;
 }
 
 // ============================================================================
@@ -363,10 +526,22 @@ pub struct ModelSpendRow {
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait TokenLedgerRepo: Send + Sync {
-    async fn insert_ledger_entry(&self, user_id: Uuid, agent_execution_id: Option<Uuid>, model_id: &str, input_tokens: i64, output_tokens: i64, cost_usd: f32) -> Result<TokenLedgerRow>;
+    async fn insert_ledger_entry(
+        &self,
+        user_id: Uuid,
+        agent_execution_id: Option<Uuid>,
+        model_id: &str,
+        input_tokens: i64,
+        output_tokens: i64,
+        cost_usd: f32,
+    ) -> Result<TokenLedgerRow>;
     async fn get_user_spend(&self, user_id: Uuid, since: Option<DateTime<Utc>>) -> Result<f64>;
     async fn get_run_spend(&self, run_id: Uuid) -> Result<f64>;
-    async fn get_model_breakdown(&self, user_id: Uuid, since: Option<DateTime<Utc>>) -> Result<Vec<ModelSpendRow>>;
+    async fn get_model_breakdown(
+        &self,
+        user_id: Uuid,
+        since: Option<DateTime<Utc>>,
+    ) -> Result<Vec<ModelSpendRow>>;
 }
 
 // ============================================================================
@@ -377,10 +552,21 @@ pub trait TokenLedgerRepo: Send + Sync {
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait ResultRepo: Send + Sync {
-    async fn save_result(&self, user_id: Uuid, agent_execution_id: Uuid, output_schema_id: Option<Uuid>, name: &str, data: serde_json::Value) -> Result<ResultRow>;
+    async fn save_result(
+        &self,
+        user_id: Uuid,
+        agent_execution_id: Uuid,
+        output_schema_id: Option<Uuid>,
+        name: &str,
+        data: serde_json::Value,
+    ) -> Result<ResultRow>;
     async fn get_result(&self, id: Uuid) -> Result<Option<ResultRow>>;
     async fn list_results(&self, user_id: Uuid) -> Result<Vec<ResultRow>>;
-    async fn list_results_by_schema(&self, user_id: Uuid, output_schema_id: Uuid) -> Result<Vec<ResultRow>>;
+    async fn list_results_by_schema(
+        &self,
+        user_id: Uuid,
+        output_schema_id: Uuid,
+    ) -> Result<Vec<ResultRow>>;
     async fn delete_result(&self, id: Uuid) -> Result<()>;
 }
 
@@ -397,7 +583,14 @@ pub trait ToolRouterRepo: Send + Sync {
     /// Get a tool router by ID.
     async fn get_tool_router(&self, id: Uuid) -> Result<Option<ToolRouterRow>>;
     /// Create a new tool router.
-    async fn create_tool_router(&self, user_id: Uuid, name: &str, description: Option<String>, system_prompt: &str, model_id: &str) -> Result<ToolRouterRow>;
+    async fn create_tool_router(
+        &self,
+        user_id: Uuid,
+        name: &str,
+        description: Option<String>,
+        system_prompt: &str,
+        model_id: &str,
+    ) -> Result<ToolRouterRow>;
     /// Update a tool router.
     async fn update_tool_router(
         &self,
@@ -425,9 +618,21 @@ pub trait ToolRouterRepo: Send + Sync {
 #[async_trait]
 pub trait ContextStoreRepo: Send + Sync {
     /// Add a context entry to a session.
-    async fn add_context(&self, session_id: Uuid, source: &str, priority: f32, content: &str, metadata: Option<serde_json::Value>, expires_at: Option<DateTime<Utc>>) -> Result<ContextStoreRow>;
+    async fn add_context(
+        &self,
+        session_id: Uuid,
+        source: &str,
+        priority: f32,
+        content: &str,
+        metadata: Option<serde_json::Value>,
+        expires_at: Option<DateTime<Utc>>,
+    ) -> Result<ContextStoreRow>;
     /// Get active context for a session, ordered by priority descending.
-    async fn get_active_context(&self, session_id: Uuid, limit: u32) -> Result<Vec<ContextStoreRow>>;
+    async fn get_active_context(
+        &self,
+        session_id: Uuid,
+        limit: u32,
+    ) -> Result<Vec<ContextStoreRow>>;
     /// Update the status of a context entry.
     async fn update_context_status(&self, id: Uuid, status: &str) -> Result<()>;
     /// Expire stale context entries (past expires_at). Returns count expired.
@@ -443,7 +648,14 @@ pub trait ContextStoreRepo: Send + Sync {
 #[async_trait]
 pub trait RouterRequestRepo: Send + Sync {
     /// Create a new router request log entry.
-    async fn create_router_request(&self, session_id: Uuid, agent_execution_id: Option<Uuid>, intent: &str, priority: &str, callback_hint: Option<String>) -> Result<RouterRequestRow>;
+    async fn create_router_request(
+        &self,
+        session_id: Uuid,
+        agent_execution_id: Option<Uuid>,
+        intent: &str,
+        priority: &str,
+        callback_hint: Option<String>,
+    ) -> Result<RouterRequestRow>;
     /// Update a router request with routing decision and result.
     async fn update_router_request(
         &self,
@@ -518,7 +730,14 @@ pub trait RoomRepo: Send + Sync {
     async fn list_room_members(&self, room_id: Uuid) -> Result<Vec<RoomMemberRow>>;
 
     /// Add a single member to a room.
-    async fn add_room_member(&self, room_id: Uuid, agent_id: Uuid, display_name: Option<String>, role_description: String, display_order: i32) -> Result<()>;
+    async fn add_room_member(
+        &self,
+        room_id: Uuid,
+        agent_id: Uuid,
+        display_name: Option<String>,
+        role_description: String,
+        display_order: i32,
+    ) -> Result<()>;
 
     /// Remove a single member from a room.
     async fn remove_room_member(&self, room_id: Uuid, agent_id: Uuid) -> Result<()>;
@@ -529,7 +748,11 @@ pub trait RoomRepo: Send + Sync {
     // --- Room sessions (runtime) ---
 
     /// Start a new room session.
-    async fn create_room_session(&self, room_id: Uuid, run_id: Option<Uuid>) -> Result<RoomSessionRow>;
+    async fn create_room_session(
+        &self,
+        room_id: Uuid,
+        run_id: Option<Uuid>,
+    ) -> Result<RoomSessionRow>;
 
     /// Get a room session by ID.
     async fn get_room_session(&self, id: Uuid) -> Result<Option<RoomSessionRow>>;
@@ -558,35 +781,106 @@ pub trait RoomRepo: Send + Sync {
 #[async_trait]
 pub trait WorkflowCollectionRepo: Send + Sync {
     // --- Collections ---
-    async fn create_collection(&self, user_id: Uuid, name: String, description: Option<String>, execution_mode: String) -> Result<WorkflowCollectionRow>;
+    async fn create_collection(
+        &self,
+        user_id: Uuid,
+        name: String,
+        description: Option<String>,
+        execution_mode: String,
+    ) -> Result<WorkflowCollectionRow>;
     async fn get_collection(&self, id: Uuid) -> Result<Option<WorkflowCollectionRow>>;
     async fn list_collections(&self, user_id: Uuid) -> Result<Vec<WorkflowCollectionRow>>;
-    async fn update_collection(&self, id: Uuid, name: Option<String>, description: Option<String>, execution_mode: Option<String>) -> Result<WorkflowCollectionRow>;
+    async fn update_collection(
+        &self,
+        id: Uuid,
+        name: Option<String>,
+        description: Option<String>,
+        execution_mode: Option<String>,
+    ) -> Result<WorkflowCollectionRow>;
     async fn delete_collection(&self, id: Uuid) -> Result<()>;
 
     // --- Collection Workflows (Membership) ---
-    async fn add_collection_workflow(&self, collection_id: Uuid, workflow_id: Uuid, display_order: i32, execution_mode: Option<String>) -> Result<CollectionWorkflowRow>;
-    async fn list_collection_workflows(&self, collection_id: Uuid) -> Result<Vec<CollectionWorkflowRow>>;
-    async fn remove_collection_workflow(&self, collection_id: Uuid, workflow_id: Uuid) -> Result<()>;
-    async fn update_collection_workflow(&self, collection_id: Uuid, workflow_id: Uuid, display_order: Option<i32>, execution_mode: Option<String>) -> Result<CollectionWorkflowRow>;
+    async fn add_collection_workflow(
+        &self,
+        collection_id: Uuid,
+        workflow_id: Uuid,
+        display_order: i32,
+        execution_mode: Option<String>,
+    ) -> Result<CollectionWorkflowRow>;
+    async fn list_collection_workflows(
+        &self,
+        collection_id: Uuid,
+    ) -> Result<Vec<CollectionWorkflowRow>>;
+    async fn remove_collection_workflow(
+        &self,
+        collection_id: Uuid,
+        workflow_id: Uuid,
+    ) -> Result<()>;
+    async fn update_collection_workflow(
+        &self,
+        collection_id: Uuid,
+        workflow_id: Uuid,
+        display_order: Option<i32>,
+        execution_mode: Option<String>,
+    ) -> Result<CollectionWorkflowRow>;
 
     // --- Collection Workflow Edges (DAG edges between workflows) ---
-    async fn set_collection_edges(&self, collection_id: Uuid, edges: Vec<CollectionWorkflowEdgeRow>) -> Result<()>;
-    async fn list_collection_edges(&self, collection_id: Uuid) -> Result<Vec<CollectionWorkflowEdgeRow>>;
-    async fn add_collection_edge(&self, collection_id: Uuid, from_workflow_id: Uuid, to_workflow_id: Uuid) -> Result<()>;
-    async fn remove_collection_edge(&self, collection_id: Uuid, from_workflow_id: Uuid, to_workflow_id: Uuid) -> Result<()>;
+    async fn set_collection_edges(
+        &self,
+        collection_id: Uuid,
+        edges: Vec<CollectionWorkflowEdgeRow>,
+    ) -> Result<()>;
+    async fn list_collection_edges(
+        &self,
+        collection_id: Uuid,
+    ) -> Result<Vec<CollectionWorkflowEdgeRow>>;
+    async fn add_collection_edge(
+        &self,
+        collection_id: Uuid,
+        from_workflow_id: Uuid,
+        to_workflow_id: Uuid,
+    ) -> Result<()>;
+    async fn remove_collection_edge(
+        &self,
+        collection_id: Uuid,
+        from_workflow_id: Uuid,
+        to_workflow_id: Uuid,
+    ) -> Result<()>;
 
     // --- Collection Runs (Execution Tracking) ---
-    async fn create_collection_run(&self, collection_id: Uuid, user_id: Uuid) -> Result<CollectionRunRow>;
+    async fn create_collection_run(
+        &self,
+        collection_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<CollectionRunRow>;
     async fn get_collection_run(&self, id: Uuid) -> Result<Option<CollectionRunRow>>;
     async fn list_collection_runs(&self, collection_id: Uuid) -> Result<Vec<CollectionRunRow>>;
-    async fn update_collection_run_status(&self, id: Uuid, status: &str, error: Option<String>) -> Result<CollectionRunRow>;
+    async fn update_collection_run_status(
+        &self,
+        id: Uuid,
+        status: &str,
+        error: Option<String>,
+    ) -> Result<CollectionRunRow>;
 
     // --- Workflow Executions (Workflow-level execution within a collection run) ---
-    async fn create_workflow_execution(&self, collection_run_id: Uuid, workflow_id: Uuid, user_id: Uuid) -> Result<WorkflowExecutionRow>;
+    async fn create_workflow_execution(
+        &self,
+        collection_run_id: Uuid,
+        workflow_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<WorkflowExecutionRow>;
     async fn get_workflow_execution(&self, id: Uuid) -> Result<Option<WorkflowExecutionRow>>;
-    async fn list_workflow_executions(&self, collection_run_id: Uuid) -> Result<Vec<WorkflowExecutionRow>>;
-    async fn update_workflow_execution_status(&self, id: Uuid, status: &str, outputs: Option<serde_json::Value>, error: Option<String>) -> Result<WorkflowExecutionRow>;
+    async fn list_workflow_executions(
+        &self,
+        collection_run_id: Uuid,
+    ) -> Result<Vec<WorkflowExecutionRow>>;
+    async fn update_workflow_execution_status(
+        &self,
+        id: Uuid,
+        status: &str,
+        outputs: Option<serde_json::Value>,
+        error: Option<String>,
+    ) -> Result<WorkflowExecutionRow>;
 
     // --- Execution Variables (Variable capture) ---
     async fn create_execution_variable(
@@ -598,8 +892,15 @@ pub trait WorkflowCollectionRepo: Send + Sync {
         variable_path: &str,
         value: serde_json::Value,
     ) -> Result<ExecutionVariableRow>;
-    async fn get_execution_variables(&self, collection_run_id: Uuid) -> Result<Vec<ExecutionVariableRow>>;
-    async fn get_execution_variable_by_path(&self, collection_run_id: Uuid, variable_path: &str) -> Result<Option<ExecutionVariableRow>>;
+    async fn get_execution_variables(
+        &self,
+        collection_run_id: Uuid,
+    ) -> Result<Vec<ExecutionVariableRow>>;
+    async fn get_execution_variable_by_path(
+        &self,
+        collection_run_id: Uuid,
+        variable_path: &str,
+    ) -> Result<Option<ExecutionVariableRow>>;
 }
 
 // ============================================================================
@@ -611,7 +912,13 @@ pub trait WorkflowCollectionRepo: Send + Sync {
 #[async_trait]
 pub trait WorkflowStepAgentRepo: Send + Sync {
     /// Add an agent to a workflow step.
-    async fn add_step_agent(&self, step_id: Uuid, agent_id: Uuid, execution_strategy: String, agent_order: i32) -> Result<WorkflowStepAgentRow>;
+    async fn add_step_agent(
+        &self,
+        step_id: Uuid,
+        agent_id: Uuid,
+        execution_strategy: String,
+        agent_order: i32,
+    ) -> Result<WorkflowStepAgentRow>;
 
     /// List all agents for a workflow step.
     async fn list_step_agents(&self, step_id: Uuid) -> Result<Vec<WorkflowStepAgentRow>>;
@@ -620,8 +927,15 @@ pub trait WorkflowStepAgentRepo: Send + Sync {
     async fn remove_step_agent(&self, step_id: Uuid, agent_id: Uuid) -> Result<()>;
 
     /// Update agent configuration for a step.
-    async fn update_step_agent(&self, step_id: Uuid, agent_id: Uuid, execution_strategy: Option<String>, agent_order: Option<i32>) -> Result<WorkflowStepAgentRow>;
+    async fn update_step_agent(
+        &self,
+        step_id: Uuid,
+        agent_id: Uuid,
+        execution_strategy: Option<String>,
+        agent_order: Option<i32>,
+    ) -> Result<WorkflowStepAgentRow>;
 
     /// Replace all agents for a step (for bulk updates).
-    async fn set_step_agents(&self, step_id: Uuid, agents: Vec<WorkflowStepAgentRow>) -> Result<()>;
+    async fn set_step_agents(&self, step_id: Uuid, agents: Vec<WorkflowStepAgentRow>)
+        -> Result<()>;
 }

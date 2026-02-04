@@ -90,21 +90,40 @@ pub struct MeResponse {
         (status = 409, description = "Password already configured")
     )
 )]
-pub async fn auth_setup(State(state): State<AppState>, Json(request): Json<SetupRequest>) -> Result<Json<SetupResponse>, (StatusCode, String)> {
+pub async fn auth_setup(
+    State(state): State<AppState>,
+    Json(request): Json<SetupRequest>,
+) -> Result<Json<SetupResponse>, (StatusCode, String)> {
     // Check if already setup
-    if state.repo.has_password().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))? {
-        return Err((StatusCode::CONFLICT, "Password already configured".to_string()));
+    if state
+        .repo
+        .has_password()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    {
+        return Err((
+            StatusCode::CONFLICT,
+            "Password already configured".to_string(),
+        ));
     }
 
     // Validate password strength
     if request.password.len() < 8 {
-        return Err((StatusCode::BAD_REQUEST, "Password must be at least 8 characters".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Password must be at least 8 characters".to_string(),
+        ));
     }
 
     // Hash and store
-    let hash = auth::hash_password(&request.password).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let hash = auth::hash_password(&request.password)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    state.repo.set_password(hash).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    state
+        .repo
+        .set_password(hash)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(SetupResponse {
         message: "Password configured successfully".to_string(),
@@ -123,16 +142,25 @@ pub async fn auth_setup(State(state): State<AppState>, Json(request): Json<Setup
         (status = 409, description = "Email already registered")
     )
 )]
-pub async fn auth_register(State(state): State<AppState>, Json(request): Json<RegisterRequest>) -> Result<(StatusCode, Json<AuthTokenResponse>), (StatusCode, String)> {
+pub async fn auth_register(
+    State(state): State<AppState>,
+    Json(request): Json<RegisterRequest>,
+) -> Result<(StatusCode, Json<AuthTokenResponse>), (StatusCode, String)> {
     // Validate
     if request.email.trim().is_empty() || !request.email.contains('@') {
         return Err((StatusCode::BAD_REQUEST, "Invalid email".into()));
     }
     if request.password.len() < 8 {
-        return Err((StatusCode::BAD_REQUEST, "Password must be at least 8 characters".into()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Password must be at least 8 characters".into(),
+        ));
     }
 
-    let user_repo = state.user_repo.as_ref().ok_or((StatusCode::INTERNAL_SERVER_ERROR, "User service unavailable".into()))?;
+    let user_repo = state.user_repo.as_ref().ok_or((
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "User service unavailable".into(),
+    ))?;
 
     // Check if email already exists
     if user_repo
@@ -144,14 +172,19 @@ pub async fn auth_register(State(state): State<AppState>, Json(request): Json<Re
         return Err((StatusCode::CONFLICT, "Email already registered".into()));
     }
 
-    let hash = auth::hash_password(&request.password).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let hash = auth::hash_password(&request.password)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let user = user_repo.create_user(&request.email, &hash).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let user = user_repo
+        .create_user(&request.email, &hash)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // Seed built-in execution tools for the new user
     let _ = state.repo.seed_builtin_tools(user.id).await;
 
-    let token = auth::create_token(&state.jwt_secret, 24, user.id, &user.email).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let token = auth::create_token(&state.jwt_secret, 24, user.id, &user.email)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok((
         StatusCode::CREATED,
@@ -180,7 +213,10 @@ pub async fn auth_register(State(state): State<AppState>, Json(request): Json<Re
         (status = 401, description = "Invalid credentials")
     )
 )]
-pub async fn auth_login(State(state): State<AppState>, Json(request): Json<LoginRequest>) -> Result<Json<LoginResponse>, StatusCode> {
+pub async fn auth_login(
+    State(state): State<AppState>,
+    Json(request): Json<LoginRequest>,
+) -> Result<Json<LoginResponse>, StatusCode> {
     let user_repo = state.user_repo.as_ref().ok_or_else(|| {
         tracing::error!("user_repo is None");
         StatusCode::INTERNAL_SERVER_ERROR
@@ -195,7 +231,10 @@ pub async fn auth_login(State(state): State<AppState>, Json(request): Json<Login
         })?
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    let password_hash = user.password_hash.as_ref().ok_or(StatusCode::UNAUTHORIZED)?;
+    let password_hash = user
+        .password_hash
+        .as_ref()
+        .ok_or(StatusCode::UNAUTHORIZED)?;
     if !auth::verify_password(&request.password, password_hash) {
         return Err(StatusCode::UNAUTHORIZED);
     }
@@ -205,7 +244,10 @@ pub async fn auth_login(State(state): State<AppState>, Json(request): Json<Login
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    Ok(Json(LoginResponse { token, expires_in: 86400 }))
+    Ok(Json(LoginResponse {
+        token,
+        expires_in: 86400,
+    }))
 }
 
 /// GET /api/auth/me - Get current user info from token
@@ -220,8 +262,14 @@ pub async fn auth_login(State(state): State<AppState>, Json(request): Json<Login
         (status = 200, description = "Current user info", body = MeResponse)
     )
 )]
-pub async fn auth_me(State(state): State<AppState>, auth: auth::AuthUser) -> Result<Json<MeResponse>, StatusCode> {
-    let user_repo = state.user_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn auth_me(
+    State(state): State<AppState>,
+    auth: auth::AuthUser,
+) -> Result<Json<MeResponse>, StatusCode> {
+    let user_repo = state
+        .user_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let user = user_repo
         .get_user_by_id(auth.user_id)

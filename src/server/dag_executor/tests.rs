@@ -31,7 +31,10 @@ fn topological_sort_linear() {
     let s1 = Uuid::new_v4();
     let s2 = Uuid::new_v4();
     let steps = vec![make_step(s1, wf, 0), make_step(s2, wf, 1)];
-    let edges = vec![WorkflowStepEdgeRow { from_step_id: s1, to_step_id: s2 }];
+    let edges = vec![WorkflowStepEdgeRow {
+        from_step_id: s1,
+        to_step_id: s2,
+    }];
 
     let result = topological_sort(&steps, &edges).unwrap();
     assert_eq!(result, vec![s1, s2]);
@@ -43,7 +46,16 @@ fn topological_sort_detects_cycle() {
     let s1 = Uuid::new_v4();
     let s2 = Uuid::new_v4();
     let steps = vec![make_step(s1, wf, 0), make_step(s2, wf, 1)];
-    let edges = vec![WorkflowStepEdgeRow { from_step_id: s1, to_step_id: s2 }, WorkflowStepEdgeRow { from_step_id: s2, to_step_id: s1 }];
+    let edges = vec![
+        WorkflowStepEdgeRow {
+            from_step_id: s1,
+            to_step_id: s2,
+        },
+        WorkflowStepEdgeRow {
+            from_step_id: s2,
+            to_step_id: s1,
+        },
+    ];
 
     assert!(topological_sort(&steps, &edges).is_err());
 }
@@ -60,9 +72,16 @@ fn resolve_variables_simple() {
 #[test]
 fn resolve_variables_nested() {
     let mut outputs = HashMap::new();
-    outputs.insert("user".to_string(), serde_json::json!({"name": "Bob", "age": 30}));
+    outputs.insert(
+        "user".to_string(),
+        serde_json::json!({"name": "Bob", "age": 30}),
+    );
 
-    let result = resolve_variables("Name: {user.name}, Age: {user.age}", &outputs, &HashMap::new());
+    let result = resolve_variables(
+        "Name: {user.name}, Age: {user.age}",
+        &outputs,
+        &HashMap::new(),
+    );
     assert_eq!(result, "Name: Bob, Age: 30");
 }
 

@@ -60,7 +60,9 @@ impl PromptRegistry {
 
     /// Get a prompt or return an error.
     pub fn require(&self, key: &str) -> Result<&str, HubError> {
-        self.get(key).ok_or_else(|| HubError::PromptNotFound { key: key.to_string() })
+        self.get(key).ok_or_else(|| HubError::PromptNotFound {
+            key: key.to_string(),
+        })
     }
 
     /// Render a prompt with `{variable}` substitution.
@@ -101,19 +103,32 @@ impl PromptRegistry {
 }
 
 /// Recursively load `.md` files from a directory.
-fn load_recursive(base: &Path, current: &Path, prompts: &mut HashMap<String, String>) -> Result<(), HubError> {
-    let entries = std::fs::read_dir(current).map_err(|e| anyhow::anyhow!("failed to read directory {}: {}", current.display(), e))?;
+fn load_recursive(
+    base: &Path,
+    current: &Path,
+    prompts: &mut HashMap<String, String>,
+) -> Result<(), HubError> {
+    let entries = std::fs::read_dir(current)
+        .map_err(|e| anyhow::anyhow!("failed to read directory {}: {}", current.display(), e))?;
 
     for entry in entries {
-        let entry = entry.map_err(|e| anyhow::anyhow!("failed to read dir entry in {}: {}", current.display(), e))?;
+        let entry = entry.map_err(|e| {
+            anyhow::anyhow!("failed to read dir entry in {}: {}", current.display(), e)
+        })?;
         let path = entry.path();
 
         if path.is_dir() {
             load_recursive(base, &path, prompts)?;
         } else if path.extension().map(|e| e == "md").unwrap_or(false) {
-            let key = path.strip_prefix(base).unwrap_or(&path).with_extension("").to_string_lossy().replace('\\', "/"); // normalize Windows paths
+            let key = path
+                .strip_prefix(base)
+                .unwrap_or(&path)
+                .with_extension("")
+                .to_string_lossy()
+                .replace('\\', "/"); // normalize Windows paths
 
-            let content = std::fs::read_to_string(&path).map_err(|e| anyhow::anyhow!("failed to read prompt {}: {}", path.display(), e))?;
+            let content = std::fs::read_to_string(&path)
+                .map_err(|e| anyhow::anyhow!("failed to read prompt {}: {}", path.display(), e))?;
 
             tracing::debug!("loaded prompt: {}", key);
             prompts.insert(key, content);

@@ -61,19 +61,29 @@ pub struct WorkflowExecutionResult {
 // ============================================================================
 
 /// Returns step IDs in topological order. Errors if cycles are detected.
-pub fn topological_sort(steps: &[WorkflowStepRow], edges: &[WorkflowStepEdgeRow]) -> Result<Vec<Uuid>> {
+pub fn topological_sort(
+    steps: &[WorkflowStepRow],
+    edges: &[WorkflowStepEdgeRow],
+) -> Result<Vec<Uuid>> {
     let step_ids: HashSet<Uuid> = steps.iter().map(|s| s.id).collect();
     let mut in_degree: HashMap<Uuid, usize> = step_ids.iter().map(|id| (*id, 0)).collect();
     let mut adjacency: HashMap<Uuid, Vec<Uuid>> = step_ids.iter().map(|id| (*id, vec![])).collect();
 
     for edge in edges {
         if step_ids.contains(&edge.from_step_id) && step_ids.contains(&edge.to_step_id) {
-            adjacency.entry(edge.from_step_id).or_default().push(edge.to_step_id);
+            adjacency
+                .entry(edge.from_step_id)
+                .or_default()
+                .push(edge.to_step_id);
             *in_degree.entry(edge.to_step_id).or_default() += 1;
         }
     }
 
-    let mut queue: Vec<Uuid> = in_degree.iter().filter(|(_, &deg)| deg == 0).map(|(id, _)| *id).collect();
+    let mut queue: Vec<Uuid> = in_degree
+        .iter()
+        .filter(|(_, &deg)| deg == 0)
+        .map(|(id, _)| *id)
+        .collect();
     // Sort entry nodes by display_order for deterministic ordering
     let step_order: HashMap<Uuid, i32> = steps.iter().map(|s| (s.id, s.display_order)).collect();
     queue.sort_by_key(|id| step_order.get(id).copied().unwrap_or(0));
@@ -104,17 +114,29 @@ pub fn topological_sort(steps: &[WorkflowStepRow], edges: &[WorkflowStepEdgeRow]
 /// Returns step IDs that have no incoming edges (entry points).
 pub fn find_entry_steps(steps: &[WorkflowStepRow], edges: &[WorkflowStepEdgeRow]) -> Vec<Uuid> {
     let has_incoming: HashSet<Uuid> = edges.iter().map(|e| e.to_step_id).collect();
-    steps.iter().filter(|s| !has_incoming.contains(&s.id)).map(|s| s.id).collect()
+    steps
+        .iter()
+        .filter(|s| !has_incoming.contains(&s.id))
+        .map(|s| s.id)
+        .collect()
 }
 
 /// Returns step IDs that a given step depends on (parents).
 pub fn get_parent_steps(step_id: Uuid, edges: &[WorkflowStepEdgeRow]) -> Vec<Uuid> {
-    edges.iter().filter(|e| e.to_step_id == step_id).map(|e| e.from_step_id).collect()
+    edges
+        .iter()
+        .filter(|e| e.to_step_id == step_id)
+        .map(|e| e.from_step_id)
+        .collect()
 }
 
 /// Returns step IDs that depend on a given step (children).
 pub fn get_child_steps(step_id: Uuid, edges: &[WorkflowStepEdgeRow]) -> Vec<Uuid> {
-    edges.iter().filter(|e| e.from_step_id == step_id).map(|e| e.to_step_id).collect()
+    edges
+        .iter()
+        .filter(|e| e.from_step_id == step_id)
+        .map(|e| e.to_step_id)
+        .collect()
 }
 
 // ============================================================================
@@ -125,7 +147,11 @@ pub fn get_child_steps(step_id: Uuid, edges: &[WorkflowStepEdgeRow]) -> Vec<Uuid
 ///
 /// Supports dot-path access: `{features.content.0.name}`.
 /// Scope: completed step outputs (from this workflow) + prior stage outputs.
-pub fn resolve_variables(template: &str, outputs: &HashMap<String, JsonValue>, prior_outputs: &HashMap<String, JsonValue>) -> String {
+pub fn resolve_variables(
+    template: &str,
+    outputs: &HashMap<String, JsonValue>,
+    prior_outputs: &HashMap<String, JsonValue>,
+) -> String {
     let mut result = String::new();
     let mut chars = template.chars().peekable();
 
@@ -160,7 +186,11 @@ pub fn resolve_variables(template: &str, outputs: &HashMap<String, JsonValue>, p
 }
 
 /// Navigate a dot-path into the combined output map.
-fn resolve_path(path: &str, outputs: &HashMap<String, JsonValue>, prior_outputs: &HashMap<String, JsonValue>) -> String {
+fn resolve_path(
+    path: &str,
+    outputs: &HashMap<String, JsonValue>,
+    prior_outputs: &HashMap<String, JsonValue>,
+) -> String {
     let parts: Vec<&str> = path.split('.').collect();
     if parts.is_empty() {
         return format!("{{{}}}", path);
@@ -169,7 +199,9 @@ fn resolve_path(path: &str, outputs: &HashMap<String, JsonValue>, prior_outputs:
     let var_name = parts[0];
 
     // Look in workflow outputs first, then prior stage outputs
-    let root = outputs.get(var_name).or_else(|| prior_outputs.get(var_name));
+    let root = outputs
+        .get(var_name)
+        .or_else(|| prior_outputs.get(var_name));
 
     match root {
         Some(value) => {
@@ -192,14 +224,20 @@ fn resolve_path(path: &str, outputs: &HashMap<String, JsonValue>, prior_outputs:
 }
 
 /// For a for_each step, resolve the array to iterate over.
-pub fn resolve_for_each_array(for_each_ref: &str, outputs: &HashMap<String, JsonValue>, prior_outputs: &HashMap<String, JsonValue>) -> Option<Vec<JsonValue>> {
+pub fn resolve_for_each_array(
+    for_each_ref: &str,
+    outputs: &HashMap<String, JsonValue>,
+    prior_outputs: &HashMap<String, JsonValue>,
+) -> Option<Vec<JsonValue>> {
     let parts: Vec<&str> = for_each_ref.split('.').collect();
     if parts.is_empty() {
         return None;
     }
 
     let var_name = parts[0];
-    let root = outputs.get(var_name).or_else(|| prior_outputs.get(var_name))?;
+    let root = outputs
+        .get(var_name)
+        .or_else(|| prior_outputs.get(var_name))?;
 
     let mut current = root.clone();
     for &part in &parts[1..] {
@@ -216,7 +254,10 @@ pub fn resolve_for_each_array(for_each_ref: &str, outputs: &HashMap<String, Json
 /// Extract the for_each label from an element using the label field.
 pub fn extract_for_each_label(element: &JsonValue, label_field: Option<&str>) -> Option<String> {
     let field = label_field?;
-    element.get(field).and_then(|v| v.as_str()).map(|s| s.to_string())
+    element
+        .get(field)
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
 }
 
 // ============================================================================
@@ -269,7 +310,10 @@ pub async fn compose_prompt(
     if let Some(_d_repo) = doc_repo {
         if let Ok(agent_docs) = server_repo.get_agent_context(step.agent_id).await {
             for doc in &agent_docs {
-                full_prompt.push_str(&format!("\n\n---\n## {} (Agent Context)\n{}", doc.title, doc.content));
+                full_prompt.push_str(&format!(
+                    "\n\n---\n## {} (Agent Context)\n{}",
+                    doc.title, doc.content
+                ));
             }
         }
     }
@@ -280,7 +324,10 @@ pub async fn compose_prompt(
             if let Some(d_repo) = doc_repo {
                 for sd in &step_docs {
                     if let Ok(Some(doc)) = d_repo.get_document(sd.document_id).await {
-                        full_prompt.push_str(&format!("\n\n---\n## {} (Step Context)\n{}", doc.title, doc.content));
+                        full_prompt.push_str(&format!(
+                            "\n\n---\n## {} (Step Context)\n{}",
+                            doc.title, doc.content
+                        ));
                     }
                 }
             }
@@ -291,7 +338,12 @@ pub async fn compose_prompt(
 }
 
 /// Resolve a for_each prompt where `$` represents the current element.
-fn resolve_for_each_prompt(template: &str, element: &JsonValue, outputs: &HashMap<String, JsonValue>, prior_outputs: &HashMap<String, JsonValue>) -> String {
+fn resolve_for_each_prompt(
+    template: &str,
+    element: &JsonValue,
+    outputs: &HashMap<String, JsonValue>,
+    prior_outputs: &HashMap<String, JsonValue>,
+) -> String {
     let mut result = String::new();
     let mut chars = template.chars().peekable();
 
@@ -332,7 +384,12 @@ fn resolve_for_each_prompt(template: &str, element: &JsonValue, outputs: &HashMa
 
 /// Resolve a path containing `$` — e.g. `features.content.$.name`
 /// The `$` is replaced with the current for_each element.
-fn resolve_for_each_path(path: &str, element: &JsonValue, outputs: &HashMap<String, JsonValue>, prior_outputs: &HashMap<String, JsonValue>) -> String {
+fn resolve_for_each_path(
+    path: &str,
+    element: &JsonValue,
+    outputs: &HashMap<String, JsonValue>,
+    prior_outputs: &HashMap<String, JsonValue>,
+) -> String {
     let parts: Vec<&str> = path.split('.').collect();
 
     // Find the position of `$`
@@ -397,7 +454,10 @@ async fn execute_step(
     _for_each_index: Option<i32>,
     _for_each_label: Option<String>,
 ) -> Result<(Uuid, StepOutput, i64, i64, f32)> {
-    let ae_repo = state.agent_execution_repo.as_ref().ok_or_else(|| anyhow!("agent_execution_repo not configured"))?;
+    let ae_repo = state
+        .agent_execution_repo
+        .as_ref()
+        .ok_or_else(|| anyhow!("agent_execution_repo not configured"))?;
 
     // Build system prompt with output schema instructions
     let mut system_prompt = agent.system_prompt.clone();
@@ -418,15 +478,41 @@ async fn execute_step(
 
     // Create agent_execution row
     let ae_row = ae_repo
-        .create_agent_execution(agent.id, Some(step.id), false, None, &system_prompt, prompt, None, None, None)
+        .create_agent_execution(
+            agent.id,
+            Some(step.id),
+            false,
+            None,
+            &system_prompt,
+            prompt,
+            None,
+            None,
+            None,
+        )
         .await?;
 
     // Record system + user messages
-    let _ = ae_repo.create_execution_message(ae_row.id, "system", &system_prompt, None, 0, 0).await;
-    let _ = ae_repo.create_execution_message(ae_row.id, "user", prompt, None, 0, 0).await;
+    let _ = ae_repo
+        .create_execution_message(ae_row.id, "system", &system_prompt, None, 0, 0)
+        .await;
+    let _ = ae_repo
+        .create_execution_message(ae_row.id, "user", prompt, None, 0, 0)
+        .await;
 
     // Broadcast running status
-    broadcast_agent_execution_update(state, ctx.run_id, &ae_row.id, step.id, &agent.name, false, "running", None, 0, 0, 0.0);
+    broadcast_agent_execution_update(
+        state,
+        ctx.run_id,
+        &ae_row.id,
+        step.id,
+        &agent.name,
+        false,
+        "running",
+        None,
+        0,
+        0,
+        0.0,
+    );
 
     // React loop
     let mut messages = vec![Message::user(prompt)];
@@ -446,7 +532,10 @@ async fn execute_step(
             tools: tools.clone(),
         };
 
-        let response = provider.send_message(request).await.map_err(|e| anyhow!("LLM call failed (round {}): {}", round, e))?;
+        let response = provider
+            .send_message(request)
+            .await
+            .map_err(|e| anyhow!("LLM call failed (round {}): {}", round, e))?;
 
         let in_tok = response.usage.input_tokens as i64;
         let out_tok = response.usage.output_tokens as i64;
@@ -457,15 +546,35 @@ async fn execute_step(
 
         // Write token_ledger for every LLM call
         if let Some(tl_repo) = &state.token_ledger_repo {
-            let _ = tl_repo.insert_ledger_entry(ctx.user_id, Some(ae_row.id), &agent.model_id, in_tok, out_tok, cost).await;
+            let _ = tl_repo
+                .insert_ledger_entry(
+                    ctx.user_id,
+                    Some(ae_row.id),
+                    &agent.model_id,
+                    in_tok,
+                    out_tok,
+                    cost,
+                )
+                .await;
         }
 
         if response.stop_reason == StopReason::ToolUse {
             // Record the assistant message with tool calls
-            let _ = ae_repo.create_execution_message(ae_row.id, "assistant", &response.content, None, in_tok, out_tok).await;
+            let _ = ae_repo
+                .create_execution_message(
+                    ae_row.id,
+                    "assistant",
+                    &response.content,
+                    None,
+                    in_tok,
+                    out_tok,
+                )
+                .await;
 
             // Add assistant response (with content blocks) to conversation
-            messages.push(Message::assistant_with_blocks(response.content_blocks.clone()));
+            messages.push(Message::assistant_with_blocks(
+                response.content_blocks.clone(),
+            ));
 
             // Execute each tool call and collect results
             let mut tool_results = Vec::new();
@@ -474,18 +583,46 @@ async fn execute_step(
                     info!(agent = %agent.name, round = round, tool = %name, "DAG step tool call");
 
                     let result = match &ctx.execution_context {
-                        Some(exec_ctx) => crate::agents::execution_tools::execute_execution_tool(name, input, exec_ctx, Some(&tool_names)).await,
+                        Some(exec_ctx) => {
+                            crate::agents::execution_tools::execute_execution_tool(
+                                name,
+                                input,
+                                exec_ctx,
+                                Some(&tool_names),
+                            )
+                            .await
+                        }
                         None => {
                             serde_json::json!({ "error": "No execution context available for tool calls" })
                         }
                     };
 
-                    let result_str = serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string());
+                    let result_str = serde_json::to_string_pretty(&result)
+                        .unwrap_or_else(|_| result.to_string());
 
                     // Record tool call and result as execution_messages
-                    let call_content = serde_json::json!({ "tool": name, "input": input }).to_string();
-                    let _ = ae_repo.create_execution_message(ae_row.id, "assistant", &call_content, Some(id.clone()), 0, 0).await;
-                    let _ = ae_repo.create_execution_message(ae_row.id, "tool", &result_str, Some(id.clone()), 0, 0).await;
+                    let call_content =
+                        serde_json::json!({ "tool": name, "input": input }).to_string();
+                    let _ = ae_repo
+                        .create_execution_message(
+                            ae_row.id,
+                            "assistant",
+                            &call_content,
+                            Some(id.clone()),
+                            0,
+                            0,
+                        )
+                        .await;
+                    let _ = ae_repo
+                        .create_execution_message(
+                            ae_row.id,
+                            "tool",
+                            &result_str,
+                            Some(id.clone()),
+                            0,
+                            0,
+                        )
+                        .await;
 
                     tool_results.push(ContentBlock::ToolResult {
                         tool_use_id: id.clone(),
@@ -502,7 +639,16 @@ async fn execute_step(
         final_content = response.content;
 
         // Record final assistant message
-        let _ = ae_repo.create_execution_message(ae_row.id, "assistant", &final_content, None, in_tok, out_tok).await;
+        let _ = ae_repo
+            .create_execution_message(
+                ae_row.id,
+                "assistant",
+                &final_content,
+                None,
+                in_tok,
+                out_tok,
+            )
+            .await;
         break;
     }
 
@@ -511,7 +657,12 @@ async fn execute_step(
 
     // Update agent_execution with results
     let _ = ae_repo
-        .update_agent_execution_status(ae_row.id, "completed", Some(final_content.clone()), structured_output.clone())
+        .update_agent_execution_status(
+            ae_row.id,
+            "completed",
+            Some(final_content.clone()),
+            structured_output.clone(),
+        )
         .await;
 
     // Broadcast completed status
@@ -536,7 +687,13 @@ async fn execute_step(
         raw_output: final_content,
     };
 
-    Ok((ae_row.id, step_output, total_input_tokens, total_output_tokens, total_cost_usd))
+    Ok((
+        ae_row.id,
+        step_output,
+        total_input_tokens,
+        total_output_tokens,
+        total_cost_usd,
+    ))
 }
 
 /// Execute the interactive review agent for a step.
@@ -549,10 +706,16 @@ async fn execute_interactive_review(
     parent_ae_id: Uuid,
     main_output: &str,
 ) -> Result<Option<JsonValue>> {
-    let ae_repo = state.agent_execution_repo.as_ref().ok_or_else(|| anyhow!("agent_execution_repo not configured"))?;
+    let ae_repo = state
+        .agent_execution_repo
+        .as_ref()
+        .ok_or_else(|| anyhow!("agent_execution_repo not configured"))?;
 
     let system_prompt = interactive_agent.system_prompt.clone();
-    let review_prompt = format!("Review the following output and provide feedback:\n\n{}", main_output);
+    let review_prompt = format!(
+        "Review the following output and provide feedback:\n\n{}",
+        main_output
+    );
 
     // Create interactive agent_execution
     let iae_row = ae_repo
@@ -570,8 +733,12 @@ async fn execute_interactive_review(
         .await?;
 
     // Record messages
-    let _ = ae_repo.create_execution_message(iae_row.id, "system", &system_prompt, None, 0, 0).await;
-    let _ = ae_repo.create_execution_message(iae_row.id, "user", &review_prompt, None, 0, 0).await;
+    let _ = ae_repo
+        .create_execution_message(iae_row.id, "system", &system_prompt, None, 0, 0)
+        .await;
+    let _ = ae_repo
+        .create_execution_message(iae_row.id, "user", &review_prompt, None, 0, 0)
+        .await;
 
     // Make LLM call for initial review
     let request = LLMRequest {
@@ -584,24 +751,50 @@ async fn execute_interactive_review(
         ..Default::default()
     };
 
-    let response = provider.send_message(request).await.map_err(|e| anyhow!("Interactive LLM call failed: {}", e))?;
+    let response = provider
+        .send_message(request)
+        .await
+        .map_err(|e| anyhow!("Interactive LLM call failed: {}", e))?;
 
     let input_tokens = response.usage.input_tokens as i64;
     let output_tokens = response.usage.output_tokens as i64;
     let cost_usd = compute_cost(&interactive_agent.model_id, input_tokens, output_tokens);
 
     // Record assistant response
-    let _ = ae_repo.create_execution_message(iae_row.id, "assistant", &response.content, None, input_tokens, output_tokens).await;
+    let _ = ae_repo
+        .create_execution_message(
+            iae_row.id,
+            "assistant",
+            &response.content,
+            None,
+            input_tokens,
+            output_tokens,
+        )
+        .await;
 
     // Write token_ledger for the review call
     if let Some(tl_repo) = &state.token_ledger_repo {
         let _ = tl_repo
-            .insert_ledger_entry(ctx.user_id, Some(iae_row.id), &interactive_agent.model_id, input_tokens, output_tokens, cost_usd)
+            .insert_ledger_entry(
+                ctx.user_id,
+                Some(iae_row.id),
+                &interactive_agent.model_id,
+                input_tokens,
+                output_tokens,
+                cost_usd,
+            )
             .await;
     }
 
     // Set status to awaiting_user — the user will chat and approve via the API
-    let _ = ae_repo.update_agent_execution_status(iae_row.id, "awaiting_user", Some(response.content.clone()), None).await;
+    let _ = ae_repo
+        .update_agent_execution_status(
+            iae_row.id,
+            "awaiting_user",
+            Some(response.content.clone()),
+            None,
+        )
+        .await;
 
     // Broadcast awaiting_user
     broadcast_agent_execution_update(
@@ -648,7 +841,8 @@ pub async fn execute_workflow(
     // Track completed step outputs: step_id → StepOutput
     let completed: Arc<RwLock<HashMap<Uuid, StepOutput>>> = Arc::new(RwLock::new(HashMap::new()));
     // Track outputs by variable name for resolution
-    let var_outputs: Arc<RwLock<HashMap<String, JsonValue>>> = Arc::new(RwLock::new(HashMap::new()));
+    let var_outputs: Arc<RwLock<HashMap<String, JsonValue>>> =
+        Arc::new(RwLock::new(HashMap::new()));
 
     let mut total_input_tokens: i64 = 0;
     let mut total_output_tokens: i64 = 0;
@@ -672,7 +866,11 @@ pub async fn execute_workflow(
         }
 
         // Load agent
-        let agent = state.repo.get_persisted_agent(step.agent_id).await?.ok_or_else(|| anyhow!("Agent {} not found", step.agent_id))?;
+        let agent = state
+            .repo
+            .get_persisted_agent(step.agent_id)
+            .await?
+            .ok_or_else(|| anyhow!("Agent {} not found", step.agent_id))?;
 
         // Build current outputs snapshot for variable resolution
         let current_outputs = {
@@ -682,13 +880,29 @@ pub async fn execute_workflow(
 
         if step.execution_mode == "for_each" {
             // Expand for_each step into N parallel executions
-            let for_each_ref = step.for_each_ref.as_deref().ok_or_else(|| anyhow!("for_each step {} missing for_each_ref", step.id))?;
-            let array = resolve_for_each_array(for_each_ref, &current_outputs, &ctx.prior_outputs).ok_or_else(|| anyhow!("for_each_ref '{}' did not resolve to an array", for_each_ref))?;
+            let for_each_ref = step
+                .for_each_ref
+                .as_deref()
+                .ok_or_else(|| anyhow!("for_each step {} missing for_each_ref", step.id))?;
+            let array = resolve_for_each_array(for_each_ref, &current_outputs, &ctx.prior_outputs)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "for_each_ref '{}' did not resolve to an array",
+                        for_each_ref
+                    )
+                })?;
 
             let label_field = step.for_each_label_field.as_deref();
 
             // Broadcast for_each_spawned event
-            broadcast_for_each_spawned(state, ctx.run_id, ctx.stage_execution_id, step.id, &agent.name, array.len());
+            broadcast_for_each_spawned(
+                state,
+                ctx.run_id,
+                ctx.stage_execution_id,
+                step.id,
+                &agent.name,
+                array.len(),
+            );
 
             // Execute all iterations (could parallelize, but sequential for now to avoid overwhelming the LLM)
             let mut iteration_outputs = Vec::new();
@@ -707,7 +921,18 @@ pub async fn execute_workflow(
                 )
                 .await;
 
-                match execute_step(state, provider.as_ref(), &ctx, step, &agent, &prompt, Some(idx as i32), label).await {
+                match execute_step(
+                    state,
+                    provider.as_ref(),
+                    &ctx,
+                    step,
+                    &agent,
+                    &prompt,
+                    Some(idx as i32),
+                    label,
+                )
+                .await
+                {
                     Ok((ae_id, output, in_tok, out_tok, cost)) => {
                         total_input_tokens += in_tok;
                         total_output_tokens += out_tok;
@@ -715,8 +940,19 @@ pub async fn execute_workflow(
 
                         // Handle interactive review for each iteration
                         if let Some(interactive_agent_id) = step.interactive_agent_id {
-                            if let Ok(Some(ia)) = state.repo.get_persisted_agent(interactive_agent_id).await {
-                                let _ = execute_interactive_review(state, provider.as_ref(), &ctx, step, &ia, ae_id, &output.raw_output).await;
+                            if let Ok(Some(ia)) =
+                                state.repo.get_persisted_agent(interactive_agent_id).await
+                            {
+                                let _ = execute_interactive_review(
+                                    state,
+                                    provider.as_ref(),
+                                    &ctx,
+                                    step,
+                                    &ia,
+                                    ae_id,
+                                    &output.raw_output,
+                                )
+                                .await;
                                 // Note: interactive steps pause here. In a full implementation,
                                 // we'd wait for user approval before continuing.
                                 // For now, we continue with the main output.
@@ -726,7 +962,10 @@ pub async fn execute_workflow(
                         iteration_outputs.push(output.structured_output.clone());
                     }
                     Err(e) => {
-                        error!("for_each iteration {} failed for step {}: {}", idx, step.id, e);
+                        error!(
+                            "for_each iteration {} failed for step {}: {}",
+                            idx, step.id, e
+                        );
                     }
                 }
             }
@@ -764,7 +1003,17 @@ pub async fn execute_workflow(
             )
             .await;
 
-            let (ae_id, output, in_tok, out_tok, cost) = execute_step(state, provider.as_ref(), &ctx, step, &agent, &prompt, None, None).await?;
+            let (ae_id, output, in_tok, out_tok, cost) = execute_step(
+                state,
+                provider.as_ref(),
+                &ctx,
+                step,
+                &agent,
+                &prompt,
+                None,
+                None,
+            )
+            .await?;
 
             total_input_tokens += in_tok;
             total_output_tokens += out_tok;
@@ -773,7 +1022,16 @@ pub async fn execute_workflow(
             // Handle interactive review
             if let Some(interactive_agent_id) = step.interactive_agent_id {
                 if let Ok(Some(ia)) = state.repo.get_persisted_agent(interactive_agent_id).await {
-                    let _ = execute_interactive_review(state, provider.as_ref(), &ctx, step, &ia, ae_id, &output.raw_output).await;
+                    let _ = execute_interactive_review(
+                        state,
+                        provider.as_ref(),
+                        &ctx,
+                        step,
+                        &ia,
+                        ae_id,
+                        &output.raw_output,
+                    )
+                    .await;
                     // Note: interactive steps pause here. Full implementation would
                     // wait for POST /agent-executions/:id/approve before continuing.
                 }
@@ -794,7 +1052,10 @@ pub async fn execute_workflow(
     }
 
     let completed_guard = completed.read().await;
-    let final_outputs: HashMap<String, StepOutput> = completed_guard.iter().map(|(id, out)| (id.to_string(), out.clone())).collect();
+    let final_outputs: HashMap<String, StepOutput> = completed_guard
+        .iter()
+        .map(|(id, out)| (id.to_string(), out.clone()))
+        .collect();
     Ok(WorkflowExecutionResult {
         outputs: final_outputs,
         total_input_tokens,
@@ -828,7 +1089,11 @@ fn parse_structured_output(content: &str) -> Option<JsonValue> {
         if let Some(end) = rest.find("```") {
             let block = rest[..end].trim();
             // Skip the language identifier line if present
-            let json_text = if let Some(nl) = block.find('\n') { block[nl + 1..].trim() } else { block };
+            let json_text = if let Some(nl) = block.find('\n') {
+                block[nl + 1..].trim()
+            } else {
+                block
+            };
             if let Ok(v) = serde_json::from_str::<JsonValue>(json_text) {
                 return Some(v);
             }
@@ -854,7 +1119,8 @@ fn compute_cost(model_id: &str, input_tokens: i64, output_tokens: i64) -> f32 {
         (1.0, 3.0) // Default fallback
     };
 
-    (input_tokens as f32 * input_rate / 1_000_000.0) + (output_tokens as f32 * output_rate / 1_000_000.0)
+    (input_tokens as f32 * input_rate / 1_000_000.0)
+        + (output_tokens as f32 * output_rate / 1_000_000.0)
 }
 
 // ============================================================================
@@ -893,7 +1159,14 @@ fn broadcast_agent_execution_update(
     });
 }
 
-fn broadcast_for_each_spawned(state: &AppState, run_id: Uuid, _stage_execution_id: Uuid, step_id: Uuid, agent_name: &str, count: usize) {
+fn broadcast_for_each_spawned(
+    state: &AppState,
+    run_id: Uuid,
+    _stage_execution_id: Uuid,
+    step_id: Uuid,
+    agent_name: &str,
+    count: usize,
+) {
     state.broadcast_pipeline(PipelineUpdate {
         run_id,
         pipeline_id: Uuid::nil(),
@@ -901,7 +1174,9 @@ fn broadcast_for_each_spawned(state: &AppState, run_id: Uuid, _stage_execution_i
         stage_number: None,
         stage_name: Some(format!("{} ({}x)", agent_name, count)),
         agent_id: None,
-        output: Some(serde_json::json!({ "workflow_step_id": step_id, "count": count }).to_string()),
+        output: Some(
+            serde_json::json!({ "workflow_step_id": step_id, "count": count }).to_string(),
+        ),
         input_tokens: None,
         output_tokens: None,
         duration_ms: None,

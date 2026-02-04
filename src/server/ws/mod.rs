@@ -238,12 +238,19 @@ pub struct WsQuery {
 ///
 /// Upgrades an HTTP connection to a WebSocket connection for real-time updates.
 /// Requires a valid JWT token in query params.
-pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>, Query(query): Query<WsQuery>) -> Result<Response, axum::http::StatusCode> {
+pub async fn ws_handler(
+    ws: WebSocketUpgrade,
+    State(state): State<AppState>,
+    Query(query): Query<WsQuery>,
+) -> Result<Response, axum::http::StatusCode> {
     let token = query.token.ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
 
-    let claims = super::auth::verify_token(&token, &state.jwt_secret).map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+    let claims = super::auth::verify_token(&token, &state.jwt_secret)
+        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
 
-    let user_id = uuid::Uuid::parse_str(&claims.sub).map(UserId).map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+    let user_id = uuid::Uuid::parse_str(&claims.sub)
+        .map(UserId)
+        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
 
     Ok(ws.on_upgrade(move |socket| handle_socket(socket, state, Some(user_id))))
 }
@@ -553,18 +560,28 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
 
     // Clean up subscriptions on disconnect
     let subs = subscriptions.lock().await;
-    info!("WebSocket connection closed, cleaning up {} subscription(s)", subs.len());
+    info!(
+        "WebSocket connection closed, cleaning up {} subscription(s)",
+        subs.len()
+    );
     // Resources are automatically cleaned up when the function exits:
     // - broadcast receivers are dropped
     // - subscriptions HashSet is dropped
 }
 
 /// Handle a client message and return optional response
-async fn handle_client_message(msg: ClientMessage, subscriptions: &Subscriptions, run_subscriptions: &RunSubscriptions) -> Option<ServerMessage> {
+async fn handle_client_message(
+    msg: ClientMessage,
+    subscriptions: &Subscriptions,
+    run_subscriptions: &RunSubscriptions,
+) -> Option<ServerMessage> {
     match msg {
         ClientMessage::Subscribe { channels } => {
             let mut subs = subscriptions.lock().await;
-            let valid_channels: Vec<String> = channels.into_iter().filter(|c| is_valid_channel(c)).collect();
+            let valid_channels: Vec<String> = channels
+                .into_iter()
+                .filter(|c| is_valid_channel(c))
+                .collect();
 
             for channel in &valid_channels {
                 subs.insert(channel.clone());
@@ -602,7 +619,15 @@ async fn handle_client_message(msg: ClientMessage, subscriptions: &Subscriptions
 
 /// Check if a channel name is valid
 fn is_valid_channel(channel: &str) -> bool {
-    matches!(channel, CHANNEL_FEED | CHANNEL_TASKS | CHANNEL_AGENTS | CHANNEL_SESSIONS | CHANNEL_PIPELINES | CHANNEL_ROUTING)
+    matches!(
+        channel,
+        CHANNEL_FEED
+            | CHANNEL_TASKS
+            | CHANNEL_AGENTS
+            | CHANNEL_SESSIONS
+            | CHANNEL_PIPELINES
+            | CHANNEL_ROUTING
+    )
 }
 
 #[cfg(test)]

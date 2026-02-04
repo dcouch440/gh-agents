@@ -18,10 +18,22 @@ async fn merge_queue_insert_and_get() {
     let now = Utc::now();
 
     // Insert entry
-    repo.insert_queue_entry(id, owner.clone(), repo_name.clone(), pr_number, position, now).await.unwrap();
+    repo.insert_queue_entry(
+        id,
+        owner.clone(),
+        repo_name.clone(),
+        pr_number,
+        position,
+        now,
+    )
+    .await
+    .unwrap();
 
     // Get entries
-    let entries = repo.get_queue_entries(owner.clone(), repo_name.clone()).await.unwrap();
+    let entries = repo
+        .get_queue_entries(owner.clone(), repo_name.clone())
+        .await
+        .unwrap();
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].pr_number, pr_number);
     assert_eq!(entries[0].queue_position, position);
@@ -40,14 +52,22 @@ async fn merge_queue_get_next_position() {
     let now = Utc::now();
 
     // Get next position (should be 1 for empty queue)
-    let pos1 = repo.get_next_position(owner.clone(), repo_name.clone()).await.unwrap();
+    let pos1 = repo
+        .get_next_position(owner.clone(), repo_name.clone())
+        .await
+        .unwrap();
     assert_eq!(pos1, 1);
 
     // Insert entry at position 1
-    repo.insert_queue_entry(Uuid::new_v4(), owner.clone(), repo_name.clone(), 1, 1, now).await.unwrap();
+    repo.insert_queue_entry(Uuid::new_v4(), owner.clone(), repo_name.clone(), 1, 1, now)
+        .await
+        .unwrap();
 
     // Get next position (should be 2)
-    let pos2 = repo.get_next_position(owner.clone(), repo_name.clone()).await.unwrap();
+    let pos2 = repo
+        .get_next_position(owner.clone(), repo_name.clone())
+        .await
+        .unwrap();
     assert_eq!(pos2, 2);
 
     db.cleanup().await;
@@ -65,14 +85,29 @@ async fn merge_queue_delete_entry() {
     let now = Utc::now();
 
     // Insert entry
-    repo.insert_queue_entry(Uuid::new_v4(), owner.clone(), repo_name.clone(), pr_number, 1, now).await.unwrap();
+    repo.insert_queue_entry(
+        Uuid::new_v4(),
+        owner.clone(),
+        repo_name.clone(),
+        pr_number,
+        1,
+        now,
+    )
+    .await
+    .unwrap();
 
     // Delete entry
-    let deleted = repo.delete_queue_entry(owner.clone(), repo_name.clone(), pr_number).await.unwrap();
+    let deleted = repo
+        .delete_queue_entry(owner.clone(), repo_name.clone(), pr_number)
+        .await
+        .unwrap();
     assert!(deleted);
 
     // Verify deletion
-    let entries = repo.get_queue_entries(owner.clone(), repo_name.clone()).await.unwrap();
+    let entries = repo
+        .get_queue_entries(owner.clone(), repo_name.clone())
+        .await
+        .unwrap();
     assert_eq!(entries.len(), 0);
 
     db.cleanup().await;
@@ -90,17 +125,36 @@ async fn merge_queue_update_status() {
     let now = Utc::now();
 
     // Insert entry
-    repo.insert_queue_entry(Uuid::new_v4(), owner.clone(), repo_name.clone(), pr_number, 1, now).await.unwrap();
+    repo.insert_queue_entry(
+        Uuid::new_v4(),
+        owner.clone(),
+        repo_name.clone(),
+        pr_number,
+        1,
+        now,
+    )
+    .await
+    .unwrap();
 
     // Update status
     let updated = repo
-        .update_entry_status(owner.clone(), repo_name.clone(), pr_number, "in_progress".to_string(), None, now)
+        .update_entry_status(
+            owner.clone(),
+            repo_name.clone(),
+            pr_number,
+            "in_progress".to_string(),
+            None,
+            now,
+        )
         .await
         .unwrap();
     assert!(updated);
 
     // Verify update
-    let entries = repo.get_queue_entries(owner.clone(), repo_name.clone()).await.unwrap();
+    let entries = repo
+        .get_queue_entries(owner.clone(), repo_name.clone())
+        .await
+        .unwrap();
     assert_eq!(entries[0].status.to_string(), "in_progress");
 
     db.cleanup().await;
@@ -117,15 +171,32 @@ async fn merge_queue_reset_interrupted() {
     let now = Utc::now();
 
     // Insert entries with in_progress status
-    repo.insert_queue_entry(Uuid::new_v4(), owner.clone(), repo_name.clone(), 1, 1, now).await.unwrap();
-    repo.update_entry_status(owner.clone(), repo_name.clone(), 1, "in_progress".to_string(), None, now).await.unwrap();
+    repo.insert_queue_entry(Uuid::new_v4(), owner.clone(), repo_name.clone(), 1, 1, now)
+        .await
+        .unwrap();
+    repo.update_entry_status(
+        owner.clone(),
+        repo_name.clone(),
+        1,
+        "in_progress".to_string(),
+        None,
+        now,
+    )
+    .await
+    .unwrap();
 
     // Reset interrupted
-    let count = repo.reset_interrupted(owner.clone(), repo_name.clone(), now).await.unwrap();
+    let count = repo
+        .reset_interrupted(owner.clone(), repo_name.clone(), now)
+        .await
+        .unwrap();
     assert_eq!(count, 1);
 
     // Verify reset
-    let entries = repo.get_queue_entries(owner.clone(), repo_name.clone()).await.unwrap();
+    let entries = repo
+        .get_queue_entries(owner.clone(), repo_name.clone())
+        .await
+        .unwrap();
     assert_eq!(entries[0].status.to_string(), "pending");
 
     db.cleanup().await;
@@ -185,7 +256,10 @@ async fn user_repo_create_github_user() {
     let token = "encrypted_token";
 
     // Create GitHub user
-    let user = repo.create_github_user(email, github_id, github_login, token).await.unwrap();
+    let user = repo
+        .create_github_user(email, github_id, github_login, token)
+        .await
+        .unwrap();
     assert_eq!(user.email, email);
     assert_eq!(user.github_id, Some(github_id));
     assert_eq!(user.github_login, Some(github_login.to_string()));
@@ -205,13 +279,18 @@ async fn user_repo_link_github() {
     let repo = PgRepo::new(db.pool.clone());
 
     // Create regular user
-    let user = repo.create_user("test@example.com", "password_hash").await.unwrap();
+    let user = repo
+        .create_user("test@example.com", "password_hash")
+        .await
+        .unwrap();
 
     // Link GitHub
     let github_id = 789;
     let github_login = "linkeduser";
     let token = "encrypted_token";
-    repo.link_github(user.id, github_id, github_login, token).await.unwrap();
+    repo.link_github(user.id, github_id, github_login, token)
+        .await
+        .unwrap();
 
     // Verify link
     let fetched = repo.get_user_by_id(user.id).await.unwrap().unwrap();
@@ -240,7 +319,10 @@ async fn server_repo_task_operations() {
     let repo = PgRepo::new(db.pool.clone());
 
     // Create a user first
-    let user = repo.create_user("taskuser@example.com", "hash").await.unwrap();
+    let user = repo
+        .create_user("taskuser@example.com", "hash")
+        .await
+        .unwrap();
 
     // Create a task
     let task = Task {
@@ -290,7 +372,18 @@ async fn document_repo_create_and_get() {
     let tags = vec!["tag1".to_string(), "tag2".to_string()];
 
     // Create document
-    let doc = repo.create_document(user_id, None, title.clone(), content.clone(), doc_type, ref_tag.clone(), tags).await.unwrap();
+    let doc = repo
+        .create_document(
+            user_id,
+            None,
+            title.clone(),
+            content.clone(),
+            doc_type,
+            ref_tag.clone(),
+            tags,
+        )
+        .await
+        .unwrap();
 
     assert_eq!(doc.title, title);
     assert_eq!(doc.content, content);
@@ -332,7 +425,12 @@ async fn document_repo_update() {
 
     // Update document
     let updated = repo
-        .update_document(doc.id, Some("Updated Content".to_string()), Some("Updated Title".to_string()), None)
+        .update_document(
+            doc.id,
+            Some("Updated Content".to_string()),
+            Some("Updated Title".to_string()),
+            None,
+        )
         .await
         .unwrap();
 
@@ -352,7 +450,15 @@ async fn document_repo_delete() {
 
     // Create document
     let doc = repo
-        .create_document(user_id, None, "Title".to_string(), "Content".to_string(), "note".to_string(), "ref".to_string(), vec![])
+        .create_document(
+            user_id,
+            None,
+            "Title".to_string(),
+            "Content".to_string(),
+            "note".to_string(),
+            "ref".to_string(),
+            vec![],
+        )
         .await
         .unwrap();
 
@@ -376,9 +482,17 @@ async fn document_repo_list_by_user() {
 
     // Create multiple documents
     for i in 1..=3 {
-        repo.create_document(user_id, None, format!("Doc {}", i), "Content".to_string(), "note".to_string(), format!("ref-{}", i), vec![])
-            .await
-            .unwrap();
+        repo.create_document(
+            user_id,
+            None,
+            format!("Doc {}", i),
+            "Content".to_string(),
+            "note".to_string(),
+            format!("ref-{}", i),
+            vec![],
+        )
+        .await
+        .unwrap();
     }
 
     // List documents

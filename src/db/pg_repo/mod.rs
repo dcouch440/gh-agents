@@ -7,13 +7,19 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::db::traits::{
-    AgentExecutionRepo, ContextStoreRepo, DocumentRepo, MergeQueueRepo, ModelSpendRow, OutputSchemaRepo, PromptTemplateRepo, ResultRepo, RoomMemberInput, RoomRepo, RouterRequestRepo, ServerRepo,
-    TokenLedgerRepo, ToolRouterRepo, UserRepo, WorkflowCollectionRepo, WorkflowRepo, WorkflowStepAgentRepo,
+    AgentExecutionRepo, ContextStoreRepo, DocumentRepo, MergeQueueRepo, ModelSpendRow,
+    OutputSchemaRepo, PromptTemplateRepo, ResultRepo, RoomMemberInput, RoomRepo, RouterRequestRepo,
+    ServerRepo, TokenLedgerRepo, ToolRouterRepo, UserRepo, WorkflowCollectionRepo, WorkflowRepo,
+    WorkflowStepAgentRepo,
 };
 use crate::db::{
-    AgentExecutionRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow, CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow, DocumentSearchResult,
-    ExecutionMessageRow, ExecutionVariableRow, OutputSchemaRow, PromptTemplateRow, ResultRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry, RouterRequestRow, SessionRow,
-    StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepRow,
+    AgentExecutionRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow,
+    CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
+    DocumentSearchResult, ExecutionMessageRow, ExecutionVariableRow, OutputSchemaRow,
+    PromptTemplateRow, ResultRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry,
+    RouterRequestRow, SessionRow, StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow,
+    WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
+    WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -36,7 +42,15 @@ impl PgRepo {
 
 #[async_trait]
 impl MergeQueueRepo for PgRepo {
-    async fn insert_queue_entry(&self, id: Uuid, owner: String, repo: String, pr_number: u32, position: u32, now: DateTime<Utc>) -> Result<(), MergeQueueError> {
+    async fn insert_queue_entry(
+        &self,
+        id: Uuid,
+        owner: String,
+        repo: String,
+        pr_number: u32,
+        position: u32,
+        now: DateTime<Utc>,
+    ) -> Result<(), MergeQueueError> {
         sqlx::query(
             r#"
             INSERT INTO pr_merge_queue (
@@ -78,7 +92,12 @@ impl MergeQueueRepo for PgRepo {
         Ok(row.map(|(n,)| n as u32).unwrap_or(1))
     }
 
-    async fn delete_queue_entry(&self, owner: String, repo: String, pr_number: u32) -> Result<bool, MergeQueueError> {
+    async fn delete_queue_entry(
+        &self,
+        owner: String,
+        repo: String,
+        pr_number: u32,
+    ) -> Result<bool, MergeQueueError> {
         let result = sqlx::query(
             r#"
             DELETE FROM pr_merge_queue
@@ -94,8 +113,23 @@ impl MergeQueueRepo for PgRepo {
         Ok(result.rows_affected() > 0)
     }
 
-    async fn get_queue_entries(&self, owner: String, repo: String) -> Result<Vec<PrQueueEntry>, MergeQueueError> {
-        let rows: Vec<(Uuid, String, String, i32, i32, String, Option<String>, Option<String>, DateTime<Utc>, DateTime<Utc>)> = sqlx::query_as(
+    async fn get_queue_entries(
+        &self,
+        owner: String,
+        repo: String,
+    ) -> Result<Vec<PrQueueEntry>, MergeQueueError> {
+        let rows: Vec<(
+            Uuid,
+            String,
+            String,
+            i32,
+            i32,
+            String,
+            Option<String>,
+            Option<String>,
+            DateTime<Utc>,
+            DateTime<Utc>,
+        )> = sqlx::query_as(
             r#"
             SELECT
                 id, repo_owner, repo_name, pr_number,
@@ -132,7 +166,15 @@ impl MergeQueueRepo for PgRepo {
         Ok(entries)
     }
 
-    async fn update_entry_status(&self, owner: String, repo: String, pr_number: u32, status: String, error_message: Option<String>, now: DateTime<Utc>) -> Result<bool, MergeQueueError> {
+    async fn update_entry_status(
+        &self,
+        owner: String,
+        repo: String,
+        pr_number: u32,
+        status: String,
+        error_message: Option<String>,
+        now: DateTime<Utc>,
+    ) -> Result<bool, MergeQueueError> {
         let result = sqlx::query(
             r#"
             UPDATE pr_merge_queue
@@ -152,7 +194,14 @@ impl MergeQueueRepo for PgRepo {
         Ok(result.rows_affected() > 0)
     }
 
-    async fn set_entry_conflict(&self, owner: String, repo: String, pr_number: u32, conflict_json: String, now: DateTime<Utc>) -> Result<bool, MergeQueueError> {
+    async fn set_entry_conflict(
+        &self,
+        owner: String,
+        repo: String,
+        pr_number: u32,
+        conflict_json: String,
+        now: DateTime<Utc>,
+    ) -> Result<bool, MergeQueueError> {
         let result = sqlx::query(
             r#"
             UPDATE pr_merge_queue
@@ -172,7 +221,12 @@ impl MergeQueueRepo for PgRepo {
         Ok(result.rows_affected() > 0)
     }
 
-    async fn update_entry_position(&self, id: Uuid, position: u32, now: DateTime<Utc>) -> Result<(), MergeQueueError> {
+    async fn update_entry_position(
+        &self,
+        id: Uuid,
+        position: u32,
+        now: DateTime<Utc>,
+    ) -> Result<(), MergeQueueError> {
         sqlx::query(
             r#"
             UPDATE pr_merge_queue
@@ -189,7 +243,12 @@ impl MergeQueueRepo for PgRepo {
         Ok(())
     }
 
-    async fn reset_interrupted(&self, owner: String, repo: String, now: DateTime<Utc>) -> Result<u32, MergeQueueError> {
+    async fn reset_interrupted(
+        &self,
+        owner: String,
+        repo: String,
+        now: DateTime<Utc>,
+    ) -> Result<u32, MergeQueueError> {
         let result = sqlx::query(
             r#"
             UPDATE pr_merge_queue
@@ -207,7 +266,12 @@ impl MergeQueueRepo for PgRepo {
         Ok(result.rows_affected() as u32)
     }
 
-    async fn cleanup_old(&self, owner: String, repo: String, cutoff: DateTime<Utc>) -> Result<u32, MergeQueueError> {
+    async fn cleanup_old(
+        &self,
+        owner: String,
+        repo: String,
+        cutoff: DateTime<Utc>,
+    ) -> Result<u32, MergeQueueError> {
         let result = sqlx::query(
             r#"
             DELETE FROM pr_merge_queue
@@ -232,7 +296,12 @@ impl ServerRepo for PgRepo {
         sqlx::query("SELECT 1").fetch_one(&self.pool).await.is_ok()
     }
 
-    async fn list_tasks(&self, user_id: UserId, status: Option<String>, limit: Option<u32>) -> Result<Vec<Task>> {
+    async fn list_tasks(
+        &self,
+        user_id: UserId,
+        status: Option<String>,
+        limit: Option<u32>,
+    ) -> Result<Vec<Task>> {
         crate::db::list_tasks(&self.pool, user_id, status.as_deref(), limit).await
     }
 
@@ -244,11 +313,22 @@ impl ServerRepo for PgRepo {
         crate::db::insert_task(&self.pool, user_id, &task).await
     }
 
-    async fn insert_chat_message(&self, user_id: UserId, id: Uuid, role: String, content: String) -> Result<()> {
+    async fn insert_chat_message(
+        &self,
+        user_id: UserId,
+        id: Uuid,
+        role: String,
+        content: String,
+    ) -> Result<()> {
         crate::db::insert_chat_message(&self.pool, user_id, &id, &role, &content).await
     }
 
-    async fn get_chat_history(&self, user_id: UserId, limit: u32, offset: u32) -> Result<Vec<ChatMessageRow>> {
+    async fn get_chat_history(
+        &self,
+        user_id: UserId,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<ChatMessageRow>> {
         crate::db::get_chat_history(&self.pool, user_id, limit, offset).await
     }
 
@@ -329,7 +409,10 @@ impl ServerRepo for PgRepo {
     }
 
     async fn delete_persisted_agent(&self, agent_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM agents WHERE id = $1").bind(agent_id).execute(&self.pool).await?;
+        sqlx::query("DELETE FROM agents WHERE id = $1")
+            .bind(agent_id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
@@ -378,7 +461,10 @@ impl ServerRepo for PgRepo {
     }
 
     async fn delete_tool(&self, tool_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM tools WHERE id = $1").bind(tool_id).execute(&self.pool).await?;
+        sqlx::query("DELETE FROM tools WHERE id = $1")
+            .bind(tool_id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
@@ -396,7 +482,10 @@ impl ServerRepo for PgRepo {
     async fn set_agent_tools(&self, agent_id: Uuid, tool_ids: Vec<Uuid>) -> Result<()> {
         let mut tx = self.pool.begin().await?;
 
-        sqlx::query("DELETE FROM agent_tools WHERE agent_id = $1").bind(agent_id).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM agent_tools WHERE agent_id = $1")
+            .bind(agent_id)
+            .execute(&mut *tx)
+            .await?;
 
         for tool_id in tool_ids {
             sqlx::query("INSERT INTO agent_tools (agent_id, tool_id) VALUES ($1, $2)")
@@ -446,7 +535,10 @@ impl ServerRepo for PgRepo {
     async fn set_agent_context(&self, agent_id: Uuid, document_ids: Vec<Uuid>) -> Result<()> {
         let mut tx = self.pool.begin().await?;
 
-        sqlx::query("DELETE FROM agent_context WHERE agent_id = $1").bind(agent_id).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM agent_context WHERE agent_id = $1")
+            .bind(agent_id)
+            .execute(&mut *tx)
+            .await?;
 
         for doc_id in document_ids {
             sqlx::query("INSERT INTO agent_context (agent_id, document_id) VALUES ($1, $2)")
@@ -462,7 +554,14 @@ impl ServerRepo for PgRepo {
 
     // --- Session management ---
 
-    async fn create_session(&self, user_id: UserId, session_id: Uuid, mode_id: &str, title: &str, agent_id: Option<Uuid>) -> Result<()> {
+    async fn create_session(
+        &self,
+        user_id: UserId,
+        session_id: Uuid,
+        mode_id: &str,
+        title: &str,
+        agent_id: Option<Uuid>,
+    ) -> Result<()> {
         crate::db::create_session(&self.pool, user_id, session_id, mode_id, title, agent_id).await
     }
 
@@ -478,11 +577,23 @@ impl ServerRepo for PgRepo {
         crate::db::delete_session(&self.pool, session_id).await
     }
 
-    async fn insert_session_message(&self, user_id: UserId, session_id: Uuid, id: Uuid, role: String, content: String) -> Result<()> {
-        crate::db::insert_session_message(&self.pool, user_id, session_id, &id, &role, &content).await
+    async fn insert_session_message(
+        &self,
+        user_id: UserId,
+        session_id: Uuid,
+        id: Uuid,
+        role: String,
+        content: String,
+    ) -> Result<()> {
+        crate::db::insert_session_message(&self.pool, user_id, session_id, &id, &role, &content)
+            .await
     }
 
-    async fn get_session_history(&self, session_id: Uuid, limit: u32) -> Result<Vec<ChatMessageRow>> {
+    async fn get_session_history(
+        &self,
+        session_id: Uuid,
+        limit: u32,
+    ) -> Result<Vec<ChatMessageRow>> {
         crate::db::get_session_history(&self.pool, session_id, limit).await
     }
 
@@ -500,10 +611,11 @@ impl ServerRepo for PgRepo {
     }
 
     async fn count_session_messages(&self, session_id: Uuid) -> Result<u32> {
-        let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM chat_messages WHERE session_id = $1")
-            .bind(session_id)
-            .fetch_one(&self.pool)
-            .await?;
+        let row: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM chat_messages WHERE session_id = $1")
+                .bind(session_id)
+                .fetch_one(&self.pool)
+                .await?;
         Ok(row.0 as u32)
     }
 
@@ -657,7 +769,13 @@ impl UserRepo for PgRepo {
         Ok(row.map(|r| r.into()))
     }
 
-    async fn link_github(&self, user_id: UserId, github_id: i64, github_login: &str, token_encrypted: &str) -> Result<()> {
+    async fn link_github(
+        &self,
+        user_id: UserId,
+        github_id: i64,
+        github_login: &str,
+        token_encrypted: &str,
+    ) -> Result<()> {
         sqlx::query(
             r#"
             UPDATE users
@@ -675,7 +793,13 @@ impl UserRepo for PgRepo {
         Ok(())
     }
 
-    async fn create_github_user(&self, email: &str, github_id: i64, github_login: &str, token_encrypted: &str) -> Result<User> {
+    async fn create_github_user(
+        &self,
+        email: &str,
+        github_id: i64,
+        github_login: &str,
+        token_encrypted: &str,
+    ) -> Result<User> {
         let row: UserRow = sqlx::query_as(
             r#"
             INSERT INTO users (id, email, github_id, github_login, github_token_encrypted, created_at, updated_at)
@@ -700,7 +824,16 @@ impl UserRepo for PgRepo {
 
 #[async_trait]
 impl DocumentRepo for PgRepo {
-    async fn create_document(&self, user_id: Uuid, session_id: Option<Uuid>, title: String, content: String, doc_type: String, ref_tag: String, tags: Vec<String>) -> Result<DocumentRow> {
+    async fn create_document(
+        &self,
+        user_id: Uuid,
+        session_id: Option<Uuid>,
+        title: String,
+        content: String,
+        doc_type: String,
+        ref_tag: String,
+        tags: Vec<String>,
+    ) -> Result<DocumentRow> {
         let id = Uuid::new_v4();
         let row: DocumentRow = sqlx::query_as(
             r#"
@@ -723,7 +856,13 @@ impl DocumentRepo for PgRepo {
         Ok(row)
     }
 
-    async fn update_document(&self, doc_id: Uuid, content: Option<String>, title: Option<String>, tags: Option<Vec<String>>) -> Result<DocumentRow> {
+    async fn update_document(
+        &self,
+        doc_id: Uuid,
+        content: Option<String>,
+        title: Option<String>,
+        tags: Option<Vec<String>>,
+    ) -> Result<DocumentRow> {
         let row: DocumentRow = sqlx::query_as(
             r#"
             UPDATE documents
@@ -789,7 +928,11 @@ impl DocumentRepo for PgRepo {
         Ok(rows)
     }
 
-    async fn search_documents(&self, user_id: Uuid, query: &str) -> Result<Vec<DocumentSearchResult>> {
+    async fn search_documents(
+        &self,
+        user_id: Uuid,
+        query: &str,
+    ) -> Result<Vec<DocumentSearchResult>> {
         let rows: Vec<DocumentSearchResult> = sqlx::query_as(
             r#"
             SELECT id, title, summary, ref_tag,
@@ -810,14 +953,22 @@ impl DocumentRepo for PgRepo {
     }
 
     async fn delete_document(&self, doc_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM documents WHERE id = $1").bind(doc_id).execute(&self.pool).await?;
+        sqlx::query("DELETE FROM documents WHERE id = $1")
+            .bind(doc_id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 }
 
 #[async_trait]
 impl OutputSchemaRepo for PgRepo {
-    async fn create_output_schema(&self, user_id: Uuid, name: String, schema: serde_json::Value) -> Result<OutputSchemaRow> {
+    async fn create_output_schema(
+        &self,
+        user_id: Uuid,
+        name: String,
+        schema: serde_json::Value,
+    ) -> Result<OutputSchemaRow> {
         let row: OutputSchemaRow = sqlx::query_as(
             r#"
             INSERT INTO output_schemas (user_id, name, schema)
@@ -849,7 +1000,12 @@ impl OutputSchemaRepo for PgRepo {
         Ok(rows)
     }
 
-    async fn update_output_schema(&self, id: Uuid, name: Option<String>, schema: Option<serde_json::Value>) -> Result<OutputSchemaRow> {
+    async fn update_output_schema(
+        &self,
+        id: Uuid,
+        name: Option<String>,
+        schema: Option<serde_json::Value>,
+    ) -> Result<OutputSchemaRow> {
         let row: OutputSchemaRow = sqlx::query_as(
             r#"
             UPDATE output_schemas
@@ -869,14 +1025,22 @@ impl OutputSchemaRepo for PgRepo {
     }
 
     async fn delete_output_schema(&self, id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM output_schemas WHERE id = $1").bind(id).execute(&self.pool).await?;
+        sqlx::query("DELETE FROM output_schemas WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 }
 
 #[async_trait]
 impl PromptTemplateRepo for PgRepo {
-    async fn create_prompt_template(&self, user_id: Uuid, name: String, content: String) -> Result<PromptTemplateRow> {
+    async fn create_prompt_template(
+        &self,
+        user_id: Uuid,
+        name: String,
+        content: String,
+    ) -> Result<PromptTemplateRow> {
         let row: PromptTemplateRow = sqlx::query_as(
             r#"
             INSERT INTO prompt_templates (user_id, name, content)
@@ -908,7 +1072,12 @@ impl PromptTemplateRepo for PgRepo {
         Ok(rows)
     }
 
-    async fn update_prompt_template(&self, id: Uuid, name: Option<String>, content: Option<String>) -> Result<PromptTemplateRow> {
+    async fn update_prompt_template(
+        &self,
+        id: Uuid,
+        name: Option<String>,
+        content: Option<String>,
+    ) -> Result<PromptTemplateRow> {
         let row: PromptTemplateRow = sqlx::query_as(
             r#"
             UPDATE prompt_templates
@@ -928,7 +1097,10 @@ impl PromptTemplateRepo for PgRepo {
     }
 
     async fn delete_prompt_template(&self, id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM prompt_templates WHERE id = $1").bind(id).execute(&self.pool).await?;
+        sqlx::query("DELETE FROM prompt_templates WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 }
@@ -937,7 +1109,12 @@ impl PromptTemplateRepo for PgRepo {
 impl WorkflowRepo for PgRepo {
     // --- Workflows ---
 
-    async fn create_workflow(&self, user_id: Uuid, name: String, description: String) -> Result<WorkflowRow> {
+    async fn create_workflow(
+        &self,
+        user_id: Uuid,
+        name: String,
+        description: String,
+    ) -> Result<WorkflowRow> {
         let row: WorkflowRow = sqlx::query_as("INSERT INTO workflows (user_id, name, description) VALUES ($1, $2, $3) RETURNING id, user_id, name, description, created_at, version")
             .bind(user_id)
             .bind(&name)
@@ -963,7 +1140,12 @@ impl WorkflowRepo for PgRepo {
         Ok(rows)
     }
 
-    async fn update_workflow(&self, id: Uuid, name: Option<String>, description: Option<String>) -> Result<WorkflowRow> {
+    async fn update_workflow(
+        &self,
+        id: Uuid,
+        name: Option<String>,
+        description: Option<String>,
+    ) -> Result<WorkflowRow> {
         let row: WorkflowRow =
             sqlx::query_as("UPDATE workflows SET name = COALESCE($1, name), description = COALESCE($2, description), version = version + 1 WHERE id = $3 RETURNING id, user_id, name, description, created_at, version")
                 .bind(name)
@@ -975,7 +1157,10 @@ impl WorkflowRepo for PgRepo {
     }
 
     async fn delete_workflow(&self, id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM workflows WHERE id = $1").bind(id).execute(&self.pool).await?;
+        sqlx::query("DELETE FROM workflows WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
@@ -1007,15 +1192,21 @@ impl WorkflowRepo for PgRepo {
     }
 
     async fn get_step(&self, id: Uuid) -> Result<Option<WorkflowStepRow>> {
-        let row: Option<WorkflowStepRow> = sqlx::query_as("SELECT * FROM workflow_steps WHERE id = $1").bind(id).fetch_optional(&self.pool).await?;
+        let row: Option<WorkflowStepRow> =
+            sqlx::query_as("SELECT * FROM workflow_steps WHERE id = $1")
+                .bind(id)
+                .fetch_optional(&self.pool)
+                .await?;
         Ok(row)
     }
 
     async fn list_steps(&self, workflow_id: Uuid) -> Result<Vec<WorkflowStepRow>> {
-        let rows: Vec<WorkflowStepRow> = sqlx::query_as("SELECT * FROM workflow_steps WHERE workflow_id = $1 ORDER BY display_order")
-            .bind(workflow_id)
-            .fetch_all(&self.pool)
-            .await?;
+        let rows: Vec<WorkflowStepRow> = sqlx::query_as(
+            "SELECT * FROM workflow_steps WHERE workflow_id = $1 ORDER BY display_order",
+        )
+        .bind(workflow_id)
+        .fetch_all(&self.pool)
+        .await?;
         Ok(rows)
     }
 
@@ -1047,7 +1238,10 @@ impl WorkflowRepo for PgRepo {
     }
 
     async fn delete_step(&self, id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM workflow_steps WHERE id = $1").bind(id).execute(&self.pool).await?;
+        sqlx::query("DELETE FROM workflow_steps WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
@@ -1060,11 +1254,13 @@ impl WorkflowRepo for PgRepo {
             .execute(&mut *tx)
             .await?;
         for edge in &edges {
-            sqlx::query("INSERT INTO workflow_step_edges (from_step_id, to_step_id) VALUES ($1, $2)")
-                .bind(edge.from_step_id)
-                .bind(edge.to_step_id)
-                .execute(&mut *tx)
-                .await?;
+            sqlx::query(
+                "INSERT INTO workflow_step_edges (from_step_id, to_step_id) VALUES ($1, $2)",
+            )
+            .bind(edge.from_step_id)
+            .bind(edge.to_step_id)
+            .execute(&mut *tx)
+            .await?;
         }
         tx.commit().await?;
         Ok(())
@@ -1099,10 +1295,11 @@ impl WorkflowRepo for PgRepo {
     // --- Step documents ---
 
     async fn list_step_documents(&self, step_id: Uuid) -> Result<Vec<StepDocumentRow>> {
-        let rows: Vec<StepDocumentRow> = sqlx::query_as("SELECT step_id, document_id FROM step_documents WHERE step_id = $1")
-            .bind(step_id)
-            .fetch_all(&self.pool)
-            .await?;
+        let rows: Vec<StepDocumentRow> =
+            sqlx::query_as("SELECT step_id, document_id FROM step_documents WHERE step_id = $1")
+                .bind(step_id)
+                .fetch_all(&self.pool)
+                .await?;
         Ok(rows)
     }
 
@@ -1157,14 +1354,21 @@ impl AgentExecutionRepo for PgRepo {
     }
 
     async fn get_agent_execution(&self, id: Uuid) -> Result<Option<AgentExecutionRow>> {
-        let row = sqlx::query_as::<_, AgentExecutionRow>("SELECT * FROM agent_executions WHERE id = $1")
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?;
+        let row =
+            sqlx::query_as::<_, AgentExecutionRow>("SELECT * FROM agent_executions WHERE id = $1")
+                .bind(id)
+                .fetch_optional(&self.pool)
+                .await?;
         Ok(row)
     }
 
-    async fn update_agent_execution_status(&self, id: Uuid, status: &str, output: Option<String>, structured_output: Option<serde_json::Value>) -> Result<AgentExecutionRow> {
+    async fn update_agent_execution_status(
+        &self,
+        id: Uuid,
+        status: &str,
+        output: Option<String>,
+        structured_output: Option<serde_json::Value>,
+    ) -> Result<AgentExecutionRow> {
         let row = sqlx::query_as::<_, AgentExecutionRow>(
             "UPDATE agent_executions SET status = $2, output = COALESCE($3, output), structured_output = COALESCE($4, structured_output), completed_at = CASE WHEN $2 IN ('completed', 'failed', 'cancelled') THEN NOW() ELSE completed_at END WHERE id = $1 RETURNING *",
         )
@@ -1177,7 +1381,15 @@ impl AgentExecutionRepo for PgRepo {
         Ok(row)
     }
 
-    async fn create_execution_message(&self, agent_execution_id: Uuid, role: &str, content: &str, tool_call_id: Option<String>, input_tokens: i64, output_tokens: i64) -> Result<ExecutionMessageRow> {
+    async fn create_execution_message(
+        &self,
+        agent_execution_id: Uuid,
+        role: &str,
+        content: &str,
+        tool_call_id: Option<String>,
+        input_tokens: i64,
+        output_tokens: i64,
+    ) -> Result<ExecutionMessageRow> {
         let row = sqlx::query_as::<_, ExecutionMessageRow>(
             "INSERT INTO execution_messages (agent_execution_id, role, content, tool_call_id, input_tokens, output_tokens) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
         )
@@ -1192,7 +1404,10 @@ impl AgentExecutionRepo for PgRepo {
         Ok(row)
     }
 
-    async fn list_execution_messages(&self, agent_execution_id: Uuid) -> Result<Vec<ExecutionMessageRow>> {
+    async fn list_execution_messages(
+        &self,
+        agent_execution_id: Uuid,
+    ) -> Result<Vec<ExecutionMessageRow>> {
         let rows = sqlx::query_as::<_, ExecutionMessageRow>("SELECT * FROM execution_messages WHERE agent_execution_id = $1 ORDER BY created_at ASC")
             .bind(agent_execution_id)
             .fetch_all(&self.pool)
@@ -1203,7 +1418,15 @@ impl AgentExecutionRepo for PgRepo {
 
 #[async_trait]
 impl TokenLedgerRepo for PgRepo {
-    async fn insert_ledger_entry(&self, user_id: Uuid, agent_execution_id: Option<Uuid>, model_id: &str, input_tokens: i64, output_tokens: i64, cost_usd: f32) -> Result<TokenLedgerRow> {
+    async fn insert_ledger_entry(
+        &self,
+        user_id: Uuid,
+        agent_execution_id: Option<Uuid>,
+        model_id: &str,
+        input_tokens: i64,
+        output_tokens: i64,
+        cost_usd: f32,
+    ) -> Result<TokenLedgerRow> {
         let row =
             sqlx::query_as::<_, TokenLedgerRow>("INSERT INTO token_ledger (user_id, agent_execution_id, model_id, input_tokens, output_tokens, cost_usd) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *")
                 .bind(user_id)
@@ -1246,7 +1469,11 @@ impl TokenLedgerRepo for PgRepo {
         Ok(row.0.unwrap_or(0.0))
     }
 
-    async fn get_model_breakdown(&self, user_id: Uuid, since: Option<DateTime<Utc>>) -> Result<Vec<ModelSpendRow>> {
+    async fn get_model_breakdown(
+        &self,
+        user_id: Uuid,
+        since: Option<DateTime<Utc>>,
+    ) -> Result<Vec<ModelSpendRow>> {
         let rows = match since {
             Some(t) => {
                 sqlx::query_as::<_, ModelSpendRow>("SELECT model_id, SUM(input_tokens) AS total_input_tokens, SUM(output_tokens) AS total_output_tokens, CAST(SUM(cost_usd) AS FLOAT8) AS total_cost_usd, COUNT(*) AS call_count FROM token_ledger WHERE user_id = $1 AND created_at >= $2 GROUP BY model_id ORDER BY total_cost_usd DESC")
@@ -1268,7 +1495,14 @@ impl TokenLedgerRepo for PgRepo {
 
 #[async_trait]
 impl ResultRepo for PgRepo {
-    async fn save_result(&self, user_id: Uuid, agent_execution_id: Uuid, output_schema_id: Option<Uuid>, name: &str, data: serde_json::Value) -> Result<ResultRow> {
+    async fn save_result(
+        &self,
+        user_id: Uuid,
+        agent_execution_id: Uuid,
+        output_schema_id: Option<Uuid>,
+        name: &str,
+        data: serde_json::Value,
+    ) -> Result<ResultRow> {
         let row = sqlx::query_as::<_, ResultRow>("INSERT INTO results (user_id, agent_execution_id, output_schema_id, name, data) VALUES ($1, $2, $3, $4, $5) RETURNING *")
             .bind(user_id)
             .bind(agent_execution_id)
@@ -1281,19 +1515,28 @@ impl ResultRepo for PgRepo {
     }
 
     async fn get_result(&self, id: Uuid) -> Result<Option<ResultRow>> {
-        let row = sqlx::query_as::<_, ResultRow>("SELECT * FROM results WHERE id = $1").bind(id).fetch_optional(&self.pool).await?;
+        let row = sqlx::query_as::<_, ResultRow>("SELECT * FROM results WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
         Ok(row)
     }
 
     async fn list_results(&self, user_id: Uuid) -> Result<Vec<ResultRow>> {
-        let rows = sqlx::query_as::<_, ResultRow>("SELECT * FROM results WHERE user_id = $1 ORDER BY created_at DESC")
-            .bind(user_id)
-            .fetch_all(&self.pool)
-            .await?;
+        let rows = sqlx::query_as::<_, ResultRow>(
+            "SELECT * FROM results WHERE user_id = $1 ORDER BY created_at DESC",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
         Ok(rows)
     }
 
-    async fn list_results_by_schema(&self, user_id: Uuid, output_schema_id: Uuid) -> Result<Vec<ResultRow>> {
+    async fn list_results_by_schema(
+        &self,
+        user_id: Uuid,
+        output_schema_id: Uuid,
+    ) -> Result<Vec<ResultRow>> {
         let rows = sqlx::query_as::<_, ResultRow>("SELECT * FROM results WHERE user_id = $1 AND output_schema_id = $2 ORDER BY created_at DESC")
             .bind(user_id)
             .bind(output_schema_id)
@@ -1303,7 +1546,10 @@ impl ResultRepo for PgRepo {
     }
 
     async fn delete_result(&self, id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM results WHERE id = $1").bind(id).execute(&self.pool).await?;
+        sqlx::query("DELETE FROM results WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 }
@@ -1331,7 +1577,14 @@ impl ToolRouterRepo for PgRepo {
         Ok(row)
     }
 
-    async fn create_tool_router(&self, user_id: Uuid, name: &str, description: Option<String>, system_prompt: &str, model_id: &str) -> Result<ToolRouterRow> {
+    async fn create_tool_router(
+        &self,
+        user_id: Uuid,
+        name: &str,
+        description: Option<String>,
+        system_prompt: &str,
+        model_id: &str,
+    ) -> Result<ToolRouterRow> {
         let row: ToolRouterRow = sqlx::query_as(
             "INSERT INTO tool_routers (user_id, name, description, system_prompt, model_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, user_id, name, description, system_prompt, model_id, is_active, created_at, updated_at",
         )
@@ -1377,7 +1630,10 @@ impl ToolRouterRepo for PgRepo {
     }
 
     async fn delete_tool_router(&self, id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM tool_routers WHERE id = $1").bind(id).execute(&self.pool).await?;
+        sqlx::query("DELETE FROM tool_routers WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
@@ -1394,7 +1650,10 @@ impl ToolRouterRepo for PgRepo {
     async fn set_router_tools(&self, router_id: Uuid, tool_ids: &[Uuid]) -> Result<()> {
         let mut tx = self.pool.begin().await?;
 
-        sqlx::query("DELETE FROM tool_router_tools WHERE router_id = $1").bind(router_id).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM tool_router_tools WHERE router_id = $1")
+            .bind(router_id)
+            .execute(&mut *tx)
+            .await?;
 
         for tool_id in tool_ids {
             sqlx::query("INSERT INTO tool_router_tools (router_id, tool_id) VALUES ($1, $2)")
@@ -1415,7 +1674,15 @@ impl ToolRouterRepo for PgRepo {
 
 #[async_trait]
 impl ContextStoreRepo for PgRepo {
-    async fn add_context(&self, session_id: Uuid, source: &str, priority: f32, content: &str, metadata: Option<serde_json::Value>, expires_at: Option<DateTime<Utc>>) -> Result<ContextStoreRow> {
+    async fn add_context(
+        &self,
+        session_id: Uuid,
+        source: &str,
+        priority: f32,
+        content: &str,
+        metadata: Option<serde_json::Value>,
+        expires_at: Option<DateTime<Utc>>,
+    ) -> Result<ContextStoreRow> {
         let row: ContextStoreRow = sqlx::query_as(
             "INSERT INTO context_store (session_id, source, priority, content, metadata, expires_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, session_id, source, priority, content, metadata, status, created_at, expires_at",
         )
@@ -1430,7 +1697,11 @@ impl ContextStoreRepo for PgRepo {
         Ok(row)
     }
 
-    async fn get_active_context(&self, session_id: Uuid, limit: u32) -> Result<Vec<ContextStoreRow>> {
+    async fn get_active_context(
+        &self,
+        session_id: Uuid,
+        limit: u32,
+    ) -> Result<Vec<ContextStoreRow>> {
         let rows: Vec<ContextStoreRow> = sqlx::query_as(
             "SELECT id, session_id, source, priority, content, metadata, status, created_at, expires_at FROM context_store WHERE session_id = $1 AND status = 'active' AND (expires_at IS NULL OR expires_at > NOW()) ORDER BY priority DESC LIMIT $2",
         )
@@ -1442,7 +1713,11 @@ impl ContextStoreRepo for PgRepo {
     }
 
     async fn update_context_status(&self, id: Uuid, status: &str) -> Result<()> {
-        sqlx::query("UPDATE context_store SET status = $2 WHERE id = $1").bind(id).bind(status).execute(&self.pool).await?;
+        sqlx::query("UPDATE context_store SET status = $2 WHERE id = $1")
+            .bind(id)
+            .bind(status)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
@@ -1461,7 +1736,14 @@ impl ContextStoreRepo for PgRepo {
 
 #[async_trait]
 impl RouterRequestRepo for PgRepo {
-    async fn create_router_request(&self, session_id: Uuid, agent_execution_id: Option<Uuid>, intent: &str, priority: &str, callback_hint: Option<String>) -> Result<RouterRequestRow> {
+    async fn create_router_request(
+        &self,
+        session_id: Uuid,
+        agent_execution_id: Option<Uuid>,
+        intent: &str,
+        priority: &str,
+        callback_hint: Option<String>,
+    ) -> Result<RouterRequestRow> {
         let row: RouterRequestRow = sqlx::query_as(
             "INSERT INTO router_requests (session_id, agent_execution_id, intent, priority, callback_hint) VALUES ($1, $2, $3, $4, $5) RETURNING id, session_id, agent_execution_id, intent, priority, callback_hint, routed_tool, routed_args, is_async, passdown, chain, status, result, created_at, completed_at",
         )
@@ -1562,7 +1844,10 @@ impl RoomRepo for PgRepo {
     }
 
     async fn get_room(&self, id: Uuid) -> Result<Option<RoomRow>> {
-        let row = sqlx::query_as::<_, RoomRow>("SELECT * FROM rooms WHERE id = $1").bind(id).fetch_optional(&self.pool).await?;
+        let row = sqlx::query_as::<_, RoomRow>("SELECT * FROM rooms WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
         Ok(row)
     }
 
@@ -1600,7 +1885,10 @@ impl RoomRepo for PgRepo {
     }
 
     async fn delete_room(&self, id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM rooms WHERE id = $1").bind(id).execute(&self.pool).await?;
+        sqlx::query("DELETE FROM rooms WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
@@ -1614,7 +1902,14 @@ impl RoomRepo for PgRepo {
         Ok(rows)
     }
 
-    async fn add_room_member(&self, room_id: Uuid, agent_id: Uuid, display_name: Option<String>, role_description: String, display_order: i32) -> Result<()> {
+    async fn add_room_member(
+        &self,
+        room_id: Uuid,
+        agent_id: Uuid,
+        display_name: Option<String>,
+        role_description: String,
+        display_order: i32,
+    ) -> Result<()> {
         sqlx::query("INSERT INTO room_members (room_id, agent_id, display_name, role_description, display_order) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING")
             .bind(room_id)
             .bind(agent_id)
@@ -1638,7 +1933,10 @@ impl RoomRepo for PgRepo {
     async fn set_room_members(&self, room_id: Uuid, members: &[RoomMemberInput]) -> Result<()> {
         let mut tx = self.pool.begin().await?;
 
-        sqlx::query("DELETE FROM room_members WHERE room_id = $1").bind(room_id).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM room_members WHERE room_id = $1")
+            .bind(room_id)
+            .execute(&mut *tx)
+            .await?;
 
         for member in members {
             sqlx::query("INSERT INTO room_members (room_id, agent_id, display_name, role_description, display_order) VALUES ($1, $2, $3, $4, $5)")
@@ -1657,12 +1955,18 @@ impl RoomRepo for PgRepo {
 
     // --- Room sessions ---
 
-    async fn create_room_session(&self, room_id: Uuid, run_id: Option<Uuid>) -> Result<RoomSessionRow> {
-        let row = sqlx::query_as::<_, RoomSessionRow>("INSERT INTO room_sessions (room_id, run_id) VALUES ($1, $2) RETURNING *")
-            .bind(room_id)
-            .bind(run_id)
-            .fetch_one(&self.pool)
-            .await?;
+    async fn create_room_session(
+        &self,
+        room_id: Uuid,
+        run_id: Option<Uuid>,
+    ) -> Result<RoomSessionRow> {
+        let row = sqlx::query_as::<_, RoomSessionRow>(
+            "INSERT INTO room_sessions (room_id, run_id) VALUES ($1, $2) RETURNING *",
+        )
+        .bind(room_id)
+        .bind(run_id)
+        .fetch_one(&self.pool)
+        .await?;
         Ok(row)
     }
 
@@ -1675,7 +1979,11 @@ impl RoomRepo for PgRepo {
     }
 
     async fn update_room_session_status(&self, id: Uuid, status: &str) -> Result<()> {
-        let completed_at = if status == "completed" || status == "cancelled" { Some(Utc::now()) } else { None };
+        let completed_at = if status == "completed" || status == "cancelled" {
+            Some(Utc::now())
+        } else {
+            None
+        };
         sqlx::query("UPDATE room_sessions SET status = $2, completed_at = COALESCE($3, completed_at) WHERE id = $1")
             .bind(id)
             .bind(status)
@@ -1736,7 +2044,13 @@ impl RoomRepo for PgRepo {
 impl WorkflowCollectionRepo for PgRepo {
     // --- Collections ---
 
-    async fn create_collection(&self, user_id: Uuid, name: String, description: Option<String>, execution_mode: String) -> Result<WorkflowCollectionRow> {
+    async fn create_collection(
+        &self,
+        user_id: Uuid,
+        name: String,
+        description: Option<String>,
+        execution_mode: String,
+    ) -> Result<WorkflowCollectionRow> {
         let row = sqlx::query_as::<_, WorkflowCollectionRow>(
             "INSERT INTO workflow_collections (user_id, name, description, execution_mode) \
              VALUES ($1, $2, $3, $4) \
@@ -1752,22 +2066,32 @@ impl WorkflowCollectionRepo for PgRepo {
     }
 
     async fn get_collection(&self, id: Uuid) -> Result<Option<WorkflowCollectionRow>> {
-        let row = sqlx::query_as::<_, WorkflowCollectionRow>("SELECT * FROM workflow_collections WHERE id = $1")
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?;
+        let row = sqlx::query_as::<_, WorkflowCollectionRow>(
+            "SELECT * FROM workflow_collections WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
         Ok(row)
     }
 
     async fn list_collections(&self, user_id: Uuid) -> Result<Vec<WorkflowCollectionRow>> {
-        let rows = sqlx::query_as::<_, WorkflowCollectionRow>("SELECT * FROM workflow_collections WHERE user_id = $1 ORDER BY created_at DESC")
-            .bind(user_id)
-            .fetch_all(&self.pool)
-            .await?;
+        let rows = sqlx::query_as::<_, WorkflowCollectionRow>(
+            "SELECT * FROM workflow_collections WHERE user_id = $1 ORDER BY created_at DESC",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
         Ok(rows)
     }
 
-    async fn update_collection(&self, id: Uuid, name: Option<String>, description: Option<String>, execution_mode: Option<String>) -> Result<WorkflowCollectionRow> {
+    async fn update_collection(
+        &self,
+        id: Uuid,
+        name: Option<String>,
+        description: Option<String>,
+        execution_mode: Option<String>,
+    ) -> Result<WorkflowCollectionRow> {
         let row = sqlx::query_as::<_, WorkflowCollectionRow>(
             "UPDATE workflow_collections \
              SET name = COALESCE($2, name), \
@@ -1787,13 +2111,22 @@ impl WorkflowCollectionRepo for PgRepo {
     }
 
     async fn delete_collection(&self, id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM workflow_collections WHERE id = $1").bind(id).execute(&self.pool).await?;
+        sqlx::query("DELETE FROM workflow_collections WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
     // --- Collection Workflows (Membership) ---
 
-    async fn add_collection_workflow(&self, collection_id: Uuid, workflow_id: Uuid, display_order: i32, execution_mode: Option<String>) -> Result<CollectionWorkflowRow> {
+    async fn add_collection_workflow(
+        &self,
+        collection_id: Uuid,
+        workflow_id: Uuid,
+        display_order: i32,
+        execution_mode: Option<String>,
+    ) -> Result<CollectionWorkflowRow> {
         let row = sqlx::query_as::<_, CollectionWorkflowRow>(
             "INSERT INTO collection_workflows (collection_id, workflow_id, display_order, execution_mode) \
              VALUES ($1, $2, $3, $4) \
@@ -1808,24 +2141,41 @@ impl WorkflowCollectionRepo for PgRepo {
         Ok(row)
     }
 
-    async fn list_collection_workflows(&self, collection_id: Uuid) -> Result<Vec<CollectionWorkflowRow>> {
-        let rows = sqlx::query_as::<_, CollectionWorkflowRow>("SELECT * FROM collection_workflows WHERE collection_id = $1 ORDER BY display_order")
-            .bind(collection_id)
-            .fetch_all(&self.pool)
-            .await?;
+    async fn list_collection_workflows(
+        &self,
+        collection_id: Uuid,
+    ) -> Result<Vec<CollectionWorkflowRow>> {
+        let rows = sqlx::query_as::<_, CollectionWorkflowRow>(
+            "SELECT * FROM collection_workflows WHERE collection_id = $1 ORDER BY display_order",
+        )
+        .bind(collection_id)
+        .fetch_all(&self.pool)
+        .await?;
         Ok(rows)
     }
 
-    async fn remove_collection_workflow(&self, collection_id: Uuid, workflow_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM collection_workflows WHERE collection_id = $1 AND workflow_id = $2")
-            .bind(collection_id)
-            .bind(workflow_id)
-            .execute(&self.pool)
-            .await?;
+    async fn remove_collection_workflow(
+        &self,
+        collection_id: Uuid,
+        workflow_id: Uuid,
+    ) -> Result<()> {
+        sqlx::query(
+            "DELETE FROM collection_workflows WHERE collection_id = $1 AND workflow_id = $2",
+        )
+        .bind(collection_id)
+        .bind(workflow_id)
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 
-    async fn update_collection_workflow(&self, collection_id: Uuid, workflow_id: Uuid, display_order: Option<i32>, execution_mode: Option<String>) -> Result<CollectionWorkflowRow> {
+    async fn update_collection_workflow(
+        &self,
+        collection_id: Uuid,
+        workflow_id: Uuid,
+        display_order: Option<i32>,
+        execution_mode: Option<String>,
+    ) -> Result<CollectionWorkflowRow> {
         let row = sqlx::query_as::<_, CollectionWorkflowRow>(
             "UPDATE collection_workflows \
              SET display_order = COALESCE($3, display_order), \
@@ -1844,7 +2194,11 @@ impl WorkflowCollectionRepo for PgRepo {
 
     // --- Collection Workflow Edges (DAG edges between workflows) ---
 
-    async fn set_collection_edges(&self, collection_id: Uuid, edges: Vec<CollectionWorkflowEdgeRow>) -> Result<()> {
+    async fn set_collection_edges(
+        &self,
+        collection_id: Uuid,
+        edges: Vec<CollectionWorkflowEdgeRow>,
+    ) -> Result<()> {
         let mut tx = self.pool.begin().await?;
 
         // Delete existing edges
@@ -1867,15 +2221,25 @@ impl WorkflowCollectionRepo for PgRepo {
         Ok(())
     }
 
-    async fn list_collection_edges(&self, collection_id: Uuid) -> Result<Vec<CollectionWorkflowEdgeRow>> {
-        let rows = sqlx::query_as::<_, CollectionWorkflowEdgeRow>("SELECT * FROM collection_workflow_edges WHERE collection_id = $1")
-            .bind(collection_id)
-            .fetch_all(&self.pool)
-            .await?;
+    async fn list_collection_edges(
+        &self,
+        collection_id: Uuid,
+    ) -> Result<Vec<CollectionWorkflowEdgeRow>> {
+        let rows = sqlx::query_as::<_, CollectionWorkflowEdgeRow>(
+            "SELECT * FROM collection_workflow_edges WHERE collection_id = $1",
+        )
+        .bind(collection_id)
+        .fetch_all(&self.pool)
+        .await?;
         Ok(rows)
     }
 
-    async fn add_collection_edge(&self, collection_id: Uuid, from_workflow_id: Uuid, to_workflow_id: Uuid) -> Result<()> {
+    async fn add_collection_edge(
+        &self,
+        collection_id: Uuid,
+        from_workflow_id: Uuid,
+        to_workflow_id: Uuid,
+    ) -> Result<()> {
         sqlx::query("INSERT INTO collection_workflow_edges (from_workflow_id, to_workflow_id, collection_id) VALUES ($1, $2, $3)")
             .bind(from_workflow_id)
             .bind(to_workflow_id)
@@ -1885,7 +2249,12 @@ impl WorkflowCollectionRepo for PgRepo {
         Ok(())
     }
 
-    async fn remove_collection_edge(&self, collection_id: Uuid, from_workflow_id: Uuid, to_workflow_id: Uuid) -> Result<()> {
+    async fn remove_collection_edge(
+        &self,
+        collection_id: Uuid,
+        from_workflow_id: Uuid,
+        to_workflow_id: Uuid,
+    ) -> Result<()> {
         sqlx::query("DELETE FROM collection_workflow_edges WHERE collection_id = $1 AND from_workflow_id = $2 AND to_workflow_id = $3")
             .bind(collection_id)
             .bind(from_workflow_id)
@@ -1897,7 +2266,11 @@ impl WorkflowCollectionRepo for PgRepo {
 
     // --- Collection Runs (Execution Tracking) ---
 
-    async fn create_collection_run(&self, collection_id: Uuid, user_id: Uuid) -> Result<CollectionRunRow> {
+    async fn create_collection_run(
+        &self,
+        collection_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<CollectionRunRow> {
         let row = sqlx::query_as::<_, CollectionRunRow>(
             "INSERT INTO collection_runs (collection_id, user_id, status) \
              VALUES ($1, $2, 'running') \
@@ -1911,22 +2284,30 @@ impl WorkflowCollectionRepo for PgRepo {
     }
 
     async fn get_collection_run(&self, id: Uuid) -> Result<Option<CollectionRunRow>> {
-        let row = sqlx::query_as::<_, CollectionRunRow>("SELECT * FROM collection_runs WHERE id = $1")
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?;
+        let row =
+            sqlx::query_as::<_, CollectionRunRow>("SELECT * FROM collection_runs WHERE id = $1")
+                .bind(id)
+                .fetch_optional(&self.pool)
+                .await?;
         Ok(row)
     }
 
     async fn list_collection_runs(&self, collection_id: Uuid) -> Result<Vec<CollectionRunRow>> {
-        let rows = sqlx::query_as::<_, CollectionRunRow>("SELECT * FROM collection_runs WHERE collection_id = $1 ORDER BY started_at DESC")
-            .bind(collection_id)
-            .fetch_all(&self.pool)
-            .await?;
+        let rows = sqlx::query_as::<_, CollectionRunRow>(
+            "SELECT * FROM collection_runs WHERE collection_id = $1 ORDER BY started_at DESC",
+        )
+        .bind(collection_id)
+        .fetch_all(&self.pool)
+        .await?;
         Ok(rows)
     }
 
-    async fn update_collection_run_status(&self, id: Uuid, status: &str, error: Option<String>) -> Result<CollectionRunRow> {
+    async fn update_collection_run_status(
+        &self,
+        id: Uuid,
+        status: &str,
+        error: Option<String>,
+    ) -> Result<CollectionRunRow> {
         let row = sqlx::query_as::<_, CollectionRunRow>(
             "UPDATE collection_runs \
              SET status = $2, \
@@ -1945,7 +2326,12 @@ impl WorkflowCollectionRepo for PgRepo {
 
     // --- Workflow Executions (Workflow-level execution within a collection run) ---
 
-    async fn create_workflow_execution(&self, collection_run_id: Uuid, workflow_id: Uuid, user_id: Uuid) -> Result<WorkflowExecutionRow> {
+    async fn create_workflow_execution(
+        &self,
+        collection_run_id: Uuid,
+        workflow_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<WorkflowExecutionRow> {
         let row = sqlx::query_as::<_, WorkflowExecutionRow>(
             "INSERT INTO workflow_executions (collection_run_id, workflow_id, user_id, status) \
              VALUES ($1, $2, $3, 'pending') \
@@ -1960,22 +2346,35 @@ impl WorkflowCollectionRepo for PgRepo {
     }
 
     async fn get_workflow_execution(&self, id: Uuid) -> Result<Option<WorkflowExecutionRow>> {
-        let row = sqlx::query_as::<_, WorkflowExecutionRow>("SELECT * FROM workflow_executions WHERE id = $1")
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?;
+        let row = sqlx::query_as::<_, WorkflowExecutionRow>(
+            "SELECT * FROM workflow_executions WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
         Ok(row)
     }
 
-    async fn list_workflow_executions(&self, collection_run_id: Uuid) -> Result<Vec<WorkflowExecutionRow>> {
-        let rows = sqlx::query_as::<_, WorkflowExecutionRow>("SELECT * FROM workflow_executions WHERE collection_run_id = $1 ORDER BY started_at")
-            .bind(collection_run_id)
-            .fetch_all(&self.pool)
-            .await?;
+    async fn list_workflow_executions(
+        &self,
+        collection_run_id: Uuid,
+    ) -> Result<Vec<WorkflowExecutionRow>> {
+        let rows = sqlx::query_as::<_, WorkflowExecutionRow>(
+            "SELECT * FROM workflow_executions WHERE collection_run_id = $1 ORDER BY started_at",
+        )
+        .bind(collection_run_id)
+        .fetch_all(&self.pool)
+        .await?;
         Ok(rows)
     }
 
-    async fn update_workflow_execution_status(&self, id: Uuid, status: &str, outputs: Option<serde_json::Value>, error: Option<String>) -> Result<WorkflowExecutionRow> {
+    async fn update_workflow_execution_status(
+        &self,
+        id: Uuid,
+        status: &str,
+        outputs: Option<serde_json::Value>,
+        error: Option<String>,
+    ) -> Result<WorkflowExecutionRow> {
         let row = sqlx::query_as::<_, WorkflowExecutionRow>(
             "UPDATE workflow_executions \
              SET status = $2, \
@@ -2022,20 +2421,31 @@ impl WorkflowCollectionRepo for PgRepo {
         Ok(row)
     }
 
-    async fn get_execution_variables(&self, collection_run_id: Uuid) -> Result<Vec<ExecutionVariableRow>> {
-        let rows = sqlx::query_as::<_, ExecutionVariableRow>("SELECT * FROM execution_variables WHERE collection_run_id = $1 ORDER BY created_at")
-            .bind(collection_run_id)
-            .fetch_all(&self.pool)
-            .await?;
+    async fn get_execution_variables(
+        &self,
+        collection_run_id: Uuid,
+    ) -> Result<Vec<ExecutionVariableRow>> {
+        let rows = sqlx::query_as::<_, ExecutionVariableRow>(
+            "SELECT * FROM execution_variables WHERE collection_run_id = $1 ORDER BY created_at",
+        )
+        .bind(collection_run_id)
+        .fetch_all(&self.pool)
+        .await?;
         Ok(rows)
     }
 
-    async fn get_execution_variable_by_path(&self, collection_run_id: Uuid, variable_path: &str) -> Result<Option<ExecutionVariableRow>> {
-        let row = sqlx::query_as::<_, ExecutionVariableRow>("SELECT * FROM execution_variables WHERE collection_run_id = $1 AND variable_path = $2")
-            .bind(collection_run_id)
-            .bind(variable_path)
-            .fetch_optional(&self.pool)
-            .await?;
+    async fn get_execution_variable_by_path(
+        &self,
+        collection_run_id: Uuid,
+        variable_path: &str,
+    ) -> Result<Option<ExecutionVariableRow>> {
+        let row = sqlx::query_as::<_, ExecutionVariableRow>(
+            "SELECT * FROM execution_variables WHERE collection_run_id = $1 AND variable_path = $2",
+        )
+        .bind(collection_run_id)
+        .bind(variable_path)
+        .fetch_optional(&self.pool)
+        .await?;
         Ok(row)
     }
 }
@@ -2046,7 +2456,13 @@ impl WorkflowCollectionRepo for PgRepo {
 
 #[async_trait]
 impl WorkflowStepAgentRepo for PgRepo {
-    async fn add_step_agent(&self, step_id: Uuid, agent_id: Uuid, execution_strategy: String, agent_order: i32) -> Result<WorkflowStepAgentRow> {
+    async fn add_step_agent(
+        &self,
+        step_id: Uuid,
+        agent_id: Uuid,
+        execution_strategy: String,
+        agent_order: i32,
+    ) -> Result<WorkflowStepAgentRow> {
         let row = sqlx::query_as::<_, WorkflowStepAgentRow>(
             "INSERT INTO workflow_step_agents (step_id, agent_id, execution_strategy, agent_order) \
              VALUES ($1, $2, $3, $4) \
@@ -2062,10 +2478,12 @@ impl WorkflowStepAgentRepo for PgRepo {
     }
 
     async fn list_step_agents(&self, step_id: Uuid) -> Result<Vec<WorkflowStepAgentRow>> {
-        let rows = sqlx::query_as::<_, WorkflowStepAgentRow>("SELECT * FROM workflow_step_agents WHERE step_id = $1 ORDER BY agent_order")
-            .bind(step_id)
-            .fetch_all(&self.pool)
-            .await?;
+        let rows = sqlx::query_as::<_, WorkflowStepAgentRow>(
+            "SELECT * FROM workflow_step_agents WHERE step_id = $1 ORDER BY agent_order",
+        )
+        .bind(step_id)
+        .fetch_all(&self.pool)
+        .await?;
         Ok(rows)
     }
 
@@ -2078,7 +2496,13 @@ impl WorkflowStepAgentRepo for PgRepo {
         Ok(())
     }
 
-    async fn update_step_agent(&self, step_id: Uuid, agent_id: Uuid, execution_strategy: Option<String>, agent_order: Option<i32>) -> Result<WorkflowStepAgentRow> {
+    async fn update_step_agent(
+        &self,
+        step_id: Uuid,
+        agent_id: Uuid,
+        execution_strategy: Option<String>,
+        agent_order: Option<i32>,
+    ) -> Result<WorkflowStepAgentRow> {
         let row = sqlx::query_as::<_, WorkflowStepAgentRow>(
             "UPDATE workflow_step_agents \
              SET execution_strategy = COALESCE($3, execution_strategy), \
@@ -2095,11 +2519,18 @@ impl WorkflowStepAgentRepo for PgRepo {
         Ok(row)
     }
 
-    async fn set_step_agents(&self, step_id: Uuid, agents: Vec<WorkflowStepAgentRow>) -> Result<()> {
+    async fn set_step_agents(
+        &self,
+        step_id: Uuid,
+        agents: Vec<WorkflowStepAgentRow>,
+    ) -> Result<()> {
         let mut tx = self.pool.begin().await?;
 
         // Delete existing agents
-        sqlx::query("DELETE FROM workflow_step_agents WHERE step_id = $1").bind(step_id).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM workflow_step_agents WHERE step_id = $1")
+            .bind(step_id)
+            .execute(&mut *tx)
+            .await?;
 
         // Insert new agents
         for agent in agents {

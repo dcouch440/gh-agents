@@ -97,9 +97,20 @@ pub struct ApproveExecutionRequest {
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_agent_execution(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<AgentExecutionResponse>, StatusCode> {
-    let repo = state.agent_execution_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let row = repo.get_agent_execution(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn get_agent_execution(
+    State(state): State<AppState>,
+    _auth: auth_utils::AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<AgentExecutionResponse>, StatusCode> {
+    let repo = state
+        .agent_execution_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = repo
+        .get_agent_execution(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     Ok(Json(AgentExecutionResponse::from(row)))
 }
 
@@ -114,12 +125,29 @@ pub async fn get_agent_execution(State(state): State<AppState>, _auth: auth_util
         (status = 404, description = "Not found")
     )
 )]
-pub async fn list_execution_messages(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<Vec<ExecutionMessageResponse>>, StatusCode> {
-    let repo = state.agent_execution_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn list_execution_messages(
+    State(state): State<AppState>,
+    _auth: auth_utils::AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Vec<ExecutionMessageResponse>>, StatusCode> {
+    let repo = state
+        .agent_execution_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     // Verify execution exists
-    repo.get_agent_execution(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
-    let rows = repo.list_execution_messages(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(rows.into_iter().map(ExecutionMessageResponse::from).collect()))
+    repo.get_agent_execution(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let rows = repo
+        .list_execution_messages(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(
+        rows.into_iter()
+            .map(ExecutionMessageResponse::from)
+            .collect(),
+    ))
 }
 
 /// POST /api/agent-executions/:id/messages — send a user message to an interactive agent execution.
@@ -142,8 +170,15 @@ pub async fn send_execution_message(
     Path(id): Path<Uuid>,
     Json(req): Json<SendMessageRequest>,
 ) -> Result<Json<ExecutionMessageResponse>, StatusCode> {
-    let repo = state.agent_execution_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let ae = repo.get_agent_execution(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let repo = state
+        .agent_execution_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let ae = repo
+        .get_agent_execution(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     if !ae.is_interactive {
         return Err(StatusCode::BAD_REQUEST);
@@ -181,8 +216,15 @@ pub async fn approve_execution(
     Path(id): Path<Uuid>,
     Json(req): Json<ApproveExecutionRequest>,
 ) -> Result<Json<AgentExecutionResponse>, StatusCode> {
-    let repo = state.agent_execution_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let ae = repo.get_agent_execution(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let repo = state
+        .agent_execution_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let ae = repo
+        .get_agent_execution(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     if !ae.is_interactive || ae.status != "awaiting_user" {
         return Err(StatusCode::BAD_REQUEST);

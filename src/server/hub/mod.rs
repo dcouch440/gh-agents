@@ -32,7 +32,10 @@ pub use error::HubError;
 // LEGACY: pub use pipeline_advance::{advance_pipeline, PipelineAdvanceAction};
 pub use prompt_registry::PromptRegistry;
 pub use recorder::ExecutionRecorder;
-pub use strategies::{ChatConfig, ChatStrategy, DagStepStrategy, RoomSpeakerConfig, RoomSpeakerStrategy, RouterStrategy};
+pub use strategies::{
+    ChatConfig, ChatStrategy, DagStepStrategy, RoomSpeakerConfig, RoomSpeakerStrategy,
+    RouterStrategy,
+};
 pub use strategy::ExecutionStrategy;
 pub use streaming::{NullSink, StreamSink};
 
@@ -59,12 +62,20 @@ pub async fn run_chat(
         .ok_or_else(|| HubError::Internal(anyhow::anyhow!("Agent {agent_id} not found")))?;
 
     // Load agent tools
-    let tools = state.repo.get_agent_tools(agent_id).await.map_err(HubError::Internal)?;
+    let tools = state
+        .repo
+        .get_agent_tools(agent_id)
+        .await
+        .map_err(HubError::Internal)?;
 
     let tool_names: Vec<String> = tools.into_iter().map(|t| t.name).collect();
 
     // Load agent modes and classify if applicable
-    let modes = state.repo.get_agent_modes(agent_id).await.map_err(HubError::Internal)?;
+    let modes = state
+        .repo
+        .get_agent_modes(agent_id)
+        .await
+        .map_err(HubError::Internal)?;
 
     let active_mode = if modes.is_empty() {
         None
@@ -91,17 +102,33 @@ pub async fn run_chat(
     let strategy = ChatStrategy::new(chat_config, state.clone(), user_id, session_id, message_id);
     let engine = ExecutionEngine::new(provider);
     let sink = streaming::SseSink::new(state.clone(), message_id);
-    let recorder = ExecutionRecorder::new(state.repo.as_ref(), state.agent_execution_repo.as_deref(), state.token_ledger_repo.as_deref());
+    let recorder = ExecutionRecorder::new(
+        state.repo.as_ref(),
+        state.agent_execution_repo.as_deref(),
+        state.token_ledger_repo.as_deref(),
+    );
 
-    engine.execute(&strategy, content, &sink, &recorder, cancel).await
+    engine
+        .execute(&strategy, content, &sink, &recorder, cancel)
+        .await
 }
 
 /// Classify the user's message into one of the agent's modes using a RouterStrategy call.
 ///
 /// Returns `None` if no mode is a clear fit (router returns "default" or unrecognized name).
-async fn classify_mode(modes: &[AgentModeRow], user_message: &str, state: &AppState, provider: &Arc<dyn LLMProvider + Send + Sync>, user_id: UserId) -> Result<Option<AgentModeRow>, HubError> {
+async fn classify_mode(
+    modes: &[AgentModeRow],
+    user_message: &str,
+    state: &AppState,
+    provider: &Arc<dyn LLMProvider + Send + Sync>,
+    user_id: UserId,
+) -> Result<Option<AgentModeRow>, HubError> {
     // Build the mode listing for the routing prompt
-    let mode_list: String = modes.iter().map(|m| format!("- \"{}\": {}", m.name, m.classifier_hint)).collect::<Vec<_>>().join("\n");
+    let mode_list: String = modes
+        .iter()
+        .map(|m| format!("- \"{}\": {}", m.name, m.classifier_hint))
+        .collect::<Vec<_>>()
+        .join("\n");
 
     let system_prompt = format!(
         "You are a conversation classifier. Given the user's message, pick the most appropriate mode.\n\n\
@@ -120,9 +147,15 @@ async fn classify_mode(modes: &[AgentModeRow], user_message: &str, state: &AppSt
     let strategy = RouterStrategy::new(router_config);
     let engine = ExecutionEngine::new(provider.clone());
     let sink = NullSink;
-    let recorder = ExecutionRecorder::new(state.repo.as_ref(), state.agent_execution_repo.as_deref(), state.token_ledger_repo.as_deref());
+    let recorder = ExecutionRecorder::new(
+        state.repo.as_ref(),
+        state.agent_execution_repo.as_deref(),
+        state.token_ledger_repo.as_deref(),
+    );
 
-    let result = engine.execute(&strategy, user_message, &sink, &recorder, None).await?;
+    let result = engine
+        .execute(&strategy, user_message, &sink, &recorder, None)
+        .await?;
 
     // Parse the mode name from the router's JSON response
     let mode_name = result

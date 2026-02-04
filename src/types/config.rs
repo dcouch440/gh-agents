@@ -223,7 +223,8 @@ impl Default for AppConfig {
 impl AppConfig {
     /// Merge global and project configs (project overrides global)
     pub fn merge(global: GlobalConfig, project: Option<ProjectConfig>) -> Self {
-        let database_url = std::env::var(ENV_DATABASE_URL).unwrap_or_else(|_| DEFAULT_DATABASE_URL.to_string());
+        let database_url =
+            std::env::var(ENV_DATABASE_URL).unwrap_or_else(|_| DEFAULT_DATABASE_URL.to_string());
 
         match project {
             Some(proj) => Self {

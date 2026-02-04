@@ -23,9 +23,11 @@ pub fn load_project_config() -> Result<Option<ProjectConfig>> {
         return Ok(None);
     }
 
-    let content = std::fs::read_to_string(&path).with_context(|| format!("Failed to read project config from {:?}", path))?;
+    let content = std::fs::read_to_string(&path)
+        .with_context(|| format!("Failed to read project config from {:?}", path))?;
 
-    let config: ProjectConfig = toml::from_str(&content).with_context(|| format!("Failed to parse project config from {:?}", path))?;
+    let config: ProjectConfig = toml::from_str(&content)
+        .with_context(|| format!("Failed to parse project config from {:?}", path))?;
 
     tracing::info!("Loaded project config from {:?}", path);
     Ok(Some(config))

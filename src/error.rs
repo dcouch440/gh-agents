@@ -13,22 +13,42 @@ use tracing::error;
 #[derive(Error, Debug, Clone)]
 pub enum NexorError {
     #[error("configuration error: {message}")]
-    Config { message: String, suggestion: Option<String> },
+    Config {
+        message: String,
+        suggestion: Option<String>,
+    },
 
     #[error("database error: {message}")]
-    Database { message: String, suggestion: Option<String> },
+    Database {
+        message: String,
+        suggestion: Option<String>,
+    },
 
     #[error("LLM API error: {message}")]
-    LlmApi { message: String, suggestion: Option<String> },
+    LlmApi {
+        message: String,
+        suggestion: Option<String>,
+    },
 
     #[error("GitHub API error: {message}")]
-    GitHubApi { message: String, suggestion: Option<String> },
+    GitHubApi {
+        message: String,
+        suggestion: Option<String>,
+    },
 
     #[error("agent error: {agent_id} - {message}")]
-    Agent { agent_id: String, message: String, suggestion: Option<String> },
+    Agent {
+        agent_id: String,
+        message: String,
+        suggestion: Option<String>,
+    },
 
     #[error("task failed: {task_id} - {message}")]
-    TaskFailed { task_id: String, message: String, recoverable: bool },
+    TaskFailed {
+        task_id: String,
+        message: String,
+        recoverable: bool,
+    },
 
     #[error("internal error: {message}")]
     Internal { message: String },
@@ -55,12 +75,19 @@ impl NexorError {
             NexorError::GitHubApi { message, .. } => {
                 // 404/403 are permanent; rate limits and server errors are transient
                 let msg = message.to_lowercase();
-                !msg.contains("not found") && !msg.contains("404") && !msg.contains("forbidden") && !msg.contains("403") && !msg.contains("authentication")
+                !msg.contains("not found")
+                    && !msg.contains("404")
+                    && !msg.contains("forbidden")
+                    && !msg.contains("403")
+                    && !msg.contains("authentication")
             }
             NexorError::Database { message, .. } => {
                 // Connection/timeout issues are transient; constraint violations are not
                 let msg = message.to_lowercase();
-                msg.contains("timeout") || msg.contains("connection") || msg.contains("locked") || msg.contains("pool")
+                msg.contains("timeout")
+                    || msg.contains("connection")
+                    || msg.contains("locked")
+                    || msg.contains("pool")
             }
             _ => false,
         }
@@ -93,7 +120,10 @@ impl NexorError {
         };
         NexorError::Config {
             message: format!("{} API key not found", provider),
-            suggestion: Some(format!("Set the {} environment variable: export {}=\"your-key\"", env_var, env_var)),
+            suggestion: Some(format!(
+                "Set the {} environment variable: export {}=\"your-key\"",
+                env_var, env_var
+            )),
         }
     }
 
@@ -101,7 +131,10 @@ impl NexorError {
     pub fn rate_limited(reset_time: DateTime<Utc>) -> Self {
         NexorError::LlmApi {
             message: "rate limit exceeded".to_string(),
-            suggestion: Some(format!("Wait until {} or reduce agent concurrency in config", reset_time.format("%H:%M:%S UTC"))),
+            suggestion: Some(format!(
+                "Wait until {} or reduce agent concurrency in config",
+                reset_time.format("%H:%M:%S UTC")
+            )),
         }
     }
 
@@ -125,7 +158,10 @@ impl NexorError {
     pub fn database_locked() -> Self {
         NexorError::Database {
             message: "database is locked".to_string(),
-            suggestion: Some("Another nexor instance may be running. Close it or delete .nexor/state.db-lock".to_string()),
+            suggestion: Some(
+                "Another nexor instance may be running. Close it or delete .nexor/state.db-lock"
+                    .to_string(),
+            ),
         }
     }
 
@@ -141,7 +177,9 @@ impl NexorError {
     pub fn github_not_found(resource: &str) -> Self {
         NexorError::GitHubApi {
             message: format!("{} not found", resource),
-            suggestion: Some("Check the URL and ensure you have access to this repository".to_string()),
+            suggestion: Some(
+                "Check the URL and ensure you have access to this repository".to_string(),
+            ),
         }
     }
 
@@ -149,14 +187,19 @@ impl NexorError {
     pub fn github_unauthorized() -> Self {
         NexorError::GitHubApi {
             message: "authentication failed".to_string(),
-            suggestion: Some("Check your GITHUB_TOKEN has the required permissions (repo scope)".to_string()),
+            suggestion: Some(
+                "Check your GITHUB_TOKEN has the required permissions (repo scope)".to_string(),
+            ),
         }
     }
 
     /// Create error for GitHub rate limiting
     pub fn github_rate_limited(reset_time: Option<DateTime<Utc>>) -> Self {
         let suggestion = match reset_time {
-            Some(time) => format!("Rate limited. Try again after {}", time.format("%H:%M:%S UTC")),
+            Some(time) => format!(
+                "Rate limited. Try again after {}",
+                time.format("%H:%M:%S UTC")
+            ),
             None => "Rate limited. Wait a moment and try again.".to_string(),
         };
         NexorError::GitHubApi {
@@ -170,7 +213,9 @@ impl NexorError {
         NexorError::Agent {
             agent_id: agent_id.to_string(),
             message: "agent timed out".to_string(),
-            suggestion: Some("The task may be too complex. Try breaking it into smaller pieces.".to_string()),
+            suggestion: Some(
+                "The task may be too complex. Try breaking it into smaller pieces.".to_string(),
+            ),
         }
     }
 
@@ -194,12 +239,18 @@ impl NexorError {
 
     /// Create internal error
     pub fn internal(message: impl Into<String>) -> Self {
-        NexorError::Internal { message: message.into() }
+        NexorError::Internal {
+            message: message.into(),
+        }
     }
 }
 
 /// Spawn a task with error boundary that reports failures to a channel
-pub fn spawn_with_boundary<F, T>(name: &str, error_tx: mpsc::Sender<NexorError>, future: F) -> JoinHandle<()>
+pub fn spawn_with_boundary<F, T>(
+    name: &str,
+    error_tx: mpsc::Sender<NexorError>,
+    future: F,
+) -> JoinHandle<()>
 where
     F: Future<Output = Result<T, anyhow::Error>> + Send + 'static,
     T: Send + 'static,
@@ -250,7 +301,11 @@ pub fn enrich_error(error: anyhow::Error) -> NexorError {
     }
 
     // Check for network issues
-    if msg.contains("network") || msg.contains("connection") || msg.contains("timeout") || msg.contains("dns") {
+    if msg.contains("network")
+        || msg.contains("connection")
+        || msg.contains("timeout")
+        || msg.contains("dns")
+    {
         return NexorError::network_error(&error.to_string());
     }
 
@@ -280,7 +335,9 @@ pub fn enrich_error(error: anyhow::Error) -> NexorError {
     }
 
     // Default: internal error
-    NexorError::Internal { message: error.to_string() }
+    NexorError::Internal {
+        message: error.to_string(),
+    }
 }
 
 #[cfg(test)]
@@ -304,7 +361,9 @@ mod tests {
         };
         assert_eq!(err.suggestion(), Some("fix it"));
 
-        let err = NexorError::Internal { message: "test".to_string() };
+        let err = NexorError::Internal {
+            message: "test".to_string(),
+        };
         assert_eq!(err.suggestion(), None);
     }
 
@@ -439,7 +498,9 @@ mod tests {
     #[tokio::test]
     async fn spawn_with_boundary_failure() {
         let (tx, mut rx) = mpsc::channel(1);
-        let handle = spawn_with_boundary("test", tx, async { Err::<(), _>(anyhow::anyhow!("rate limit exceeded")) });
+        let handle = spawn_with_boundary("test", tx, async {
+            Err::<(), _>(anyhow::anyhow!("rate limit exceeded"))
+        });
         handle.await.unwrap();
         // Error should be sent
         let err = rx.recv().await.unwrap();
@@ -455,7 +516,9 @@ mod tests {
 
     #[tokio::test]
     async fn spawn_with_result_failure() {
-        let handle = spawn_with_result("test", async { Err::<i32, _>(anyhow::anyhow!("database locked")) });
+        let handle = spawn_with_result("test", async {
+            Err::<i32, _>(anyhow::anyhow!("database locked"))
+        });
         let result = handle.await.unwrap();
         assert!(matches!(result, Err(NexorError::Database { .. })));
     }
@@ -496,7 +559,9 @@ mod tests {
         };
         assert_eq!(format!("{}", task), "task failed: t1 - oops");
 
-        let internal = NexorError::Internal { message: "bug".into() };
+        let internal = NexorError::Internal {
+            message: "bug".into(),
+        };
         assert_eq!(format!("{}", internal), "internal error: bug");
     }
 
@@ -614,7 +679,9 @@ mod tests {
 
     #[test]
     fn is_recoverable_internal_not_recoverable() {
-        let err = NexorError::Internal { message: "bug".into() };
+        let err = NexorError::Internal {
+            message: "bug".into(),
+        };
         assert!(!err.is_recoverable());
     }
 

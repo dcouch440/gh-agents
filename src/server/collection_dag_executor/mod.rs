@@ -10,7 +10,9 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::db::traits::{WorkflowCollectionRepo, WorkflowRepo};
-use crate::db::{CollectionRunRow, CollectionWorkflowEdgeRow, CollectionWorkflowRow, WorkflowExecutionRow};
+use crate::db::{
+    CollectionRunRow, CollectionWorkflowEdgeRow, CollectionWorkflowRow, WorkflowExecutionRow,
+};
 use crate::llm::LLMProvider;
 use crate::server::dag_executor::{execute_workflow, WorkflowExecutionContext};
 use crate::server::state::AppState;
@@ -30,7 +32,11 @@ where
     R: WorkflowCollectionRepo + Send + Sync + 'static,
 {
     /// Create a new collection DAG executor.
-    pub fn new(collection_repo: Arc<R>, workflow_repo: Arc<dyn WorkflowRepo>, state: Arc<AppState>) -> Self {
+    pub fn new(
+        collection_repo: Arc<R>,
+        workflow_repo: Arc<dyn WorkflowRepo>,
+        state: Arc<AppState>,
+    ) -> Self {
         Self {
             collection_repo,
             workflow_repo,
@@ -39,7 +45,11 @@ where
     }
 
     /// Execute a workflow collection (DAG of workflows).
-    pub async fn execute_collection(&self, collection_id: Uuid, user_id: Uuid) -> Result<CollectionRunRow> {
+    pub async fn execute_collection(
+        &self,
+        collection_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<CollectionRunRow> {
         // 1. Load collection
         let collection = self
             .collection_repo
@@ -48,25 +58,49 @@ where
             .ok_or_else(|| anyhow!("Collection not found: {}", collection_id))?;
 
         // 2. Load workflows and edges
-        let collection_workflows = self.collection_repo.list_collection_workflows(collection_id).await?;
-        let edges = self.collection_repo.list_collection_edges(collection_id).await?;
+        let collection_workflows = self
+            .collection_repo
+            .list_collection_workflows(collection_id)
+            .await?;
+        let edges = self
+            .collection_repo
+            .list_collection_edges(collection_id)
+            .await?;
 
         // 3. Create collection_run row
-        let run = self.collection_repo.create_collection_run(collection_id, user_id).await?;
+        let run = self
+            .collection_repo
+            .create_collection_run(collection_id, user_id)
+            .await?;
 
         // 4. Execute based on execution_mode
         let result = match collection.execution_mode.as_str() {
-            "sequential" => self.execute_collection_sequential(run.id, &collection_workflows, &edges, user_id).await,
-            "parallel" => self.execute_collection_parallel(run.id, &collection_workflows, &edges, user_id).await,
-            _ => Err(anyhow!("Unknown execution mode: {}", collection.execution_mode)),
+            "sequential" => {
+                self.execute_collection_sequential(run.id, &collection_workflows, &edges, user_id)
+                    .await
+            }
+            "parallel" => {
+                self.execute_collection_parallel(run.id, &collection_workflows, &edges, user_id)
+                    .await
+            }
+            _ => Err(anyhow!(
+                "Unknown execution mode: {}",
+                collection.execution_mode
+            )),
         };
 
         // 5. Update collection_run status
         let final_run = match result {
-            Ok(_) => self.collection_repo.update_collection_run_status(run.id, "completed", None).await?,
+            Ok(_) => {
+                self.collection_repo
+                    .update_collection_run_status(run.id, "completed", None)
+                    .await?
+            }
             Err(e) => {
                 let error_msg = format!("{:#}", e);
-                self.collection_repo.update_collection_run_status(run.id, "failed", Some(error_msg)).await?
+                self.collection_repo
+                    .update_collection_run_status(run.id, "failed", Some(error_msg))
+                    .await?
             }
         };
 
@@ -74,19 +108,32 @@ where
     }
 
     /// Execute workflows sequentially (one-at-a-time).
-    async fn execute_collection_sequential(&self, run_id: Uuid, collection_workflows: &[CollectionWorkflowRow], edges: &[CollectionWorkflowEdgeRow], user_id: Uuid) -> Result<()> {
+    async fn execute_collection_sequential(
+        &self,
+        run_id: Uuid,
+        collection_workflows: &[CollectionWorkflowRow],
+        edges: &[CollectionWorkflowEdgeRow],
+        user_id: Uuid,
+    ) -> Result<()> {
         // Topological sort workflows
-        let workflow_ids: Vec<Uuid> = collection_workflows.iter().map(|cw| cw.workflow_id).collect();
-        let sorted_workflow_ids = topological_sort_workflows(&workflow_ids, collection_workflows, edges)?;
+        let workflow_ids: Vec<Uuid> = collection_workflows
+            .iter()
+            .map(|cw| cw.workflow_id)
+            .collect();
+        let sorted_workflow_ids =
+            topological_sort_workflows(&workflow_ids, collection_workflows, edges)?;
 
         let mut completed_workflows: HashMap<Uuid, WorkflowExecutionRow> = HashMap::new();
 
         for workflow_id in sorted_workflow_ids {
             // Collect outputs from completed workflows for variable resolution
-            let prior_outputs = collect_workflow_outputs(&completed_workflows, &*self.workflow_repo).await?;
+            let prior_outputs =
+                collect_workflow_outputs(&completed_workflows, &*self.workflow_repo).await?;
 
             // Execute workflow and capture outputs
-            let workflow_exec = self.execute_workflow_in_collection(run_id, workflow_id, user_id, &prior_outputs).await?;
+            let workflow_exec = self
+                .execute_workflow_in_collection(run_id, workflow_id, user_id, &prior_outputs)
+                .await?;
 
             completed_workflows.insert(workflow_id, workflow_exec);
         }
@@ -99,11 +146,20 @@ where
     /// Spawns multiple workflow executions concurrently, respecting the DAG structure.
     /// Entry workflows (no dependencies) start immediately. Each workflow, upon completion,
     /// triggers its dependent workflows if all their dependencies are satisfied.
-    async fn execute_collection_parallel(&self, run_id: Uuid, collection_workflows: &[CollectionWorkflowRow], edges: &[CollectionWorkflowEdgeRow], user_id: Uuid) -> Result<()> {
+    async fn execute_collection_parallel(
+        &self,
+        run_id: Uuid,
+        collection_workflows: &[CollectionWorkflowRow],
+        edges: &[CollectionWorkflowEdgeRow],
+        user_id: Uuid,
+    ) -> Result<()> {
         use tokio::sync::RwLock;
 
         // Build dependency graph
-        let workflow_ids: Vec<Uuid> = collection_workflows.iter().map(|cw| cw.workflow_id).collect();
+        let workflow_ids: Vec<Uuid> = collection_workflows
+            .iter()
+            .map(|cw| cw.workflow_id)
+            .collect();
         let mut in_degree: HashMap<Uuid, usize> = HashMap::new();
         let mut children: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
 
@@ -113,7 +169,10 @@ where
         }
 
         for edge in edges {
-            children.entry(edge.from_workflow_id).or_default().push(edge.to_workflow_id);
+            children
+                .entry(edge.from_workflow_id)
+                .or_default()
+                .push(edge.to_workflow_id);
             *in_degree.entry(edge.to_workflow_id).or_default() += 1;
         }
 
@@ -125,7 +184,10 @@ where
         // Find entry workflows (no dependencies)
         let ready: Vec<Uuid> = {
             let deg = in_degree.read().await;
-            deg.iter().filter(|(_, &d)| d == 0).map(|(&id, _)| id).collect()
+            deg.iter()
+                .filter(|(_, &d)| d == 0)
+                .map(|(&id, _)| id)
+                .collect()
         };
 
         // Channel to collect errors from spawned tasks
@@ -134,7 +196,15 @@ where
         // Spawn entry workflows
         let mut handles = Vec::new();
         for workflow_id in ready {
-            let handle = self.spawn_workflow_with_cascade(run_id, workflow_id, user_id, Arc::clone(&completed), Arc::clone(&in_degree), Arc::clone(&children), error_tx.clone());
+            let handle = self.spawn_workflow_with_cascade(
+                run_id,
+                workflow_id,
+                user_id,
+                Arc::clone(&completed),
+                Arc::clone(&in_degree),
+                Arc::clone(&children),
+                error_tx.clone(),
+            );
             handles.push(handle);
         }
 
@@ -158,7 +228,11 @@ where
         }
 
         if !errors.is_empty() {
-            return Err(anyhow::anyhow!("Parallel execution failed with {} error(s): {}", errors.len(), errors.first().unwrap()));
+            return Err(anyhow::anyhow!(
+                "Parallel execution failed with {} error(s): {}",
+                errors.len(),
+                errors.first().unwrap()
+            ));
         }
 
         Ok(())
@@ -200,7 +274,10 @@ where
                 state: Arc::clone(&state),
             };
 
-            let workflow_exec = match executor.execute_workflow_in_collection(run_id, workflow_id, user_id, &prior_outputs).await {
+            let workflow_exec = match executor
+                .execute_workflow_in_collection(run_id, workflow_id, user_id, &prior_outputs)
+                .await
+            {
                 Ok(exec) => exec,
                 Err(e) => {
                     let _ = error_tx.send(e).await;
@@ -236,7 +313,15 @@ where
             // Spawn ready children
             let mut child_handles = Vec::new();
             for child_id in ready_children {
-                let handle = executor.spawn_workflow_with_cascade(run_id, child_id, user_id, Arc::clone(&completed), Arc::clone(&in_degree), Arc::clone(&children), error_tx.clone());
+                let handle = executor.spawn_workflow_with_cascade(
+                    run_id,
+                    child_id,
+                    user_id,
+                    Arc::clone(&completed),
+                    Arc::clone(&in_degree),
+                    Arc::clone(&children),
+                    error_tx.clone(),
+                );
                 child_handles.push(handle);
             }
 
@@ -249,14 +334,26 @@ where
     ///
     /// Creates a workflow_execution record, loads the workflow steps/edges,
     /// executes the workflow DAG, and stores the outputs.
-    async fn execute_workflow_in_collection(&self, collection_run_id: Uuid, workflow_id: Uuid, user_id: Uuid, prior_workflow_outputs: &HashMap<String, JsonValue>) -> Result<WorkflowExecutionRow> {
+    async fn execute_workflow_in_collection(
+        &self,
+        collection_run_id: Uuid,
+        workflow_id: Uuid,
+        user_id: Uuid,
+        prior_workflow_outputs: &HashMap<String, JsonValue>,
+    ) -> Result<WorkflowExecutionRow> {
         use crate::llm::{AnthropicClient, RateLimitedProvider, RetryingProvider};
 
         // 1. Create workflow_execution record
-        let workflow_exec = self.collection_repo.create_workflow_execution(collection_run_id, workflow_id, user_id).await?;
+        let workflow_exec = self
+            .collection_repo
+            .create_workflow_execution(collection_run_id, workflow_id, user_id)
+            .await?;
 
         // 2. Update status to "running"
-        let workflow_exec = self.collection_repo.update_workflow_execution_status(workflow_exec.id, "running", None, None).await?;
+        let workflow_exec = self
+            .collection_repo
+            .update_workflow_execution_status(workflow_exec.id, "running", None, None)
+            .await?;
 
         // 3. Load workflow steps and edges
         let steps = self.workflow_repo.list_steps(workflow_id).await?;
@@ -264,10 +361,19 @@ where
 
         // 4. Create LLM provider
         let provider: Arc<dyn LLMProvider> = match AnthropicClient::from_env() {
-            Ok(p) => Arc::new(RetryingProvider::with_defaults(RateLimitedProvider::with_defaults(p))),
+            Ok(p) => Arc::new(RetryingProvider::with_defaults(
+                RateLimitedProvider::with_defaults(p),
+            )),
             Err(e) => {
                 let error_msg = format!("Failed to initialize LLM provider: {}", e);
-                self.collection_repo.update_workflow_execution_status(workflow_exec.id, "failed", None, Some(error_msg.clone())).await?;
+                self.collection_repo
+                    .update_workflow_execution_status(
+                        workflow_exec.id,
+                        "failed",
+                        None,
+                        Some(error_msg.clone()),
+                    )
+                    .await?;
                 return Err(anyhow!(error_msg));
             }
         };
@@ -294,17 +400,38 @@ where
                 // Update workflow_execution with outputs
                 let workflow_exec = self
                     .collection_repo
-                    .update_workflow_execution_status(workflow_exec.id, "completed", Some(workflow_outputs.clone()), None)
+                    .update_workflow_execution_status(
+                        workflow_exec.id,
+                        "completed",
+                        Some(workflow_outputs.clone()),
+                        None,
+                    )
                     .await?;
 
                 // Store execution variables for cross-workflow variable resolution
-                store_workflow_variables(&*self.collection_repo, &*self.workflow_repo, collection_run_id, workflow_exec.id, workflow_id, &workflow_outputs).await?;
+                store_workflow_variables(
+                    &*self.collection_repo,
+                    &*self.workflow_repo,
+                    collection_run_id,
+                    workflow_exec.id,
+                    workflow_id,
+                    &workflow_outputs,
+                )
+                .await?;
 
                 Ok(workflow_exec)
             }
             Err(e) => {
                 let error_msg = format!("{:#}", e);
-                let _workflow_exec = self.collection_repo.update_workflow_execution_status(workflow_exec.id, "failed", None, Some(error_msg.clone())).await?;
+                let _workflow_exec = self
+                    .collection_repo
+                    .update_workflow_execution_status(
+                        workflow_exec.id,
+                        "failed",
+                        None,
+                        Some(error_msg.clone()),
+                    )
+                    .await?;
                 Err(anyhow!("Workflow {} failed: {}", workflow_id, error_msg))
             }
         }
@@ -315,7 +442,11 @@ where
 ///
 /// Uses Kahn's algorithm to sort workflows by their dependencies.
 /// Returns workflow IDs in execution order, or an error if a cycle is detected.
-fn topological_sort_workflows(workflow_ids: &[Uuid], collection_workflows: &[CollectionWorkflowRow], edges: &[CollectionWorkflowEdgeRow]) -> Result<Vec<Uuid>> {
+fn topological_sort_workflows(
+    workflow_ids: &[Uuid],
+    collection_workflows: &[CollectionWorkflowRow],
+    edges: &[CollectionWorkflowEdgeRow],
+) -> Result<Vec<Uuid>> {
     let mut in_degree: HashMap<Uuid, usize> = HashMap::new();
     let mut adj_list: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
 
@@ -327,16 +458,29 @@ fn topological_sort_workflows(workflow_ids: &[Uuid], collection_workflows: &[Col
 
     // Build adjacency list
     for edge in edges {
-        adj_list.entry(edge.from_workflow_id).or_insert_with(Vec::new).push(edge.to_workflow_id);
+        adj_list
+            .entry(edge.from_workflow_id)
+            .or_insert_with(Vec::new)
+            .push(edge.to_workflow_id);
         *in_degree.entry(edge.to_workflow_id).or_insert(0) += 1;
     }
 
     // Find entry workflows (in_degree == 0)
-    let mut queue: VecDeque<Uuid> = in_degree.iter().filter(|(_, &deg)| deg == 0).map(|(&id, _)| id).collect();
+    let mut queue: VecDeque<Uuid> = in_degree
+        .iter()
+        .filter(|(_, &deg)| deg == 0)
+        .map(|(&id, _)| id)
+        .collect();
 
     // Sort entry workflows by display_order
     let mut queue_vec: Vec<Uuid> = queue.into_iter().collect();
-    queue_vec.sort_by_key(|&id| collection_workflows.iter().find(|cw| cw.workflow_id == id).map(|cw| cw.display_order).unwrap_or(0));
+    queue_vec.sort_by_key(|&id| {
+        collection_workflows
+            .iter()
+            .find(|cw| cw.workflow_id == id)
+            .map(|cw| cw.display_order)
+            .unwrap_or(0)
+    });
     queue = queue_vec.into_iter().collect();
 
     let mut sorted = Vec::new();
@@ -369,13 +513,18 @@ fn topological_sort_workflows(workflow_ids: &[Uuid], collection_workflows: &[Col
 /// Returns a HashMap of variable_name → JsonValue for all completed workflow outputs.
 /// Uses workflow names (not UUIDs) for user-friendly variable references.
 /// Stores as nested objects: { "$workflow_analysis": { "result": ... } }
-async fn collect_workflow_outputs(completed_workflows: &HashMap<Uuid, WorkflowExecutionRow>, workflow_repo: &dyn WorkflowRepo) -> Result<HashMap<String, JsonValue>> {
+async fn collect_workflow_outputs(
+    completed_workflows: &HashMap<Uuid, WorkflowExecutionRow>,
+    workflow_repo: &dyn WorkflowRepo,
+) -> Result<HashMap<String, JsonValue>> {
     let mut outputs = HashMap::new();
 
     for (workflow_id, workflow_exec) in completed_workflows {
         // Load workflow to get its name
         let workflow = workflow_repo.get_workflow(*workflow_id).await?;
-        let workflow_name = workflow.map(|w| w.name.clone()).unwrap_or_else(|| workflow_id.to_string());
+        let workflow_name = workflow
+            .map(|w| w.name.clone())
+            .unwrap_or_else(|| workflow_id.to_string());
 
         if let Some(workflow_outputs) = &workflow_exec.outputs {
             // Store as nested object: $workflow_{name} → { outputs }
@@ -392,7 +541,9 @@ async fn collect_workflow_outputs(completed_workflows: &HashMap<Uuid, WorkflowEx
 ///
 /// Takes the outputs from all steps in the workflow and combines them into
 /// a single JSON object keyed by step output variable names.
-fn aggregate_step_outputs(step_outputs: &HashMap<String, crate::server::dag_executor::StepOutput>) -> JsonValue {
+fn aggregate_step_outputs(
+    step_outputs: &HashMap<String, crate::server::dag_executor::StepOutput>,
+) -> JsonValue {
     use serde_json::json;
 
     let mut aggregated = serde_json::Map::new();
@@ -424,7 +575,9 @@ where
 {
     // Load workflow to get its name
     let workflow = workflow_repo.get_workflow(workflow_id).await?;
-    let workflow_name = workflow.map(|w| w.name.clone()).unwrap_or_else(|| workflow_id.to_string());
+    let workflow_name = workflow
+        .map(|w| w.name.clone())
+        .unwrap_or_else(|| workflow_id.to_string());
 
     if let Some(obj) = workflow_outputs.as_object() {
         for (key, value) in obj {

@@ -119,7 +119,11 @@ pub enum QueueError {
     InvalidStatus(String),
 
     #[error("PR #{pr_number} not in queue for {owner}/{repo}")]
-    NotInQueue { owner: String, repo: String, pr_number: u32 },
+    NotInQueue {
+        owner: String,
+        repo: String,
+        pr_number: u32,
+    },
 
     #[error("cannot merge PR #{pr_number} out of order, PR #{next_in_queue} is next")]
     OutOfOrder { pr_number: u32, next_in_queue: u32 },
@@ -151,14 +155,31 @@ impl<R: MergeQueueRepo> MergeQueue<R> {
     /// Add a PR to the merge queue
     ///
     /// Returns the queue entry with position (1-indexed)
-    pub async fn add_to_queue(&self, owner: &str, repo: &str, pr_number: u32) -> Result<PrQueueEntry, QueueError> {
+    pub async fn add_to_queue(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u32,
+    ) -> Result<PrQueueEntry, QueueError> {
         let id = Uuid::new_v4();
         let now = Utc::now();
 
         // Get next position for this repo
-        let next_position = self.repo.get_next_position(owner.to_owned(), repo.to_owned()).await?;
+        let next_position = self
+            .repo
+            .get_next_position(owner.to_owned(), repo.to_owned())
+            .await?;
 
-        self.repo.insert_queue_entry(id, owner.to_owned(), repo.to_owned(), pr_number, next_position, now).await?;
+        self.repo
+            .insert_queue_entry(
+                id,
+                owner.to_owned(),
+                repo.to_owned(),
+                pr_number,
+                next_position,
+                now,
+            )
+            .await?;
 
         tracing::info!(
             owner = %owner,
@@ -183,36 +204,76 @@ impl<R: MergeQueueRepo> MergeQueue<R> {
     }
 
     /// Remove a PR from the queue
-    pub async fn remove_from_queue(&self, owner: &str, repo: &str, pr_number: u32) -> Result<bool, QueueError> {
-        self.repo.delete_queue_entry(owner.to_owned(), repo.to_owned(), pr_number).await
+    pub async fn remove_from_queue(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u32,
+    ) -> Result<bool, QueueError> {
+        self.repo
+            .delete_queue_entry(owner.to_owned(), repo.to_owned(), pr_number)
+            .await
     }
 
     /// Get all entries in the queue for a repo, ordered by position
-    pub async fn get_queue(&self, owner: &str, repo: &str) -> Result<Vec<PrQueueEntry>, QueueError> {
-        self.repo.get_queue_entries(owner.to_owned(), repo.to_owned()).await
+    pub async fn get_queue(
+        &self,
+        owner: &str,
+        repo: &str,
+    ) -> Result<Vec<PrQueueEntry>, QueueError> {
+        self.repo
+            .get_queue_entries(owner.to_owned(), repo.to_owned())
+            .await
     }
 
     /// Get a specific entry by PR number
-    pub async fn get_entry(&self, owner: &str, repo: &str, pr_number: u32) -> Result<Option<PrQueueEntry>, QueueError> {
+    pub async fn get_entry(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u32,
+    ) -> Result<Option<PrQueueEntry>, QueueError> {
         let queue = self.get_queue(owner, repo).await?;
         Ok(queue.into_iter().find(|e| e.pr_number == pr_number))
     }
 
     /// Update the status of a queue entry
-    pub async fn update_status(&self, owner: &str, repo: &str, pr_number: u32, status: QueueStatus, error_message: Option<&str>) -> Result<bool, QueueError> {
+    pub async fn update_status(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u32,
+        status: QueueStatus,
+        error_message: Option<&str>,
+    ) -> Result<bool, QueueError> {
         let now = Utc::now();
 
         self.repo
-            .update_entry_status(owner.to_owned(), repo.to_owned(), pr_number, status.to_string(), error_message.map(|s| s.to_owned()), now)
+            .update_entry_status(
+                owner.to_owned(),
+                repo.to_owned(),
+                pr_number,
+                status.to_string(),
+                error_message.map(|s| s.to_owned()),
+                now,
+            )
             .await
     }
 
     /// Set conflict info for a queue entry
-    pub async fn set_conflict_info(&self, owner: &str, repo: &str, pr_number: u32, info: ConflictInfoJson) -> Result<bool, QueueError> {
+    pub async fn set_conflict_info(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u32,
+        info: ConflictInfoJson,
+    ) -> Result<bool, QueueError> {
         let now = Utc::now();
         let info_json = serde_json::to_string(&info).unwrap_or_default();
 
-        self.repo.set_entry_conflict(owner.to_owned(), repo.to_owned(), pr_number, info_json, now).await
+        self.repo
+            .set_entry_conflict(owner.to_owned(), repo.to_owned(), pr_number, info_json, now)
+            .await
     }
 
     // =======================================================================
@@ -223,7 +284,11 @@ impl<R: MergeQueueRepo> MergeQueue<R> {
     ///
     /// This is the ONLY entry that should be merged. Never merge
     /// a PR that isn't at the front of the queue.
-    pub async fn get_next_to_merge(&self, owner: &str, repo: &str) -> Result<Option<PrQueueEntry>, QueueError> {
+    pub async fn get_next_to_merge(
+        &self,
+        owner: &str,
+        repo: &str,
+    ) -> Result<Option<PrQueueEntry>, QueueError> {
         let queue = self.get_queue(owner, repo).await?;
 
         // Find first pending entry
@@ -235,13 +300,22 @@ impl<R: MergeQueueRepo> MergeQueue<R> {
     /// Returns true only if:
     /// 1. The PR is in the queue
     /// 2. It's the first pending entry
-    pub async fn can_merge(&self, owner: &str, repo: &str, pr_number: u32) -> Result<bool, QueueError> {
+    pub async fn can_merge(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u32,
+    ) -> Result<bool, QueueError> {
         let next = self.get_next_to_merge(owner, repo).await?;
 
         match next {
             Some(entry) if entry.pr_number == pr_number => Ok(true),
             Some(entry) => {
-                tracing::warn!(requested = pr_number, next_in_queue = entry.pr_number, "Cannot merge PR out of order");
+                tracing::warn!(
+                    requested = pr_number,
+                    next_in_queue = entry.pr_number,
+                    "Cannot merge PR out of order"
+                );
                 Ok(false)
             }
             None => {
@@ -253,10 +327,18 @@ impl<R: MergeQueueRepo> MergeQueue<R> {
 
     /// Get the position of a PR in the pending queue
     /// Returns None if PR is not pending
-    pub async fn get_position(&self, owner: &str, repo: &str, pr_number: u32) -> Result<Option<u32>, QueueError> {
+    pub async fn get_position(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u32,
+    ) -> Result<Option<u32>, QueueError> {
         let queue = self.get_queue(owner, repo).await?;
 
-        let pending: Vec<_> = queue.iter().filter(|e| e.status == QueueStatus::Pending).collect();
+        let pending: Vec<_> = queue
+            .iter()
+            .filter(|e| e.status == QueueStatus::Pending)
+            .collect();
 
         for (idx, entry) in pending.iter().enumerate() {
             if entry.pr_number == pr_number {
@@ -268,7 +350,12 @@ impl<R: MergeQueueRepo> MergeQueue<R> {
     }
 
     /// Get count of PRs ahead in queue
-    pub async fn prs_ahead(&self, owner: &str, repo: &str, pr_number: u32) -> Result<u32, QueueError> {
+    pub async fn prs_ahead(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u32,
+    ) -> Result<u32, QueueError> {
         match self.get_position(owner, repo, pr_number).await? {
             Some(pos) => Ok(pos - 1),
             None => Ok(0),
@@ -284,7 +371,9 @@ impl<R: MergeQueueRepo> MergeQueue<R> {
         for entry in queue {
             if entry.status == QueueStatus::Pending {
                 if entry.queue_position != new_position {
-                    self.repo.update_entry_position(entry.id, new_position, Utc::now()).await?;
+                    self.repo
+                        .update_entry_position(entry.id, new_position, Utc::now())
+                        .await?;
                 }
                 new_position += 1;
             }
@@ -321,9 +410,16 @@ impl<R: MergeQueueRepo> MergeQueue<R> {
     /// Resume queue processing after restart
     ///
     /// Call this when auto-merge is re-enabled or on startup.
-    pub async fn resume_processing(&self, owner: &str, repo: &str) -> Result<Vec<PrQueueEntry>, QueueError> {
+    pub async fn resume_processing(
+        &self,
+        owner: &str,
+        repo: &str,
+    ) -> Result<Vec<PrQueueEntry>, QueueError> {
         // First, reset any in_progress back to pending (they were interrupted)
-        let reset_count = self.repo.reset_interrupted(owner.to_owned(), repo.to_owned(), Utc::now()).await?;
+        let reset_count = self
+            .repo
+            .reset_interrupted(owner.to_owned(), repo.to_owned(), Utc::now())
+            .await?;
 
         if reset_count > 0 {
             tracing::info!(
@@ -336,7 +432,10 @@ impl<R: MergeQueueRepo> MergeQueue<R> {
 
         // Get all pending entries
         let queue = self.get_queue(owner, repo).await?;
-        let pending: Vec<_> = queue.into_iter().filter(|e| e.status == QueueStatus::Pending).collect();
+        let pending: Vec<_> = queue
+            .into_iter()
+            .filter(|e| e.status == QueueStatus::Pending)
+            .collect();
 
         if !pending.is_empty() {
             tracing::info!(
@@ -351,24 +450,42 @@ impl<R: MergeQueueRepo> MergeQueue<R> {
     }
 
     /// Get entries that need attention (conflicts, failures)
-    pub async fn get_needs_attention(&self, owner: &str, repo: &str) -> Result<Vec<PrQueueEntry>, QueueError> {
+    pub async fn get_needs_attention(
+        &self,
+        owner: &str,
+        repo: &str,
+    ) -> Result<Vec<PrQueueEntry>, QueueError> {
         let queue = self.get_queue(owner, repo).await?;
 
-        Ok(queue.into_iter().filter(|e| e.status == QueueStatus::Conflict || e.status == QueueStatus::Failed).collect())
+        Ok(queue
+            .into_iter()
+            .filter(|e| e.status == QueueStatus::Conflict || e.status == QueueStatus::Failed)
+            .collect())
     }
 
     /// Check if there's work to resume
     pub async fn has_pending_work(&self, owner: &str, repo: &str) -> Result<bool, QueueError> {
         let queue = self.get_queue(owner, repo).await?;
 
-        Ok(queue.iter().any(|e| e.status == QueueStatus::Pending || e.status == QueueStatus::InProgress))
+        Ok(queue
+            .iter()
+            .any(|e| e.status == QueueStatus::Pending || e.status == QueueStatus::InProgress))
     }
 
     /// Clear completed entries older than the given duration
-    pub async fn cleanup_old_entries(&self, owner: &str, repo: &str, older_than: std::time::Duration) -> Result<u32, QueueError> {
-        let cutoff = Utc::now() - chrono::Duration::from_std(older_than).unwrap_or(chrono::Duration::days(7));
+    pub async fn cleanup_old_entries(
+        &self,
+        owner: &str,
+        repo: &str,
+        older_than: std::time::Duration,
+    ) -> Result<u32, QueueError> {
+        let cutoff = Utc::now()
+            - chrono::Duration::from_std(older_than).unwrap_or(chrono::Duration::days(7));
 
-        let deleted = self.repo.cleanup_old(owner.to_owned(), repo.to_owned(), cutoff).await?;
+        let deleted = self
+            .repo
+            .cleanup_old(owner.to_owned(), repo.to_owned(), cutoff)
+            .await?;
 
         if deleted > 0 {
             tracing::info!(
@@ -393,7 +510,10 @@ pub enum ProcessResult {
     /// PR was merged successfully
     Merged { sha: String },
     /// Conflicts were resolved and PR merged
-    MergedAfterResolution { sha: String, conflicts_resolved: u32 },
+    MergedAfterResolution {
+        sha: String,
+        conflicts_resolved: u32,
+    },
     /// Conflicts need human review
     NeedsHumanReview { files: Vec<String> },
     /// PR was skipped (closed, already merged, etc.)
@@ -442,7 +562,12 @@ pub struct MergeQueueProcessor {
 }
 
 impl MergeQueueProcessor {
-    pub fn new(pool: sqlx::PgPool, github: GitHubClient, git: GitOps, config: PrMergeConfig) -> Self {
+    pub fn new(
+        pool: sqlx::PgPool,
+        github: GitHubClient,
+        git: GitOps,
+        config: PrMergeConfig,
+    ) -> Self {
         Self {
             queue: MergeQueue::new(PgRepo::new(pool)),
             github,
@@ -463,11 +588,19 @@ impl MergeQueueProcessor {
     }
 
     /// Add a PR to the queue and notify
-    pub async fn enqueue(&self, owner: &str, repo: &str, pr_number: u32) -> Result<PrQueueEntry, QueueError> {
+    pub async fn enqueue(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u32,
+    ) -> Result<PrQueueEntry, QueueError> {
         let entry = self.queue.add_to_queue(owner, repo, pr_number).await?;
 
         if self.notifications.on_queued {
-            if let Err(e) = self.notify_queued(owner, repo, pr_number, entry.queue_position).await {
+            if let Err(e) = self
+                .notify_queued(owner, repo, pr_number, entry.queue_position)
+                .await
+            {
                 tracing::warn!(error = %e, "Failed to post queue notification");
             }
         }
@@ -478,7 +611,11 @@ impl MergeQueueProcessor {
     /// Process the next PR in the queue
     ///
     /// Returns the PR number and result, or None if queue is empty.
-    pub async fn process_next(&self, owner: &str, repo: &str) -> Result<Option<(u32, ProcessResult)>, QueueError> {
+    pub async fn process_next(
+        &self,
+        owner: &str,
+        repo: &str,
+    ) -> Result<Option<(u32, ProcessResult)>, QueueError> {
         // Get next PR to process
         let entry = match self.queue.get_next_to_merge(owner, repo).await? {
             Some(e) => e,
@@ -488,9 +625,15 @@ impl MergeQueueProcessor {
         let pr_number = entry.pr_number;
 
         // Mark as in progress
-        self.queue.update_status(owner, repo, pr_number, QueueStatus::InProgress, None).await?;
+        self.queue
+            .update_status(owner, repo, pr_number, QueueStatus::InProgress, None)
+            .await?;
 
-        tracing::info!(pr = pr_number, position = entry.queue_position, "Processing PR from queue");
+        tracing::info!(
+            pr = pr_number,
+            position = entry.queue_position,
+            "Processing PR from queue"
+        );
 
         if self.notifications.on_merge_start {
             if let Err(e) = self.notify_merge_started(owner, repo, pr_number).await {
@@ -503,8 +646,11 @@ impl MergeQueueProcessor {
 
         // Update status based on result
         match &result {
-            Ok(ProcessResult::Merged { sha, .. }) | Ok(ProcessResult::MergedAfterResolution { sha, .. }) => {
-                self.queue.update_status(owner, repo, pr_number, QueueStatus::Merged, None).await?;
+            Ok(ProcessResult::Merged { sha, .. })
+            | Ok(ProcessResult::MergedAfterResolution { sha, .. }) => {
+                self.queue
+                    .update_status(owner, repo, pr_number, QueueStatus::Merged, None)
+                    .await?;
 
                 if self.notifications.on_merged {
                     if let Err(e) = self.notify_merged(owner, repo, pr_number, sha).await {
@@ -533,10 +679,20 @@ impl MergeQueueProcessor {
                 }
             }
             Ok(ProcessResult::Skipped { reason }) => {
-                self.queue.update_status(owner, repo, pr_number, QueueStatus::Skipped, Some(reason)).await?;
+                self.queue
+                    .update_status(owner, repo, pr_number, QueueStatus::Skipped, Some(reason))
+                    .await?;
             }
             Ok(ProcessResult::Failed { error }) | Err(QueueError::Other(error)) => {
-                self.queue.update_status(owner, repo, pr_number, QueueStatus::Failed, Some(error.as_str())).await?;
+                self.queue
+                    .update_status(
+                        owner,
+                        repo,
+                        pr_number,
+                        QueueStatus::Failed,
+                        Some(error.as_str()),
+                    )
+                    .await?;
 
                 if self.notifications.on_failed {
                     if let Err(e) = self.notify_failed(owner, repo, pr_number, error).await {
@@ -545,7 +701,15 @@ impl MergeQueueProcessor {
                 }
             }
             Err(e) => {
-                self.queue.update_status(owner, repo, pr_number, QueueStatus::Failed, Some(&e.to_string())).await?;
+                self.queue
+                    .update_status(
+                        owner,
+                        repo,
+                        pr_number,
+                        QueueStatus::Failed,
+                        Some(&e.to_string()),
+                    )
+                    .await?;
             }
         }
 
@@ -553,7 +717,12 @@ impl MergeQueueProcessor {
     }
 
     /// Process a single PR
-    async fn process_pr(&self, owner: &str, repo: &str, pr_number: u32) -> Result<ProcessResult, QueueError> {
+    async fn process_pr(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u32,
+    ) -> Result<ProcessResult, QueueError> {
         // Get PR details
         let pr = self.github.get_pull_request(owner, repo, pr_number).await?;
 
@@ -565,12 +734,17 @@ impl MergeQueueProcessor {
         }
 
         if pr.state == "closed" {
-            return Ok(ProcessResult::Skipped { reason: "PR is closed".to_string() });
+            return Ok(ProcessResult::Skipped {
+                reason: "PR is closed".to_string(),
+            });
         }
 
         // Try to merge directly first
         let merge_method: MergeMethod = self.config.merge_strategy.into();
-        let merge_result = self.github.merge_pr_simple(owner, repo, pr_number, merge_method).await?;
+        let merge_result = self
+            .github
+            .merge_pr_simple(owner, repo, pr_number, merge_method)
+            .await?;
 
         match merge_result {
             MergePrResult::Merged { sha, .. } => Ok(ProcessResult::Merged { sha }),
@@ -592,7 +766,13 @@ impl MergeQueueProcessor {
     }
 
     /// Handle merge conflicts for a PR
-    async fn handle_conflicts(&self, owner: &str, repo: &str, pr_number: u32, pr: &GitHubPullRequest) -> Result<ProcessResult, QueueError> {
+    async fn handle_conflicts(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u32,
+        pr: &GitHubPullRequest,
+    ) -> Result<ProcessResult, QueueError> {
         tracing::info!(pr = pr_number, "PR has conflicts, attempting resolution");
 
         // Fetch the PR branch locally
@@ -609,7 +789,10 @@ impl MergeQueueProcessor {
                 // No conflicts after all? Push and merge
                 self.git.push()?;
                 let merge_method: MergeMethod = self.config.merge_strategy.into();
-                let result = self.github.merge_pr_simple(owner, repo, pr_number, merge_method).await?;
+                let result = self
+                    .github
+                    .merge_pr_simple(owner, repo, pr_number, merge_method)
+                    .await?;
 
                 match result {
                     MergePrResult::Merged { sha, .. } => Ok(ProcessResult::Merged { sha }),
@@ -624,7 +807,10 @@ impl MergeQueueProcessor {
                     // Need human review
                     self.git.abort_merge()?;
                     return Ok(ProcessResult::NeedsHumanReview {
-                        files: conflicting_files.iter().map(|p| p.to_string_lossy().to_string()).collect(),
+                        files: conflicting_files
+                            .iter()
+                            .map(|p| p.to_string_lossy().to_string())
+                            .collect(),
                     });
                 }
 
@@ -639,10 +825,16 @@ impl MergeQueueProcessor {
 
                 // Now try the API merge again
                 let merge_method: MergeMethod = self.config.merge_strategy.into();
-                let result = self.github.merge_pr_simple(owner, repo, pr_number, merge_method).await?;
+                let result = self
+                    .github
+                    .merge_pr_simple(owner, repo, pr_number, merge_method)
+                    .await?;
 
                 match result {
-                    MergePrResult::Merged { sha, .. } => Ok(ProcessResult::MergedAfterResolution { sha, conflicts_resolved: resolved }),
+                    MergePrResult::Merged { sha, .. } => Ok(ProcessResult::MergedAfterResolution {
+                        sha,
+                        conflicts_resolved: resolved,
+                    }),
                     _ => Ok(ProcessResult::Failed {
                         error: "Merge failed after conflict resolution".to_string(),
                     }),
@@ -656,7 +848,12 @@ impl MergeQueueProcessor {
     }
 
     /// Run the queue processor continuously
-    pub async fn run(&self, owner: &str, repo: &str, mut shutdown: tokio::sync::watch::Receiver<bool>) -> Result<(), QueueError> {
+    pub async fn run(
+        &self,
+        owner: &str,
+        repo: &str,
+        mut shutdown: tokio::sync::watch::Receiver<bool>,
+    ) -> Result<(), QueueError> {
         tracing::info!(
             owner = %owner,
             repo = %repo,
@@ -714,40 +911,108 @@ impl MergeQueueProcessor {
     // =======================================================================
 
     /// Post a status update to the PR
-    async fn post_status(&self, owner: &str, repo: &str, pr_number: u32, status: &str, details: &str) -> Result<(), QueueError> {
-        let body = format!("**Merge Queue Update**: {}\n\n{}\n\n---\n*Automated by nexor*", status, details);
+    async fn post_status(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u32,
+        status: &str,
+        details: &str,
+    ) -> Result<(), QueueError> {
+        let body = format!(
+            "**Merge Queue Update**: {}\n\n{}\n\n---\n*Automated by nexor*",
+            status, details
+        );
 
-        self.github.create_issue_comment(owner, repo, pr_number, &crate::github::CreateIssueComment { body }).await?;
+        self.github
+            .create_issue_comment(
+                owner,
+                repo,
+                pr_number,
+                &crate::github::CreateIssueComment { body },
+            )
+            .await?;
 
         Ok(())
     }
 
     /// Notify PR was added to queue
-    async fn notify_queued(&self, owner: &str, repo: &str, pr_number: u32, position: u32) -> Result<(), QueueError> {
+    async fn notify_queued(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u32,
+        position: u32,
+    ) -> Result<(), QueueError> {
         let details = if position == 1 {
             "This PR is next in line and will be processed shortly.".to_string()
         } else {
-            format!("This PR is #{} in the queue. {} PR(s) ahead.", position, position - 1)
+            format!(
+                "This PR is #{} in the queue. {} PR(s) ahead.",
+                position,
+                position - 1
+            )
         };
 
-        self.post_status(owner, repo, pr_number, "Added to Merge Queue", &details).await
+        self.post_status(owner, repo, pr_number, "Added to Merge Queue", &details)
+            .await
     }
 
     /// Notify merge started
-    async fn notify_merge_started(&self, owner: &str, repo: &str, pr_number: u32) -> Result<(), QueueError> {
-        self.post_status(owner, repo, pr_number, "Merge In Progress", "Attempting to merge this PR...").await
+    async fn notify_merge_started(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u32,
+    ) -> Result<(), QueueError> {
+        self.post_status(
+            owner,
+            repo,
+            pr_number,
+            "Merge In Progress",
+            "Attempting to merge this PR...",
+        )
+        .await
     }
 
     /// Notify merge completed
-    async fn notify_merged(&self, owner: &str, repo: &str, pr_number: u32, sha: &str) -> Result<(), QueueError> {
-        self.post_status(owner, repo, pr_number, "Merged", &format!("Successfully merged in commit `{}`", sha)).await
+    async fn notify_merged(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u32,
+        sha: &str,
+    ) -> Result<(), QueueError> {
+        self.post_status(
+            owner,
+            repo,
+            pr_number,
+            "Merged",
+            &format!("Successfully merged in commit `{}`", sha),
+        )
+        .await
     }
 
     /// Notify conflicts need resolution
-    async fn notify_conflicts(&self, owner: &str, repo: &str, pr_number: u32, files: &[String]) -> Result<(), QueueError> {
-        let file_list = files.iter().take(10).map(|f| format!("- `{}`", f)).collect::<Vec<_>>().join("\n");
+    async fn notify_conflicts(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u32,
+        files: &[String],
+    ) -> Result<(), QueueError> {
+        let file_list = files
+            .iter()
+            .take(10)
+            .map(|f| format!("- `{}`", f))
+            .collect::<Vec<_>>()
+            .join("\n");
 
-        let more = if files.len() > 10 { format!("\n...and {} more files", files.len() - 10) } else { String::new() };
+        let more = if files.len() > 10 {
+            format!("\n...and {} more files", files.len() - 10)
+        } else {
+            String::new()
+        };
 
         let details = format!(
             "This PR has merge conflicts that need resolution:\n\n{}{}\n\n\
@@ -755,21 +1020,54 @@ impl MergeQueueProcessor {
             file_list, more
         );
 
-        self.post_status(owner, repo, pr_number, "Conflicts Detected", &details).await
+        self.post_status(owner, repo, pr_number, "Conflicts Detected", &details)
+            .await
     }
 
     /// Notify merge failed
-    async fn notify_failed(&self, owner: &str, repo: &str, pr_number: u32, error: &str) -> Result<(), QueueError> {
-        self.post_status(owner, repo, pr_number, "Merge Failed", &format!("Failed to merge: {}", error)).await
+    async fn notify_failed(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u32,
+        error: &str,
+    ) -> Result<(), QueueError> {
+        self.post_status(
+            owner,
+            repo,
+            pr_number,
+            "Merge Failed",
+            &format!("Failed to merge: {}", error),
+        )
+        .await
     }
 
     /// Notify queue position changed
-    pub async fn notify_position_changed(&self, owner: &str, repo: &str, pr_number: u32, new_position: u32) -> Result<(), QueueError> {
+    pub async fn notify_position_changed(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u32,
+        new_position: u32,
+    ) -> Result<(), QueueError> {
         if new_position == 1 {
-            self.post_status(owner, repo, pr_number, "Queue Position Update", "This PR is now next in line!").await
+            self.post_status(
+                owner,
+                repo,
+                pr_number,
+                "Queue Position Update",
+                "This PR is now next in line!",
+            )
+            .await
         } else {
-            self.post_status(owner, repo, pr_number, "Queue Position Update", &format!("This PR is now #{} in the queue.", new_position))
-                .await
+            self.post_status(
+                owner,
+                repo,
+                pr_number,
+                "Queue Position Update",
+                &format!("This PR is now #{} in the queue.", new_position),
+            )
+            .await
         }
     }
 }
@@ -872,8 +1170,14 @@ mod tests {
     #[test]
     fn merge_strategy_to_merge_method() {
         assert_eq!(MergeMethod::from(MergeStrategy::Merge), MergeMethod::Merge);
-        assert_eq!(MergeMethod::from(MergeStrategy::Squash), MergeMethod::Squash);
-        assert_eq!(MergeMethod::from(MergeStrategy::Rebase), MergeMethod::Rebase);
+        assert_eq!(
+            MergeMethod::from(MergeStrategy::Squash),
+            MergeMethod::Squash
+        );
+        assert_eq!(
+            MergeMethod::from(MergeStrategy::Rebase),
+            MergeMethod::Rebase
+        );
     }
 
     #[test]
@@ -944,8 +1248,14 @@ mod tests {
         };
         assert_eq!(err.to_string(), "PR #42 not in queue for alice/myrepo");
 
-        let err = QueueError::OutOfOrder { pr_number: 5, next_in_queue: 3 };
-        assert_eq!(err.to_string(), "cannot merge PR #5 out of order, PR #3 is next");
+        let err = QueueError::OutOfOrder {
+            pr_number: 5,
+            next_in_queue: 3,
+        };
+        assert_eq!(
+            err.to_string(),
+            "cannot merge PR #5 out of order, PR #3 is next"
+        );
 
         let err = QueueError::Other("something went wrong".to_string());
         assert_eq!(err.to_string(), "something went wrong");
@@ -968,7 +1278,9 @@ mod tests {
 
     #[test]
     fn process_result_debug_variants() {
-        let r = ProcessResult::Merged { sha: "abc123".to_string() };
+        let r = ProcessResult::Merged {
+            sha: "abc123".to_string(),
+        };
         let d = format!("{:?}", r);
         assert!(d.contains("Merged"));
         assert!(d.contains("abc123"));
@@ -989,12 +1301,16 @@ mod tests {
         assert!(d.contains("NeedsHumanReview"));
         assert!(d.contains("a.rs"));
 
-        let r = ProcessResult::Skipped { reason: "closed".to_string() };
+        let r = ProcessResult::Skipped {
+            reason: "closed".to_string(),
+        };
         let d = format!("{:?}", r);
         assert!(d.contains("Skipped"));
         assert!(d.contains("closed"));
 
-        let r = ProcessResult::Failed { error: "timeout".to_string() };
+        let r = ProcessResult::Failed {
+            error: "timeout".to_string(),
+        };
         let d = format!("{:?}", r);
         assert!(d.contains("Failed"));
         assert!(d.contains("timeout"));
@@ -1140,7 +1456,8 @@ mod tests {
     async fn add_to_queue_returns_entry() {
         let mut mock = MockMergeQueueRepo::new();
         mock.expect_get_next_position().returning(|_, _| Ok(1));
-        mock.expect_insert_queue_entry().returning(|_, _, _, _, _, _| Ok(()));
+        mock.expect_insert_queue_entry()
+            .returning(|_, _, _, _, _, _| Ok(()));
         let mq = MergeQueue::new(mock);
 
         let entry = mq.add_to_queue("owner", "repo", 1).await.unwrap();
@@ -1161,7 +1478,8 @@ mod tests {
             call_count += 1;
             Ok(call_count)
         });
-        mock.expect_insert_queue_entry().returning(|_, _, _, _, _, _| Ok(()));
+        mock.expect_insert_queue_entry()
+            .returning(|_, _, _, _, _, _| Ok(()));
         let mq = MergeQueue::new(mock);
 
         let e1 = mq.add_to_queue("owner", "repo", 1).await.unwrap();
@@ -1226,7 +1544,8 @@ mod tests {
     #[tokio::test]
     async fn get_entry_found_and_not_found() {
         let mut mock = MockMergeQueueRepo::new();
-        mock.expect_get_queue_entries().returning(|_, _| Ok(vec![make_entry(42, 1, QueueStatus::Pending)]));
+        mock.expect_get_queue_entries()
+            .returning(|_, _| Ok(vec![make_entry(42, 1, QueueStatus::Pending)]));
         let mq = MergeQueue::new(mock);
 
         let found = mq.get_entry("owner", "repo", 42).await.unwrap();
@@ -1240,10 +1559,14 @@ mod tests {
     #[tokio::test]
     async fn update_status_works() {
         let mut mock = MockMergeQueueRepo::new();
-        mock.expect_update_entry_status().returning(|_, _, _, _, _, _| Ok(true));
+        mock.expect_update_entry_status()
+            .returning(|_, _, _, _, _, _| Ok(true));
         let mq = MergeQueue::new(mock);
 
-        let updated = mq.update_status("owner", "repo", 1, QueueStatus::InProgress, None).await.unwrap();
+        let updated = mq
+            .update_status("owner", "repo", 1, QueueStatus::InProgress, None)
+            .await
+            .unwrap();
         assert!(updated);
     }
 
@@ -1255,24 +1578,38 @@ mod tests {
             .returning(|_, _, _, _, _, _| Ok(true));
         let mq = MergeQueue::new(mock);
 
-        let updated = mq.update_status("owner", "repo", 1, QueueStatus::Failed, Some("something broke")).await.unwrap();
+        let updated = mq
+            .update_status(
+                "owner",
+                "repo",
+                1,
+                QueueStatus::Failed,
+                Some("something broke"),
+            )
+            .await
+            .unwrap();
         assert!(updated);
     }
 
     #[tokio::test]
     async fn update_status_nonexistent_returns_false() {
         let mut mock = MockMergeQueueRepo::new();
-        mock.expect_update_entry_status().returning(|_, _, _, _, _, _| Ok(false));
+        mock.expect_update_entry_status()
+            .returning(|_, _, _, _, _, _| Ok(false));
         let mq = MergeQueue::new(mock);
 
-        let updated = mq.update_status("owner", "repo", 999, QueueStatus::Merged, None).await.unwrap();
+        let updated = mq
+            .update_status("owner", "repo", 999, QueueStatus::Merged, None)
+            .await
+            .unwrap();
         assert!(!updated);
     }
 
     #[tokio::test]
     async fn set_conflict_info_works() {
         let mut mock = MockMergeQueueRepo::new();
-        mock.expect_set_entry_conflict().returning(|_, _, _, _, _| Ok(true));
+        mock.expect_set_entry_conflict()
+            .returning(|_, _, _, _, _| Ok(true));
         let mq = MergeQueue::new(mock);
 
         let info = ConflictInfoJson {
@@ -1280,14 +1617,18 @@ mod tests {
             detected_at: Utc::now(),
             needs_human_review: true,
         };
-        let updated = mq.set_conflict_info("owner", "repo", 1, info).await.unwrap();
+        let updated = mq
+            .set_conflict_info("owner", "repo", 1, info)
+            .await
+            .unwrap();
         assert!(updated);
     }
 
     #[tokio::test]
     async fn set_conflict_info_nonexistent_returns_false() {
         let mut mock = MockMergeQueueRepo::new();
-        mock.expect_set_entry_conflict().returning(|_, _, _, _, _| Ok(false));
+        mock.expect_set_entry_conflict()
+            .returning(|_, _, _, _, _| Ok(false));
         let mq = MergeQueue::new(mock);
 
         let info = ConflictInfoJson {
@@ -1295,7 +1636,10 @@ mod tests {
             detected_at: Utc::now(),
             needs_human_review: false,
         };
-        let updated = mq.set_conflict_info("owner", "repo", 999, info).await.unwrap();
+        let updated = mq
+            .set_conflict_info("owner", "repo", 999, info)
+            .await
+            .unwrap();
         assert!(!updated);
     }
 
@@ -1328,7 +1672,8 @@ mod tests {
     #[tokio::test]
     async fn get_next_to_merge_all_non_pending() {
         let mut mock = MockMergeQueueRepo::new();
-        mock.expect_get_queue_entries().returning(|_, _| Ok(vec![make_entry(1, 1, QueueStatus::Merged)]));
+        mock.expect_get_queue_entries()
+            .returning(|_, _| Ok(vec![make_entry(1, 1, QueueStatus::Merged)]));
         let mq = MergeQueue::new(mock);
 
         let next = mq.get_next_to_merge("owner", "repo").await.unwrap();
@@ -1338,8 +1683,12 @@ mod tests {
     #[tokio::test]
     async fn can_merge_first_pending() {
         let mut mock = MockMergeQueueRepo::new();
-        mock.expect_get_queue_entries()
-            .returning(|_, _| Ok(vec![make_entry(1, 1, QueueStatus::Pending), make_entry(2, 2, QueueStatus::Pending)]));
+        mock.expect_get_queue_entries().returning(|_, _| {
+            Ok(vec![
+                make_entry(1, 1, QueueStatus::Pending),
+                make_entry(2, 2, QueueStatus::Pending),
+            ])
+        });
         let mq = MergeQueue::new(mock);
 
         assert!(mq.can_merge("owner", "repo", 1).await.unwrap());
@@ -1375,7 +1724,8 @@ mod tests {
     #[tokio::test]
     async fn get_position_non_pending_returns_none() {
         let mut mock = MockMergeQueueRepo::new();
-        mock.expect_get_queue_entries().returning(|_, _| Ok(vec![make_entry(1, 1, QueueStatus::Merged)]));
+        mock.expect_get_queue_entries()
+            .returning(|_, _| Ok(vec![make_entry(1, 1, QueueStatus::Merged)]));
         let mq = MergeQueue::new(mock);
 
         assert_eq!(mq.get_position("owner", "repo", 1).await.unwrap(), None);
@@ -1430,7 +1780,9 @@ mod tests {
             Ok(vec![e1, e3])
         });
         // Entry 1 at position 1 is correct; entry 3 at position 3 needs update to 2
-        mock.expect_update_entry_position().withf(move |id, pos, _| *id == id3 && *pos == 2).returning(|_, _, _| Ok(()));
+        mock.expect_update_entry_position()
+            .withf(move |id, pos, _| *id == id3 && *pos == 2)
+            .returning(|_, _, _| Ok(()));
         let mq = MergeQueue::new(mock);
 
         mq.compact_queue("owner", "repo").await.unwrap();
@@ -1447,7 +1799,9 @@ mod tests {
             Ok(vec![make_entry(1, 1, QueueStatus::Merged), e2])
         });
         // PR 2 at position 2 should be renumbered to 1
-        mock.expect_update_entry_position().withf(move |id, pos, _| *id == id2 && *pos == 1).returning(|_, _, _| Ok(()));
+        mock.expect_update_entry_position()
+            .withf(move |id, pos, _| *id == id2 && *pos == 1)
+            .returning(|_, _, _| Ok(()));
         let mq = MergeQueue::new(mock);
 
         mq.compact_queue("owner", "repo").await.unwrap();
@@ -1492,8 +1846,12 @@ mod tests {
     async fn resume_processing_resets_in_progress() {
         let mut mock = MockMergeQueueRepo::new();
         mock.expect_reset_interrupted().returning(|_, _, _| Ok(1));
-        mock.expect_get_queue_entries()
-            .returning(|_, _| Ok(vec![make_entry(1, 1, QueueStatus::Pending), make_entry(2, 2, QueueStatus::Pending)]));
+        mock.expect_get_queue_entries().returning(|_, _| {
+            Ok(vec![
+                make_entry(1, 1, QueueStatus::Pending),
+                make_entry(2, 2, QueueStatus::Pending),
+            ])
+        });
         let mq = MergeQueue::new(mock);
 
         let pending = mq.resume_processing("owner", "repo").await.unwrap();
@@ -1516,7 +1874,8 @@ mod tests {
     async fn resume_processing_no_interrupted() {
         let mut mock = MockMergeQueueRepo::new();
         mock.expect_reset_interrupted().returning(|_, _, _| Ok(0));
-        mock.expect_get_queue_entries().returning(|_, _| Ok(vec![make_entry(1, 1, QueueStatus::Pending)]));
+        mock.expect_get_queue_entries()
+            .returning(|_, _| Ok(vec![make_entry(1, 1, QueueStatus::Pending)]));
         let mq = MergeQueue::new(mock);
 
         let pending = mq.resume_processing("owner", "repo").await.unwrap();
@@ -1546,7 +1905,8 @@ mod tests {
     #[tokio::test]
     async fn get_needs_attention_none() {
         let mut mock = MockMergeQueueRepo::new();
-        mock.expect_get_queue_entries().returning(|_, _| Ok(vec![make_entry(1, 1, QueueStatus::Pending)]));
+        mock.expect_get_queue_entries()
+            .returning(|_, _| Ok(vec![make_entry(1, 1, QueueStatus::Pending)]));
         let mq = MergeQueue::new(mock);
 
         let attention = mq.get_needs_attention("owner", "repo").await.unwrap();
@@ -1565,7 +1925,8 @@ mod tests {
     #[tokio::test]
     async fn has_pending_work_with_pending() {
         let mut mock = MockMergeQueueRepo::new();
-        mock.expect_get_queue_entries().returning(|_, _| Ok(vec![make_entry(1, 1, QueueStatus::Pending)]));
+        mock.expect_get_queue_entries()
+            .returning(|_, _| Ok(vec![make_entry(1, 1, QueueStatus::Pending)]));
         let mq = MergeQueue::new(mock);
 
         assert!(mq.has_pending_work("owner", "repo").await.unwrap());
@@ -1574,7 +1935,8 @@ mod tests {
     #[tokio::test]
     async fn has_pending_work_with_in_progress() {
         let mut mock = MockMergeQueueRepo::new();
-        mock.expect_get_queue_entries().returning(|_, _| Ok(vec![make_entry(1, 1, QueueStatus::InProgress)]));
+        mock.expect_get_queue_entries()
+            .returning(|_, _| Ok(vec![make_entry(1, 1, QueueStatus::InProgress)]));
         let mq = MergeQueue::new(mock);
 
         assert!(mq.has_pending_work("owner", "repo").await.unwrap());
@@ -1583,7 +1945,8 @@ mod tests {
     #[tokio::test]
     async fn has_pending_work_only_completed() {
         let mut mock = MockMergeQueueRepo::new();
-        mock.expect_get_queue_entries().returning(|_, _| Ok(vec![make_entry(1, 1, QueueStatus::Merged)]));
+        mock.expect_get_queue_entries()
+            .returning(|_, _| Ok(vec![make_entry(1, 1, QueueStatus::Merged)]));
         let mq = MergeQueue::new(mock);
 
         assert!(!mq.has_pending_work("owner", "repo").await.unwrap());
@@ -1595,7 +1958,10 @@ mod tests {
         mock.expect_cleanup_old().returning(|_, _, _| Ok(1));
         let mq = MergeQueue::new(mock);
 
-        let deleted = mq.cleanup_old_entries("owner", "repo", std::time::Duration::from_secs(60)).await.unwrap();
+        let deleted = mq
+            .cleanup_old_entries("owner", "repo", std::time::Duration::from_secs(60))
+            .await
+            .unwrap();
         assert_eq!(deleted, 1);
     }
 
@@ -1605,7 +1971,10 @@ mod tests {
         mock.expect_cleanup_old().returning(|_, _, _| Ok(0));
         let mq = MergeQueue::new(mock);
 
-        let deleted = mq.cleanup_old_entries("o", "r", std::time::Duration::from_secs(60)).await.unwrap();
+        let deleted = mq
+            .cleanup_old_entries("o", "r", std::time::Duration::from_secs(60))
+            .await
+            .unwrap();
         assert_eq!(deleted, 0);
     }
 
@@ -1637,8 +2006,12 @@ mod tests {
     #[tokio::test]
     async fn can_merge_wrong_pr_returns_false() {
         let mut mock = MockMergeQueueRepo::new();
-        mock.expect_get_queue_entries()
-            .returning(|_, _| Ok(vec![make_entry(1, 1, QueueStatus::Pending), make_entry(2, 2, QueueStatus::Pending)]));
+        mock.expect_get_queue_entries().returning(|_, _| {
+            Ok(vec![
+                make_entry(1, 1, QueueStatus::Pending),
+                make_entry(2, 2, QueueStatus::Pending),
+            ])
+        });
         let mq = MergeQueue::new(mock);
 
         assert!(!mq.can_merge("o", "r", 2).await.unwrap());
@@ -1684,8 +2057,12 @@ mod tests {
     #[tokio::test]
     async fn has_pending_work_with_conflict_and_failed() {
         let mut mock = MockMergeQueueRepo::new();
-        mock.expect_get_queue_entries()
-            .returning(|_, _| Ok(vec![make_entry(1, 1, QueueStatus::Conflict), make_entry(2, 2, QueueStatus::Failed)]));
+        mock.expect_get_queue_entries().returning(|_, _| {
+            Ok(vec![
+                make_entry(1, 1, QueueStatus::Conflict),
+                make_entry(2, 2, QueueStatus::Failed),
+            ])
+        });
         let mq = MergeQueue::new(mock);
 
         assert!(!mq.has_pending_work("o", "r").await.unwrap());
@@ -1694,7 +2071,8 @@ mod tests {
     #[tokio::test]
     async fn has_pending_work_with_skipped() {
         let mut mock = MockMergeQueueRepo::new();
-        mock.expect_get_queue_entries().returning(|_, _| Ok(vec![make_entry(1, 1, QueueStatus::Skipped)]));
+        mock.expect_get_queue_entries()
+            .returning(|_, _| Ok(vec![make_entry(1, 1, QueueStatus::Skipped)]));
         let mq = MergeQueue::new(mock);
 
         assert!(!mq.has_pending_work("o", "r").await.unwrap());
@@ -1728,7 +2106,12 @@ mod tests {
             e2.id = id2;
             let mut e4 = make_entry(4, 4, QueueStatus::Pending);
             e4.id = id4;
-            Ok(vec![make_entry(3, 3, QueueStatus::Failed), e2, e4, make_entry(5, 5, QueueStatus::Skipped)])
+            Ok(vec![
+                make_entry(3, 3, QueueStatus::Failed),
+                e2,
+                e4,
+                make_entry(5, 5, QueueStatus::Skipped),
+            ])
         });
         mock.expect_update_entry_position()
             .withf(move |id, pos, _| (*id == id2 && *pos == 1) || (*id == id4 && *pos == 2))

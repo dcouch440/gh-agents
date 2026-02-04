@@ -119,7 +119,9 @@ impl DangerousOperation {
             DangerousOperation::CreateFile => "Create a new file in the project",
             DangerousOperation::GitCommit => "Create a new commit with staged changes",
             DangerousOperation::GitPush => "Push commits to the remote repository",
-            DangerousOperation::GitForcePush => "Force push, potentially overwriting remote history",
+            DangerousOperation::GitForcePush => {
+                "Force push, potentially overwriting remote history"
+            }
             DangerousOperation::GitBranchDelete => "Delete a git branch",
             DangerousOperation::GitMerge => "Merge one branch into another",
             DangerousOperation::RunCommand => "Execute a shell command",
@@ -161,7 +163,10 @@ pub struct ApprovalGate {
 
 impl ApprovalGate {
     pub fn new(config: ApprovalGatesConfig, autonomy_level: AutonomyLevel) -> Self {
-        Self { config, autonomy_level }
+        Self {
+            config,
+            autonomy_level,
+        }
     }
 
     /// Create a fully autonomous gate (no approvals except Critical)
@@ -227,7 +232,10 @@ impl ApprovalGate {
             CloseIssue,
         ];
 
-        all_ops.into_iter().filter(|op| self.requires_approval(*op)).collect()
+        all_ops
+            .into_iter()
+            .filter(|op| self.requires_approval(*op))
+            .collect()
     }
 }
 
@@ -254,7 +262,11 @@ pub struct ApprovalContext {
 }
 
 impl ApprovalRequest {
-    pub fn new(operation: DangerousOperation, description: impl Into<String>, context: ApprovalContext) -> Self {
+    pub fn new(
+        operation: DangerousOperation,
+        description: impl Into<String>,
+        context: ApprovalContext,
+    ) -> Self {
         Self {
             id: Uuid::new_v4(),
             operation,
@@ -311,13 +323,17 @@ pub enum ApprovalResponse {
 
 impl ApprovalResponse {
     pub fn is_approved(&self) -> bool {
-        matches!(self, ApprovalResponse::Approve | ApprovalResponse::AlwaysApprove)
+        matches!(
+            self,
+            ApprovalResponse::Approve | ApprovalResponse::AlwaysApprove
+        )
     }
 }
 
 /// Channel types for TUI communication
 pub type ApprovalRequestSender = mpsc::Sender<(ApprovalRequest, oneshot::Sender<ApprovalResponse>)>;
-pub type ApprovalRequestReceiver = mpsc::Receiver<(ApprovalRequest, oneshot::Sender<ApprovalResponse>)>;
+pub type ApprovalRequestReceiver =
+    mpsc::Receiver<(ApprovalRequest, oneshot::Sender<ApprovalResponse>)>;
 
 /// Create a channel pair for approval requests
 pub fn approval_channel(buffer: usize) -> (ApprovalRequestSender, ApprovalRequestReceiver) {
@@ -381,7 +397,10 @@ impl InteractiveApprovalGate {
         // Send request to TUI and wait for response
         let (response_tx, response_rx) = oneshot::channel();
 
-        self.request_tx.send((request.clone(), response_tx)).await.map_err(|_| ApprovalError::ChannelClosed)?;
+        self.request_tx
+            .send((request.clone(), response_tx))
+            .await
+            .map_err(|_| ApprovalError::ChannelClosed)?;
 
         tracing::info!(
             operation = %request.operation,
@@ -390,10 +409,13 @@ impl InteractiveApprovalGate {
         );
 
         // Wait for response with timeout
-        let response = tokio::time::timeout(std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS), response_rx)
-            .await
-            .map_err(|_| ApprovalError::Timeout)?
-            .map_err(|_| ApprovalError::ChannelClosed)?;
+        let response = tokio::time::timeout(
+            std::time::Duration::from_secs(crate::constants::DEFAULT_TIMEOUT_SECS),
+            response_rx,
+        )
+        .await
+        .map_err(|_| ApprovalError::Timeout)?
+        .map_err(|_| ApprovalError::ChannelClosed)?;
 
         // Handle "always" responses
         match response {
@@ -481,7 +503,10 @@ mod tests {
 
     #[test]
     fn force_push_is_critical() {
-        assert_eq!(DangerousOperation::GitForcePush.danger_level(), DangerLevel::Critical);
+        assert_eq!(
+            DangerousOperation::GitForcePush.danger_level(),
+            DangerLevel::Critical
+        );
     }
 
     #[test]
@@ -582,9 +607,18 @@ mod tests {
     #[test]
     fn approval_error_display() {
         assert_eq!(ApprovalError::Denied.to_string(), "approval denied by user");
-        assert_eq!(ApprovalError::Timeout.to_string(), "approval request timed out");
-        assert_eq!(ApprovalError::ChannelClosed.to_string(), "approval channel closed");
-        assert_eq!(ApprovalError::NoHandler.to_string(), "no approval handler configured");
+        assert_eq!(
+            ApprovalError::Timeout.to_string(),
+            "approval request timed out"
+        );
+        assert_eq!(
+            ApprovalError::ChannelClosed.to_string(),
+            "approval channel closed"
+        );
+        assert_eq!(
+            ApprovalError::NoHandler.to_string(),
+            "no approval handler configured"
+        );
     }
 
     #[test]
@@ -643,14 +677,20 @@ mod tests {
             (CreateFile, "Create a new file in the project"),
             (GitCommit, "Create a new commit with staged changes"),
             (GitPush, "Push commits to the remote repository"),
-            (GitForcePush, "Force push, potentially overwriting remote history"),
+            (
+                GitForcePush,
+                "Force push, potentially overwriting remote history",
+            ),
             (GitBranchDelete, "Delete a git branch"),
             (GitMerge, "Merge one branch into another"),
             (RunCommand, "Execute a shell command"),
             (NetworkAccess, "Make a network request"),
             (InstallPackage, "Install a package or dependency"),
             (CreatePullRequest, "Create a new pull request on GitHub"),
-            (MergePullRequest, "Merge a pull request into the target branch"),
+            (
+                MergePullRequest,
+                "Merge a pull request into the target branch",
+            ),
             (CloseIssue, "Close a GitHub issue"),
         ];
         for (op, expected) in &ops {

@@ -89,7 +89,9 @@ async fn test_retries_on_rate_limit() {
     let call_count = Arc::new(AtomicU32::new(0));
     let count = call_count.clone();
 
-    let config = BackoffConfig::new().with_initial_delay(Duration::from_millis(10)).with_max_retries(3);
+    let config = BackoffConfig::new()
+        .with_initial_delay(Duration::from_millis(10))
+        .with_max_retries(3);
 
     let result = with_retry(config, RetryPolicy::Default, || {
         let c = count.clone();
@@ -137,7 +139,9 @@ async fn test_max_retries_exceeded() {
     let call_count = Arc::new(AtomicU32::new(0));
     let count = call_count.clone();
 
-    let config = BackoffConfig::new().with_initial_delay(Duration::from_millis(1)).with_max_retries(2);
+    let config = BackoffConfig::new()
+        .with_initial_delay(Duration::from_millis(1))
+        .with_max_retries(2);
 
     let result = with_retry(config, RetryPolicy::Default, || {
         let c = count.clone();
@@ -161,7 +165,9 @@ async fn test_retries_on_server_error() {
     let call_count = Arc::new(AtomicU32::new(0));
     let count = call_count.clone();
 
-    let config = BackoffConfig::new().with_initial_delay(Duration::from_millis(1)).with_max_retries(3);
+    let config = BackoffConfig::new()
+        .with_initial_delay(Duration::from_millis(1))
+        .with_max_retries(3);
 
     let result = with_retry(config, RetryPolicy::Default, || {
         let c = count.clone();
@@ -185,7 +191,9 @@ async fn test_retries_on_server_error() {
 
 #[test]
 fn test_retry_policy_never() {
-    let error = LLMError::RateLimited { retry_after_ms: 100 };
+    let error = LLMError::RateLimited {
+        retry_after_ms: 100,
+    };
     assert!(!RetryPolicy::Never.should_retry(&error));
 }
 
@@ -293,7 +301,10 @@ fn test_backoff_no_jitter_produces_exact_delays() {
 
 #[test]
 fn test_backoff_with_jitter_varies() {
-    let config = BackoffConfig::new().with_initial_delay(Duration::from_millis(1000)).with_jitter(1.0).with_max_retries(1);
+    let config = BackoffConfig::new()
+        .with_initial_delay(Duration::from_millis(1000))
+        .with_jitter(1.0)
+        .with_max_retries(1);
 
     // Run multiple times - with full jitter, delays should vary
     let mut backoff = ExponentialBackoff::new(config);
@@ -404,7 +415,9 @@ fn test_retry_policy_default_600_not_retried() {
 #[test]
 fn test_retry_policy_never_rejects_all() {
     let errors = vec![
-        LLMError::RateLimited { retry_after_ms: 100 },
+        LLMError::RateLimited {
+            retry_after_ms: 100,
+        },
         LLMError::Timeout(5000),
         LLMError::ApiError {
             status: 500,
@@ -444,7 +457,9 @@ async fn test_with_retry_never_policy_no_retries() {
     let call_count = Arc::new(AtomicU32::new(0));
     let count = call_count.clone();
 
-    let config = BackoffConfig::new().with_initial_delay(Duration::from_millis(1)).with_max_retries(5);
+    let config = BackoffConfig::new()
+        .with_initial_delay(Duration::from_millis(1))
+        .with_max_retries(5);
 
     let result = with_retry(config, RetryPolicy::Never, || {
         let c = count.clone();
@@ -467,7 +482,9 @@ async fn test_with_retry_always_policy_retries_auth_error() {
     let call_count = Arc::new(AtomicU32::new(0));
     let count = call_count.clone();
 
-    let config = BackoffConfig::new().with_initial_delay(Duration::from_millis(1)).with_max_retries(2);
+    let config = BackoffConfig::new()
+        .with_initial_delay(Duration::from_millis(1))
+        .with_max_retries(2);
 
     let result = with_retry(config, RetryPolicy::Always, || {
         let c = count.clone();
@@ -494,7 +511,9 @@ async fn test_with_retry_non_retryable_mid_retry() {
     let call_count = Arc::new(AtomicU32::new(0));
     let count = call_count.clone();
 
-    let config = BackoffConfig::new().with_initial_delay(Duration::from_millis(1)).with_max_retries(5);
+    let config = BackoffConfig::new()
+        .with_initial_delay(Duration::from_millis(1))
+        .with_max_retries(5);
 
     let result = with_retry(config, RetryPolicy::Default, || {
         let c = count.clone();
@@ -522,7 +541,9 @@ async fn test_with_retry_rate_limit_uses_retry_after_delay() {
     let call_count = Arc::new(AtomicU32::new(0));
     let count = call_count.clone();
 
-    let config = BackoffConfig::new().with_initial_delay(Duration::from_millis(1)).with_max_retries(1);
+    let config = BackoffConfig::new()
+        .with_initial_delay(Duration::from_millis(1))
+        .with_max_retries(1);
 
     let start = std::time::Instant::now();
     let result = with_retry(config, RetryPolicy::Default, || {
@@ -559,7 +580,10 @@ fn test_retry_context_debug() {
 
 #[test]
 fn test_backoff_reset_restores_initial_delay() {
-    let config = BackoffConfig::new().with_initial_delay(Duration::from_millis(100)).with_jitter(0.0).with_max_retries(3);
+    let config = BackoffConfig::new()
+        .with_initial_delay(Duration::from_millis(100))
+        .with_jitter(0.0)
+        .with_max_retries(3);
 
     let mut backoff = ExponentialBackoff::new(config);
 

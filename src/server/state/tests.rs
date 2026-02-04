@@ -120,7 +120,9 @@ async fn get_response_stream_returns_existing() {
 #[tokio::test]
 async fn send_stream_chunk_no_stream() {
     let state = make_state();
-    let result = state.send_stream_chunk(Uuid::new_v4(), StreamChunk::Token("hi".into())).await;
+    let result = state
+        .send_stream_chunk(Uuid::new_v4(), StreamChunk::Token("hi".into()))
+        .await;
     assert!(!result);
 }
 
@@ -129,7 +131,9 @@ async fn send_stream_chunk_with_stream() {
     let state = make_state();
     let msg_id = Uuid::new_v4();
     state.ensure_response_stream(msg_id).await;
-    let result = state.send_stream_chunk(msg_id, StreamChunk::Token("hi".into())).await;
+    let result = state
+        .send_stream_chunk(msg_id, StreamChunk::Token("hi".into()))
+        .await;
     assert!(result);
 }
 
@@ -140,8 +144,12 @@ async fn buffered_stream_replays_chunks() {
     state.ensure_response_stream(msg_id).await;
 
     // Send chunks with no SSE client connected
-    state.send_stream_chunk(msg_id, StreamChunk::Token("hello ".into())).await;
-    state.send_stream_chunk(msg_id, StreamChunk::Token("world".into())).await;
+    state
+        .send_stream_chunk(msg_id, StreamChunk::Token("hello ".into()))
+        .await;
+    state
+        .send_stream_chunk(msg_id, StreamChunk::Token("world".into()))
+        .await;
     state.send_stream_chunk(msg_id, StreamChunk::Done).await;
 
     // Late subscriber gets the full buffer

@@ -227,7 +227,11 @@ pub struct RetryContext {
 }
 
 /// Execute an async operation with retry logic
-pub async fn with_retry<T, F, Fut>(config: BackoffConfig, policy: RetryPolicy, operation: F) -> Result<T, LLMError>
+pub async fn with_retry<T, F, Fut>(
+    config: BackoffConfig,
+    policy: RetryPolicy,
+    operation: F,
+) -> Result<T, LLMError>
 where
     F: Fn() -> Fut,
     Fut: Future<Output = Result<T, LLMError>>,
@@ -254,11 +258,19 @@ where
 
         // Check for rate limit with specific delay
         let actual_delay = match &last_error {
-            LLMError::RateLimited { retry_after_ms } => Duration::from_millis(*retry_after_ms).max(delay),
+            LLMError::RateLimited { retry_after_ms } => {
+                Duration::from_millis(*retry_after_ms).max(delay)
+            }
             _ => delay,
         };
 
-        tracing::warn!("Retry {}/{}: {} (waiting {:?})", attempt, max_retries, last_error, actual_delay);
+        tracing::warn!(
+            "Retry {}/{}: {} (waiting {:?})",
+            attempt,
+            max_retries,
+            last_error,
+            actual_delay
+        );
 
         sleep(actual_delay).await;
 
@@ -343,7 +355,10 @@ impl<P: LLMProvider + 'static> LLMProvider for RetryingProvider<P> {
         .await
     }
 
-    async fn send_message_stream(&self, request: LLMRequest) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
+    async fn send_message_stream(
+        &self,
+        request: LLMRequest,
+    ) -> LLMResult<Pin<Box<dyn Stream<Item = LLMResult<StreamChunk>> + Send>>> {
         // For streaming, we retry the connection but not individual chunks
         let inner = self.inner.clone();
         let req = request.clone();

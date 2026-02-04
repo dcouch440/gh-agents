@@ -48,9 +48,18 @@ pub struct SetRouterToolsRequest {
         (status = 200, description = "List of tool routers")
     )
 )]
-pub async fn list_tool_routers(State(state): State<AppState>, auth: auth_utils::AuthUser) -> Result<Json<Vec<crate::db::ToolRouterRow>>, StatusCode> {
-    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = repo.list_tool_routers(auth.user_id.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn list_tool_routers(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+) -> Result<Json<Vec<crate::db::ToolRouterRow>>, StatusCode> {
+    let repo = state
+        .tool_router_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = repo
+        .list_tool_routers(auth.user_id.0)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(rows))
 }
 
@@ -74,9 +83,18 @@ pub async fn create_tool_router(
     if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = state
+        .tool_router_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo
-        .create_tool_router(auth.user_id.0, &request.name, request.description, &request.system_prompt, &request.model_id)
+        .create_tool_router(
+            auth.user_id.0,
+            &request.name,
+            request.description,
+            &request.system_prompt,
+            &request.model_id,
+        )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok((StatusCode::CREATED, Json(row)))
@@ -94,9 +112,20 @@ pub async fn create_tool_router(
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_tool_router(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<crate::db::ToolRouterRow>, StatusCode> {
-    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let row = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn get_tool_router(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<crate::db::ToolRouterRow>, StatusCode> {
+    let repo = state
+        .tool_router_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = repo
+        .get_tool_router(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if row.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
@@ -122,8 +151,15 @@ pub async fn update_tool_router(
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateToolRouterRequest>,
 ) -> Result<Json<crate::db::ToolRouterRow>, StatusCode> {
-    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let repo = state
+        .tool_router_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let existing = repo
+        .get_tool_router(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if existing.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
@@ -133,7 +169,14 @@ pub async fn update_tool_router(
         }
     }
     let row = repo
-        .update_tool_router(id, request.name, request.description, request.system_prompt, request.model_id, request.is_active)
+        .update_tool_router(
+            id,
+            request.name,
+            request.description,
+            request.system_prompt,
+            request.model_id,
+            request.is_active,
+        )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(row))
@@ -151,13 +194,26 @@ pub async fn update_tool_router(
         (status = 404, description = "Not found")
     )
 )]
-pub async fn delete_tool_router(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
-    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn delete_tool_router(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, StatusCode> {
+    let repo = state
+        .tool_router_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let existing = repo
+        .get_tool_router(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if existing.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
-    repo.delete_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    repo.delete_tool_router(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -173,13 +229,27 @@ pub async fn delete_tool_router(State(state): State<AppState>, auth: auth_utils:
         (status = 404, description = "Router not found")
     )
 )]
-pub async fn get_router_tools(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
-    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn get_router_tools(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
+    let repo = state
+        .tool_router_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let existing = repo
+        .get_tool_router(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if existing.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
-    let tools = repo.get_router_tools(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let tools = repo
+        .get_router_tools(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let tools = tools.into_iter().map(ToolResponse::from_row).collect();
     Ok(Json(tools))
 }
@@ -197,13 +267,27 @@ pub async fn get_router_tools(State(state): State<AppState>, auth: auth_utils::A
         (status = 404, description = "Router not found")
     )
 )]
-pub async fn set_router_tools(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>, Json(request): Json<SetRouterToolsRequest>) -> Result<StatusCode, StatusCode> {
-    let repo = state.tool_router_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let existing = repo.get_tool_router(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn set_router_tools(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(id): Path<Uuid>,
+    Json(request): Json<SetRouterToolsRequest>,
+) -> Result<StatusCode, StatusCode> {
+    let repo = state
+        .tool_router_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let existing = repo
+        .get_tool_router(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if existing.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
-    repo.set_router_tools(id, &request.tool_ids).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    repo.set_router_tools(id, &request.tool_ids)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)
 }
 

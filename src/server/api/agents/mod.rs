@@ -100,11 +100,18 @@ pub struct UpdateAgentRequest {
         (status = 200, description = "List of agents with pool stats", body = AgentsListResponse)
     )
 )]
-pub async fn list_agents(State(state): State<AppState>, auth: auth_utils::AuthUser) -> Result<Json<AgentsListResponse>, StatusCode> {
+pub async fn list_agents(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+) -> Result<Json<AgentsListResponse>, StatusCode> {
     let config = state.config.read().await;
     let pool_config = &config.pool;
 
-    let rows = state.repo.list_persisted_agents(auth.user_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = state
+        .repo
+        .list_persisted_agents(auth.user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let agents: Vec<AgentResponse> = rows.into_iter().map(AgentResponse::from_row).collect();
 
@@ -132,7 +139,11 @@ pub async fn list_agents(State(state): State<AppState>, auth: auth_utils::AuthUs
         (status = 400, description = "Invalid request")
     )
 )]
-pub async fn create_agent(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(request): Json<CreateAgentRequest>) -> Result<(StatusCode, Json<AgentResponse>), StatusCode> {
+pub async fn create_agent(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Json(request): Json<CreateAgentRequest>,
+) -> Result<(StatusCode, Json<AgentResponse>), StatusCode> {
     if request.model_id.trim().is_empty() {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -150,8 +161,14 @@ pub async fn create_agent(State(state): State<AppState>, auth: auth_utils::AuthU
         tier: None,
         name: request.name.trim().to_string(),
         system_prompt: request.system_prompt.unwrap_or_default(),
-        persona_style: Some(request.persona_style.unwrap_or_else(|| "casual".to_string())),
-        model_provider: request.model_provider.unwrap_or_else(|| "anthropic".to_string()),
+        persona_style: Some(
+            request
+                .persona_style
+                .unwrap_or_else(|| "casual".to_string()),
+        ),
+        model_provider: request
+            .model_provider
+            .unwrap_or_else(|| "anthropic".to_string()),
         model_id: request.model_id.trim().to_string(),
         model_max_tokens: request.model_max_tokens.unwrap_or(4096),
         model_temperature: request.model_temperature.unwrap_or(0.7),
@@ -161,7 +178,11 @@ pub async fn create_agent(State(state): State<AppState>, auth: auth_utils::AuthU
         version: 1,
     };
 
-    state.repo.upsert_agent(auth.user_id, row.clone()).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state
+        .repo
+        .upsert_agent(auth.user_id, row.clone())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok((StatusCode::CREATED, Json(AgentResponse::from_row(row))))
 }
@@ -178,8 +199,17 @@ pub async fn create_agent(State(state): State<AppState>, auth: auth_utils::AuthU
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_agent(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<AgentResponse>, StatusCode> {
-    let row = state.repo.get_persisted_agent(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn get_agent(
+    State(state): State<AppState>,
+    _auth: auth_utils::AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<AgentResponse>, StatusCode> {
+    let row = state
+        .repo
+        .get_persisted_agent(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     Ok(Json(AgentResponse::from_row(row)))
 }
@@ -197,26 +227,47 @@ pub async fn get_agent(State(state): State<AppState>, _auth: auth_utils::AuthUse
         (status = 404, description = "Not found")
     )
 )]
-pub async fn update_agent(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>, Json(request): Json<UpdateAgentRequest>) -> Result<Json<AgentResponse>, StatusCode> {
-    let existing = state.repo.get_persisted_agent(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn update_agent(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(id): Path<Uuid>,
+    Json(request): Json<UpdateAgentRequest>,
+) -> Result<Json<AgentResponse>, StatusCode> {
+    let existing = state
+        .repo
+        .get_persisted_agent(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     let updated = crate::db::AgentRow {
         id: existing.id,
         tier: None,
         name: request.name.unwrap_or(existing.name),
         system_prompt: request.system_prompt.unwrap_or(existing.system_prompt),
-        persona_style: request.persona_style.map(Some).unwrap_or(existing.persona_style),
+        persona_style: request
+            .persona_style
+            .map(Some)
+            .unwrap_or(existing.persona_style),
         model_provider: request.model_provider.unwrap_or(existing.model_provider),
         model_id: request.model_id.unwrap_or(existing.model_id),
-        model_max_tokens: request.model_max_tokens.unwrap_or(existing.model_max_tokens),
-        model_temperature: request.model_temperature.unwrap_or(existing.model_temperature),
+        model_max_tokens: request
+            .model_max_tokens
+            .unwrap_or(existing.model_max_tokens),
+        model_temperature: request
+            .model_temperature
+            .unwrap_or(existing.model_temperature),
         status: existing.status,
         router_mode: existing.router_mode,
         output_schema_id: request.output_schema_id.or(existing.output_schema_id),
         version: existing.version,
     };
 
-    state.repo.upsert_agent(auth.user_id, updated.clone()).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state
+        .repo
+        .upsert_agent(auth.user_id, updated.clone())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(AgentResponse::from_row(updated)))
 }
@@ -233,8 +284,16 @@ pub async fn update_agent(State(state): State<AppState>, auth: auth_utils::AuthU
         (status = 404, description = "Not found")
     )
 )]
-pub async fn delete_agent(State(state): State<AppState>, _auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
-    state.repo.delete_persisted_agent(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn delete_agent(
+    State(state): State<AppState>,
+    _auth: auth_utils::AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, StatusCode> {
+    state
+        .repo
+        .delete_persisted_agent(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::NO_CONTENT)
 }

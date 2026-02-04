@@ -13,9 +13,17 @@ fn setup_test_prompts() -> (TempDir, PromptRegistry) {
     std::fs::create_dir_all(base.join("system")).unwrap();
     std::fs::create_dir_all(base.join("agents")).unwrap();
 
-    std::fs::write(base.join("system/distiller.md"), "Distill this: {messages}\nTask: {task_title}").unwrap();
+    std::fs::write(
+        base.join("system/distiller.md"),
+        "Distill this: {messages}\nTask: {task_title}",
+    )
+    .unwrap();
 
-    std::fs::write(base.join("system/router.md"), "Route intent: {intent}\nTools: {tool_specs}").unwrap();
+    std::fs::write(
+        base.join("system/router.md"),
+        "Route intent: {intent}\nTools: {tool_specs}",
+    )
+    .unwrap();
 
     std::fs::write(base.join("agents/worker.md"), "You are a worker agent.").unwrap();
 
@@ -85,7 +93,10 @@ fn render_inline_works() {
 fn keys_returns_sorted() {
     let (_dir, registry) = setup_test_prompts();
     let keys = registry.keys();
-    assert_eq!(keys, vec!["agents/worker", "system/distiller", "system/router"]);
+    assert_eq!(
+        keys,
+        vec!["agents/worker", "system/distiller", "system/router"]
+    );
 }
 
 #[test]
@@ -108,7 +119,11 @@ fn load_real_prompts_dir() {
     let prompts_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("prompts");
     if prompts_dir.exists() {
         let registry = PromptRegistry::load_from_dir(&prompts_dir).unwrap();
-        assert!(registry.len() >= 5, "expected at least 5 system prompts, got {}", registry.len());
+        assert!(
+            registry.len() >= 5,
+            "expected at least 5 system prompts, got {}",
+            registry.len()
+        );
         assert!(registry.get("system/distiller").is_some());
         assert!(registry.get("system/router").is_some());
         assert!(registry.get("system/schema_enforcement").is_some());

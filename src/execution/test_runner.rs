@@ -81,10 +81,16 @@ impl TestResult {
 
         match (self.passed, self.failed, self.skipped) {
             (Some(p), Some(f), Some(s)) => {
-                format!("{}: {} passed, {} failed, {} skipped ({} ms)", status, p, f, s, self.duration_ms)
+                format!(
+                    "{}: {} passed, {} failed, {} skipped ({} ms)",
+                    status, p, f, s, self.duration_ms
+                )
             }
             (Some(p), Some(f), None) => {
-                format!("{}: {} passed, {} failed ({} ms)", status, p, f, self.duration_ms)
+                format!(
+                    "{}: {} passed, {} failed ({} ms)",
+                    status, p, f, self.duration_ms
+                )
             }
             _ => {
                 format!("{} ({} ms)", status, self.duration_ms)
@@ -117,7 +123,10 @@ pub struct TestRunner {
 
 impl TestRunner {
     pub fn new(ctx: ExecutionContext) -> Self {
-        Self { ctx, framework: None }
+        Self {
+            ctx,
+            framework: None,
+        }
     }
 
     /// Auto-detect the test framework based on project files
@@ -140,7 +149,10 @@ impl TestRunner {
             } else {
                 Some(TestFramework::Npm)
             }
-        } else if root.join("pytest.ini").exists() || root.join("pyproject.toml").exists() || root.join("setup.py").exists() {
+        } else if root.join("pytest.ini").exists()
+            || root.join("pyproject.toml").exists()
+            || root.join("setup.py").exists()
+        {
             // Check for pytest
             if self.has_pytest(root) {
                 Some(TestFramework::Pytest)
@@ -218,7 +230,9 @@ impl TestRunner {
 
     /// Run tests using detected or configured framework
     pub async fn run_tests(&mut self) -> Result<TestResult, TestError> {
-        let framework = self.detect_framework().ok_or(TestError::NoFrameworkDetected)?;
+        let framework = self
+            .detect_framework()
+            .ok_or(TestError::NoFrameworkDetected)?;
 
         self.run_with_command(&framework.default_command()).await
     }
@@ -239,7 +253,11 @@ impl TestRunner {
             "Running tests"
         );
 
-        let output = Command::new(command[0]).args(&command[1..]).current_dir(&self.ctx.project_root).output().await?;
+        let output = Command::new(command[0])
+            .args(&command[1..])
+            .current_dir(&self.ctx.project_root)
+            .output()
+            .await?;
 
         let duration_ms = start.elapsed().as_millis() as u64;
 
@@ -292,15 +310,24 @@ impl TestRunner {
             TestFramework::Pytest => vec!["pytest", "-v", "-k", pattern],
             TestFramework::Npm => vec!["npm", "test", "--", pattern],
             TestFramework::Go => vec!["go", "test", "-run", pattern, "./..."],
-            _ => return Err(TestError::CommandFailed("Specific test not supported for this framework".to_string())),
+            _ => {
+                return Err(TestError::CommandFailed(
+                    "Specific test not supported for this framework".to_string(),
+                ))
+            }
         };
 
         self.run_with_command(&command).await
     }
 
     /// Run tests with streaming output
-    pub async fn run_tests_streaming(&mut self, output_tx: mpsc::Sender<TestOutputEvent>) -> Result<TestResult, TestError> {
-        let framework = self.detect_framework().ok_or(TestError::NoFrameworkDetected)?;
+    pub async fn run_tests_streaming(
+        &mut self,
+        output_tx: mpsc::Sender<TestOutputEvent>,
+    ) -> Result<TestResult, TestError> {
+        let framework = self
+            .detect_framework()
+            .ok_or(TestError::NoFrameworkDetected)?;
 
         let command = framework.default_command();
 
@@ -310,7 +337,12 @@ impl TestRunner {
 
         let start = std::time::Instant::now();
 
-        let _ = output_tx.send(TestOutputEvent::Line(format!("Running: {}", command.join(" ")))).await;
+        let _ = output_tx
+            .send(TestOutputEvent::Line(format!(
+                "Running: {}",
+                command.join(" ")
+            )))
+            .await;
 
         // Spawn process with piped stdout/stderr
         let mut child = Command::new(command[0])
@@ -320,8 +352,14 @@ impl TestRunner {
             .stderr(Stdio::piped())
             .spawn()?;
 
-        let stdout = child.stdout.take().ok_or_else(|| TestError::CommandFailed("Failed to capture stdout".to_string()))?;
-        let stderr = child.stderr.take().ok_or_else(|| TestError::CommandFailed("Failed to capture stderr".to_string()))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| TestError::CommandFailed("Failed to capture stdout".to_string()))?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| TestError::CommandFailed("Failed to capture stderr".to_string()))?;
 
         // Spawn tasks to read stdout and stderr
         let output_tx_clone = output_tx.clone();
@@ -348,7 +386,9 @@ impl TestRunner {
             while let Ok(Some(line)) = lines.next_line().await {
                 collected.push_str(&line);
                 collected.push('\n');
-                let _ = output_tx_clone.send(TestOutputEvent::Line(format!("[stderr] {}", line))).await;
+                let _ = output_tx_clone
+                    .send(TestOutputEvent::Line(format!("[stderr] {}", line)))
+                    .await;
             }
 
             collected
@@ -365,7 +405,8 @@ impl TestRunner {
         let exit_code = status.code().unwrap_or(-1);
         let success = status.success();
 
-        let (passed, failed, skipped) = self.parse_results(framework, &stdout_output, &stderr_output);
+        let (passed, failed, skipped) =
+            self.parse_results(framework, &stdout_output, &stderr_output);
 
         let result = TestResult {
             framework,
@@ -380,22 +421,39 @@ impl TestRunner {
         };
 
         // Send completion event
-        let _ = output_tx.send(TestOutputEvent::Complete(result.clone())).await;
+        let _ = output_tx
+            .send(TestOutputEvent::Complete(result.clone()))
+            .await;
 
         Ok(result)
     }
 
     /// Run tests with a timeout
-    pub async fn run_tests_with_timeout(&mut self, timeout_secs: u64) -> Result<TestResult, TestError> {
-        let result = tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), self.run_tests()).await;
+    pub async fn run_tests_with_timeout(
+        &mut self,
+        timeout_secs: u64,
+    ) -> Result<TestResult, TestError> {
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(timeout_secs),
+            self.run_tests(),
+        )
+        .await;
 
         match result {
             Ok(r) => r,
-            Err(_) => Err(TestError::CommandFailed(format!("Tests timed out after {} seconds", timeout_secs))),
+            Err(_) => Err(TestError::CommandFailed(format!(
+                "Tests timed out after {} seconds",
+                timeout_secs
+            ))),
         }
     }
 
-    fn parse_results(&self, framework: TestFramework, stdout: &str, stderr: &str) -> (Option<u32>, Option<u32>, Option<u32>) {
+    fn parse_results(
+        &self,
+        framework: TestFramework,
+        stdout: &str,
+        stderr: &str,
+    ) -> (Option<u32>, Option<u32>, Option<u32>) {
         match framework {
             TestFramework::Cargo => self.parse_cargo_output(stdout, stderr),
             TestFramework::Jest => self.parse_jest_output(stdout),
@@ -405,7 +463,11 @@ impl TestRunner {
         }
     }
 
-    fn parse_cargo_output(&self, stdout: &str, _stderr: &str) -> (Option<u32>, Option<u32>, Option<u32>) {
+    fn parse_cargo_output(
+        &self,
+        stdout: &str,
+        _stderr: &str,
+    ) -> (Option<u32>, Option<u32>, Option<u32>) {
         // Look for "test result: ok. X passed; Y failed; Z ignored"
         for line in stdout.lines() {
             if line.starts_with("test result:") {
@@ -505,7 +567,10 @@ impl TestRunner {
         for line in stdout.lines() {
             // Detect test start
             if line.starts_with("---- ") && line.ends_with(" stdout ----") {
-                let test_name = line.trim_start_matches("---- ").trim_end_matches(" stdout ----").to_string();
+                let test_name = line
+                    .trim_start_matches("---- ")
+                    .trim_end_matches(" stdout ----")
+                    .to_string();
                 current_test = Some(test_name);
                 current_message.clear();
                 in_failure = true;
@@ -572,7 +637,11 @@ mod tests {
     #[test]
     fn detects_jest() {
         let tmp = TempDir::new().unwrap();
-        std::fs::write(tmp.path().join("package.json"), r#"{"devDependencies":{"jest":"^29"}}"#).unwrap();
+        std::fs::write(
+            tmp.path().join("package.json"),
+            r#"{"devDependencies":{"jest":"^29"}}"#,
+        )
+        .unwrap();
 
         let ctx = ExecutionContext::new(tmp.path().to_path_buf());
         let mut runner = TestRunner::new(ctx);
@@ -677,7 +746,10 @@ test result: FAILED. 1 passed; 1 failed; 0 ignored
             duration_ms: 1500,
         };
 
-        assert_eq!(result.summary(), "PASSED: 10 passed, 0 failed, 2 skipped (1500 ms)");
+        assert_eq!(
+            result.summary(),
+            "PASSED: 10 passed, 0 failed, 2 skipped (1500 ms)"
+        );
     }
 
     #[test]
@@ -699,13 +771,28 @@ test result: FAILED. 1 passed; 1 failed; 0 ignored
 
     #[test]
     fn default_commands_all_frameworks() {
-        assert_eq!(TestFramework::Cargo.default_command(), vec!["cargo", "test"]);
+        assert_eq!(
+            TestFramework::Cargo.default_command(),
+            vec!["cargo", "test"]
+        );
         assert_eq!(TestFramework::Npm.default_command(), vec!["npm", "test"]);
         assert_eq!(TestFramework::Jest.default_command(), vec!["npx", "jest"]);
-        assert_eq!(TestFramework::Pytest.default_command(), vec!["pytest", "-v"]);
-        assert_eq!(TestFramework::PythonUnittest.default_command(), vec!["python", "-m", "unittest", "discover"]);
-        assert_eq!(TestFramework::Go.default_command(), vec!["go", "test", "./..."]);
-        assert_eq!(TestFramework::Generic.default_command(), vec!["make", "test"]);
+        assert_eq!(
+            TestFramework::Pytest.default_command(),
+            vec!["pytest", "-v"]
+        );
+        assert_eq!(
+            TestFramework::PythonUnittest.default_command(),
+            vec!["python", "-m", "unittest", "discover"]
+        );
+        assert_eq!(
+            TestFramework::Go.default_command(),
+            vec!["go", "test", "./..."]
+        );
+        assert_eq!(
+            TestFramework::Generic.default_command(),
+            vec!["make", "test"]
+        );
     }
 
     #[test]
@@ -881,7 +968,11 @@ thread 'tests::fail_b' panicked at 'assert b', src/lib.rs:2:1
     #[test]
     fn detects_pytest_from_pyproject() {
         let tmp = TempDir::new().unwrap();
-        std::fs::write(tmp.path().join("pyproject.toml"), "[tool.pytest]\nminversion = \"6.0\"").unwrap();
+        std::fs::write(
+            tmp.path().join("pyproject.toml"),
+            "[tool.pytest]\nminversion = \"6.0\"",
+        )
+        .unwrap();
         let ctx = ExecutionContext::new(tmp.path().to_path_buf());
         let mut runner = TestRunner::new(ctx);
         assert_eq!(runner.detect_framework(), Some(TestFramework::Pytest));
@@ -908,10 +999,17 @@ thread 'tests::fail_b' panicked at 'assert b', src/lib.rs:2:1
     #[test]
     fn detects_setup_py_unittest() {
         let tmp = TempDir::new().unwrap();
-        std::fs::write(tmp.path().join("setup.py"), "from setuptools import setup\nsetup()").unwrap();
+        std::fs::write(
+            tmp.path().join("setup.py"),
+            "from setuptools import setup\nsetup()",
+        )
+        .unwrap();
         let ctx = ExecutionContext::new(tmp.path().to_path_buf());
         let mut runner = TestRunner::new(ctx);
-        assert_eq!(runner.detect_framework(), Some(TestFramework::PythonUnittest));
+        assert_eq!(
+            runner.detect_framework(),
+            Some(TestFramework::PythonUnittest)
+        );
     }
 
     #[test]
@@ -1012,7 +1110,11 @@ thread 'tests::fail_b' panicked at 'assert b', src/lib.rs:2:1
     fn has_pytest_from_requirements_txt() {
         let tmp = TempDir::new().unwrap();
         std::fs::write(tmp.path().join("pyproject.toml"), "[build-system]").unwrap();
-        std::fs::write(tmp.path().join("requirements.txt"), "pytest==7.0\nrequests\n").unwrap();
+        std::fs::write(
+            tmp.path().join("requirements.txt"),
+            "pytest==7.0\nrequests\n",
+        )
+        .unwrap();
 
         let ctx = ExecutionContext::new(tmp.path().to_path_buf());
         let mut runner = TestRunner::new(ctx);
@@ -1022,7 +1124,11 @@ thread 'tests::fail_b' panicked at 'assert b', src/lib.rs:2:1
     #[test]
     fn has_pytest_pyproject_with_pytest_keyword() {
         let tmp = TempDir::new().unwrap();
-        std::fs::write(tmp.path().join("pyproject.toml"), "[project]\ndependencies = [\"pytest\"]\n").unwrap();
+        std::fs::write(
+            tmp.path().join("pyproject.toml"),
+            "[project]\ndependencies = [\"pytest\"]\n",
+        )
+        .unwrap();
 
         let ctx = ExecutionContext::new(tmp.path().to_path_buf());
         let mut runner = TestRunner::new(ctx);
@@ -1032,11 +1138,18 @@ thread 'tests::fail_b' panicked at 'assert b', src/lib.rs:2:1
     #[test]
     fn has_pytest_returns_false_no_pytest_indicators() {
         let tmp = TempDir::new().unwrap();
-        std::fs::write(tmp.path().join("pyproject.toml"), "[build-system]\nrequires = [\"setuptools\"]\n").unwrap();
+        std::fs::write(
+            tmp.path().join("pyproject.toml"),
+            "[build-system]\nrequires = [\"setuptools\"]\n",
+        )
+        .unwrap();
 
         let ctx = ExecutionContext::new(tmp.path().to_path_buf());
         let mut runner = TestRunner::new(ctx);
-        assert_eq!(runner.detect_framework(), Some(TestFramework::PythonUnittest));
+        assert_eq!(
+            runner.detect_framework(),
+            Some(TestFramework::PythonUnittest)
+        );
     }
 
     #[test]
@@ -1131,7 +1244,10 @@ thread 'tests::fail_b' panicked at 'assert b', src/lib.rs:2:1
     async fn run_with_command_nonexistent_binary() {
         let ctx = ExecutionContext::new("/tmp".into());
         let runner = TestRunner::new(ctx);
-        let err = runner.run_with_command(&["__nonexistent_binary_xyz__"]).await.unwrap_err();
+        let err = runner
+            .run_with_command(&["__nonexistent_binary_xyz__"])
+            .await
+            .unwrap_err();
         assert!(matches!(err, TestError::ExecutionError(_)));
     }
 
@@ -1169,8 +1285,13 @@ thread 'tests::fail_b' panicked at 'assert b', src/lib.rs:2:1
 
     #[test]
     fn test_error_display() {
-        assert_eq!(TestError::NoFrameworkDetected.to_string(), "no test framework detected");
-        assert!(TestError::CommandFailed("x".into()).to_string().contains("x"));
+        assert_eq!(
+            TestError::NoFrameworkDetected.to_string(),
+            "no test framework detected"
+        );
+        assert!(TestError::CommandFailed("x".into())
+            .to_string()
+            .contains("x"));
         assert!(TestError::ParseError("y".into()).to_string().contains("y"));
     }
 }

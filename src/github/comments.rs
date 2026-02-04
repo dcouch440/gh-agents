@@ -44,7 +44,13 @@ impl ProgressSummary {
     }
 
     /// Add a slice's progress
-    pub fn add_slice(mut self, title: impl Into<String>, status: TaskStatus, task_count: usize, tasks_completed: usize) -> Self {
+    pub fn add_slice(
+        mut self,
+        title: impl Into<String>,
+        status: TaskStatus,
+        task_count: usize,
+        tasks_completed: usize,
+    ) -> Self {
         self.slices.push(SliceProgress {
             title: title.into(),
             status,
@@ -88,16 +94,25 @@ impl ProgressSummary {
         md.push_str("## nexor Progress Update\n\n");
 
         // Overall progress
-        let completed = self.slices.iter().filter(|s| s.status == TaskStatus::Completed).count();
+        let completed = self
+            .slices
+            .iter()
+            .filter(|s| s.status == TaskStatus::Completed)
+            .count();
         let total = self.slices.len();
 
         if total > 0 {
-            md.push_str(&format!("**Progress:** {} of {} slices complete\n\n", completed, total));
+            md.push_str(&format!(
+                "**Progress:** {} of {} slices complete\n\n",
+                completed, total
+            ));
 
             // Progress bar
             let pct = (completed * 100) / total;
             let filled = (completed * 10) / total;
-            let bar: String = (0..10).map(|i| if i < filled { '█' } else { '░' }).collect();
+            let bar: String = (0..10)
+                .map(|i| if i < filled { '█' } else { '░' })
+                .collect();
             md.push_str(&format!("`[{}]` {}%\n\n", bar, pct));
         }
 
@@ -114,7 +129,10 @@ impl ProgressSummary {
                 };
 
                 if slice.task_count > 0 {
-                    md.push_str(&format!("{} **{}** ({}/{})\n", emoji, slice.title, slice.tasks_completed, slice.task_count));
+                    md.push_str(&format!(
+                        "{} **{}** ({}/{})\n",
+                        emoji, slice.title, slice.tasks_completed, slice.task_count
+                    ));
                 } else {
                     md.push_str(&format!("{} **{}**\n", emoji, slice.title));
                 }
@@ -162,13 +180,21 @@ impl CommentService {
     /// Get GitHub issue reference from ticket source
     fn get_issue_ref(&self, ticket: &Ticket) -> Result<(String, String, u32), CommentError> {
         match &ticket.source {
-            TicketSource::GitHub { owner, repo, issue_number } => Ok((owner.clone(), repo.clone(), *issue_number)),
+            TicketSource::GitHub {
+                owner,
+                repo,
+                issue_number,
+            } => Ok((owner.clone(), repo.clone(), *issue_number)),
             TicketSource::Manual => Err(CommentError::ManualTicket),
         }
     }
 
     /// Post initial comment when work begins
-    pub async fn on_work_started(&mut self, ticket: &Ticket, slice_count: usize) -> Result<GitHubComment, CommentError> {
+    pub async fn on_work_started(
+        &mut self,
+        ticket: &Ticket,
+        slice_count: usize,
+    ) -> Result<GitHubComment, CommentError> {
         let (owner, repo, number) = self.get_issue_ref(ticket)?;
 
         let body = format!(
@@ -179,7 +205,10 @@ impl CommentService {
             slice_count
         );
 
-        let comment = self.client.create_issue_comment(&owner, &repo, number, &CreateIssueComment { body }).await?;
+        let comment = self
+            .client
+            .create_issue_comment(&owner, &repo, number, &CreateIssueComment { body })
+            .await?;
 
         // Store comment ID for future updates
         self.progress_comments.insert(ticket.id.0, comment.id);
@@ -194,14 +223,21 @@ impl CommentService {
     }
 
     /// Update progress when a slice is completed
-    pub async fn on_progress_update(&mut self, ticket: &Ticket, summary: &ProgressSummary) -> Result<GitHubComment, CommentError> {
+    pub async fn on_progress_update(
+        &mut self,
+        ticket: &Ticket,
+        summary: &ProgressSummary,
+    ) -> Result<GitHubComment, CommentError> {
         let (owner, repo, number) = self.get_issue_ref(ticket)?;
 
         let body = summary.generate_markdown();
 
         // Check if we have an existing comment to update
         if let Some(&comment_id) = self.progress_comments.get(&ticket.id.0) {
-            let comment = self.client.update_issue_comment(&owner, &repo, comment_id, &CreateIssueComment { body }).await?;
+            let comment = self
+                .client
+                .update_issue_comment(&owner, &repo, comment_id, &CreateIssueComment { body })
+                .await?;
 
             tracing::info!(
                 ticket_id = %ticket.id.0,
@@ -212,7 +248,10 @@ impl CommentService {
             Ok(comment)
         } else {
             // Create new comment
-            let comment = self.client.create_issue_comment(&owner, &repo, number, &CreateIssueComment { body }).await?;
+            let comment = self
+                .client
+                .create_issue_comment(&owner, &repo, number, &CreateIssueComment { body })
+                .await?;
 
             self.progress_comments.insert(ticket.id.0, comment.id);
 
@@ -227,10 +266,18 @@ impl CommentService {
     }
 
     /// Post final comment when ticket is complete
-    pub async fn on_ticket_completed(&mut self, ticket: &Ticket, pr_url: Option<&str>) -> Result<GitHubComment, CommentError> {
+    pub async fn on_ticket_completed(
+        &mut self,
+        ticket: &Ticket,
+        pr_url: Option<&str>,
+    ) -> Result<GitHubComment, CommentError> {
         let (owner, repo, number) = self.get_issue_ref(ticket)?;
 
-        let pr_section = if let Some(url) = pr_url { format!("\n\n**Pull Request:** {}", url) } else { String::new() };
+        let pr_section = if let Some(url) = pr_url {
+            format!("\n\n**Pull Request:** {}", url)
+        } else {
+            String::new()
+        };
 
         let body = format!(
             "## ✅ Work Complete\n\n\
@@ -239,7 +286,10 @@ impl CommentService {
             pr_section
         );
 
-        let comment = self.client.create_issue_comment(&owner, &repo, number, &CreateIssueComment { body }).await?;
+        let comment = self
+            .client
+            .create_issue_comment(&owner, &repo, number, &CreateIssueComment { body })
+            .await?;
 
         // Remove from tracking
         self.progress_comments.remove(&ticket.id.0);
@@ -250,7 +300,11 @@ impl CommentService {
     }
 
     /// Post an error notification
-    pub async fn on_error(&self, ticket: &Ticket, error_msg: &str) -> Result<GitHubComment, CommentError> {
+    pub async fn on_error(
+        &self,
+        ticket: &Ticket,
+        error_msg: &str,
+    ) -> Result<GitHubComment, CommentError> {
         let (owner, repo, number) = self.get_issue_ref(ticket)?;
 
         let body = format!(
@@ -262,7 +316,10 @@ impl CommentService {
             error_msg
         );
 
-        let comment = self.client.create_issue_comment(&owner, &repo, number, &CreateIssueComment { body }).await?;
+        let comment = self
+            .client
+            .create_issue_comment(&owner, &repo, number, &CreateIssueComment { body })
+            .await?;
 
         tracing::warn!(ticket_id = %ticket.id.0, "Posted error comment");
 
@@ -303,7 +360,8 @@ mod tests {
 
     #[test]
     fn progress_summary_with_errors() {
-        let summary = ProgressSummary::new("Test").with_error("Test failed: assertion error at line 42");
+        let summary =
+            ProgressSummary::new("Test").with_error("Test failed: assertion error at line 42");
 
         let md = summary.generate_markdown();
 
@@ -419,7 +477,9 @@ mod tests {
 
     #[test]
     fn progress_summary_all_completed() {
-        let summary = ProgressSummary::new("Done").add_slice("S1", TaskStatus::Completed, 1, 1).add_slice("S2", TaskStatus::Completed, 1, 1);
+        let summary = ProgressSummary::new("Done")
+            .add_slice("S1", TaskStatus::Completed, 1, 1)
+            .add_slice("S2", TaskStatus::Completed, 1, 1);
 
         let md = summary.generate_markdown();
         assert!(md.contains("2 of 2 slices complete"));
@@ -430,7 +490,10 @@ mod tests {
 
     #[test]
     fn progress_summary_multiple_errors() {
-        let summary = ProgressSummary::new("Broken").with_error("Error one").with_error("Error two").with_error("Error three");
+        let summary = ProgressSummary::new("Broken")
+            .with_error("Error one")
+            .with_error("Error two")
+            .with_error("Error three");
 
         assert_eq!(summary.errors.len(), 3);
 
@@ -465,7 +528,10 @@ mod tests {
     #[test]
     fn comment_error_manual_ticket_display() {
         let err = CommentError::ManualTicket;
-        assert_eq!(err.to_string(), "cannot comment on manually created ticket - no GitHub issue associated");
+        assert_eq!(
+            err.to_string(),
+            "cannot comment on manually created ticket - no GitHub issue associated"
+        );
     }
 
     #[test]
@@ -564,7 +630,11 @@ mod tests {
         // 3/10 = 30%, 3 filled bars
         let mut summary = ProgressSummary::new("Partial");
         for i in 0..10 {
-            let status = if i < 3 { TaskStatus::Completed } else { TaskStatus::Pending };
+            let status = if i < 3 {
+                TaskStatus::Completed
+            } else {
+                TaskStatus::Pending
+            };
             summary = summary.add_slice(&format!("S{}", i), status, 1, 0);
         }
 

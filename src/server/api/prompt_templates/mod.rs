@@ -46,9 +46,18 @@ pub struct UpdatePromptTemplateRequest {
         (status = 200, description = "List of prompt templates", body = Vec<PromptTemplateResponse>)
     )
 )]
-pub async fn list_prompt_templates(State(state): State<AppState>, auth: auth_utils::AuthUser) -> Result<Json<Vec<PromptTemplateResponse>>, StatusCode> {
-    let repo = state.prompt_template_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = repo.list_prompt_templates(auth.user_id.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn list_prompt_templates(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+) -> Result<Json<Vec<PromptTemplateResponse>>, StatusCode> {
+    let repo = state
+        .prompt_template_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = repo
+        .list_prompt_templates(auth.user_id.0)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let items = rows
         .into_iter()
         .map(|r| PromptTemplateResponse {
@@ -84,7 +93,10 @@ pub async fn create_prompt_template(
     if request.content.len() > MAX_PROMPT_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let repo = state.prompt_template_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = state
+        .prompt_template_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo
         .create_prompt_template(auth.user_id.0, request.name, request.content)
         .await
@@ -112,9 +124,20 @@ pub async fn create_prompt_template(
         (status = 404, description = "Not found")
     )
 )]
-pub async fn get_prompt_template(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<PromptTemplateResponse>, StatusCode> {
-    let repo = state.prompt_template_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let row = repo.get_prompt_template(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn get_prompt_template(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<PromptTemplateResponse>, StatusCode> {
+    let repo = state
+        .prompt_template_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = repo
+        .get_prompt_template(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if row.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
@@ -145,8 +168,15 @@ pub async fn update_prompt_template(
     Path(id): Path<Uuid>,
     Json(request): Json<UpdatePromptTemplateRequest>,
 ) -> Result<Json<PromptTemplateResponse>, StatusCode> {
-    let repo = state.prompt_template_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let existing = repo.get_prompt_template(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let repo = state
+        .prompt_template_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let existing = repo
+        .get_prompt_template(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if existing.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
@@ -160,7 +190,10 @@ pub async fn update_prompt_template(
             return Err(StatusCode::BAD_REQUEST);
         }
     }
-    let row = repo.update_prompt_template(id, request.name, request.content).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = repo
+        .update_prompt_template(id, request.name, request.content)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(PromptTemplateResponse {
         id: row.id,
         name: row.name,
@@ -181,13 +214,26 @@ pub async fn update_prompt_template(
         (status = 404, description = "Not found")
     )
 )]
-pub async fn delete_prompt_template(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
-    let repo = state.prompt_template_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let existing = repo.get_prompt_template(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+pub async fn delete_prompt_template(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, StatusCode> {
+    let repo = state
+        .prompt_template_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let existing = repo
+        .get_prompt_template(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     if existing.user_id != auth.user_id.0 {
         return Err(StatusCode::NOT_FOUND);
     }
-    repo.delete_prompt_template(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    repo.delete_prompt_template(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)
 }
 

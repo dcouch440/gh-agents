@@ -21,7 +21,10 @@ fn display_llm_call_failed() {
 
 #[test]
 fn display_context_budget() {
-    let err = HubError::ContextBudgetExceeded { chars: 500_000, round: 7 };
+    let err = HubError::ContextBudgetExceeded {
+        chars: 500_000,
+        round: 7,
+    };
     assert!(err.to_string().contains("500000"));
     assert!(err.to_string().contains("round 7"));
 }
@@ -44,7 +47,9 @@ fn display_max_rounds() {
 
 #[test]
 fn display_unknown_mode() {
-    let err = HubError::UnknownMode { mode_id: "ghost".into() };
+    let err = HubError::UnknownMode {
+        mode_id: "ghost".into(),
+    };
     assert!(err.to_string().contains("ghost"));
 }
 
@@ -56,13 +61,17 @@ fn display_dag_cycle() {
 
 #[test]
 fn display_unresolved_variable() {
-    let err = HubError::UnresolvedVariable { path: "steps.0.output".into() };
+    let err = HubError::UnresolvedVariable {
+        path: "steps.0.output".into(),
+    };
     assert!(err.to_string().contains("steps.0.output"));
 }
 
 #[test]
 fn display_for_each_not_array() {
-    let err = HubError::ForEachNotArray { reference: "results".into() };
+    let err = HubError::ForEachNotArray {
+        reference: "results".into(),
+    };
     assert!(err.to_string().contains("results"));
 }
 
@@ -70,7 +79,10 @@ fn display_for_each_not_array() {
 fn display_agent_not_found() {
     let step = Uuid::nil();
     let agent = Uuid::nil();
-    let err = HubError::AgentNotFound { step_id: step, agent_id: agent };
+    let err = HubError::AgentNotFound {
+        step_id: step,
+        agent_id: agent,
+    };
     assert!(err.to_string().contains("00000000"));
 }
 
@@ -91,13 +103,17 @@ fn display_cancelled() {
 
 #[test]
 fn display_stream_interrupted() {
-    let err = HubError::StreamInterrupted { execution_id: Uuid::nil() };
+    let err = HubError::StreamInterrupted {
+        execution_id: Uuid::nil(),
+    };
     assert!(err.to_string().contains("interrupted"));
 }
 
 #[test]
 fn display_prompt_not_found() {
-    let err = HubError::PromptNotFound { key: "modes/home".into() };
+    let err = HubError::PromptNotFound {
+        key: "modes/home".into(),
+    };
     assert!(err.to_string().contains("modes/home"));
 }
 

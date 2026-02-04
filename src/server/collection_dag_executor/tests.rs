@@ -147,13 +147,21 @@ async fn test_variable_resolution() {
         async fn list_workflows(&self, _: Uuid) -> Result<Vec<WorkflowRow>> {
             unimplemented!()
         }
-        async fn update_workflow(&self, _: Uuid, _: Option<String>, _: Option<String>) -> Result<WorkflowRow> {
+        async fn update_workflow(
+            &self,
+            _: Uuid,
+            _: Option<String>,
+            _: Option<String>,
+        ) -> Result<WorkflowRow> {
             unimplemented!()
         }
         async fn delete_workflow(&self, _: Uuid) -> Result<()> {
             unimplemented!()
         }
-        async fn create_step(&self, _: crate::db::WorkflowStepRow) -> Result<crate::db::WorkflowStepRow> {
+        async fn create_step(
+            &self,
+            _: crate::db::WorkflowStepRow,
+        ) -> Result<crate::db::WorkflowStepRow> {
             unimplemented!()
         }
         async fn get_step(&self, _: Uuid) -> Result<Option<crate::db::WorkflowStepRow>> {
@@ -162,7 +170,10 @@ async fn test_variable_resolution() {
         async fn list_steps(&self, _: Uuid) -> Result<Vec<crate::db::WorkflowStepRow>> {
             unimplemented!()
         }
-        async fn update_step(&self, _: crate::db::WorkflowStepRow) -> Result<crate::db::WorkflowStepRow> {
+        async fn update_step(
+            &self,
+            _: crate::db::WorkflowStepRow,
+        ) -> Result<crate::db::WorkflowStepRow> {
             unimplemented!()
         }
         async fn delete_step(&self, _: Uuid) -> Result<()> {
@@ -214,7 +225,9 @@ async fn test_variable_resolution() {
 
     // Test variable collection
     let repo = MockWorkflowRepo;
-    let outputs = collect_workflow_outputs(&completed_workflows, &repo).await.unwrap();
+    let outputs = collect_workflow_outputs(&completed_workflows, &repo)
+        .await
+        .unwrap();
 
     // Verify structure: $workflow_test_workflow -> { analysis: ..., summary: ... }
     assert!(outputs.contains_key("$workflow_test_workflow"));
@@ -225,7 +238,8 @@ async fn test_variable_resolution() {
 
     // Verify it would work with resolve_variables
     let template = "Found: {$workflow_test_workflow.analysis.findings.0}";
-    let resolved = crate::server::dag_executor::resolve_variables(template, &HashMap::new(), &outputs);
+    let resolved =
+        crate::server::dag_executor::resolve_variables(template, &HashMap::new(), &outputs);
     // Note: JSON strings are resolved with quotes (this is correct behavior)
     assert_eq!(resolved, "Found: issue1");
 }

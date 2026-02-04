@@ -240,7 +240,11 @@ function AgentWorkshopPage() {
           content: msg.content,
         }));
 
-        console.warn("[Workshop] Loading session with", messages.length, "messages");
+        console.warn(
+          "[Workshop] Loading session with",
+          messages.length,
+          "messages",
+        );
 
         // Hydrate state
         dispatch({
@@ -263,7 +267,8 @@ function AgentWorkshopPage() {
           dispatch({type: "SET_SESSION_LOADING", value: false});
           dispatch({
             type: "SET_ERROR",
-            value: err instanceof Error ? err.message : "Failed to load session",
+            value:
+              err instanceof Error ? err.message : "Failed to load session",
           });
         }
       }
@@ -446,7 +451,10 @@ function AgentWorkshopPage() {
         dispatch({type: "SET_DIRTY", value: false});
         // If we don't have a sessionId in URL yet, update URL without reload
         if (!urlSessionId && state.sessionId) {
-          console.warn("[Workshop] Navigating to session URL, current message count:", state.messages.length);
+          console.warn(
+            "[Workshop] Navigating to session URL, current message count:",
+            state.messages.length,
+          );
           justNavigatedRef.current = true;
           void navigate(`/agents/workshop/${state.sessionId}`, {replace: true});
         }
@@ -480,7 +488,7 @@ function AgentWorkshopPage() {
         display: "flex",
         flexDirection: "column",
         height: "calc(100vh - 120px)",
-        pt: 2
+        pt: 2,
       }}
     >
       <PageHeader title="Agent Workshop">

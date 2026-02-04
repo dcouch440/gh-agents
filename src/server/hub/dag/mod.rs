@@ -25,8 +25,9 @@ use super::streaming::NullSink;
 
 // Re-export pure DAG functions from the existing dag_executor
 pub use crate::server::dag_executor::{
-    compose_prompt, extract_for_each_label, find_entry_steps, get_child_steps, get_parent_steps, resolve_for_each_array, resolve_variables, topological_sort, StepOutput, WorkflowExecutionContext,
-    WorkflowExecutionResult,
+    compose_prompt, extract_for_each_label, find_entry_steps, get_child_steps, get_parent_steps,
+    resolve_for_each_array, resolve_variables, topological_sort, StepOutput,
+    WorkflowExecutionContext, WorkflowExecutionResult,
 };
 
 /// Execute a complete workflow DAG using the unified ExecutionEngine.
@@ -85,8 +86,16 @@ pub async fn execute_workflow_via_engine(
             // Room execution — create a session and pause the pipeline.
             // The user interacts with the room via POST /api/room-sessions/:id/messages.
             // When the session completes, the pipeline continues.
-            let room_id = step.room_id.ok_or_else(|| HubError::Internal(anyhow!("step {} has execution_mode='room' but no room_id", step.id)))?;
-            let room_repo = state.room_repo.as_ref().ok_or(HubError::ProviderNotConfigured)?;
+            let room_id = step.room_id.ok_or_else(|| {
+                HubError::Internal(anyhow!(
+                    "step {} has execution_mode='room' but no room_id",
+                    step.id
+                ))
+            })?;
+            let room_repo = state
+                .room_repo
+                .as_ref()
+                .ok_or(HubError::ProviderNotConfigured)?;
             let session = room_repo
                 .create_room_session(room_id, Some(ctx.run_id))
                 .await
@@ -102,14 +111,20 @@ pub async fn execute_workflow_via_engine(
             // Store a placeholder output so downstream steps can reference the session
             let output = StepOutput {
                 variable_name: step.output_variable_name.clone().unwrap_or_default(),
-                raw_output: format!("{{\"room_session_id\":\"{}\",\"status\":\"awaiting_room\"}}", session.id),
+                raw_output: format!(
+                    "{{\"room_session_id\":\"{}\",\"status\":\"awaiting_room\"}}",
+                    session.id
+                ),
                 structured_output: Some(serde_json::json!({
                     "room_session_id": session.id.to_string(),
                     "status": "awaiting_room"
                 })),
             };
             if let Some(ref var_name) = step.output_variable_name {
-                var_outputs.insert(var_name.clone(), output.structured_output.clone().unwrap_or_default());
+                var_outputs.insert(
+                    var_name.clone(),
+                    output.structured_output.clone().unwrap_or_default(),
+                );
             }
             completed.insert(step.id, output);
 
@@ -152,7 +167,10 @@ pub async fn execute_workflow_via_engine(
         }
     }
 
-    let final_outputs: HashMap<String, StepOutput> = completed.into_iter().map(|(id, out)| (id.to_string(), out)).collect();
+    let final_outputs: HashMap<String, StepOutput> = completed
+        .into_iter()
+        .map(|(id, out)| (id.to_string(), out))
+        .collect();
 
     Ok(WorkflowExecutionResult {
         outputs: final_outputs,
@@ -188,7 +206,8 @@ async fn execute_single_step(
     )
     .await;
 
-    let (output, in_tok, out_tok, cost) = run_step_via_engine(engine, state, ctx, step, agent, &prompt, cancel).await?;
+    let (output, in_tok, out_tok, cost) =
+        run_step_via_engine(engine, state, ctx, step, agent, &prompt, cancel).await?;
 
     *total_input_tokens += in_tok;
     *total_output_tokens += out_tok;
@@ -221,9 +240,17 @@ async fn execute_for_each_step(
     total_cost_usd: &mut f32,
     cancel: Option<&CancellationToken>,
 ) -> Result<(), HubError> {
-    let for_each_ref = step.for_each_ref.as_deref().ok_or_else(|| anyhow::anyhow!("for_each step {} missing for_each_ref", step.id))?;
+    let for_each_ref = step
+        .for_each_ref
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("for_each step {} missing for_each_ref", step.id))?;
 
-    let array = resolve_for_each_array(for_each_ref, var_outputs, &ctx.prior_outputs).ok_or_else(|| HubError::ForEachNotArray { reference: for_each_ref.to_string() })?;
+    let array =
+        resolve_for_each_array(for_each_ref, var_outputs, &ctx.prior_outputs).ok_or_else(|| {
+            HubError::ForEachNotArray {
+                reference: for_each_ref.to_string(),
+            }
+        })?;
 
     let label_field = step.for_each_label_field.as_deref();
 
@@ -261,7 +288,10 @@ async fn execute_for_each_step(
                 iteration_outputs.push(output.structured_output.clone());
             }
             Err(e) => {
-                error!("for_each iteration {} failed for step {}: {}", idx, step.id, e);
+                error!(
+                    "for_each iteration {} failed for step {}: {}",
+                    idx, step.id, e
+                );
             }
         }
     }
@@ -295,7 +325,10 @@ async fn run_step_via_engine(
     prompt: &str,
     cancel: Option<&CancellationToken>,
 ) -> Result<(StepOutput, i64, i64, f32), HubError> {
-    let ae_repo = state.agent_execution_repo.as_ref().ok_or_else(|| anyhow::anyhow!("agent_execution_repo not configured"))?;
+    let ae_repo = state
+        .agent_execution_repo
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("agent_execution_repo not configured"))?;
 
     // Build system prompt with optional schema enforcement
     let mut system_prompt = agent.system_prompt.clone();
@@ -316,13 +349,27 @@ async fn run_step_via_engine(
 
     // Create agent_execution row
     let ae_row = ae_repo
-        .create_agent_execution(agent.id, Some(step.id), false, None, &system_prompt, prompt, None, None, None)
+        .create_agent_execution(
+            agent.id,
+            Some(step.id),
+            false,
+            None,
+            &system_prompt,
+            prompt,
+            None,
+            None,
+            None,
+        )
         .await
         .map_err(|e| anyhow::anyhow!("failed to create agent execution: {}", e))?;
 
     // Record initial messages
-    let _ = ae_repo.create_execution_message(ae_row.id, "system", &system_prompt, None, 0, 0).await;
-    let _ = ae_repo.create_execution_message(ae_row.id, "user", prompt, None, 0, 0).await;
+    let _ = ae_repo
+        .create_execution_message(ae_row.id, "system", &system_prompt, None, 0, 0)
+        .await;
+    let _ = ae_repo
+        .create_execution_message(ae_row.id, "user", prompt, None, 0, 0)
+        .await;
 
     // Build strategy
     let config = DagStepConfig {
@@ -340,14 +387,24 @@ async fn run_step_via_engine(
     let strategy = DagStepStrategy::new(config, state.clone());
 
     // Build recorder (strategy handles its own recording in on_complete)
-    let recorder = ExecutionRecorder::new(state.repo.as_ref(), state.agent_execution_repo.as_deref(), state.token_ledger_repo.as_deref());
+    let recorder = ExecutionRecorder::new(
+        state.repo.as_ref(),
+        state.agent_execution_repo.as_deref(),
+        state.token_ledger_repo.as_deref(),
+    );
 
     let sink = NullSink;
 
     // Execute
-    let result = engine.execute(&strategy, prompt, &sink, &recorder, cancel).await?;
+    let result = engine
+        .execute(&strategy, prompt, &sink, &recorder, cancel)
+        .await?;
 
-    let cost = compute_cost(&agent.model_id, result.input_tokens as i64, result.output_tokens as i64);
+    let cost = compute_cost(
+        &agent.model_id,
+        result.input_tokens as i64,
+        result.output_tokens as i64,
+    );
 
     let variable_name = step.output_variable_name.clone().unwrap_or_default();
     let structured = super::strategies::dag_step::DagStepStrategy::parse_output(&result.content);
@@ -358,7 +415,12 @@ async fn run_step_via_engine(
         raw_output: result.content,
     };
 
-    Ok((output, result.input_tokens as i64, result.output_tokens as i64, cost))
+    Ok((
+        output,
+        result.input_tokens as i64,
+        result.output_tokens as i64,
+        cost,
+    ))
 }
 
 /// Resolve tool definitions for an agent from the database.

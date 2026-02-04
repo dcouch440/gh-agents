@@ -43,8 +43,14 @@ Select the tools you'll need and plan the order of operations."#,
     /// # Arguments
     /// * `task_description` - What to accomplish
     /// * `selected_tools` - Tools that have been selected
-    pub fn plan_tool_usage(task_description: &str, selected_tools: &[&ToolDefinition]) -> PromptBuilder {
-        let tools_detail: Vec<String> = selected_tools.iter().map(|t| t.to_schema_string()).collect();
+    pub fn plan_tool_usage(
+        task_description: &str,
+        selected_tools: &[&ToolDefinition],
+    ) -> PromptBuilder {
+        let tools_detail: Vec<String> = selected_tools
+            .iter()
+            .map(|t| t.to_schema_string())
+            .collect();
 
         PromptBuilder::new()
             .version(Self::selection_version())
@@ -136,7 +142,8 @@ mod tests {
         let write_tool = file_tools::write_file();
         let selected = vec![&read_tool, &write_tool];
 
-        let prompt = ToolSelectionPrompts::plan_tool_usage("Modify the config file", &selected).build();
+        let prompt =
+            ToolSelectionPrompts::plan_tool_usage("Modify the config file", &selected).build();
 
         assert!(prompt.text.contains("Modify the config file"));
         assert!(prompt.text.contains("read_file"));

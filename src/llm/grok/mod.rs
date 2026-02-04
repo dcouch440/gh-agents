@@ -38,9 +38,11 @@ impl GrokConfig {
     ///
     /// Reads `XAI_API_KEY` (required) and `XAI_MODEL` (optional).
     pub fn from_env() -> Result<Self, LLMError> {
-        let api_key = std::env::var(constants::ENV_XAI_API_KEY).map_err(|_| LLMError::AuthError(format!("{} not set", constants::ENV_XAI_API_KEY)))?;
+        let api_key = std::env::var(constants::ENV_XAI_API_KEY)
+            .map_err(|_| LLMError::AuthError(format!("{} not set", constants::ENV_XAI_API_KEY)))?;
 
-        let model = std::env::var(constants::ENV_XAI_MODEL).unwrap_or_else(|_| constants::XAI_RESEARCH_MODEL.to_string());
+        let model = std::env::var(constants::ENV_XAI_MODEL)
+            .unwrap_or_else(|_| constants::XAI_RESEARCH_MODEL.to_string());
 
         Ok(Self {
             api_key,
@@ -224,13 +226,16 @@ impl GrokResearchClient {
     /// Create a new client from config.
     pub fn new(config: GrokConfig) -> Result<Self, LLMError> {
         if config.api_key.is_empty() {
-            return Err(LLMError::AuthError("xAI API key cannot be empty".to_string()));
+            return Err(LLMError::AuthError(
+                "xAI API key cannot be empty".to_string(),
+            ));
         }
 
         let mut headers = HeaderMap::new();
         headers.insert(
             "authorization",
-            HeaderValue::from_str(&format!("Bearer {}", config.api_key)).map_err(|_| LLMError::AuthError("Invalid xAI API key format".to_string()))?,
+            HeaderValue::from_str(&format!("Bearer {}", config.api_key))
+                .map_err(|_| LLMError::AuthError("Invalid xAI API key format".to_string()))?,
         );
         headers.insert("content-type", HeaderValue::from_static("application/json"));
 
@@ -256,7 +261,13 @@ impl GrokResearchClient {
 
         tracing::debug!(model = %self.config.model, query = %request.query, "Sending Grok research request");
 
-        let response = self.client.post(&url).json(&body).send().await.map_err(LLMError::HttpError)?;
+        let response = self
+            .client
+            .post(&url)
+            .json(&body)
+            .send()
+            .await
+            .map_err(LLMError::HttpError)?;
 
         let status = response.status().as_u16();
         if !response.status().is_success() {
@@ -271,7 +282,10 @@ impl GrokResearchClient {
             return Err(Self::handle_error(status, &body_text, retry_after));
         }
 
-        let api_response: XAIResponse = response.json().await.map_err(|e| LLMError::ParseError(format!("Failed to parse xAI response: {}", e)))?;
+        let api_response: XAIResponse = response
+            .json()
+            .await
+            .map_err(|e| LLMError::ParseError(format!("Failed to parse xAI response: {}", e)))?;
 
         Ok(Self::parse_response(api_response))
     }
@@ -310,10 +324,13 @@ impl GrokResearchClient {
                             filter_obj.insert("allowed_domains".into(), serde_json::json!(domains));
                         }
                         if let Some(ref domains) = filters.excluded_domains {
-                            filter_obj.insert("excluded_domains".into(), serde_json::json!(domains));
+                            filter_obj
+                                .insert("excluded_domains".into(), serde_json::json!(domains));
                         }
                         if !filter_obj.is_empty() {
-                            tool.as_object_mut().unwrap().insert("filters".into(), serde_json::Value::Object(filter_obj));
+                            tool.as_object_mut()
+                                .unwrap()
+                                .insert("filters".into(), serde_json::Value::Object(filter_obj));
                         }
                     }
                     tools.push(tool);
@@ -326,7 +343,8 @@ impl GrokResearchClient {
                             tool_obj.insert("allowed_x_handles".into(), serde_json::json!(handles));
                         }
                         if let Some(ref handles) = filters.excluded_x_handles {
-                            tool_obj.insert("excluded_x_handles".into(), serde_json::json!(handles));
+                            tool_obj
+                                .insert("excluded_x_handles".into(), serde_json::json!(handles));
                         }
                         if let Some(ref date) = filters.from_date {
                             tool_obj.insert("from_date".into(), serde_json::json!(date));

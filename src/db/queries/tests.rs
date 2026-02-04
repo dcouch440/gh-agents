@@ -52,9 +52,14 @@ async fn can_update_task_status() {
     let task = create_test_task();
 
     insert_task(&db.pool, test_user_id(), &task).await.unwrap();
-    update_task_status(&db.pool, &task.id, TaskStatus::InProgress).await.unwrap();
+    update_task_status(&db.pool, &task.id, TaskStatus::InProgress)
+        .await
+        .unwrap();
 
-    let retrieved = get_task(&db.pool, test_user_id(), &task.id).await.unwrap().unwrap();
+    let retrieved = get_task(&db.pool, test_user_id(), &task.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(retrieved.status, TaskStatus::InProgress);
 
     db.cleanup().await;
@@ -71,7 +76,9 @@ async fn can_list_tasks_by_status() {
     insert_task(&db.pool, test_user_id(), &task1).await.unwrap();
     insert_task(&db.pool, test_user_id(), &task2).await.unwrap();
 
-    let pending = list_tasks_by_status(&db.pool, TaskStatus::Pending).await.unwrap();
+    let pending = list_tasks_by_status(&db.pool, TaskStatus::Pending)
+        .await
+        .unwrap();
     assert!(pending.len() >= 2);
 
     db.cleanup().await;
@@ -85,9 +92,13 @@ async fn can_insert_and_get_chat_message() {
     let db = TestDb::new().await;
     let id = Uuid::new_v4();
 
-    insert_chat_message(&db.pool, test_user_id(), &id, "user", "Hello, world!").await.unwrap();
+    insert_chat_message(&db.pool, test_user_id(), &id, "user", "Hello, world!")
+        .await
+        .unwrap();
 
-    let history = get_chat_history(&db.pool, test_user_id(), 50, 0).await.unwrap();
+    let history = get_chat_history(&db.pool, test_user_id(), 50, 0)
+        .await
+        .unwrap();
     assert!(history.len() >= 1);
 
     db.cleanup().await;
@@ -101,11 +112,21 @@ async fn chat_history_pagination_works() {
     // Insert 5 messages
     for i in 0..5 {
         let id = Uuid::new_v4();
-        insert_chat_message(&db.pool, test_user_id(), &id, "user", &format!("Message {}", i)).await.unwrap();
+        insert_chat_message(
+            &db.pool,
+            test_user_id(),
+            &id,
+            "user",
+            &format!("Message {}", i),
+        )
+        .await
+        .unwrap();
     }
 
     // Get first 2
-    let history = get_chat_history(&db.pool, test_user_id(), 2, 0).await.unwrap();
+    let history = get_chat_history(&db.pool, test_user_id(), 2, 0)
+        .await
+        .unwrap();
     assert_eq!(history.len(), 2);
 
     db.cleanup().await;
@@ -118,15 +139,21 @@ async fn can_clear_chat_history() {
 
     for _ in 0..3 {
         let id = Uuid::new_v4();
-        insert_chat_message(&db.pool, test_user_id(), &id, "user", "Test message").await.unwrap();
+        insert_chat_message(&db.pool, test_user_id(), &id, "user", "Test message")
+            .await
+            .unwrap();
     }
 
-    let history = get_chat_history(&db.pool, test_user_id(), 50, 0).await.unwrap();
+    let history = get_chat_history(&db.pool, test_user_id(), 50, 0)
+        .await
+        .unwrap();
     assert!(history.len() >= 3);
 
     clear_chat_history(&db.pool, test_user_id()).await.unwrap();
 
-    let history = get_chat_history(&db.pool, test_user_id(), 50, 0).await.unwrap();
+    let history = get_chat_history(&db.pool, test_user_id(), 50, 0)
+        .await
+        .unwrap();
     assert_eq!(history.len(), 0);
 
     db.cleanup().await;

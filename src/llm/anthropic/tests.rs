@@ -28,7 +28,10 @@ fn client_creates_with_valid_key() {
 fn messages_url_correct() {
     let config = AnthropicConfig::new("test-key");
     let client = AnthropicClient::new(config).unwrap();
-    assert_eq!(client.messages_url(), "https://api.anthropic.com/v1/messages");
+    assert_eq!(
+        client.messages_url(),
+        "https://api.anthropic.com/v1/messages"
+    );
 }
 
 #[test]
@@ -40,11 +43,26 @@ fn messages_url_with_custom_base() {
 
 #[test]
 fn parse_stop_reasons() {
-    assert_eq!(AnthropicClient::parse_stop_reason("end_turn"), StopReason::EndTurn);
-    assert_eq!(AnthropicClient::parse_stop_reason("max_tokens"), StopReason::MaxTokens);
-    assert_eq!(AnthropicClient::parse_stop_reason("stop_sequence"), StopReason::StopSequence);
-    assert_eq!(AnthropicClient::parse_stop_reason("tool_use"), StopReason::ToolUse);
-    assert_eq!(AnthropicClient::parse_stop_reason("unknown"), StopReason::EndTurn);
+    assert_eq!(
+        AnthropicClient::parse_stop_reason("end_turn"),
+        StopReason::EndTurn
+    );
+    assert_eq!(
+        AnthropicClient::parse_stop_reason("max_tokens"),
+        StopReason::MaxTokens
+    );
+    assert_eq!(
+        AnthropicClient::parse_stop_reason("stop_sequence"),
+        StopReason::StopSequence
+    );
+    assert_eq!(
+        AnthropicClient::parse_stop_reason("tool_use"),
+        StopReason::ToolUse
+    );
+    assert_eq!(
+        AnthropicClient::parse_stop_reason("unknown"),
+        StopReason::EndTurn
+    );
 }
 
 #[test]
@@ -77,7 +95,10 @@ fn parse_sse_message_start() {
     assert!(result.is_some());
     let chunk = result.unwrap().unwrap();
     match chunk {
-        StreamChunk::MessageStart { model, input_tokens } => {
+        StreamChunk::MessageStart {
+            model,
+            input_tokens,
+        } => {
             assert_eq!(model, "claude-3");
             assert_eq!(input_tokens, 10);
         }
@@ -134,7 +155,8 @@ fn parse_sse_ignores_non_data_lines() {
 
 #[test]
 fn handle_error_401_auth_error() {
-    let body = r#"{"type":"error","error":{"type":"authentication_error","message":"Invalid API key"}}"#;
+    let body =
+        r#"{"type":"error","error":{"type":"authentication_error","message":"Invalid API key"}}"#;
     let error = AnthropicClient::handle_error_response(401, body, None);
     match error {
         LLMError::AuthError(msg) => assert_eq!(msg, "Invalid API key"),
@@ -144,7 +166,8 @@ fn handle_error_401_auth_error() {
 
 #[test]
 fn handle_error_429_rate_limited() {
-    let body = r#"{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}"#;
+    let body =
+        r#"{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}"#;
     let error = AnthropicClient::handle_error_response(429, body, None);
     match error {
         LLMError::RateLimited { retry_after_ms } => assert_eq!(retry_after_ms, 60000),
@@ -154,7 +177,8 @@ fn handle_error_429_rate_limited() {
 
 #[test]
 fn handle_error_429_with_retry_after() {
-    let body = r#"{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}"#;
+    let body =
+        r#"{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}"#;
     let error = AnthropicClient::handle_error_response(429, body, Some(30000));
     match error {
         LLMError::RateLimited { retry_after_ms } => assert_eq!(retry_after_ms, 30000),
@@ -230,7 +254,10 @@ fn parse_sse_message_delta_with_stop_reason() {
     assert!(result.is_some());
     let chunk = result.unwrap().unwrap();
     match chunk {
-        StreamChunk::MessageDelta { stop_reason, output_tokens } => {
+        StreamChunk::MessageDelta {
+            stop_reason,
+            output_tokens,
+        } => {
             assert_eq!(stop_reason, Some(StopReason::EndTurn));
             assert_eq!(output_tokens, Some(42));
         }
@@ -245,7 +272,10 @@ fn parse_sse_message_delta_no_usage() {
     assert!(result.is_some());
     let chunk = result.unwrap().unwrap();
     match chunk {
-        StreamChunk::MessageDelta { stop_reason, output_tokens } => {
+        StreamChunk::MessageDelta {
+            stop_reason,
+            output_tokens,
+        } => {
             assert_eq!(stop_reason, Some(StopReason::MaxTokens));
             assert_eq!(output_tokens, None);
         }
@@ -260,7 +290,10 @@ fn parse_sse_message_delta_no_stop_reason() {
     assert!(result.is_some());
     let chunk = result.unwrap().unwrap();
     match chunk {
-        StreamChunk::MessageDelta { stop_reason, output_tokens } => {
+        StreamChunk::MessageDelta {
+            stop_reason,
+            output_tokens,
+        } => {
             assert_eq!(stop_reason, None);
             assert_eq!(output_tokens, Some(10));
         }
@@ -279,7 +312,8 @@ fn parse_sse_ping() {
 
 #[test]
 fn parse_sse_error_event() {
-    let line = r#"data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#;
+    let line =
+        r#"data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#;
     let result = AnthropicClient::parse_sse_line(line);
     assert!(result.is_some());
     let err = result.unwrap().unwrap_err();
@@ -301,7 +335,8 @@ fn parse_sse_invalid_json_returns_none() {
 
 #[test]
 fn parse_sse_content_delta_no_text_returns_none() {
-    let line = r#"data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta"}}"#;
+    let line =
+        r#"data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta"}}"#;
     let result = AnthropicClient::parse_sse_line(line);
     assert!(result.is_none());
 }
@@ -396,7 +431,14 @@ fn build_request_multiple_messages() {
     let config = AnthropicConfig::new("test-key");
     let client = AnthropicClient::new(config).unwrap();
 
-    let request = LLMRequest::new("model", vec![Message::user("Hello"), Message::assistant("Hi"), Message::user("How are you?")]);
+    let request = LLMRequest::new(
+        "model",
+        vec![
+            Message::user("Hello"),
+            Message::assistant("Hi"),
+            Message::user("How are you?"),
+        ],
+    );
     let api_req = client.build_request(&request);
 
     assert_eq!(api_req.messages.len(), 3);
@@ -479,7 +521,8 @@ async fn send_message_server_error() {
 
     let mock_server = MockServer::start().await;
 
-    let error_body = r#"{"type":"error","error":{"type":"server_error","message":"Internal error"}}"#;
+    let error_body =
+        r#"{"type":"error","error":{"type":"server_error","message":"Internal error"}}"#;
 
     Mock::given(method("POST"))
         .and(path("/v1/messages"))
@@ -510,7 +553,8 @@ async fn send_message_auth_error() {
 
     let mock_server = MockServer::start().await;
 
-    let error_body = r#"{"type":"error","error":{"type":"authentication_error","message":"Invalid API key"}}"#;
+    let error_body =
+        r#"{"type":"error","error":{"type":"authentication_error","message":"Invalid API key"}}"#;
 
     Mock::given(method("POST"))
         .and(path("/v1/messages"))
@@ -537,7 +581,8 @@ async fn send_message_rate_limited() {
 
     let mock_server = MockServer::start().await;
 
-    let error_body = r#"{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}"#;
+    let error_body =
+        r#"{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}"#;
 
     Mock::given(method("POST"))
         .and(path("/v1/messages"))
