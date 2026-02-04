@@ -1,21 +1,25 @@
-import { AgentProvider, TaskProvider, FeedProvider, ChatProvider } from './contexts'
-import { DashboardPage } from './pages/Dashboard/DashboardPage'
-import { AgentsPage } from './pages/Agents/AgentsPage'
-import { AgentDetailPage } from './pages/Agents/AgentDetailPage'
-import { AgentWorkshopPage } from './pages/Agents/AgentWorkshopPage'
-import { ChatPage } from './pages/Chat/ChatPage'
-import { ChatSessionPage } from './pages/Chat/ChatSessionPage'
-import { PipelinesPage } from './pages/Pipelines/PipelinesPage'
-import { PipelineDetailPage } from './pages/Pipelines/PipelineDetailPage'
-import { PipelineRunPage } from './pages/Pipelines/PipelineRunPage'
-import { TasksPage } from './pages/Tasks/TasksPage'
+import {
+  AgentProvider,
+  TaskProvider,
+  FeedProvider,
+  ChatProvider,
+} from "./contexts";
+import {DashboardPage} from "./pages/Dashboard/DashboardPage";
+import {AgentsPage} from "./pages/Agents/AgentsPage";
+import {AgentDetailPage} from "./pages/Agents/AgentDetailPage";
+import {AgentWorkshopPage} from "./pages/Agents/AgentWorkshopPage";
+import {ChatSessionPage} from "./pages/Chat/ChatSessionPage";
+import {PipelinesPage} from "./pages/Pipelines/PipelinesPage";
+import {PipelineDetailPage} from "./pages/Pipelines/PipelineDetailPage";
+import {PipelineRunPage} from "./pages/Pipelines/PipelineRunPage";
+import {TasksPage} from "./pages/Tasks/TasksPage";
 
 function DashboardWithProviders() {
   return (
     <FeedProvider>
       <DashboardPage />
     </FeedProvider>
-  )
+  );
 }
 
 function AgentsWithProvider() {
@@ -23,7 +27,7 @@ function AgentsWithProvider() {
     <AgentProvider>
       <AgentsPage />
     </AgentProvider>
-  )
+  );
 }
 
 function AgentWorkshopWithProvider() {
@@ -31,7 +35,7 @@ function AgentWorkshopWithProvider() {
     <AgentProvider>
       <AgentWorkshopPage />
     </AgentProvider>
-  )
+  );
 }
 
 function AgentDetailWithProvider() {
@@ -39,7 +43,7 @@ function AgentDetailWithProvider() {
     <AgentProvider>
       <AgentDetailPage />
     </AgentProvider>
-  )
+  );
 }
 
 function TasksWithProvider() {
@@ -47,35 +51,19 @@ function TasksWithProvider() {
     <TaskProvider>
       <TasksPage />
     </TaskProvider>
-  )
+  );
 }
 
 function PipelinesWithProvider() {
-  return <PipelinesPage />
+  return <PipelinesPage />;
 }
 
 function PipelineDetailWithProvider() {
-  return <PipelineDetailPage />
+  return <PipelineDetailPage />;
 }
 
 function PipelineRunWithProvider() {
-  return <PipelineRunPage />
-}
-
-function ChatWithProvider() {
-  return (
-    <ChatProvider>
-      <ChatPage />
-    </ChatProvider>
-  )
-}
-
-function ChatSessionWithProvider() {
-  return (
-    <ChatProvider>
-      <ChatSessionPage />
-    </ChatProvider>
-  )
+  return <PipelineRunPage />;
 }
 
 export {
@@ -83,10 +71,8 @@ export {
   AgentsWithProvider,
   AgentWorkshopWithProvider,
   AgentDetailWithProvider,
-  ChatWithProvider,
-  ChatSessionWithProvider,
   TasksWithProvider,
   PipelinesWithProvider,
   PipelineDetailWithProvider,
   PipelineRunWithProvider,
-}
+};

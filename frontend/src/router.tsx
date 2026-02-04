@@ -9,8 +9,6 @@ import {
   AgentsWithProvider,
   AgentWorkshopWithProvider,
   AgentDetailWithProvider,
-  ChatWithProvider,
-  ChatSessionWithProvider,
   PipelinesWithProvider,
   PipelineDetailWithProvider,
   PipelineRunWithProvider,
@@ -26,8 +24,6 @@ export const router = createBrowserRouter([
     element: <AppLayout />,
     children: [
       {path: ROUTES.DASHBOARD, element: <DashboardWithProviders />},
-      {path: ROUTES.CHAT, element: <ChatWithProvider />},
-      {path: ROUTES.CHAT_SESSION, element: <ChatSessionWithProvider />},
       {path: ROUTES.AGENTS, element: <AgentsWithProvider />},
       {path: ROUTES.AGENT_WORKSHOP, element: <AgentWorkshopWithProvider />},
       {path: ROUTES.AGENT_DETAIL, element: <AgentDetailWithProvider />},

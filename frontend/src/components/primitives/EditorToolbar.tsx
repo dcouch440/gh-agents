@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Box } from '@mui/material'
 
 export type EditorToolbarProps = {
   children: ReactNode
@@ -6,7 +7,21 @@ export type EditorToolbarProps = {
 }
 
 export function EditorToolbar({ children, className }: EditorToolbarProps) {
-  const toolbarClassName = ['editor-toolbar', className].filter(Boolean).join(' ')
-
-  return <div className={toolbarClassName}>{children}</div>
+  return (
+    <Box
+      className={className}
+      sx={{
+        borderBottom: 1,
+        borderColor: 'divider',
+        bgcolor: 'background.paper',
+        px: 2,
+        py: 1,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1,
+      }}
+    >
+      {children}
+    </Box>
+  )
 }

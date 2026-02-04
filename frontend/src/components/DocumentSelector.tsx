@@ -1,4 +1,21 @@
 import {useState} from "react";
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Box,
+  Typography,
+  Checkbox,
+  Chip,
+  Collapse,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+} from "@mui/material";
 import {useDocuments} from "@/hooks/useDocuments";
 import {LoadingSpinner, EmptyState} from "@/components/primitives";
 import {api} from "@/api";
@@ -82,251 +99,137 @@ function DocumentSelector({
     const isExpanded = expandedId === doc.id;
 
     return (
-      <div key={doc.id} style={{borderBottom: "1px solid #2a2e35"}}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            padding: "10px 12px",
-            cursor: "pointer",
-            backgroundColor: isSelected ? "#1e3a5f" : "transparent",
-            transition: "background-color 0.15s",
+      <ListItem
+        key={doc.id}
+        disablePadding
+        sx={{
+          flexDirection: "column",
+          alignItems: "stretch",
+          borderBottom: 1,
+          borderColor: "divider",
+        }}
+      >
+        <ListItemButton
+          selected={isSelected}
+          onClick={(e) => {
+            toggleExpand(doc.id, e);
           }}
-          onClick={() => handleToggle(doc.id)}
-          onMouseEnter={(e) => {
-            if (!isSelected) e.currentTarget.style.backgroundColor = "#1f2429";
-          }}
-          onMouseLeave={(e) => {
-            if (!isSelected) e.currentTarget.style.backgroundColor = "transparent";
+          sx={{
+            py: 1.25,
+            px: 1.5,
           }}
         >
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={() => handleToggle(doc.id)}
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              marginRight: "12px",
-              cursor: "pointer",
-              width: "16px",
-              height: "16px",
-            }}
+          <ListItemIcon sx={{minWidth: 36}}>
+            <Checkbox
+              checked={isSelected}
+              edge="start"
+              tabIndex={-1}
+              disableRipple
+              onChange={() => handleToggle(doc.id)}
+            />
+          </ListItemIcon>
+          <ListItemText
+            primary={
+              <Box sx={{display: "flex", alignItems: "center", gap: 1.5}}>
+                <Typography variant="body2" sx={{fontWeight: 500}}>
+                  {doc.title}
+                </Typography>
+                {doc.doc_type ? (
+                  <Chip label={doc.doc_type} size="small" variant="outlined" />
+                ) : null}
+                {doc.ref_tag ? (
+                  <Typography variant="caption" color="text.secondary">
+                    {doc.ref_tag}
+                  </Typography>
+                ) : null}
+              </Box>
+            }
           />
-          <div style={{flex: 1, display: "flex", alignItems: "center", gap: "12px"}}>
-            <span
-              style={{
-                fontWeight: 500,
-                color: "#e5e7eb",
-                fontSize: "14px",
+        </ListItemButton>
+        <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+          <Box
+            sx={{
+              py: 1.5,
+              px: 2,
+              pl: 6,
+              bgcolor: "background.default",
+              borderLeft: 3,
+              borderColor: "divider",
+              ml: 1.5,
+              maxHeight: 300,
+              overflowY: "auto",
+            }}
+          >
+            <Typography
+              variant="body2"
+              component="pre"
+              sx={{
+                fontFamily: "monospace",
+                fontSize: "0.75rem",
+                whiteSpace: "pre-wrap",
+                wordWrap: "break-word",
+                m: 0,
               }}
             >
-              {doc.title}
-            </span>
-            {doc.doc_type ? (
-              <span
-                style={{
-                  fontSize: "12px",
-                  color: "#9ca3af",
-                  backgroundColor: "#374151",
-                  padding: "2px 8px",
-                  borderRadius: "4px",
-                }}
-              >
-                {doc.doc_type}
-              </span>
-            ) : null}
-            {doc.ref_tag ? (
-              <span style={{fontSize: "12px", color: "#6b7280"}}>
-                {doc.ref_tag}
-              </span>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            onClick={(e) => toggleExpand(doc.id, e)}
-            style={{
-              background: "none",
-              border: "none",
-              padding: "8px 12px",
-              cursor: "pointer",
-              color: "#9ca3af",
-              fontSize: "16px",
-              display: "flex",
-              alignItems: "center",
-              transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
-              transition: "transform 0.2s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = "#e5e7eb";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = "#9ca3af";
-            }}
-          >
-            ▶
-          </button>
-        </div>
-        {isExpanded ? (
-          <div
-            style={{
-              padding: "12px 16px 12px 48px",
-              backgroundColor: "#1a1d23",
-              fontSize: "13px",
-              color: "#d1d5db",
-              lineHeight: "1.6",
-              maxHeight: "300px",
-              overflowY: "auto",
-              whiteSpace: "pre-wrap",
-              borderLeft: "3px solid #374151",
-              marginLeft: "12px",
-            }}
-          >
-            <div style={{fontFamily: "monospace", fontSize: "12px"}}>
               {getDocumentContent(doc.id)}
-            </div>
-          </div>
-        ) : null}
-      </div>
+            </Typography>
+          </Box>
+        </Collapse>
+      </ListItem>
     );
   };
 
   return (
-    <div
-      className="document-selector__overlay"
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.75)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 50,
-      }}
-      onClick={handleCancel}
-    >
-      <div
-        className="document-selector__modal"
-        style={{
-          backgroundColor: "#1c2028",
-          borderRadius: "8px",
-          border: "1px solid #2a2e35",
-          maxWidth: "700px",
-          width: "90%",
+    <Dialog
+      open={open}
+      onClose={handleCancel}
+      maxWidth="md"
+      fullWidth
+      PaperProps={{
+        sx: {
           maxHeight: "85vh",
-          display: "flex",
-          flexDirection: "column",
-          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+        },
+      }}
+    >
+      <DialogTitle>
+        <Typography variant="h6" component="div" sx={{fontWeight: 600}}>
+          Select Documents
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Choose documents to attach as agent context ({localSelectedIds.length}{" "}
+          selected)
+        </Typography>
+      </DialogTitle>
+
+      <DialogContent
+        dividers
+        sx={{
+          p: 0,
+          bgcolor: "background.default",
         }}
-        onClick={(e) => e.stopPropagation()}
       >
-        <div
-          style={{
-            padding: "20px 24px",
-            borderBottom: "1px solid #2a2e35",
-          }}
-        >
-          <h2
-            style={{
-              fontSize: "18px",
-              fontWeight: 600,
-              marginBottom: "6px",
-              color: "#f3f4f6",
-            }}
-          >
-            Select Documents
-          </h2>
-          <p style={{fontSize: "13px", color: "#9ca3af"}}>
-            Choose documents to attach as agent context ({localSelectedIds.length}{" "}
-            selected)
-          </p>
-        </div>
+        {loading ? (
+          <Box sx={{display: "flex", justifyContent: "center", py: 7.5}}>
+            <LoadingSpinner size="md" />
+          </Box>
+        ) : documents.length === 0 ? (
+          <Box sx={{p: 5}}>
+            <EmptyState message="No documents available" />
+          </Box>
+        ) : (
+          <List disablePadding>{documents.map(renderDocumentRow)}</List>
+        )}
+      </DialogContent>
 
-        <div
-          style={{
-            flex: 1,
-            overflowY: "auto",
-            backgroundColor: "#16191f",
-            maxHeight: "calc(85vh - 200px)",
-          }}
-        >
-          {loading ? (
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "center",
-                padding: "60px",
-              }}
-            >
-              <LoadingSpinner size="medium" />
-            </div>
-          ) : documents.length === 0 ? (
-            <div style={{padding: "40px"}}>
-              <EmptyState message="No documents available" />
-            </div>
-          ) : (
-            <div>{documents.map(renderDocumentRow)}</div>
-          )}
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: "12px",
-            padding: "16px 24px",
-            borderTop: "1px solid #2a2e35",
-            backgroundColor: "#1c2028",
-          }}
-        >
-          <button
-            type="button"
-            onClick={handleCancel}
-            style={{
-              padding: "8px 16px",
-              fontSize: "14px",
-              fontWeight: 500,
-              color: "#d1d5db",
-              backgroundColor: "#374151",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              transition: "background-color 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "#4b5563";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = "#374151";
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            style={{
-              padding: "8px 16px",
-              fontSize: "14px",
-              fontWeight: 500,
-              color: "#ffffff",
-              backgroundColor: "#3b82f6",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              transition: "background-color 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "#2563eb";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = "#3b82f6";
-            }}
-          >
-            Save Selection
-          </button>
-        </div>
-      </div>
-    </div>
+      <DialogActions sx={{px: 3, py: 2}}>
+        <Button onClick={handleCancel} variant="outlined" color="inherit">
+          Cancel
+        </Button>
+        <Button onClick={handleSave} variant="contained" color="primary">
+          Save Selection
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
