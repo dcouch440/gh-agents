@@ -536,7 +536,6 @@ pub trait TokenLedgerRepo: Send + Sync {
         cost_usd: f32,
     ) -> Result<TokenLedgerRow>;
     async fn get_user_spend(&self, user_id: Uuid, since: Option<DateTime<Utc>>) -> Result<f64>;
-    async fn get_run_spend(&self, run_id: Uuid) -> Result<f64>;
     async fn get_model_breakdown(
         &self,
         user_id: Uuid,

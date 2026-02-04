@@ -1459,16 +1459,6 @@ impl TokenLedgerRepo for PgRepo {
         Ok(row.0.unwrap_or(0.0))
     }
 
-    async fn get_run_spend(&self, run_id: Uuid) -> Result<f64> {
-        let row: (Option<f64>,) = sqlx::query_as(
-            "SELECT CAST(COALESCE(SUM(tl.cost_usd), 0) AS FLOAT8) FROM token_ledger tl JOIN agent_executions ae ON tl.agent_execution_id = ae.id JOIN stage_executions se ON ae.stage_execution_id = se.id WHERE se.run_id = $1",
-        )
-        .bind(run_id)
-        .fetch_one(&self.pool)
-        .await?;
-        Ok(row.0.unwrap_or(0.0))
-    }
-
     async fn get_model_breakdown(
         &self,
         user_id: Uuid,
