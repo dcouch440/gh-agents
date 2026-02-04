@@ -6,7 +6,6 @@ type Tool = {
   parameter_schema: unknown
   output_schema: unknown
   enabled: boolean
-  cluster_id: string | null
   is_builtin: boolean
 }
 

@@ -169,7 +169,6 @@ pub struct PipelineUpdate {
 pub struct RoutingUpdate {
     pub request_id: Uuid,
     pub tool_name: String,
-    pub cluster_name: String,
     pub status: String,
     pub duration_ms: Option<u64>,
     pub timestamp: chrono::DateTime<chrono::Utc>,

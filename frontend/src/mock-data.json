@@ -356,7 +356,6 @@
         {
           "stage_number": 0,
           "agent_id": "a-00000000-0000-4000-a000-000000000001",
-          "cluster_id": null,
           "role": "planner",
           "approval_required": false,
           "fan_out": false,
@@ -368,7 +367,6 @@
         {
           "stage_number": 1,
           "agent_id": "a-00000000-0000-4000-a000-000000000002",
-          "cluster_id": null,
           "role": "implementer",
           "approval_required": false,
           "fan_out": true,
@@ -380,7 +378,6 @@
         {
           "stage_number": 2,
           "agent_id": "a-00000000-0000-4000-a000-000000000004",
-          "cluster_id": null,
           "role": "tester",
           "approval_required": false,
           "fan_out": false,
@@ -392,7 +389,6 @@
         {
           "stage_number": 3,
           "agent_id": "a-00000000-0000-4000-a000-000000000007",
-          "cluster_id": null,
           "role": "reviewer",
           "approval_required": true,
           "fan_out": false,
@@ -404,7 +400,6 @@
         {
           "stage_number": 4,
           "agent_id": "a-00000000-0000-4000-a000-000000000006",
-          "cluster_id": null,
           "role": "deployer",
           "approval_required": true,
           "fan_out": false,
@@ -422,7 +417,6 @@
         {
           "stage_number": 0,
           "agent_id": "a-00000000-0000-4000-a000-000000000008",
-          "cluster_id": null,
           "role": "investigator",
           "approval_required": false,
           "fan_out": false,
@@ -434,7 +428,6 @@
         {
           "stage_number": 1,
           "agent_id": "a-00000000-0000-4000-a000-000000000002",
-          "cluster_id": null,
           "role": "fixer",
           "approval_required": false,
           "fan_out": false,
@@ -446,7 +439,6 @@
         {
           "stage_number": 2,
           "agent_id": "a-00000000-0000-4000-a000-000000000004",
-          "cluster_id": null,
           "role": "verifier",
           "approval_required": false,
           "fan_out": false,
@@ -464,7 +456,6 @@
         {
           "stage_number": 0,
           "agent_id": "a-00000000-0000-4000-a000-000000000008",
-          "cluster_id": null,
           "role": "scanner",
           "approval_required": false,
           "fan_out": false,
@@ -476,7 +467,6 @@
         {
           "stage_number": 1,
           "agent_id": "a-00000000-0000-4000-a000-000000000005",
-          "cluster_id": null,
           "role": "writer",
           "approval_required": false,
           "fan_out": true,
@@ -488,7 +478,6 @@
         {
           "stage_number": 2,
           "agent_id": "a-00000000-0000-4000-a000-000000000007",
-          "cluster_id": null,
           "role": "reviewer",
           "approval_required": true,
           "fan_out": false,
@@ -957,7 +946,6 @@
       "parameter_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
       "output_schema": {"type": "object", "properties": {"content": {"type": "string"}, "line_count": {"type": "integer"}}},
       "enabled": true,
-      "cluster_id": null,
       "is_builtin": true
     },
     {
@@ -968,7 +956,6 @@
       "parameter_schema": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"]},
       "output_schema": {"type": "object", "properties": {"bytes_written": {"type": "integer"}}},
       "enabled": true,
-      "cluster_id": null,
       "is_builtin": true
     },
     {
@@ -979,7 +966,6 @@
       "parameter_schema": {"type": "object", "properties": {"filter": {"type": "string"}, "timeout_seconds": {"type": "integer"}}},
       "output_schema": {"type": "object", "properties": {"passed": {"type": "integer"}, "failed": {"type": "integer"}, "output": {"type": "string"}}},
       "enabled": true,
-      "cluster_id": null,
       "is_builtin": true
     },
     {
@@ -990,7 +976,6 @@
       "parameter_schema": {"type": "object", "properties": {"files": {"type": "array", "items": {"type": "string"}}, "message": {"type": "string"}}, "required": ["files", "message"]},
       "output_schema": {"type": "object", "properties": {"sha": {"type": "string"}, "files_changed": {"type": "integer"}}},
       "enabled": true,
-      "cluster_id": null,
       "is_builtin": true
     },
     {
@@ -1001,7 +986,6 @@
       "parameter_schema": {"type": "object", "properties": {"query": {"type": "string"}, "file_pattern": {"type": "string"}}, "required": ["query"]},
       "output_schema": {"type": "object", "properties": {"matches": {"type": "array", "items": {"type": "object", "properties": {"file": {"type": "string"}, "line": {"type": "integer"}, "content": {"type": "string"}}}}}},
       "enabled": true,
-      "cluster_id": null,
       "is_builtin": true
     },
     {
@@ -1012,7 +996,6 @@
       "parameter_schema": {"type": "object", "properties": {"title": {"type": "string"}, "body": {"type": "string"}, "base": {"type": "string"}}, "required": ["title"]},
       "output_schema": {"type": "object", "properties": {"pr_number": {"type": "integer"}, "url": {"type": "string"}}},
       "enabled": true,
-      "cluster_id": null,
       "is_builtin": true
     },
     {
@@ -1023,7 +1006,6 @@
       "parameter_schema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
       "output_schema": {"type": "object", "properties": {"rows": {"type": "array"}, "row_count": {"type": "integer"}}},
       "enabled": true,
-      "cluster_id": null,
       "is_builtin": true
     },
     {
@@ -1034,7 +1016,6 @@
       "parameter_schema": {"type": "object", "properties": {"description": {"type": "string"}, "identifier": {"type": "string"}, "additional_values": {"type": "object"}}, "required": ["description", "identifier"]},
       "output_schema": {"type": "object", "properties": {"response": {"type": "string"}, "agent_id": {"type": "string"}}},
       "enabled": true,
-      "cluster_id": null,
       "is_builtin": true
     }
   ],

@@ -21,7 +21,7 @@ describe('useToolMutations', () => {
 
       let tool: unknown
       await act(async () => {
-        tool = await result.current.mutate({ name: 'search_files', description: 'Search', category: 'codebase', parameter_schema: {}, output_schema: {}, enabled: true, is_builtin: true, cluster_id: null })
+        tool = await result.current.mutate({ name: 'search_files', description: 'Search', category: 'codebase', parameter_schema: {}, output_schema: {}, enabled: true, is_builtin: true })
       })
 
       expect(tool).toEqual(mockTool)
@@ -34,7 +34,7 @@ describe('useToolMutations', () => {
       const { result } = renderHook(() => useCreateTool())
 
       await act(async () => {
-        await expect(result.current.mutate({ name: 'search_files', description: 'Search', category: 'codebase', parameter_schema: {}, output_schema: {}, enabled: true, is_builtin: true, cluster_id: null })).rejects.toThrow('Create failed')
+        await expect(result.current.mutate({ name: 'search_files', description: 'Search', category: 'codebase', parameter_schema: {}, output_schema: {}, enabled: true, is_builtin: true })).rejects.toThrow('Create failed')
       })
 
       expect(result.current.error).toBe('Create failed')
