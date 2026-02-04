@@ -59,7 +59,8 @@ This document provides an overview of every API domain in the nexor application,
 ### `workflows`
 **Purpose:** Multi-step workflow orchestration
 **What it does:** Manages workflows composed of sequential/parallel steps, each step assigned to an agent with specific prompts and output schemas
-**Used for:** Defining complex multi-agent processes, workflow automation, structured data pipelines
+**Used for:** Defining complex multi-agent processes, workflow automation, structured data processing
+**Note:** Workflows have replaced the deprecated pipeline system (removed Feb 3, 2026). Use Workflow Collections for equivalent functionality with improved architecture.
 **Key endpoints:**
 - Workflows: `GET /api/workflows`, `POST /api/workflows`, `GET /api/workflows/:id`, `DELETE /api/workflows/:id`
 - Steps: `POST /api/workflows/:id/steps`, `GET /api/workflows/:id/steps`, `PATCH /api/workflows/:wid/steps/:sid`

@@ -16,7 +16,7 @@
 - `executor.rs` - Agent task executor (react loop)
 - `protocol.rs` - AgentCommand, AgentResponse enums
 - `channels.rs` - Channel-based communication
-- `pipeline.rs` - Old pipeline manager
+- `pipeline.rs` - Old pipeline manager (REMOVED Feb 3, 2026)
 - `schedule.rs` - Schedule manager for periodic tasks
 - `cluster.rs` - Agent clustering
 - `router_agent.rs` - Router agent implementation
@@ -26,7 +26,7 @@
 - `execution_tools.rs` - Tools for agent execution
 
 **Status:**
-- ❌ Used by old pipeline system (pipelines table)
+- ❌ Was used by old pipeline system (pipelines table - REMOVED Feb 3, 2026)
 - ❌ Used by agent management tools in tools.rs
 - ❌ Used by response consumer in orchestrator.rs
 - ✅ NOT used by new chat/hub system
@@ -43,7 +43,7 @@
 - Stores results in `state.task_results`
 - Broadcasts task/agent updates to WebSocket
 - Handles context requests (auto-reads files)
-- Triggers pipeline advancement (lines 220-430)
+- Triggered pipeline advancement (lines 220-430) - pipeline system REMOVED Feb 3, 2026
 
 **Dependencies:**
 - `state.dispatcher` - Agent pool dispatcher
@@ -160,30 +160,25 @@
 
 ---
 
-## 🔴 LEGACY: Old Pipeline System
+## ✅ REMOVED: Old Pipeline System
 
-**Database Table:** `pipelines` + `pipeline_stages` + `pipeline_runs`
+**Removal Date:** February 3, 2026
 
-**vs NEW:** `workflows` + `workflow_steps`
+**Database Tables Removed:** `pipelines`, `pipeline_stages`, `pipeline_runs`, `pipeline_stage_members`
 
-**How They Differ:**
-- **OLD Pipelines:** Use agent pool, depend on response consumer for advancement
-- **NEW Workflows:** Use ExecutionEngine, self-contained execution
+**Replaced By:** Workflow Collections system
 
-**Status:**
-- ✅ **CONFIRMED LEGACY** - User migrated to workflows
-- ❌ `pipelines` table has 0 rows (empty)
-- ❌ Response consumer advances old pipelines (orchestrator.rs:223)
-- ✅ Workflows use hub (hub/dag.rs)
-- ✅ API endpoints still exist but reference empty tables
+**What Was Removed:**
+1. ✅ All pipeline database tables dropped
+2. ✅ Pipeline advancement logic from response consumer (orchestrator.rs:223-430)
+3. ✅ `PipelineManager` from AppState
+4. ✅ Pipeline-related API endpoints and handlers
+5. ✅ Frontend pipeline UI components and state management
+6. ✅ All foreign key references to pipeline tables
 
-**Can Remove:** YES - User confirmed workflows are the current system
+**Migration:** Existing users migrated to Workflow Collections. See `doc/WORKFLOW_COLLECTIONS_MIGRATION.md` for details.
 
-**What to Delete:**
-1. Pipeline advancement logic in response consumer (orchestrator.rs:223-430)
-2. `PipelineManager` from AppState
-3. Pipeline-related API endpoints (or keep for backward compatibility)
-4. Eventually: Drop `pipelines`, `pipeline_stages`, `pipeline_runs` tables from DB
+**Note:** The old pipeline system used agent pool and relied on response consumer for advancement. The new Workflow Collections system uses ExecutionEngine with self-contained execution, providing better architecture and UX.
 
 ---
 
@@ -226,7 +221,7 @@ pub feed_tx, task_tx, agent_tx: // WebSocket broadcasts
 - ✅ `recorder.rs` - ExecutionRecorder for logging
 - ✅ `mod.rs` - `run_chat()` function (entry point)
 - ✅ `dag.rs` - `execute_workflow_via_engine()` for workflows
-- ✅ `pipeline_advance.rs` - Pipeline stage advancement logic
+- ❌ `pipeline_advance.rs` - Pipeline stage advancement logic (REMOVED Feb 3, 2026 with pipeline system)
 
 **This is the NEW architecture - DO NOT REMOVE!**
 
@@ -252,9 +247,9 @@ pub feed_tx, task_tx, agent_tx: // WebSocket broadcasts
 3. ⚠️ Check router_service.rs vs RouterStrategy
 
 ### Phase 4: Database Cleanup
-1. ✅ Drop `pipelines`, `pipeline_stages`, `pipeline_runs` tables (confirmed unused)
+1. ✅ Drop `pipelines`, `pipeline_stages`, `pipeline_runs`, `pipeline_stage_members` tables (COMPLETED Feb 3, 2026)
 2. ✅ Drop `schedules` table if unused
-3. ✅ Remove `PipelineManager` from AppState
+3. ✅ Remove `PipelineManager` from AppState (COMPLETED Feb 3, 2026)
 
 ---
 
@@ -272,7 +267,7 @@ pub feed_tx, task_tx, agent_tx: // WebSocket broadcasts
 ## Migration Checklist
 
 Before removing agent pool:
-- [ ] Check database: `SELECT COUNT(*) FROM pipelines;`
+- [x] Check database: `SELECT COUNT(*) FROM pipelines;` (Table removed Feb 3, 2026)
 - [ ] Check database: `SELECT COUNT(*) FROM schedules;`
 - [ ] Grep codebase: `git grep "state.pool\|state.dispatcher"`
 - [ ] Check agent configurations: Do any agents use agent management tools?
