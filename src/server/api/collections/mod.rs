@@ -89,17 +89,11 @@ pub struct ExecutionVariableResponse {
         (status = 200, description = "List of collections", body = Vec<CollectionResponse>)
     )
 )]
-pub async fn list_collections(
-    State(state): State<AppState>,
-    auth: auth_utils::AuthUser,
-) -> Result<Json<Vec<CollectionResponse>>, StatusCode> {
+pub async fn list_collections(State(state): State<AppState>, auth: auth_utils::AuthUser) -> Result<Json<Vec<CollectionResponse>>, StatusCode> {
     let db = state.db.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db.clone()));
 
-    let rows = repo
-        .list_collections(auth.user_id.0)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = repo.list_collections(auth.user_id.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let items = rows
         .into_iter()
@@ -131,19 +125,11 @@ pub async fn list_collections(
         (status = 404, description = "Collection not found")
     )
 )]
-pub async fn get_collection(
-    State(state): State<AppState>,
-    auth: auth_utils::AuthUser,
-    Path(id): Path<Uuid>,
-) -> Result<Json<CollectionResponse>, StatusCode> {
+pub async fn get_collection(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<Json<CollectionResponse>, StatusCode> {
     let db = state.db.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db.clone()));
 
-    let row = repo
-        .get_collection(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let row = repo.get_collection(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     // Verify ownership
     if row.user_id != auth.user_id.0 {
@@ -173,11 +159,7 @@ pub async fn get_collection(
         (status = 400, description = "Invalid request")
     )
 )]
-pub async fn create_collection(
-    State(state): State<AppState>,
-    auth: auth_utils::AuthUser,
-    Json(request): Json<CreateCollectionRequest>,
-) -> Result<(StatusCode, Json<CollectionResponse>), StatusCode> {
+pub async fn create_collection(State(state): State<AppState>, auth: auth_utils::AuthUser, Json(request): Json<CreateCollectionRequest>) -> Result<(StatusCode, Json<CollectionResponse>), StatusCode> {
     let db = state.db.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db.clone()));
 
@@ -187,12 +169,7 @@ pub async fn create_collection(
     }
 
     let row = repo
-        .create_collection(
-            auth.user_id.0,
-            request.name,
-            request.description,
-            request.execution_mode,
-        )
+        .create_collection(auth.user_id.0, request.name, request.description, request.execution_mode)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -236,11 +213,7 @@ pub async fn update_collection(
     let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db.clone()));
 
     // Verify ownership
-    let existing = repo
-        .get_collection(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let existing = repo.get_collection(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     if existing.user_id != auth.user_id.0 {
         return Err(StatusCode::FORBIDDEN);
@@ -283,28 +256,18 @@ pub async fn update_collection(
         (status = 404, description = "Collection not found")
     )
 )]
-pub async fn delete_collection(
-    State(state): State<AppState>,
-    auth: auth_utils::AuthUser,
-    Path(id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
+pub async fn delete_collection(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<StatusCode, StatusCode> {
     let db = state.db.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db.clone()));
 
     // Verify ownership
-    let existing = repo
-        .get_collection(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let existing = repo.get_collection(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     if existing.user_id != auth.user_id.0 {
         return Err(StatusCode::FORBIDDEN);
     }
 
-    repo.delete_collection(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    repo.delete_collection(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -327,40 +290,22 @@ pub async fn delete_collection(
         (status = 404, description = "Collection not found")
     )
 )]
-pub async fn run_collection(
-    State(state): State<AppState>,
-    auth: auth_utils::AuthUser,
-    Path(id): Path<Uuid>,
-) -> Result<(StatusCode, Json<CollectionRunResponse>), StatusCode> {
+pub async fn run_collection(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(id): Path<Uuid>) -> Result<(StatusCode, Json<CollectionRunResponse>), StatusCode> {
     let db = state.db.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let repo = Arc::new(PgRepo::new(db.clone()));
-    let workflow_repo = state
-        .workflow_repo
-        .as_ref()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let workflow_repo = state.workflow_repo.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Verify ownership
-    let collection = repo
-        .get_collection(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let collection = repo.get_collection(id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     if collection.user_id != auth.user_id.0 {
         return Err(StatusCode::FORBIDDEN);
     }
 
     // Create executor and run collection
-    let executor = CollectionDagExecutor::new(
-        Arc::clone(&repo),
-        Arc::clone(workflow_repo),
-        Arc::new(state.clone()),
-    );
+    let executor = CollectionDagExecutor::new(Arc::clone(&repo), Arc::clone(workflow_repo), Arc::new(state.clone()));
 
-    let run = executor
-        .execute_collection(id, auth.user_id.0)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let run = executor.execute_collection(id, auth.user_id.0).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok((
         StatusCode::ACCEPTED,
@@ -390,19 +335,11 @@ pub async fn run_collection(
         (status = 404, description = "Run not found")
     )
 )]
-pub async fn get_collection_run_status(
-    State(state): State<AppState>,
-    auth: auth_utils::AuthUser,
-    Path(run_id): Path<Uuid>,
-) -> Result<Json<CollectionRunResponse>, StatusCode> {
+pub async fn get_collection_run_status(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(run_id): Path<Uuid>) -> Result<Json<CollectionRunResponse>, StatusCode> {
     let db = state.db.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db.clone()));
 
-    let row = repo
-        .get_collection_run(run_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let row = repo.get_collection_run(run_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     // Verify ownership
     if row.user_id != auth.user_id.0 {
@@ -434,29 +371,18 @@ pub async fn get_collection_run_status(
         (status = 404, description = "Run not found")
     )
 )]
-pub async fn get_collection_variables(
-    State(state): State<AppState>,
-    auth: auth_utils::AuthUser,
-    Path(run_id): Path<Uuid>,
-) -> Result<Json<Vec<ExecutionVariableResponse>>, StatusCode> {
+pub async fn get_collection_variables(State(state): State<AppState>, auth: auth_utils::AuthUser, Path(run_id): Path<Uuid>) -> Result<Json<Vec<ExecutionVariableResponse>>, StatusCode> {
     let db = state.db.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db.clone()));
 
     // Verify ownership
-    let run = repo
-        .get_collection_run(run_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let run = repo.get_collection_run(run_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
 
     if run.user_id != auth.user_id.0 {
         return Err(StatusCode::FORBIDDEN);
     }
 
-    let rows = repo
-        .get_execution_variables(run_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = repo.get_execution_variables(run_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let items = rows
         .into_iter()

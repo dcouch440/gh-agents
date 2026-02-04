@@ -25,6 +25,7 @@ pub struct AgentResponse {
     pub model_max_tokens: i32,
     pub model_temperature: f32,
     pub status: String,
+    pub output_schema_id: Option<String>,
     pub version: i32,
 }
 
@@ -40,6 +41,7 @@ impl AgentResponse {
             model_max_tokens: row.model_max_tokens,
             model_temperature: row.model_temperature,
             status: row.status.unwrap_or_else(|| "idle".to_string()),
+            output_schema_id: row.output_schema_id.map(|id| id.to_string()),
             version: row.version,
         }
     }
@@ -70,6 +72,8 @@ pub struct CreateAgentRequest {
     pub model_id: String,
     pub model_max_tokens: Option<i32>,
     pub model_temperature: Option<f32>,
+    #[serde(default)]
+    pub output_schema_id: Option<Uuid>,
 }
 
 /// Request to update an existing agent
@@ -82,6 +86,8 @@ pub struct UpdateAgentRequest {
     pub model_id: Option<String>,
     pub model_max_tokens: Option<i32>,
     pub model_temperature: Option<f32>,
+    #[serde(default)]
+    pub output_schema_id: Option<Uuid>,
 }
 
 /// List all agents and their status
@@ -151,6 +157,7 @@ pub async fn create_agent(State(state): State<AppState>, auth: auth_utils::AuthU
         model_temperature: request.model_temperature.unwrap_or(0.7),
         status: Some("idle".to_string()),
         router_mode: Some(false),
+        output_schema_id: request.output_schema_id,
         version: 1,
     };
 
@@ -205,6 +212,7 @@ pub async fn update_agent(State(state): State<AppState>, auth: auth_utils::AuthU
         model_temperature: request.model_temperature.unwrap_or(existing.model_temperature),
         status: existing.status,
         router_mode: existing.router_mode,
+        output_schema_id: request.output_schema_id.or(existing.output_schema_id),
         version: existing.version,
     };
 

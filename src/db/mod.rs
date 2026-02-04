@@ -27,6 +27,7 @@ pub struct AgentRow {
     pub model_temperature: f32,
     pub status: Option<String>,
     pub router_mode: Option<bool>,
+    pub output_schema_id: Option<Uuid>,
     pub version: i32,
 }
 
@@ -142,7 +143,7 @@ pub struct WorkflowStepRow {
     pub id: Uuid,
     pub workflow_id: Uuid,
     pub agent_id: Uuid,
-    pub execution_mode: String, // "single", "for_each", or "room"
+    pub execution_mode: String,               // "single", "for_each", or "room"
     pub agent_execution_mode: Option<String>, // "sequential" or "parallel", NULL = inherit from workflow
     pub for_each_ref: Option<String>,
     pub prompt_template_id: Option<Uuid>,

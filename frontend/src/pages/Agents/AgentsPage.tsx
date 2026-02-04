@@ -1,4 +1,4 @@
-import {useMemo} from "react";
+import {useMemo, useState} from "react";
 import {useNavigate} from "react-router-dom";
 import {
   Box,
@@ -14,11 +14,13 @@ import {
 import {PageHeader} from "@/components/primitives";
 import {useAgents} from "@/hooks/useAgents";
 import {useSessions} from "@/hooks/useSessions";
+import {api} from "@/api";
 
 function AgentsPage() {
   const navigate = useNavigate();
   const {agents, loading: agentsLoading, error: agentsError} = useAgents();
   const {sessions, loading: sessionsLoading} = useSessions();
+  const [creatingSession, setCreatingSession] = useState<string | null>(null);
 
   // Match agents with their workshop sessions
   const agentsWithSessions = useMemo(() => {
@@ -37,14 +39,25 @@ function AgentsPage() {
     });
   }, [agents, sessions]);
 
-  const handleAgentClick = (agentId: string, sessionId?: string) => {
+  const handleAgentClick = async (agentId: string, sessionId?: string) => {
     if (sessionId) {
       // Open existing workshop session
       void navigate(`/agents/workshop/${sessionId}`);
     } else {
-      // Create new workshop - would need to create session first
-      // For now, just navigate to workshop page
-      void navigate("/agents/workshop");
+      // Create a new session for this existing agent
+      setCreatingSession(agentId);
+      try {
+        const session = await api.sessions.create({
+          mode_id: "workshop",
+          agent_id: agentId,
+          title: "Agent Workshop",
+        });
+        void navigate(`/agents/workshop/${session.id}`);
+      } catch (err) {
+        console.error("Failed to create session:", err);
+      } finally {
+        setCreatingSession(null);
+      }
     }
   };
 
@@ -94,7 +107,7 @@ function AgentsPage() {
                     boxShadow: 4,
                   },
                 }}
-                onClick={() => handleAgentClick(agent.id, session?.id)}
+                onClick={() => void handleAgentClick(agent.id, session?.id)}
               >
                 <CardContent sx={{flexGrow: 1}}>
                   <Typography variant="h6" gutterBottom>
@@ -118,15 +131,18 @@ function AgentsPage() {
                   </Typography>
                 </CardContent>
                 <CardActions>
-                  {session ? (
-                    <Button size="small" fullWidth>
-                      Open Workshop
-                    </Button>
-                  ) : (
-                    <Button size="small" fullWidth variant="outlined">
-                      Create Session
-                    </Button>
-                  )}
+                  <Button
+                    size="small"
+                    fullWidth
+                    variant={session ? "contained" : "outlined"}
+                    disabled={creatingSession === agent.id}
+                  >
+                    {creatingSession === agent.id
+                      ? "Creating..."
+                      : session
+                        ? "Open Workshop"
+                        : "Start Workshop"}
+                  </Button>
                 </CardActions>
               </Card>
             </Grid>

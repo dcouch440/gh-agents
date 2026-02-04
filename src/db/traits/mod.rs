@@ -649,7 +649,15 @@ pub trait WorkflowCollectionRepo: Send + Sync {
     async fn update_workflow_execution_status(&self, id: Uuid, status: &str, outputs: Option<serde_json::Value>, error: Option<String>) -> Result<WorkflowExecutionRow>;
 
     // --- Execution Variables (Variable capture) ---
-    async fn create_execution_variable(&self, collection_run_id: Option<Uuid>, workflow_execution_id: Option<Uuid>, step_execution_id: Option<Uuid>, variable_name: &str, variable_path: &str, value: serde_json::Value) -> Result<ExecutionVariableRow>;
+    async fn create_execution_variable(
+        &self,
+        collection_run_id: Option<Uuid>,
+        workflow_execution_id: Option<Uuid>,
+        step_execution_id: Option<Uuid>,
+        variable_name: &str,
+        variable_path: &str,
+        value: serde_json::Value,
+    ) -> Result<ExecutionVariableRow>;
     async fn get_execution_variables(&self, collection_run_id: Uuid) -> Result<Vec<ExecutionVariableRow>>;
     async fn get_execution_variable_by_path(&self, collection_run_id: Uuid, variable_path: &str) -> Result<Option<ExecutionVariableRow>>;
 }
