@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useCallback } from 'react'
+import { Box, TextField } from '@mui/material'
 
 type ChatInputProps = {
   onSend: (message: string) => void
@@ -6,17 +7,11 @@ type ChatInputProps = {
   placeholder?: string
 }
 
-function ChatInput({ onSend, disabled, placeholder }: ChatInputProps) {
+function ChatInput({ onSend, disabled, placeholder = 'Type a message...' }: ChatInputProps) {
   const [value, setValue] = useState('')
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setValue(e.target.value)
-    const el = textareaRef.current
-    if (el) {
-      el.style.height = 'auto'
-      el.style.height = `${el.scrollHeight}px`
-    }
   }, [])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -26,26 +21,31 @@ function ChatInput({ onSend, disabled, placeholder }: ChatInputProps) {
       if (trimmed) {
         onSend(trimmed)
         setValue('')
-        const el = textareaRef.current
-        if (el) {
-          el.style.height = 'auto'
-        }
       }
     }
   }, [value, onSend])
 
   return (
-    <div className="chat-input">
-      <textarea
-        ref={textareaRef}
-        className="chat-input__textarea"
+    <Box sx={{ borderTop: 1, borderColor: 'divider', p: 1.5, bgcolor: 'background.paper' }}>
+      <TextField
+        fullWidth
+        multiline
+        maxRows={6}
         value={value}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         disabled={disabled}
         placeholder={placeholder}
+        variant="outlined"
+        size="small"
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            fontFamily: 'monospace',
+            fontSize: '0.875rem',
+          },
+        }}
       />
-    </div>
+    </Box>
   )
 }
 
