@@ -17,9 +17,9 @@ use crate::db::{
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
     DocumentSearchResult, ExecutionMessageRow, ExecutionVariableRow, OutputSchemaRow,
     PromptTemplateRow, ResultRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry,
-    RouterRequestRow, SessionRow, StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow,
-    WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
-    WorkflowStepEdgeRow, WorkflowStepRow,
+    RouterRequestRow, SessionRow, StepDocumentRow, TokenLedgerRow, ToolRouterModeRow,
+    ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow,
+    WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -1552,7 +1552,7 @@ impl ResultRepo for PgRepo {
 impl ToolRouterRepo for PgRepo {
     async fn list_tool_routers(&self, user_id: Uuid) -> Result<Vec<ToolRouterRow>> {
         let rows: Vec<ToolRouterRow> =
-            sqlx::query_as("SELECT id, user_id, name, description, system_prompt, model_id, is_active, created_at, updated_at FROM tool_routers WHERE user_id = $1 ORDER BY created_at DESC")
+            sqlx::query_as("SELECT id, user_id, name, description, system_prompt, model_id, is_active, created_at, updated_at, parent_router_id, level FROM tool_routers WHERE user_id = $1 ORDER BY created_at DESC")
                 .bind(user_id)
                 .fetch_all(&self.pool)
                 .await?;
@@ -1560,7 +1560,7 @@ impl ToolRouterRepo for PgRepo {
     }
 
     async fn get_tool_router(&self, id: Uuid) -> Result<Option<ToolRouterRow>> {
-        let row: Option<ToolRouterRow> = sqlx::query_as("SELECT id, user_id, name, description, system_prompt, model_id, is_active, created_at, updated_at FROM tool_routers WHERE id = $1")
+        let row: Option<ToolRouterRow> = sqlx::query_as("SELECT id, user_id, name, description, system_prompt, model_id, is_active, created_at, updated_at, parent_router_id, level FROM tool_routers WHERE id = $1")
             .bind(id)
             .fetch_optional(&self.pool)
             .await?;
@@ -1576,7 +1576,7 @@ impl ToolRouterRepo for PgRepo {
         model_id: &str,
     ) -> Result<ToolRouterRow> {
         let row: ToolRouterRow = sqlx::query_as(
-            "INSERT INTO tool_routers (user_id, name, description, system_prompt, model_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, user_id, name, description, system_prompt, model_id, is_active, created_at, updated_at",
+            "INSERT INTO tool_routers (user_id, name, description, system_prompt, model_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, user_id, name, description, system_prompt, model_id, is_active, created_at, updated_at, parent_router_id, level",
         )
         .bind(user_id)
         .bind(name)
@@ -1606,7 +1606,7 @@ impl ToolRouterRepo for PgRepo {
                 is_active = COALESCE($6, is_active),
                 updated_at = NOW()
             WHERE id = $1
-            RETURNING id, user_id, name, description, system_prompt, model_id, is_active, created_at, updated_at"#,
+            RETURNING id, user_id, name, description, system_prompt, model_id, is_active, created_at, updated_at, parent_router_id, level"#,
         )
         .bind(id)
         .bind(name)
@@ -1648,6 +1648,185 @@ impl ToolRouterRepo for PgRepo {
         for tool_id in tool_ids {
             sqlx::query("INSERT INTO tool_router_tools (router_id, tool_id) VALUES ($1, $2)")
                 .bind(router_id)
+                .bind(tool_id)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    // --- Router Modes ---
+
+    async fn list_router_modes(&self, router_id: Uuid) -> Result<Vec<ToolRouterModeRow>> {
+        let rows: Vec<ToolRouterModeRow> = sqlx::query_as(
+            r#"SELECT id, router_id, mode_key, display_name, description, system_prompt,
+               temperature, max_tokens, append_to_agent_system_prompt, append_to_agent_tools,
+               display_order, created_at, updated_at
+               FROM tool_router_modes
+               WHERE router_id = $1
+               ORDER BY display_order, mode_key"#,
+        )
+        .bind(router_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn get_router_mode(&self, id: Uuid) -> Result<Option<ToolRouterModeRow>> {
+        let row: Option<ToolRouterModeRow> = sqlx::query_as(
+            r#"SELECT id, router_id, mode_key, display_name, description, system_prompt,
+               temperature, max_tokens, append_to_agent_system_prompt, append_to_agent_tools,
+               display_order, created_at, updated_at
+               FROM tool_router_modes
+               WHERE id = $1"#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn get_router_mode_by_key(
+        &self,
+        router_id: Uuid,
+        mode_key: &str,
+    ) -> Result<Option<ToolRouterModeRow>> {
+        let row: Option<ToolRouterModeRow> = sqlx::query_as(
+            r#"SELECT id, router_id, mode_key, display_name, description, system_prompt,
+               temperature, max_tokens, append_to_agent_system_prompt, append_to_agent_tools,
+               display_order, created_at, updated_at
+               FROM tool_router_modes
+               WHERE router_id = $1 AND mode_key = $2"#,
+        )
+        .bind(router_id)
+        .bind(mode_key)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn create_router_mode(
+        &self,
+        router_id: Uuid,
+        mode_key: &str,
+        display_name: &str,
+        description: &str,
+        system_prompt: &str,
+        temperature: f32,
+        max_tokens: i32,
+        append_to_agent_system_prompt: bool,
+        append_to_agent_tools: bool,
+        display_order: i32,
+    ) -> Result<ToolRouterModeRow> {
+        let row: ToolRouterModeRow = sqlx::query_as(
+            r#"INSERT INTO tool_router_modes (
+                   router_id, mode_key, display_name, description, system_prompt,
+                   temperature, max_tokens, append_to_agent_system_prompt,
+                   append_to_agent_tools, display_order
+               )
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+               RETURNING id, router_id, mode_key, display_name, description, system_prompt,
+                         temperature, max_tokens, append_to_agent_system_prompt,
+                         append_to_agent_tools, display_order, created_at, updated_at"#,
+        )
+        .bind(router_id)
+        .bind(mode_key)
+        .bind(display_name)
+        .bind(description)
+        .bind(system_prompt)
+        .bind(temperature)
+        .bind(max_tokens)
+        .bind(append_to_agent_system_prompt)
+        .bind(append_to_agent_tools)
+        .bind(display_order)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn update_router_mode(
+        &self,
+        id: Uuid,
+        mode_key: Option<String>,
+        display_name: Option<String>,
+        description: Option<String>,
+        system_prompt: Option<String>,
+        temperature: Option<f32>,
+        max_tokens: Option<i32>,
+        append_to_agent_system_prompt: Option<bool>,
+        append_to_agent_tools: Option<bool>,
+        display_order: Option<i32>,
+    ) -> Result<ToolRouterModeRow> {
+        let row: ToolRouterModeRow = sqlx::query_as(
+            r#"UPDATE tool_router_modes SET
+                   mode_key = COALESCE($2, mode_key),
+                   display_name = COALESCE($3, display_name),
+                   description = COALESCE($4, description),
+                   system_prompt = COALESCE($5, system_prompt),
+                   temperature = COALESCE($6, temperature),
+                   max_tokens = COALESCE($7, max_tokens),
+                   append_to_agent_system_prompt = COALESCE($8, append_to_agent_system_prompt),
+                   append_to_agent_tools = COALESCE($9, append_to_agent_tools),
+                   display_order = COALESCE($10, display_order),
+                   updated_at = NOW()
+               WHERE id = $1
+               RETURNING id, router_id, mode_key, display_name, description, system_prompt,
+                         temperature, max_tokens, append_to_agent_system_prompt,
+                         append_to_agent_tools, display_order, created_at, updated_at"#,
+        )
+        .bind(id)
+        .bind(mode_key)
+        .bind(display_name)
+        .bind(description)
+        .bind(system_prompt)
+        .bind(temperature)
+        .bind(max_tokens)
+        .bind(append_to_agent_system_prompt)
+        .bind(append_to_agent_tools)
+        .bind(display_order)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn delete_router_mode(&self, id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM tool_router_modes WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn get_mode_tools(&self, mode_id: Uuid) -> Result<Vec<ToolRow>> {
+        let rows: Vec<ToolRow> = sqlx::query_as(
+            r#"SELECT t.id, t.user_id, t.name, t.display_name, t.description,
+               t.parameters, t.created_at, t.version
+               FROM tools t
+               INNER JOIN tool_router_mode_tools trmt ON t.id = trmt.tool_id
+               WHERE trmt.mode_id = $1
+               ORDER BY t.name"#,
+        )
+        .bind(mode_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn set_mode_tools(&self, mode_id: Uuid, tool_ids: &[Uuid]) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        // Delete all existing associations
+        sqlx::query("DELETE FROM tool_router_mode_tools WHERE mode_id = $1")
+            .bind(mode_id)
+            .execute(&mut *tx)
+            .await?;
+
+        // Insert new associations
+        for tool_id in tool_ids {
+            sqlx::query("INSERT INTO tool_router_mode_tools (mode_id, tool_id) VALUES ($1, $2)")
+                .bind(mode_id)
                 .bind(tool_id)
                 .execute(&mut *tx)
                 .await?;

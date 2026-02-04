@@ -286,6 +286,26 @@ pub struct ToolRouterRow {
     pub is_active: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub parent_router_id: Option<Uuid>,
+    pub level: i32,
+}
+
+/// Row type for tool router mode definitions.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow, utoipa::ToSchema)]
+pub struct ToolRouterModeRow {
+    pub id: Uuid,
+    pub router_id: Uuid,
+    pub mode_key: String,
+    pub display_name: String,
+    pub description: String,
+    pub system_prompt: String,
+    pub temperature: f32,
+    pub max_tokens: i32,
+    pub append_to_agent_system_prompt: bool,
+    pub append_to_agent_tools: bool,
+    pub display_order: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 /// Row type for context store entries.
