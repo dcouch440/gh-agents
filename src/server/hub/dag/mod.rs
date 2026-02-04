@@ -316,7 +316,7 @@ async fn run_step_via_engine(
 
     // Create agent_execution row
     let ae_row = ae_repo
-        .create_agent_execution(ctx.stage_execution_id, agent.id, Some(step.id), false, None, &system_prompt, prompt, None, None, None)
+        .create_agent_execution(agent.id, Some(step.id), false, None, &system_prompt, prompt, None, None, None)
         .await
         .map_err(|e| anyhow::anyhow!("failed to create agent execution: {}", e))?;
 

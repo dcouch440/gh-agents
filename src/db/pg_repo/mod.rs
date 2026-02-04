@@ -7,14 +7,13 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::db::traits::{
-    AgentExecutionRepo, ContextStoreRepo, DocumentRepo, MergeQueueRepo, ModelSpendRow, OutputSchemaRepo, PromptTemplateRepo, ResultRepo, RoomMemberInput, RoomRepo,
-    RouterRequestRepo, ServerRepo, TokenLedgerRepo, ToolRouterRepo, UserRepo, WorkflowCollectionRepo, WorkflowRepo, WorkflowStepAgentRepo,
+    AgentExecutionRepo, ContextStoreRepo, DocumentRepo, MergeQueueRepo, ModelSpendRow, OutputSchemaRepo, PromptTemplateRepo, ResultRepo, RoomMemberInput, RoomRepo, RouterRequestRepo, ServerRepo,
+    TokenLedgerRepo, ToolRouterRepo, UserRepo, WorkflowCollectionRepo, WorkflowRepo, WorkflowStepAgentRepo,
 };
 use crate::db::{
     AgentExecutionRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow, CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow, DocumentSearchResult,
-    ExecutionMessageRow, ExecutionVariableRow, OutputSchemaRow, PromptTemplateRow, ResultRow, RoomMemberRow, RoomRow,
-    RoomSessionRow, RoomTranscriptEntry, RouterRequestRow, SessionRow, StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow,
-    WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepRow,
+    ExecutionMessageRow, ExecutionVariableRow, OutputSchemaRow, PromptTemplateRow, ResultRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry, RouterRequestRow, SessionRow,
+    StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -461,96 +460,6 @@ impl ServerRepo for PgRepo {
         Ok(())
     }
 
-    // --- Pipeline persistence ---
-
-    async fn list_pipelines(&self, user_id: UserId) -> Result<Vec<PipelineRow>> {
-        let rows: Vec<(Uuid, String)> = sqlx::query_as("SELECT id, name FROM pipelines WHERE user_id = $1").bind(user_id.0).fetch_all(&self.pool).await?;
-
-        Ok(rows.into_iter().map(|(id, name)| PipelineRow { id, name }).collect())
-    }
-
-    async fn upsert_pipeline(&self, user_id: UserId, pipeline: PipelineRow) -> Result<()> {
-        sqlx::query(
-            r#"
-            INSERT INTO pipelines (id, user_id, name)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
-        "#,
-        )
-        .bind(pipeline.id)
-        .bind(user_id.0)
-        .bind(&pipeline.name)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    async fn delete_pipeline(&self, pipeline_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM pipelines WHERE id = $1").bind(pipeline_id).execute(&self.pool).await?;
-        Ok(())
-    }
-
-    async fn list_pipeline_stages(&self, pipeline_id: Uuid) -> Result<Vec<PipelineStageRow>> {
-        let rows: Vec<(Uuid, i32, Option<Uuid>, Option<Uuid>, Option<String>, Option<bool>, Option<bool>, String, Option<serde_json::Value>, Option<String>, Option<serde_json::Value>)> = sqlx::query_as(
-            "SELECT pipeline_id, stage_number, agent_id, cluster_id, role, approval_required, fan_out, stage_name, input_definitions, output_description, output_schema FROM pipeline_stages WHERE pipeline_id = $1 ORDER BY stage_number"
-        )
-        .bind(pipeline_id)
-        .fetch_all(&self.pool)
-        .await?;
-
-        Ok(rows
-            .into_iter()
-            .map(
-                |(pipeline_id, stage_number, agent_id, cluster_id, role, approval_required, fan_out, stage_name, input_definitions, output_description, output_schema)| PipelineStageRow {
-                    pipeline_id,
-                    stage_number,
-                    agent_id,
-                    cluster_id,
-                    role,
-                    approval_required,
-                    fan_out,
-                    stage_name,
-                    input_definitions,
-                    output_description,
-                    output_schema,
-                },
-            )
-            .collect())
-    }
-
-    async fn upsert_pipeline_stage(&self, stage: PipelineStageRow) -> Result<()> {
-        sqlx::query(
-            r#"
-            INSERT INTO pipeline_stages (pipeline_id, stage_number, agent_id, cluster_id, role, approval_required, fan_out, stage_name, input_definitions, output_description, output_schema)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            ON CONFLICT (pipeline_id, stage_number) DO UPDATE SET
-                agent_id = EXCLUDED.agent_id,
-                cluster_id = EXCLUDED.cluster_id,
-                role = EXCLUDED.role,
-                approval_required = EXCLUDED.approval_required,
-                fan_out = EXCLUDED.fan_out,
-                stage_name = EXCLUDED.stage_name,
-                input_definitions = EXCLUDED.input_definitions,
-                output_description = EXCLUDED.output_description,
-                output_schema = EXCLUDED.output_schema
-        "#,
-        )
-        .bind(stage.pipeline_id)
-        .bind(stage.stage_number)
-        .bind(stage.agent_id)
-        .bind(stage.cluster_id)
-        .bind(&stage.role)
-        .bind(stage.approval_required)
-        .bind(stage.fan_out)
-        .bind(&stage.stage_name)
-        .bind(&stage.input_definitions)
-        .bind(&stage.output_description)
-        .bind(&stage.output_schema)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
     // --- Session management ---
 
     async fn create_session(&self, user_id: UserId, session_id: Uuid, mode_id: &str, title: &str, agent_id: Option<Uuid>) -> Result<()> {
@@ -596,126 +505,6 @@ impl ServerRepo for PgRepo {
             .fetch_one(&self.pool)
             .await?;
         Ok(row.0 as u32)
-    }
-
-    // --- Token usage tracking ---
-
-    async fn create_pipeline_run(&self, run: &PipelineRunRow) -> Result<()> {
-        sqlx::query(
-            r#"
-            INSERT INTO pipeline_runs (id, pipeline_id, user_id, status, initial_task, stage_outputs, current_stage, started_at, completed_at, total_input_tokens, total_output_tokens)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            "#,
-        )
-        .bind(run.id)
-        .bind(run.pipeline_id)
-        .bind(run.user_id)
-        .bind(&run.status)
-        .bind(&run.initial_task)
-        .bind(&run.stage_outputs)
-        .bind(run.current_stage)
-        .bind(run.started_at)
-        .bind(run.completed_at)
-        .bind(run.total_input_tokens)
-        .bind(run.total_output_tokens)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    async fn update_pipeline_run(&self, run: &PipelineRunRow) -> Result<()> {
-        sqlx::query(
-            r#"
-            UPDATE pipeline_runs
-            SET status = $2, stage_outputs = $3, current_stage = $4, completed_at = $5, total_input_tokens = $6, total_output_tokens = $7
-            WHERE id = $1
-            "#,
-        )
-        .bind(run.id)
-        .bind(&run.status)
-        .bind(&run.stage_outputs)
-        .bind(run.current_stage)
-        .bind(run.completed_at)
-        .bind(run.total_input_tokens)
-        .bind(run.total_output_tokens)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    async fn get_pipeline_run(&self, run_id: Uuid) -> Result<Option<PipelineRunRow>> {
-        let row = sqlx::query_as::<_, PipelineRunRow>("SELECT * FROM pipeline_runs WHERE id = $1")
-            .bind(run_id)
-            .fetch_optional(&self.pool)
-            .await?;
-        Ok(row)
-    }
-
-    async fn list_pipeline_runs(&self, pipeline_id: Uuid) -> Result<Vec<PipelineRunRow>> {
-        let rows = sqlx::query_as::<_, PipelineRunRow>("SELECT * FROM pipeline_runs WHERE pipeline_id = $1 ORDER BY started_at DESC")
-            .bind(pipeline_id)
-            .fetch_all(&self.pool)
-            .await?;
-        Ok(rows)
-    }
-
-    async fn create_stage_execution(&self, exec: &StageExecutionRow) -> Result<()> {
-        sqlx::query(
-            r#"
-            INSERT INTO stage_executions (id, run_id, stage_number, stage_name, agent_id, status, rendered_prompt, output, structured_output, user_input, input_tokens, output_tokens, started_at, completed_at, duration_ms, stage_member_id, pipeline_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-            "#,
-        )
-        .bind(exec.id)
-        .bind(exec.run_id)
-        .bind(exec.stage_number)
-        .bind(&exec.stage_name)
-        .bind(exec.agent_id)
-        .bind(&exec.status)
-        .bind(exec.rendered_prompt.as_deref())
-        .bind(exec.output.as_deref())
-        .bind(&exec.structured_output)
-        .bind(exec.user_input.as_deref())
-        .bind(exec.input_tokens)
-        .bind(exec.output_tokens)
-        .bind(exec.started_at)
-        .bind(exec.completed_at)
-        .bind(exec.duration_ms)
-        .bind(exec.stage_member_id)
-        .bind(exec.pipeline_id)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    async fn update_stage_execution(&self, exec: &StageExecutionRow) -> Result<()> {
-        sqlx::query(
-            r#"
-            UPDATE stage_executions
-            SET status = $2, output = $3, structured_output = $4, user_input = $5, input_tokens = $6, output_tokens = $7, completed_at = $8, duration_ms = $9
-            WHERE id = $1
-            "#,
-        )
-        .bind(exec.id)
-        .bind(&exec.status)
-        .bind(exec.output.as_deref())
-        .bind(&exec.structured_output)
-        .bind(exec.user_input.as_deref())
-        .bind(exec.input_tokens)
-        .bind(exec.output_tokens)
-        .bind(exec.completed_at)
-        .bind(exec.duration_ms)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    async fn list_stage_executions(&self, run_id: Uuid) -> Result<Vec<StageExecutionRow>> {
-        let rows = sqlx::query_as::<_, StageExecutionRow>("SELECT * FROM stage_executions WHERE run_id = $1 ORDER BY stage_number")
-            .bind(run_id)
-            .fetch_all(&self.pool)
-            .await?;
-        Ok(rows)
     }
 
     // --- Agent modes ---
@@ -1337,50 +1126,9 @@ impl WorkflowRepo for PgRepo {
 }
 
 #[async_trait]
-impl PipelineStageMemberRepo for PgRepo {
-    async fn list_stage_members(&self, pipeline_id: Uuid, stage_number: i32) -> Result<Vec<PipelineStageMemberRow>> {
-        let rows: Vec<PipelineStageMemberRow> =
-            sqlx::query_as("SELECT id, pipeline_id, stage_number, workflow_id, display_order FROM pipeline_stage_members WHERE pipeline_id = $1 AND stage_number = $2 ORDER BY display_order")
-                .bind(pipeline_id)
-                .bind(stage_number)
-                .fetch_all(&self.pool)
-                .await?;
-        Ok(rows)
-    }
-
-    async fn add_stage_member(&self, pipeline_id: Uuid, stage_number: i32, workflow_id: Uuid, display_order: i32) -> Result<PipelineStageMemberRow> {
-        let row: PipelineStageMemberRow = sqlx::query_as(
-            "INSERT INTO pipeline_stage_members (pipeline_id, stage_number, workflow_id, display_order) VALUES ($1, $2, $3, $4) RETURNING id, pipeline_id, stage_number, workflow_id, display_order",
-        )
-        .bind(pipeline_id)
-        .bind(stage_number)
-        .bind(workflow_id)
-        .bind(display_order)
-        .fetch_one(&self.pool)
-        .await?;
-        Ok(row)
-    }
-
-    async fn remove_stage_member(&self, member_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM pipeline_stage_members WHERE id = $1").bind(member_id).execute(&self.pool).await?;
-        Ok(())
-    }
-
-    async fn update_stage_member(&self, member_id: Uuid, display_order: i32) -> Result<PipelineStageMemberRow> {
-        let row: PipelineStageMemberRow = sqlx::query_as("UPDATE pipeline_stage_members SET display_order = $1 WHERE id = $2 RETURNING id, pipeline_id, stage_number, workflow_id, display_order")
-            .bind(display_order)
-            .bind(member_id)
-            .fetch_one(&self.pool)
-            .await?;
-        Ok(row)
-    }
-}
-
-#[async_trait]
 impl AgentExecutionRepo for PgRepo {
     async fn create_agent_execution(
         &self,
-        stage_execution_id: Uuid,
         agent_id: Uuid,
         workflow_step_id: Option<Uuid>,
         is_interactive: bool,
@@ -1392,9 +1140,8 @@ impl AgentExecutionRepo for PgRepo {
         speaker_order: Option<i32>,
     ) -> Result<AgentExecutionRow> {
         let row = sqlx::query_as::<_, AgentExecutionRow>(
-            "INSERT INTO agent_executions (stage_execution_id, agent_id, workflow_step_id, is_interactive, parent_agent_execution_id, system_prompt_rendered, input, selected_mode_id, room_session_id, speaker_order) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *",
+            "INSERT INTO agent_executions (agent_id, workflow_step_id, is_interactive, parent_agent_execution_id, system_prompt_rendered, input, selected_mode_id, room_session_id, speaker_order) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *",
         )
-        .bind(stage_execution_id)
         .bind(agent_id)
         .bind(workflow_step_id)
         .bind(is_interactive)
@@ -1415,14 +1162,6 @@ impl AgentExecutionRepo for PgRepo {
             .fetch_optional(&self.pool)
             .await?;
         Ok(row)
-    }
-
-    async fn list_agent_executions_by_stage(&self, stage_execution_id: Uuid) -> Result<Vec<AgentExecutionRow>> {
-        let rows = sqlx::query_as::<_, AgentExecutionRow>("SELECT * FROM agent_executions WHERE stage_execution_id = $1 ORDER BY started_at ASC")
-            .bind(stage_execution_id)
-            .fetch_all(&self.pool)
-            .await?;
-        Ok(rows)
     }
 
     async fn update_agent_execution_status(&self, id: Uuid, status: &str, output: Option<String>, structured_output: Option<serde_json::Value>) -> Result<AgentExecutionRow> {
@@ -1798,7 +1537,7 @@ impl RoomRepo for PgRepo {
     async fn create_room(
         &self,
         user_id: Uuid,
-        pipeline_id: Uuid,
+        collection_id: Option<Uuid>,
         name: &str,
         gatekeeper_enabled: bool,
         gatekeeper_model_id: &str,
@@ -1807,10 +1546,10 @@ impl RoomRepo for PgRepo {
         tools_enabled: bool,
     ) -> Result<RoomRow> {
         let row = sqlx::query_as::<_, RoomRow>(
-            "INSERT INTO rooms (user_id, pipeline_id, name, gatekeeper_enabled, gatekeeper_model_id, max_speakers_per_turn, max_turns, tools_enabled) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *",
+            "INSERT INTO rooms (user_id, collection_id, name, gatekeeper_enabled, gatekeeper_model_id, max_speakers_per_turn, max_turns, tools_enabled) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *",
         )
         .bind(user_id)
-        .bind(pipeline_id)
+        .bind(collection_id)
         .bind(name)
         .bind(gatekeeper_enabled)
         .bind(gatekeeper_model_id)
@@ -1825,14 +1564,6 @@ impl RoomRepo for PgRepo {
     async fn get_room(&self, id: Uuid) -> Result<Option<RoomRow>> {
         let row = sqlx::query_as::<_, RoomRow>("SELECT * FROM rooms WHERE id = $1").bind(id).fetch_optional(&self.pool).await?;
         Ok(row)
-    }
-
-    async fn list_rooms_for_pipeline(&self, pipeline_id: Uuid) -> Result<Vec<RoomRow>> {
-        let rows = sqlx::query_as::<_, RoomRow>("SELECT * FROM rooms WHERE pipeline_id = $1 ORDER BY created_at ASC")
-            .bind(pipeline_id)
-            .fetch_all(&self.pool)
-            .await?;
-        Ok(rows)
     }
 
     async fn update_room(

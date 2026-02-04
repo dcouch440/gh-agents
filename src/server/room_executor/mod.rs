@@ -205,12 +205,6 @@ pub async fn execute_room_turn(
     let engine = ExecutionEngine::new(provider.clone());
     let mut results = Vec::new();
 
-    // We need a stage_execution_id for creating agent_executions.
-    // For rooms not tied to a pipeline run, we create a dummy one or
-    // use a sentinel. For now, create a nil-based one — the room_session_id
-    // is the real anchor.
-    let stage_execution_id = session.run_id.unwrap_or_else(Uuid::nil);
-
     for (i, selection) in speakers.iter().enumerate() {
         if cancel.is_some_and(|t| t.is_cancelled()) {
             return Err(HubError::Cancelled);
@@ -228,7 +222,7 @@ pub async fn execute_room_turn(
         // Broadcast speaker_start
         state.broadcast_room_update(RoomUpdateEvent {
             room_session_id: session.id,
-            run_id: session.run_id,
+            run_id: None,
             event: "speaker_start".into(),
             agent_id: Some(selection.agent_id),
             agent_name: Some(speaker_name.clone()),
@@ -275,7 +269,6 @@ pub async fn execute_room_turn(
         // Create agent_execution record
         let ae_row = ae_repo
             .create_agent_execution(
-                stage_execution_id,
                 selection.agent_id,
                 None,  // workflow_step_id
                 false, // is_interactive
@@ -312,7 +305,7 @@ pub async fn execute_room_turn(
         let sink = RoomStreamSink {
             state: state.clone(),
             room_session_id: session.id,
-            run_id: session.run_id,
+            run_id: None,
             agent_id: selection.agent_id,
             agent_name: speaker_name.clone(),
             speaker_order: i as i32,
@@ -334,7 +327,7 @@ pub async fn execute_room_turn(
                 // Broadcast speaker_end
                 state.broadcast_room_update(RoomUpdateEvent {
                     room_session_id: session.id,
-                    run_id: session.run_id,
+                    run_id: None,
                     event: "speaker_end".into(),
                     agent_id: Some(selection.agent_id),
                     agent_name: Some(speaker_name.clone()),
@@ -375,7 +368,7 @@ pub async fn execute_room_turn(
     // Broadcast turn_complete
     state.broadcast_room_update(RoomUpdateEvent {
         room_session_id: session.id,
-        run_id: session.run_id,
+        run_id: None,
         event: if session_completed { "session_complete" } else { "turn_complete" }.into(),
         agent_id: None,
         agent_name: None,

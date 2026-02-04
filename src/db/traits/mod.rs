@@ -10,9 +10,8 @@ use uuid::Uuid;
 
 use crate::db::{
     AgentExecutionRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow, CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow, DocumentSearchResult,
-    ExecutionMessageRow, ExecutionVariableRow, OutputSchemaRow, PromptTemplateRow, ResultRow, RoomMemberRow, RoomRow,
-    RoomSessionRow, RoomTranscriptEntry, RouterRequestRow, SessionRow, StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow,
-    WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepRow,
+    ExecutionMessageRow, ExecutionVariableRow, OutputSchemaRow, PromptTemplateRow, ResultRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry, RouterRequestRow, SessionRow,
+    StepDocumentRow, TokenLedgerRow, ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -136,23 +135,6 @@ pub trait ServerRepo: Send + Sync {
     /// Set the full context document list for an agent (replaces existing).
     async fn set_agent_context(&self, agent_id: Uuid, document_ids: Vec<Uuid>) -> Result<()>;
 
-    // --- Pipeline persistence ---
-
-    /// List all pipelines for a user.
-    async fn list_pipelines(&self, user_id: UserId) -> Result<Vec<PipelineRow>>;
-
-    /// Insert or update a pipeline.
-    async fn upsert_pipeline(&self, user_id: UserId, pipeline: PipelineRow) -> Result<()>;
-
-    /// Delete a pipeline by ID.
-    async fn delete_pipeline(&self, pipeline_id: Uuid) -> Result<()>;
-
-    /// List stages for a pipeline.
-    async fn list_pipeline_stages(&self, pipeline_id: Uuid) -> Result<Vec<PipelineStageRow>>;
-
-    /// Insert or update a pipeline stage.
-    async fn upsert_pipeline_stage(&self, stage: PipelineStageRow) -> Result<()>;
-
     // --- Session management ---
 
     /// Create a new chat session.
@@ -181,29 +163,6 @@ pub trait ServerRepo: Send + Sync {
 
     /// Count messages in a session.
     async fn count_session_messages(&self, session_id: Uuid) -> Result<u32>;
-
-    // --- Pipeline run persistence ---
-
-    /// Create a pipeline run record.
-    async fn create_pipeline_run(&self, run: &PipelineRunRow) -> Result<()>;
-
-    /// Update a pipeline run record.
-    async fn update_pipeline_run(&self, run: &PipelineRunRow) -> Result<()>;
-
-    /// Get a pipeline run by ID.
-    async fn get_pipeline_run(&self, run_id: Uuid) -> Result<Option<PipelineRunRow>>;
-
-    /// List runs for a pipeline.
-    async fn list_pipeline_runs(&self, pipeline_id: Uuid) -> Result<Vec<PipelineRunRow>>;
-
-    /// Create a stage execution record.
-    async fn create_stage_execution(&self, exec: &StageExecutionRow) -> Result<()>;
-
-    /// Update a stage execution record.
-    async fn update_stage_execution(&self, exec: &StageExecutionRow) -> Result<()>;
-
-    /// List stage executions for a run.
-    async fn list_stage_executions(&self, run_id: Uuid) -> Result<Vec<StageExecutionRow>>;
 
     // --- Agent modes ---
 
@@ -358,20 +317,6 @@ pub trait WorkflowRepo: Send + Sync {
 }
 
 // ============================================================================
-// Pipeline Stage Member Repository
-// ============================================================================
-
-/// Database operations for pipeline stage members.
-#[cfg_attr(test, mockall::automock)]
-#[async_trait]
-pub trait PipelineStageMemberRepo: Send + Sync {
-    async fn list_stage_members(&self, pipeline_id: Uuid, stage_number: i32) -> Result<Vec<PipelineStageMemberRow>>;
-    async fn add_stage_member(&self, pipeline_id: Uuid, stage_number: i32, workflow_id: Uuid, display_order: i32) -> Result<PipelineStageMemberRow>;
-    async fn remove_stage_member(&self, member_id: Uuid) -> Result<()>;
-    async fn update_stage_member(&self, member_id: Uuid, display_order: i32) -> Result<PipelineStageMemberRow>;
-}
-
-// ============================================================================
 // Agent Execution Repository
 // ============================================================================
 
@@ -382,7 +327,6 @@ pub trait AgentExecutionRepo: Send + Sync {
     // --- Agent Executions ---
     async fn create_agent_execution(
         &self,
-        stage_execution_id: Uuid,
         agent_id: Uuid,
         workflow_step_id: Option<Uuid>,
         is_interactive: bool,
@@ -394,7 +338,6 @@ pub trait AgentExecutionRepo: Send + Sync {
         speaker_order: Option<i32>,
     ) -> Result<AgentExecutionRow>;
     async fn get_agent_execution(&self, id: Uuid) -> Result<Option<AgentExecutionRow>>;
-    async fn list_agent_executions_by_stage(&self, stage_execution_id: Uuid) -> Result<Vec<AgentExecutionRow>>;
     async fn update_agent_execution_status(&self, id: Uuid, status: &str, output: Option<String>, structured_output: Option<serde_json::Value>) -> Result<AgentExecutionRow>;
 
     // --- Execution Messages ---
@@ -538,11 +481,11 @@ pub struct RoomMemberInput {
 pub trait RoomRepo: Send + Sync {
     // --- Room CRUD ---
 
-    /// Create a new room within a pipeline.
+    /// Create a new room within a collection.
     async fn create_room(
         &self,
         user_id: Uuid,
-        pipeline_id: Uuid,
+        collection_id: Option<Uuid>,
         name: &str,
         gatekeeper_enabled: bool,
         gatekeeper_model_id: &str,
@@ -553,9 +496,6 @@ pub trait RoomRepo: Send + Sync {
 
     /// Get a room by ID.
     async fn get_room(&self, id: Uuid) -> Result<Option<RoomRow>>;
-
-    /// List all rooms for a pipeline.
-    async fn list_rooms_for_pipeline(&self, pipeline_id: Uuid) -> Result<Vec<RoomRow>>;
 
     /// Update a room's configuration.
     async fn update_room(
