@@ -22,6 +22,7 @@ use super::error::HubError;
 use super::recorder::ExecutionRecorder;
 use super::strategies::dag_step::{compute_cost, DagStepConfig, DagStepStrategy};
 use super::streaming::NullSink;
+use super::construct_agent_defaults;
 
 // Re-export pure DAG functions from the existing dag_executor
 pub use crate::server::dag_executor::{
@@ -330,8 +331,21 @@ async fn run_step_via_engine(
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("agent_execution_repo not configured"))?;
 
-    // Build system prompt with optional schema enforcement
-    let mut system_prompt = agent.system_prompt.clone();
+    // Resolve mode (no context hint initially - future: pass step description)
+    let mode = if let Some(resolver) = &state.mode_resolver {
+        resolver
+            .resolve(agent, prompt, None)
+            .await
+            .map_err(|e| HubError::Internal(anyhow!("Mode resolution failed: {}", e)))?
+    } else {
+        // Fallback: construct agent defaults for backward compatibility
+        construct_agent_defaults(agent, &state.repo)
+            .await
+            .map_err(HubError::Internal)?
+    };
+
+    // Build system prompt: mode result + schema enforcement
+    let mut system_prompt = mode.system_prompt;  // agent + mode already merged
     if let Some(schema_id) = step.output_schema_id {
         if let Some(os_repo) = &state.output_schema_repo {
             if let Ok(Some(schema)) = os_repo.get_output_schema(schema_id).await {
@@ -343,10 +357,6 @@ async fn run_step_via_engine(
         }
     }
 
-    // Resolve tools
-    let tools = resolve_agent_tools(state, agent.id).await;
-    let tool_names: Vec<String> = tools.iter().map(|t| t.name.clone()).collect();
-
     // Create agent_execution row
     let ae_row = ae_repo
         .create_agent_execution(
@@ -356,7 +366,7 @@ async fn run_step_via_engine(
             None,
             &system_prompt,
             prompt,
-            None,
+            mode.selected_mode_id,  // Track which mode was used
             None,
             None,
         )
@@ -377,8 +387,9 @@ async fn run_step_via_engine(
         step: step.clone(),
         system_prompt,
         user_prompt: prompt.to_string(),
-        tools,
-        tool_names,
+        tools: mode.tools,           // Use mode tools
+        tool_names: mode.tool_names,  // Use mode tool names
+        temperature: mode.temperature, // Use mode temperature
         execution_context: ctx.execution_context.clone(),
         run_id: ctx.run_id,
         user_id: ctx.user_id,
@@ -421,22 +432,6 @@ async fn run_step_via_engine(
         result.output_tokens as i64,
         cost,
     ))
-}
-
-/// Resolve tool definitions for an agent from the database.
-async fn resolve_agent_tools(state: &AppState, agent_id: Uuid) -> Vec<Tool> {
-    let tools = match state.repo.get_agent_tools(agent_id).await {
-        Ok(rows) => rows,
-        Err(_) => return vec![],
-    };
-    tools
-        .into_iter()
-        .map(|t| Tool {
-            name: t.name,
-            description: t.description,
-            input_schema: t.parameters,
-        })
-        .collect()
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────
