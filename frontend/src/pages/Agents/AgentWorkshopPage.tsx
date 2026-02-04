@@ -208,15 +208,15 @@ function AgentWorkshopPage() {
 
     const loadExistingSession = async () => {
       try {
-        console.log("[Workshop] Loading session:", urlSessionId);
+        console.warn("[Workshop] Loading session:", urlSessionId);
         // Fetch session, agent, history, and context in parallel
         const [session, history] = await Promise.all([
           api.sessions.get(urlSessionId!),
           api.sessions.getHistory(urlSessionId!),
         ]);
 
-        console.log("[Workshop] Session data:", session);
-        console.log("[Workshop] History response:", history);
+        console.warn("[Workshop] Session data:", session);
+        console.warn("[Workshop] History response:", history);
 
         if (cancelled) return;
 
@@ -240,7 +240,7 @@ function AgentWorkshopPage() {
           content: msg.content,
         }));
 
-        console.log("[Workshop] Loading session with", messages.length, "messages");
+        console.warn("[Workshop] Loading session with", messages.length, "messages");
 
         // Hydrate state
         dispatch({
@@ -370,7 +370,7 @@ function AgentWorkshopPage() {
     (message: string) => {
       if (!state.sessionId) return;
 
-      console.log("[Workshop] Sending message to session:", state.sessionId);
+      console.warn("[Workshop] Sending message to session:", state.sessionId);
 
       // Add user message
       const userMsgId = `msg-${Date.now()}`;
@@ -446,7 +446,7 @@ function AgentWorkshopPage() {
         dispatch({type: "SET_DIRTY", value: false});
         // If we don't have a sessionId in URL yet, update URL without reload
         if (!urlSessionId && state.sessionId) {
-          console.log("[Workshop] Navigating to session URL, current message count:", state.messages.length);
+          console.warn("[Workshop] Navigating to session URL, current message count:", state.messages.length);
           justNavigatedRef.current = true;
           void navigate(`/agents/workshop/${state.sessionId}`, {replace: true});
         }
@@ -466,6 +466,7 @@ function AgentWorkshopPage() {
     state.tempAgentId,
     state.selectedDocumentIds,
     state.sessionId,
+    state.messages.length,
     urlSessionId,
     navigate,
   ]);
@@ -646,7 +647,7 @@ function AgentWorkshopPage() {
                     <MenuItem value="">
                       <em>None</em>
                     </MenuItem>
-                    {schemas?.map((schema) => (
+                    {schemas.map((schema) => (
                       <MenuItem key={schema.id} value={schema.id}>
                         {schema.name}
                       </MenuItem>

@@ -28,34 +28,6 @@ type ExecutionMessage = {
   created_at: string
 }
 
-type TreeRunInfo = {
-  id: string
-  pipeline_id: string
-  pipeline_name: string
-  status: string
-  initial_input: string
-  current_stage: number
-  started_at: string
-  completed_at: string | null
-  total_input_tokens: number
-  total_output_tokens: number
-  total_cost_usd: number
-}
-
-type TreeStage = {
-  stage_number: number
-  stage_name: string
-  status: string
-  stage_executions: TreeStageExecution[]
-}
-
-type TreeStageExecution = {
-  id: string
-  workflow_name: string
-  status: string
-  agent_executions: TreeAgentExecution[]
-}
-
 type TreeAgentExecution = {
   id: string
   agent_name: string
@@ -73,11 +45,6 @@ type TreeAgentExecution = {
   interactive_review: TreeAgentExecution | null
 }
 
-type ExecutionTree = {
-  run: TreeRunInfo
-  stages: TreeStage[]
-}
-
 type SendExecutionMessageRequest = {
   content: string
 }
@@ -90,11 +57,7 @@ export type {
   AgentExecution,
   AgentExecutionStatus,
   ExecutionMessage,
-  TreeRunInfo,
-  TreeStage,
-  TreeStageExecution,
   TreeAgentExecution,
-  ExecutionTree,
   SendExecutionMessageRequest,
   ApproveExecutionRequest,
 }

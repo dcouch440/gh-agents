@@ -11,7 +11,6 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', path: ROUTES.DASHBOARD },
   { label: 'Chat', path: ROUTES.CHAT },
   { label: 'Agents', path: ROUTES.AGENTS },
-  { label: 'Pipelines', path: ROUTES.PIPELINES },
   { label: 'Tasks', path: ROUTES.TASKS },
   { label: 'Documents', path: ROUTES.DOCUMENTS },
   { label: 'Settings', path: ROUTES.SETTINGS },

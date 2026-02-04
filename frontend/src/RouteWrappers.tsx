@@ -7,9 +7,6 @@ import {DashboardPage} from "./pages/Dashboard/DashboardPage";
 import {AgentsPage} from "./pages/Agents/AgentsPage";
 import {AgentDetailPage} from "./pages/Agents/AgentDetailPage";
 import {AgentWorkshopPage} from "./pages/Agents/AgentWorkshopPage";
-import {PipelinesPage} from "./pages/Pipelines/PipelinesPage";
-import {PipelineDetailPage} from "./pages/Pipelines/PipelineDetailPage";
-import {PipelineRunPage} from "./pages/Pipelines/PipelineRunPage";
 import {TasksPage} from "./pages/Tasks/TasksPage";
 
 function DashboardWithProviders() {
@@ -52,25 +49,10 @@ function TasksWithProvider() {
   );
 }
 
-function PipelinesWithProvider() {
-  return <PipelinesPage />;
-}
-
-function PipelineDetailWithProvider() {
-  return <PipelineDetailPage />;
-}
-
-function PipelineRunWithProvider() {
-  return <PipelineRunPage />;
-}
-
 export {
   DashboardWithProviders,
   AgentsWithProvider,
   AgentWorkshopWithProvider,
   AgentDetailWithProvider,
   TasksWithProvider,
-  PipelinesWithProvider,
-  PipelineDetailWithProvider,
-  PipelineRunWithProvider,
 };

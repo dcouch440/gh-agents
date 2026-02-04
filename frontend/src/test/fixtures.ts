@@ -1,6 +1,5 @@
 import type { Agent } from '@/types/agent'
 import type { Task } from '@/types/task'
-import type { Pipeline, PipelineRun, StageExecution } from '@/types/pipeline'
 import type { FeedItem } from '@/types/feed'
 import type { UsageSummary } from '@/types/stats'
 import type { ChatMessage, Session, Mode } from '@/types/session'
@@ -53,26 +52,6 @@ export const mockTaskCompleted: Task = {
   ...mockTask,
   status: 'completed',
   updated_at: '2025-01-01T01:00:00Z',
-}
-
-export const mockPipeline: Pipeline = {
-  id: 'pipeline-001',
-  name: 'Test pipeline',
-  stages: [],
-}
-
-export const mockPipelineRun: PipelineRun = {
-  id: 'run-001',
-  pipeline_id: 'pipeline-001',
-  user_id: 'user-001',
-  status: 'running',
-  initial_task: 'Do the thing',
-  stage_outputs: {},
-  current_stage: 1,
-  started_at: '2025-01-01T00:00:00Z',
-  completed_at: null,
-  total_input_tokens: 0,
-  total_output_tokens: 0,
 }
 
 export const mockFeedItem: FeedItem = {
@@ -179,24 +158,6 @@ export const mockTool: Tool = {
   is_builtin: true,
 }
 
-export const mockStageExecution: StageExecution = {
-  id: 'exec-001',
-  run_id: 'run-001',
-  stage_number: 1,
-  stage_name: 'Planning',
-  agent_id: 'agent-001',
-  status: 'completed',
-  rendered_prompt: 'Plan the task',
-  output: 'Here is the plan',
-  structured_output: null,
-  user_input: null,
-  input_tokens: 500,
-  output_tokens: 200,
-  started_at: '2025-01-01T00:00:00Z',
-  completed_at: '2025-01-01T00:00:01Z',
-  duration_ms: 1000,
-}
-
 export const mockPromptTemplate: PromptTemplate = {
   id: 'template-001',
   user_id: 'user-001',
@@ -230,11 +191,10 @@ export const mockConfig: Config = {
 
 export const mockResult: Result = {
   id: 'result-001',
-  pipeline_run_id: 'run-001',
-  stage_number: 1,
   agent_execution_id: 'exec-001',
-  output: 'Task completed successfully',
-  structured_output: { status: 'success' },
+  output_schema_id: null,
+  name: 'Test Result',
+  data: { status: 'success', message: 'Task completed successfully' },
   created_at: '2025-01-01T00:00:00Z',
 }
 
@@ -283,23 +243,9 @@ export const mockOutputSchema: OutputSchema = {
   updated_at: '2025-01-01T00:00:00Z',
 }
 
-// ── Execution Tree ───────────────────────────────────────────────────────────
+// ── Execution ────────────────────────────────────────────────────────────────
 
-import type { TreeRunInfo, TreeStage, TreeStageExecution, TreeAgentExecution, ExecutionTree, ExecutionMessage } from '@/types/execution'
-
-export const mockTreeRunInfo: TreeRunInfo = {
-  id: 'run-001',
-  pipeline_id: 'pipeline-001',
-  pipeline_name: 'Test pipeline',
-  status: 'running',
-  initial_input: 'Do the thing',
-  current_stage: 1,
-  started_at: '2025-01-01T00:00:00Z',
-  completed_at: null,
-  total_input_tokens: 500,
-  total_output_tokens: 0,
-  total_cost_usd: 0,
-}
+import type { TreeAgentExecution, ExecutionMessage } from '@/types/execution'
 
 export const mockTreeAgentExecution: TreeAgentExecution = {
   id: 'agent-exec-001',
@@ -316,25 +262,6 @@ export const mockTreeAgentExecution: TreeAgentExecution = {
   for_each_index: null,
   for_each_label: null,
   interactive_review: null,
-}
-
-export const mockTreeStageExecution: TreeStageExecution = {
-  id: 'stage-exec-001',
-  workflow_name: 'Planning Workflow',
-  status: 'running',
-  agent_executions: [mockTreeAgentExecution],
-}
-
-export const mockTreeStage: TreeStage = {
-  stage_number: 1,
-  stage_name: 'Planning',
-  status: 'running',
-  stage_executions: [mockTreeStageExecution],
-}
-
-export const mockExecutionTree: ExecutionTree = {
-  run: mockTreeRunInfo,
-  stages: [mockTreeStage],
 }
 
 export const mockExecutionMessage: ExecutionMessage = {
