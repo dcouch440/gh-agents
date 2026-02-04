@@ -1,1 +1,0 @@
-export { FilesPage } from './FilesPage';

@@ -1,4 +1,4 @@
-import { AgentProvider, TaskProvider, PipelineProvider, FeedProvider, ChatProvider } from './contexts'
+import { AgentProvider, TaskProvider, FeedProvider, ChatProvider } from './contexts'
 import { DashboardPage } from './pages/Dashboard/DashboardPage'
 import { AgentsPage } from './pages/Agents/AgentsPage'
 import { AgentDetailPage } from './pages/Agents/AgentDetailPage'
@@ -51,27 +51,15 @@ function TasksWithProvider() {
 }
 
 function PipelinesWithProvider() {
-  return (
-    <PipelineProvider>
-      <PipelinesPage />
-    </PipelineProvider>
-  )
+  return <PipelinesPage />
 }
 
 function PipelineDetailWithProvider() {
-  return (
-    <PipelineProvider>
-      <PipelineDetailPage />
-    </PipelineProvider>
-  )
+  return <PipelineDetailPage />
 }
 
 function PipelineRunWithProvider() {
-  return (
-    <PipelineProvider>
-      <PipelineRunPage />
-    </PipelineProvider>
-  )
+  return <PipelineRunPage />
 }
 
 function ChatWithProvider() {
