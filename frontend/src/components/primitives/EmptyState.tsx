@@ -1,3 +1,5 @@
+import { Box, Typography } from '@mui/material'
+
 type EmptyStateProps = {
   icon?: string
   message: string
@@ -5,10 +7,26 @@ type EmptyStateProps = {
 
 function EmptyState({ icon, message }: EmptyStateProps) {
   return (
-    <div className="empty-state">
-      {icon ? <div className="empty-state__icon">{icon}</div> : null}
-      <div className="empty-state__message">{message}</div>
-    </div>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        p: 4,
+        textAlign: 'center',
+        gap: 1,
+      }}
+    >
+      {icon ? (
+        <Typography variant="h3" component="div" sx={{ opacity: 0.5 }}>
+          {icon}
+        </Typography>
+      ) : null}
+      <Typography variant="body2" color="text.secondary">
+        {message}
+      </Typography>
+    </Box>
   )
 }
 

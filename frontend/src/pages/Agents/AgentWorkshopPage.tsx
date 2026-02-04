@@ -271,7 +271,11 @@ function AgentWorkshopPage() {
       contentRef.current = "";
 
       const onEvent = (event: SSEEvent) => {
-        if (event.event === "token" || event.event === "message" || event.event === "content") {
+        if (
+          event.event === "token" ||
+          event.event === "message" ||
+          event.event === "content"
+        ) {
           // Backend sends event:"token" with JSON-encoded string data
           let text = event.data;
           try {
@@ -313,7 +317,10 @@ function AgentWorkshopPage() {
       .then(() => {
         // Save agent context documents
         if (state.selectedDocumentIds.length > 0) {
-          return api.agents.setContext(state.tempAgentId, state.selectedDocumentIds);
+          return api.agents.setContext(
+            state.tempAgentId,
+            state.selectedDocumentIds,
+          );
         }
       })
       .then(() => {
@@ -336,14 +343,22 @@ function AgentWorkshopPage() {
     state.saving || state.sessionLoading || !state.sessionId || sseStreaming;
 
   return (
-    <Box sx={{display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)'}}>
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        height: "calc(100vh - 120px)",
+      }}
+    >
       <PageHeader title="Agent Workshop">
-        <Box sx={{display: 'flex', gap: 2, alignItems: 'center'}}>
+        <Box sx={{display: "flex", gap: 2, alignItems: "center"}}>
           <TextField
             size="small"
             placeholder="Agent name..."
             value={state.name}
-            onChange={(e) => dispatch({type: "SET_NAME", value: e.target.value})}
+            onChange={(e) =>
+              dispatch({type: "SET_NAME", value: e.target.value})
+            }
             disabled={state.saving}
             sx={{minWidth: 200}}
           />
@@ -358,9 +373,15 @@ function AgentWorkshopPage() {
         </Box>
       </PageHeader>
 
-      {state.error ? <Alert severity="error" sx={{mb: 2}}>{state.error}</Alert> : null}
+      {state.error ? (
+        <Alert severity="error" sx={{mb: 2}}>
+          {state.error}
+        </Alert>
+      ) : null}
 
-      <Box sx={{flex: 1, display: "flex", minHeight: 0}}>
+      <Box
+        sx={{flex: 1, display: "flex", minHeight: 0, flexDirection: "column"}}
+      >
         <SplitPane
           splitPercent={splitPercent}
           onMouseDown={handleMouseDown}
@@ -373,7 +394,9 @@ function AgentWorkshopPage() {
             />
           }
           right={
-            <Box sx={{display: "flex", flexDirection: "column", height: "100%"}}>
+            <Box
+              sx={{display: "flex", flexDirection: "column", height: "100%"}}
+            >
               <EditorToolbar>
                 <ToggleGroup
                   options={EDITOR_MODES}
@@ -462,7 +485,10 @@ function AgentWorkshopPage() {
                 />
                 <Box sx={{gridColumn: "1 / -1"}}>
                   <FormControl fullWidth>
-                    <InputLabel shrink sx={{position: "relative", transform: "none", mb: 1}}>
+                    <InputLabel
+                      shrink
+                      sx={{position: "relative", transform: "none", mb: 1}}
+                    >
                       Agent Context Documents
                     </InputLabel>
                     <Button

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Box, Typography } from '@mui/material'
 
 type KeyValueProps = {
   label: string
@@ -7,10 +8,19 @@ type KeyValueProps = {
 
 function KeyValue({ label, children }: KeyValueProps) {
   return (
-    <div className="kv">
-      <dt className="kv__label">{label}</dt>
-      <dd className="kv__value">{children}</dd>
-    </div>
+    <Box sx={{ mb: 1 }}>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        component="div"
+        sx={{ mb: 0.5 }}
+      >
+        {label}
+      </Typography>
+      <Typography variant="body2" component="div">
+        {children}
+      </Typography>
+    </Box>
   )
 }
 

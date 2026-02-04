@@ -1,3 +1,5 @@
+import { Alert, Button } from '@mui/material'
+
 type ErrorMessageProps = {
   message: string
   onRetry?: (() => void) | null
@@ -5,14 +7,19 @@ type ErrorMessageProps = {
 
 function ErrorMessage({ message, onRetry }: ErrorMessageProps) {
   return (
-    <div className="error-message">
-      <span>{message}</span>
-      {onRetry ? (
-        <button className="error-message__retry" onClick={onRetry}>
-          Retry
-        </button>
-      ) : null}
-    </div>
+    <Alert
+      severity="error"
+      sx={{ mb: 2 }}
+      action={
+        onRetry ? (
+          <Button color="inherit" size="small" onClick={onRetry}>
+            Retry
+          </Button>
+        ) : undefined
+      }
+    >
+      {message}
+    </Alert>
   )
 }
 
