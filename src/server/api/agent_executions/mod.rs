@@ -15,7 +15,6 @@ use crate::server::state::AppState;
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct AgentExecutionResponse {
     pub id: Uuid,
-    pub stage_execution_id: Uuid,
     pub agent_id: Uuid,
     pub workflow_step_id: Option<Uuid>,
     pub is_interactive: bool,
@@ -34,7 +33,6 @@ impl From<crate::db::AgentExecutionRow> for AgentExecutionResponse {
     fn from(r: crate::db::AgentExecutionRow) -> Self {
         Self {
             id: r.id,
-            stage_execution_id: r.stage_execution_id,
             agent_id: r.agent_id,
             workflow_step_id: r.workflow_step_id,
             is_interactive: r.is_interactive,

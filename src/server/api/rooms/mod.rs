@@ -16,7 +16,7 @@ use crate::server::state::AppState;
 /// Request body for creating a room.
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateRoomRequest {
-    pub pipeline_id: Uuid,
+    pub collection_id: Option<Uuid>,
     pub name: String,
     #[serde(default)]
     pub gatekeeper_enabled: bool,
@@ -82,7 +82,7 @@ pub async fn create_room(State(state): State<AppState>, auth: auth_utils::AuthUs
     let row = repo
         .create_room(
             auth.user_id.0,
-            request.pipeline_id,
+            request.collection_id,
             &request.name,
             request.gatekeeper_enabled,
             &request.gatekeeper_model_id,

@@ -51,7 +51,6 @@ impl<'a> ExecutionRecorder<'a> {
     /// Create an agent execution record for a DAG step.
     pub async fn record_agent_execution(
         &self,
-        stage_execution_id: Uuid,
         agent_id: Uuid,
         workflow_step_id: Option<Uuid>,
         is_interactive: bool,
@@ -63,7 +62,6 @@ impl<'a> ExecutionRecorder<'a> {
         let repo = self.agent_execution_repo.ok_or_else(|| anyhow::anyhow!("agent_execution_repo not configured"))?;
         let row = repo
             .create_agent_execution(
-                stage_execution_id,
                 agent_id,
                 workflow_step_id,
                 is_interactive,
@@ -105,7 +103,6 @@ impl<'a> ExecutionRecorder<'a> {
             .context("failed to insert token ledger entry")?;
         Ok(())
     }
-
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────

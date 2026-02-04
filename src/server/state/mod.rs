@@ -12,8 +12,8 @@ use uuid::Uuid;
 use crate::agents::ToolClusterIndex;
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::{
-    AgentExecutionRepo, ContextStoreRepo, DocumentRepo, OutputSchemaRepo, PipelineStageMemberRepo, PromptTemplateRepo, ResultRepo, RoomRepo, RouterRequestRepo, ServerRepo, TokenLedgerRepo,
-    ToolRouterRepo, UserRepo, WorkflowRepo,
+    AgentExecutionRepo, ContextStoreRepo, DocumentRepo, OutputSchemaRepo, PromptTemplateRepo, ResultRepo, RoomRepo, RouterRequestRepo, ServerRepo, TokenLedgerRepo, ToolRouterRepo, UserRepo,
+    WorkflowRepo,
 };
 use crate::llm::AnthropicClient;
 use crate::types::{AppConfig, UserId};
@@ -74,8 +74,6 @@ pub struct AppState {
     pub prompt_template_repo: Option<Arc<dyn PromptTemplateRepo>>,
     /// Workflow repository (None in legacy/test mode)
     pub workflow_repo: Option<Arc<dyn WorkflowRepo>>,
-    /// Pipeline stage member repository (None in legacy/test mode)
-    pub stage_member_repo: Option<Arc<dyn PipelineStageMemberRepo>>,
     pub agent_execution_repo: Option<Arc<dyn AgentExecutionRepo>>,
     pub token_ledger_repo: Option<Arc<dyn TokenLedgerRepo>>,
     pub result_repo: Option<Arc<dyn ResultRepo>>,
@@ -135,7 +133,6 @@ impl AppState {
         let output_schema_repo: Arc<dyn OutputSchemaRepo> = Arc::new(PgRepo::new(db.clone()));
         let prompt_template_repo: Arc<dyn PromptTemplateRepo> = Arc::new(PgRepo::new(db.clone()));
         let workflow_repo: Arc<dyn WorkflowRepo> = Arc::new(PgRepo::new(db.clone()));
-        let stage_member_repo: Arc<dyn PipelineStageMemberRepo> = Arc::new(PgRepo::new(db.clone()));
         let agent_execution_repo: Arc<dyn AgentExecutionRepo> = Arc::new(PgRepo::new(db.clone()));
         let token_ledger_repo: Arc<dyn TokenLedgerRepo> = Arc::new(PgRepo::new(db.clone()));
         let result_repo: Arc<dyn ResultRepo> = Arc::new(PgRepo::new(db.clone()));
@@ -161,7 +158,6 @@ impl AppState {
         state.output_schema_repo = Some(output_schema_repo);
         state.prompt_template_repo = Some(prompt_template_repo);
         state.workflow_repo = Some(workflow_repo);
-        state.stage_member_repo = Some(stage_member_repo);
         state.agent_execution_repo = Some(agent_execution_repo);
         state.token_ledger_repo = Some(token_ledger_repo);
         state.result_repo = Some(result_repo);
@@ -239,7 +235,6 @@ impl AppState {
                 output_schema_repo: None,
                 prompt_template_repo: None,
                 workflow_repo: None,
-                stage_member_repo: None,
                 agent_execution_repo: None,
                 token_ledger_repo: None,
                 result_repo: None,
