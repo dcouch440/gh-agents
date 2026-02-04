@@ -8,6 +8,7 @@
 pub mod dag;
 pub mod engine;
 pub mod error;
+pub mod mode_resolver;
 pub mod prompt_registry;
 pub mod recorder;
 pub mod strategies;
@@ -28,6 +29,7 @@ use strategies::router::RouterConfig;
 
 pub use engine::{ExecutionEngine, ExecutionResult};
 pub use error::HubError;
+pub use mode_resolver::{ModeResolver, ResolvedModeConfig, RoutingError};
 pub use prompt_registry::PromptRegistry;
 pub use recorder::ExecutionRecorder;
 pub use strategies::{
@@ -36,6 +38,39 @@ pub use strategies::{
 };
 pub use strategy::ExecutionStrategy;
 pub use streaming::{NullSink, StreamSink};
+
+use crate::db::AgentRow;
+use crate::db::traits::ServerRepo;
+use crate::llm::Tool;
+
+/// Construct agent defaults when mode_resolver is unavailable.
+/// Used for backward compatibility.
+pub async fn construct_agent_defaults(
+    agent: &AgentRow,
+    repo: &Arc<dyn ServerRepo>,
+) -> Result<ResolvedModeConfig, anyhow::Error> {
+    let agent_tool_rows = repo
+        .get_agent_tools(agent.id)
+        .await
+        .unwrap_or_default();
+
+    let tools: Vec<Tool> = agent_tool_rows
+        .iter()
+        .filter_map(|row| crate::tools::registry::get_tool_definition(&row.name))
+        .collect();
+
+    let tool_names = tools.iter().map(|t| t.name.clone()).collect();
+
+    Ok(ResolvedModeConfig {
+        system_prompt: agent.system_prompt.clone(),
+        tools,
+        tool_names,
+        temperature: agent.model_temperature,
+        max_tokens: agent.model_max_tokens,
+        selected_mode_id: None,
+        selected_mode_key: None,
+    })
+}
 
 /// Run a chat turn for the given agent. Loads config from DB, builds strategy, executes.
 ///
@@ -59,42 +94,90 @@ pub async fn run_chat(
         .map_err(HubError::Internal)?
         .ok_or_else(|| HubError::Internal(anyhow::anyhow!("Agent {agent_id} not found")))?;
 
-    // Load agent tools
-    let tools = state
-        .repo
-        .get_agent_tools(agent_id)
-        .await
-        .map_err(HubError::Internal)?;
+    // Build ChatConfig based on whether agent uses router_modes or legacy agent_modes
+    let chat_config = if agent.router_id.is_some() && state.mode_resolver.is_some() {
+        // NEW: Use router_modes system via ModeResolver
+        debug!(agent_id = %agent_id, router_id = ?agent.router_id, "Using router_modes system");
 
-    let tool_names: Vec<String> = tools.into_iter().map(|t| t.name).collect();
+        // Load conversation history for context
+        let history = if let Some(sid) = session_id {
+            state
+                .repo
+                .get_session_history(sid, 10)
+                .await
+                .map_err(HubError::Internal)?
+        } else {
+            vec![]
+        };
+        let history_text = format_history(&history);
 
-    // Load agent modes and classify if applicable
-    let modes = state
-        .repo
-        .get_agent_modes(agent_id)
-        .await
-        .map_err(HubError::Internal)?;
+        // Resolve mode
+        let mode = state
+            .mode_resolver
+            .as_ref()
+            .unwrap()
+            .resolve(&agent, content, Some(&history_text))
+            .await
+            .map_err(|e| HubError::Internal(anyhow::anyhow!("Mode resolution failed: {}", e)))?;
 
-    let active_mode = if modes.is_empty() {
-        None
+        debug!(
+            selected_mode_id = ?mode.selected_mode_id,
+            selected_mode_key = ?mode.selected_mode_key,
+            "Mode resolved"
+        );
+
+        ChatConfig {
+            system_prompt: mode.system_prompt,
+            tool_names: mode.tool_names,
+            model_id: agent.model_id,
+            temperature: mode.temperature,
+            max_history: 50,
+            max_rounds: 10,
+            context_budget: 480_000,
+        }
     } else {
-        classify_mode(&modes, content, state, &provider, user_id).await?
-    };
+        // OLD: Use legacy agent_modes system
+        debug!(agent_id = %agent_id, "Using legacy agent_modes system");
 
-    // Build ChatConfig from agent row
-    let mut chat_config = ChatConfig {
-        system_prompt: agent.system_prompt,
-        tool_names: tool_names.clone(),
-        model_id: agent.model_id,
-        temperature: agent.model_temperature,
-        max_history: 50,
-        ..Default::default()
-    };
+        // Load agent tools
+        let tools = state
+            .repo
+            .get_agent_tools(agent_id)
+            .await
+            .map_err(HubError::Internal)?;
 
-    if let Some(mode) = &active_mode {
-        debug!(mode = %mode.name, agent_id = %agent_id, "Applying mode overlay");
-        apply_mode_overlay(&mut chat_config, mode);
-    }
+        let tool_names: Vec<String> = tools.into_iter().map(|t| t.name).collect();
+
+        // Load agent modes and classify if applicable
+        let modes = state
+            .repo
+            .get_agent_modes(agent_id)
+            .await
+            .map_err(HubError::Internal)?;
+
+        let active_mode = if modes.is_empty() {
+            None
+        } else {
+            classify_mode(&modes, content, state, &provider, user_id).await?
+        };
+
+        // Build ChatConfig from agent row
+        let mut chat_config = ChatConfig {
+            system_prompt: agent.system_prompt.clone(),
+            tool_names: tool_names.clone(),
+            model_id: agent.model_id.clone(),
+            temperature: agent.model_temperature,
+            max_history: 50,
+            ..Default::default()
+        };
+
+        if let Some(mode) = &active_mode {
+            debug!(mode = %mode.name, agent_id = %agent_id, "Applying mode overlay");
+            apply_mode_overlay(&mut chat_config, mode);
+        }
+
+        chat_config
+    };
 
     // Create strategy, engine, sink, recorder
     let strategy = ChatStrategy::new(chat_config, state.clone(), user_id, session_id, message_id);
@@ -196,6 +279,22 @@ pub(crate) fn apply_mode_overlay(config: &mut ChatConfig, mode: &AgentModeRow) {
     if let Some(tools) = &mode.tool_overrides {
         config.tool_names = tools.clone();
     }
+}
+
+/// Format conversation history into text for router context.
+fn format_history(history: &[crate::db::ChatMessageRow]) -> String {
+    if history.is_empty() {
+        return String::new();
+    }
+
+    history
+        .iter()
+        .map(|msg| {
+            let role = if msg.role == "user" { "User" } else { "Assistant" };
+            format!("{}: {}", role, msg.content)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Schedule removal of a response stream after a delay (for late-connecting SSE clients).
