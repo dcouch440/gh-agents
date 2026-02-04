@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::execution::{ExecutionContext, GitOps};
+    use std::process::Command;
     use tempfile::TempDir;
 
     fn init_git_repo(dir: &TempDir) {

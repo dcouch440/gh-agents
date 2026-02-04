@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::execution::ExecutionContext;
     use tempfile::TempDir;
 
     #[test]
