@@ -89,7 +89,7 @@ where
 
         for workflow_id in sorted_workflow_ids {
             // Collect outputs from completed workflows for variable resolution
-            let prior_outputs = collect_workflow_outputs(&completed_workflows);
+            let prior_outputs = collect_workflow_outputs(&completed_workflows, &*self.workflow_repo).await?;
 
             // Execute workflow and capture outputs
             let workflow_exec = self
@@ -192,6 +192,7 @@ where
                 // Store execution variables for cross-workflow variable resolution
                 store_workflow_variables(
                     &*self.collection_repo,
+                    &*self.workflow_repo,
                     collection_run_id,
                     workflow_exec.id,
                     workflow_id,
@@ -279,22 +280,30 @@ fn topological_sort_workflows(
 /// Collect outputs from completed workflows for variable resolution.
 ///
 /// Returns a HashMap of variable_name → JsonValue for all completed workflow outputs.
-fn collect_workflow_outputs(completed_workflows: &HashMap<Uuid, WorkflowExecutionRow>) -> HashMap<String, JsonValue> {
+/// Uses workflow names (not UUIDs) for user-friendly variable references.
+/// Stores as nested objects: { "$workflow_analysis": { "result": ... } }
+async fn collect_workflow_outputs(
+    completed_workflows: &HashMap<Uuid, WorkflowExecutionRow>,
+    workflow_repo: &dyn WorkflowRepo,
+) -> Result<HashMap<String, JsonValue>> {
     let mut outputs = HashMap::new();
 
     for (workflow_id, workflow_exec) in completed_workflows {
+        // Load workflow to get its name
+        let workflow = workflow_repo.get_workflow(*workflow_id).await?;
+        let workflow_name = workflow
+            .map(|w| w.name.clone())
+            .unwrap_or_else(|| workflow_id.to_string());
+
         if let Some(workflow_outputs) = &workflow_exec.outputs {
-            // Store each output with a workflow-scoped key: $workflow_{id}.{key}
-            if let Some(obj) = workflow_outputs.as_object() {
-                for (key, value) in obj {
-                    let scoped_key = format!("$workflow_{}.{}", workflow_id, key);
-                    outputs.insert(scoped_key, value.clone());
-                }
-            }
+            // Store as nested object: $workflow_{name} → { outputs }
+            // This allows resolve_path to navigate: {$workflow_analysis.result}
+            let workflow_key = format!("$workflow_{}", workflow_name);
+            outputs.insert(workflow_key, workflow_outputs.clone());
         }
     }
 
-    outputs
+    Ok(outputs)
 }
 
 /// Aggregate step outputs into workflow-level outputs.
@@ -319,8 +328,10 @@ fn aggregate_step_outputs(step_outputs: &HashMap<String, crate::server::dag_exec
 /// Store workflow execution variables for cross-workflow variable resolution.
 ///
 /// Creates execution_variables rows for each output variable from the workflow.
+/// Uses workflow names (not UUIDs) for user-friendly variable paths.
 async fn store_workflow_variables<R>(
     collection_repo: &R,
+    workflow_repo: &dyn WorkflowRepo,
     collection_run_id: Uuid,
     workflow_execution_id: Uuid,
     workflow_id: Uuid,
@@ -329,9 +340,15 @@ async fn store_workflow_variables<R>(
 where
     R: WorkflowCollectionRepo + Send + Sync,
 {
+    // Load workflow to get its name
+    let workflow = workflow_repo.get_workflow(workflow_id).await?;
+    let workflow_name = workflow
+        .map(|w| w.name.clone())
+        .unwrap_or_else(|| workflow_id.to_string());
+
     if let Some(obj) = workflow_outputs.as_object() {
         for (key, value) in obj {
-            let variable_path = format!("$workflow_{}.{}", workflow_id, key);
+            let variable_path = format!("$workflow_{}.{}", workflow_name, key);
 
             collection_repo
                 .create_execution_variable(
@@ -469,6 +486,86 @@ mod tests {
         // B and C can be in any order
         assert!(sorted.contains(&b));
         assert!(sorted.contains(&c));
+    }
+
+    #[tokio::test]
+    async fn test_variable_resolution() {
+        use crate::db::{WorkflowRow, WorkflowExecutionRow};
+        use chrono::Utc;
+
+        // Mock workflow repo
+        struct MockWorkflowRepo;
+
+        #[async_trait::async_trait]
+        impl crate::db::traits::WorkflowRepo for MockWorkflowRepo {
+            async fn get_workflow(&self, id: Uuid) -> Result<Option<WorkflowRow>> {
+                Ok(Some(WorkflowRow {
+                    id,
+                    user_id: Uuid::new_v4(),
+                    name: "test_workflow".to_string(),
+                    description: String::new(),
+                    execution_mode: "parallel".to_string(),
+                    created_at: Utc::now(),
+                    version: 1,
+                }))
+            }
+
+            // Stub other methods (not used in test)
+            async fn create_workflow(&self, _: Uuid, _: String, _: String) -> Result<WorkflowRow> { unimplemented!() }
+            async fn list_workflows(&self, _: Uuid) -> Result<Vec<WorkflowRow>> { unimplemented!() }
+            async fn update_workflow(&self, _: Uuid, _: Option<String>, _: Option<String>) -> Result<WorkflowRow> { unimplemented!() }
+            async fn delete_workflow(&self, _: Uuid) -> Result<()> { unimplemented!() }
+            async fn create_step(&self, _: crate::db::WorkflowStepRow) -> Result<crate::db::WorkflowStepRow> { unimplemented!() }
+            async fn get_step(&self, _: Uuid) -> Result<Option<crate::db::WorkflowStepRow>> { unimplemented!() }
+            async fn list_steps(&self, _: Uuid) -> Result<Vec<crate::db::WorkflowStepRow>> { unimplemented!() }
+            async fn update_step(&self, _: crate::db::WorkflowStepRow) -> Result<crate::db::WorkflowStepRow> { unimplemented!() }
+            async fn delete_step(&self, _: Uuid) -> Result<()> { unimplemented!() }
+            async fn set_edges(&self, _: Uuid, _: Vec<crate::db::WorkflowStepEdgeRow>) -> Result<()> { unimplemented!() }
+            async fn list_edges(&self, _: Uuid) -> Result<Vec<crate::db::WorkflowStepEdgeRow>> { unimplemented!() }
+            async fn add_edge(&self, _: Uuid, _: Uuid) -> Result<()> { unimplemented!() }
+            async fn remove_edge(&self, _: Uuid, _: Uuid) -> Result<()> { unimplemented!() }
+            async fn list_step_documents(&self, _: Uuid) -> Result<Vec<crate::db::StepDocumentRow>> { unimplemented!() }
+            async fn add_step_document(&self, _: Uuid, _: Uuid) -> Result<()> { unimplemented!() }
+            async fn remove_step_document(&self, _: Uuid, _: Uuid) -> Result<()> { unimplemented!() }
+        }
+
+        // Create test data
+        let workflow_id = Uuid::new_v4();
+        let mut completed_workflows = HashMap::new();
+
+        let workflow_exec = WorkflowExecutionRow {
+            id: Uuid::new_v4(),
+            collection_run_id: Uuid::new_v4(),
+            workflow_id,
+            user_id: Uuid::new_v4(),
+            status: "completed".to_string(),
+            started_at: Some(Utc::now()),
+            completed_at: Some(Utc::now()),
+            outputs: Some(serde_json::json!({
+                "analysis": {"findings": ["issue1", "issue2"]},
+                "summary": "Test complete"
+            })),
+            error: None,
+        };
+
+        completed_workflows.insert(workflow_id, workflow_exec);
+
+        // Test variable collection
+        let repo = MockWorkflowRepo;
+        let outputs = collect_workflow_outputs(&completed_workflows, &repo).await.unwrap();
+
+        // Verify structure: $workflow_test_workflow -> { analysis: ..., summary: ... }
+        assert!(outputs.contains_key("$workflow_test_workflow"));
+
+        let workflow_outputs = outputs.get("$workflow_test_workflow").unwrap();
+        assert!(workflow_outputs.get("analysis").is_some());
+        assert!(workflow_outputs.get("summary").is_some());
+
+        // Verify it would work with resolve_variables
+        let template = "Found: {$workflow_test_workflow.analysis.findings.0}";
+        let resolved = crate::server::dag_executor::resolve_variables(template, &HashMap::new(), &outputs);
+        // Note: JSON strings are resolved with quotes (this is correct behavior)
+        assert_eq!(resolved, "Found: issue1");
     }
 
     #[test]

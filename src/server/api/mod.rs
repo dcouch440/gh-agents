@@ -6,6 +6,7 @@ pub mod agents;
 pub mod auth;
 pub mod cancellation;
 pub mod chat;
+pub mod collections;
 pub mod config;
 pub mod costs;
 pub mod documents;
@@ -83,6 +84,12 @@ pub use workflows::{
     add_step_document, add_workflow_edge, create_workflow, create_workflow_step, delete_workflow, delete_workflow_step, get_workflow, get_workflow_step, list_step_documents, list_workflow_edges,
     list_workflow_steps, list_workflows, remove_step_document, remove_workflow_edge, update_workflow, update_workflow_step, CreateStepRequest, CreateWorkflowRequest, EdgeRequest, EdgeResponse,
     StepDocumentRequest, StepDocumentResponse, UpdateStepRequest, UpdateWorkflowRequest, WorkflowResponse, WorkflowStepResponse,
+};
+
+// Re-export collection handlers and types
+pub use collections::{
+    create_collection, delete_collection, get_collection, get_collection_run_status, get_collection_variables, list_collections, run_collection, update_collection, CollectionResponse,
+    CollectionRunResponse, CreateCollectionRequest, ExecutionVariableResponse, UpdateCollectionRequest,
 };
 
 // Re-export tool router handlers and types

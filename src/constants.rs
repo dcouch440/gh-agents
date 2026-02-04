@@ -257,6 +257,13 @@ pub mod routes {
     pub const WORKFLOW_EDGES: &str = "/workflows/:id/edges";
     pub const WORKFLOW_STEP_DOCUMENTS: &str = "/workflows/:wid/steps/:sid/documents";
 
+    // Workflow Collections
+    pub const COLLECTIONS: &str = "/collections";
+    pub const COLLECTION: &str = "/collections/:id";
+    pub const COLLECTION_RUN: &str = "/collections/:id/run";
+    pub const COLLECTION_RUN_STATUS: &str = "/collections/runs/:run_id/status";
+    pub const COLLECTION_RUN_VARIABLES: &str = "/collections/runs/:run_id/variables";
+
     // Pipeline stage members
     pub const PIPELINE_STAGE_MEMBERS: &str = "/pipelines/:pid/stages/:num/members";
     pub const PIPELINE_STAGE_MEMBER: &str = "/pipelines/:pid/stages/:num/members/:mid";
