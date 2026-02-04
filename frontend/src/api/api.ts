@@ -25,10 +25,6 @@ import type {
   Config,
   UpdateConfigRequest,
   UsageSummary,
-  Pipeline,
-  PipelineRun,
-  StageMember,
-  CreateStageMemberRequest,
   AgentExecution,
   ExecutionMessage,
   OutputSchema,
@@ -64,9 +60,6 @@ type DocumentsResponse = ListResponse<DocumentListItem>
 type SessionsResponse = ListResponse<Session>
 type ChatResponse = { message_id: string; response: string }
 type SessionHistoryResponse = ChatMessage[]
-type PipelinesResponse = ListResponse<Pipeline>
-type PipelineRunsResponse = ListResponse<PipelineRun>
-type PipelineRunTreeResponse = unknown
 type ExecutionMessagesResponse = { messages: ExecutionMessage[] }
 type OutputSchemasResponse = ListResponse<OutputSchema>
 type PromptTemplatesResponse = ListResponse<PromptTemplate>
@@ -196,57 +189,6 @@ const config = {
 
 const stats = {
   get: (config?: RequestConfig) => baseApi.get<UsageSummary>(API.STATS, config),
-}
-
-const pipelines = {
-  list: (config?: RequestConfig) => baseApi.get<PipelinesResponse>(API.PIPELINES, config),
-
-  get: (id: string, config?: RequestConfig) => baseApi.get<Pipeline>(API.PIPELINE(id), config),
-
-  create: (body: Partial<Pipeline>, config?: RequestConfig) =>
-    baseApi.post<Pipeline>(API.PIPELINES, body, config),
-
-  update: (id: string, body: Partial<Pipeline>, config?: RequestConfig) =>
-    baseApi.patch<Pipeline>(API.PIPELINE(id), body, config),
-
-  delete: (id: string, config?: RequestConfig) => baseApi.del<void>(API.PIPELINE(id), config),
-
-  renderStage: (id: string, stage: number, config?: RequestConfig) =>
-    baseApi.get<unknown>(API.PIPELINE_STAGE_RENDER(id, stage), config),
-
-  getSideTasks: (id: string, stage: number, config?: RequestConfig) =>
-    baseApi.get<Task[]>(API.PIPELINE_SIDE_TASKS(id, stage), config),
-
-  getSideTask: (id: string, stage: number, taskId: string, config?: RequestConfig) =>
-    baseApi.get<Task>(API.PIPELINE_SIDE_TASK(id, stage, taskId), config),
-}
-
-const pipelineRuns = {
-  list: (config?: RequestConfig) => baseApi.get<PipelineRunsResponse>(API.PIPELINE_RUNS, config),
-
-  get: (id: string, config?: RequestConfig) =>
-    baseApi.get<PipelineRun>(API.PIPELINE_RUN(id), config),
-
-  approve: (id: string, config?: RequestConfig) =>
-    baseApi.post<void>(API.PIPELINE_RUN_APPROVE(id), undefined, config),
-
-  getTree: (runId: string, config?: RequestConfig) =>
-    baseApi.get<PipelineRunTreeResponse>(API.PIPELINE_RUN_TREE(runId), config),
-}
-
-const stageMembers = {
-  list: (pipelineId: string, stageNum: number, config?: RequestConfig) =>
-    baseApi.get<StageMember[]>(API.STAGE_MEMBERS(pipelineId, stageNum), config),
-
-  create: (
-    pipelineId: string,
-    stageNum: number,
-    body: CreateStageMemberRequest,
-    config?: RequestConfig
-  ) => baseApi.post<StageMember>(API.STAGE_MEMBERS(pipelineId, stageNum), body, config),
-
-  delete: (pipelineId: string, stageNum: number, memberId: string, config?: RequestConfig) =>
-    baseApi.del<void>(API.STAGE_MEMBER(pipelineId, stageNum, memberId), config),
 }
 
 const agentExecutions = {
@@ -381,9 +323,6 @@ export const api = {
   chat,
   config,
   stats,
-  pipelines,
-  pipelineRuns,
-  stageMembers,
   agentExecutions,
   outputSchemas,
   promptTemplates,
