@@ -2,13 +2,11 @@ import {
   AgentProvider,
   TaskProvider,
   FeedProvider,
-  ChatProvider,
 } from "./contexts";
 import {DashboardPage} from "./pages/Dashboard/DashboardPage";
 import {AgentsPage} from "./pages/Agents/AgentsPage";
 import {AgentDetailPage} from "./pages/Agents/AgentDetailPage";
 import {AgentWorkshopPage} from "./pages/Agents/AgentWorkshopPage";
-import {ChatSessionPage} from "./pages/Chat/ChatSessionPage";
 import {PipelinesPage} from "./pages/Pipelines/PipelinesPage";
 import {PipelineDetailPage} from "./pages/Pipelines/PipelineDetailPage";
 import {PipelineRunPage} from "./pages/Pipelines/PipelineRunPage";

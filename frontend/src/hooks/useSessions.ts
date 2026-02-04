@@ -50,8 +50,8 @@ const useChatHistory = (sessionId: string | null) => {
       setLoading(true)
       setError(null)
       try {
-        const data = await api.sessions.getHistory(sessionId)
-        if (!cancelled) setMessages(data.messages)
+        const messages = await api.sessions.getHistory(sessionId)
+        if (!cancelled) setMessages(messages)
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load chat history')
       } finally {

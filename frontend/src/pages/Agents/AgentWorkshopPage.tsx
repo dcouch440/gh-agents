@@ -1,5 +1,5 @@
 import {useReducer, useEffect, useRef, useCallback, useState} from "react";
-import {useNavigate} from "react-router-dom";
+import {useNavigate, useParams} from "react-router-dom";
 import {
   Box,
   TextField,
@@ -21,7 +21,6 @@ import {DocumentSelector} from "@/components/DocumentSelector";
 import {useSplitPane} from "@/hooks/useSplitPane";
 import {useSendSessionMessage} from "@/hooks/useChatMutations";
 import {api} from "@/api";
-import {ROUTES} from "@/constants";
 import type {ChatMessageData} from "@/components/chat/ChatPanel";
 import type {SSEEvent} from "@/api";
 
@@ -63,7 +62,21 @@ type WorkshopAction =
   | {type: "SET_TEMP_AGENT"; agentId: string}
   | {type: "SET_SAVING"; value: boolean}
   | {type: "SET_DIRTY"; value: boolean}
-  | {type: "SET_ERROR"; value: string | null};
+  | {type: "SET_ERROR"; value: string | null}
+  | {
+      type: "HYDRATE_SESSION";
+      payload: {
+        name: string;
+        systemPrompt: string;
+        modelId: string;
+        maxTokens: number;
+        temperature: number;
+        selectedDocumentIds: string[];
+        messages: ChatMessageData[];
+        sessionId: string;
+        tempAgentId: string;
+      };
+    };
 
 const initialState: WorkshopState = {
   name: "",
@@ -126,6 +139,14 @@ const reducer = (
       return {...state, dirty: action.value};
     case "SET_ERROR":
       return {...state, error: action.value};
+    case "HYDRATE_SESSION":
+      return {
+        ...state,
+        ...action.payload,
+        sessionLoading: false,
+        dirty: false,
+        error: null,
+      };
   }
 };
 
@@ -146,10 +167,20 @@ const getFullModelId = (shorthand: string): string => {
   return MODEL_ID_MAP[shorthand] ?? shorthand;
 };
 
+const getShorthandModelId = (fullId: string): string => {
+  const reverseMap: Record<string, string> = {
+    "claude-opus-4-5-20251101": "opus",
+    "claude-sonnet-4-20250514": "sonnet",
+    "claude-3-5-haiku-20241022": "haiku",
+  };
+  return reverseMap[fullId] ?? "sonnet";
+};
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 function AgentWorkshopPage() {
   const navigate = useNavigate();
+  const {sessionId: urlSessionId} = useParams<{sessionId?: string}>();
   const [state, dispatch] = useReducer(reducer, initialState);
   const {splitPercent, handleMouseDown} = useSplitPane({
     initial: 40,
@@ -160,39 +191,94 @@ function AgentWorkshopPage() {
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
   const contentRef = useRef("");
   const savedRef = useRef(false);
+  const justNavigatedRef = useRef(false);
 
-  // Create a temporary agent and session on mount
+  // Load existing session or create new one on mount
   useEffect(() => {
     let cancelled = false;
     let tempAgentIdForCleanup: string | null = null;
 
-    // First create a temporary agent
-    api.agents
-      .create({
-        name: "[Workshop Draft]",
-        system_prompt: "",
-        model_id: getFullModelId(initialState.modelId),
-        model_max_tokens: 4096,
-        model_temperature: 0.7,
-      })
-      .then((agent) => {
+    const loadExistingSession = async () => {
+      try {
+        // Fetch session, agent, history, and context in parallel
+        const [session, history] = await Promise.all([
+          api.sessions.get(urlSessionId!),
+          api.sessions.getHistory(urlSessionId!),
+        ]);
+
+        if (cancelled) return;
+
+        if (!session.agent_id) {
+          throw new Error("Session has no linked agent");
+        }
+
+        // Fetch agent and context
+        const [agent, contextDocs] = await Promise.all([
+          api.agents.get(session.agent_id),
+          api.agents.getContext(session.agent_id),
+        ]);
+
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        if (cancelled) return;
+
+        // Convert chat history to ChatMessageData format
+        const messages: ChatMessageData[] = history.map((msg) => ({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+        }));
+
+        // Hydrate state
+        dispatch({
+          type: "HYDRATE_SESSION",
+          payload: {
+            name: agent.name.replace("[Workshop Draft] ", ""),
+            systemPrompt: agent.system_prompt,
+            modelId: getShorthandModelId(agent.model_id),
+            maxTokens: agent.model_max_tokens,
+            temperature: agent.model_temperature,
+            selectedDocumentIds: contextDocs.documents.map((d) => d.id),
+            messages,
+            sessionId: session.id,
+            tempAgentId: agent.id,
+          },
+        });
+      } catch (err) {
+        if (!cancelled) {
+          dispatch({type: "SET_SESSION_LOADING", value: false});
+          dispatch({
+            type: "SET_ERROR",
+            value: err instanceof Error ? err.message : "Failed to load session",
+          });
+        }
+      }
+    };
+
+    const createNewSession = async () => {
+      try {
+        const agent = await api.agents.create({
+          name: "[Workshop Draft]",
+          system_prompt: "",
+          model_id: getFullModelId(initialState.modelId),
+          model_max_tokens: 4096,
+          model_temperature: 0.7,
+        });
+
         if (cancelled) return;
         tempAgentIdForCleanup = agent.id;
         dispatch({type: "SET_TEMP_AGENT", agentId: agent.id});
 
-        // Then create a session linked to this agent
-        return api.sessions.create({
+        const session = await api.sessions.create({
           mode_id: "workshop",
           agent_id: agent.id,
           title: "Agent Workshop",
         });
-      })
-      .then((session) => {
-        if (!cancelled && session) {
+
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        if (!cancelled) {
           dispatch({type: "SET_SESSION", sessionId: session.id});
         }
-      })
-      .catch((err: unknown) => {
+      } catch (err) {
         if (!cancelled) {
           dispatch({type: "SET_SESSION_LOADING", value: false});
           dispatch({
@@ -203,7 +289,20 @@ function AgentWorkshopPage() {
                 : "Failed to initialize workshop",
           });
         }
-      });
+      }
+    };
+
+    // Skip loading if we just navigated after save (data is already in state)
+    if (justNavigatedRef.current) {
+      justNavigatedRef.current = false;
+      return;
+    }
+
+    if (urlSessionId) {
+      void loadExistingSession();
+    } else {
+      void createNewSession();
+    }
 
     return () => {
       cancelled = true;
@@ -212,7 +311,7 @@ function AgentWorkshopPage() {
         void api.agents.delete(tempAgentIdForCleanup);
       }
     };
-  }, []);
+  }, [urlSessionId]);
 
   // Update temporary agent when config changes
   useEffect(() => {
@@ -326,7 +425,12 @@ function AgentWorkshopPage() {
       .then(() => {
         savedRef.current = true;
         dispatch({type: "SET_DIRTY", value: false});
-        void navigate(ROUTES.AGENTS);
+        // If we don't have a sessionId in URL yet, update URL without reload
+        if (!urlSessionId && state.sessionId) {
+          justNavigatedRef.current = true;
+          void navigate(`/agents/workshop/${state.sessionId}`, {replace: true});
+        }
+        // Otherwise, stay on the same URL (already persistent)
       })
       .catch((err: unknown) => {
         dispatch({
@@ -337,7 +441,14 @@ function AgentWorkshopPage() {
       .finally(() => {
         dispatch({type: "SET_SAVING", value: false});
       });
-  }, [state.name, state.tempAgentId, state.selectedDocumentIds, navigate]);
+  }, [
+    state.name,
+    state.tempAgentId,
+    state.selectedDocumentIds,
+    state.sessionId,
+    urlSessionId,
+    navigate,
+  ]);
 
   const chatDisabled =
     state.saving || state.sessionLoading || !state.sessionId || sseStreaming;
@@ -369,7 +480,13 @@ function AgentWorkshopPage() {
             disabled={state.saving || !state.name.trim()}
             size="small"
           >
-            {state.saving ? "Saving..." : "Save"}
+            {state.saving
+              ? urlSessionId
+                ? "Updating..."
+                : "Saving..."
+              : urlSessionId
+                ? "Update"
+                : "Save"}
           </Button>
         </Box>
       </PageHeader>
