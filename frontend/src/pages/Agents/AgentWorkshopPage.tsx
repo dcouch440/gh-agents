@@ -637,7 +637,7 @@ function AgentWorkshopPage() {
                     <MenuItem value="">
                       <em>None</em>
                     </MenuItem>
-                    {schemas.map((schema) => (
+                    {schemas?.map((schema) => (
                       <MenuItem key={schema.id} value={schema.id}>
                         {schema.name}
                       </MenuItem>
