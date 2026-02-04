@@ -1,4 +1,14 @@
 import type { ReactNode } from 'react'
+import {
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  TableSortLabel,
+  TableContainer,
+  Paper,
+} from '@mui/material'
 
 type SortDirection = 'asc' | 'desc'
 
@@ -27,35 +37,42 @@ function DataTable<T>({
   onSort,
 }: DataTableProps<T>) {
   return (
-    <table className="table">
-      <thead>
-        <tr>
-          {columns.map((col) => {
-            const isSortable = col.sortable === true && onSort !== undefined && onSort !== null
-            const isActive = sortColumn === col.key
-            return (
-              <th
-                key={col.key}
-                className={isSortable ? 'th--sortable' : undefined}
-                onClick={isSortable ? () => onSort(col.key) : undefined}
-              >
-                {col.header}
-                {isActive && sortDirection ? (sortDirection === 'asc' ? ' ↑' : ' ↓') : null}
-              </th>
-            )
-          })}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <tr key={rowKey(row)}>
-            {columns.map((col) => (
-              <td key={col.key}>{col.render(row)}</td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <TableContainer component={Paper} elevation={0}>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            {columns.map((col) => {
+              const isSortable = col.sortable === true && onSort !== undefined && onSort !== null
+              const isActive = sortColumn === col.key
+              return (
+                <TableCell key={col.key}>
+                  {isSortable ? (
+                    <TableSortLabel
+                      active={isActive}
+                      direction={isActive && sortDirection ? sortDirection : 'asc'}
+                      onClick={() => onSort(col.key)}
+                    >
+                      {col.header}
+                    </TableSortLabel>
+                  ) : (
+                    col.header
+                  )}
+                </TableCell>
+              )
+            })}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.map((row) => (
+            <TableRow key={rowKey(row)} hover>
+              {columns.map((col) => (
+                <TableCell key={col.key}>{col.render(row)}</TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
   )
 }
 

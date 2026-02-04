@@ -1,5 +1,6 @@
 import { useParams } from 'react-router-dom'
 import { useState } from 'react'
+import { Box, Typography, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material'
 import { useAgent } from '@/hooks/useAgents'
 import { useAgentDocuments } from '@/hooks/useAgentDocuments'
 import { useDocuments } from '@/hooks/useDocuments'
@@ -10,6 +11,7 @@ import {
   ErrorMessage,
   EmptyState,
   DataTable,
+  Button,
   type Column,
 } from '@/components/primitives'
 import type { DocumentListItem } from '@/types/document'
@@ -34,9 +36,9 @@ function AgentDetailPage() {
 
   if (agentLoading || docsLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <LoadingSpinner size="large" />
-      </div>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '256px' }}>
+        <LoadingSpinner size="lg" />
+      </Box>
     )
   }
 
@@ -83,67 +85,79 @@ function AgentDetailPage() {
       key: 'actions',
       header: 'Actions',
       render: (doc) => (
-        <button
+        <Button
+          variant="danger"
+          size="small"
           onClick={() => {
             void handleRemoveDocument(doc.id)
           }}
           disabled={saving}
-          className="btn btn--small btn--danger"
-          type="button"
         >
           Remove
-        </button>
+        </Button>
       ),
     },
   ]
 
   return (
-    <div>
+    <Box>
       <PageHeader title={agent.name}>
-        <div className="text-sm text-gray-600">{agent.model_id}</div>
+        <Typography variant="body2" color="text.secondary">{agent.model_id}</Typography>
       </PageHeader>
 
-      <div className="space-y-6">
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         <Card title="Agent Details">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">System Prompt</label>
-              <div className="mt-1 p-3 bg-gray-50 rounded border border-gray-200">
-                <pre className="text-sm whitespace-pre-wrap">{agent.system_prompt}</pre>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Model Provider</label>
-                <div className="mt-1 text-sm">{agent.model_provider}</div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Status</label>
-                <div className="mt-1 text-sm">{agent.status}</div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Max Tokens</label>
-                <div className="mt-1 text-sm">{agent.model_max_tokens}</div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Temperature</label>
-                <div className="mt-1 text-sm">{agent.model_temperature}</div>
-              </div>
-            </div>
-          </div>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box>
+              <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 0.5 }}>
+                System Prompt
+              </Typography>
+              <Box sx={{ p: 1.5, bgcolor: 'background.default', borderRadius: 1, border: 1, borderColor: 'divider' }}>
+                <Typography variant="body2" component="pre" sx={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', m: 0 }}>
+                  {agent.system_prompt}
+                </Typography>
+              </Box>
+            </Box>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+              <Box>
+                <Typography variant="caption" color="text.secondary" component="div">
+                  Model Provider
+                </Typography>
+                <Typography variant="body2">{agent.model_provider}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary" component="div">
+                  Status
+                </Typography>
+                <Typography variant="body2">{agent.status}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary" component="div">
+                  Max Tokens
+                </Typography>
+                <Typography variant="body2">{agent.model_max_tokens}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary" component="div">
+                  Temperature
+                </Typography>
+                <Typography variant="body2">{agent.model_temperature}</Typography>
+              </Box>
+            </Box>
+          </Box>
         </Card>
 
         <Card
           title="Agent Context Documents"
           actions={
-            <button
+            <Button
+              variant="primary"
+              size="small"
               onClick={() => setShowAddDialog(true)}
               disabled={saving || allDocsLoading}
-              className="btn btn--small btn--primary"
-              type="button"
             >
               Add Document
-            </button>
+            </Button>
           }
         >
           {docsError && <ErrorMessage message={docsError} />}
@@ -153,45 +167,50 @@ function AgentDetailPage() {
             <DataTable data={agentDocs} columns={columns} />
           )}
         </Card>
-      </div>
+      </Box>
 
-      {showAddDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-            <h2 className="text-xl font-semibold mb-4">Add Document to Agent Context</h2>
-            {availableDocuments.length === 0 ? (
-              <EmptyState message="All documents are already attached to this agent" />
-            ) : (
-              <div className="space-y-2">
-                {availableDocuments.map((doc) => (
-                  <div
-                    key={doc.id}
-                    className="border border-gray-200 rounded p-3 hover:bg-gray-50 cursor-pointer"
-                    onClick={() => {
-                      void handleAddDocument(doc.id)
-                    }}
-                  >
-                    <div className="font-medium">{doc.title}</div>
-                    <div className="text-sm text-gray-600">
-                      {doc.doc_type ?? 'N/A'} {doc.ref_tag ? `• ${doc.ref_tag}` : ''}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="mt-4 flex justify-end">
-              <button
-                onClick={() => setShowAddDialog(false)}
-                className="btn btn--secondary"
-                type="button"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+      <Dialog open={showAddDialog} onClose={() => setShowAddDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Add Document to Agent Context</DialogTitle>
+        <DialogContent dividers sx={{ p: 2 }}>
+          {availableDocuments.length === 0 ? (
+            <EmptyState message="All documents are already attached to this agent" />
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {availableDocuments.map((doc) => (
+                <Box
+                  key={doc.id}
+                  onClick={() => {
+                    void handleAddDocument(doc.id)
+                  }}
+                  sx={{
+                    p: 1.5,
+                    border: 1,
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                    cursor: 'pointer',
+                    '&:hover': {
+                      bgcolor: 'action.hover',
+                    },
+                  }}
+                >
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {doc.title}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {doc.doc_type ?? 'N/A'} {doc.ref_tag ? `• ${doc.ref_tag}` : ''}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button variant="secondary" onClick={() => setShowAddDialog(false)}>
+            Cancel
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   )
 }
 
