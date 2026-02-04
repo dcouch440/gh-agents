@@ -8,6 +8,7 @@
 pub mod api;
 pub mod auth;
 pub mod chat_consumer;
+pub mod collection_dag_executor;
 pub mod dag_executor;
 pub mod hub;
 pub mod openapi;

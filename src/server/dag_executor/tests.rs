@@ -11,6 +11,7 @@ fn make_step(id: Uuid, workflow_id: Uuid, order: i32) -> WorkflowStepRow {
         workflow_id,
         agent_id: Uuid::new_v4(),
         execution_mode: "single".to_string(),
+        agent_execution_mode: None,
         for_each_ref: None,
         prompt_template_id: None,
         prompt_template: String::new(),

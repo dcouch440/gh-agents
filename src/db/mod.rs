@@ -131,6 +131,7 @@ pub struct WorkflowRow {
     pub user_id: Uuid,
     pub name: String,
     pub description: String,
+    pub execution_mode: String,
     pub created_at: DateTime<Utc>,
     pub version: i32,
 }
@@ -141,7 +142,8 @@ pub struct WorkflowStepRow {
     pub id: Uuid,
     pub workflow_id: Uuid,
     pub agent_id: Uuid,
-    pub execution_mode: String,
+    pub execution_mode: String, // "single", "for_each", or "room"
+    pub agent_execution_mode: Option<String>, // "sequential" or "parallel", NULL = inherit from workflow
     pub for_each_ref: Option<String>,
     pub prompt_template_id: Option<Uuid>,
     pub prompt_template: String,
@@ -159,6 +161,83 @@ pub struct WorkflowStepRow {
 pub struct WorkflowStepEdgeRow {
     pub from_step_id: Uuid,
     pub to_step_id: Uuid,
+}
+
+/// Row type for workflow collections (DAG of workflows).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct WorkflowCollectionRow {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub execution_mode: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Row type for collection workflows (which workflows belong to a collection).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct CollectionWorkflowRow {
+    pub collection_id: Uuid,
+    pub workflow_id: Uuid,
+    pub display_order: i32,
+    pub execution_mode: Option<String>,
+}
+
+/// Row type for collection workflow edges (DAG edges between workflows).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct CollectionWorkflowEdgeRow {
+    pub from_workflow_id: Uuid,
+    pub to_workflow_id: Uuid,
+    pub collection_id: Uuid,
+}
+
+/// Row type for collection runs (execution tracking).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct CollectionRunRow {
+    pub id: Uuid,
+    pub collection_id: Uuid,
+    pub user_id: Uuid,
+    pub status: String,
+    pub started_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub error: Option<String>,
+}
+
+/// Row type for workflow executions (workflow-level execution within a collection run).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct WorkflowExecutionRow {
+    pub id: Uuid,
+    pub collection_run_id: Uuid,
+    pub workflow_id: Uuid,
+    pub user_id: Uuid,
+    pub status: String,
+    pub started_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub outputs: Option<serde_json::Value>,
+    pub error: Option<String>,
+}
+
+/// Row type for execution variables (for text editor variable capture).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct ExecutionVariableRow {
+    pub id: Uuid,
+    pub collection_run_id: Option<Uuid>,
+    pub workflow_execution_id: Option<Uuid>,
+    pub step_execution_id: Option<Uuid>,
+    pub variable_name: String,
+    pub variable_path: String,
+    pub value: serde_json::Value,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Row type for workflow step agents (multi-agent step support).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct WorkflowStepAgentRow {
+    pub step_id: Uuid,
+    pub agent_id: Uuid,
+    pub execution_strategy: String,
+    pub agent_order: i32,
 }
 
 /// Row type for a step-document attachment.
@@ -185,6 +264,7 @@ pub struct AgentExecutionRow {
     pub stage_execution_id: Uuid,
     pub agent_id: Uuid,
     pub workflow_step_id: Option<Uuid>,
+    pub workflow_execution_id: Option<Uuid>,
     pub is_interactive: bool,
     pub parent_agent_execution_id: Option<Uuid>,
     pub system_prompt_rendered: String,

@@ -320,6 +320,7 @@ pub async fn create_workflow_step(
         workflow_id: wid,
         agent_id: req.agent_id,
         execution_mode: req.execution_mode.unwrap_or_else(|| "single".to_string()),
+        agent_execution_mode: None, // NULL = inherit from workflow
         for_each_ref: req.for_each_ref,
         prompt_template_id: req.prompt_template_id,
         prompt_template: req.prompt_template.unwrap_or_default(),
@@ -421,6 +422,7 @@ pub async fn update_workflow_step(
         workflow_id: p.wid,
         agent_id: req.agent_id,
         execution_mode: req.execution_mode.unwrap_or(existing.execution_mode),
+        agent_execution_mode: existing.agent_execution_mode, // Preserve existing value
         for_each_ref: req.for_each_ref,
         prompt_template_id: req.prompt_template_id,
         prompt_template: req.prompt_template.unwrap_or(existing.prompt_template),
