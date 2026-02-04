@@ -32,6 +32,8 @@ pub struct DagStepConfig {
     pub tools: Vec<Tool>,
     /// Tool name allow-list for execution_tools.
     pub tool_names: Vec<String>,
+    /// Temperature for sampling (from mode resolution or agent default).
+    pub temperature: f32,
     /// Execution context for file/git/test tool calls.
     pub execution_context: Option<ExecutionContext>,
     /// Pipeline run ID for broadcasting.
@@ -99,7 +101,7 @@ impl ExecutionStrategy for DagStepStrategy {
     }
 
     fn temperature(&self) -> f32 {
-        self.config.agent.model_temperature
+        self.config.temperature  // Use mode-resolved temperature
     }
 
     async fn build_messages(&self, _input: &str) -> Result<Vec<Message>, HubError> {
