@@ -1,852 +1,456 @@
 # DATABASE ENTITY RELATIONSHIP DIAGRAM
 
-## HIGH-LEVEL OVERVIEW
+## FULL SYSTEM ERD
 
-```mermaid
-flowchart TB
-    classDef core fill:#4A90D9,stroke:#2C5F8A,color:#FFFFFF,font-weight:bold
-    classDef workflow fill:#7B68EE,stroke:#5A4DB0,color:#FFFFFF,font-weight:bold
-    classDef exec fill:#E67E22,stroke:#B8641A,color:#FFFFFF,font-weight:bold
-    classDef chat fill:#2ECC71,stroke:#239B56,color:#FFFFFF,font-weight:bold
-    classDef room fill:#E74C3C,stroke:#B83A2E,color:#FFFFFF,font-weight:bold
-    classDef doc fill:#1ABC9C,stroke:#148F77,color:#FFFFFF,font-weight:bold
-    classDef cost fill:#F39C12,stroke:#C47F10,color:#FFFFFF,font-weight:bold
-    classDef legacy fill:#95A5A6,stroke:#717D7E,color:#FFFFFF,font-weight:bold
-    classDef join fill:#8E44AD,stroke:#6C3483,color:#FFFFFF,font-weight:bold
+```
+┌─────────────────┐
+│      USERS      │  (ROOT - MULTI-TENANT ANCHOR)
+│─────────────────│
+│ ID (PK)         │
+│ EMAIL (UNIQUE)  │
+│ PASSWORD_HASH   │
+│ GITHUB_ID (UQ)  │
+│ GITHUB_LOGIN    │
+│ GITHUB_TOKEN_ENC│
+│ CREATED_AT      │
+│ UPDATED_AT      │
+└────────┬────────┘
+         │
+         │ (ALL TABLES REFERENCE USER_ID FOR TENANT ISOLATION)
+         │
+         ├──────────────────────────────────────────────────────────────────────────────┐
+         │                                                                              │
+         │  CORE ENTITIES                                                               │
+         │                                                                              │
+┌────────▼────────┐         ┌───────────────┐         ┌──────────────────┐              │
+│     AGENTS      │◄────────┤  AGENT_TOOLS  ├────────►│      TOOLS       │              │
+│─────────────────│         │  (JOIN TABLE) │         │──────────────────│              │
+│ ID (PK)         │         │───────────────│         │ ID (PK)          │              │
+│ USER_ID (FK)    │         │ AGENT_ID (FK) │         │ USER_ID (FK)     │              │
+│ NAME            │         │ TOOL_ID (FK)  │         │ NAME (UNIQUE/USR)│              │
+│ SYSTEM_PROMPT   │         └───────────────┘         │ DISPLAY_NAME     │              │
+│ PERSONA_STYLE   │                                   │ DESCRIPTION      │              │
+│ MODEL_PROVIDER  │         ┌───────────────┐         │ PARAMETERS (JSON)│              │
+│ MODEL_ID        │◄────────┤ AGENT_CONTEXT ├──┐      │ VERSION          │              │
+│ MODEL_MAX_TOKENS│         │  (JOIN TABLE) │  │      └────────┬─────────┘              │
+│ MODEL_TEMP      │         │───────────────│  │               │                        │
+│ CURRENT_TASK(FK)├──┐      │ AGENT_ID (FK) │  │               │                        │
+│ STATUS          │  │      │ DOCUMENT_ID   │  │      ┌────────▼─────────┐              │
+│ ROUTER_MODE     │  │      └───────────────┘  │      │  TOOL_ROUTERS    │              │
+│ OUTPUT_SCHEMA_ID│  │                         │      │──────────────────│              │
+│ VERSION         │  │                         │      │ ID (PK)          │              │
+└────────┬────────┘  │                         │      │ USER_ID (FK)     │              │
+         │           │                         │      │ NAME             │              │
+         │           │                         │      │ DESCRIPTION      │              │
+         │ 1:N       │                         │      │ SYSTEM_PROMPT    │              │
+         │           │                         │      │ MODEL_ID         │              │
+┌────────▼────────┐  │                         │      │ IS_ACTIVE        │              │
+│  AGENT_MODES    │  │                         │      └────────┬─────────┘              │
+│─────────────────│  │                         │               │                        │
+│ ID (PK)         │  │                         │               │ 1:N                    │
+│ AGENT_ID (FK)   │  │                         │               │                        │
+│ NAME (UQ/AGENT) │  │                         │      ┌────────▼─────────┐              │
+│ SYSTEM_PROMPT_  │  │                         │      │TOOL_ROUTER_TOOLS │              │
+│   SUFFIX        │  │                         │      │  (JOIN TABLE)    │              │
+│ TEMP_OVERRIDE   │  │                         │      │──────────────────│              │
+│ MODEL_OVERRIDE  │  │                         │      │ ROUTER_ID (FK)   │              │
+│ TOOL_OVERRIDES[]│  │                         │      │ TOOL_ID (FK)     │              │
+│ CLASSIFIER_HINT │  │                         │      └──────────────────┘              │
+│ VERSION         │  │                         │                                        │
+└─────────────────┘  │                         │                                        │
+                     │                         │                                        │
+         ┌───────────┘                         │                                        │
+         │                                     │                                        │
+         │                              ┌──────▼──────────┐                             │
+         │                              │   DOCUMENTS     │                             │
+         │                              │─────────────────│                             │
+         │                              │ ID (PK)         │                             │
+         │                              │ USER_ID (FK)    │                             │
+         │                              │ SESSION_ID (FK) │                             │
+         │                              │ TITLE           │                             │
+         │                              │ CONTENT         │                             │
+         │                              │ SUMMARY         │                             │
+         │                              │ DOC_TYPE        │                             │
+         │                              │ REF_TAG         │                             │
+         │                              │ TAGS[]          │                             │
+         │                              └─────────────────┘                             │
+         │                                                                              │
+    ┌────▼──────┐                                                                       │
+    │  TASKS    │  (LEGACY)           ┌──────────────────┐                              │
+    │───────────│                     │    CLUSTERS      │◄─────────────────────────────┤
+    │ ID (PK)   │                     │──────────────────│                              │
+    │ USER_ID   │                     │ ID (PK)          │                              │
+    │ SLICE_ID  │                     │ USER_ID (FK)     │                              │
+    │ TITLE     │                     │ NAME             │                              │
+    │ STATUS    │                     │ DESCRIPTION      │                              │
+    │ PRIORITY  │                     │ CONVENTIONS      │                              │
+    │ RETRY_*   │                     │ SHARED_FILES     │                              │
+    └─────┬─────┘                     └────────┬─────────┘                              │
+          │                                    │                                        │
+          │ 1:N                                │ N:M                                    │
+          │                                    │                                        │
+    ┌─────▼───────────┐               ┌────────▼─────────┐                              │
+    │  TASK_EVENTS    │               │ CLUSTER_MEMBERS  │                              │
+    │─────────────────│               │  (JOIN TABLE)    │                              │
+    │ ID (PK)         │               │──────────────────│                              │
+    │ TASK_ID (FK)    │               │ CLUSTER_ID (FK)  │                              │
+    │ EVENT_TYPE      │               │ AGENT_ID (FK)    │                              │
+    │ AGENT_ID        │               │ ROLE             │                              │
+    │ DETAILS         │               │ PERSONA_OVERRIDE │                              │
+    └─────────────────┘               └──────────────────┘                              │
+          │                                                                             │
+    ┌─────▼───────────┐                                                                 │
+    │TASK_DEPENDENCIES│                                                                 │
+    │  (JOIN TABLE)   │                                                                 │
+    │─────────────────│                                                                 │
+    │ TASK_ID (FK)    │                                                                 │
+    │ DEPENDS_ON (FK) │                                                                 │
+    └─────────────────┘                                                                 │
+                                                                                        │
+         ├──────────────────────────────────────────────────────────────────────────────┘
+         │
+         │  WORKFLOW & DAG SYSTEM
+         │
+┌────────▼────────┐                                    ┌──────────────────┐
+│    WORKFLOWS    │                                    │ OUTPUT_SCHEMAS   │
+│─────────────────│                                    │──────────────────│
+│ ID (PK)         │                                    │ ID (PK)          │
+│ USER_ID (FK)    │                                    │ USER_ID (FK)     │
+│ NAME            │                                    │ NAME (UQ/USER)   │
+│ DESCRIPTION     │                                    │ SCHEMA (JSONB)   │
+│ EXECUTION_MODE  │                                    │ VERSION          │
+│ VERSION         │                                    └────────┬─────────┘
+└────────┬────────┘                                             │
+         │                                                      │
+         │ 1:N                          ┌───────────────────────┘
+         │                              │
+┌────────▼──────────────┐       ┌───────┘       ┌──────────────────┐
+│    WORKFLOW_STEPS     │       │               │ PROMPT_TEMPLATES │
+│───────────────────────│       │               │──────────────────│
+│ ID (PK)               │       │               │ ID (PK)          │
+│ WORKFLOW_ID (FK)      │       │               │ USER_ID (FK)     │
+│ AGENT_ID (FK)         │       │               │ NAME (UQ/USER)   │
+│ EXECUTION_MODE        │◄──────┘               │ CONTENT          │
+│ AGENT_EXECUTION_MODE  │                       │ VERSION          │
+│ FOR_EACH_REF          │◄──────────────────────┘                  │
+│ FOR_EACH_LABEL_FIELD  │  PROMPT_TEMPLATE_ID(FK)                  │
+│ PROMPT_TEMPLATE       │                       └──────────────────┘
+│ OUTPUT_SCHEMA_ID (FK) │
+│ OUTPUT_VARIABLE_NAME  │
+│ INTERACTIVE_AGENT_ID  │
+│ ROOM_ID (FK)          │
+│ DISPLAY_ORDER         │
+│ VERSION               │
+└────────┬──────────────┘
+         │
+         ├──────────────────────────────────────────┐
+         │                                          │
+         │ N:M (DAG EDGES)                          │ N:M (MULTI-AGENT)
+         │                                          │
+┌────────▼──────────────┐               ┌───────────▼──────────┐
+│ WORKFLOW_STEP_EDGES   │               │ WORKFLOW_STEP_AGENTS │
+│───────────────────────│               │──────────────────────│
+│ FROM_STEP_ID (FK)     │               │ STEP_ID (FK)         │
+│ TO_STEP_ID (FK)       │               │ AGENT_ID (FK)        │
+└───────────────────────┘               │ EXECUTION_STRATEGY   │
+                                        │ AGENT_ORDER          │
+         │                              └──────────────────────┘
+         │
+         │ N:M (STEP CONTEXT)
+         │
+┌────────▼──────────────┐
+│   STEP_DOCUMENTS      │
+│   (JOIN TABLE)        │
+│───────────────────────│
+│ STEP_ID (FK)          │
+│ DOCUMENT_ID (FK)      │────────────────────────►  DOCUMENTS
+└───────────────────────┘
 
-    USERS:::core
 
-    subgraph CORE_ENTITIES["CORE ENTITIES"]
-        AGENTS:::core
-        AGENT_MODES:::core
-        TOOLS:::core
-        TOOL_ROUTERS:::core
-        CLUSTERS:::core
-    end
+         ├──────────────────────────────────────────────────────────────────────────────┐
+         │                                                                              │
+         │  COLLECTION SYSTEM (DAG OF WORKFLOWS)                                        │
+         │                                                                              │
+┌────────▼──────────────────┐                                                           │
+│  WORKFLOW_COLLECTIONS     │                                                           │
+│───────────────────────────│                                                           │
+│ ID (PK)                   │                                                           │
+│ USER_ID (FK)              │                                                           │
+│ NAME                      │                                                           │
+│ DESCRIPTION               │                                                           │
+│ EXECUTION_MODE            │                                                           │
+└────────┬──────────────────┘                                                           │
+         │                                                                              │
+         ├──────────────────────┬───────────────────────┐                               │
+         │                      │                       │                               │
+         │ 1:N                  │ 1:N (DAG EDGES)       │ 1:N                           │
+         │                      │                       │                               │
+┌────────▼──────────────┐ ┌────▼───────────────────┐ ┌──▼──────────────┐               │
+│ COLLECTION_WORKFLOWS  │ │COLLECTION_WORKFLOW_EDGES│ │    ROOMS        │               │
+│   (JOIN TABLE)        │ │────────────────────────│ │─────────────────│               │
+│───────────────────────│ │ FROM_WORKFLOW_ID (FK)  │ │ ID (PK)         │               │
+│ COLLECTION_ID (FK)    │ │ TO_WORKFLOW_ID (FK)    │ │ USER_ID (FK)    │               │
+│ WORKFLOW_ID (FK)      │ │ COLLECTION_ID (FK)     │ │ COLLECTION_ID   │               │
+│ DISPLAY_ORDER         │ └────────────────────────┘ │ NAME            │               │
+│ EXECUTION_MODE        │                            │ GATEKEEPER_*    │               │
+└───────────────────────┘                            │ MAX_SPEAKERS    │               │
+         │                                           │ MAX_TURNS       │               │
+         │                                           │ TOOLS_ENABLED   │               │
+         └───────────►  WORKFLOWS                    └────────┬────────┘               │
+                                                              │                        │
+                                                    ┌─────────┴──────────┐             │
+                                                    │                    │              │
+                                                    │ N:M                │ 1:N          │
+                                                    │                    │              │
+                                           ┌────────▼────────┐ ┌────────▼────────┐     │
+                                           │  ROOM_MEMBERS   │ │ ROOM_SESSIONS   │     │
+                                           │  (JOIN TABLE)   │ │─────────────────│     │
+                                           │─────────────────│ │ ID (PK)         │     │
+                                           │ ROOM_ID (FK)    │ │ ROOM_ID (FK)    │     │
+                                           │ AGENT_ID (FK)   │ │ STATUS          │     │
+                                           │ DISPLAY_NAME    │ │ CURRENT_TURN    │     │
+                                           │ ROLE_DESCRIPTION│ │ TRANSCRIPT_SUM  │     │
+                                           │ DISPLAY_ORDER   │ │ STARTED_AT      │     │
+                                           └─────────────────┘ │ COMPLETED_AT    │     │
+                                                               └────────┬────────┘     │
+                                                                        │              │
+                                                                        │ 1:N          │
+                                                                        ▼              │
+                                                              AGENT_EXECUTIONS         │
+                                                                                       │
+         ├─────────────────────────────────────────────────────────────────────────────┘
+         │
+         │  EXECUTION RUNTIME
+         │
+┌────────▼──────────────┐
+│    COLLECTION_RUNS    │
+│───────────────────────│
+│ ID (PK)               │
+│ COLLECTION_ID (FK)    │
+│ USER_ID (FK)          │
+│ STATUS                │
+│ STARTED_AT            │
+│ COMPLETED_AT          │
+│ ERROR                 │
+└────────┬──────────────┘
+         │
+         │ 1:N
+         │
+┌────────▼──────────────┐
+│ WORKFLOW_EXECUTIONS   │
+│───────────────────────│
+│ ID (PK)               │
+│ COLLECTION_RUN_ID (FK)│
+│ WORKFLOW_ID (FK)      │
+│ USER_ID (FK)          │
+│ STATUS                │
+│ STARTED_AT            │
+│ COMPLETED_AT          │
+│ OUTPUTS (JSONB)       │
+│ ERROR                 │
+└────────┬──────────────┘
+         │
+         │ 1:N
+         │
+┌────────▼──────────────────┐
+│    AGENT_EXECUTIONS       │
+│───────────────────────────│
+│ ID (PK)                   │
+│ AGENT_ID (FK)             │
+│ WORKFLOW_STEP_ID (FK)     │
+│ WORKFLOW_EXECUTION_ID (FK)│
+│ IS_INTERACTIVE            │
+│ PARENT_EXEC_ID (FK) ◄────┼──┐ (SELF-REFERENCING)
+│ SELECTED_MODE_ID (FK)     │  │
+│ SYSTEM_PROMPT_RENDERED    │  │
+│ INPUT                     │  │
+│ OUTPUT                    │  │
+│ STRUCTURED_OUTPUT (JSONB) │  │
+│ ROOM_SESSION_ID (FK)      │  │
+│ SPEAKER_ORDER             │  │
+│ STATUS                    │  │
+│ STARTED_AT                │  │
+│ COMPLETED_AT              │  │
+└────────┬──────────────────┘  │
+         │                     │
+         ├─────────────────────┘
+         │
+         ├──────────────────────┬──────────────────────┬──────────────────┐
+         │                      │                      │                  │
+         │ 1:N                  │ 1:N                  │ 1:N              │ 1:N
+         │                      │                      │                  │
+┌────────▼──────────────┐ ┌────▼──────────────┐ ┌─────▼──────────┐ ┌────▼──────────────┐
+│ EXECUTION_MESSAGES    │ │  TOKEN_LEDGER     │ │   RESULTS      │ │EXECUTION_VARIABLES│
+│───────────────────────│ │───────────────────│ │────────────────│ │───────────────────│
+│ ID (PK)               │ │ ID (PK)           │ │ ID (PK)        │ │ ID (PK)           │
+│ AGENT_EXEC_ID (FK)    │ │ USER_ID (FK)      │ │ USER_ID (FK)   │ │ COLLECTION_RUN_ID │
+│ ROLE                  │ │ AGENT_EXEC_ID (FK)│ │ AGENT_EXEC_ID  │ │ WORKFLOW_EXEC_ID  │
+│ CONTENT               │ │ MODEL_ID          │ │ OUTPUT_SCHEMA_ID│ │ STEP_EXEC_ID     │
+│ TOOL_CALL_ID          │ │ INPUT_TOKENS      │ │ NAME           │ │ VARIABLE_NAME     │
+│ INPUT_TOKENS          │ │ OUTPUT_TOKENS     │ │ DATA (JSONB)   │ │ VARIABLE_PATH     │
+│ OUTPUT_TOKENS         │ │ COST_USD          │ └────────────────┘ │ VALUE (JSONB)     │
+│ CREATED_AT            │ │ CREATED_AT        │                    │ CREATED_AT        │
+└───────────────────────┘ └───────────────────┘                    └───────────────────┘
 
-    subgraph WORKFLOW_ENGINE["WORKFLOW ENGINE"]
-        WORKFLOWS:::workflow
-        WORKFLOW_STEPS:::workflow
-        WORKFLOW_STEP_EDGES:::workflow
-        WORKFLOW_COLLECTIONS:::workflow
-    end
 
-    subgraph EXECUTION_RUNTIME["EXECUTION RUNTIME"]
-        COLLECTION_RUNS:::exec
-        WORKFLOW_EXECUTIONS:::exec
-        AGENT_EXECUTIONS:::exec
-        EXECUTION_MESSAGES:::exec
-        EXECUTION_VARIABLES:::exec
-    end
-
-    subgraph CHAT_SYSTEM["CHAT SYSTEM"]
-        CHAT_SESSIONS:::chat
-        CHAT_MESSAGES:::chat
-        CONTEXT_STORE:::chat
-        ROUTER_REQUESTS:::chat
-    end
-
-    subgraph ROOMS_SYSTEM["ROOMS"]
-        ROOMS:::room
-        ROOM_MEMBERS:::room
-        ROOM_SESSIONS:::room
-    end
-
-    subgraph KNOWLEDGE["DOCUMENTS & SCHEMAS"]
-        DOCUMENTS:::doc
-        OUTPUT_SCHEMAS:::doc
-        PROMPT_TEMPLATES:::doc
-    end
-
-    subgraph COST_TRACKING["COST TRACKING"]
-        TOKEN_LEDGER:::cost
-        RESULTS:::cost
-    end
-
-    subgraph LEGACY_TABLES["LEGACY"]
-        TASKS:::legacy
-        TICKETS:::legacy
-        VERTICAL_SLICES:::legacy
-    end
-
-    %% USER OWNS EVERYTHING
-    USERS -- "OWNS" --> AGENTS
-    USERS -- "OWNS" --> TOOLS
-    USERS -- "OWNS" --> TOOL_ROUTERS
-    USERS -- "OWNS" --> CLUSTERS
-    USERS -- "OWNS" --> WORKFLOWS
-    USERS -- "OWNS" --> WORKFLOW_COLLECTIONS
-    USERS -- "OWNS" --> ROOMS
-    USERS -- "OWNS" --> DOCUMENTS
-    USERS -- "OWNS" --> OUTPUT_SCHEMAS
-    USERS -- "OWNS" --> PROMPT_TEMPLATES
-    USERS -- "OWNS" --> CHAT_SESSIONS
-    USERS -- "OWNS" --> TASKS
-    USERS -- "OWNS" --> TICKETS
-
-    %% AGENT CONNECTIONS
-    AGENTS -- "HAS" --> AGENT_MODES
-    AGENTS -. "USES" .-> TOOLS
-    AGENTS -. "JOINS" .-> CLUSTERS
-    AGENTS -. "ASSIGNED TO" .-> WORKFLOW_STEPS
-    AGENTS -. "PARTICIPATES IN" .-> ROOMS
-    AGENTS -- "PERFORMS" --> AGENT_EXECUTIONS
-    AGENTS -. "REFERENCES" .-> DOCUMENTS
-    AGENTS -. "CONFORMS TO" .-> OUTPUT_SCHEMAS
-
-    %% TOOL ROUTING
-    TOOL_ROUTERS -. "MANAGES" .-> TOOLS
-
-    %% WORKFLOW CHAIN
-    WORKFLOWS -- "DEFINES" --> WORKFLOW_STEPS
-    WORKFLOW_STEPS -- "CONNECTED BY" --> WORKFLOW_STEP_EDGES
-    WORKFLOW_STEPS -. "USES TEMPLATE" .-> PROMPT_TEMPLATES
-    WORKFLOW_STEPS -. "OUTPUTS TO" .-> OUTPUT_SCHEMAS
-    WORKFLOW_STEPS -. "DISPATCHES TO" .-> ROOMS
-
-    %% COLLECTIONS
-    WORKFLOW_COLLECTIONS -. "CONTAINS" .-> WORKFLOWS
-    WORKFLOW_COLLECTIONS -- "EXECUTED AS" --> COLLECTION_RUNS
-
-    %% EXECUTION CHAIN
-    COLLECTION_RUNS -- "SPAWNS" --> WORKFLOW_EXECUTIONS
-    WORKFLOW_EXECUTIONS -- "RUNS" --> AGENT_EXECUTIONS
-    AGENT_EXECUTIONS -- "EXCHANGES" --> EXECUTION_MESSAGES
-    AGENT_EXECUTIONS -- "COSTS" --> TOKEN_LEDGER
-    AGENT_EXECUTIONS -- "PRODUCES" --> RESULTS
-    AGENT_EXECUTIONS -- "EMITS" --> EXECUTION_VARIABLES
-    RESULTS -. "VALIDATED BY" .-> OUTPUT_SCHEMAS
-
-    %% CHAT CHAIN
-    CHAT_SESSIONS -- "CONTAINS" --> CHAT_MESSAGES
-    CHAT_SESSIONS -- "MAINTAINS" --> CONTEXT_STORE
-    CHAT_SESSIONS -- "DISPATCHES" --> ROUTER_REQUESTS
-    CHAT_SESSIONS -. "CONVERSES WITH" .-> AGENTS
-
-    %% ROOMS CHAIN
-    ROOMS -- "HAS" --> ROOM_MEMBERS
-    ROOMS -- "HOSTS" --> ROOM_SESSIONS
-    ROOM_SESSIONS -- "RUNS" --> AGENT_EXECUTIONS
-
-    %% DOCUMENTS
-    DOCUMENTS -. "ATTACHED TO" .-> WORKFLOW_STEPS
-
-    %% LEGACY
-    TASKS -. "ASSIGNED TO" .-> AGENTS
-    TICKETS -- "DECOMPOSED INTO" --> VERTICAL_SLICES
+         ├──────────────────────────────────────────────────────────────────────────────┐
+         │                                                                              │
+         │  CHAT & SESSION SYSTEM                                                       │
+         │                                                                              │
+┌────────▼──────────────┐                                                               │
+│    CHAT_SESSIONS      │                                                               │
+│───────────────────────│                                                               │
+│ ID (PK)               │                                                               │
+│ USER_ID (FK)          │                                                               │
+│ AGENT_ID (FK)         │────────────────────────────────────────────►  AGENTS           │
+│ MODE_ID               │                                                               │
+│ TITLE                 │                                                               │
+│ SUMMARY               │                                                               │
+└────────┬──────────────┘                                                               │
+         │                                                                              │
+         ├──────────────────┬───────────────────┬───────────────────┐                   │
+         │                  │                   │                   │                   │
+         │ 1:N              │ 1:N               │ 1:N               │ 1:N               │
+         │                  │                   │                   │                   │
+┌────────▼────────┐ ┌───────▼────────┐ ┌────────▼────────┐ ┌───────▼────────┐          │
+│ CHAT_MESSAGES   │ │ CONTEXT_STORE  │ │ROUTER_REQUESTS  │ │  DOCUMENTS     │          │
+│─────────────────│ │────────────────│ │─────────────────│ │  (CREATED IN   │          │
+│ ID (PK)         │ │ ID (PK)        │ │ ID (PK)         │ │   SESSION)     │          │
+│ USER_ID (FK)    │ │ SESSION_ID (FK)│ │ SESSION_ID (FK) │ └────────────────┘          │
+│ SESSION_ID (FK) │ │ SOURCE         │ │ AGENT_EXEC_ID   │                             │
+│ ROLE            │ │ PRIORITY       │ │ INTENT          │                             │
+│ CONTENT         │ │ CONTENT        │ │ PRIORITY        │                             │
+│ TIMESTAMP       │ │ METADATA (JSON)│ │ CALLBACK_HINT   │                             │
+└─────────────────┘ │ STATUS         │ │ ROUTED_TOOL     │                             │
+                    │ EXPIRES_AT     │ │ ROUTED_ARGS     │                             │
+                    └────────────────┘ │ IS_ASYNC        │                             │
+                                       │ PASSDOWN        │                             │
+                                       │ CHAIN (JSONB)   │                             │
+                                       │ STATUS          │                             │
+                                       │ RESULT          │                             │
+                                       └─────────────────┘                             │
+                                                                                       │
+         ├─────────────────────────────────────────────────────────────────────────────┘
+         │
+         │  LEGACY TICKET SYSTEM
+         │
+┌────────▼──────────┐
+│     TICKETS       │  (DEPRECATED)
+│───────────────────│
+│ ID (PK)           │
+│ USER_ID (FK)      │
+│ SOURCE_TYPE       │
+│ SOURCE_OWNER      │
+│ SOURCE_REPO       │
+│ SOURCE_ISSUE_NUM  │
+│ TITLE             │
+│ DESCRIPTION       │
+│ LABELS (JSONB)    │
+│ STATUS            │
+└────────┬──────────┘
+         │
+         │ 1:N
+         │
+┌────────▼──────────┐
+│  VERTICAL_SLICES  │  (DEPRECATED)
+│───────────────────│
+│ ID (PK)           │
+│ USER_ID (FK)      │
+│ TICKET_ID (FK)    │
+│ TITLE             │
+│ DESCRIPTION       │
+│ STATUS            │
+└───────────────────┘
 ```
 
----
+## KEY RELATIONSHIPS SUMMARY
 
-## CORE ENTITIES
-
-```mermaid
-erDiagram
-    USERS {
-        UUID ID PK
-        TEXT EMAIL UK
-        TEXT PASSWORD_HASH
-        BIGINT GITHUB_ID UK
-        TEXT GITHUB_LOGIN
-        TEXT GITHUB_TOKEN_ENCRYPTED
-        TIMESTAMPTZ CREATED_AT
-        TIMESTAMPTZ UPDATED_AT
-    }
-
-    AGENTS {
-        UUID ID PK
-        UUID USER_ID FK
-        TEXT NAME
-        TEXT SYSTEM_PROMPT
-        TEXT PERSONA_STYLE
-        TEXT MODEL_PROVIDER
-        TEXT MODEL_ID
-        INTEGER MODEL_MAX_TOKENS
-        REAL MODEL_TEMPERATURE
-        UUID CURRENT_TASK FK
-        TEXT STATUS
-        BOOLEAN ROUTER_MODE
-        UUID OUTPUT_SCHEMA_ID FK
-        INTEGER VERSION
-        TIMESTAMPTZ CREATED_AT
-    }
-
-    AGENT_MODES {
-        UUID ID PK
-        UUID AGENT_ID FK
-        TEXT NAME
-        TEXT SYSTEM_PROMPT_SUFFIX
-        DOUBLE_PRECISION TEMPERATURE_OVERRIDE
-        TEXT MODEL_OVERRIDE
-        TEXT_ARRAY TOOL_OVERRIDES
-        TEXT CLASSIFIER_HINT
-        INTEGER VERSION
-        TIMESTAMPTZ CREATED_AT
-    }
-
-    TOOLS {
-        UUID ID PK
-        UUID USER_ID FK
-        TEXT NAME
-        TEXT DISPLAY_NAME
-        TEXT DESCRIPTION
-        JSONB PARAMETERS
-        INTEGER VERSION
-        TIMESTAMPTZ CREATED_AT
-    }
-
-    AGENT_TOOLS {
-        UUID AGENT_ID PK_FK
-        UUID TOOL_ID PK_FK
-    }
-
-    TOOL_ROUTERS {
-        UUID ID PK
-        UUID USER_ID FK
-        TEXT NAME
-        TEXT DESCRIPTION
-        TEXT SYSTEM_PROMPT
-        TEXT MODEL_ID
-        BOOLEAN IS_ACTIVE
-        TIMESTAMPTZ CREATED_AT
-        TIMESTAMPTZ UPDATED_AT
-    }
-
-    TOOL_ROUTER_TOOLS {
-        UUID ROUTER_ID PK_FK
-        UUID TOOL_ID PK_FK
-    }
-
-    CLUSTERS {
-        UUID ID PK
-        UUID USER_ID FK
-        TEXT NAME
-        TEXT DESCRIPTION
-        TEXT CONVENTIONS
-        JSONB SHARED_FILES
-        TIMESTAMPTZ CREATED_AT
-    }
-
-    CLUSTER_MEMBERS {
-        UUID CLUSTER_ID PK_FK
-        UUID AGENT_ID PK_FK
-        TEXT ROLE
-        TEXT PERSONA_OVERRIDE
-        TIMESTAMPTZ JOINED_AT
-    }
-
-    OUTPUT_SCHEMAS {
-        UUID ID PK
-        UUID USER_ID FK
-        TEXT NAME
-        JSONB SCHEMA
-        INTEGER VERSION
-        TIMESTAMPTZ CREATED_AT
-    }
-
-    USERS ||--o{ AGENTS : "OWNS"
-    USERS ||--o{ TOOLS : "OWNS"
-    USERS ||--o{ TOOL_ROUTERS : "OWNS"
-    USERS ||--o{ CLUSTERS : "OWNS"
-    USERS ||--o{ OUTPUT_SCHEMAS : "OWNS"
-    AGENTS ||--o{ AGENT_MODES : "HAS MODES"
-    AGENTS ||--o{ AGENT_TOOLS : "USES"
-    AGENTS ||--o{ CLUSTER_MEMBERS : "JOINS"
-    AGENTS }o--o| OUTPUT_SCHEMAS : "CONFORMS TO"
-    TOOLS ||--o{ AGENT_TOOLS : "ASSIGNED VIA"
-    TOOLS ||--o{ TOOL_ROUTER_TOOLS : "ROUTED VIA"
-    TOOL_ROUTERS ||--o{ TOOL_ROUTER_TOOLS : "MANAGES"
-    CLUSTERS ||--o{ CLUSTER_MEMBERS : "CONTAINS"
+### EXECUTION HIERARCHY
+```
+WORKFLOW_COLLECTIONS
+  └── COLLECTION_RUNS
+      └── WORKFLOW_EXECUTIONS
+          └── AGENT_EXECUTIONS (CAN HAVE WORKFLOW_STEP_ID)
+              ├── EXECUTION_MESSAGES
+              ├── TOKEN_LEDGER
+              ├── RESULTS (STRUCTURED OUTPUTS)
+              └── EXECUTION_VARIABLES
 ```
 
----
-
-## WORKFLOW ENGINE
-
-```mermaid
-erDiagram
-    WORKFLOWS {
-        UUID ID PK
-        UUID USER_ID FK
-        TEXT NAME
-        TEXT DESCRIPTION
-        TEXT EXECUTION_MODE
-        INTEGER VERSION
-        TIMESTAMPTZ CREATED_AT
-    }
-
-    WORKFLOW_STEPS {
-        UUID ID PK
-        UUID WORKFLOW_ID FK
-        UUID AGENT_ID FK
-        TEXT EXECUTION_MODE
-        TEXT AGENT_EXECUTION_MODE
-        TEXT FOR_EACH_REF
-        TEXT FOR_EACH_LABEL_FIELD
-        UUID PROMPT_TEMPLATE_ID FK
-        TEXT PROMPT_TEMPLATE
-        UUID OUTPUT_SCHEMA_ID FK
-        TEXT OUTPUT_VARIABLE_NAME
-        UUID INTERACTIVE_AGENT_ID FK
-        UUID ROOM_ID FK
-        INTEGER DISPLAY_ORDER
-        INTEGER VERSION
-    }
-
-    WORKFLOW_STEP_AGENTS {
-        UUID STEP_ID PK_FK
-        UUID AGENT_ID PK_FK
-        TEXT EXECUTION_STRATEGY
-        INTEGER AGENT_ORDER
-    }
-
-    WORKFLOW_STEP_EDGES {
-        UUID FROM_STEP_ID PK_FK
-        UUID TO_STEP_ID PK_FK
-    }
-
-    STEP_DOCUMENTS {
-        UUID STEP_ID PK_FK
-        UUID DOCUMENT_ID PK_FK
-    }
-
-    PROMPT_TEMPLATES {
-        UUID ID PK
-        UUID USER_ID FK
-        TEXT NAME
-        TEXT CONTENT
-        INTEGER VERSION
-        TIMESTAMPTZ CREATED_AT
-    }
-
-    OUTPUT_SCHEMAS {
-        UUID ID PK
-        UUID USER_ID FK
-        TEXT NAME
-        JSONB SCHEMA
-        INTEGER VERSION
-    }
-
-    AGENTS {
-        UUID ID PK
-        TEXT NAME
-    }
-
-    DOCUMENTS {
-        UUID ID PK
-        TEXT TITLE
-    }
-
-    ROOMS {
-        UUID ID PK
-        TEXT NAME
-    }
-
-    WORKFLOWS ||--o{ WORKFLOW_STEPS : "DEFINES"
-    WORKFLOW_STEPS ||--o{ WORKFLOW_STEP_AGENTS : "STAFFED BY"
-    WORKFLOW_STEPS ||--o{ WORKFLOW_STEP_EDGES : "CONNECTS FROM"
-    WORKFLOW_STEPS ||--o{ STEP_DOCUMENTS : "USES"
-    WORKFLOW_STEPS }o--o| PROMPT_TEMPLATES : "USES TEMPLATE"
-    WORKFLOW_STEPS }o--o| OUTPUT_SCHEMAS : "OUTPUTS TO"
-    WORKFLOW_STEPS }o--o| ROOMS : "DISPATCHES TO"
-    WORKFLOW_STEP_AGENTS }o--|| AGENTS : "REFERENCES"
-    STEP_DOCUMENTS }o--|| DOCUMENTS : "REFERENCES"
-    WORKFLOW_STEP_EDGES }o--|| WORKFLOW_STEPS : "TO STEP"
+### AGENT CONFIGURATION
+```
+AGENTS
+  ├── AGENT_TOOLS ──► TOOLS (WHAT TOOLS CAN AGENT USE)
+  ├── AGENT_CONTEXT ──► DOCUMENTS (KNOWLEDGE BASE)
+  ├── AGENT_MODES (BEHAVIORAL VARIANTS)
+  └── CLUSTER_MEMBERS ──► CLUSTERS (TEAM MEMBERSHIP)
 ```
 
----
-
-## COLLECTIONS (DAG OF WORKFLOWS)
-
-```mermaid
-erDiagram
-    WORKFLOW_COLLECTIONS {
-        UUID ID PK
-        UUID USER_ID FK
-        TEXT NAME
-        TEXT DESCRIPTION
-        TEXT EXECUTION_MODE
-        TIMESTAMPTZ CREATED_AT
-        TIMESTAMPTZ UPDATED_AT
-    }
-
-    COLLECTION_WORKFLOWS {
-        UUID COLLECTION_ID PK_FK
-        UUID WORKFLOW_ID PK_FK
-        INTEGER DISPLAY_ORDER
-        TEXT EXECUTION_MODE
-    }
-
-    COLLECTION_WORKFLOW_EDGES {
-        UUID FROM_WORKFLOW_ID PK_FK
-        UUID TO_WORKFLOW_ID PK_FK
-        UUID COLLECTION_ID PK_FK
-    }
-
-    WORKFLOWS {
-        UUID ID PK
-        TEXT NAME
-        TEXT EXECUTION_MODE
-    }
-
-    USERS {
-        UUID ID PK
-    }
-
-    ROOMS {
-        UUID ID PK
-        TEXT NAME
-        UUID COLLECTION_ID FK
-    }
-
-    USERS ||--o{ WORKFLOW_COLLECTIONS : "OWNS"
-    WORKFLOW_COLLECTIONS ||--o{ COLLECTION_WORKFLOWS : "CONTAINS"
-    WORKFLOW_COLLECTIONS ||--o{ COLLECTION_WORKFLOW_EDGES : "CONNECTS"
-    WORKFLOW_COLLECTIONS ||--o{ ROOMS : "HOSTS"
-    COLLECTION_WORKFLOWS }o--|| WORKFLOWS : "REFERENCES"
-    COLLECTION_WORKFLOW_EDGES }o--|| WORKFLOWS : "FROM WORKFLOW"
-    COLLECTION_WORKFLOW_EDGES }o--|| WORKFLOWS : "TO WORKFLOW"
+### WORKFLOW DAG
+```
+WORKFLOWS
+  └── WORKFLOW_STEPS (NODES)
+      ├── WORKFLOW_STEP_EDGES (DEFINES EXECUTION ORDER)
+      ├── WORKFLOW_STEP_AGENTS (MULTI-AGENT PER STEP)
+      ├── STEP_DOCUMENTS ──► DOCUMENTS (STEP CONTEXT)
+      ├── PROMPT_TEMPLATE_ID ──► PROMPT_TEMPLATES
+      └── OUTPUT_SCHEMA_ID ──► OUTPUT_SCHEMAS
 ```
 
----
-
-## EXECUTION RUNTIME
-
-```mermaid
-erDiagram
-    COLLECTION_RUNS {
-        UUID ID PK
-        UUID COLLECTION_ID FK
-        UUID USER_ID FK
-        TEXT STATUS
-        TIMESTAMPTZ STARTED_AT
-        TIMESTAMPTZ COMPLETED_AT
-        TEXT ERROR
-    }
-
-    WORKFLOW_EXECUTIONS {
-        UUID ID PK
-        UUID COLLECTION_RUN_ID FK
-        UUID WORKFLOW_ID FK
-        UUID USER_ID FK
-        TEXT STATUS
-        TIMESTAMPTZ STARTED_AT
-        TIMESTAMPTZ COMPLETED_AT
-        JSONB OUTPUTS
-        TEXT ERROR
-    }
-
-    AGENT_EXECUTIONS {
-        UUID ID PK
-        UUID AGENT_ID FK
-        UUID WORKFLOW_STEP_ID FK
-        UUID WORKFLOW_EXECUTION_ID FK
-        BOOLEAN IS_INTERACTIVE
-        UUID PARENT_AGENT_EXECUTION_ID FK
-        UUID SELECTED_MODE_ID FK
-        TEXT SYSTEM_PROMPT_RENDERED
-        TEXT INPUT
-        TEXT OUTPUT
-        JSONB STRUCTURED_OUTPUT
-        UUID ROOM_SESSION_ID FK
-        INTEGER SPEAKER_ORDER
-        TEXT STATUS
-        TIMESTAMPTZ STARTED_AT
-        TIMESTAMPTZ COMPLETED_AT
-    }
-
-    EXECUTION_MESSAGES {
-        UUID ID PK
-        UUID AGENT_EXECUTION_ID FK
-        TEXT ROLE
-        TEXT CONTENT
-        TEXT TOOL_CALL_ID
-        BIGINT INPUT_TOKENS
-        BIGINT OUTPUT_TOKENS
-        TIMESTAMPTZ CREATED_AT
-    }
-
-    EXECUTION_VARIABLES {
-        UUID ID PK
-        UUID COLLECTION_RUN_ID FK
-        UUID WORKFLOW_EXECUTION_ID FK
-        UUID STEP_EXECUTION_ID FK
-        TEXT VARIABLE_NAME
-        TEXT VARIABLE_PATH
-        JSONB VALUE
-        TIMESTAMPTZ CREATED_AT
-    }
-
-    TOKEN_LEDGER {
-        UUID ID PK
-        UUID USER_ID FK
-        UUID AGENT_EXECUTION_ID FK
-        TEXT MODEL_ID
-        BIGINT INPUT_TOKENS
-        BIGINT OUTPUT_TOKENS
-        REAL COST_USD
-        TIMESTAMPTZ CREATED_AT
-    }
-
-    RESULTS {
-        UUID ID PK
-        UUID USER_ID FK
-        UUID AGENT_EXECUTION_ID FK
-        UUID OUTPUT_SCHEMA_ID FK
-        TEXT NAME
-        JSONB DATA
-        TIMESTAMPTZ CREATED_AT
-    }
-
-    WORKFLOW_COLLECTIONS {
-        UUID ID PK
-    }
-
-    AGENTS {
-        UUID ID PK
-    }
-
-    AGENT_MODES {
-        UUID ID PK
-    }
-
-    WORKFLOW_STEPS {
-        UUID ID PK
-    }
-
-    ROOM_SESSIONS {
-        UUID ID PK
-    }
-
-    OUTPUT_SCHEMAS {
-        UUID ID PK
-    }
-
-    WORKFLOW_COLLECTIONS ||--o{ COLLECTION_RUNS : "EXECUTED AS"
-    COLLECTION_RUNS ||--o{ WORKFLOW_EXECUTIONS : "SPAWNS"
-    COLLECTION_RUNS ||--o{ EXECUTION_VARIABLES : "CAPTURES"
-    WORKFLOW_EXECUTIONS ||--o{ AGENT_EXECUTIONS : "RUNS"
-    WORKFLOW_EXECUTIONS ||--o{ EXECUTION_VARIABLES : "STORES"
-    AGENT_EXECUTIONS ||--o{ EXECUTION_MESSAGES : "EXCHANGES"
-    AGENT_EXECUTIONS ||--o{ TOKEN_LEDGER : "COSTS"
-    AGENT_EXECUTIONS ||--o{ RESULTS : "PRODUCES"
-    AGENT_EXECUTIONS ||--o{ EXECUTION_VARIABLES : "EMITS"
-    AGENT_EXECUTIONS }o--o| AGENT_EXECUTIONS : "PARENT"
-    AGENT_EXECUTIONS }o--|| AGENTS : "PERFORMED BY"
-    AGENT_EXECUTIONS }o--o| AGENT_MODES : "SELECTED MODE"
-    AGENT_EXECUTIONS }o--o| WORKFLOW_STEPS : "FOR STEP"
-    AGENT_EXECUTIONS }o--o| ROOM_SESSIONS : "WITHIN"
-    RESULTS }o--o| OUTPUT_SCHEMAS : "VALIDATED BY"
+### COLLECTION DAG (DAG OF WORKFLOWS)
+```
+WORKFLOW_COLLECTIONS
+  ├── COLLECTION_WORKFLOWS ──► WORKFLOWS
+  ├── COLLECTION_WORKFLOW_EDGES (DEFINES WORKFLOW ORDER)
+  ├── COLLECTION_RUNS (EXECUTION RECORDS)
+  └── ROOMS (MULTI-AGENT DISCUSSION SPACES)
 ```
 
----
-
-## CHAT SYSTEM
-
-```mermaid
-erDiagram
-    CHAT_SESSIONS {
-        UUID ID PK
-        UUID USER_ID FK
-        UUID AGENT_ID FK
-        TEXT MODE_ID
-        TEXT TITLE
-        TEXT SUMMARY
-        TIMESTAMPTZ CREATED_AT
-        TIMESTAMPTZ UPDATED_AT
-    }
-
-    CHAT_MESSAGES {
-        UUID ID PK
-        UUID USER_ID FK
-        UUID SESSION_ID FK
-        TEXT ROLE
-        TEXT CONTENT
-        TIMESTAMPTZ TIMESTAMP
-    }
-
-    CONTEXT_STORE {
-        UUID ID PK
-        UUID SESSION_ID FK
-        TEXT SOURCE
-        REAL PRIORITY
-        TEXT CONTENT
-        JSONB METADATA
-        TEXT STATUS
-        TIMESTAMPTZ CREATED_AT
-        TIMESTAMPTZ EXPIRES_AT
-    }
-
-    ROUTER_REQUESTS {
-        UUID ID PK
-        UUID SESSION_ID FK
-        UUID AGENT_EXECUTION_ID FK
-        TEXT INTENT
-        TEXT PRIORITY
-        TEXT CALLBACK_HINT
-        TEXT ROUTED_TOOL
-        JSONB ROUTED_ARGS
-        BOOLEAN IS_ASYNC
-        TEXT PASSDOWN
-        JSONB CHAIN
-        TEXT STATUS
-        TEXT RESULT
-        TIMESTAMPTZ CREATED_AT
-        TIMESTAMPTZ COMPLETED_AT
-    }
-
-    DOCUMENTS {
-        UUID ID PK
-        UUID SESSION_ID FK
-        TEXT TITLE
-    }
-
-    USERS {
-        UUID ID PK
-    }
-
-    AGENTS {
-        UUID ID PK
-    }
-
-    AGENT_EXECUTIONS {
-        UUID ID PK
-    }
-
-    USERS ||--o{ CHAT_SESSIONS : "OWNS"
-    USERS ||--o{ CHAT_MESSAGES : "SENDS"
-    CHAT_SESSIONS ||--o{ CHAT_MESSAGES : "CONTAINS"
-    CHAT_SESSIONS ||--o{ CONTEXT_STORE : "MAINTAINS"
-    CHAT_SESSIONS ||--o{ ROUTER_REQUESTS : "DISPATCHES"
-    CHAT_SESSIONS ||--o{ DOCUMENTS : "CREATES"
-    CHAT_SESSIONS }o--o| AGENTS : "CONVERSES WITH"
-    ROUTER_REQUESTS }o--o| AGENT_EXECUTIONS : "FULFILLED BY"
+### ROOM COLLABORATION
+```
+ROOMS
+  ├── ROOM_MEMBERS ──► AGENTS
+  └── ROOM_SESSIONS
+      └── AGENT_EXECUTIONS (SPEAKER_ORDER TRACKS TURN)
 ```
 
----
-
-## ROOMS (MULTI-AGENT DISCUSSIONS)
-
-```mermaid
-erDiagram
-    ROOMS {
-        UUID ID PK
-        UUID USER_ID FK
-        UUID COLLECTION_ID FK
-        TEXT NAME
-        BOOLEAN GATEKEEPER_ENABLED
-        TEXT GATEKEEPER_MODEL_ID
-        INTEGER MAX_SPEAKERS_PER_TURN
-        INTEGER MAX_TURNS
-        BOOLEAN TOOLS_ENABLED
-        TIMESTAMPTZ CREATED_AT
-        TIMESTAMPTZ UPDATED_AT
-    }
-
-    ROOM_MEMBERS {
-        UUID ROOM_ID PK_FK
-        UUID AGENT_ID PK_FK
-        TEXT DISPLAY_NAME
-        TEXT ROLE_DESCRIPTION
-        INTEGER DISPLAY_ORDER
-    }
-
-    ROOM_SESSIONS {
-        UUID ID PK
-        UUID ROOM_ID FK
-        TEXT STATUS
-        INTEGER CURRENT_TURN
-        TEXT TRANSCRIPT_SUMMARY
-        TIMESTAMPTZ STARTED_AT
-        TIMESTAMPTZ COMPLETED_AT
-    }
-
-    USERS {
-        UUID ID PK
-    }
-
-    AGENTS {
-        UUID ID PK
-    }
-
-    WORKFLOW_COLLECTIONS {
-        UUID ID PK
-    }
-
-    AGENT_EXECUTIONS {
-        UUID ID PK
-        UUID ROOM_SESSION_ID FK
-    }
-
-    USERS ||--o{ ROOMS : "OWNS"
-    ROOMS ||--o{ ROOM_MEMBERS : "HAS"
-    ROOMS ||--o{ ROOM_SESSIONS : "HOSTS"
-    ROOMS }o--o| WORKFLOW_COLLECTIONS : "BELONGS TO"
-    ROOM_MEMBERS }o--|| AGENTS : "REFERENCES"
-    ROOM_SESSIONS ||--o{ AGENT_EXECUTIONS : "RUNS"
+### CHAT SYSTEM
 ```
-
----
-
-## DOCUMENTS & KNOWLEDGE
-
-```mermaid
-erDiagram
-    DOCUMENTS {
-        UUID ID PK
-        UUID USER_ID FK
-        UUID SESSION_ID FK
-        TEXT TITLE
-        TEXT CONTENT
-        TEXT SUMMARY
-        TEXT DOC_TYPE
-        TEXT REF_TAG
-        TEXT_ARRAY TAGS
-        TIMESTAMPTZ CREATED_AT
-        TIMESTAMPTZ UPDATED_AT
-    }
-
-    AGENT_CONTEXT {
-        UUID AGENT_ID PK_FK
-        UUID DOCUMENT_ID PK_FK
-    }
-
-    STEP_DOCUMENTS {
-        UUID STEP_ID PK_FK
-        UUID DOCUMENT_ID PK_FK
-    }
-
-    USERS {
-        UUID ID PK
-    }
-
-    AGENTS {
-        UUID ID PK
-    }
-
-    WORKFLOW_STEPS {
-        UUID ID PK
-    }
-
-    CHAT_SESSIONS {
-        UUID ID PK
-    }
-
-    USERS ||--o{ DOCUMENTS : "OWNS"
-    DOCUMENTS ||--o{ AGENT_CONTEXT : "PROVIDES CONTEXT"
-    DOCUMENTS ||--o{ STEP_DOCUMENTS : "ATTACHED TO"
-    DOCUMENTS }o--o| CHAT_SESSIONS : "CREATED IN"
-    AGENT_CONTEXT }o--|| AGENTS : "REFERENCES"
-    STEP_DOCUMENTS }o--|| WORKFLOW_STEPS : "REFERENCES"
+CHAT_SESSIONS
+  ├── CHAT_MESSAGES
+  ├── CONTEXT_STORE (CONTEXTUAL DATA)
+  ├── ROUTER_REQUESTS ──► AGENT_EXECUTIONS
+  └── DOCUMENTS (CREATED IN SESSION)
 ```
-
----
-
-## LEGACY TABLES
-
-```mermaid
-erDiagram
-    TASKS {
-        UUID ID PK
-        UUID USER_ID FK
-        UUID SLICE_ID FK
-        TEXT TITLE
-        TEXT DESCRIPTION
-        UUID ASSIGNED_AGENT FK
-        TEXT STATUS
-        TEXT PRIORITY
-        JSONB CONTEXT_FILES
-        JSONB METADATA
-        INTEGER RETRY_COUNT
-        INTEGER MAX_RETRIES
-        TEXT LAST_ERROR
-        TIMESTAMPTZ CREATED_AT
-        TIMESTAMPTZ UPDATED_AT
-    }
-
-    TASK_EVENTS {
-        UUID ID PK
-        UUID TASK_ID FK
-        TEXT EVENT_TYPE
-        UUID AGENT_ID
-        TEXT DETAILS
-        TIMESTAMPTZ TIMESTAMP
-    }
-
-    TASK_DEPENDENCIES {
-        UUID TASK_ID PK_FK
-        UUID DEPENDS_ON_ID PK_FK
-        TIMESTAMPTZ CREATED_AT
-    }
-
-    TICKETS {
-        UUID ID PK
-        UUID USER_ID FK
-        TEXT SOURCE_TYPE
-        TEXT SOURCE_OWNER
-        TEXT SOURCE_REPO
-        INTEGER SOURCE_ISSUE_NUMBER
-        TEXT TITLE
-        TEXT DESCRIPTION
-        JSONB LABELS
-        TEXT STATUS
-        TIMESTAMPTZ CREATED_AT
-    }
-
-    VERTICAL_SLICES {
-        UUID ID PK
-        UUID USER_ID FK
-        UUID TICKET_ID FK
-        TEXT TITLE
-        TEXT DESCRIPTION
-        TEXT STATUS
-        TIMESTAMPTZ CREATED_AT
-    }
-
-    USERS {
-        UUID ID PK
-    }
-
-    AGENTS {
-        UUID ID PK
-    }
-
-    USERS ||--o{ TASKS : "OWNS"
-    USERS ||--o{ TICKETS : "OWNS"
-    USERS ||--o{ VERTICAL_SLICES : "OWNS"
-    TASKS ||--o{ TASK_EVENTS : "LOGS"
-    TASKS ||--o{ TASK_DEPENDENCIES : "DEPENDS ON"
-    TASKS }o--o| AGENTS : "ASSIGNED TO"
-    TASKS }o--o| VERTICAL_SLICES : "BELONGS TO"
-    TICKETS ||--o{ VERTICAL_SLICES : "DECOMPOSED INTO"
-```
-
----
 
 ## VERSION HISTORY TABLES
 
-THE FOLLOWING TABLES HAVE ASSOCIATED `_VERSIONS` HISTORY TABLES THAT TRACK ALL CHANGES:
+THE FOLLOWING TABLES HAVE ASSOCIATED `_VERSIONS` HISTORY TABLES:
 
-| ENTITY TABLE | VERSION TABLE | TRACKS |
-|---|---|---|
-| **AGENTS** | **AGENTS_VERSIONS** | NAME, SYSTEM_PROMPT, MODEL CONFIG, ETC. |
-| **AGENT_MODES** | **AGENT_MODES_VERSIONS** | MODE DEFINITIONS AND OVERRIDES |
-| **TOOLS** | **TOOLS_VERSIONS** | TOOL DEFINITIONS AND PARAMETERS |
-| **WORKFLOWS** | **WORKFLOWS_VERSIONS** | WORKFLOW NAME, DESCRIPTION, MODE |
-| **WORKFLOW_STEPS** | **WORKFLOW_STEPS_VERSIONS** | STEP CONFIG, TEMPLATES, SCHEMAS |
-| **OUTPUT_SCHEMAS** | **OUTPUT_SCHEMAS_VERSIONS** | JSON SCHEMA DEFINITIONS |
-| **PROMPT_TEMPLATES** | **PROMPT_TEMPLATES_VERSIONS** | TEMPLATE CONTENT |
+```
+AGENTS              ──►  AGENTS_VERSIONS
+AGENT_MODES         ──►  AGENT_MODES_VERSIONS
+TOOLS               ──►  TOOLS_VERSIONS
+WORKFLOWS           ──►  WORKFLOWS_VERSIONS
+WORKFLOW_STEPS      ──►  WORKFLOW_STEPS_VERSIONS
+OUTPUT_SCHEMAS      ──►  OUTPUT_SCHEMAS_VERSIONS
+PROMPT_TEMPLATES    ──►  PROMPT_TEMPLATES_VERSIONS
+```
 
 EACH VERSION TABLE CONTAINS: `ID`, `VERSION`, ALL ENTITY COLUMNS, `CHANGED_BY` (UUID), `CHANGED_AT` (TIMESTAMPTZ)
 
----
+## JOIN TABLE INDEX
 
-## RELATIONSHIP LEGEND
-
-| SYMBOL | MEANING |
-|---|---|
-| `\|\|--o{` | ONE TO MANY (SOLID LINE) |
-| `}o--o\|` | MANY TO ZERO-OR-ONE (OPTIONAL FK) |
-| `}o--\|\|` | MANY TO ONE (REQUIRED FK) |
-| `--` SOLID ARROW | DIRECT OWNERSHIP / REQUIRED RELATIONSHIP |
-| `-.` DOTTED ARROW | CROSS-DOMAIN / OPTIONAL REFERENCE |
+```
+AGENT_TOOLS             ──  AGENTS        ◄──N:M──►  TOOLS
+TOOL_ROUTER_TOOLS       ──  TOOL_ROUTERS  ◄──N:M──►  TOOLS
+CLUSTER_MEMBERS         ──  CLUSTERS      ◄──N:M──►  AGENTS
+WORKFLOW_STEP_AGENTS    ──  WORKFLOW_STEPS◄──N:M──►  AGENTS
+WORKFLOW_STEP_EDGES     ──  WORKFLOW_STEPS◄──DAG──►  WORKFLOW_STEPS
+STEP_DOCUMENTS          ──  WORKFLOW_STEPS◄──N:M──►  DOCUMENTS
+COLLECTION_WORKFLOWS    ──  COLLECTIONS   ◄──N:M──►  WORKFLOWS
+COLLECTION_WORKFLOW_EDGES── COLLECTIONS   ◄──DAG──►  WORKFLOWS
+ROOM_MEMBERS            ──  ROOMS         ◄──N:M──►  AGENTS
+AGENT_CONTEXT           ──  AGENTS        ◄──N:M──►  DOCUMENTS
+TASK_DEPENDENCIES       ──  TASKS         ◄──DAG──►  TASKS
+```
