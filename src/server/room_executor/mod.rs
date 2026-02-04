@@ -12,10 +12,11 @@ use uuid::Uuid;
 
 use crate::agents::gatekeeper::{self, GatekeeperInput, RosterEntry, SpeakerSelection};
 use crate::db::{AgentRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry};
-use crate::llm::{LLMProvider, LLMRequest, Message, Tool};
+use crate::llm::{LLMProvider, LLMRequest, Message};
 use crate::server::hub::streaming::StreamSink;
 use crate::server::hub::{
-    ExecutionEngine, ExecutionRecorder, HubError, RoomSpeakerConfig, RoomSpeakerStrategy,
+    construct_agent_defaults, ExecutionEngine, ExecutionRecorder, HubError, RoomSpeakerConfig,
+    RoomSpeakerStrategy,
 };
 use crate::server::state::AppState;
 use crate::server::ws::RoomUpdateEvent;
@@ -289,9 +290,24 @@ pub async fn execute_room_turn(
             user_id: Some(user_id),
         });
 
-        // Build system prompt: agent base + agent context documents + room context
+        // Resolve mode with transcript as context
+        let mode = if let Some(resolver) = &state.mode_resolver {
+            resolver
+                .resolve(&ma.agent, user_message, Some(&transcript_block))
+                .await
+                .map_err(|e| HubError::Internal(anyhow::anyhow!("Mode resolution failed: {}", e)))?
+        } else {
+            // Fallback: construct agent defaults for backward compatibility
+            construct_agent_defaults(&ma.agent, &state.repo)
+                .await
+                .map_err(HubError::Internal)?
+        };
+
+        // Build system prompt: mode result + room context + agent docs
         let room_context = build_room_context(room, &ma.member, &ma.agent, members);
-        let mut system_prompt = format!("{}\n\n{}", ma.agent.system_prompt, room_context);
+        let mut system_prompt = mode.system_prompt;  // agent + mode already merged
+        system_prompt.push_str("\n\n");
+        system_prompt.push_str(&room_context);
 
         // Append agent context documents (global knowledge for this agent)
         if let Some(_doc_repo) = &state.doc_repo {
@@ -309,24 +325,12 @@ pub async fn execute_room_turn(
         let user_prompt =
             build_speaker_prompt(user_message, &selection.followup_context, &transcript_block);
 
-        // Resolve tools (empty if room.tools_enabled is false)
+        // Apply room tools_enabled override
         let (tools, tool_names) = if room.tools_enabled {
-            let tool_rows = state
-                .repo
-                .get_agent_tools(selection.agent_id)
-                .await
-                .unwrap_or_default();
-            let names: Vec<String> = tool_rows.iter().map(|t| t.name.clone()).collect();
-            let llm_tools: Vec<Tool> = tool_rows
-                .iter()
-                .map(|t| Tool {
-                    name: t.name.clone(),
-                    description: t.description.clone(),
-                    input_schema: t.parameters.clone(),
-                })
-                .collect();
-            (llm_tools, names)
+            // Use resolved tools from mode (or agent defaults)
+            (mode.tools, mode.tool_names)
         } else {
+            // Room master switch OFF → force disable
             (vec![], vec![])
         };
 
@@ -339,9 +343,9 @@ pub async fn execute_room_turn(
                 None,  // parent_agent_execution_id
                 &system_prompt,
                 &user_prompt,
-                None,             // selected_mode_id
-                Some(session.id), // room_session_id
-                Some(i as i32),   // speaker_order
+                mode.selected_mode_id,  // Track which mode was used
+                Some(session.id),       // room_session_id
+                Some(i as i32),         // speaker_order
             )
             .await
             .map_err(HubError::Internal)?;
@@ -362,7 +366,8 @@ pub async fn execute_room_turn(
                 user_prompt,
                 tools,
                 tool_names,
-                execution_context: None, // TODO: wire up if tools_enabled
+                temperature: mode.temperature,  // Use mode temperature
+                execution_context: None,        // TODO: wire up if tools_enabled
                 user_id,
                 agent_execution_id: ae_row.id,
             },

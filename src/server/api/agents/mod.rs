@@ -174,6 +174,7 @@ pub async fn create_agent(
         model_temperature: request.model_temperature.unwrap_or(0.7),
         status: Some("idle".to_string()),
         router_mode: Some(false),
+        router_id: None,
         output_schema_id: request.output_schema_id,
         version: 1,
     };
@@ -259,6 +260,7 @@ pub async fn update_agent(
             .unwrap_or(existing.model_temperature),
         status: existing.status,
         router_mode: existing.router_mode,
+        router_id: existing.router_id,
         output_schema_id: request.output_schema_id.or(existing.output_schema_id),
         version: existing.version,
     };

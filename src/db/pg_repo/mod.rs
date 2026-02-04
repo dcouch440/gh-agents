@@ -650,6 +650,7 @@ struct PgAgentRow {
     model_temperature: f32,
     status: Option<String>,
     router_mode: Option<bool>,
+    router_id: Option<Uuid>,
     output_schema_id: Option<Uuid>,
     version: i32,
 }
@@ -667,6 +668,7 @@ fn agent_row_from_pg(r: PgAgentRow) -> AgentRow {
         model_temperature: r.model_temperature,
         status: r.status,
         router_mode: r.router_mode,
+        router_id: r.router_id,
         output_schema_id: r.output_schema_id,
         version: r.version,
     }

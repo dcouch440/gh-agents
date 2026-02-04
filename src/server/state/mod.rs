@@ -15,9 +15,10 @@ use crate::db::traits::{
     ResultRepo, RoomRepo, RouterRequestRepo, ServerRepo, TokenLedgerRepo, ToolRouterRepo, UserRepo,
     WorkflowRepo,
 };
+use crate::llm::LLMProvider;
 use crate::types::{AppConfig, UserId};
 
-use super::hub::PromptRegistry;
+use super::hub::{ModeResolver, PromptRegistry};
 use super::ws::{
     AgentUpdate, FeedUpdate, PipelineUpdate, RoomUpdateEvent, RoutingUpdate, SessionUpdate,
     TaskUpdate,
@@ -87,6 +88,10 @@ pub struct AppState {
     pub router_request_repo: Option<Arc<dyn RouterRequestRepo>>,
     /// Room repository for agent room management (None in legacy/test mode)
     pub room_repo: Option<Arc<dyn RoomRepo>>,
+    /// LLM provider for agent execution (None in legacy/test mode)
+    pub provider: Option<Arc<dyn LLMProvider + Send + Sync>>,
+    /// Mode resolver for router-based mode selection (None in legacy/test mode)
+    pub mode_resolver: Option<Arc<ModeResolver>>,
     /// Application configuration (mutable at runtime via API)
     pub config: Arc<RwLock<AppConfig>>,
     /// JWT secret for token signing
@@ -169,10 +174,37 @@ impl AppState {
         state.agent_execution_repo = Some(agent_execution_repo);
         state.token_ledger_repo = Some(token_ledger_repo);
         state.result_repo = Some(result_repo);
-        state.tool_router_repo = Some(tool_router_repo);
+        state.tool_router_repo = Some(tool_router_repo.clone());
         state.context_store_repo = Some(context_store_repo);
         state.router_request_repo = Some(router_request_repo);
         state.room_repo = Some(room_repo);
+
+        // Initialize LLM provider
+        match crate::llm::AnthropicClient::from_env() {
+            Ok(p) => {
+                tracing::info!("Initialized LLM provider: {}", p.model_id().to_string());
+                let provider: Arc<dyn LLMProvider + Send + Sync> = Arc::new(
+                    crate::llm::RetryingProvider::with_defaults(
+                        crate::llm::RateLimitedProvider::with_defaults(p),
+                    ),
+                );
+
+                // Initialize mode resolver with provider
+                let mode_resolver = Arc::new(ModeResolver::new(
+                    state.repo.clone(),
+                    tool_router_repo,
+                    provider.clone(),
+                ));
+
+                state.provider = Some(provider);
+                state.mode_resolver = Some(mode_resolver);
+            }
+            Err(e) => {
+                tracing::warn!("Failed to initialize LLM provider: {}. ModeResolver will not be available. Set ANTHROPIC_API_KEY.", e);
+                state.provider = None;
+                state.mode_resolver = None;
+            }
+        }
 
         // Look up default agent from DB (for workflow system)
         let legacy_user =
@@ -253,6 +285,8 @@ impl AppState {
                 context_store_repo: None,
                 router_request_repo: None,
                 room_repo: None,
+                provider: None,
+                mode_resolver: None,
                 config: Arc::new(RwLock::new(config)),
                 jwt_secret,
                 chat_tx,

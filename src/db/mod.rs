@@ -27,6 +27,7 @@ pub struct AgentRow {
     pub model_temperature: f32,
     pub status: Option<String>,
     pub router_mode: Option<bool>,
+    pub router_id: Option<Uuid>,
     pub output_schema_id: Option<Uuid>,
     pub version: i32,
 }
