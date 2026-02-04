@@ -5,10 +5,11 @@
 2. [Problem Statement](#problem-statement)
 3. [Proposed Solution](#proposed-solution)
 4. [Database Design](#database-design)
-5. [Runtime Architecture](#runtime-architecture)
-6. [Implementation Plan](#implementation-plan)
-7. [Edge Cases & Defaults](#edge-cases--defaults)
-8. [Integration Points](#integration-points)
+5. [Layered Architecture](#layered-architecture)
+6. [Runtime Architecture](#runtime-architecture)
+7. [Implementation Plan](#implementation-plan)
+8. [Edge Cases & Defaults](#edge-cases--defaults)
+9. [Integration Points](#integration-points)
 
 ---
 
@@ -161,9 +162,11 @@ CREATE TABLE tool_router_modes (
     description TEXT NOT NULL,               -- For router LLM classification
 
     -- Behavior configuration
-    system_prompt TEXT NOT NULL,             -- Full system prompt for this mode
+    system_prompt TEXT NOT NULL,             -- System prompt for this mode
     temperature REAL NOT NULL DEFAULT 0.7,
     max_tokens INT NOT NULL DEFAULT 4096,
+    append_to_agent_system_prompt BOOLEAN NOT NULL DEFAULT FALSE,  -- Append mode prompt to agent's or replace
+    append_to_agent_tools BOOLEAN NOT NULL DEFAULT TRUE,           -- Add mode tools to agent's or replace
 
     -- Metadata
     display_order INT NOT NULL DEFAULT 0,
@@ -312,24 +315,170 @@ DROP TABLE IF EXISTS agent_modes CASCADE;
 
 ---
 
+## Layered Architecture
+
+### Design Principle: Keep ExecutionEngine Pure
+
+The existing `ExecutionEngine` is **perfectly designed** as a generic LLM execution loop. We should NOT modify it to add routing logic. Instead, we wrap it with an orchestration layer.
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  LAYER 3: APPLICATION (Call Sites)                               │
+│  ─────────────────────────────────────────────────────────────── │
+│  - chat_consumer.rs                                              │
+│  - workflow_executor.rs                                          │
+│  - room_executor.rs                                              │
+│  - agent_executions.rs                                           │
+│                                                                  │
+│  All call: orchestrator.execute_agent(agent_id, input, history) │
+└──────────────────────────┬───────────────────────────────────────┘
+                           │
+                           ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  LAYER 2: ORCHESTRATION (NEW - AgentOrchestrator)                │
+│  ─────────────────────────────────────────────────────────────── │
+│  Responsibilities:                                               │
+│  ✓ Load agent from database                                     │
+│  ✓ Route with FULL HISTORY (if agent.router_id)                 │
+│  ✓ Load mode configuration (system_prompt, tools, temp)         │
+│  ✓ Create execution strategy (ChatStrategy, DagStepStrategy)    │
+│  ✓ Call ExecutionEngine with strategy                           │
+│  ✓ Return result with routing metadata                          │
+│                                                                  │
+│  This layer is AGENT-AWARE and handles routing.                 │
+└──────────────────────────┬───────────────────────────────────────┘
+                           │
+                           ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  LAYER 1: EXECUTION (Existing - ExecutionEngine)                 │
+│  ─────────────────────────────────────────────────────────────── │
+│  Responsibilities:                                               │
+│  ✓ Execute strategy (strategy pattern)                          │
+│  ✓ Tool use loop                                                │
+│  ✓ Streaming                                                    │
+│  ✓ Token tracking                                               │
+│  ✓ Cancellation handling                                        │
+│                                                                  │
+│  This layer is PURE - no agent/routing awareness.               │
+│  Just executes whatever strategy it receives.                   │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Why This Architecture?
+
+**ExecutionEngine (Layer 1)**:
+- ✅ Pure execution loop (generic, reusable)
+- ✅ Strategy-agnostic (works with any ExecutionStrategy)
+- ✅ No agent awareness (maintains single responsibility)
+- ✅ Easy to test (mock strategies)
+- ✅ Already exists and works perfectly!
+
+**AgentOrchestrator (Layer 2)**:
+- ✅ Handles agent-specific logic (loading, routing)
+- ✅ Routing sees full conversation history
+- ✅ Creates appropriate strategy based on mode
+- ✅ Reusable across all agent execution contexts
+- ✅ Single source of truth for routing logic
+
+**Application Layer (Layer 3)**:
+- ✅ Simple API: `orchestrator.execute_agent(agent_id, input, history)`
+- ✅ No routing logic duplication
+- ✅ Consistent behavior everywhere
+- ✅ Easy to add new agent execution contexts
+
+### AgentOrchestrator Interface
+
+```rust
+pub struct AgentOrchestrator {
+    engine: ExecutionEngine,
+    repo: Arc<dyn ServerRepo>,
+    router_repo: Arc<dyn ToolRouterRepo>,
+}
+
+impl AgentOrchestrator {
+    /// Execute an agent with automatic routing.
+    ///
+    /// This is the PRIMARY way to execute agents. Use everywhere:
+    /// - Chat messages
+    /// - Workflow steps
+    /// - Room speakers
+    /// - Interactive executions
+    pub async fn execute_agent(
+        &self,
+        agent_id: Uuid,
+        input: &str,
+        history: Vec<Message>,  // FULL history for routing context!
+        sink: &dyn StreamSink,
+        recorder: &ExecutionRecorder<'_>,
+        cancel: Option<&CancellationToken>,
+    ) -> Result<OrchestratedResult, OrchestratorError> {
+        // 1. Load agent
+        // 2. Route with full history (if agent.router_id)
+        // 3. Create strategy with mode config
+        // 4. Execute via engine
+        // 5. Return result with routing metadata
+    }
+}
+
+pub struct OrchestratedResult {
+    pub execution: ExecutionResult,      // From engine
+    pub selected_mode_id: Option<Uuid>,  // Which mode was selected
+    pub selected_mode_key: Option<String>, // Mode key for logging
+}
+```
+
+### Routing with Full Context
+
+**Key Feature**: Router sees FULL conversation history, not just current message.
+
+```rust
+// Inside AgentOrchestrator::route_with_history()
+
+let classification_prompt = format!(
+    "## Conversation History:\n{}\n\n\
+     ## Current User Input:\n{}\n\n\
+     ## Available Modes:\n{}\n\n\
+     Based on the conversation context and current input, \
+     output ONLY the mode key.",
+    format_history(&history, 10),  // Last 10 messages
+    current_input,
+    format_modes(&modes)
+);
+```
+
+**Why this matters**:
+- Router can see conversation flow
+- Better mode selection (e.g., switch from "supportive" to "direct" mid-conversation)
+- Context-aware personality changes
+
+---
+
 ## Runtime Architecture
 
-### Execution Flow
+### Execution Flow (via AgentOrchestrator)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ 1. USER SENDS MESSAGE                                                    │
+│ 1. APPLICATION LAYER - USER MESSAGE                                      │
+│                                                                          │
+│    // chat_consumer.rs, workflow_executor.rs, room_executor.rs          │
+│    orchestrator.execute_agent(                                          │
+│        agent_id,                                                        │
+│        "Help me debug this React component",                            │
+│        history,  // FULL conversation history!                          │
+│        &sink, &recorder, cancel                                         │
+│    ).await?                                                             │
+│                                                                          │
 └──────────────────────────┬───────────────────────────────────────────────┘
                            │
                            ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ 2. LOAD AGENT CONFIGURATION                                              │
+│ 2. ORCHESTRATOR - LOAD AGENT                                             │
 │                                                                          │
-│    agent = db.get_agent(agent_id)                                       │
+│    agent = db.get_agent(agent_id).await?                                │
 │                                                                          │
 │    if agent.router_id.is_some():                                        │
-│        router = db.get_tool_router(agent.router_id)                     │
-│        → HAS ROUTER: Proceed to classification                          │
+│        → HAS ROUTER: Proceed to routing with full history               │
 │    else:                                                                │
 │        → NO ROUTER: Use agent's default config (fallback)               │
 │                                                                          │
@@ -337,31 +486,35 @@ DROP TABLE IF EXISTS agent_modes CASCADE;
                            │
                            ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ 3. ROUTER CLASSIFICATION (if agent has router_id)                        │
+│ 3. ORCHESTRATOR - ROUTE WITH FULL HISTORY (if agent.router_id exists)   │
 │                                                                          │
-│    modes = db.list_router_modes(router.id)                              │
-│    → Build classification prompt:                                       │
+│    router = db.get_tool_router(agent.router_id).await?                  │
+│    modes = db.list_router_modes(router.id).await?                       │
 │                                                                          │
-│      System: "{router.system_prompt}"                                   │
-│               e.g., "Select the best mode for this user request"        │
+│    → Build classification prompt WITH FULL CONVERSATION CONTEXT:        │
 │                                                                          │
-│      User: "User input: {message.content}                               │
+│      ## Conversation History (last 10 messages):                        │
+│      user: How do I center a div?                                       │
+│      assistant: Use flexbox with justify-content: center...             │
+│      user: Help me debug this React component                           │
 │                                                                          │
-│             Available modes:                                            │
-│             - coding: For programming tasks (bash, edit, search)        │
-│             - research: For information gathering (web_search, read)    │
-│             - chat: For conversation (no tools)                         │
+│      ## Current User Input:                                             │
+│      Help me debug this React component                                 │
 │                                                                          │
-│             Output ONLY the mode key (e.g., 'coding')"                  │
+│      ## Available Modes:                                                │
+│      - coding: For programming tasks (bash, edit, search)               │
+│      - research: For information gathering (web_search, read)           │
+│      - chat: For conversation (no tools)                                │
 │                                                                          │
-│    → Call Router LLM (Haiku, temp=0.0, fast):                           │
-│        ExecutionEngine.execute(                                         │
-│            strategy: RouterStrategy::new(router.system_prompt, ...),    │
-│            input: classification_prompt                                 │
-│        )                                                                │
+│      Based on conversation context and current input,                   │
+│      output ONLY the mode key.                                          │
+│                                                                          │
+│    → Call Router LLM via ExecutionEngine:                               │
+│        router_strategy = RouterStrategy::new(router.system_prompt, ...) │
+│        result = engine.execute(&router_strategy, prompt, ...).await?    │
 │                                                                          │
 │    → Parse response: selected_mode_key = "coding"                       │
-│    → Fetch mode: mode = db.get_mode_by_key(router.id, "coding")        │
+│    → Load mode: mode = db.get_mode_by_key(router.id, "coding").await?  │
 │                                                                          │
 └──────────────────────────┬───────────────────────────────────────────────┘
                            │
@@ -412,7 +565,76 @@ DROP TABLE IF EXISTS agent_modes CASCADE;
 │        }                                                                │
 │    }                                                                    │
 │                                                                          │
-│    → Result: Vec<Tool> with only 4 tools (not 50!)                      │
+│    → Result: Vec<Tool> with mode-specific tools                         │
+│                                                                          │
+└──────────────────────────┬───────────────────────────────────────────────┘
+                           │
+                           ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ 6b. UNION OR REPLACE TOOLS (based on append_to_agent_tools flag)        │
+│                                                                          │
+│    if mode.append_to_agent_tools == true:                               │
+│        → UNION: Combine agent's base tools + mode tools                 │
+│                                                                          │
+│        agent_tool_ids = db.get_agent_tools(agent.id)                    │
+│        agent_tool_rows = db.get_tools_by_ids(agent_tool_ids)            │
+│        agent_tools = agent_tool_rows.map(get_tool_definition)           │
+│                                                                          │
+│        // Deduplicate by tool name                                      │
+│        final_tools = union_by_name(agent_tools, mode_tools)             │
+│                                                                          │
+│        Example:                                                          │
+│          Agent tools:   [read_file, write_file]                         │
+│          Mode tools:    [bash, git, edit_file]                          │
+│          Final tools:   [read_file, write_file, bash, git, edit_file]  │
+│                                                                          │
+│    else:                                                                │
+│        → REPLACE: Use ONLY mode tools (ignore agent's base tools)       │
+│                                                                          │
+│        final_tools = mode_tools                                         │
+│                                                                          │
+│        Example:                                                          │
+│          Agent tools:   [read_file, write_file, bash, ...]              │
+│          Mode tools:    []  (empty - minimal chat mode)                 │
+│          Final tools:   []  (no tools available)                        │
+│                                                                          │
+│    → Result: Vec<Tool> optimized for this specific interaction          │
+│                                                                          │
+└──────────────────────────┬───────────────────────────────────────────────┘
+                           │
+                           ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ 6c. CONSTRUCT SYSTEM PROMPT (based on append_to_agent_system_prompt)    │
+│                                                                          │
+│    if mode.append_to_agent_system_prompt == true:                       │
+│        → APPEND: Combine agent's system prompt + mode's system prompt   │
+│                                                                          │
+│        agent_system_prompt = agent.system_prompt                        │
+│        mode_system_prompt = mode.system_prompt                          │
+│                                                                          │
+│        final_system_prompt = format!(                                   │
+│            "{}\n\n{}",                                                  │
+│            agent_system_prompt,                                         │
+│            mode_system_prompt                                           │
+│        )                                                                │
+│                                                                          │
+│        Example:                                                          │
+│          Agent: "You are a helpful coding assistant."                   │
+│          Mode:  "You love science and physics."                         │
+│          Final: "You are a helpful coding assistant.\n\n\               │
+│                  You love science and physics."                         │
+│                                                                          │
+│    else:                                                                │
+│        → REPLACE: Use ONLY mode's system prompt                         │
+│                                                                          │
+│        final_system_prompt = mode.system_prompt                         │
+│                                                                          │
+│        Example:                                                          │
+│          Agent: "You are a helpful coding assistant."                   │
+│          Mode:  "You love science and physics."                         │
+│          Final: "You love science and physics."                         │
+│                                                                          │
+│    → Result: final_system_prompt for execution strategy                 │
 │                                                                          │
 └──────────────────────────┬───────────────────────────────────────────────┘
                            │
@@ -421,7 +643,7 @@ DROP TABLE IF EXISTS agent_modes CASCADE;
 │ 7. CREATE EXECUTION STRATEGY                                             │
 │                                                                          │
 │    strategy = ChatStrategy::new(ChatConfig {                             │
-│        system_prompt: mode.system_prompt,    ← From mode                │
+│        system_prompt: final_system_prompt,   ← From step 6c             │
 │        temperature: mode.temperature,        ← From mode                │
 │        max_tokens: mode.max_tokens,          ← From mode                │
 │        tools: tools,                         ← From mode (filtered!)    │
@@ -556,6 +778,8 @@ CREATE TABLE tool_router_modes (
     system_prompt TEXT NOT NULL,
     temperature REAL NOT NULL DEFAULT 0.7,
     max_tokens INT NOT NULL DEFAULT 4096,
+    append_to_agent_system_prompt BOOLEAN NOT NULL DEFAULT FALSE,  -- Append mode prompt to agent's or replace
+    append_to_agent_tools BOOLEAN NOT NULL DEFAULT TRUE,           -- Add mode tools to agent's or replace
     display_order INT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1200,6 +1424,297 @@ JOIN tool_routers tr ON tr.name = 'Agent ' || a.name || ' Router';
 
 ---
 
+## Architecture Summary
+
+### The Complete Picture
+
+```
+APPLICATION LAYER (chat_consumer, workflow_executor, room_executor)
+    │
+    │ orchestrator.execute_agent(agent_id, input, history, ...)
+    │
+    ▼
+ORCHESTRATION LAYER (AgentOrchestrator) - NEW
+    │
+    ├─ Load agent from DB
+    ├─ Route with FULL history (if agent.router_id)
+    │   └─ Calls engine.execute(RouterStrategy, ...)
+    ├─ Load mode config & tools
+    ├─ Create ChatStrategy with mode config
+    │
+    │ engine.execute(ChatStrategy, ...)
+    │
+    ▼
+EXECUTION LAYER (ExecutionEngine) - UNCHANGED
+    │
+    ├─ Tool use loop
+    ├─ Streaming
+    ├─ Token tracking
+    │
+    └─ Returns ExecutionResult
+```
+
+### Key Points
+
+1. **ExecutionEngine Stays Pure** ✅
+   - No agent/routing awareness
+   - Just executes strategies
+   - Perfectly designed, leave it unchanged
+
+2. **AgentOrchestrator Wraps Engine** ✅
+   - Handles all agent-specific logic
+   - Routing with full conversation history
+   - Creates appropriate strategies
+   - Single source of truth for agent execution
+
+3. **Application Layer Simplified** ✅
+   - Just calls `orchestrator.execute_agent()`
+   - No routing logic duplication
+   - Consistent everywhere
+
+4. **Router Sees Full History** ✅
+   - Classification prompt includes last N messages
+   - Better mode selection with context
+   - Can adapt personality mid-conversation
+
+5. **Reusable Everywhere** ✅
+   - Chat messages
+   - Workflow steps
+   - Room speakers
+   - Any agent execution
+
+### Usage Pattern
+
+**Before** (scattered routing logic):
+```rust
+// ❌ Duplicated in every file
+let agent = repo.get_agent(agent_id).await?;
+if let Some(router_id) = agent.router_id {
+    // Manual routing...
+}
+let strategy = ChatStrategy::new(...);
+let engine = ExecutionEngine::new(provider);
+let result = engine.execute(&strategy, ...).await?;
+```
+
+**After** (unified orchestrator):
+```rust
+// ✅ One line, works everywhere
+let result = orchestrator.execute_agent(
+    agent_id,
+    input,
+    history,  // Full context!
+    &sink,
+    &recorder,
+    cancel,
+).await?;
+
+// Result includes routing metadata
+db.insert_agent_execution(AgentExecutionRow {
+    selected_router_mode_id: result.selected_mode_id,
+    ...
+});
+```
+
+---
+
+## Practical Examples: Union vs Replace (System Prompts & Tools)
+
+### Example 1: Coding Mode (Append System Prompt, Union Tools)
+
+**Scenario**: Agent has base personality and tools. "Coding" mode adds programming-specific instructions and tools.
+
+**Agent Configuration**:
+- System Prompt: `"You are a helpful AI assistant."`
+- Base Tools: `[read_file, write_file, web_search]`
+
+**Mode Configuration**:
+```json
+{
+  "mode_key": "coding",
+  "display_name": "Coding Mode",
+  "description": "For programming and development tasks",
+  "system_prompt": "Focus on code quality, best practices, and clear explanations. Use bash and git tools when appropriate.",
+  "temperature": 0.3,
+  "max_tokens": 8000,
+  "append_to_agent_system_prompt": true,   // APPEND
+  "append_to_agent_tools": true,           // UNION
+  "tools": ["bash", "git", "edit_file", "search_code"]
+}
+```
+
+**Result**:
+```
+System Prompt:
+  "You are a helpful AI assistant.
+
+   Focus on code quality, best practices, and clear explanations. Use bash and git tools when appropriate."
+  └── Agent base ──┘  └──────────────── Mode addition ────────────────────┘
+
+Tools:
+  [read_file, write_file, web_search, bash, git, edit_file, search_code]
+   └────── Agent base tools ────────┘  └────── Mode tools ────────┘
+```
+
+**Why Append/Union?** Agent's base personality is preserved while adding coding-specific guidance. General tools (read/write/search) remain available alongside dev tools (bash/git).
+
+---
+
+### Example 2: Minimal Chat Mode (Replace System Prompt, Replace Tools)
+
+**Scenario**: Pure conversation mode with completely different personality and no tools.
+
+**Agent Configuration**:
+- System Prompt: `"You are a helpful AI assistant that can help with coding, research, and general tasks."`
+- Base Tools: `[read_file, write_file, web_search, bash, ... 46 more tools]`
+
+**Mode Configuration**:
+```json
+{
+  "mode_key": "minimal_chat",
+  "display_name": "Minimal Chat",
+  "description": "Pure conversation without tools",
+  "system_prompt": "You are a friendly conversational AI focused on engaging dialogue and thoughtful responses.",
+  "temperature": 0.9,
+  "max_tokens": 2048,
+  "append_to_agent_system_prompt": false,  // REPLACE
+  "append_to_agent_tools": false,          // REPLACE
+  "tools": []  // Empty!
+}
+```
+
+**Result**:
+```
+System Prompt:
+  "You are a friendly conversational AI focused on engaging dialogue and thoughtful responses."
+  └── Mode completely replaces agent's system prompt ──┘
+
+Tools:
+  []  (no tools available)
+  └── Mode replaces with empty list
+```
+
+**Why Replace Both?** Completely different use case - want pure conversation with specific personality, no task-oriented language, and zero tool overhead.
+
+---
+
+### Example 3: Research Mode (Append System Prompt, Replace Tools)
+
+**Scenario**: Research tasks need specific instructions and ONLY information gathering tools.
+
+**Agent Configuration**:
+- System Prompt: `"You are a helpful AI assistant."`
+- Base Tools: `[read_file, write_file, bash, git, edit_file, search_code, web_search, web_fetch, ...]`
+
+**Mode Configuration**:
+```json
+{
+  "mode_key": "research",
+  "display_name": "Research Mode",
+  "description": "For information gathering and analysis",
+  "system_prompt": "Focus on finding accurate information from reliable sources. Cite sources when possible. Avoid speculation.",
+  "temperature": 0.5,
+  "max_tokens": 4096,
+  "append_to_agent_system_prompt": true,   // APPEND
+  "append_to_agent_tools": false,          // REPLACE
+  "tools": ["web_search", "web_fetch", "read_file"]
+}
+```
+
+**Result**:
+```
+System Prompt:
+  "You are a helpful AI assistant.
+
+   Focus on finding accurate information from reliable sources. Cite sources when possible. Avoid speculation."
+  └── Agent base ──┘  └──────────────── Mode addition ──────────────────┘
+
+Tools:
+  [web_search, web_fetch, read_file]
+  └── Only research tools (replaced agent's full toolset)
+```
+
+**Why Append System + Replace Tools?** Keep agent's base personality but add research-specific guidance. Replace tools because code execution (bash/git/edit) is irrelevant and wastes context.
+
+---
+
+### Example 4: Debug Mode (Append System Prompt, Union Tools)
+
+**Scenario**: Debug mode adds specialized debugging instructions and tools while keeping base capabilities.
+
+**Agent Configuration**:
+- System Prompt: `"You are a helpful AI assistant."`
+- Base Tools: `[read_file, write_file, edit_file, bash]`
+
+**Mode Configuration**:
+```json
+{
+  "mode_key": "debug",
+  "display_name": "Debug Mode",
+  "description": "For debugging and troubleshooting code",
+  "system_prompt": "Approach problems systematically. Check logs, reproduce errors, isolate root causes. Use debugging tools to inspect runtime behavior.",
+  "temperature": 0.2,
+  "max_tokens": 8000,
+  "append_to_agent_system_prompt": true,   // APPEND
+  "append_to_agent_tools": true,           // UNION
+  "tools": ["strace", "gdb", "profiler", "log_viewer"]
+}
+```
+
+**Result**:
+```
+System Prompt:
+  "You are a helpful AI assistant.
+
+   Approach problems systematically. Check logs, reproduce errors, isolate root causes. Use debugging tools to inspect runtime behavior."
+  └── Agent base ──┘  └──────────────────── Mode addition ───────────────────────┘
+
+Tools:
+  [read_file, write_file, edit_file, bash, strace, gdb, profiler, log_viewer]
+   └────── Agent base tools ────────┘  └───── Debug tools ──────┘
+```
+
+**Why Append/Union?** Base personality preserved with added debugging methodology. Basic file ops still needed plus specialized debug tools.
+
+---
+
+### Decision Matrix: When to Append vs Replace
+
+#### System Prompts
+
+| Scenario | `append_to_agent_system_prompt` | Reasoning |
+|----------|--------------------------------|-----------|
+| **Mode adds specific instructions** | `true` (APPEND) | Agent's base personality preserved, mode adds task-specific guidance |
+| **Mode tweaks behavior** | `true` (APPEND) | "Be more concise" or "Focus on security" appended to base prompt |
+| **Completely different personality** | `false` (REPLACE) | Chat mode vs task mode need totally different personalities |
+| **Safety/compliance override** | `false` (REPLACE) | Replace entire prompt with strict safety instructions |
+| **Context optimization** | `false` (REPLACE) | Shorter prompt saves tokens when agent's base prompt is verbose |
+
+**Default**: `false` (replace) - modes typically define complete behavior, appending is less common.
+
+#### Tools
+
+| Scenario | `append_to_agent_tools` | Reasoning |
+|----------|------------------------|-----------|
+| **Specialized mode extending base capabilities** | `true` (UNION) | Mode adds domain-specific tools while keeping general tools available |
+| **Context optimization (replace with subset)** | `false` (REPLACE) | Mode knows exact tools needed, replacing agent's default set saves context |
+| **Minimal/restricted mode** | `false` (REPLACE) | Explicitly remove tool access (e.g., chat-only mode with empty tools) |
+| **Tool experimentation** | `false` (REPLACE) | Testing new tool combinations without agent's tools interfering |
+| **Safety/sandboxing** | `false` (REPLACE) | Restrict agent to safe subset (e.g., no bash/git in prod environments) |
+
+**Default**: `true` (union) - safest choice, preserves agent's base capabilities.
+
+#### Common Combinations
+
+| Use Case | System Prompt | Tools | Example |
+|----------|--------------|-------|---------|
+| **Specialized mode** | APPEND | UNION | Coding mode: keep base personality, add dev guidance + tools |
+| **Pure conversation** | REPLACE | REPLACE | Chat mode: different personality, no tools at all |
+| **Context-optimized research** | APPEND | REPLACE | Keep personality, add research focus, only search tools |
+| **Emergency safety mode** | REPLACE | REPLACE | Override everything with safe behavior + no dangerous tools |
+
+---
+
 ## Next Steps
 
 1. Review this document with the team
@@ -1217,6 +1732,29 @@ JOIN tool_routers tr ON tr.name = 'Agent ' || a.name || ' Router';
 
 ---
 
-**Document Version**: 1.0
+---
+
+## Implementation Phase Updates
+
+**IMPORTANT**: The implementation phases have been updated based on the layered architecture design:
+
+- **Phase 1-3**: Unchanged (Database, DB Layer, Tool Registry)
+- **Phase 4**: ~~Routing Service~~ → **AgentOrchestrator**
+  - Files: `src/server/hub/orchestrator/mod.rs` + `tests.rs` (NEW)
+  - Wraps ExecutionEngine with agent loading + routing logic
+  - Handles routing with full conversation history
+  - Creates strategies and calls engine
+  - See "Layered Architecture" section for details
+- **Phase 5**: ~~Integration~~ → **Update Call Sites**
+  - Replace all `ExecutionEngine` calls with `orchestrator.execute_agent()`
+  - Files: chat_consumer, workflow_executor, room_executor, etc.
+  - Simple one-line replacement everywhere
+- **Phase 6-7**: Unchanged (API endpoints, Frontend UI)
+
+**Key Change**: Instead of scattered routing logic, ALL agent execution goes through `AgentOrchestrator` which handles routing automatically.
+
+---
+
+**Document Version**: 1.1
 **Last Updated**: 2026-02-04
 **Author**: Claude (Sonnet 4.5)
