@@ -1,24 +1,29 @@
 # Backend Capabilities & Implementation Status
 
+> **⚠️ DEPRECATION NOTICE:** This document describes the deprecated pipeline system architecture, which was removed on February 3, 2026. Pipelines have been replaced by **Workflow Collections**, which provide equivalent functionality with improved architecture and UX. This document is preserved for historical reference only.
+
 ## Overview
 
-This document describes the current state of the nexor backend, what it can do, what's missing, and the plan to reach 100% completeness.
+This document describes the state of the nexor backend as of the pipeline system era. The pipeline system has been fully removed and replaced by Workflow Collections.
 
-## Current Architecture (What Works ✅)
+## DEPRECATED: Pipeline Architecture (Removed Feb 3, 2026)
 
-### 1. Pipeline → Workflow → Agent Hierarchy
+### 1. Pipeline → Workflow → Agent Hierarchy (DEPRECATED)
 
+> **Note:** This hierarchy described the old pipeline system. It has been replaced by Workflow Collections.
+
+**Old Pipeline Architecture (REMOVED):**
 ```
-Pipeline
-  └─> Pipeline Stages (sequential)
-      └─> Pipeline Stage Members (parallel workflows)
-          └─> Workflows (DAG of steps)
-              └─> Workflow Steps (agents with execution modes)
+Pipeline (REMOVED)
+  └─> Pipeline Stages (sequential) (REMOVED)
+      └─> Pipeline Stage Members (parallel workflows) (REMOVED)
+          └─> Workflows (DAG of steps) (✅ Still exists, now used in Workflow Collections)
+              └─> Workflow Steps (agents with execution modes) (✅ Still exists)
 ```
 
-**Example:**
+**Historical Example:**
 ```
-Pipeline: "Feature Development"
+Pipeline: "Feature Development" (THIS STRUCTURE NO LONGER EXISTS)
 
   Stage 1: "Analysis"
     ├─ Workflow A: Requirements Analysis (3 agents in DAG)
@@ -33,6 +38,8 @@ Pipeline: "Feature Development"
     └─ Workflow C: Feature Design (for_each)
         └─ Step 1: designer-agent (executes N times)
 ```
+
+**Replacement:** Use Workflow Collections, which provide equivalent multi-workflow orchestration capabilities.
 
 ### 2. Workflow Step Execution Modes
 
@@ -104,7 +111,7 @@ These docs only appear when THIS specific step executes
 
 **Workflow steps can reference outputs from:**
 - Current workflow (completed steps): `{step_name.field}`
-- Prior pipeline stages: `{prior_stage.output.field}`
+- Prior pipeline stages: `{prior_stage.output.field}` (DEPRECATED - pipeline stages removed)
 - Array elements in for_each: `{files.$.name}`
 
 **Dot-path access:**
@@ -118,11 +125,11 @@ These docs only appear when THIS specific step executes
 
 ### 5. Parallel Execution
 
-**Stage-level parallelism:**
-- Multiple workflows in a pipeline stage run in parallel
-- Implementation: `execute_stage_via_members()` uses `tokio::spawn`
+**Stage-level parallelism (DEPRECATED):**
+- Multiple workflows in a pipeline stage used to run in parallel
+- Pipeline stages have been removed - use Workflow Collections instead
 
-**Step-level parallelism:**
+**Step-level parallelism (✅ Still works):**
 - Workflow steps with no dependencies run in parallel
 - DAG edges control execution order
 - Implementation: Topological sort + dependency tracking
@@ -306,27 +313,30 @@ CREATE TABLE step_documents (
 );
 ```
 
-### Pipeline Stage Members
+### Pipeline Stage Members (REMOVED Feb 3, 2026)
 ```sql
-CREATE TABLE pipeline_stage_members (
-    id UUID PRIMARY KEY,
-    pipeline_id UUID,
-    stage_number INTEGER,
-    workflow_id UUID REFERENCES workflows(id),
-    display_order INTEGER,
-    FOREIGN KEY (pipeline_id, stage_number)
-        REFERENCES pipeline_stages(pipeline_id, stage_number)
-        ON DELETE CASCADE
-);
+-- This table has been removed from the database
+-- CREATE TABLE pipeline_stage_members (
+--     id UUID PRIMARY KEY,
+--     pipeline_id UUID,
+--     stage_number INTEGER,
+--     workflow_id UUID REFERENCES workflows(id),
+--     display_order INTEGER,
+--     FOREIGN KEY (pipeline_id, stage_number)
+--         REFERENCES pipeline_stages(pipeline_id, stage_number)
+--         ON DELETE CASCADE
+-- );
 ```
 
-## API Endpoints (All Implemented ✅)
+## API Endpoints
 
-### Pipeline Management
-- `GET /api/pipelines` - List pipelines
-- `POST /api/pipelines` - Create pipeline
-- `GET /api/pipelines/:id` - Get pipeline
-- `POST /api/pipelines/:id/runs` - Start pipeline run
+### Pipeline Management (REMOVED Feb 3, 2026)
+- ~~`GET /api/pipelines` - List pipelines~~ (REMOVED)
+- ~~`POST /api/pipelines` - Create pipeline~~ (REMOVED)
+- ~~`GET /api/pipelines/:id` - Get pipeline~~ (REMOVED)
+- ~~`POST /api/pipelines/:id/runs` - Start pipeline run~~ (REMOVED)
+
+**Replacement:** Use Workflow Collections API endpoints instead.
 
 ### Workflow Management
 - `GET /api/workflows` - List workflows

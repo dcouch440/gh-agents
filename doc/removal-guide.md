@@ -6,6 +6,24 @@ Run `cargo check && cargo test` after each section to catch breakage incremental
 
 ---
 
+## ✅ REMOVED: Pipeline System (Replaced by Workflow Collections)
+
+**Removal Date:** February 3, 2026
+
+**Status:** COMPLETE - All pipeline code and tables have been removed from the system.
+
+**What Was Removed:**
+- Database tables: `pipelines`, `pipeline_stages`, `pipeline_runs`, `pipeline_stage_members`
+- Backend code: Pipeline-related API endpoints, handlers, and database operations
+- Frontend code: Pipeline UI components and state management
+- All foreign key references to pipeline tables
+
+**Replacement:** Workflow Collections system provides equivalent functionality with improved architecture and UX.
+
+**Migration Notes:** Existing users were migrated to Workflow Collections. See `doc/WORKFLOW_COLLECTIONS_MIGRATION.md` for details.
+
+---
+
 ## 1. Old DB Traits + Implementations
 
 Delete these traits from `src/db/traits.rs` and their `PgRepo` implementations from `src/db/pg_repo.rs`:
@@ -178,11 +196,7 @@ After the tables are gone and the code compiles clean:
 
 **`agents`:** Drop `tier`, `persona_style`, `status`, `router_mode`, `current_task`
 
-**`pipeline_stages`:** Drop `agent_id`, `cluster_id`, `role`, `approval_required`, `fan_out`, `input_definitions`, `output_description`, `output_schema`
-
 **`stage_executions`:** Drop old `rendered_prompt`, `output`, `structured_output`, `user_input`, `input_tokens`, `output_tokens`, `duration_ms`, old `agent_id`. Make `stage_member_id` NOT NULL.
-
-**`pipeline_runs`:** Drop `stage_outputs`, `total_input_tokens`, `total_output_tokens`
 
 **`documents`:** Drop `session_id`, `summary`, `doc_type`, `ref_tag`, `tags`
 

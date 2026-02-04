@@ -296,21 +296,27 @@ POST /api/workflows/wf-review/steps/step-1/documents
 }
 ```
 
-### 4. Create Pipeline & Run
+### 4. Execute Workflow (Updated - Pipeline API Removed Feb 3, 2026)
 ```bash
-POST /api/pipelines
-{
-  "name": "Review Pipeline"
-}
-→ {id: "pipeline-1"}
+# Pipeline API has been removed. Use Workflow Collections instead.
+# Historical example (NO LONGER WORKS):
+# POST /api/pipelines
+# {
+#   "name": "Review Pipeline"
+# }
+# → {id: "pipeline-1"}
+#
+# POST /api/pipelines/pipeline-1/runs
+# {
+#   "initial_input": "Review the authentication module"
+# }
 
-POST /api/pipelines/pipeline-1/runs
-{
-  "initial_input": "Review the authentication module"
-}
-→ Executes with BOTH documents:
-   - style-123 (Agent Context) ✅
-   - prd-456 (Step Context) ✅
+# Modern approach: Use Workflow Collections
+# See Workflow Collections documentation for current API
+
+# Note: Agent context and step documents still work as expected:
+#   - Agent Context documents ✅
+#   - Step Context documents ✅
 ```
 
 ## Backend Completeness Checklist
