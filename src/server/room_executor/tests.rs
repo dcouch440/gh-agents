@@ -18,6 +18,7 @@ fn make_agent(name: &str) -> AgentRow {
         model_temperature: 0.7,
         status: None,
         router_mode: None,
+        output_schema_id: None,
         version: 1,
     }
 }
@@ -36,7 +37,7 @@ fn make_room() -> RoomRow {
     RoomRow {
         id: Uuid::new_v4(),
         user_id: Uuid::new_v4(),
-        pipeline_id: Uuid::new_v4(),
+        collection_id: None,
         name: "Architecture Review".to_string(),
         gatekeeper_enabled: false,
         gatekeeper_model_id: "claude-haiku-4-20250414".to_string(),
