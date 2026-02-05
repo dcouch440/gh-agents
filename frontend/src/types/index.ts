@@ -15,3 +15,4 @@ export type { PromptTemplate, CreatePromptTemplateRequest, UpdatePromptTemplateR
 export type { Result } from './result'
 export type { CostResponse, ModelSpendRow } from './cost'
 export type { RouterMode, CreateRouterModeRequest, UpdateRouterModeRequest, SetModeToolsRequest } from './router'
+export type { ToolRouter, CreateToolRouterRequest, UpdateToolRouterRequest, SetRouterToolsRequest } from './toolRouter'

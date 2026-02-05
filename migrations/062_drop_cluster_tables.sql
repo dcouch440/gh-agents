@@ -35,20 +35,16 @@ END $$;
 
 -- Drop routing_events table (has FK to clusters)
 DROP TABLE IF EXISTS routing_events CASCADE;
-RAISE NOTICE '✅ Dropped routing_events table';
 
 -- Drop cluster_members table (has FK to clusters)
 DROP TABLE IF EXISTS cluster_members CASCADE;
-RAISE NOTICE '✅ Dropped cluster_members table';
 
 -- Drop cluster_id column from tools table
 ALTER TABLE tools DROP COLUMN IF EXISTS cluster_id;
 DROP INDEX IF EXISTS idx_tools_cluster;
-RAISE NOTICE '✅ Dropped tools.cluster_id column and index';
 
 -- Drop clusters table (root table)
 DROP TABLE IF EXISTS clusters CASCADE;
-RAISE NOTICE '✅ Dropped clusters table';
 
 -- ============================================================================
 -- Step 3: Final Verification

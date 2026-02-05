@@ -19,6 +19,7 @@ fn make_agent(name: &str) -> AgentRow {
         status: None,
         router_mode: None,
         output_schema_id: None,
+        router_id: None,
         version: 1,
     }
 }
