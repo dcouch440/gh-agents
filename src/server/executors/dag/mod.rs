@@ -1128,7 +1128,7 @@ pub async fn execute_workflow(
 // ============================================================================
 
 /// Parse structured JSON output from raw LLM response text.
-fn parse_structured_output(content: &str) -> Option<JsonValue> {
+pub(crate) fn parse_structured_output(content: &str) -> Option<JsonValue> {
     // Try parsing the whole response as JSON
     if let Ok(v) = serde_json::from_str::<JsonValue>(content) {
         return Some(v);
@@ -1162,7 +1162,7 @@ fn parse_structured_output(content: &str) -> Option<JsonValue> {
 }
 
 /// Compute approximate cost in USD based on model and tokens.
-fn compute_cost(model_id: &str, input_tokens: i64, output_tokens: i64) -> f32 {
+pub(crate) fn compute_cost(model_id: &str, input_tokens: i64, output_tokens: i64) -> f32 {
     // Approximate pricing per 1M tokens (input/output)
     let (input_rate, output_rate) = if model_id.contains("opus") {
         (15.0_f32, 75.0_f32)
@@ -1244,3 +1244,6 @@ fn broadcast_for_each_spawned(
         user_id: None,
     });
 }
+
+#[cfg(test)]
+mod tests;

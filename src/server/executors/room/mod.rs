@@ -55,7 +55,7 @@ pub struct RoomTurnResult {
 // ---------------------------------------------------------------------------
 
 /// Build the room context preamble injected into each speaker's system prompt.
-fn build_room_context(
+pub(crate) fn build_room_context(
     room: &RoomRow,
     member: &RoomMemberRow,
     agent: &AgentRow,
@@ -84,7 +84,10 @@ fn build_room_context(
 }
 
 /// Format transcript entries for injection into a speaker's prompt.
-fn format_transcript(transcript: &[RoomTranscriptEntry], summary: Option<&str>) -> String {
+pub(crate) fn format_transcript(
+    transcript: &[RoomTranscriptEntry],
+    summary: Option<&str>,
+) -> String {
     let mut out = String::new();
 
     if let Some(s) = summary {
@@ -110,7 +113,7 @@ fn format_transcript(transcript: &[RoomTranscriptEntry], summary: Option<&str>) 
 }
 
 /// Build the full user prompt for a speaker: transcript + original message + gatekeeper context.
-fn build_speaker_prompt(
+pub(crate) fn build_speaker_prompt(
     user_message: &str,
     followup_context: &str,
     transcript_block: &str,
@@ -528,3 +531,6 @@ impl StreamSink for RoomStreamSink {
         // Speaker completion is handled by the executor, not the sink.
     }
 }
+
+#[cfg(test)]
+mod tests;
