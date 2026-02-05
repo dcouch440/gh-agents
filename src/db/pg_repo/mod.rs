@@ -1453,16 +1453,16 @@ impl AgentExecutionRepo for PgRepo {
     async fn list_agent_executions(
         &self,
         user_id: Uuid,
-        status: Option<&str>,
+        status: Option<String>,
     ) -> Result<Vec<AgentExecutionRow>> {
-        let rows = if let Some(s) = status {
+        let rows = if let Some(ref s) = status {
             sqlx::query_as::<_, AgentExecutionRow>(
                 "SELECT ae.* FROM agent_executions ae \
                  JOIN workflow_executions we ON ae.workflow_execution_id = we.id \
                  WHERE ae.status = $1 AND ae.is_interactive = true AND we.user_id = $2 \
                  ORDER BY ae.started_at DESC LIMIT 100",
             )
-            .bind(s)
+            .bind(s.as_str())
             .bind(user_id)
             .fetch_all(&self.pool)
             .await?
