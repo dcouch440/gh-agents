@@ -17,13 +17,15 @@ async fn null_sink_all_methods_are_noop() {
 #[tokio::test]
 async fn sse_sink_sends_chunks() {
     use crate::db::traits::MockServerRepo;
+    use crate::server::state::test_helpers::default_mock_repos;
     use crate::types::AppConfig;
     use std::sync::Arc;
 
     let mut mock = MockServerRepo::new();
     mock.expect_health_check().returning(|| true);
     let repo: Arc<dyn crate::db::traits::ServerRepo> = Arc::new(mock);
-    let (state, _rx) = AppState::with_repo(None, repo, AppConfig::default());
+    let repos = default_mock_repos();
+    let (state, _rx) = AppState::with_repo(None, repo, repos, AppConfig::default());
 
     let msg_id = Uuid::new_v4();
     state.ensure_response_stream(msg_id);

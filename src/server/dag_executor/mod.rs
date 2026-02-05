@@ -473,20 +473,17 @@ async fn execute_step(
     _for_each_index: Option<i32>,
     _for_each_label: Option<String>,
 ) -> Result<(Uuid, StepOutput, i64, i64, f32)> {
-    let ae_repo = state
-        .agent_execution_repo()
-        .ok_or_else(|| anyhow!("agent_execution_repo not configured"))?;
+    let ae_repo = &state.repos().agent_executions;
 
     // Build system prompt with output schema instructions
     let mut system_prompt = agent.system_prompt.clone();
     if let Some(schema_id) = step.output_schema_id {
-        if let Some(os_repo) = state.output_schema_repo() {
-            if let Ok(Some(schema)) = os_repo.get_output_schema(schema_id).await {
-                system_prompt.push_str(&format!(
-                    "\n\nYou MUST respond with valid JSON matching this schema:\n```json\n{}\n```\nRespond ONLY with the JSON object, no other text.",
-                    serde_json::to_string_pretty(&schema.schema).unwrap_or_default()
-                ));
-            }
+        let os_repo = &state.repos().output_schemas;
+        if let Ok(Some(schema)) = os_repo.get_output_schema(schema_id).await {
+            system_prompt.push_str(&format!(
+                "\n\nYou MUST respond with valid JSON matching this schema:\n```json\n{}\n```\nRespond ONLY with the JSON object, no other text.",
+                serde_json::to_string_pretty(&schema.schema).unwrap_or_default()
+            ));
         }
     }
 
@@ -563,18 +560,17 @@ async fn execute_step(
         total_cost_usd += cost;
 
         // Write token_ledger for every LLM call
-        if let Some(tl_repo) = state.token_ledger_repo() {
-            let _ = tl_repo
-                .insert_ledger_entry(
-                    ctx.user_id,
-                    Some(ae_row.id),
-                    &agent.model_id,
-                    in_tok,
-                    out_tok,
-                    cost,
-                )
-                .await;
-        }
+        let tl_repo = &state.repos().token_ledger;
+        let _ = tl_repo
+            .insert_ledger_entry(
+                ctx.user_id,
+                Some(ae_row.id),
+                &agent.model_id,
+                in_tok,
+                out_tok,
+                cost,
+            )
+            .await;
 
         if response.stop_reason == StopReason::ToolUse {
             // Record the assistant message with tool calls
@@ -790,18 +786,17 @@ async fn execute_interactive_review(
         .await;
 
     // Write token_ledger for the review call
-    if let Some(tl_repo) = state.token_ledger_repo() {
-        let _ = tl_repo
-            .insert_ledger_entry(
-                ctx.user_id,
-                Some(iae_row.id),
-                &interactive_agent.model_id,
-                input_tokens,
-                output_tokens,
-                cost_usd,
-            )
-            .await;
-    }
+    let tl_repo = &state.repos().token_ledger;
+    let _ = tl_repo
+        .insert_ledger_entry(
+            ctx.user_id,
+            Some(iae_row.id),
+            &interactive_agent.model_id,
+            input_tokens,
+            output_tokens,
+            cost_usd,
+        )
+        .await;
 
     // Set status to awaiting_user — the user will chat and approve via the API
     let _ = ae_repo

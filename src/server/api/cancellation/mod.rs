@@ -33,11 +33,10 @@ pub async fn cancel_agent_execution(
     }
 
     // Update execution status in DB
-    if let Some(ae_repo) = state.agent_execution_repo() {
-        let _ = ae_repo
-            .update_agent_execution_status(exec_uuid, "cancelled", None, None)
-            .await;
-    }
+    let ae_repo = &state.repos().agent_executions;
+    let _ = ae_repo
+        .update_agent_execution_status(exec_uuid, "cancelled", None, None)
+        .await;
 
     Ok(Json(serde_json::json!({ "status": "cancelled" })))
 }

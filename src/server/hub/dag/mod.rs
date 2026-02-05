@@ -93,7 +93,7 @@ pub async fn execute_workflow_via_engine(
                     step.id
                 ))
             })?;
-            let room_repo = state.room_repo().ok_or(HubError::ProviderNotConfigured)?;
+            let room_repo = &state.repos().rooms;
             let session = room_repo
                 .create_room_session(room_id, Some(ctx.run_id))
                 .await
@@ -343,13 +343,12 @@ async fn run_step_via_engine(
     // Build system prompt: mode result + schema enforcement
     let mut system_prompt = mode.system_prompt; // agent + mode already merged
     if let Some(schema_id) = step.output_schema_id {
-        if let Some(os_repo) = state.output_schema_repo() {
-            if let Ok(Some(schema)) = os_repo.get_output_schema(schema_id).await {
-                system_prompt.push_str(&format!(
-                    "\n\nYou MUST respond with valid JSON matching this schema:\n```json\n{}\n```\nRespond ONLY with the JSON object, no other text.",
-                    serde_json::to_string_pretty(&schema.schema).unwrap_or_default()
-                ));
-            }
+        let os_repo = &state.repos().output_schemas;
+        if let Ok(Some(schema)) = os_repo.get_output_schema(schema_id).await {
+            system_prompt.push_str(&format!(
+                "\n\nYou MUST respond with valid JSON matching this schema:\n```json\n{}\n```\nRespond ONLY with the JSON object, no other text.",
+                serde_json::to_string_pretty(&schema.schema).unwrap_or_default()
+            ));
         }
     }
 
@@ -550,12 +549,8 @@ pub async fn resume_dag_from_approval(
     paused_step_id: Uuid,
     approved_output: StepOutput,
 ) -> Result<(), HubError> {
-    let wf_repo = state
-        .workflow_repo()
-        .ok_or(HubError::ProviderNotConfigured)?;
-    let ae_repo = state
-        .agent_execution_repo()
-        .ok_or(HubError::ProviderNotConfigured)?;
+    let wf_repo = &state.repos().workflows;
+    let ae_repo = &state.repos().agent_executions;
 
     // Load the step to get workflow_id
     let step = wf_repo

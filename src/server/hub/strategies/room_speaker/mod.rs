@@ -114,35 +114,33 @@ impl ExecutionStrategy for RoomSpeakerStrategy {
 
     async fn on_complete(&self, response: &str, usage: &TokenUsage) -> Result<(), HubError> {
         // Record token usage
-        if let Some(tl_repo) = self.state.token_ledger_repo() {
-            let cost = super::compute_cost(
+        let tl_repo = &self.state.repos().token_ledger;
+        let cost = super::compute_cost(
+            &self.config.agent.model_id,
+            usage.input_tokens as i64,
+            usage.output_tokens as i64,
+        );
+        let _ = tl_repo
+            .insert_ledger_entry(
+                self.config.user_id,
+                Some(self.config.agent_execution_id),
                 &self.config.agent.model_id,
                 usage.input_tokens as i64,
                 usage.output_tokens as i64,
-            );
-            let _ = tl_repo
-                .insert_ledger_entry(
-                    self.config.user_id,
-                    Some(self.config.agent_execution_id),
-                    &self.config.agent.model_id,
-                    usage.input_tokens as i64,
-                    usage.output_tokens as i64,
-                    cost,
-                )
-                .await;
-        }
+                cost,
+            )
+            .await;
 
         // Update agent_execution with final status
-        if let Some(ae_repo) = self.state.agent_execution_repo() {
-            let _ = ae_repo
-                .update_agent_execution_status(
-                    self.config.agent_execution_id,
-                    "completed",
-                    Some(response.to_string()),
-                    None,
-                )
-                .await;
-        }
+        let ae_repo = &self.state.repos().agent_executions;
+        let _ = ae_repo
+            .update_agent_execution_status(
+                self.config.agent_execution_id,
+                "completed",
+                Some(response.to_string()),
+                None,
+            )
+            .await;
 
         Ok(())
     }

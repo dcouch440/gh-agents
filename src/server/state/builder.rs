@@ -26,6 +26,10 @@ pub enum BuilderError {
     #[error("server_repo is required")]
     MissingServerRepo,
 
+    /// The grouped repositories are required but were not provided.
+    #[error("repos is required")]
+    MissingRepos,
+
     /// The application configuration is required but was not provided.
     #[error("config is required")]
     MissingConfig,
@@ -38,8 +42,8 @@ pub enum BuilderError {
 /// ```ignore
 /// let (state, rx) = AppStateBuilder::new()
 ///     .with_server_repo(repo)
+///     .with_repos(repos)  // Required
 ///     .with_config(config)
-///     .with_repos(repos)
 ///     .build()?;
 /// ```
 pub struct AppStateBuilder {
@@ -84,7 +88,7 @@ impl AppStateBuilder {
         self
     }
 
-    /// Set the grouped repositories.
+    /// Set the grouped repositories (required).
     pub fn with_repos(mut self, repos: Repos) -> Self {
         self.repos = Some(repos);
         self
@@ -137,9 +141,11 @@ impl AppStateBuilder {
     /// # Errors
     ///
     /// Returns `BuilderError::MissingServerRepo` if `with_server_repo()` was not called.
+    /// Returns `BuilderError::MissingRepos` if `with_repos()` was not called.
     /// Returns `BuilderError::MissingConfig` if `with_config()` was not called.
     pub fn build(self) -> Result<(AppState, mpsc::Receiver<ConsumerMessage>), BuilderError> {
         let server_repo = self.server_repo.ok_or(BuilderError::MissingServerRepo)?;
+        let repos = self.repos.ok_or(BuilderError::MissingRepos)?;
         let config = self.config.ok_or(BuilderError::MissingConfig)?;
 
         let (chat_tx, orchestrator_rx) = mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
@@ -154,7 +160,7 @@ impl AppStateBuilder {
         let state = AppState::from_inner(AppStateInner {
             db: self.db,
             server_repo,
-            repos: self.repos,
+            repos,
             events,
             config: Arc::new(RwLock::new(config)),
             provider: self.provider,
@@ -194,6 +200,7 @@ impl Default for AppStateBuilder {
 mod tests {
     use super::*;
     use crate::db::traits::MockServerRepo;
+    use crate::server::state::test_helpers::default_mock_repos;
 
     fn mock_repo() -> Arc<dyn ServerRepo> {
         let mut mock = MockServerRepo::new();
@@ -209,6 +216,7 @@ mod tests {
     fn build_with_required_fields_succeeds() {
         let result = AppStateBuilder::new()
             .with_server_repo(mock_repo())
+            .with_repos(default_mock_repos())
             .with_config(default_config())
             .build();
 
@@ -217,14 +225,30 @@ mod tests {
 
     #[test]
     fn build_without_server_repo_fails() {
-        let result = AppStateBuilder::new().with_config(default_config()).build();
+        let result = AppStateBuilder::new()
+            .with_repos(default_mock_repos())
+            .with_config(default_config())
+            .build();
 
         assert!(matches!(result, Err(BuilderError::MissingServerRepo)));
     }
 
     #[test]
+    fn build_without_repos_fails() {
+        let result = AppStateBuilder::new()
+            .with_server_repo(mock_repo())
+            .with_config(default_config())
+            .build();
+
+        assert!(matches!(result, Err(BuilderError::MissingRepos)));
+    }
+
+    #[test]
     fn build_without_config_fails() {
-        let result = AppStateBuilder::new().with_server_repo(mock_repo()).build();
+        let result = AppStateBuilder::new()
+            .with_server_repo(mock_repo())
+            .with_repos(default_mock_repos())
+            .build();
 
         assert!(matches!(result, Err(BuilderError::MissingConfig)));
     }
@@ -233,6 +257,7 @@ mod tests {
     fn build_for_test_with_required_fields_succeeds() {
         let (_state, _rx) = AppStateBuilder::new()
             .with_server_repo(mock_repo())
+            .with_repos(default_mock_repos())
             .with_config(default_config())
             .build_for_test();
     }
@@ -250,6 +275,7 @@ mod tests {
 
         let (state, _rx) = AppStateBuilder::new()
             .with_server_repo(mock_repo())
+            .with_repos(default_mock_repos())
             .with_config(default_config())
             .with_jwt_secret(custom_secret.clone())
             .with_default_agent_id(agent_id)

@@ -82,10 +82,7 @@ impl ExecutionStrategy for InteractiveChatStrategy {
     }
 
     async fn build_messages(&self, input: &str) -> Result<Vec<Message>, HubError> {
-        let ae_repo = self
-            .state
-            .agent_execution_repo()
-            .ok_or_else(|| HubError::Internal(anyhow::anyhow!("agent_execution_repo missing")))?;
+        let ae_repo = &self.state.repos().agent_executions;
 
         let rows = ae_repo
             .list_execution_messages(self.config.agent_execution_id)
@@ -126,52 +123,48 @@ impl ExecutionStrategy for InteractiveChatStrategy {
 
     async fn on_complete(&self, response: &str, usage: &TokenUsage) -> Result<(), HubError> {
         // Record token usage to ledger
-        if let Some(tl_repo) = self.state.token_ledger_repo() {
-            let cost = super::compute_cost(
+        let tl_repo = &self.state.repos().token_ledger;
+        let cost = super::compute_cost(
+            &self.config.agent.model_id,
+            usage.input_tokens as i64,
+            usage.output_tokens as i64,
+        );
+        let _ = tl_repo
+            .insert_ledger_entry(
+                self.config.user_id,
+                Some(self.config.agent_execution_id),
                 &self.config.agent.model_id,
                 usage.input_tokens as i64,
                 usage.output_tokens as i64,
-            );
-            let _ = tl_repo
-                .insert_ledger_entry(
-                    self.config.user_id,
-                    Some(self.config.agent_execution_id),
-                    &self.config.agent.model_id,
-                    usage.input_tokens as i64,
-                    usage.output_tokens as i64,
-                    cost,
-                )
-                .await;
-        }
+                cost,
+            )
+            .await;
 
         // Record assistant response as execution message
-        if let Some(ae_repo) = self.state.agent_execution_repo() {
-            if let Err(e) = ae_repo
-                .create_execution_message(
-                    self.config.agent_execution_id,
-                    "assistant",
-                    response,
-                    None,
-                    usage.input_tokens as i64,
-                    usage.output_tokens as i64,
-                )
-                .await
-            {
-                error!("Failed to record interactive assistant message: {}", e);
-            }
+        let ae_repo = &self.state.repos().agent_executions;
+        if let Err(e) = ae_repo
+            .create_execution_message(
+                self.config.agent_execution_id,
+                "assistant",
+                response,
+                None,
+                usage.input_tokens as i64,
+                usage.output_tokens as i64,
+            )
+            .await
+        {
+            error!("Failed to record interactive assistant message: {}", e);
         }
 
         // Update agent_execution output (but NOT status — keep awaiting_user)
-        if let Some(ae_repo) = self.state.agent_execution_repo() {
-            let _ = ae_repo
-                .update_agent_execution_status(
-                    self.config.agent_execution_id,
-                    "awaiting_user", // Preserve status
-                    Some(response.to_string()),
-                    super::super::strategies::dag_step::parse_structured_output(response),
-                )
-                .await;
-        }
+        let _ = ae_repo
+            .update_agent_execution_status(
+                self.config.agent_execution_id,
+                "awaiting_user", // Preserve status
+                Some(response.to_string()),
+                super::super::strategies::dag_step::parse_structured_output(response),
+            )
+            .await;
 
         info!(
             agent_execution_id = %self.config.agent_execution_id,
