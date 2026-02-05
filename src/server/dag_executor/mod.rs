@@ -36,6 +36,25 @@ pub struct StepOutput {
     pub raw_output: String,
 }
 
+/// Sentinel error: the DAG paused because a step is awaiting interactive user input.
+#[derive(Debug)]
+pub struct DagPaused {
+    pub step_id: Uuid,
+    pub execution_id: Uuid,
+}
+
+impl std::fmt::Display for DagPaused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "interactive step {} (execution {}) awaiting user input",
+            self.step_id, self.execution_id
+        )
+    }
+}
+
+impl std::error::Error for DagPaused {}
+
 /// Context passed into the DAG executor for one workflow run.
 pub struct WorkflowExecutionContext {
     pub stage_execution_id: Uuid,
@@ -811,9 +830,14 @@ async fn execute_interactive_review(
         cost_usd,
     );
 
-    // Return None — the interactive output will be resolved when the user approves
-    // The caller should wait for approval via the API (POST /agent-executions/:id/approve)
-    Ok(None)
+    // Halt the DAG — the caller should propagate this error so the pipeline pauses.
+    // The user interacts via POST /agent-executions/:id/messages, then approves
+    // via POST /agent-executions/:id/approve to resume.
+    Err(DagPaused {
+        step_id: step.id,
+        execution_id: iae_row.id,
+    }
+    .into())
 }
 
 // ============================================================================
@@ -943,7 +967,7 @@ pub async fn execute_workflow(
                             if let Ok(Some(ia)) =
                                 state.repo.get_persisted_agent(interactive_agent_id).await
                             {
-                                let _ = execute_interactive_review(
+                                match execute_interactive_review(
                                     state,
                                     provider.as_ref(),
                                     &ctx,
@@ -952,10 +976,19 @@ pub async fn execute_workflow(
                                     ae_id,
                                     &output.raw_output,
                                 )
-                                .await;
-                                // Note: interactive steps pause here. In a full implementation,
-                                // we'd wait for user approval before continuing.
-                                // For now, we continue with the main output.
+                                .await
+                                {
+                                    Err(e) if e.downcast_ref::<DagPaused>().is_some() => {
+                                        return Err(e);
+                                    }
+                                    Err(e) => {
+                                        error!(
+                                            "interactive review failed for step {} iteration {}: {}",
+                                            step.id, idx, e
+                                        );
+                                    }
+                                    Ok(_) => {}
+                                }
                             }
                         }
 
@@ -1022,7 +1055,7 @@ pub async fn execute_workflow(
             // Handle interactive review
             if let Some(interactive_agent_id) = step.interactive_agent_id {
                 if let Ok(Some(ia)) = state.repo.get_persisted_agent(interactive_agent_id).await {
-                    let _ = execute_interactive_review(
+                    match execute_interactive_review(
                         state,
                         provider.as_ref(),
                         &ctx,
@@ -1031,9 +1064,42 @@ pub async fn execute_workflow(
                         ae_id,
                         &output.raw_output,
                     )
-                    .await;
-                    // Note: interactive steps pause here. Full implementation would
-                    // wait for POST /agent-executions/:id/approve before continuing.
+                    .await
+                    {
+                        Err(e) if e.downcast_ref::<DagPaused>().is_some() => {
+                            let paused = e.downcast_ref::<DagPaused>().unwrap();
+                            // Store placeholder output before halting
+                            let placeholder = StepOutput {
+                                variable_name: output.variable_name.clone(),
+                                raw_output: format!(
+                                    "{{\"status\":\"awaiting_user\",\"interactive_execution_id\":\"{}\"}}",
+                                    paused.execution_id
+                                ),
+                                structured_output: Some(serde_json::json!({
+                                    "status": "awaiting_user",
+                                    "interactive_execution_id": paused.execution_id.to_string(),
+                                })),
+                            };
+                            if !placeholder.variable_name.is_empty() {
+                                if let Some(structured) = &placeholder.structured_output {
+                                    let mut guard = var_outputs.write().await;
+                                    guard.insert(
+                                        placeholder.variable_name.clone(),
+                                        structured.clone(),
+                                    );
+                                }
+                            }
+                            {
+                                let mut guard = completed.write().await;
+                                guard.insert(*step_id, placeholder);
+                            }
+                            return Err(e);
+                        }
+                        Err(e) => {
+                            error!("interactive review failed for step {}: {}", step.id, e);
+                        }
+                        Ok(_) => {}
+                    }
                 }
             }
 
