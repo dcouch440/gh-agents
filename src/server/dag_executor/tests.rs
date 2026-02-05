@@ -90,3 +90,27 @@ fn resolve_variables_unresolved_left_as_is() {
     let result = resolve_variables("Hello {unknown}!", &HashMap::new(), &HashMap::new());
     assert_eq!(result, "Hello {unknown}!");
 }
+
+#[test]
+fn dag_paused_error_downcasts() {
+    let err: anyhow::Error = DagPaused {
+        step_id: Uuid::new_v4(),
+        execution_id: Uuid::new_v4(),
+    }
+    .into();
+    assert!(err.downcast_ref::<DagPaused>().is_some());
+    assert!(err.to_string().contains("awaiting user input"));
+}
+
+#[test]
+fn dag_paused_display_includes_ids() {
+    let step_id = Uuid::new_v4();
+    let execution_id = Uuid::new_v4();
+    let paused = DagPaused {
+        step_id,
+        execution_id,
+    };
+    let msg = paused.to_string();
+    assert!(msg.contains(&step_id.to_string()));
+    assert!(msg.contains(&execution_id.to_string()));
+}

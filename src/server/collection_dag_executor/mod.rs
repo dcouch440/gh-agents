@@ -96,6 +96,14 @@ where
                     .update_collection_run_status(run.id, "completed", None)
                     .await?
             }
+            Err(ref e)
+                if e.downcast_ref::<crate::server::dag_executor::DagPaused>()
+                    .is_some() =>
+            {
+                self.collection_repo
+                    .update_collection_run_status(run.id, "paused", None)
+                    .await?
+            }
             Err(e) => {
                 let error_msg = format!("{:#}", e);
                 self.collection_repo
@@ -192,6 +200,7 @@ where
 
         // Channel to collect errors from spawned tasks
         let (error_tx, mut error_rx) = tokio::sync::mpsc::channel::<anyhow::Error>(10);
+        let any_paused = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
         // Spawn entry workflows
         let mut handles = Vec::new();
@@ -204,6 +213,7 @@ where
                 Arc::clone(&in_degree),
                 Arc::clone(&children),
                 error_tx.clone(),
+                Arc::clone(&any_paused),
             );
             handles.push(handle);
         }
@@ -235,6 +245,14 @@ where
             ));
         }
 
+        if any_paused.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err(crate::server::dag_executor::DagPaused {
+                step_id: Uuid::nil(),
+                execution_id: Uuid::nil(),
+            }
+            .into());
+        }
+
         Ok(())
     }
 
@@ -248,6 +266,7 @@ where
         in_degree: Arc<tokio::sync::RwLock<HashMap<Uuid, usize>>>,
         children: Arc<HashMap<Uuid, Vec<Uuid>>>,
         error_tx: tokio::sync::mpsc::Sender<anyhow::Error>,
+        any_paused: Arc<std::sync::atomic::AtomicBool>,
     ) -> tokio::task::JoinHandle<()> {
         // Clone everything needed for the spawned task
         let collection_repo = Arc::clone(&self.collection_repo);
@@ -279,6 +298,13 @@ where
                 .await
             {
                 Ok(exec) => exec,
+                Err(e)
+                    if e.downcast_ref::<crate::server::dag_executor::DagPaused>()
+                        .is_some() =>
+                {
+                    any_paused.store(true, std::sync::atomic::Ordering::Relaxed);
+                    return; // don't cascade to children, don't send to error_tx
+                }
                 Err(e) => {
                     let _ = error_tx.send(e).await;
                     return;
@@ -321,6 +347,7 @@ where
                     Arc::clone(&in_degree),
                     Arc::clone(&children),
                     error_tx.clone(),
+                    Arc::clone(&any_paused),
                 );
                 child_handles.push(handle);
             }
@@ -420,6 +447,31 @@ where
                 .await?;
 
                 Ok(workflow_exec)
+            }
+            Err(e)
+                if e.downcast_ref::<crate::server::dag_executor::DagPaused>()
+                    .is_some() =>
+            {
+                let paused = e
+                    .downcast_ref::<crate::server::dag_executor::DagPaused>()
+                    .unwrap();
+                let pause_metadata = serde_json::json!({
+                    "__pause_state": {
+                        "step_id": paused.step_id.to_string(),
+                        "execution_id": paused.execution_id.to_string(),
+                    }
+                });
+                let _workflow_exec = self
+                    .collection_repo
+                    .update_workflow_execution_status(
+                        workflow_exec.id,
+                        "paused",
+                        Some(pause_metadata),
+                        None,
+                    )
+                    .await?;
+                // Propagate the pause error so the collection level also pauses
+                Err(e)
             }
             Err(e) => {
                 let error_msg = format!("{:#}", e);

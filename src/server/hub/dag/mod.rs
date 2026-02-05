@@ -17,17 +17,17 @@ use crate::db::{AgentRow, WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::llm::Tool;
 use crate::server::state::AppState;
 
+use super::construct_agent_defaults;
 use super::engine::ExecutionEngine;
 use super::error::HubError;
 use super::recorder::ExecutionRecorder;
 use super::strategies::dag_step::{compute_cost, DagStepConfig, DagStepStrategy};
 use super::streaming::NullSink;
-use super::construct_agent_defaults;
 
 // Re-export pure DAG functions from the existing dag_executor
 pub use crate::server::dag_executor::{
     compose_prompt, extract_for_each_label, find_entry_steps, get_child_steps, get_parent_steps,
-    resolve_for_each_array, resolve_variables, topological_sort, StepOutput,
+    resolve_for_each_array, resolve_variables, topological_sort, DagPaused, StepOutput,
     WorkflowExecutionContext, WorkflowExecutionResult,
 };
 
@@ -345,7 +345,7 @@ async fn run_step_via_engine(
     };
 
     // Build system prompt: mode result + schema enforcement
-    let mut system_prompt = mode.system_prompt;  // agent + mode already merged
+    let mut system_prompt = mode.system_prompt; // agent + mode already merged
     if let Some(schema_id) = step.output_schema_id {
         if let Some(os_repo) = &state.output_schema_repo {
             if let Ok(Some(schema)) = os_repo.get_output_schema(schema_id).await {
@@ -366,7 +366,7 @@ async fn run_step_via_engine(
             None,
             &system_prompt,
             prompt,
-            mode.selected_mode_id,  // Track which mode was used
+            mode.selected_mode_id, // Track which mode was used
             None,
             None,
         )
@@ -387,8 +387,8 @@ async fn run_step_via_engine(
         step: step.clone(),
         system_prompt,
         user_prompt: prompt.to_string(),
-        tools: mode.tools,           // Use mode tools
-        tool_names: mode.tool_names,  // Use mode tool names
+        tools: mode.tools,             // Use mode tools
+        tool_names: mode.tool_names,   // Use mode tool names
         temperature: mode.temperature, // Use mode temperature
         execution_context: ctx.execution_context.clone(),
         run_id: ctx.run_id,
