@@ -12,6 +12,7 @@ import type { Result } from '@/types/result'
 import type { PromptTemplate } from '@/types/template'
 import type { OutputSchema } from '@/types/schema'
 import type { Workflow, WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
+import type { RouterMode } from '@/types/router'
 
 export const mockAgent: Agent = {
   id: 'agent-001',
@@ -154,6 +155,22 @@ export const mockTool: Tool = {
   is_builtin: true,
 }
 
+export const mockRouterMode: RouterMode = {
+  id: 'mode-001',
+  router_id: 'router-001',
+  mode_key: 'planning_mode',
+  display_name: 'Planning Mode',
+  description: 'Mode for strategic planning tasks',
+  system_prompt: 'You are a strategic planner.',
+  temperature: 0.7,
+  max_tokens: 8192,
+  append_to_agent_system_prompt: false,
+  append_to_agent_tools: true,
+  display_order: 0,
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
+}
+
 export const mockPromptTemplate: PromptTemplate = {
   id: 'template-001',
   user_id: 'user-001',
@@ -241,7 +258,24 @@ export const mockOutputSchema: OutputSchema = {
 
 // ── Execution ────────────────────────────────────────────────────────────────
 
-import type { TreeAgentExecution, ExecutionMessage } from '@/types/execution'
+import type { AgentExecution, TreeAgentExecution, ExecutionMessage } from '@/types/execution'
+
+export const mockAgentExecution: AgentExecution = {
+  id: 'exec-001',
+  stage_execution_id: 'stage-001',
+  agent_id: 'agent-001',
+  workflow_step_id: 'step-001',
+  is_interactive: true,
+  parent_agent_execution_id: null,
+  system_prompt_rendered: 'Review the code changes',
+  input: 'Please review the following changes...',
+  output: 'The changes look good overall.',
+  structured_output: null,
+  selected_mode_id: null,
+  status: 'awaiting_user',
+  started_at: '2025-01-01T00:00:00Z',
+  completed_at: null,
+}
 
 export const mockTreeAgentExecution: TreeAgentExecution = {
   id: 'agent-exec-001',

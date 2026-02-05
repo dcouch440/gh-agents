@@ -270,6 +270,7 @@ pub mod routes {
     pub const PIPELINE_STAGE_MEMBER: &str = "/pipelines/:pid/stages/:num/members/:mid";
 
     // Agent executions
+    pub const AGENT_EXECUTIONS: &str = "/agent-executions";
     pub const AGENT_EXECUTION: &str = "/agent-executions/:id";
     pub const AGENT_EXECUTION_MESSAGES: &str = "/agent-executions/:id/messages";
     pub const AGENT_EXECUTION_MESSAGE_STREAM: &str =
