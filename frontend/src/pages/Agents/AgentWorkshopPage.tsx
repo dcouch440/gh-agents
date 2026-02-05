@@ -29,6 +29,7 @@ import {api} from "@/api";
 import type {ChatMessageData} from "@/components/chat/ChatPanel";
 import type {SSEEvent} from "@/api";
 import type {DraftConfig} from "@/types";
+import {extractVariables} from "@/utils/variables";
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,11 @@ type WorkshopState = {
   saving: boolean;
   dirty: boolean;
   error: string | null;
+  variableSimulation: {
+    enabled: boolean;
+    mockData: Record<string, string>; // variable name → JSON string
+    activeTab: string; // "system" or variable name
+  };
 };
 
 type WorkshopAction =
@@ -72,6 +78,10 @@ type WorkshopAction =
   | {type: "SET_SAVING"; value: boolean}
   | {type: "SET_DIRTY"; value: boolean}
   | {type: "SET_ERROR"; value: string | null}
+  | {type: "TOGGLE_VARIABLE_SIMULATION"}
+  | {type: "SET_VARIABLE_TAB"; tab: string}
+  | {type: "SET_VARIABLE_MOCK_DATA"; variable: string; jsonText: string}
+  | {type: "SYNC_VARIABLES"; variables: string[]}
   | {
       type: "HYDRATE_DRAFT_SESSION";
       payload: {
@@ -116,6 +126,11 @@ const initialState: WorkshopState = {
   saving: false,
   dirty: false,
   error: null,
+  variableSimulation: {
+    enabled: false,
+    mockData: {},
+    activeTab: "system",
+  },
 };
 
 const reducer = (
@@ -181,6 +196,62 @@ const reducer = (
         dirty: false,
         error: null,
       };
+    case "TOGGLE_VARIABLE_SIMULATION":
+      return {
+        ...state,
+        variableSimulation: {
+          ...state.variableSimulation,
+          enabled: !state.variableSimulation.enabled,
+          // Reset to system tab and clear mock data when toggling off
+          activeTab: !state.variableSimulation.enabled
+            ? state.variableSimulation.activeTab
+            : "system",
+          mockData: !state.variableSimulation.enabled
+            ? state.variableSimulation.mockData
+            : {},
+        },
+      };
+    case "SET_VARIABLE_TAB":
+      return {
+        ...state,
+        variableSimulation: {
+          ...state.variableSimulation,
+          activeTab: action.tab,
+        },
+      };
+    case "SET_VARIABLE_MOCK_DATA":
+      return {
+        ...state,
+        variableSimulation: {
+          ...state.variableSimulation,
+          mockData: {
+            ...state.variableSimulation.mockData,
+            [action.variable]: action.jsonText,
+          },
+        },
+      };
+    case "SYNC_VARIABLES": {
+      // When variables change (systemPrompt edited), update mockData
+      // Preserve existing mock data for variables that still exist
+      // Remove mock data for variables that no longer exist
+      const newMockData: Record<string, string> = {};
+      for (const variable of action.variables) {
+        newMockData[variable] = state.variableSimulation.mockData[variable] || "";
+      }
+      return {
+        ...state,
+        variableSimulation: {
+          ...state.variableSimulation,
+          mockData: newMockData,
+          // Reset to system tab if current tab variable no longer exists
+          activeTab:
+            action.variables.includes(state.variableSimulation.activeTab) ||
+            state.variableSimulation.activeTab === "system"
+              ? state.variableSimulation.activeTab
+              : "system",
+        },
+      };
+    }
   }
 };
 
@@ -392,6 +463,14 @@ function AgentWorkshopPage() {
       window.removeEventListener("beforeunload", handler);
     };
   }, [state.dirty]);
+
+  // Sync variables when system prompt changes (for variable simulation)
+  useEffect(() => {
+    if (!state.variableSimulation.enabled) return;
+
+    const variables = extractVariables(state.systemPrompt);
+    dispatch({type: "SYNC_VARIABLES", variables});
+  }, [state.systemPrompt, state.variableSimulation.enabled]);
 
   const handleSend = useCallback(
     (message: string) => {
