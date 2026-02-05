@@ -1,5 +1,6 @@
 import {Box, Typography} from '@mui/material'
 import {SearchInput} from '@/components/primitives'
+import type {ReactNode} from 'react'
 
 type TableToolbarProps = {
   searchQuery: string
@@ -7,6 +8,8 @@ type TableToolbarProps = {
   searchPlaceholder?: string
   totalRows: number
   filteredRows: number
+  columnMenu?: ReactNode
+  exportButton?: ReactNode
 }
 
 function TableToolbar({
@@ -15,6 +18,8 @@ function TableToolbar({
   searchPlaceholder = 'Search...',
   totalRows,
   filteredRows,
+  columnMenu,
+  exportButton,
 }: TableToolbarProps) {
   const showResultCount = searchQuery.trim().length > 0 && filteredRows !== totalRows
 
@@ -38,11 +43,15 @@ function TableToolbar({
         />
       </Box>
 
-      {showResultCount && (
-        <Typography variant="body2" color="text.secondary">
-          {filteredRows} of {totalRows} results
-        </Typography>
-      )}
+      <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
+        {showResultCount && (
+          <Typography variant="body2" color="text.secondary">
+            {filteredRows} of {totalRows} results
+          </Typography>
+        )}
+        {exportButton}
+        {columnMenu}
+      </Box>
     </Box>
   )
 }

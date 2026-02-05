@@ -50,6 +50,7 @@ type TableProps<T> = {
   enablePagination?: boolean
   enableSelection?: boolean
   enableRowActions?: boolean
+  enableExport?: boolean
 
   // Sorting
   defaultSortColumn?: string
@@ -71,6 +72,9 @@ type TableProps<T> = {
   // Search
   searchPlaceholder?: string
   searchFields?: (keyof T)[]
+
+  // Export
+  exportFilename?: string
 
   // Styling
   stickyHeader?: boolean
