@@ -18,6 +18,7 @@ import {EditorToolbar} from "@/components/primitives/EditorToolbar";
 import {ToggleGroup} from "@/components/primitives/ToggleGroup";
 import {ChatPanel} from "@/components/chat/ChatPanel";
 import {DocumentSelector} from "@/components/DocumentSelector";
+import {OutputSchemaFormDialog} from "./OutputSchemaFormDialog";
 import {useSplitPane} from "@/hooks/useSplitPane";
 import {useSendSessionMessage} from "@/hooks/useChatMutations";
 import {useOutputSchemaContext} from "@/hooks/useOutputSchemaContext";
@@ -197,6 +198,7 @@ function AgentWorkshopPage() {
   const {send, streaming: sseStreaming} = useSendSessionMessage();
   const {schemas = []} = useOutputSchemaContext();
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
+  const [showSchemaDialog, setShowSchemaDialog] = useState(false);
   const contentRef = useRef("");
   const savedRef = useRef(false);
   const justNavigatedRef = useRef(false);
@@ -635,33 +637,46 @@ function AgentWorkshopPage() {
                   disabled={state.saving}
                   fullWidth
                 />
-                <FormControl size="small" fullWidth sx={{gridColumn: "1 / -1"}}>
-                  <InputLabel id="ws-schema-label">
-                    Output Schema (Optional)
-                  </InputLabel>
-                  <Select
-                    labelId="ws-schema-label"
-                    id="ws-schema"
-                    value={state.outputSchemaId ?? ""}
-                    label="Output Schema (Optional)"
-                    onChange={(e) =>
-                      dispatch({
-                        type: "SET_OUTPUT_SCHEMA",
-                        schemaId: e.target.value || null,
-                      })
-                    }
-                    disabled={state.saving}
-                  >
-                    <MenuItem value="">
-                      <em>None</em>
-                    </MenuItem>
-                    {schemas.map((schema) => (
-                      <MenuItem key={schema.id} value={schema.id}>
-                        {schema.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <Box sx={{gridColumn: "1 / -1"}}>
+                  <FormControl size="small" fullWidth>
+                    <InputLabel id="ws-schema-label">
+                      Output Schema (Optional)
+                    </InputLabel>
+                    <Box sx={{display: "grid", gridTemplateColumns: "1fr auto", gap: 1}}>
+                      <Select
+                        labelId="ws-schema-label"
+                        id="ws-schema"
+                        value={state.outputSchemaId ?? ""}
+                        label="Output Schema (Optional)"
+                        onChange={(e) =>
+                          dispatch({
+                            type: "SET_OUTPUT_SCHEMA",
+                            schemaId: e.target.value || null,
+                          })
+                        }
+                        disabled={state.saving}
+                      >
+                        <MenuItem value="">
+                          <em>None</em>
+                        </MenuItem>
+                        {schemas.map((schema) => (
+                          <MenuItem key={schema.id} value={schema.id}>
+                            {schema.name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => setShowSchemaDialog(true)}
+                        disabled={state.saving}
+                        sx={{minWidth: 80}}
+                      >
+                        New
+                      </Button>
+                    </Box>
+                  </FormControl>
+                </Box>
                 <Box sx={{gridColumn: "1 / -1"}}>
                   <FormControl fullWidth>
                     <InputLabel
@@ -690,6 +705,15 @@ function AgentWorkshopPage() {
           }
         />
       </Box>
+
+      <OutputSchemaFormDialog
+        open={showSchemaDialog}
+        onClose={() => setShowSchemaDialog(false)}
+        onSave={(schemaId) => {
+          dispatch({type: "SET_OUTPUT_SCHEMA", schemaId});
+          dispatch({type: "SET_DIRTY", value: true});
+        }}
+      />
 
       <DocumentSelector
         selectedIds={state.selectedDocumentIds}
