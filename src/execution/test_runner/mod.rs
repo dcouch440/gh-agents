@@ -607,4 +607,5 @@ impl TestRunner {
     }
 }
 
+#[cfg(test)]
 mod tests;
