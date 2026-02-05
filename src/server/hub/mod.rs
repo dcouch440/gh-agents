@@ -262,6 +262,83 @@ pub async fn run_interactive_chat(
         .await
 }
 
+/// Draft agent configuration for workshop sessions without a persisted agent.
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct DraftConfig {
+    pub system_prompt: String,
+    pub model_id: String,
+    #[serde(default = "default_max_tokens")]
+    pub model_max_tokens: i32,
+    #[serde(default = "default_temperature")]
+    pub model_temperature: f32,
+    #[serde(default)]
+    pub tool_names: Vec<String>,
+}
+
+impl TryFrom<serde_json::Value> for DraftConfig {
+    type Error = serde_json::Error;
+
+    fn try_from(value: serde_json::Value) -> Result<Self, Self::Error> {
+        serde_json::from_value(value)
+    }
+}
+
+fn default_max_tokens() -> i32 {
+    4096
+}
+
+fn default_temperature() -> f32 {
+    crate::constants::DEFAULT_TEMPERATURE
+}
+
+/// Run a chat turn with inline config (no agent lookup).
+///
+/// Used for workshop sessions where the agent hasn't been saved yet.
+/// The config is provided directly instead of loaded from the database.
+pub async fn run_chat_with_config(
+    state: &AppState,
+    provider: Arc<dyn LLMProvider + Send + Sync>,
+    session_id: Uuid,
+    draft_config: DraftConfig,
+    message_id: Uuid,
+    content: &str,
+    user_id: UserId,
+    cancel: Option<&CancellationToken>,
+) -> Result<ExecutionResult, HubError> {
+    // Build ChatConfig from DraftConfig
+    let chat_config = ChatConfig {
+        system_prompt: draft_config.system_prompt,
+        tool_names: draft_config.tool_names,
+        model_id: draft_config.model_id,
+        temperature: draft_config.model_temperature,
+        max_history: 50,
+        max_rounds: 10,
+        context_budget: 480_000,
+    };
+
+    // Create strategy, engine, sink, recorder
+    let strategy = ChatStrategy::new(
+        chat_config,
+        state.clone(),
+        user_id,
+        Some(session_id),
+        message_id,
+    );
+    let engine = ExecutionEngine::new(provider);
+    let sink = streaming::SseSink::new(state.clone(), message_id);
+    let ae_repo = state.agent_execution_repo();
+    let tl_repo = state.token_ledger_repo();
+    let recorder = ExecutionRecorder::new(
+        state.repo().as_ref(),
+        ae_repo.as_deref(),
+        tl_repo.as_deref(),
+    );
+
+    engine
+        .execute(&strategy, content, &sink, &recorder, cancel)
+        .await
+}
+
 /// Classify the user's message into one of the agent's modes using a RouterStrategy call.
 ///
 /// Returns `None` if no mode is a clear fit (router returns "default" or unrecognized name).

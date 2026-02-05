@@ -207,6 +207,8 @@ pub struct CreateSessionRequest {
     pub agent_id: Option<Uuid>,
     #[serde(default)]
     pub title: String,
+    #[serde(default)]
+    pub draft_config: Option<serde_json::Value>,
 }
 
 /// Request body for updating a session
@@ -215,12 +217,33 @@ pub struct UpdateSessionRequest {
     pub title: String,
 }
 
+/// Request body for updating session draft config
+#[derive(Deserialize, utoipa::ToSchema)]
+pub struct UpdateDraftConfigRequest {
+    pub draft_config: serde_json::Value,
+}
+
+/// Request body for saving an agent from draft config
+#[derive(Deserialize, utoipa::ToSchema)]
+pub struct SaveAgentRequest {
+    pub name: String,
+    #[serde(default)]
+    pub context_document_ids: Vec<Uuid>,
+}
+
+/// Response for saving an agent from draft
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct SaveAgentResponse {
+    pub agent_id: Uuid,
+}
+
 /// Response for session creation
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct SessionResponse {
     pub id: Uuid,
     pub mode_id: String,
     pub agent_id: Option<Uuid>,
+    pub draft_config: Option<serde_json::Value>,
     pub title: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -270,7 +293,14 @@ pub async fn create_session(
 
     state
         .repo()
-        .create_session(auth.user_id, session_id, &mode_id, &title, request.agent_id)
+        .create_session(
+            auth.user_id,
+            session_id,
+            &mode_id,
+            &title,
+            request.agent_id,
+            request.draft_config,
+        )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -295,6 +325,7 @@ pub async fn create_session(
             id: session.id,
             mode_id: session.mode_id,
             agent_id: session.agent_id,
+            draft_config: session.draft_config,
             title: session.title,
             created_at: session.created_at,
             updated_at: session.updated_at,
@@ -328,6 +359,7 @@ pub async fn list_sessions(
             id: s.id,
             mode_id: s.mode_id,
             agent_id: s.agent_id,
+            draft_config: s.draft_config,
             title: s.title,
             created_at: s.created_at,
             updated_at: s.updated_at,
@@ -370,6 +402,7 @@ pub async fn get_session(
         id: session.id,
         mode_id: session.mode_id,
         agent_id: session.agent_id,
+        draft_config: session.draft_config,
         title: session.title,
         created_at: session.created_at,
         updated_at: session.updated_at,
@@ -477,6 +510,7 @@ pub async fn update_session(
         id: updated.id,
         mode_id: updated.mode_id,
         agent_id: updated.agent_id,
+        draft_config: updated.draft_config,
         title: updated.title,
         created_at: updated.created_at,
         updated_at: updated.updated_at,
@@ -611,5 +645,182 @@ pub async fn get_session_history(
 
     Ok(Json(messages))
 }
+
+/// Update session draft config
+#[utoipa::path(
+    patch,
+    path = "/api/sessions/{session_id}/config",
+    tag = "Sessions",
+    security(("bearer_auth" = [])),
+    params(("session_id" = Uuid, Path, description = "Session ID")),
+    request_body = UpdateDraftConfigRequest,
+    responses(
+        (status = 200, description = "Config updated", body = SessionResponse),
+        (status = 404, description = "Not found")
+    )
+)]
+pub async fn update_session_config(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(session_id): Path<Uuid>,
+    Json(request): Json<UpdateDraftConfigRequest>,
+) -> Result<Json<SessionResponse>, StatusCode> {
+    // Verify session ownership
+    let session = state
+        .repo()
+        .get_session(session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if session.user_id != auth.user_id.0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    state
+        .repo()
+        .update_session_draft_config(session_id, Some(request.draft_config))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let updated = state
+        .repo()
+        .get_session(session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(SessionResponse {
+        id: updated.id,
+        mode_id: updated.mode_id,
+        agent_id: updated.agent_id,
+        draft_config: updated.draft_config,
+        title: updated.title,
+        created_at: updated.created_at,
+        updated_at: updated.updated_at,
+    }))
+}
+
+/// Clear session messages
+#[utoipa::path(
+    delete,
+    path = "/api/sessions/{session_id}/messages",
+    tag = "Sessions",
+    security(("bearer_auth" = [])),
+    params(("session_id" = Uuid, Path, description = "Session ID")),
+    responses(
+        (status = 204, description = "Messages cleared"),
+        (status = 404, description = "Not found")
+    )
+)]
+pub async fn clear_session_messages(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(session_id): Path<Uuid>,
+) -> Result<StatusCode, StatusCode> {
+    // Verify session ownership
+    let session = state
+        .repo()
+        .get_session(session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if session.user_id != auth.user_id.0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    state
+        .repo()
+        .clear_session_messages(session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Save agent from session draft config
+#[utoipa::path(
+    post,
+    path = "/api/sessions/{session_id}/save-agent",
+    tag = "Sessions",
+    security(("bearer_auth" = [])),
+    params(("session_id" = Uuid, Path, description = "Session ID")),
+    request_body = SaveAgentRequest,
+    responses(
+        (status = 201, description = "Agent created and linked", body = SaveAgentResponse),
+        (status = 400, description = "Session has no draft config"),
+        (status = 404, description = "Not found")
+    )
+)]
+pub async fn save_session_agent(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(session_id): Path<Uuid>,
+    Json(request): Json<SaveAgentRequest>,
+) -> Result<(StatusCode, Json<SaveAgentResponse>), StatusCode> {
+    // Verify session ownership
+    let session = state
+        .repo()
+        .get_session(session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if session.user_id != auth.user_id.0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    // Parse draft_config
+    let draft_config: crate::server::hub::DraftConfig = session
+        .draft_config
+        .ok_or(StatusCode::BAD_REQUEST)?
+        .try_into()
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+
+    // Create agent from draft config
+    let agent_id = Uuid::new_v4();
+    let agent = crate::db::AgentRow {
+        id: agent_id,
+        tier: None,
+        name: request.name,
+        system_prompt: draft_config.system_prompt,
+        persona_style: None,
+        model_provider: "anthropic".to_string(),
+        model_id: draft_config.model_id,
+        model_max_tokens: draft_config.model_max_tokens,
+        model_temperature: draft_config.model_temperature,
+        status: None,
+        router_mode: None,
+        router_id: None,
+        output_schema_id: None,
+        version: 1,
+    };
+
+    state
+        .repo()
+        .upsert_agent(auth.user_id, agent)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Set context documents if provided
+    if !request.context_document_ids.is_empty() {
+        state
+            .repo()
+            .set_agent_context(agent_id, request.context_document_ids)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    // Link agent to session (clears draft_config)
+    state
+        .repo()
+        .link_session_agent(session_id, agent_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok((StatusCode::CREATED, Json(SaveAgentResponse { agent_id })))
+}
+
 #[cfg(test)]
 mod tests;

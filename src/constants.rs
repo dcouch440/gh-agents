@@ -236,6 +236,9 @@ pub mod routes {
     pub const SESSION_CHAT: &str = "/sessions/:session_id/chat";
     pub const SESSION_HISTORY: &str = "/sessions/:session_id/history";
     pub const SESSION_CHAT_STREAM: &str = "/sessions/:session_id/chat/:message_id/stream";
+    pub const SESSION_CONFIG: &str = "/sessions/:session_id/config";
+    pub const SESSION_MESSAGES: &str = "/sessions/:session_id/messages";
+    pub const SESSION_SAVE_AGENT: &str = "/sessions/:session_id/save-agent";
 
     // Documents
     pub const DOCUMENTS: &str = "/documents";

@@ -212,6 +212,7 @@ pub trait ServerRepo: Send + Sync {
         mode_id: &str,
         title: &str,
         agent_id: Option<Uuid>,
+        draft_config: Option<serde_json::Value>,
     ) -> Result<()>;
 
     /// List sessions for a user.
@@ -248,6 +249,19 @@ pub trait ServerRepo: Send + Sync {
 
     /// Count messages in a session.
     async fn count_session_messages(&self, session_id: Uuid) -> Result<u32>;
+
+    /// Update draft_config for a session.
+    async fn update_session_draft_config(
+        &self,
+        session_id: Uuid,
+        draft_config: Option<serde_json::Value>,
+    ) -> Result<()>;
+
+    /// Clear all messages for a session.
+    async fn clear_session_messages(&self, session_id: Uuid) -> Result<()>;
+
+    /// Link an agent to a session (and clear draft_config).
+    async fn link_session_agent(&self, session_id: Uuid, agent_id: Uuid) -> Result<()>;
 
     // --- Agent modes ---
 

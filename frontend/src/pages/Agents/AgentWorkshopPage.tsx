@@ -9,7 +9,10 @@ import {
   FormControl,
   InputLabel,
   Alert,
+  IconButton,
+  Tooltip,
 } from "@mui/material";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import {PageHeader} from "@/components/primitives";
 import {SplitPane} from "@/components/primitives/SplitPane";
 import {CodeEditor} from "@/components/primitives/CodeEditor";
@@ -25,6 +28,7 @@ import {useOutputSchemaContext} from "@/hooks/useOutputSchemaContext";
 import {api} from "@/api";
 import type {ChatMessageData} from "@/components/chat/ChatPanel";
 import type {SSEEvent} from "@/api";
+import type {DraftConfig} from "@/types";
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -43,7 +47,7 @@ type WorkshopState = {
   streaming: boolean;
   sessionId: string | null;
   sessionLoading: boolean;
-  tempAgentId: string | null;
+  agentId: string | null; // Set only after save (or when loading saved session)
   saving: boolean;
   dirty: boolean;
   error: string | null;
@@ -60,15 +64,27 @@ type WorkshopAction =
   | {type: "SET_EDITOR_MODE"; value: EditorMode}
   | {type: "ADD_MESSAGE"; message: ChatMessageData}
   | {type: "UPDATE_LAST_ASSISTANT"; content: string}
+  | {type: "CLEAR_MESSAGES"}
   | {type: "SET_STREAMING"; value: boolean}
   | {type: "SET_SESSION"; sessionId: string}
   | {type: "SET_SESSION_LOADING"; value: boolean}
-  | {type: "SET_TEMP_AGENT"; agentId: string}
+  | {type: "SET_AGENT_ID"; agentId: string}
   | {type: "SET_SAVING"; value: boolean}
   | {type: "SET_DIRTY"; value: boolean}
   | {type: "SET_ERROR"; value: string | null}
   | {
-      type: "HYDRATE_SESSION";
+      type: "HYDRATE_DRAFT_SESSION";
+      payload: {
+        systemPrompt: string;
+        modelId: string;
+        maxTokens: number;
+        temperature: number;
+        messages: ChatMessageData[];
+        sessionId: string;
+      };
+    }
+  | {
+      type: "HYDRATE_SAVED_SESSION";
       payload: {
         name: string;
         systemPrompt: string;
@@ -79,7 +95,7 @@ type WorkshopAction =
         selectedDocumentIds: string[];
         messages: ChatMessageData[];
         sessionId: string;
-        tempAgentId: string;
+        agentId: string;
       };
     };
 
@@ -96,7 +112,7 @@ const initialState: WorkshopState = {
   streaming: false,
   sessionId: null,
   sessionLoading: true,
-  tempAgentId: null,
+  agentId: null,
   saving: false,
   dirty: false,
   error: null,
@@ -133,21 +149,31 @@ const reducer = (
       }
       return {...state, messages: msgs};
     }
+    case "CLEAR_MESSAGES":
+      return {...state, messages: []};
     case "SET_STREAMING":
       return {...state, streaming: action.value};
     case "SET_SESSION":
       return {...state, sessionId: action.sessionId, sessionLoading: false};
     case "SET_SESSION_LOADING":
       return {...state, sessionLoading: action.value};
-    case "SET_TEMP_AGENT":
-      return {...state, tempAgentId: action.agentId};
+    case "SET_AGENT_ID":
+      return {...state, agentId: action.agentId};
     case "SET_SAVING":
       return {...state, saving: action.value};
     case "SET_DIRTY":
       return {...state, dirty: action.value};
     case "SET_ERROR":
       return {...state, error: action.value};
-    case "HYDRATE_SESSION":
+    case "HYDRATE_DRAFT_SESSION":
+      return {
+        ...state,
+        ...action.payload,
+        sessionLoading: false,
+        dirty: false,
+        error: null,
+      };
+    case "HYDRATE_SAVED_SESSION":
       return {
         ...state,
         ...action.payload,
@@ -200,39 +226,20 @@ function AgentWorkshopPage() {
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
   const [showSchemaDialog, setShowSchemaDialog] = useState(false);
   const contentRef = useRef("");
-  const savedRef = useRef(false);
   const justNavigatedRef = useRef(false);
 
   // Load existing session or create new one on mount
   useEffect(() => {
     let cancelled = false;
-    let tempAgentIdForCleanup: string | null = null;
 
     const loadExistingSession = async () => {
       try {
-        console.warn("[Workshop] Loading session:", urlSessionId);
-        // Fetch session, agent, history, and context in parallel
+        // Fetch session and history
         const [session, history] = await Promise.all([
           api.sessions.get(urlSessionId!),
           api.sessions.getHistory(urlSessionId!),
         ]);
 
-        console.warn("[Workshop] Session data:", session);
-        console.warn("[Workshop] History response:", history);
-
-        if (cancelled) return;
-
-        if (!session.agent_id) {
-          throw new Error("Session has no linked agent");
-        }
-
-        // Fetch agent and context
-        const [agent, contextDocs] = await Promise.all([
-          api.agents.get(session.agent_id),
-          api.agents.getContext(session.agent_id),
-        ]);
-
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (cancelled) return;
 
         // Convert chat history to ChatMessageData format
@@ -242,28 +249,48 @@ function AgentWorkshopPage() {
           content: msg.content,
         }));
 
-        console.warn(
-          "[Workshop] Loading session with",
-          messages.length,
-          "messages",
-        );
+        if (session.agent_id) {
+          // Saved session with agent - load agent config
+          const [agent, contextDocs] = await Promise.all([
+            api.agents.get(session.agent_id),
+            api.agents.getContext(session.agent_id),
+          ]);
 
-        // Hydrate state
-        dispatch({
-          type: "HYDRATE_SESSION",
-          payload: {
-            name: agent.name.replace("[Workshop Draft] ", ""),
-            systemPrompt: agent.system_prompt,
-            modelId: getShorthandModelId(agent.model_id),
-            maxTokens: agent.model_max_tokens,
-            temperature: agent.model_temperature,
-            outputSchemaId: agent.output_schema_id,
-            selectedDocumentIds: contextDocs.documents.map((d) => d.id),
-            messages,
-            sessionId: session.id,
-            tempAgentId: agent.id,
-          },
-        });
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+          if (cancelled) return;
+
+          dispatch({
+            type: "HYDRATE_SAVED_SESSION",
+            payload: {
+              name: agent.name,
+              systemPrompt: agent.system_prompt,
+              modelId: getShorthandModelId(agent.model_id),
+              maxTokens: agent.model_max_tokens,
+              temperature: agent.model_temperature,
+              outputSchemaId: agent.output_schema_id,
+              selectedDocumentIds: contextDocs.documents.map((d) => d.id),
+              messages,
+              sessionId: session.id,
+              agentId: agent.id,
+            },
+          });
+        } else if (session.draft_config) {
+          // Draft session without agent - load from draft_config
+          const draft = session.draft_config;
+          dispatch({
+            type: "HYDRATE_DRAFT_SESSION",
+            payload: {
+              systemPrompt: draft.system_prompt,
+              modelId: getShorthandModelId(draft.model_id),
+              maxTokens: draft.model_max_tokens,
+              temperature: draft.model_temperature,
+              messages,
+              sessionId: session.id,
+            },
+          });
+        } else {
+          throw new Error("Session has no agent or draft config");
+        }
       } catch (err) {
         if (!cancelled) {
           dispatch({type: "SET_SESSION_LOADING", value: false});
@@ -278,25 +305,21 @@ function AgentWorkshopPage() {
 
     const createNewSession = async () => {
       try {
-        const agent = await api.agents.create({
-          name: "[Workshop Draft]",
+        // Create default draft config
+        const draftConfig: DraftConfig = {
           system_prompt: "",
           model_id: getFullModelId(initialState.modelId),
-          model_max_tokens: 4096,
-          model_temperature: 0.7,
-        });
+          model_max_tokens: initialState.maxTokens,
+          model_temperature: initialState.temperature,
+        };
 
-        if (cancelled) return;
-        tempAgentIdForCleanup = agent.id;
-        dispatch({type: "SET_TEMP_AGENT", agentId: agent.id});
-
+        // Create session with draft config (no agent)
         const session = await api.sessions.create({
           mode_id: "workshop",
-          agent_id: agent.id,
           title: "Agent Workshop",
+          draft_config: draftConfig,
         });
 
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (!cancelled) {
           dispatch({type: "SET_SESSION", sessionId: session.id});
         }
@@ -328,37 +351,34 @@ function AgentWorkshopPage() {
 
     return () => {
       cancelled = true;
-      // Clean up temporary agent if user navigates away without saving
-      if (tempAgentIdForCleanup && !savedRef.current) {
-        void api.agents.delete(tempAgentIdForCleanup);
-      }
     };
   }, [urlSessionId]);
 
-  // Update temporary agent when config changes
+  // Sync config changes to session's draft_config (debounced)
+  // Only sync for draft sessions (no agentId)
   useEffect(() => {
-    if (!state.tempAgentId) return;
+    if (!state.sessionId || state.agentId) return;
 
     const timeoutId = setTimeout(() => {
-      void api.agents.update(state.tempAgentId, {
-        system_prompt: state.systemPrompt || undefined,
+      const draftConfig: DraftConfig = {
+        system_prompt: state.systemPrompt,
         model_id: getFullModelId(state.modelId),
         model_max_tokens: state.maxTokens,
         model_temperature: state.temperature,
-        output_schema_id: state.outputSchemaId ?? undefined,
-      });
+      };
+      void api.sessions.updateConfig(state.sessionId, draftConfig);
     }, 500);
 
     return () => {
       clearTimeout(timeoutId);
     };
   }, [
-    state.tempAgentId,
+    state.sessionId,
+    state.agentId,
     state.systemPrompt,
     state.modelId,
     state.maxTokens,
     state.temperature,
-    state.outputSchemaId,
   ]);
 
   // Warn on unsaved navigation
@@ -376,8 +396,6 @@ function AgentWorkshopPage() {
   const handleSend = useCallback(
     (message: string) => {
       if (!state.sessionId) return;
-
-      console.warn("[Workshop] Sending message to session:", state.sessionId);
 
       // Add user message
       const userMsgId = `msg-${Date.now()}`;
@@ -430,59 +448,91 @@ function AgentWorkshopPage() {
   );
 
   const handleSave = useCallback(() => {
-    if (!state.name.trim() || !state.tempAgentId) return;
+    if (!state.name.trim() || !state.sessionId) return;
     dispatch({type: "SET_SAVING", value: true});
     dispatch({type: "SET_ERROR", value: null});
 
-    // Update the temporary agent's name to finalize it
-    api.agents
-      .update(state.tempAgentId, {
-        name: state.name.trim(),
-      })
-      .then(() => {
-        // Save agent context documents
-        if (state.selectedDocumentIds.length > 0) {
-          return api.agents.setContext(
-            state.tempAgentId,
-            state.selectedDocumentIds,
-          );
-        }
-      })
-      .then(() => {
-        savedRef.current = true;
-        dispatch({type: "SET_DIRTY", value: false});
-        // If we don't have a sessionId in URL yet, update URL without reload
-        if (!urlSessionId && state.sessionId) {
-          console.warn(
-            "[Workshop] Navigating to session URL, current message count:",
-            state.messages.length,
-          );
-          justNavigatedRef.current = true;
-          void navigate(`/agents/workshop/${state.sessionId}`, {replace: true});
-        }
-        // Otherwise, stay on the same URL (already persistent)
-      })
-      .catch((err: unknown) => {
-        dispatch({
-          type: "SET_ERROR",
-          value: err instanceof Error ? err.message : "Failed to save agent",
+    if (state.agentId) {
+      // Update existing agent
+      api.agents
+        .update(state.agentId, {
+          name: state.name.trim(),
+          system_prompt: state.systemPrompt || undefined,
+          model_id: getFullModelId(state.modelId),
+          model_max_tokens: state.maxTokens,
+          model_temperature: state.temperature,
+          output_schema_id: state.outputSchemaId ?? undefined,
+        })
+        .then(() => {
+          // Update agent context documents
+          return api.agents.setContext(state.agentId!, state.selectedDocumentIds);
+        })
+        .then(() => {
+          dispatch({type: "SET_DIRTY", value: false});
+        })
+        .catch((err: unknown) => {
+          dispatch({
+            type: "SET_ERROR",
+            value: err instanceof Error ? err.message : "Failed to update agent",
+          });
+        })
+        .finally(() => {
+          dispatch({type: "SET_SAVING", value: false});
         });
-      })
-      .finally(() => {
-        dispatch({type: "SET_SAVING", value: false});
-      });
+    } else {
+      // Create new agent from draft session
+      api.sessions
+        .saveAgent(state.sessionId, {
+          name: state.name.trim(),
+          context_document_ids: state.selectedDocumentIds.length > 0
+            ? state.selectedDocumentIds
+            : undefined,
+        })
+        .then((response) => {
+          dispatch({type: "SET_AGENT_ID", agentId: response.agent_id});
+          dispatch({type: "SET_DIRTY", value: false});
+          // Navigate to session URL if not already there
+          if (!urlSessionId) {
+            justNavigatedRef.current = true;
+            void navigate(`/agents/workshop/${state.sessionId}`, {replace: true});
+          }
+        })
+        .catch((err: unknown) => {
+          dispatch({
+            type: "SET_ERROR",
+            value: err instanceof Error ? err.message : "Failed to save agent",
+          });
+        })
+        .finally(() => {
+          dispatch({type: "SET_SAVING", value: false});
+        });
+    }
   }, [
     state.name,
-    state.tempAgentId,
-    state.selectedDocumentIds,
     state.sessionId,
-    state.messages.length,
+    state.agentId,
+    state.systemPrompt,
+    state.modelId,
+    state.maxTokens,
+    state.temperature,
+    state.outputSchemaId,
+    state.selectedDocumentIds,
     urlSessionId,
     navigate,
   ]);
 
+  const handleClearMessages = useCallback(() => {
+    if (!state.sessionId) return;
+
+    void api.sessions.clearMessages(state.sessionId).then(() => {
+      dispatch({type: "CLEAR_MESSAGES"});
+    });
+  }, [state.sessionId]);
+
   const chatDisabled =
     state.saving || state.sessionLoading || !state.sessionId || sseStreaming;
+
+  const isSaved = state.agentId !== null;
 
   return (
     <Box
@@ -512,10 +562,10 @@ function AgentWorkshopPage() {
             size="small"
           >
             {state.saving
-              ? urlSessionId
+              ? isSaved
                 ? "Updating..."
                 : "Saving..."
-              : urlSessionId
+              : isSaved
                 ? "Update"
                 : "Save"}
           </Button>
@@ -540,12 +590,38 @@ function AgentWorkshopPage() {
           splitPercent={splitPercent}
           onMouseDown={handleMouseDown}
           left={
-            <ChatPanel
-              messages={state.messages}
-              onSend={handleSend}
-              streaming={state.streaming}
-              disabled={chatDisabled}
-            />
+            <Box sx={{display: "flex", flexDirection: "column", height: "100%"}}>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  px: 1,
+                  py: 0.5,
+                  borderBottom: 1,
+                  borderColor: "divider",
+                }}
+              >
+                <Tooltip title="Clear messages">
+                  <span>
+                    <IconButton
+                      size="small"
+                      onClick={handleClearMessages}
+                      disabled={state.messages.length === 0 || state.streaming}
+                    >
+                      <DeleteOutlineIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              </Box>
+              <Box sx={{flex: 1, minHeight: 0}}>
+                <ChatPanel
+                  messages={state.messages}
+                  onSend={handleSend}
+                  streaming={state.streaming}
+                  disabled={chatDisabled}
+                />
+              </Box>
+            </Box>
           }
           right={
             <Box

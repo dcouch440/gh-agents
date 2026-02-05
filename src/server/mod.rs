@@ -209,6 +209,9 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         .route(routes::SESSION_CHAT, post(api::send_session_chat))
         .route(routes::SESSION_HISTORY, get(api::get_session_history))
         .route(routes::SESSION_CHAT_STREAM, get(api::session_chat_stream))
+        .route(routes::SESSION_CONFIG, axum::routing::patch(api::update_session_config))
+        .route(routes::SESSION_MESSAGES, delete(api::clear_session_messages))
+        .route(routes::SESSION_SAVE_AGENT, post(api::save_session_agent))
         .route(
             routes::DOCUMENTS,
             get(api::list_documents).post(api::create_document),
@@ -751,6 +754,7 @@ mod tests {
             _mode_id: &str,
             _title: &str,
             _agent_id: Option<Uuid>,
+            _draft_config: Option<serde_json::Value>,
         ) -> anyhow::Result<()> {
             Ok(())
         }
@@ -796,6 +800,23 @@ mod tests {
         }
         async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> {
             Ok(0)
+        }
+        async fn update_session_draft_config(
+            &self,
+            _session_id: Uuid,
+            _draft_config: Option<serde_json::Value>,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn clear_session_messages(&self, _session_id: Uuid) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn link_session_agent(
+            &self,
+            _session_id: Uuid,
+            _agent_id: Uuid,
+        ) -> anyhow::Result<()> {
+            Ok(())
         }
         async fn get_agent_modes(
             &self,
