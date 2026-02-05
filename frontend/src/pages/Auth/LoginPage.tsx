@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation, Navigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
@@ -15,8 +15,15 @@ function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const { login } = useAuth()
+  const { login, user } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+
+  const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? ROUTES.DASHBOARD
+
+  if (user) {
+    return <Navigate to={from} replace />
+  }
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -26,7 +33,7 @@ function LoginPage() {
     void (async () => {
       try {
         await login(email, password)
-        void navigate(ROUTES.DASHBOARD)
+        void navigate(from)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Login failed')
       } finally {
