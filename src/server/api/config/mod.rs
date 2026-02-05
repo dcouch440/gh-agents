@@ -42,7 +42,7 @@ pub struct UpdateConfigRequest {
     )
 )]
 pub async fn get_config(State(state): State<AppState>) -> Json<ConfigResponse> {
-    let config = state.config.read().await;
+    let config = state.config().read().await;
 
     Json(ConfigResponse {
         verbosity: format!("{:?}", config.verbosity).to_lowercase(),
@@ -68,7 +68,7 @@ pub async fn update_config(
     State(state): State<AppState>,
     Json(request): Json<UpdateConfigRequest>,
 ) -> Result<Json<ConfigResponse>, StatusCode> {
-    let mut config = state.config.write().await;
+    let mut config = state.config().write().await;
 
     // Verbosity
     if let Some(ref v) = request.verbosity {

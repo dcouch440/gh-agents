@@ -43,7 +43,7 @@ pub async fn get_agent_context(
     Path(agent_id): Path<Uuid>,
 ) -> Result<Json<AgentContextResponse>, StatusCode> {
     let rows = state
-        .repo
+        .repo()
         .get_agent_context(agent_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -95,13 +95,13 @@ pub async fn set_agent_context(
     let document_ids = document_ids.map_err(|_| StatusCode::BAD_REQUEST)?;
 
     state
-        .repo
+        .repo()
         .set_agent_context(agent_id, document_ids)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let rows = state
-        .repo
+        .repo()
         .get_agent_context(agent_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

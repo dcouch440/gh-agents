@@ -459,7 +459,7 @@ async fn require_auth(
         })
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    auth::verify_token(&token, &state.jwt_secret).map_err(|_| StatusCode::UNAUTHORIZED)?;
+    auth::verify_token(&token, &state.jwt_secret()).map_err(|_| StatusCode::UNAUTHORIZED)?;
 
     Ok(next.run(request).await)
 }
@@ -823,7 +823,7 @@ mod tests {
 
     fn create_test_token(state: &AppState) -> String {
         use crate::types::UserId;
-        auth::create_token(&state.jwt_secret, 24, UserId::new(), "test@test.com").unwrap()
+        auth::create_token(&state.jwt_secret(), 24, UserId::new(), "test@test.com").unwrap()
     }
 
     fn setup_test_app() -> (Router, AppState) {

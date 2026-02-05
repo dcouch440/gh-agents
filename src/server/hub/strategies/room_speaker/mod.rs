@@ -114,7 +114,7 @@ impl ExecutionStrategy for RoomSpeakerStrategy {
 
     async fn on_complete(&self, response: &str, usage: &TokenUsage) -> Result<(), HubError> {
         // Record token usage
-        if let Some(tl_repo) = &self.state.token_ledger_repo {
+        if let Some(tl_repo) = self.state.token_ledger_repo() {
             let cost = super::compute_cost(
                 &self.config.agent.model_id,
                 usage.input_tokens as i64,
@@ -133,7 +133,7 @@ impl ExecutionStrategy for RoomSpeakerStrategy {
         }
 
         // Update agent_execution with final status
-        if let Some(ae_repo) = &self.state.agent_execution_repo {
+        if let Some(ae_repo) = self.state.agent_execution_repo() {
             let _ = ae_repo
                 .update_agent_execution_status(
                     self.config.agent_execution_id,

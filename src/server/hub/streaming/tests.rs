@@ -26,7 +26,7 @@ async fn sse_sink_sends_chunks() {
     let (state, _rx) = AppState::with_repo(None, repo, AppConfig::default());
 
     let msg_id = Uuid::new_v4();
-    state.ensure_response_stream(msg_id).await;
+    state.ensure_response_stream(msg_id);
 
     let sink = SseSink::new(state.clone(), msg_id);
     sink.token("hi").await;
@@ -35,7 +35,7 @@ async fn sse_sink_sends_chunks() {
     sink.error("oops").await;
     sink.done().await;
 
-    let (buf, _rx, done) = state.get_response_stream(msg_id).await;
+    let (buf, _rx, done) = state.get_response_stream(msg_id);
     assert_eq!(buf.len(), 5);
     assert!(done);
 }

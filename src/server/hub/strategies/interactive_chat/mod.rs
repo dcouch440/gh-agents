@@ -82,10 +82,10 @@ impl ExecutionStrategy for InteractiveChatStrategy {
     }
 
     async fn build_messages(&self, input: &str) -> Result<Vec<Message>, HubError> {
-        let ae_repo =
-            self.state.agent_execution_repo.as_ref().ok_or_else(|| {
-                HubError::Internal(anyhow::anyhow!("agent_execution_repo missing"))
-            })?;
+        let ae_repo = self
+            .state
+            .agent_execution_repo()
+            .ok_or_else(|| HubError::Internal(anyhow::anyhow!("agent_execution_repo missing")))?;
 
         let rows = ae_repo
             .list_execution_messages(self.config.agent_execution_id)
@@ -126,7 +126,7 @@ impl ExecutionStrategy for InteractiveChatStrategy {
 
     async fn on_complete(&self, response: &str, usage: &TokenUsage) -> Result<(), HubError> {
         // Record token usage to ledger
-        if let Some(tl_repo) = &self.state.token_ledger_repo {
+        if let Some(tl_repo) = self.state.token_ledger_repo() {
             let cost = super::compute_cost(
                 &self.config.agent.model_id,
                 usage.input_tokens as i64,
@@ -145,7 +145,7 @@ impl ExecutionStrategy for InteractiveChatStrategy {
         }
 
         // Record assistant response as execution message
-        if let Some(ae_repo) = &self.state.agent_execution_repo {
+        if let Some(ae_repo) = self.state.agent_execution_repo() {
             if let Err(e) = ae_repo
                 .create_execution_message(
                     self.config.agent_execution_id,
@@ -162,7 +162,7 @@ impl ExecutionStrategy for InteractiveChatStrategy {
         }
 
         // Update agent_execution output (but NOT status — keep awaiting_user)
-        if let Some(ae_repo) = &self.state.agent_execution_repo {
+        if let Some(ae_repo) = self.state.agent_execution_repo() {
             let _ = ae_repo
                 .update_agent_execution_status(
                     self.config.agent_execution_id,

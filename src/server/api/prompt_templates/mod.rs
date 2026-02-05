@@ -51,8 +51,7 @@ pub async fn list_prompt_templates(
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<PromptTemplateResponse>>, StatusCode> {
     let repo = state
-        .prompt_template_repo
-        .as_ref()
+        .prompt_template_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo
         .list_prompt_templates(auth.user_id.0)
@@ -94,8 +93,7 @@ pub async fn create_prompt_template(
         return Err(StatusCode::BAD_REQUEST);
     }
     let repo = state
-        .prompt_template_repo
-        .as_ref()
+        .prompt_template_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo
         .create_prompt_template(auth.user_id.0, request.name, request.content)
@@ -130,8 +128,7 @@ pub async fn get_prompt_template(
     Path(id): Path<Uuid>,
 ) -> Result<Json<PromptTemplateResponse>, StatusCode> {
     let repo = state
-        .prompt_template_repo
-        .as_ref()
+        .prompt_template_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo
         .get_prompt_template(id)
@@ -169,8 +166,7 @@ pub async fn update_prompt_template(
     Json(request): Json<UpdatePromptTemplateRequest>,
 ) -> Result<Json<PromptTemplateResponse>, StatusCode> {
     let repo = state
-        .prompt_template_repo
-        .as_ref()
+        .prompt_template_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo
         .get_prompt_template(id)
@@ -220,8 +216,7 @@ pub async fn delete_prompt_template(
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
     let repo = state
-        .prompt_template_repo
-        .as_ref()
+        .prompt_template_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo
         .get_prompt_template(id)

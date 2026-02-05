@@ -93,8 +93,8 @@ pub async fn list_collections(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<CollectionResponse>>, StatusCode> {
-    let db = state.db.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db.clone()));
+    let db = state.db().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?.clone();
+    let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
 
     let rows = repo
         .list_collections(auth.user_id.0)
@@ -136,8 +136,8 @@ pub async fn get_collection(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<CollectionResponse>, StatusCode> {
-    let db = state.db.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db.clone()));
+    let db = state.db().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?.clone();
+    let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
 
     let row = repo
         .get_collection(id)
@@ -178,8 +178,8 @@ pub async fn create_collection(
     auth: auth_utils::AuthUser,
     Json(request): Json<CreateCollectionRequest>,
 ) -> Result<(StatusCode, Json<CollectionResponse>), StatusCode> {
-    let db = state.db.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db.clone()));
+    let db = state.db().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?.clone();
+    let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
 
     // Validate execution_mode
     if request.execution_mode != "sequential" && request.execution_mode != "parallel" {
@@ -232,8 +232,8 @@ pub async fn update_collection(
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateCollectionRequest>,
 ) -> Result<Json<CollectionResponse>, StatusCode> {
-    let db = state.db.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db.clone()));
+    let db = state.db().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?.clone();
+    let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
 
     // Verify ownership
     let existing = repo
@@ -293,8 +293,8 @@ pub async fn delete_collection(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
-    let db = state.db.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db.clone()));
+    let db = state.db().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?.clone();
+    let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
 
     // Verify ownership
     let existing = repo
@@ -337,11 +337,10 @@ pub async fn run_collection(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<CollectionRunResponse>), StatusCode> {
-    let db = state.db.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let repo = Arc::new(PgRepo::new(db.clone()));
+    let db = state.db().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?.clone();
+    let repo = Arc::new(PgRepo::new(db));
     let workflow_repo = state
-        .workflow_repo
-        .as_ref()
+        .workflow_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Verify ownership
@@ -356,11 +355,8 @@ pub async fn run_collection(
     }
 
     // Create executor and run collection
-    let executor = CollectionDagExecutor::new(
-        Arc::clone(&repo),
-        Arc::clone(workflow_repo),
-        Arc::new(state.clone()),
-    );
+    let executor =
+        CollectionDagExecutor::new(Arc::clone(&repo), workflow_repo, Arc::new(state.clone()));
 
     let run = executor
         .execute_collection(id, auth.user_id.0)
@@ -400,8 +396,8 @@ pub async fn get_collection_run_status(
     auth: auth_utils::AuthUser,
     Path(run_id): Path<Uuid>,
 ) -> Result<Json<CollectionRunResponse>, StatusCode> {
-    let db = state.db.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db.clone()));
+    let db = state.db().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?.clone();
+    let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
 
     let row = repo
         .get_collection_run(run_id)
@@ -444,8 +440,8 @@ pub async fn get_collection_variables(
     auth: auth_utils::AuthUser,
     Path(run_id): Path<Uuid>,
 ) -> Result<Json<Vec<ExecutionVariableResponse>>, StatusCode> {
-    let db = state.db.as_ref().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db.clone()));
+    let db = state.db().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?.clone();
+    let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
 
     // Verify ownership
     let run = repo

@@ -1,28 +1,38 @@
 //! Shared application state for HTTP handlers
+//!
+//! This module provides `AppState`, the central state container shared across all
+//! HTTP handlers. It wraps an inner `Arc<AppStateInner>` for cheap cloning.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
+use dashmap::DashMap;
 use sqlx::PgPool;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::db::pg_repo::PgRepo;
-use crate::db::traits::{
-    AgentExecutionRepo, ContextStoreRepo, DocumentRepo, OutputSchemaRepo, PromptTemplateRepo,
-    ResultRepo, RoomRepo, RouterRequestRepo, ServerRepo, TokenLedgerRepo, ToolRouterRepo, UserRepo,
-    WorkflowRepo,
-};
+use crate::db::traits::ServerRepo;
 use crate::llm::LLMProvider;
 use crate::types::{AppConfig, UserId};
 
 use super::hub::{ModeResolver, PromptRegistry};
 use super::ws::{
-    AgentUpdate, FeedUpdate, PipelineUpdate, RoomUpdateEvent, RoutingUpdate, SessionUpdate,
-    TaskUpdate,
+    AgentUpdate, ContextUpdateEvent, FeedUpdate, PipelineUpdate, RoomUpdateEvent,
+    RouterRequestEvent, RoutingUpdate, SessionUpdate, TaskUpdate,
 };
+
+mod events;
+mod repos;
+
+pub use events::{ChannelSizes, EventBus};
+pub use repos::Repos;
+
+#[cfg(test)]
+mod test_helpers;
+#[cfg(test)]
+mod tests;
 
 /// Message sent to the chat consumer
 #[derive(Debug, Clone)]
@@ -54,77 +64,48 @@ pub enum StreamChunk {
 
 /// A buffered broadcast stream that retains all chunks so late-connecting
 /// SSE clients can replay missed tokens.
-struct BufferedStream {
+pub struct BufferedStream {
     tx: broadcast::Sender<StreamChunk>,
     buffer: Vec<StreamChunk>,
     done: bool,
 }
 
-/// Application state shared across all HTTP handlers
-#[derive(Clone)]
-pub struct AppState {
-    /// Database connection pool (used by Scheduler; None in mock-based tests)
-    pub db: Option<PgPool>,
+/// Inner state wrapped in Arc for cheap cloning.
+struct AppStateInner {
+    /// Database connection pool
+    db: Option<PgPool>,
     /// Repository trait object for DB operations used by API handlers
-    pub repo: Arc<dyn ServerRepo>,
-    /// User repository for authentication operations (None in legacy/test mode)
-    pub user_repo: Option<Arc<dyn UserRepo>>,
-    /// Document repository for document CRUD operations (None in legacy/test mode)
-    pub doc_repo: Option<Arc<dyn DocumentRepo>>,
-    /// Output schema repository (None in legacy/test mode)
-    pub output_schema_repo: Option<Arc<dyn OutputSchemaRepo>>,
-    /// Prompt template repository (None in legacy/test mode)
-    pub prompt_template_repo: Option<Arc<dyn PromptTemplateRepo>>,
-    /// Workflow repository (None in legacy/test mode)
-    pub workflow_repo: Option<Arc<dyn WorkflowRepo>>,
-    pub agent_execution_repo: Option<Arc<dyn AgentExecutionRepo>>,
-    pub token_ledger_repo: Option<Arc<dyn TokenLedgerRepo>>,
-    pub result_repo: Option<Arc<dyn ResultRepo>>,
-    /// Tool router repository (None in legacy/test mode)
-    pub tool_router_repo: Option<Arc<dyn ToolRouterRepo>>,
-    /// Context store repository (None in legacy/test mode)
-    pub context_store_repo: Option<Arc<dyn ContextStoreRepo>>,
-    /// Router request repository (None in legacy/test mode)
-    pub router_request_repo: Option<Arc<dyn RouterRequestRepo>>,
-    /// Room repository for agent room management (None in legacy/test mode)
-    pub room_repo: Option<Arc<dyn RoomRepo>>,
-    /// LLM provider for agent execution (None in legacy/test mode)
-    pub provider: Option<Arc<dyn LLMProvider + Send + Sync>>,
-    /// Mode resolver for router-based mode selection (None in legacy/test mode)
-    pub mode_resolver: Option<Arc<ModeResolver>>,
+    server_repo: Arc<dyn ServerRepo>,
+    /// All repository trait objects grouped together (non-optional)
+    repos: Option<Repos>,
+    /// All broadcast channels grouped together
+    events: EventBus,
     /// Application configuration (mutable at runtime via API)
-    pub config: Arc<RwLock<AppConfig>>,
+    config: Arc<RwLock<AppConfig>>,
+    /// LLM provider for agent execution
+    provider: Option<Arc<dyn LLMProvider + Send + Sync>>,
+    /// Mode resolver for router-based mode selection
+    mode_resolver: Option<Arc<ModeResolver>>,
+    /// Prompt registry for core system/agent prompts
+    prompt_registry: Arc<PromptRegistry>,
     /// JWT secret for token signing
-    pub jwt_secret: Vec<u8>,
+    jwt_secret: Vec<u8>,
+    /// Default agent UUID (looked up at startup)
+    default_agent_id: Option<Uuid>,
     /// Channel to send messages to the orchestrator
-    pub chat_tx: mpsc::Sender<ConsumerMessage>,
-    /// Map of message IDs to buffered response streams
-    response_streams: Arc<RwLock<HashMap<Uuid, Arc<RwLock<BufferedStream>>>>>,
-    /// Broadcast channel for feed updates
-    pub feed_tx: broadcast::Sender<FeedUpdate>,
-    /// Broadcast channel for task updates
-    pub task_tx: broadcast::Sender<TaskUpdate>,
-    /// Broadcast channel for agent updates
-    pub agent_tx: broadcast::Sender<AgentUpdate>,
-    /// Broadcast channel for session updates
-    pub session_tx: broadcast::Sender<SessionUpdate>,
-    /// Broadcast channel for pipeline execution updates
-    pub pipeline_tx: broadcast::Sender<PipelineUpdate>,
-    /// Broadcast channel for tool routing updates
-    pub routing_tx: broadcast::Sender<RoutingUpdate>,
-    /// Broadcast channel for router request lifecycle events
-    pub router_request_tx: broadcast::Sender<super::ws::RouterRequestEvent>,
-    /// Broadcast channel for context store updates
-    pub context_update_tx: broadcast::Sender<super::ws::ContextUpdateEvent>,
-    /// Broadcast channel for room events
-    pub room_update_tx: broadcast::Sender<RoomUpdateEvent>,
-    /// Default agent UUID (looked up at startup, agent with name "Home")
-    pub default_agent_id: Option<Uuid>,
-    /// Prompt registry for core system/agent prompts loaded from prompts/ directory
-    pub prompt_registry: Arc<PromptRegistry>,
+    chat_tx: mpsc::Sender<ConsumerMessage>,
+    /// Map of message IDs to buffered response streams (DashMap for concurrent access)
+    response_streams: DashMap<Uuid, BufferedStream>,
     /// Cancellation tokens for running pipelines and agent executions
-    pub cancellation_tokens: Arc<RwLock<HashMap<Uuid, CancellationToken>>>,
+    cancellation_tokens: DashMap<Uuid, CancellationToken>,
 }
+
+/// Application state shared across all HTTP handlers.
+///
+/// Wraps an inner Arc for cheap cloning. All handlers receive
+/// the same underlying state.
+#[derive(Clone)]
+pub struct AppState(Arc<AppStateInner>);
 
 impl AppState {
     /// Create new application state, returning the orchestrator receiver separately
@@ -132,116 +113,146 @@ impl AppState {
     ///
     /// Loads persisted agents and clusters from the database on startup.
     pub async fn new(db: PgPool, config: AppConfig) -> (Self, mpsc::Receiver<ConsumerMessage>) {
-        let repo: Arc<dyn ServerRepo> = Arc::new(PgRepo::new(db.clone()));
-        let user_repo: Arc<dyn UserRepo> = Arc::new(PgRepo::new(db.clone()));
-        let doc_repo: Arc<dyn DocumentRepo> = Arc::new(PgRepo::new(db.clone()));
-        let output_schema_repo: Arc<dyn OutputSchemaRepo> = Arc::new(PgRepo::new(db.clone()));
-        let prompt_template_repo: Arc<dyn PromptTemplateRepo> = Arc::new(PgRepo::new(db.clone()));
-        let workflow_repo: Arc<dyn WorkflowRepo> = Arc::new(PgRepo::new(db.clone()));
-        let agent_execution_repo: Arc<dyn AgentExecutionRepo> = Arc::new(PgRepo::new(db.clone()));
-        let token_ledger_repo: Arc<dyn TokenLedgerRepo> = Arc::new(PgRepo::new(db.clone()));
-        let result_repo: Arc<dyn ResultRepo> = Arc::new(PgRepo::new(db.clone()));
-        let tool_router_repo: Arc<dyn ToolRouterRepo> = Arc::new(PgRepo::new(db.clone()));
-        let context_store_repo: Arc<dyn ContextStoreRepo> = Arc::new(PgRepo::new(db.clone()));
-        let router_request_repo: Arc<dyn RouterRequestRepo> = Arc::new(PgRepo::new(db.clone()));
-        let room_repo: Arc<dyn RoomRepo> = Arc::new(PgRepo::new(db.clone()));
-        let (mut state, rx) = Self::with_repo(Some(db), repo, config.clone());
+        let server_repo: Arc<dyn ServerRepo> = Arc::new(PgRepo::new(db.clone()));
+
+        // Create all repos from PgRepo
+        let repos = Repos::new(
+            Arc::new(PgRepo::new(db.clone())), // users
+            Arc::new(PgRepo::new(db.clone())), // documents
+            Arc::new(PgRepo::new(db.clone())), // output_schemas
+            Arc::new(PgRepo::new(db.clone())), // prompt_templates
+            Arc::new(PgRepo::new(db.clone())), // workflows
+            Arc::new(PgRepo::new(db.clone())), // agent_executions
+            Arc::new(PgRepo::new(db.clone())), // token_ledger
+            Arc::new(PgRepo::new(db.clone())), // results
+            Arc::new(PgRepo::new(db.clone())), // tool_routers
+            Arc::new(PgRepo::new(db.clone())), // context_store
+            Arc::new(PgRepo::new(db.clone())), // router_requests
+            Arc::new(PgRepo::new(db.clone())), // rooms
+        );
+
+        let (chat_tx, orchestrator_rx) = mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
+        let events = EventBus::new();
+
+        // JWT secret: require via env var, fall back to random for dev only
+        let jwt_secret = Self::load_jwt_secret();
 
         // Load prompt registry from prompts/ directory
-        let prompts_dir = std::env::current_dir().unwrap_or_default().join("prompts");
-        match PromptRegistry::load_from_dir(&prompts_dir) {
-            Ok(registry) => {
-                tracing::info!(
-                    "Loaded {} prompts from {}",
-                    registry.len(),
-                    prompts_dir.display()
-                );
-                state.prompt_registry = Arc::new(registry);
-            }
-            Err(e) => {
-                tracing::warn!(
-                    "Failed to load prompts from {}: {} — using empty registry",
-                    prompts_dir.display(),
-                    e
-                );
-            }
-        }
-        state.user_repo = Some(user_repo);
-        state.doc_repo = Some(doc_repo);
-        state.output_schema_repo = Some(output_schema_repo);
-        state.prompt_template_repo = Some(prompt_template_repo);
-        state.workflow_repo = Some(workflow_repo);
-        state.agent_execution_repo = Some(agent_execution_repo);
-        state.token_ledger_repo = Some(token_ledger_repo);
-        state.result_repo = Some(result_repo);
-        state.tool_router_repo = Some(tool_router_repo.clone());
-        state.context_store_repo = Some(context_store_repo);
-        state.router_request_repo = Some(router_request_repo);
-        state.room_repo = Some(room_repo);
+        let prompt_registry = Self::load_prompt_registry();
 
-        // Initialize LLM provider
-        match crate::llm::AnthropicClient::from_env() {
-            Ok(p) => {
-                tracing::info!("Initialized LLM provider: {}", p.model_id().to_string());
-                let provider: Arc<dyn LLMProvider + Send + Sync> =
-                    Arc::new(crate::llm::RetryingProvider::with_defaults(
-                        crate::llm::RateLimitedProvider::with_defaults(p),
-                    ));
+        // Initialize LLM provider and mode resolver
+        let (provider, mode_resolver) =
+            Self::init_provider(server_repo.clone(), repos.tool_routers.clone());
 
-                // Initialize mode resolver with provider
-                let mode_resolver = Arc::new(ModeResolver::new(
-                    state.repo.clone(),
-                    tool_router_repo,
-                    provider.clone(),
-                ));
-
-                state.provider = Some(provider);
-                state.mode_resolver = Some(mode_resolver);
-            }
-            Err(e) => {
-                tracing::warn!("Failed to initialize LLM provider: {}. ModeResolver will not be available. Set ANTHROPIC_API_KEY.", e);
-                state.provider = None;
-                state.mode_resolver = None;
-            }
-        }
+        let mut state = Self(Arc::new(AppStateInner {
+            db: Some(db),
+            server_repo,
+            repos: Some(repos),
+            events,
+            config: Arc::new(RwLock::new(config)),
+            provider,
+            mode_resolver,
+            prompt_registry,
+            jwt_secret,
+            default_agent_id: None,
+            chat_tx,
+            response_streams: DashMap::new(),
+            cancellation_tokens: DashMap::new(),
+        }));
 
         // Look up default agent from DB (for workflow system)
         let legacy_user =
             UserId(uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap());
-        if let Ok(agent_rows) = state.repo.list_persisted_agents(legacy_user).await {
-            // Look up default agent (name = "Home")
+        if let Ok(agent_rows) = state.server_repo().list_persisted_agents(legacy_user).await {
             if let Some(home) = agent_rows
                 .iter()
                 .find(|r| r.name.eq_ignore_ascii_case("home"))
             {
                 tracing::info!("Default agent: {} ({})", home.name, home.id);
-                state.default_agent_id = Some(home.id);
+                // We need to recreate the Arc with the updated default_agent_id
+                let inner = Arc::try_unwrap(state.0).unwrap_or_else(|arc| (*arc).clone_inner());
+                state = Self(Arc::new(AppStateInner {
+                    default_agent_id: Some(home.id),
+                    ..inner
+                }));
             }
         }
 
-        (state, rx)
+        (state, orchestrator_rx)
     }
 
     /// Create application state with a custom repo (for testing).
     /// Returns the state and the orchestrator message receiver.
+    ///
+    /// Note: This creates state without Repos populated. For tests that need
+    /// repos, use `with_repos()` or the test helpers.
     pub fn with_repo(
         db: Option<PgPool>,
         repo: Arc<dyn ServerRepo>,
         config: AppConfig,
     ) -> (Self, mpsc::Receiver<ConsumerMessage>) {
         let (chat_tx, orchestrator_rx) = mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
-        let (feed_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST_HIGH);
-        let (task_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
-        let (agent_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST_LOW);
-        let (session_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST_LOW);
-        let (pipeline_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
-        let (routing_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST_HIGH);
-        let (router_request_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
-        let (context_update_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST_LOW);
-        let (room_update_tx, _) = broadcast::channel(crate::constants::CHANNEL_BROADCAST);
+        let events = EventBus::new();
+        let jwt_secret = Self::load_jwt_secret();
 
-        // JWT secret: require via env var, fall back to random for dev only
-        let jwt_secret = match std::env::var(crate::constants::ENV_JWT_SECRET) {
+        (
+            Self(Arc::new(AppStateInner {
+                db,
+                server_repo: repo,
+                repos: None, // Tests provide repos separately if needed
+                events,
+                config: Arc::new(RwLock::new(config)),
+                provider: None,
+                mode_resolver: None,
+                prompt_registry: Arc::new(PromptRegistry::empty()),
+                jwt_secret,
+                default_agent_id: None,
+                chat_tx,
+                response_streams: DashMap::new(),
+                cancellation_tokens: DashMap::new(),
+            })),
+            orchestrator_rx,
+        )
+    }
+
+    /// Create application state with repos for testing.
+    #[cfg(test)]
+    pub fn with_repos(
+        db: Option<PgPool>,
+        server_repo: Arc<dyn ServerRepo>,
+        repos: Repos,
+        config: AppConfig,
+    ) -> (Self, mpsc::Receiver<ConsumerMessage>) {
+        let (chat_tx, orchestrator_rx) = mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
+        let events = EventBus::new();
+        let jwt_secret = Self::load_jwt_secret();
+
+        (
+            Self(Arc::new(AppStateInner {
+                db,
+                server_repo,
+                repos: Some(repos),
+                events,
+                config: Arc::new(RwLock::new(config)),
+                provider: None,
+                mode_resolver: None,
+                prompt_registry: Arc::new(PromptRegistry::empty()),
+                jwt_secret,
+                default_agent_id: None,
+                chat_tx,
+                response_streams: DashMap::new(),
+                cancellation_tokens: DashMap::new(),
+            })),
+            orchestrator_rx,
+        )
+    }
+
+    // =========================================================================
+    // Private initialization helpers
+    // =========================================================================
+
+    fn load_jwt_secret() -> Vec<u8> {
+        match std::env::var(crate::constants::ENV_JWT_SECRET) {
             Ok(s) if !s.is_empty() => {
                 tracing::info!(
                     "{} loaded from environment",
@@ -266,189 +277,360 @@ impl AppState {
                 );
                 rand::random::<[u8; 32]>().to_vec()
             }
-        };
-
-        (
-            Self {
-                db,
-                repo,
-                user_repo: None,
-                doc_repo: None,
-                output_schema_repo: None,
-                prompt_template_repo: None,
-                workflow_repo: None,
-                agent_execution_repo: None,
-                token_ledger_repo: None,
-                result_repo: None,
-                tool_router_repo: None,
-                context_store_repo: None,
-                router_request_repo: None,
-                room_repo: None,
-                provider: None,
-                mode_resolver: None,
-                config: Arc::new(RwLock::new(config)),
-                jwt_secret,
-                chat_tx,
-                response_streams: Arc::new(RwLock::new(HashMap::new())),
-                feed_tx,
-                task_tx,
-                agent_tx,
-                session_tx,
-                pipeline_tx,
-                routing_tx,
-                router_request_tx,
-                context_update_tx,
-                room_update_tx,
-                default_agent_id: None,
-                prompt_registry: Arc::new(PromptRegistry::empty()),
-                cancellation_tokens: Arc::new(RwLock::new(HashMap::new())),
-            },
-            orchestrator_rx,
-        )
+        }
     }
+
+    fn load_prompt_registry() -> Arc<PromptRegistry> {
+        let prompts_dir = std::env::current_dir().unwrap_or_default().join("prompts");
+        match PromptRegistry::load_from_dir(&prompts_dir) {
+            Ok(registry) => {
+                tracing::info!(
+                    "Loaded {} prompts from {}",
+                    registry.len(),
+                    prompts_dir.display()
+                );
+                Arc::new(registry)
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to load prompts from {}: {} — using empty registry",
+                    prompts_dir.display(),
+                    e
+                );
+                Arc::new(PromptRegistry::empty())
+            }
+        }
+    }
+
+    fn init_provider(
+        server_repo: Arc<dyn ServerRepo>,
+        tool_router_repo: Arc<dyn crate::db::traits::ToolRouterRepo>,
+    ) -> (
+        Option<Arc<dyn LLMProvider + Send + Sync>>,
+        Option<Arc<ModeResolver>>,
+    ) {
+        match crate::llm::AnthropicClient::from_env() {
+            Ok(p) => {
+                tracing::info!("Initialized LLM provider: {}", p.model_id().to_string());
+                let provider: Arc<dyn LLMProvider + Send + Sync> =
+                    Arc::new(crate::llm::RetryingProvider::with_defaults(
+                        crate::llm::RateLimitedProvider::with_defaults(p),
+                    ));
+
+                let mode_resolver = Arc::new(ModeResolver::new(
+                    server_repo,
+                    tool_router_repo,
+                    provider.clone(),
+                ));
+
+                (Some(provider), Some(mode_resolver))
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to initialize LLM provider: {}. ModeResolver will not be available. Set ANTHROPIC_API_KEY.",
+                    e
+                );
+                (None, None)
+            }
+        }
+    }
+
+    // =========================================================================
+    // Accessor methods
+    // =========================================================================
+
+    /// Access the database connection pool.
+    pub fn db(&self) -> Option<&PgPool> {
+        self.0.db.as_ref()
+    }
+
+    /// Access the server repository (legacy).
+    pub fn server_repo(&self) -> &Arc<dyn ServerRepo> {
+        &self.0.server_repo
+    }
+
+    /// Backward-compatible alias for `server_repo()`.
+    /// This is the primary method used by existing handlers.
+    pub fn repo(&self) -> &Arc<dyn ServerRepo> {
+        &self.0.server_repo
+    }
+
+    /// Access the grouped repositories.
+    /// Panics if repos were not initialized (use in tests with `with_repos()`).
+    pub fn repos(&self) -> &Repos {
+        self.0
+            .repos
+            .as_ref()
+            .expect("Repos not initialized - use AppState::new() or with_repos() for tests")
+    }
+
+    /// Access the grouped repositories (optional, for migration).
+    pub fn repos_opt(&self) -> Option<&Repos> {
+        self.0.repos.as_ref()
+    }
+
+    /// Access the event bus.
+    pub fn events(&self) -> &EventBus {
+        &self.0.events
+    }
+
+    /// Access the application configuration.
+    pub fn config(&self) -> &Arc<RwLock<AppConfig>> {
+        &self.0.config
+    }
+
+    /// Access the LLM provider.
+    pub fn provider(&self) -> Option<&Arc<dyn LLMProvider + Send + Sync>> {
+        self.0.provider.as_ref()
+    }
+
+    /// Access the mode resolver.
+    pub fn mode_resolver(&self) -> Option<&Arc<ModeResolver>> {
+        self.0.mode_resolver.as_ref()
+    }
+
+    /// Access the prompt registry.
+    pub fn prompt_registry(&self) -> &Arc<PromptRegistry> {
+        &self.0.prompt_registry
+    }
+
+    /// Access the JWT secret.
+    pub fn jwt_secret(&self) -> &[u8] {
+        &self.0.jwt_secret
+    }
+
+    /// Access the default agent ID.
+    pub fn default_agent_id(&self) -> Option<Uuid> {
+        self.0.default_agent_id
+    }
+
+    /// Access the chat sender (for sending messages to orchestrator).
+    pub fn chat_tx(&self) -> &mpsc::Sender<ConsumerMessage> {
+        &self.0.chat_tx
+    }
+
+    // =========================================================================
+    // Backward-compatible accessors (delegate to inner fields)
+    // These maintain the old API while we migrate handlers
+    // =========================================================================
+
+    // --- Legacy individual repo accessors (for migration) ---
+    // These return Option<Arc<...>> to match the old field access pattern.
+    // After migration, handlers should use state.repos().* directly.
+
+    /// Backward-compatible: User repository.
+    pub fn user_repo(&self) -> Option<Arc<dyn crate::db::traits::UserRepo>> {
+        self.0.repos.as_ref().map(|r| r.users.clone())
+    }
+
+    /// Backward-compatible: Document repository.
+    pub fn doc_repo(&self) -> Option<Arc<dyn crate::db::traits::DocumentRepo>> {
+        self.0.repos.as_ref().map(|r| r.documents.clone())
+    }
+
+    /// Backward-compatible: Output schema repository.
+    pub fn output_schema_repo(&self) -> Option<Arc<dyn crate::db::traits::OutputSchemaRepo>> {
+        self.0.repos.as_ref().map(|r| r.output_schemas.clone())
+    }
+
+    /// Backward-compatible: Prompt template repository.
+    pub fn prompt_template_repo(&self) -> Option<Arc<dyn crate::db::traits::PromptTemplateRepo>> {
+        self.0.repos.as_ref().map(|r| r.prompt_templates.clone())
+    }
+
+    /// Backward-compatible: Workflow repository.
+    pub fn workflow_repo(&self) -> Option<Arc<dyn crate::db::traits::WorkflowRepo>> {
+        self.0.repos.as_ref().map(|r| r.workflows.clone())
+    }
+
+    /// Backward-compatible: Agent execution repository.
+    pub fn agent_execution_repo(&self) -> Option<Arc<dyn crate::db::traits::AgentExecutionRepo>> {
+        self.0.repos.as_ref().map(|r| r.agent_executions.clone())
+    }
+
+    /// Backward-compatible: Token ledger repository.
+    pub fn token_ledger_repo(&self) -> Option<Arc<dyn crate::db::traits::TokenLedgerRepo>> {
+        self.0.repos.as_ref().map(|r| r.token_ledger.clone())
+    }
+
+    /// Backward-compatible: Result repository.
+    pub fn result_repo(&self) -> Option<Arc<dyn crate::db::traits::ResultRepo>> {
+        self.0.repos.as_ref().map(|r| r.results.clone())
+    }
+
+    /// Backward-compatible: Tool router repository.
+    pub fn tool_router_repo(&self) -> Option<Arc<dyn crate::db::traits::ToolRouterRepo>> {
+        self.0.repos.as_ref().map(|r| r.tool_routers.clone())
+    }
+
+    /// Backward-compatible: Context store repository.
+    pub fn context_store_repo(&self) -> Option<Arc<dyn crate::db::traits::ContextStoreRepo>> {
+        self.0.repos.as_ref().map(|r| r.context_store.clone())
+    }
+
+    /// Backward-compatible: Router request repository.
+    pub fn router_request_repo(&self) -> Option<Arc<dyn crate::db::traits::RouterRequestRepo>> {
+        self.0.repos.as_ref().map(|r| r.router_requests.clone())
+    }
+
+    /// Backward-compatible: Room repository.
+    pub fn room_repo(&self) -> Option<Arc<dyn crate::db::traits::RoomRepo>> {
+        self.0.repos.as_ref().map(|r| r.rooms.clone())
+    }
+
+    // =========================================================================
+    // Event subscription methods (delegate to EventBus)
+    // =========================================================================
 
     /// Subscribe to feed updates
     pub fn subscribe_feed(&self) -> broadcast::Receiver<FeedUpdate> {
-        self.feed_tx.subscribe()
+        self.0.events.subscribe_feed()
     }
 
     /// Subscribe to task updates
     pub fn subscribe_tasks(&self) -> broadcast::Receiver<TaskUpdate> {
-        self.task_tx.subscribe()
+        self.0.events.subscribe_tasks()
     }
 
     /// Subscribe to agent updates
     pub fn subscribe_agents(&self) -> broadcast::Receiver<AgentUpdate> {
-        self.agent_tx.subscribe()
-    }
-
-    /// Broadcast a feed update to all subscribers
-    pub fn broadcast_feed(&self, update: FeedUpdate) {
-        let _ = self.feed_tx.send(update);
-    }
-
-    /// Broadcast a task update to all subscribers
-    pub fn broadcast_task(&self, update: TaskUpdate) {
-        let _ = self.task_tx.send(update);
-    }
-
-    /// Broadcast an agent update to all subscribers
-    pub fn broadcast_agent(&self, update: AgentUpdate) {
-        let _ = self.agent_tx.send(update);
+        self.0.events.subscribe_agents()
     }
 
     /// Subscribe to session updates
     pub fn subscribe_sessions(&self) -> broadcast::Receiver<SessionUpdate> {
-        self.session_tx.subscribe()
-    }
-
-    /// Broadcast a session update to all subscribers
-    pub fn broadcast_session(&self, update: SessionUpdate) {
-        let _ = self.session_tx.send(update);
+        self.0.events.subscribe_sessions()
     }
 
     /// Subscribe to pipeline execution updates
     pub fn subscribe_pipelines(&self) -> broadcast::Receiver<PipelineUpdate> {
-        self.pipeline_tx.subscribe()
-    }
-
-    /// Broadcast a pipeline execution update to all subscribers
-    pub fn broadcast_pipeline(&self, update: PipelineUpdate) {
-        let _ = self.pipeline_tx.send(update);
+        self.0.events.subscribe_pipelines()
     }
 
     /// Subscribe to routing updates
     pub fn subscribe_routing(&self) -> broadcast::Receiver<RoutingUpdate> {
-        self.routing_tx.subscribe()
-    }
-
-    /// Broadcast a routing update to all subscribers
-    pub fn broadcast_routing(&self, update: RoutingUpdate) {
-        let _ = self.routing_tx.send(update);
+        self.0.events.subscribe_routing()
     }
 
     /// Subscribe to router request lifecycle events
-    pub fn subscribe_router_requests(&self) -> broadcast::Receiver<super::ws::RouterRequestEvent> {
-        self.router_request_tx.subscribe()
-    }
-
-    /// Broadcast a router request event
-    pub fn broadcast_router_request(&self, event: super::ws::RouterRequestEvent) {
-        let _ = self.router_request_tx.send(event);
+    pub fn subscribe_router_requests(&self) -> broadcast::Receiver<RouterRequestEvent> {
+        self.0.events.subscribe_router_requests()
     }
 
     /// Subscribe to context store updates
-    pub fn subscribe_context_updates(&self) -> broadcast::Receiver<super::ws::ContextUpdateEvent> {
-        self.context_update_tx.subscribe()
-    }
-
-    /// Broadcast a context update event
-    pub fn broadcast_context_update(&self, event: super::ws::ContextUpdateEvent) {
-        let _ = self.context_update_tx.send(event);
+    pub fn subscribe_context_updates(&self) -> broadcast::Receiver<ContextUpdateEvent> {
+        self.0.events.subscribe_context_updates()
     }
 
     /// Subscribe to room events
     pub fn subscribe_room_updates(&self) -> broadcast::Receiver<RoomUpdateEvent> {
-        self.room_update_tx.subscribe()
+        self.0.events.subscribe_room_updates()
+    }
+
+    // =========================================================================
+    // Broadcast methods (delegate to EventBus)
+    // =========================================================================
+
+    /// Broadcast a feed update to all subscribers
+    pub fn broadcast_feed(&self, update: FeedUpdate) {
+        self.0.events.broadcast_feed(update);
+    }
+
+    /// Broadcast a task update to all subscribers
+    pub fn broadcast_task(&self, update: TaskUpdate) {
+        self.0.events.broadcast_task(update);
+    }
+
+    /// Broadcast an agent update to all subscribers
+    pub fn broadcast_agent(&self, update: AgentUpdate) {
+        self.0.events.broadcast_agent(update);
+    }
+
+    /// Broadcast a session update to all subscribers
+    pub fn broadcast_session(&self, update: SessionUpdate) {
+        self.0.events.broadcast_session(update);
+    }
+
+    /// Broadcast a pipeline execution update to all subscribers
+    pub fn broadcast_pipeline(&self, update: PipelineUpdate) {
+        self.0.events.broadcast_pipeline(update);
+    }
+
+    /// Broadcast a routing update to all subscribers
+    pub fn broadcast_routing(&self, update: RoutingUpdate) {
+        self.0.events.broadcast_routing(update);
+    }
+
+    /// Broadcast a router request event
+    pub fn broadcast_router_request(&self, event: RouterRequestEvent) {
+        self.0.events.broadcast_router_request(event);
+    }
+
+    /// Broadcast a context update event
+    pub fn broadcast_context_update(&self, event: ContextUpdateEvent) {
+        self.0.events.broadcast_context_update(event);
     }
 
     /// Broadcast a room event
     pub fn broadcast_room_update(&self, event: RoomUpdateEvent) {
-        let _ = self.room_update_tx.send(event);
+        self.0.events.broadcast_room_update(event);
     }
+
+    // =========================================================================
+    // Response stream methods (using DashMap for concurrent access)
+    // =========================================================================
 
     /// Ensure a response stream exists for this message (creates if missing).
     ///
     /// Call this before queuing work to the orchestrator so the broadcast
     /// channel exists when tokens start arriving.
-    pub async fn ensure_response_stream(&self, message_id: Uuid) {
-        let mut streams = self.response_streams.write().await;
-        streams.entry(message_id).or_insert_with(|| {
-            let (tx, _) = broadcast::channel(100);
-            Arc::new(RwLock::new(BufferedStream {
-                tx,
-                buffer: Vec::new(),
-                done: false,
-            }))
-        });
+    pub fn ensure_response_stream(&self, message_id: Uuid) {
+        self.0
+            .response_streams
+            .entry(message_id)
+            .or_insert_with(|| {
+                let (tx, _) = broadcast::channel(100);
+                BufferedStream {
+                    tx,
+                    buffer: Vec::new(),
+                    done: false,
+                }
+            });
     }
 
     /// Get the buffered chunks, a live receiver, and whether the stream is done.
     ///
     /// The caller should replay the buffer first, then listen on the receiver.
-    /// Holding the inner read lock while snapshotting + subscribing guarantees
-    /// no chunks are missed or duplicated.
-    pub async fn get_response_stream(
+    pub fn get_response_stream(
         &self,
         message_id: Uuid,
     ) -> (Vec<StreamChunk>, broadcast::Receiver<StreamChunk>, bool) {
-        let mut streams = self.response_streams.write().await;
-        let entry = streams.entry(message_id).or_insert_with(|| {
-            let (tx, _) = broadcast::channel(100);
-            Arc::new(RwLock::new(BufferedStream {
-                tx,
-                buffer: Vec::new(),
-                done: false,
-            }))
-        });
-        let inner = entry.read().await;
-        let rx = inner.tx.subscribe();
-        (inner.buffer.clone(), rx, inner.done)
+        let entry = self
+            .0
+            .response_streams
+            .entry(message_id)
+            .or_insert_with(|| {
+                let (tx, _) = broadcast::channel(100);
+                BufferedStream {
+                    tx,
+                    buffer: Vec::new(),
+                    done: false,
+                }
+            });
+        let rx = entry.tx.subscribe();
+        (entry.buffer.clone(), rx, entry.done)
     }
 
     /// Send a chunk to a message's response stream
     ///
     /// Appends to the buffer and broadcasts. Returns false if no stream exists.
-    pub async fn send_stream_chunk(&self, message_id: Uuid, chunk: StreamChunk) -> bool {
-        let streams = self.response_streams.read().await;
-
-        if let Some(entry) = streams.get(&message_id) {
-            let mut inner = entry.write().await;
+    pub fn send_stream_chunk(&self, message_id: Uuid, chunk: StreamChunk) -> bool {
+        if let Some(mut entry) = self.0.response_streams.get_mut(&message_id) {
             if matches!(&chunk, StreamChunk::Done) {
-                inner.done = true;
+                entry.done = true;
             }
-            inner.buffer.push(chunk.clone());
-            let _ = inner.tx.send(chunk);
+            entry.buffer.push(chunk.clone());
+            let _ = entry.tx.send(chunk);
             true
         } else {
             false
@@ -456,38 +638,38 @@ impl AppState {
     }
 
     /// Remove a response stream (call when streaming is complete)
-    pub async fn remove_response_stream(&self, message_id: Uuid) {
-        let mut streams = self.response_streams.write().await;
-        streams.remove(&message_id);
+    pub fn remove_response_stream(&self, message_id: Uuid) {
+        self.0.response_streams.remove(&message_id);
     }
+
+    // =========================================================================
+    // Cancellation token methods (using DashMap for concurrent access)
+    // =========================================================================
 
     /// Register a cancellation token for a running execution (pipeline run or agent execution).
     /// Returns a clone of the token to pass through the execution chain.
-    pub async fn register_cancellation(&self, id: Uuid) -> CancellationToken {
+    pub fn register_cancellation(&self, id: Uuid) -> CancellationToken {
         let token = CancellationToken::new();
-        let mut tokens = self.cancellation_tokens.write().await;
-        tokens.insert(id, token.clone());
+        self.0.cancellation_tokens.insert(id, token.clone());
         token
     }
 
     /// Create a child cancellation token linked to a parent.
     /// Cancelling the parent automatically cancels all children.
-    pub async fn register_child_cancellation(
+    pub fn register_child_cancellation(
         &self,
         id: Uuid,
         parent: &CancellationToken,
     ) -> CancellationToken {
         let child = parent.child_token();
-        let mut tokens = self.cancellation_tokens.write().await;
-        tokens.insert(id, child.clone());
+        self.0.cancellation_tokens.insert(id, child.clone());
         child
     }
 
     /// Cancel a running execution by its ID. Returns true if the token existed.
-    pub async fn cancel_execution(&self, id: Uuid) -> bool {
-        let tokens = self.cancellation_tokens.read().await;
-        if let Some(token) = tokens.get(&id) {
-            token.cancel();
+    pub fn cancel_execution(&self, id: Uuid) -> bool {
+        if let Some(entry) = self.0.cancellation_tokens.get(&id) {
+            entry.cancel();
             true
         } else {
             false
@@ -495,11 +677,28 @@ impl AppState {
     }
 
     /// Remove a cancellation token after execution completes.
-    pub async fn remove_cancellation(&self, id: Uuid) {
-        let mut tokens = self.cancellation_tokens.write().await;
-        tokens.remove(&id);
+    pub fn remove_cancellation(&self, id: Uuid) {
+        self.0.cancellation_tokens.remove(&id);
     }
 }
 
-#[cfg(test)]
-mod tests;
+// Helper for cloning inner state (needed for default_agent_id update)
+impl AppStateInner {
+    fn clone_inner(&self) -> Self {
+        Self {
+            db: self.db.clone(),
+            server_repo: self.server_repo.clone(),
+            repos: self.repos.clone(),
+            events: EventBus::new(), // Create new event bus (can't clone senders)
+            config: self.config.clone(),
+            provider: self.provider.clone(),
+            mode_resolver: self.mode_resolver.clone(),
+            prompt_registry: self.prompt_registry.clone(),
+            jwt_secret: self.jwt_secret.clone(),
+            default_agent_id: self.default_agent_id,
+            chat_tx: self.chat_tx.clone(),
+            response_streams: DashMap::new(), // Fresh map (streams don't survive clone)
+            cancellation_tokens: DashMap::new(), // Fresh map
+        }
+    }
+}

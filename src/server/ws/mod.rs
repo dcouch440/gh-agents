@@ -244,7 +244,7 @@ pub async fn ws_handler(
 ) -> Result<Response, axum::http::StatusCode> {
     let token = query.token.ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
 
-    let claims = super::auth::verify_token(&token, &state.jwt_secret)
+    let claims = super::auth::verify_token(&token, &state.jwt_secret())
         .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
 
     let user_id = uuid::Uuid::parse_str(&claims.sub)

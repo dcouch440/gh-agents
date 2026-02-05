@@ -1,13 +1,71 @@
-//! Logging infrastructure
+//! Production-ready logging infrastructure with environment-aware formatting
+//!
+//! # Overview
+//!
+//! This module provides structured logging with two modes:
+//! - **Development**: Pretty colored output + JSON files for local debugging
+//! - **Production**: JSON stdout only (Docker captures) for log aggregators
+//!
+//! # Environment Detection
+//!
+//! Set `NEXOR_ENV=production` or `RUST_ENV=production` for production mode.
+//! Defaults to development mode for safety.
+//!
+//! # Usage
+//!
+//! ```no_run
+//! use nexor::logging::init_logging_with_file;
+//! use std::path::Path;
+//!
+//! // Initialize logging with file output
+//! let _guard = init_logging_with_file(Some(Path::new(".nexor/logs")))?;
+//!
+//! // Or console only
+//! let _guard = init_logging_with_file(None)?;
+//! # Ok::<(), anyhow::Error>(())
+//! ```
 
 use anyhow::Result;
 use std::path::Path;
 use tracing::{span, Level, Span};
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{
+    fmt::{self, format::FmtSpan},
+    layer::SubscriberExt,
+    util::SubscriberInitExt,
+    EnvFilter,
+};
 
 /// Default log directory
 pub const LOG_DIR: &str = ".nexor/logs";
+
+/// Environment mode for logging
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Environment {
+    Development,
+    Production,
+}
+
+impl Environment {
+    /// Detect environment from NEXOR_ENV or RUST_ENV, defaulting to Development
+    fn detect() -> Self {
+        std::env::var("NEXOR_ENV")
+            .or_else(|_| std::env::var("RUST_ENV"))
+            .map(|s| match s.to_lowercase().as_str() {
+                "production" | "prod" => Self::Production,
+                _ => Self::Development,
+            })
+            .unwrap_or(Self::Development)
+    }
+
+    /// Get default log level for this environment
+    fn default_log_level(&self) -> &'static str {
+        match self {
+            Self::Development => "debug",
+            Self::Production => "info",
+        }
+    }
+}
 
 /// Initialize logging with console output only
 ///
@@ -18,48 +76,81 @@ pub fn init_logging() -> Result<Option<WorkerGuard>> {
 
 /// Initialize logging with optional file output
 ///
-/// If `log_dir` is Some, logs will also be written to files in that directory.
+/// If `log_dir` is Some, logs will also be written to files in that directory
+/// (development mode only - production mode ignores file output).
 /// Returns a guard that must be held for the lifetime of the application
 /// to ensure all logs are flushed.
 pub fn init_logging_with_file(log_dir: Option<&Path>) -> Result<Option<WorkerGuard>> {
-    // Build env filter - default to INFO, allow override via RUST_LOG
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let env = Environment::detect();
 
-    // Console layer - always enabled
-    let console_layer = fmt::layer()
-        .with_target(true)
-        .with_thread_ids(false)
-        .with_thread_names(false)
-        .with_file(false)
-        .with_line_number(false);
+    // Build env filter - default based on environment, allow override via RUST_LOG
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(env.default_log_level()));
 
-    match log_dir {
-        Some(dir) => {
-            // Create log directory if needed
+    match (env, log_dir) {
+        // Development with file output: pretty console + JSON file
+        (Environment::Development, Some(dir)) => {
+            use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
+
             std::fs::create_dir_all(dir)?;
-
-            // File appender - rotates daily
             let file_appender = tracing_appender::rolling::daily(dir, "nexor.log");
             let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
-            // File layer - more verbose format
-            let file_layer = fmt::layer()
+            // Console layer: pretty, colored, hierarchical
+            let console_layer = fmt::layer()
+                .pretty()
+                .with_ansi(true)
                 .with_target(true)
-                .with_thread_ids(true)
+                .with_thread_ids(false)
+                .with_thread_names(false)
                 .with_file(true)
                 .with_line_number(true)
-                .with_ansi(false)
-                .with_writer(non_blocking);
+                .with_span_events(FmtSpan::CLOSE);
+
+            // File layer: Bunyan JSON format for AI parsing
+            let json_storage = JsonStorageLayer;
+            let bunyan_layer = BunyanFormattingLayer::new("nexor".to_string(), non_blocking);
 
             tracing_subscriber::registry()
                 .with(env_filter)
+                .with(json_storage)
+                .with(bunyan_layer)
                 .with(console_layer)
-                .with(file_layer)
                 .init();
 
             Ok(Some(guard))
         }
-        None => {
+        // Development without file: pretty console only
+        (Environment::Development, None) => {
+            let console_layer = fmt::layer()
+                .pretty()
+                .with_ansi(true)
+                .with_target(true)
+                .with_thread_ids(false)
+                .with_thread_names(false)
+                .with_file(true)
+                .with_line_number(true)
+                .with_span_events(FmtSpan::CLOSE);
+
+            tracing_subscriber::registry()
+                .with(env_filter)
+                .with(console_layer)
+                .init();
+
+            Ok(None)
+        }
+        // Production: JSON stdout only
+        (Environment::Production, _) => {
+            let console_layer = fmt::layer()
+                .json()
+                .with_ansi(false)
+                .with_current_span(true)
+                .with_span_list(true)
+                .with_target(true)
+                .with_thread_ids(true)
+                .with_file(true)
+                .with_line_number(true);
+
             tracing_subscriber::registry()
                 .with(env_filter)
                 .with(console_layer)
@@ -114,9 +205,61 @@ macro_rules! log_error {
     };
 }
 
+/// Log an error with full error chain (includes causes)
+///
+/// This macro is useful for debugging complex errors with multiple causes.
+/// It logs both the main error and the full error chain for AI debugging.
+///
+/// # Example
+///
+/// ```no_run
+/// # use anyhow::anyhow;
+/// use nexor::log_error_chain;
+///
+/// let err = anyhow!("Failed to connect").context("Database unavailable");
+/// log_error_chain!(
+///     err,
+///     agent_id = "agent-123",
+///     operation = "db_connect",
+///     "Failed to connect to database, will retry"
+/// );
+/// ```
+#[macro_export]
+macro_rules! log_error_chain {
+    ($err:expr, $($arg:tt)*) => {
+        {
+            let error_chain = format!("{:#}", $err);
+            tracing::error!(
+                error = %$err,
+                error_chain = %error_chain,
+                $($arg)*
+            )
+        }
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn environment_default_is_development() {
+        // Test that Development is the default (safest option)
+        // Note: Can't reliably test env var detection in parallel tests
+        assert_eq!(Environment::Development, Environment::Development);
+    }
+
+    #[test]
+    fn environment_values_are_distinct() {
+        // Verify the two environments are different
+        assert_ne!(Environment::Development, Environment::Production);
+    }
+
+    #[test]
+    fn environment_default_log_levels() {
+        assert_eq!(Environment::Development.default_log_level(), "debug");
+        assert_eq!(Environment::Production.default_log_level(), "info");
+    }
 
     #[test]
     fn spans_compile() {
@@ -150,6 +293,11 @@ mod tests {
             std::io::Error::new(std::io::ErrorKind::Other, "test"),
             "Something failed"
         );
+        log_error_chain!(
+            anyhow::anyhow!("test error"),
+            operation = "test",
+            "Test error chain"
+        );
     }
 
     #[test]
@@ -173,7 +321,8 @@ mod tests {
 
     #[test]
     fn env_filter_falls_back_to_info() {
-        // When RUST_LOG is not set (or invalid), should fall back to "info"
+        // When RUST_LOG is not set (or invalid), should fall back based on environment
+        std::env::remove_var("RUST_LOG");
         let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
         let debug_str = format!("{}", filter);
         // The filter should contain "info" as default

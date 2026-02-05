@@ -443,7 +443,7 @@ fn resolve_for_each_path(
 /// Returns an empty vec if the agent has no tools assigned — in that case
 /// the LLM will never return `StopReason::ToolUse` and the loop executes once.
 async fn resolve_agent_tools(state: &AppState, agent_id: Uuid) -> Vec<Tool> {
-    let tools = match state.repo.get_agent_tools(agent_id).await {
+    let tools = match state.repo().get_agent_tools(agent_id).await {
         Ok(rows) => rows,
         Err(_) => return vec![],
     };
@@ -474,14 +474,13 @@ async fn execute_step(
     _for_each_label: Option<String>,
 ) -> Result<(Uuid, StepOutput, i64, i64, f32)> {
     let ae_repo = state
-        .agent_execution_repo
-        .as_ref()
+        .agent_execution_repo()
         .ok_or_else(|| anyhow!("agent_execution_repo not configured"))?;
 
     // Build system prompt with output schema instructions
     let mut system_prompt = agent.system_prompt.clone();
     if let Some(schema_id) = step.output_schema_id {
-        if let Some(os_repo) = &state.output_schema_repo {
+        if let Some(os_repo) = state.output_schema_repo() {
             if let Ok(Some(schema)) = os_repo.get_output_schema(schema_id).await {
                 system_prompt.push_str(&format!(
                     "\n\nYou MUST respond with valid JSON matching this schema:\n```json\n{}\n```\nRespond ONLY with the JSON object, no other text.",
@@ -564,7 +563,7 @@ async fn execute_step(
         total_cost_usd += cost;
 
         // Write token_ledger for every LLM call
-        if let Some(tl_repo) = &state.token_ledger_repo {
+        if let Some(tl_repo) = state.token_ledger_repo() {
             let _ = tl_repo
                 .insert_ledger_entry(
                     ctx.user_id,
@@ -726,8 +725,7 @@ async fn execute_interactive_review(
     main_output: &str,
 ) -> Result<Option<JsonValue>> {
     let ae_repo = state
-        .agent_execution_repo
-        .as_ref()
+        .agent_execution_repo()
         .ok_or_else(|| anyhow!("agent_execution_repo not configured"))?;
 
     let system_prompt = interactive_agent.system_prompt.clone();
@@ -792,7 +790,7 @@ async fn execute_interactive_review(
         .await;
 
     // Write token_ledger for the review call
-    if let Some(tl_repo) = &state.token_ledger_repo {
+    if let Some(tl_repo) = state.token_ledger_repo() {
         let _ = tl_repo
             .insert_ledger_entry(
                 ctx.user_id,
@@ -891,7 +889,7 @@ pub async fn execute_workflow(
 
         // Load agent
         let agent = state
-            .repo
+            .repo()
             .get_persisted_agent(step.agent_id)
             .await?
             .ok_or_else(|| anyhow!("Agent {} not found", step.agent_id))?;
@@ -935,10 +933,10 @@ pub async fn execute_workflow(
 
                 let prompt = compose_prompt(
                     step,
-                    state.prompt_template_repo.as_deref(),
-                    state.doc_repo.as_deref(),
-                    state.workflow_repo.as_deref(),
-                    &*state.repo,
+                    state.prompt_template_repo().as_deref(),
+                    state.doc_repo().as_deref(),
+                    state.workflow_repo().as_deref(),
+                    state.repo().as_ref(),
                     &current_outputs,
                     &ctx.prior_outputs,
                     Some(element),
@@ -965,7 +963,7 @@ pub async fn execute_workflow(
                         // Handle interactive review for each iteration
                         if let Some(interactive_agent_id) = step.interactive_agent_id {
                             if let Ok(Some(ia)) =
-                                state.repo.get_persisted_agent(interactive_agent_id).await
+                                state.repo().get_persisted_agent(interactive_agent_id).await
                             {
                                 match execute_interactive_review(
                                     state,
@@ -1026,10 +1024,10 @@ pub async fn execute_workflow(
             // Single execution
             let prompt = compose_prompt(
                 step,
-                state.prompt_template_repo.as_deref(),
-                state.doc_repo.as_deref(),
-                state.workflow_repo.as_deref(),
-                &*state.repo,
+                state.prompt_template_repo().as_deref(),
+                state.doc_repo().as_deref(),
+                state.workflow_repo().as_deref(),
+                state.repo().as_ref(),
                 &current_outputs,
                 &ctx.prior_outputs,
                 None,
@@ -1054,7 +1052,7 @@ pub async fn execute_workflow(
 
             // Handle interactive review
             if let Some(interactive_agent_id) = step.interactive_agent_id {
-                if let Ok(Some(ia)) = state.repo.get_persisted_agent(interactive_agent_id).await {
+                if let Ok(Some(ia)) = state.repo().get_persisted_agent(interactive_agent_id).await {
                     match execute_interactive_review(
                         state,
                         provider.as_ref(),

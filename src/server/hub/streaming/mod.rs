@@ -47,44 +47,37 @@ impl SseSink {
 impl StreamSink for SseSink {
     async fn token(&self, text: &str) {
         self.state
-            .send_stream_chunk(self.message_id, StreamChunk::Token(text.to_string()))
-            .await;
+            .send_stream_chunk(self.message_id, StreamChunk::Token(text.to_string()));
     }
 
     async fn tool_start(&self, name: &str, tool_id: &str) {
-        self.state
-            .send_stream_chunk(
-                self.message_id,
-                StreamChunk::ToolStart {
-                    name: name.to_string(),
-                    tool_id: tool_id.to_string(),
-                },
-            )
-            .await;
+        self.state.send_stream_chunk(
+            self.message_id,
+            StreamChunk::ToolStart {
+                name: name.to_string(),
+                tool_id: tool_id.to_string(),
+            },
+        );
     }
 
     async fn tool_end(&self, name: &str, tool_id: &str) {
-        self.state
-            .send_stream_chunk(
-                self.message_id,
-                StreamChunk::ToolEnd {
-                    name: name.to_string(),
-                    tool_id: tool_id.to_string(),
-                },
-            )
-            .await;
+        self.state.send_stream_chunk(
+            self.message_id,
+            StreamChunk::ToolEnd {
+                name: name.to_string(),
+                tool_id: tool_id.to_string(),
+            },
+        );
     }
 
     async fn error(&self, msg: &str) {
         self.state
-            .send_stream_chunk(self.message_id, StreamChunk::Error(msg.to_string()))
-            .await;
+            .send_stream_chunk(self.message_id, StreamChunk::Error(msg.to_string()));
     }
 
     async fn done(&self) {
         self.state
-            .send_stream_chunk(self.message_id, StreamChunk::Done)
-            .await;
+            .send_stream_chunk(self.message_id, StreamChunk::Done);
     }
 }
 

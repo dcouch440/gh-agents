@@ -81,7 +81,7 @@ impl ExecutionStrategy for RouterStrategy {
     async fn on_complete(&self, _response: &str, usage: &TokenUsage) -> Result<(), HubError> {
         // Record token usage to ledger if state is available
         if let (Some(state), Some(user_id)) = (&self.config.state, &self.config.user_id) {
-            if let Some(tl_repo) = &state.token_ledger_repo {
+            if let Some(tl_repo) = state.token_ledger_repo() {
                 let cost = super::compute_cost(
                     &self.config.model_id,
                     usage.input_tokens as i64,

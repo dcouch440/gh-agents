@@ -124,17 +124,14 @@ pub async fn list_agent_executions(
     Query(query): Query<ListExecutionsQuery>,
 ) -> Result<Json<Vec<AgentExecutionResponse>>, StatusCode> {
     let repo = state
-        .agent_execution_repo
-        .as_ref()
+        .agent_execution_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo
         .list_agent_executions(auth.user_id.0, query.status)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let items: Vec<AgentExecutionResponse> = rows
-        .into_iter()
-        .map(AgentExecutionResponse::from)
-        .collect();
+    let items: Vec<AgentExecutionResponse> =
+        rows.into_iter().map(AgentExecutionResponse::from).collect();
     Ok(Json(items))
 }
 
@@ -155,8 +152,7 @@ pub async fn get_agent_execution(
     Path(id): Path<Uuid>,
 ) -> Result<Json<AgentExecutionResponse>, StatusCode> {
     let repo = state
-        .agent_execution_repo
-        .as_ref()
+        .agent_execution_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo
         .get_agent_execution(id)
@@ -183,8 +179,7 @@ pub async fn list_execution_messages(
     Path(id): Path<Uuid>,
 ) -> Result<Json<Vec<ExecutionMessageResponse>>, StatusCode> {
     let repo = state
-        .agent_execution_repo
-        .as_ref()
+        .agent_execution_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     // Verify execution exists
     repo.get_agent_execution(id)
@@ -226,8 +221,7 @@ pub async fn send_execution_message(
     Json(req): Json<SendMessageRequest>,
 ) -> Result<(StatusCode, Json<SendMessageResponse>), StatusCode> {
     let repo = state
-        .agent_execution_repo
-        .as_ref()
+        .agent_execution_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let ae = repo
         .get_agent_execution(id)
@@ -250,22 +244,19 @@ pub async fn send_execution_message(
 
     // Create a stream ID for the agent's response
     let stream_id = Uuid::new_v4();
-    state.ensure_response_stream(stream_id).await;
+    state.ensure_response_stream(stream_id);
 
     // Spawn background LLM call
     let state_clone = state.clone();
     let content = req.content.clone();
     let user_id = auth.user_id.0;
     tokio::spawn(async move {
-        let provider = match state_clone.provider.as_ref() {
+        let provider = match state_clone.provider() {
             Some(p) => p.clone(),
             None => {
                 state_clone
-                    .send_stream_chunk(stream_id, StreamChunk::Error("No LLM provider".into()))
-                    .await;
-                state_clone
-                    .send_stream_chunk(stream_id, StreamChunk::Done)
-                    .await;
+                    .send_stream_chunk(stream_id, StreamChunk::Error("No LLM provider".into()));
+                state_clone.send_stream_chunk(stream_id, StreamChunk::Done);
                 return;
             }
         };
@@ -273,18 +264,12 @@ pub async fn send_execution_message(
             .await
         {
             Ok(_) => {
-                state_clone
-                    .send_stream_chunk(stream_id, StreamChunk::Done)
-                    .await;
+                state_clone.send_stream_chunk(stream_id, StreamChunk::Done);
             }
             Err(e) => {
                 error!("Interactive chat failed: {}", e);
-                state_clone
-                    .send_stream_chunk(stream_id, StreamChunk::Error(format!("{}", e)))
-                    .await;
-                state_clone
-                    .send_stream_chunk(stream_id, StreamChunk::Done)
-                    .await;
+                state_clone.send_stream_chunk(stream_id, StreamChunk::Error(format!("{}", e)));
+                state_clone.send_stream_chunk(stream_id, StreamChunk::Done);
             }
         }
         hub::schedule_stream_cleanup(&state_clone, stream_id);
@@ -321,7 +306,7 @@ pub async fn execution_message_stream(
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     // Reuse the same streaming infrastructure as chat — keyed by stream_id
     let stream = async_stream::stream! {
-        let (buffered, mut rx, already_done) = state.get_response_stream(stream_id).await;
+        let (buffered, mut rx, already_done) = state.get_response_stream(stream_id);
 
         // Replay any buffered chunks
         for chunk in buffered {
@@ -427,8 +412,7 @@ pub async fn approve_execution(
     Json(req): Json<ApproveExecutionRequest>,
 ) -> Result<Json<AgentExecutionResponse>, StatusCode> {
     let repo = state
-        .agent_execution_repo
-        .as_ref()
+        .agent_execution_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let ae = repo
         .get_agent_execution(id)
