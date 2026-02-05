@@ -11,7 +11,8 @@ import {
   Checkbox,
 } from '@mui/material'
 import {useCallback} from 'react'
-import {LoadingSpinner, EmptyState, ErrorMessage, Skeleton} from '@/components/primitives'
+import {Skeleton as MuiSkeleton} from '@mui/material'
+import {LoadingSpinner, EmptyState, ErrorMessage} from '@/components/primitives'
 import {useTableState} from './useTableState'
 import {useTableColumns} from './useTableColumns'
 import {TableToolbar} from './TableToolbar'
@@ -243,12 +244,12 @@ function Table<T>({
               <TableRow key={index}>
                 {enableSelection && (
                   <TableCell padding="checkbox" sx={{p: padding}}>
-                    <Skeleton variant="rectangular" width={24} height={24} />
+                    <MuiSkeleton variant="rectangular" width={24} height={24} />
                   </TableCell>
                 )}
                 {visibleColumns.map((column) => (
                   <TableCell key={column.key} sx={{p: padding}}>
-                    <Skeleton variant="text" />
+                    <MuiSkeleton variant="text" />
                   </TableCell>
                 ))}
               </TableRow>
