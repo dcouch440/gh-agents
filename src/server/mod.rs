@@ -326,6 +326,20 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::TOOL_ROUTER_TOOLS,
             get(api::get_router_tools).put(api::set_router_tools),
         )
+        .route(
+            routes::ROUTER_MODES,
+            get(api::list_router_modes).post(api::create_router_mode),
+        )
+        .route(
+            routes::ROUTER_MODE,
+            get(api::get_router_mode)
+                .put(api::update_router_mode)
+                .delete(api::delete_router_mode),
+        )
+        .route(
+            routes::ROUTER_MODE_TOOLS,
+            get(api::get_mode_tools).put(api::set_mode_tools),
+        )
         .route(routes::SESSION_CONTEXT, get(api::get_session_context))
         .route(routes::SESSION_REQUESTS, get(api::list_session_requests))
         .route(routes::ROOMS, post(api::create_room))
