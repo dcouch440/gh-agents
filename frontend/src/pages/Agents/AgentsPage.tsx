@@ -1,23 +1,33 @@
-import {useMemo, useState, useCallback} from "react";
-import {useNavigate} from "react-router-dom";
-import {Box, Button, Typography} from "@mui/material";
-import {FadeIn} from "@/components/animation";
+import {useMemo, useState, useCallback} from 'react'
+import {useNavigate} from 'react-router-dom'
+import {Box, Button, Typography} from '@mui/material'
+import DeleteIcon from '@mui/icons-material/Delete'
+import WorkshopIcon from '@mui/icons-material/Science'
+import VisibilityIcon from '@mui/icons-material/Visibility'
+import {FadeIn} from '@/components/animation'
 import {
   PageHeader,
   Table,
   StatusBadge,
+  ActionMenu,
+  ConfirmModal,
   type TableColumn,
-} from "@/components/primitives";
-import {useAgents} from "@/hooks/useAgents";
-import {useSessions} from "@/hooks/useSessions";
-import {api} from "@/api";
-import type {Agent} from "@/types/agent";
+  type MenuAction,
+} from '@/components/primitives'
+import {useAgents} from '@/hooks/useAgents'
+import {useSessions} from '@/hooks/useSessions'
+import {useDeleteAgent} from '@/hooks/useAgentMutations'
+import {useConfirmModal} from '@/hooks/useConfirmModal'
+import {api} from '@/api'
+import type {Agent} from '@/types/agent'
 
 function AgentsPage() {
-  const navigate = useNavigate();
-  const {agents, loading: agentsLoading, error: agentsError} = useAgents();
-  const {sessions, loading: sessionsLoading} = useSessions();
-  const [creatingSession, setCreatingSession] = useState<string | null>(null);
+  const navigate = useNavigate()
+  const {agents, loading: agentsLoading, error: agentsError, reload: refetchAgents} = useAgents()
+  const {sessions, loading: sessionsLoading} = useSessions()
+  const {mutate: deleteAgent} = useDeleteAgent()
+  const confirm = useConfirmModal()
+  const [creatingSession, setCreatingSession] = useState<string | null>(null)
 
   // Match agents with their workshop sessions
   const agentsWithSessions = useMemo(() => {
@@ -62,10 +72,31 @@ function AgentsPage() {
   );
 
   const handleNewWorkshop = useCallback(() => {
-    void navigate("/agents/workshop");
-  }, [navigate]);
+    void navigate('/agents/workshop')
+  }, [navigate])
 
-  const loading = agentsLoading || sessionsLoading;
+  const handleDeleteAgent = useCallback(
+    async (agent: Agent) => {
+      confirm.openConfirm({
+        title: 'Delete Agent',
+        message: `Are you sure you want to delete "${agent.name}"? This action cannot be undone.`,
+        confirmText: 'Delete',
+        confirmColor: 'error',
+      })
+
+      const confirmed = await confirm.confirmAsync(async () => {
+        await deleteAgent(agent.id)
+        await refetchAgents()
+      })
+
+      if (confirmed) {
+        // Agent deleted successfully
+      }
+    },
+    [confirm, deleteAgent, refetchAgents],
+  )
+
+  const loading = agentsLoading || sessionsLoading
 
   // Extract just the agents from agentsWithSessions for the table
   const tableAgents = useMemo(
@@ -139,31 +170,56 @@ function AgentsPage() {
         render: (agent) => <StatusBadge status={agent.status} />,
       },
       {
-        key: 'workshop',
-        header: 'Workshop',
-        width: 140,
+        key: 'actions',
+        header: 'Actions',
+        width: 80,
+        align: 'center' as const,
         render: (agent) => {
-          const {session} = agentsWithSessions.find((a) => a.agent.id === agent.id) ?? {};
-          const isCreating = creatingSession === agent.id;
+          const {session} =
+            agentsWithSessions.find((a) => a.agent.id === agent.id) ?? {}
+          const isCreating = creatingSession === agent.id
+
+          const actions: MenuAction[] = [
+            {
+              key: 'workshop',
+              label: session ? 'Open Workshop' : 'Start Workshop',
+              icon: <WorkshopIcon fontSize="small" />,
+              onClick: () => {
+                void handleAgentClick(agent.id, session?.id)
+              },
+              disabled: isCreating,
+              dividerAfter: true,
+            },
+            {
+              key: 'view',
+              label: 'View Details',
+              icon: <VisibilityIcon fontSize="small" />,
+              onClick: () => {
+                void navigate(`/agents/${agent.id}`)
+              },
+            },
+            {
+              key: 'delete',
+              label: 'Delete',
+              icon: <DeleteIcon fontSize="small" />,
+              onClick: () => {
+                void handleDeleteAgent(agent)
+              },
+              color: 'error' as const,
+            },
+          ]
+
           return (
-            <Button
-              size="small"
-              variant={session ? 'contained' : 'outlined'}
-              disabled={isCreating}
-              onClick={(e) => {
-                e.stopPropagation();
-                void handleAgentClick(agent.id, session?.id);
-              }}
-              sx={{minWidth: 120}}
-            >
-              {isCreating ? 'Creating...' : session ? 'Open Workshop' : 'Start Workshop'}
-            </Button>
-          );
+            <ActionMenu
+              actions={actions}
+              ariaLabel={`Actions for ${agent.name}`}
+            />
+          )
         },
       },
     ],
-    [agentsWithSessions, creatingSession, handleAgentClick],
-  );
+    [agentsWithSessions, creatingSession, handleAgentClick, handleDeleteAgent, navigate],
+  )
 
   return (
     <FadeIn>
@@ -191,15 +247,29 @@ function AgentsPage() {
           defaultPageSize={25}
           pageSizeOptions={[10, 25, 50, 100]}
           onRowClick={(agent) => {
-            const {session} = agentsWithSessions.find((a) => a.agent.id === agent.id) ?? {};
-            void handleAgentClick(agent.id, session?.id);
+            const {session} =
+              agentsWithSessions.find((a) => a.agent.id === agent.id) ?? {}
+            void handleAgentClick(agent.id, session?.id)
           }}
           stickyHeader
           density="normal"
         />
+
+        <ConfirmModal
+          open={confirm.open}
+          onClose={confirm.closeConfirm}
+          onConfirm={confirm.onConfirm}
+          title={confirm.title}
+          message={confirm.message}
+          confirmText={confirm.confirmText}
+          cancelText={confirm.cancelText}
+          confirmColor={confirm.confirmColor}
+          loading={confirm.loading}
+          error={confirm.error}
+        />
       </Box>
     </FadeIn>
-  );
+  )
 }
 
 export {AgentsPage};
