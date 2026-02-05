@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::WorkflowCollectionRepo;
 use crate::server::auth as auth_utils;
-use crate::server::collection_dag_executor::CollectionDagExecutor;
+use crate::server::executors::collection_dag::CollectionDagExecutor;
 use crate::server::state::AppState;
 
 // ============================================================================

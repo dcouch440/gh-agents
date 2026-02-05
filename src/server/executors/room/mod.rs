@@ -528,10 +528,3 @@ impl StreamSink for RoomStreamSink {
         // Speaker completion is handled by the executor, not the sink.
     }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests;

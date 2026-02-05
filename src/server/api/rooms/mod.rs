@@ -323,7 +323,7 @@ pub async fn send_room_message(
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
             .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-        members.push(crate::server::room_executor::RoomMemberWithAgent { member: m, agent });
+        members.push(crate::server::executors::room::RoomMemberWithAgent { member: m, agent });
     }
 
     // Create LLM provider
@@ -340,7 +340,7 @@ pub async fn send_room_message(
     let user_message = request.content.clone();
     let user_id = auth.user_id.0;
     tokio::spawn(async move {
-        if let Err(e) = crate::server::room_executor::execute_room_turn(
+        if let Err(e) = crate::server::executors::room::execute_room_turn(
             &state_clone,
             provider,
             &room_clone,

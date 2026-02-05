@@ -239,7 +239,7 @@ async fn test_variable_resolution() {
     // Verify it would work with resolve_variables
     let template = "Found: {$workflow_test_workflow.analysis.findings.0}";
     let resolved =
-        crate::server::dag_executor::resolve_variables(template, &HashMap::new(), &outputs);
+        crate::server::executors::dag::resolve_variables(template, &HashMap::new(), &outputs);
     // Note: JSON strings are resolved with quotes (this is correct behavior)
     assert_eq!(resolved, "Found: issue1");
 }

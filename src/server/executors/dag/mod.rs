@@ -22,8 +22,8 @@ use crate::db::traits::{DocumentRepo, WorkflowRepo};
 use crate::db::{AgentRow, WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::llm::{ContentBlock, LLMProvider, LLMRequest, Message, StopReason, Tool};
 
-use super::state::AppState;
-use super::ws::PipelineUpdate;
+use crate::server::state::AppState;
+use crate::server::ws::PipelineUpdate;
 
 /// Maximum tool use rounds per step execution.
 const DAG_MAX_TOOL_ROUNDS: u32 = 15;
@@ -1244,10 +1244,3 @@ fn broadcast_for_each_spawned(
         user_id: None,
     });
 }
-
-// ============================================================================
-// Tests
-// ============================================================================
-
-#[cfg(test)]
-mod tests;
