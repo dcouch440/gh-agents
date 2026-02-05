@@ -23,9 +23,11 @@ use super::ws::{
     RouterRequestEvent, RoutingUpdate, SessionUpdate, TaskUpdate,
 };
 
+mod builder;
 mod events;
 mod repos;
 
+pub use builder::{AppStateBuilder, BuilderError};
 pub use events::{ChannelSizes, EventBus};
 pub use repos::Repos;
 
@@ -64,40 +66,40 @@ pub enum StreamChunk {
 
 /// A buffered broadcast stream that retains all chunks so late-connecting
 /// SSE clients can replay missed tokens.
-pub struct BufferedStream {
+pub(crate) struct BufferedStream {
     tx: broadcast::Sender<StreamChunk>,
     buffer: Vec<StreamChunk>,
     done: bool,
 }
 
 /// Inner state wrapped in Arc for cheap cloning.
-struct AppStateInner {
+pub(crate) struct AppStateInner {
     /// Database connection pool
-    db: Option<PgPool>,
+    pub(crate) db: Option<PgPool>,
     /// Repository trait object for DB operations used by API handlers
-    server_repo: Arc<dyn ServerRepo>,
+    pub(crate) server_repo: Arc<dyn ServerRepo>,
     /// All repository trait objects grouped together (non-optional)
-    repos: Option<Repos>,
+    pub(crate) repos: Option<Repos>,
     /// All broadcast channels grouped together
-    events: EventBus,
+    pub(crate) events: EventBus,
     /// Application configuration (mutable at runtime via API)
-    config: Arc<RwLock<AppConfig>>,
+    pub(crate) config: Arc<RwLock<AppConfig>>,
     /// LLM provider for agent execution
-    provider: Option<Arc<dyn LLMProvider + Send + Sync>>,
+    pub(crate) provider: Option<Arc<dyn LLMProvider + Send + Sync>>,
     /// Mode resolver for router-based mode selection
-    mode_resolver: Option<Arc<ModeResolver>>,
+    pub(crate) mode_resolver: Option<Arc<ModeResolver>>,
     /// Prompt registry for core system/agent prompts
-    prompt_registry: Arc<PromptRegistry>,
+    pub(crate) prompt_registry: Arc<PromptRegistry>,
     /// JWT secret for token signing
-    jwt_secret: Vec<u8>,
+    pub(crate) jwt_secret: Vec<u8>,
     /// Default agent UUID (looked up at startup)
-    default_agent_id: Option<Uuid>,
+    pub(crate) default_agent_id: Option<Uuid>,
     /// Channel to send messages to the orchestrator
-    chat_tx: mpsc::Sender<ConsumerMessage>,
+    pub(crate) chat_tx: mpsc::Sender<ConsumerMessage>,
     /// Map of message IDs to buffered response streams (DashMap for concurrent access)
-    response_streams: DashMap<Uuid, BufferedStream>,
+    pub(crate) response_streams: DashMap<Uuid, BufferedStream>,
     /// Cancellation tokens for running pipelines and agent executions
-    cancellation_tokens: DashMap<Uuid, CancellationToken>,
+    pub(crate) cancellation_tokens: DashMap<Uuid, CancellationToken>,
 }
 
 /// Application state shared across all HTTP handlers.
@@ -108,6 +110,11 @@ struct AppStateInner {
 pub struct AppState(Arc<AppStateInner>);
 
 impl AppState {
+    /// Create AppState from inner state (used by AppStateBuilder).
+    pub(crate) fn from_inner(inner: AppStateInner) -> Self {
+        Self(Arc::new(inner))
+    }
+
     /// Create new application state, returning the orchestrator receiver separately
     /// so it can be passed to the orchestrator consumer task.
     ///
