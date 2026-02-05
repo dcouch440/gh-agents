@@ -78,7 +78,7 @@ pub async fn list_documents(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<DocumentListItem>>, StatusCode> {
-    let doc_repo = state.doc_repo().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc_repo = &state.repos().documents;
     let docs = doc_repo
         .list_documents(auth.user_id.0)
         .await
@@ -116,7 +116,7 @@ pub async fn search_documents(
     auth: auth_utils::AuthUser,
     Query(query): Query<DocumentSearchQuery>,
 ) -> Result<Json<Vec<crate::db::DocumentSearchResult>>, StatusCode> {
-    let doc_repo = state.doc_repo().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc_repo = &state.repos().documents;
     let results = doc_repo
         .search_documents(auth.user_id.0, &query.q)
         .await
@@ -142,7 +142,7 @@ pub async fn get_document(
     auth: auth_utils::AuthUser,
     Path(doc_id): Path<Uuid>,
 ) -> Result<Json<DocumentResponse>, StatusCode> {
-    let doc_repo = state.doc_repo().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc_repo = &state.repos().documents;
     let doc = doc_repo
         .get_document(doc_id)
         .await
@@ -192,7 +192,7 @@ pub async fn create_document(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let doc_repo = state.doc_repo().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc_repo = &state.repos().documents;
     let doc = doc_repo
         .create_document(
             auth.user_id.0,
@@ -244,7 +244,7 @@ pub async fn update_document(
     Path(doc_id): Path<Uuid>,
     Json(request): Json<UpdateDocumentRequest>,
 ) -> Result<Json<DocumentResponse>, StatusCode> {
-    let doc_repo = state.doc_repo().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc_repo = &state.repos().documents;
 
     // Verify ownership
     let existing = doc_repo
@@ -293,7 +293,7 @@ pub async fn delete_document(
     auth: auth_utils::AuthUser,
     Path(doc_id): Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
-    let doc_repo = state.doc_repo().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc_repo = &state.repos().documents;
 
     // Verify ownership
     let existing = doc_repo

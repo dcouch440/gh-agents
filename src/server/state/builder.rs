@@ -1,0 +1,261 @@
+//! Builder pattern for constructing AppState.
+//!
+//! Provides a fluent API for creating AppState instances, particularly useful
+//! for tests where you want fine-grained control over which components are set.
+
+use std::sync::Arc;
+
+use dashmap::DashMap;
+use sqlx::PgPool;
+use thiserror::Error;
+use tokio::sync::{mpsc, RwLock};
+use uuid::Uuid;
+
+use crate::db::traits::ServerRepo;
+use crate::llm::LLMProvider;
+use crate::types::AppConfig;
+
+use crate::server::hub::{ModeResolver, PromptRegistry};
+
+use super::{AppState, AppStateInner, ConsumerMessage, EventBus, Repos};
+
+/// Errors that can occur during AppState building.
+#[derive(Debug, Error)]
+pub enum BuilderError {
+    /// The server repository is required but was not provided.
+    #[error("server_repo is required")]
+    MissingServerRepo,
+
+    /// The application configuration is required but was not provided.
+    #[error("config is required")]
+    MissingConfig,
+}
+
+/// Builder for constructing AppState instances.
+///
+/// # Example
+///
+/// ```ignore
+/// let (state, rx) = AppStateBuilder::new()
+///     .with_server_repo(repo)
+///     .with_config(config)
+///     .with_repos(repos)
+///     .build()?;
+/// ```
+pub struct AppStateBuilder {
+    db: Option<PgPool>,
+    server_repo: Option<Arc<dyn ServerRepo>>,
+    repos: Option<Repos>,
+    events: Option<EventBus>,
+    config: Option<AppConfig>,
+    provider: Option<Arc<dyn LLMProvider + Send + Sync>>,
+    mode_resolver: Option<Arc<ModeResolver>>,
+    prompt_registry: Option<Arc<PromptRegistry>>,
+    jwt_secret: Option<Vec<u8>>,
+    default_agent_id: Option<Uuid>,
+}
+
+impl AppStateBuilder {
+    /// Create a new builder with no fields set.
+    pub fn new() -> Self {
+        Self {
+            db: None,
+            server_repo: None,
+            repos: None,
+            events: None,
+            config: None,
+            provider: None,
+            mode_resolver: None,
+            prompt_registry: None,
+            jwt_secret: None,
+            default_agent_id: None,
+        }
+    }
+
+    /// Set the database connection pool.
+    pub fn with_db(mut self, db: PgPool) -> Self {
+        self.db = Some(db);
+        self
+    }
+
+    /// Set the server repository (required).
+    pub fn with_server_repo(mut self, repo: Arc<dyn ServerRepo>) -> Self {
+        self.server_repo = Some(repo);
+        self
+    }
+
+    /// Set the grouped repositories.
+    pub fn with_repos(mut self, repos: Repos) -> Self {
+        self.repos = Some(repos);
+        self
+    }
+
+    /// Set the event bus. If not provided, a default one will be created.
+    pub fn with_events(mut self, events: EventBus) -> Self {
+        self.events = Some(events);
+        self
+    }
+
+    /// Set the application configuration (required).
+    pub fn with_config(mut self, config: AppConfig) -> Self {
+        self.config = Some(config);
+        self
+    }
+
+    /// Set the LLM provider.
+    pub fn with_provider(mut self, provider: Arc<dyn LLMProvider + Send + Sync>) -> Self {
+        self.provider = Some(provider);
+        self
+    }
+
+    /// Set the mode resolver.
+    pub fn with_mode_resolver(mut self, resolver: Arc<ModeResolver>) -> Self {
+        self.mode_resolver = Some(resolver);
+        self
+    }
+
+    /// Set the prompt registry. If not provided, an empty one will be used.
+    pub fn with_prompt_registry(mut self, registry: Arc<PromptRegistry>) -> Self {
+        self.prompt_registry = Some(registry);
+        self
+    }
+
+    /// Set the JWT secret. If not provided, a random one will be generated.
+    pub fn with_jwt_secret(mut self, secret: Vec<u8>) -> Self {
+        self.jwt_secret = Some(secret);
+        self
+    }
+
+    /// Set the default agent ID.
+    pub fn with_default_agent_id(mut self, id: Uuid) -> Self {
+        self.default_agent_id = Some(id);
+        self
+    }
+
+    /// Build the AppState and return it along with the orchestrator message receiver.
+    ///
+    /// # Errors
+    ///
+    /// Returns `BuilderError::MissingServerRepo` if `with_server_repo()` was not called.
+    /// Returns `BuilderError::MissingConfig` if `with_config()` was not called.
+    pub fn build(self) -> Result<(AppState, mpsc::Receiver<ConsumerMessage>), BuilderError> {
+        let server_repo = self.server_repo.ok_or(BuilderError::MissingServerRepo)?;
+        let config = self.config.ok_or(BuilderError::MissingConfig)?;
+
+        let (chat_tx, orchestrator_rx) = mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
+        let events = self.events.unwrap_or_else(EventBus::new);
+        let jwt_secret = self
+            .jwt_secret
+            .unwrap_or_else(|| rand::random::<[u8; 32]>().to_vec());
+        let prompt_registry = self
+            .prompt_registry
+            .unwrap_or_else(|| Arc::new(PromptRegistry::empty()));
+
+        let state = AppState::from_inner(AppStateInner {
+            db: self.db,
+            server_repo,
+            repos: self.repos,
+            events,
+            config: Arc::new(RwLock::new(config)),
+            provider: self.provider,
+            mode_resolver: self.mode_resolver,
+            prompt_registry,
+            jwt_secret,
+            default_agent_id: self.default_agent_id,
+            chat_tx,
+            response_streams: DashMap::new(),
+            cancellation_tokens: DashMap::new(),
+        });
+
+        Ok((state, orchestrator_rx))
+    }
+
+    /// Build the AppState for tests, panicking on error.
+    ///
+    /// This is a convenience method for tests that don't want to handle errors.
+    ///
+    /// # Panics
+    ///
+    /// Panics if required fields are missing.
+    #[cfg(test)]
+    pub fn build_for_test(self) -> (AppState, mpsc::Receiver<ConsumerMessage>) {
+        self.build()
+            .expect("AppStateBuilder: missing required fields")
+    }
+}
+
+impl Default for AppStateBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::traits::MockServerRepo;
+
+    fn mock_repo() -> Arc<dyn ServerRepo> {
+        let mut mock = MockServerRepo::new();
+        mock.expect_health_check().returning(|| true);
+        Arc::new(mock)
+    }
+
+    fn default_config() -> AppConfig {
+        AppConfig::default()
+    }
+
+    #[test]
+    fn build_with_required_fields_succeeds() {
+        let result = AppStateBuilder::new()
+            .with_server_repo(mock_repo())
+            .with_config(default_config())
+            .build();
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn build_without_server_repo_fails() {
+        let result = AppStateBuilder::new().with_config(default_config()).build();
+
+        assert!(matches!(result, Err(BuilderError::MissingServerRepo)));
+    }
+
+    #[test]
+    fn build_without_config_fails() {
+        let result = AppStateBuilder::new().with_server_repo(mock_repo()).build();
+
+        assert!(matches!(result, Err(BuilderError::MissingConfig)));
+    }
+
+    #[test]
+    fn build_for_test_with_required_fields_succeeds() {
+        let (_state, _rx) = AppStateBuilder::new()
+            .with_server_repo(mock_repo())
+            .with_config(default_config())
+            .build_for_test();
+    }
+
+    #[test]
+    #[should_panic(expected = "missing required fields")]
+    fn build_for_test_panics_on_missing_fields() {
+        let _ = AppStateBuilder::new().build_for_test();
+    }
+
+    #[test]
+    fn builder_sets_optional_fields() {
+        let custom_secret = vec![1, 2, 3, 4];
+        let agent_id = Uuid::new_v4();
+
+        let (state, _rx) = AppStateBuilder::new()
+            .with_server_repo(mock_repo())
+            .with_config(default_config())
+            .with_jwt_secret(custom_secret.clone())
+            .with_default_agent_id(agent_id)
+            .build_for_test();
+
+        assert_eq!(state.jwt_secret(), &custom_secret);
+        assert_eq!(state.default_agent_id(), Some(agent_id));
+    }
+}

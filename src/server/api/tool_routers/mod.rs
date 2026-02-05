@@ -52,10 +52,9 @@ pub async fn list_tool_routers(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<crate::db::ToolRouterRow>>, StatusCode> {
-    let repo = state
-        .tool_router_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = repo
+    let rows = state
+        .repos()
+        .tool_routers
         .list_tool_routers(auth.user_id.0)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -82,9 +81,7 @@ pub async fn create_tool_router(
     if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let repo = state
-        .tool_router_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().tool_routers;
     let row = repo
         .create_tool_router(
             auth.user_id.0,
@@ -115,9 +112,7 @@ pub async fn get_tool_router(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<crate::db::ToolRouterRow>, StatusCode> {
-    let repo = state
-        .tool_router_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().tool_routers;
     let row = repo
         .get_tool_router(id)
         .await
@@ -148,9 +143,7 @@ pub async fn update_tool_router(
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateToolRouterRequest>,
 ) -> Result<Json<crate::db::ToolRouterRow>, StatusCode> {
-    let repo = state
-        .tool_router_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().tool_routers;
     let existing = repo
         .get_tool_router(id)
         .await
@@ -195,9 +188,7 @@ pub async fn delete_tool_router(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
-    let repo = state
-        .tool_router_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().tool_routers;
     let existing = repo
         .get_tool_router(id)
         .await
@@ -229,9 +220,7 @@ pub async fn get_router_tools(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
-    let repo = state
-        .tool_router_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().tool_routers;
     let existing = repo
         .get_tool_router(id)
         .await
@@ -267,9 +256,7 @@ pub async fn set_router_tools(
     Path(id): Path<Uuid>,
     Json(request): Json<SetRouterToolsRequest>,
 ) -> Result<StatusCode, StatusCode> {
-    let repo = state
-        .tool_router_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().tool_routers;
     let existing = repo
         .get_tool_router(id)
         .await

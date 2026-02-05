@@ -339,9 +339,7 @@ pub async fn run_collection(
 ) -> Result<(StatusCode, Json<CollectionRunResponse>), StatusCode> {
     let db = state.db().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?.clone();
     let repo = Arc::new(PgRepo::new(db));
-    let workflow_repo = state
-        .workflow_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let workflow_repo = state.repos().workflows.clone();
 
     // Verify ownership
     let collection = repo

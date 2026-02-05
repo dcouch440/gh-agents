@@ -123,9 +123,7 @@ pub async fn list_agent_executions(
     auth: auth_utils::AuthUser,
     Query(query): Query<ListExecutionsQuery>,
 ) -> Result<Json<Vec<AgentExecutionResponse>>, StatusCode> {
-    let repo = state
-        .agent_execution_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().agent_executions;
     let rows = repo
         .list_agent_executions(auth.user_id.0, query.status)
         .await
@@ -151,9 +149,7 @@ pub async fn get_agent_execution(
     _auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<AgentExecutionResponse>, StatusCode> {
-    let repo = state
-        .agent_execution_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().agent_executions;
     let row = repo
         .get_agent_execution(id)
         .await
@@ -178,9 +174,7 @@ pub async fn list_execution_messages(
     _auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Vec<ExecutionMessageResponse>>, StatusCode> {
-    let repo = state
-        .agent_execution_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().agent_executions;
     // Verify execution exists
     repo.get_agent_execution(id)
         .await
@@ -220,9 +214,7 @@ pub async fn send_execution_message(
     Path(id): Path<Uuid>,
     Json(req): Json<SendMessageRequest>,
 ) -> Result<(StatusCode, Json<SendMessageResponse>), StatusCode> {
-    let repo = state
-        .agent_execution_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().agent_executions;
     let ae = repo
         .get_agent_execution(id)
         .await
@@ -411,9 +403,7 @@ pub async fn approve_execution(
     Path(id): Path<Uuid>,
     Json(req): Json<ApproveExecutionRequest>,
 ) -> Result<Json<AgentExecutionResponse>, StatusCode> {
-    let repo = state
-        .agent_execution_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().agent_executions;
     let ae = repo
         .get_agent_execution(id)
         .await

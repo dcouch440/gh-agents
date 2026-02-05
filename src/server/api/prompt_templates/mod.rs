@@ -50,10 +50,9 @@ pub async fn list_prompt_templates(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<PromptTemplateResponse>>, StatusCode> {
-    let repo = state
-        .prompt_template_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = repo
+    let rows = state
+        .repos()
+        .prompt_templates
         .list_prompt_templates(auth.user_id.0)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -92,9 +91,7 @@ pub async fn create_prompt_template(
     if request.content.len() > MAX_PROMPT_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let repo = state
-        .prompt_template_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().prompt_templates;
     let row = repo
         .create_prompt_template(auth.user_id.0, request.name, request.content)
         .await
@@ -127,9 +124,7 @@ pub async fn get_prompt_template(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<PromptTemplateResponse>, StatusCode> {
-    let repo = state
-        .prompt_template_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().prompt_templates;
     let row = repo
         .get_prompt_template(id)
         .await
@@ -165,9 +160,7 @@ pub async fn update_prompt_template(
     Path(id): Path<Uuid>,
     Json(request): Json<UpdatePromptTemplateRequest>,
 ) -> Result<Json<PromptTemplateResponse>, StatusCode> {
-    let repo = state
-        .prompt_template_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().prompt_templates;
     let existing = repo
         .get_prompt_template(id)
         .await
@@ -215,9 +208,7 @@ pub async fn delete_prompt_template(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
-    let repo = state
-        .prompt_template_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().prompt_templates;
     let existing = repo
         .get_prompt_template(id)
         .await

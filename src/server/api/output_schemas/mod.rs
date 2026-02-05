@@ -50,10 +50,9 @@ pub async fn list_output_schemas(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<OutputSchemaResponse>>, StatusCode> {
-    let repo = state
-        .output_schema_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = repo
+    let rows = state
+        .repos()
+        .output_schemas
         .list_output_schemas(auth.user_id.0)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -89,9 +88,7 @@ pub async fn create_output_schema(
     if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let repo = state
-        .output_schema_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().output_schemas;
     let row = repo
         .create_output_schema(auth.user_id.0, request.name, request.schema)
         .await
@@ -124,9 +121,7 @@ pub async fn get_output_schema(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<OutputSchemaResponse>, StatusCode> {
-    let repo = state
-        .output_schema_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().output_schemas;
     let row = repo
         .get_output_schema(id)
         .await
@@ -162,9 +157,7 @@ pub async fn update_output_schema(
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateOutputSchemaRequest>,
 ) -> Result<Json<OutputSchemaResponse>, StatusCode> {
-    let repo = state
-        .output_schema_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().output_schemas;
     let existing = repo
         .get_output_schema(id)
         .await
@@ -207,9 +200,7 @@ pub async fn delete_output_schema(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
-    let repo = state
-        .output_schema_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().output_schemas;
     let existing = repo
         .get_output_schema(id)
         .await

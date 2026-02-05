@@ -55,9 +55,7 @@ pub async fn list_results(
     auth: auth_utils::AuthUser,
     Query(q): Query<ResultQuery>,
 ) -> Result<Json<Vec<ResultResponse>>, StatusCode> {
-    let repo = state
-        .result_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().results;
     let rows = match q.output_schema_id {
         Some(schema_id) => repo.list_results_by_schema(auth.user_id.0, schema_id).await,
         None => repo.list_results(auth.user_id.0).await,
@@ -82,9 +80,7 @@ pub async fn get_result(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ResultResponse>, StatusCode> {
-    let repo = state
-        .result_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().results;
     let row = repo
         .get_result(id)
         .await
@@ -112,9 +108,7 @@ pub async fn delete_result(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
-    let repo = state
-        .result_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().results;
     let row = repo
         .get_result(id)
         .await

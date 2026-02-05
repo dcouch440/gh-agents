@@ -26,10 +26,9 @@ pub async fn get_session_context(
     _auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
 ) -> Result<Json<Vec<crate::db::ContextStoreRow>>, StatusCode> {
-    let repo = state
-        .context_store_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = repo
+    let rows = state
+        .repos()
+        .context_store
         .get_active_context(session_id, 100)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -52,10 +51,9 @@ pub async fn list_session_requests(
     _auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
 ) -> Result<Json<Vec<crate::db::RouterRequestRow>>, StatusCode> {
-    let repo = state
-        .router_request_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let rows = repo
+    let rows = state
+        .repos()
+        .router_requests
         .list_session_requests(session_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

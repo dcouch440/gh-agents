@@ -260,15 +260,17 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
     let subscriptions: Subscriptions = Arc::new(Mutex::new(HashSet::new()));
     let run_subscriptions: RunSubscriptions = Arc::new(Mutex::new(HashSet::new()));
 
-    // Subscribe to broadcast channels
-    let mut feed_rx = state.subscribe_feed();
-    let mut task_rx = state.subscribe_tasks();
-    let mut agent_rx = state.subscribe_agents();
-    let mut session_rx = state.subscribe_sessions();
-    let mut pipeline_rx = state.subscribe_pipelines();
-    let mut routing_rx = state.subscribe_routing();
-    let mut router_request_rx = state.subscribe_router_requests();
-    let mut context_update_rx = state.subscribe_context_updates();
+    // Subscribe to broadcast channels via EventBus
+    let events = state.events();
+    let mut feed_rx = events.subscribe_feed();
+    let mut task_rx = events.subscribe_tasks();
+    let mut agent_rx = events.subscribe_agents();
+    let mut session_rx = events.subscribe_sessions();
+    let mut pipeline_rx = events.subscribe_pipelines();
+    let mut routing_rx = events.subscribe_routing();
+    let mut router_request_rx = events.subscribe_router_requests();
+    let mut context_update_rx = events.subscribe_context_updates();
+    let mut room_update_rx = events.subscribe_room_updates();
 
     // Ping interval for keeping connection alive
     let mut ping_interval = interval(PING_INTERVAL);
@@ -550,6 +552,37 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
                     }
                     Err(RecvError::Lagged(n)) => {
                         warn!("Context update receiver lagged, skipped {} messages", n);
+                    }
+                    Err(RecvError::Closed) => break,
+                }
+            }
+
+            // Handle room updates (filtered by run subscription)
+            room = room_update_rx.recv() => {
+                match room {
+                    Ok(event) => {
+                        let subs = subscriptions.lock().await;
+                        if subs.contains(CHANNEL_ROUTING) {
+                            let should_send = event.user_id.is_none()
+                                || user_id.map(|u| Some(u.0) == event.user_id).unwrap_or(false);
+                            let run_match = if let Some(rid) = event.run_id {
+                                let runs = run_subscriptions.lock().await;
+                                runs.contains(&rid)
+                            } else {
+                                true
+                            };
+                            if should_send && run_match {
+                                let msg = ServerMessage::RoomUpdate { data: event };
+                                if let Some(json) = serialize_msg(&msg) {
+                                    if sender.send(Message::Text(json)).await.is_err() {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(RecvError::Lagged(n)) => {
+                        warn!("Room update receiver lagged, skipped {} messages", n);
                     }
                     Err(RecvError::Closed) => break,
                 }

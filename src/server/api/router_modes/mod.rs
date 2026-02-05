@@ -148,9 +148,7 @@ pub async fn list_router_modes(
     auth: auth_utils::AuthUser,
     Path(router_id): Path<Uuid>,
 ) -> Result<Json<Vec<RouterModeResponse>>, StatusCode> {
-    let repo = state
-        .tool_router_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().tool_routers;
 
     // Verify user owns the router
     let router = repo
@@ -215,9 +213,7 @@ pub async fn create_router_mode(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let repo = state
-        .tool_router_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().tool_routers;
 
     // Verify user owns the router
     let router = repo
@@ -280,9 +276,7 @@ pub async fn get_router_mode(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<RouterModeResponse>, StatusCode> {
-    let repo = state
-        .tool_router_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().tool_routers;
 
     let mode = repo
         .get_router_mode(id)
@@ -325,9 +319,7 @@ pub async fn update_router_mode(
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateRouterModeRequest>,
 ) -> Result<Json<RouterModeResponse>, StatusCode> {
-    let repo = state
-        .tool_router_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().tool_routers;
 
     // Get existing mode
     let existing = repo
@@ -423,9 +415,7 @@ pub async fn delete_router_mode(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
-    let repo = state
-        .tool_router_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().tool_routers;
 
     let existing = repo
         .get_router_mode(id)
@@ -468,9 +458,7 @@ pub async fn get_mode_tools(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
-    let repo = state
-        .tool_router_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().tool_routers;
 
     let mode = repo
         .get_router_mode(id)
@@ -518,9 +506,7 @@ pub async fn set_mode_tools(
     Path(id): Path<Uuid>,
     Json(request): Json<SetModeToolsRequest>,
 ) -> Result<StatusCode, StatusCode> {
-    let repo = state
-        .tool_router_repo()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let repo = &state.repos().tool_routers;
 
     let mode = repo
         .get_router_mode(id)
