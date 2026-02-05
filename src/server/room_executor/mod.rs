@@ -305,7 +305,7 @@ pub async fn execute_room_turn(
 
         // Build system prompt: mode result + room context + agent docs
         let room_context = build_room_context(room, &ma.member, &ma.agent, members);
-        let mut system_prompt = mode.system_prompt;  // agent + mode already merged
+        let mut system_prompt = mode.system_prompt; // agent + mode already merged
         system_prompt.push_str("\n\n");
         system_prompt.push_str(&room_context);
 
@@ -343,9 +343,9 @@ pub async fn execute_room_turn(
                 None,  // parent_agent_execution_id
                 &system_prompt,
                 &user_prompt,
-                mode.selected_mode_id,  // Track which mode was used
-                Some(session.id),       // room_session_id
-                Some(i as i32),         // speaker_order
+                mode.selected_mode_id, // Track which mode was used
+                Some(session.id),      // room_session_id
+                Some(i as i32),        // speaker_order
             )
             .await
             .map_err(HubError::Internal)?;
@@ -366,8 +366,8 @@ pub async fn execute_room_turn(
                 user_prompt,
                 tools,
                 tool_names,
-                temperature: mode.temperature,  // Use mode temperature
-                execution_context: None,        // TODO: wire up if tools_enabled
+                temperature: mode.temperature, // Use mode temperature
+                execution_context: None,       // TODO: wire up if tools_enabled
                 user_id,
                 agent_execution_id: ae_row.id,
             },

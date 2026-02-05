@@ -101,7 +101,7 @@ impl ExecutionStrategy for DagStepStrategy {
     }
 
     fn temperature(&self) -> f32 {
-        self.config.temperature  // Use mode-resolved temperature
+        self.config.temperature // Use mode-resolved temperature
     }
 
     async fn build_messages(&self, _input: &str) -> Result<Vec<Message>, HubError> {

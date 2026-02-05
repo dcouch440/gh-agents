@@ -183,11 +183,10 @@ impl AppState {
         match crate::llm::AnthropicClient::from_env() {
             Ok(p) => {
                 tracing::info!("Initialized LLM provider: {}", p.model_id().to_string());
-                let provider: Arc<dyn LLMProvider + Send + Sync> = Arc::new(
-                    crate::llm::RetryingProvider::with_defaults(
+                let provider: Arc<dyn LLMProvider + Send + Sync> =
+                    Arc::new(crate::llm::RetryingProvider::with_defaults(
                         crate::llm::RateLimitedProvider::with_defaults(p),
-                    ),
-                );
+                    ));
 
                 // Initialize mode resolver with provider
                 let mode_resolver = Arc::new(ModeResolver::new(
