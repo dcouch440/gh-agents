@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::db::test_utils::TestDb;
-use crate::types::{Priority, Task, TaskId, TaskStatus};
+use crate::types::{Priority, Task, TaskId, TaskStatus, UserId};
 
 #[tokio::test]
 #[ignore = "requires running Postgres"]
@@ -751,7 +751,9 @@ async fn test_get_mode_tools() {
         created_at: Utc::now(),
         version: 1,
     };
-    repo.upsert_tool(user_id, tool1.clone()).await.unwrap();
+    repo.upsert_tool(UserId(user_id), tool1.clone())
+        .await
+        .unwrap();
 
     let tool2 = ToolRow {
         id: Uuid::new_v4(),
@@ -763,7 +765,9 @@ async fn test_get_mode_tools() {
         created_at: Utc::now(),
         version: 1,
     };
-    repo.upsert_tool(user_id, tool2.clone()).await.unwrap();
+    repo.upsert_tool(UserId(user_id), tool2.clone())
+        .await
+        .unwrap();
 
     let tool3 = ToolRow {
         id: Uuid::new_v4(),
@@ -775,7 +779,9 @@ async fn test_get_mode_tools() {
         created_at: Utc::now(),
         version: 1,
     };
-    repo.upsert_tool(user_id, tool3.clone()).await.unwrap();
+    repo.upsert_tool(UserId(user_id), tool3.clone())
+        .await
+        .unwrap();
 
     // Create mode
     let mode = repo
@@ -830,7 +836,9 @@ async fn test_set_mode_tools_replaces() {
         created_at: Utc::now(),
         version: 1,
     };
-    repo.upsert_tool(user_id, tool_a.clone()).await.unwrap();
+    repo.upsert_tool(UserId(user_id), tool_a.clone())
+        .await
+        .unwrap();
 
     let tool_b = ToolRow {
         id: Uuid::new_v4(),
@@ -842,7 +850,9 @@ async fn test_set_mode_tools_replaces() {
         created_at: Utc::now(),
         version: 1,
     };
-    repo.upsert_tool(user_id, tool_b.clone()).await.unwrap();
+    repo.upsert_tool(UserId(user_id), tool_b.clone())
+        .await
+        .unwrap();
 
     let tool_c = ToolRow {
         id: Uuid::new_v4(),
@@ -854,7 +864,9 @@ async fn test_set_mode_tools_replaces() {
         created_at: Utc::now(),
         version: 1,
     };
-    repo.upsert_tool(user_id, tool_c.clone()).await.unwrap();
+    repo.upsert_tool(UserId(user_id), tool_c.clone())
+        .await
+        .unwrap();
 
     let tool_d = ToolRow {
         id: Uuid::new_v4(),
@@ -866,7 +878,9 @@ async fn test_set_mode_tools_replaces() {
         created_at: Utc::now(),
         version: 1,
     };
-    repo.upsert_tool(user_id, tool_d.clone()).await.unwrap();
+    repo.upsert_tool(UserId(user_id), tool_d.clone())
+        .await
+        .unwrap();
 
     // Create mode
     let mode = repo
@@ -926,7 +940,9 @@ async fn test_set_mode_tools_empty() {
         created_at: Utc::now(),
         version: 1,
     };
-    repo.upsert_tool(user_id, tool.clone()).await.unwrap();
+    repo.upsert_tool(UserId(user_id), tool.clone())
+        .await
+        .unwrap();
 
     // Create mode
     let mode = repo
