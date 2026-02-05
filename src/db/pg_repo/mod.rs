@@ -409,6 +409,13 @@ impl ServerRepo for PgRepo {
     }
 
     async fn delete_persisted_agent(&self, agent_id: Uuid) -> Result<()> {
+        // First, nullify agent_id in sessions that reference this agent
+        sqlx::query("UPDATE chat_sessions SET agent_id = NULL WHERE agent_id = $1")
+            .bind(agent_id)
+            .execute(&self.pool)
+            .await?;
+
+        // Now safe to delete the agent
         sqlx::query("DELETE FROM agents WHERE id = $1")
             .bind(agent_id)
             .execute(&self.pool)
