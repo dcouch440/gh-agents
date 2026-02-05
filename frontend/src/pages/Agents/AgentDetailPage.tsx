@@ -59,6 +59,7 @@ function AgentDetailPage() {
   // Mode dialog state
   const [showModeForm, setShowModeForm] = useState(false)
   const [editingMode, setEditingMode] = useState<RouterMode | null>(null)
+  const [editingModeToolIds, setEditingModeToolIds] = useState<string[]>([])
 
   // Tool assignment dialog state
   const [showToolAssignment, setShowToolAssignment] = useState(false)
@@ -141,16 +142,20 @@ function AgentDetailPage() {
   }
 
   // Mode handlers
-  const handleCreateMode = async (data: CreateRouterModeRequest) => {
+  const handleCreateMode = async (data: CreateRouterModeRequest, toolIds: string[]) => {
     if (!agent.router_id) return
-    await modeMutations.createMode(agent.router_id, data)
+    const newMode = await modeMutations.createMode(agent.router_id, data)
+    if (toolIds.length > 0) {
+      await modeMutations.saveModeTools(newMode.id, { tool_ids: toolIds })
+    }
     setShowModeForm(false)
     await modes.reload()
   }
 
-  const handleUpdateMode = async (data: CreateRouterModeRequest) => {
+  const handleUpdateMode = async (data: CreateRouterModeRequest, toolIds: string[]) => {
     if (!editingMode) return
     await modeMutations.updateMode(editingMode.id, data)
+    await modeMutations.saveModeTools(editingMode.id, { tool_ids: toolIds })
     setEditingMode(null)
     setShowModeForm(false)
     await modes.reload()
@@ -204,11 +209,18 @@ function AgentDetailPage() {
 
   const handleOpenCreateMode = () => {
     setEditingMode(null)
+    setEditingModeToolIds([])
     setShowModeForm(true)
   }
 
-  const handleOpenEditMode = (mode: RouterMode) => {
+  const handleOpenEditMode = async (mode: RouterMode) => {
     setEditingMode(mode)
+    try {
+      const tools = await modeMutations.loadModeTools(mode.id)
+      setEditingModeToolIds(tools.map((t) => t.id))
+    } catch {
+      setEditingModeToolIds([])
+    }
     setShowModeForm(true)
   }
 
@@ -342,7 +354,7 @@ function AgentDetailPage() {
               ) : (
                 <RouterModesList
                   modes={modes.modes}
-                  onEditMode={handleOpenEditMode}
+                  onEditMode={(m) => { void handleOpenEditMode(m) }}
                   onDeleteMode={(m) => { void handleDeleteMode(m) }}
                   onManageTools={(m) => { void handleOpenModeTools(m) }}
                 />
@@ -405,8 +417,10 @@ function AgentDetailPage() {
       <ModeFormDialog
         open={showModeForm}
         onClose={() => { setShowModeForm(false); setEditingMode(null) }}
-        onSubmit={(data) => { void (editingMode ? handleUpdateMode(data) : handleCreateMode(data)) }}
+        onSubmit={(data, toolIds) => { void (editingMode ? handleUpdateMode(data, toolIds) : handleCreateMode(data, toolIds)) }}
         initialValues={modeFormInitialValues}
+        allTools={allTools}
+        initialToolIds={editingModeToolIds}
         saving={modeMutations.creating || modeMutations.updating}
         title={editingMode ? 'Edit Mode' : 'Create Mode'}
       />

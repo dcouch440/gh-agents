@@ -10,15 +10,19 @@ import {
   Typography,
   Switch,
   FormControlLabel,
+  Checkbox,
+  Divider,
 } from '@mui/material'
 import { Button } from '@/components/primitives'
-import type { CreateRouterModeRequest } from '@/types'
+import type { CreateRouterModeRequest, Tool } from '@/types'
 
 type ModeFormDialogProps = {
   open: boolean
   onClose: () => void
-  onSubmit: (data: CreateRouterModeRequest) => void
+  onSubmit: (data: CreateRouterModeRequest, toolIds: string[]) => void
   initialValues: Partial<CreateRouterModeRequest> | null
+  allTools: Tool[]
+  initialToolIds: string[]
   saving: boolean
   title: string
 }
@@ -27,11 +31,15 @@ function ModeFormContent({
   onClose,
   onSubmit,
   initialValues,
+  allTools,
+  initialToolIds,
   saving,
 }: {
   onClose: () => void
-  onSubmit: (data: CreateRouterModeRequest) => void
+  onSubmit: (data: CreateRouterModeRequest, toolIds: string[]) => void
   initialValues: Partial<CreateRouterModeRequest> | null
+  allTools: Tool[]
+  initialToolIds: string[]
   saving: boolean
 }) {
   const [modeKey, setModeKey] = useState(initialValues?.mode_key ?? '')
@@ -43,19 +51,29 @@ function ModeFormContent({
   const [appendPrompt, setAppendPrompt] = useState(initialValues?.append_to_agent_system_prompt ?? false)
   const [appendTools, setAppendTools] = useState(initialValues?.append_to_agent_tools ?? true)
   const [displayOrder, setDisplayOrder] = useState(initialValues?.display_order ?? 0)
+  const [selectedToolIds, setSelectedToolIds] = useState<string[]>([...initialToolIds])
+
+  const handleToggleTool = (toolId: string) => {
+    setSelectedToolIds((prev) =>
+      prev.includes(toolId) ? prev.filter((id) => id !== toolId) : [...prev, toolId],
+    )
+  }
 
   const handleSubmit = () => {
-    onSubmit({
-      mode_key: modeKey.trim(),
-      display_name: displayName.trim(),
-      description: description.trim(),
-      system_prompt: systemPrompt,
-      temperature,
-      max_tokens: maxTokens,
-      append_to_agent_system_prompt: appendPrompt,
-      append_to_agent_tools: appendTools,
-      display_order: displayOrder,
-    })
+    onSubmit(
+      {
+        mode_key: modeKey.trim(),
+        display_name: displayName.trim(),
+        description: description.trim(),
+        system_prompt: systemPrompt,
+        temperature,
+        max_tokens: maxTokens,
+        append_to_agent_system_prompt: appendPrompt,
+        append_to_agent_tools: appendTools,
+        display_order: displayOrder,
+      },
+      selectedToolIds,
+    )
   }
 
   const isValid =
@@ -150,6 +168,42 @@ function ModeFormContent({
             }
             label="Append to agent tools"
           />
+
+          <Divider />
+
+          <Typography variant="subtitle2">Tools</Typography>
+          {allTools.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              No tools available
+            </Typography>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+              {allTools.map((tool) => (
+                <FormControlLabel
+                  key={tool.id}
+                  control={
+                    <Checkbox
+                      checked={selectedToolIds.includes(tool.id)}
+                      onChange={() => handleToggleTool(tool.id)}
+                      size="small"
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {tool.name}
+                      </Typography>
+                      {tool.description ? (
+                        <Typography variant="caption" color="text.secondary">
+                          {tool.description}
+                        </Typography>
+                      ) : null}
+                    </Box>
+                  }
+                />
+              ))}
+            </Box>
+          )}
         </Box>
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 2 }}>
@@ -164,7 +218,7 @@ function ModeFormContent({
   )
 }
 
-function ModeFormDialog({ open, onClose, onSubmit, initialValues, saving, title }: ModeFormDialogProps) {
+function ModeFormDialog({ open, onClose, onSubmit, initialValues, allTools, initialToolIds, saving, title }: ModeFormDialogProps) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>{title}</DialogTitle>
@@ -173,6 +227,8 @@ function ModeFormDialog({ open, onClose, onSubmit, initialValues, saving, title 
           onClose={onClose}
           onSubmit={onSubmit}
           initialValues={initialValues}
+          allTools={allTools}
+          initialToolIds={initialToolIds}
           saving={saving}
         />
       ) : null}

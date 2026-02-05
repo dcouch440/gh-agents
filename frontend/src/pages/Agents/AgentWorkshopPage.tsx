@@ -195,7 +195,7 @@ function AgentWorkshopPage() {
     max: 75,
   });
   const {send, streaming: sseStreaming} = useSendSessionMessage();
-  const {schemas} = useOutputSchemaContext();
+  const {schemas = []} = useOutputSchemaContext();
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
   const contentRef = useRef("");
   const savedRef = useRef(false);

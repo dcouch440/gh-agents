@@ -317,38 +317,66 @@ DROP TABLE IF EXISTS agent_modes CASCADE;
 
 ## Layered Architecture
 
-### Design Principle: Keep ExecutionEngine Pure
+### Design Principle: Keep ExecutionEngine Pure, Keep Call Sites In Control
 
-The existing `ExecutionEngine` is **perfectly designed** as a generic LLM execution loop. We should NOT modify it to add routing logic. Instead, we wrap it with an orchestration layer.
+The existing `ExecutionEngine` is **perfectly designed** as a generic LLM execution loop. We should NOT modify it. Each call site (chat, room, DAG) also has context-specific logic that only it understands. Instead of a monolithic orchestrator that tries to create every strategy type, we introduce a **ModeResolver** that resolves routing config and lets each call site apply it.
+
+### Why NOT a Monolithic AgentOrchestrator?
+
+The original design proposed `orchestrator.execute_agent()` as a single entry point. This fails because:
+
+1. **Different strategy types**: Chat needs `ChatStrategy`, rooms need `RoomSpeakerStrategy`, DAGs need `DagStepStrategy`. A single orchestrator would need to know about all of them.
+2. **Context-specific composition**: Rooms add room context + agent docs to the system prompt. DAGs add schema enforcement. The orchestrator would need all this context passed in, defeating the purpose.
+3. **Tool authority varies**: Rooms have `room.tools_enabled` as a master switch. DAGs always have tools. The orchestrator can't make this decision.
+4. **History format varies**: Chat has `Vec<Message>`, rooms have a transcript blob, DAGs have no history. The orchestrator can't normalize these.
+
+### The Correct Architecture: ModeResolver
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │  LAYER 3: APPLICATION (Call Sites)                               │
 │  ─────────────────────────────────────────────────────────────── │
-│  - chat_consumer.rs                                              │
-│  - workflow_executor.rs                                          │
-│  - room_executor.rs                                              │
-│  - agent_executions.rs                                           │
+│  - hub/mod.rs (chat)         → ChatStrategy                     │
+│  - room_executor.rs          → RoomSpeakerStrategy               │
+│  - hub/dag/mod.rs            → DagStepStrategy                   │
 │                                                                  │
-│  All call: orchestrator.execute_agent(agent_id, input, history) │
+│  Each call site:                                                 │
+│  1. Calls mode_resolver.resolve(agent, input, context_hint)     │
+│  2. Gets back ResolvedModeConfig (prompt, tools, temp)          │
+│  3. Applies its own context on top (room context, schema, etc.) │
+│  4. Builds its own strategy type                                 │
+│  5. Calls engine.execute(strategy, ...)                         │
 └──────────────────────────┬───────────────────────────────────────┘
                            │
-                           ▼
+          ┌────────────────┼────────────────┐
+          │                │                │
+          ▼                ▼                ▼
+┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+│  ModeResolver │ │  ModeResolver │ │  ModeResolver │
+│  .resolve()   │ │  .resolve()   │ │  .resolve()   │
+│  (same svc)   │ │  (same svc)   │ │  (same svc)   │
+└──────┬───────┘ └──────┬───────┘ └──────┬───────┘
+       │                │                │
+       └────────────────┼────────────────┘
+                        │
+                        ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│  LAYER 2: ORCHESTRATION (NEW - AgentOrchestrator)                │
+│  LAYER 2: MODE RESOLUTION (NEW - ModeResolver)                   │
 │  ─────────────────────────────────────────────────────────────── │
 │  Responsibilities:                                               │
-│  ✓ Load agent from database                                     │
-│  ✓ Route with FULL HISTORY (if agent.router_id)                 │
-│  ✓ Load mode configuration (system_prompt, tools, temp)         │
-│  ✓ Create execution strategy (ChatStrategy, DagStepStrategy)    │
-│  ✓ Call ExecutionEngine with strategy                           │
-│  ✓ Return result with routing metadata                          │
+│  ✓ Check if agent has router_id                                 │
+│  ✓ Load router + modes from DB                                  │
+│  ✓ Classify input via Router LLM (with context hint)            │
+│  ✓ Load mode tools from DB                                      │
+│  ✓ Merge system prompt (append/replace per mode flag)           │
+│  ✓ Merge tools (append/replace per mode flag)                   │
+│  ✓ Return ResolvedModeConfig                                    │
 │                                                                  │
-│  This layer is AGENT-AWARE and handles routing.                 │
-└──────────────────────────┬───────────────────────────────────────┘
-                           │
-                           ▼
+│  This layer ONLY resolves config. It does NOT create strategies  │
+│  or call the engine. Each call site remains in control.         │
+└──────────────────────────────────────────────────────────────────┘
+                        │
+                        ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │  LAYER 1: EXECUTION (Existing - ExecutionEngine)                 │
 │  ─────────────────────────────────────────────────────────────── │
@@ -366,137 +394,227 @@ The existing `ExecutionEngine` is **perfectly designed** as a generic LLM execut
 
 ### Why This Architecture?
 
-**ExecutionEngine (Layer 1)**:
+**ExecutionEngine (Layer 1)** — unchanged:
 - ✅ Pure execution loop (generic, reusable)
 - ✅ Strategy-agnostic (works with any ExecutionStrategy)
 - ✅ No agent awareness (maintains single responsibility)
-- ✅ Easy to test (mock strategies)
-- ✅ Already exists and works perfectly!
+- ✅ Already exists and works perfectly
 
-**AgentOrchestrator (Layer 2)**:
-- ✅ Handles agent-specific logic (loading, routing)
-- ✅ Routing sees full conversation history
-- ✅ Creates appropriate strategy based on mode
-- ✅ Reusable across all agent execution contexts
-- ✅ Single source of truth for routing logic
+**ModeResolver (Layer 2)** — new:
+- ✅ Single responsibility: resolve mode config from agent + input
+- ✅ Context-agnostic: doesn't know about rooms, DAGs, or chat
+- ✅ Returns data, not behavior (no strategy creation)
+- ✅ Reusable by any call site with one function call
+- ✅ Easy to test (input agent + input text → output config)
 
-**Application Layer (Layer 3)**:
-- ✅ Simple API: `orchestrator.execute_agent(agent_id, input, history)`
-- ✅ No routing logic duplication
-- ✅ Consistent behavior everywhere
-- ✅ Easy to add new agent execution contexts
+**Application Layer (Layer 3)** — each call site stays in control:
+- ✅ Calls `mode_resolver.resolve()` to get config
+- ✅ Applies its own context on top (room context, schema, etc.)
+- ✅ Builds its own strategy type
+- ✅ No context leaking between execution contexts
 
-### AgentOrchestrator Interface
+### ModeResolver Interface
 
 ```rust
-pub struct AgentOrchestrator {
-    engine: ExecutionEngine,
+pub struct ModeResolver {
     repo: Arc<dyn ServerRepo>,
-    router_repo: Arc<dyn ToolRouterRepo>,
+    tool_router_repo: Arc<dyn ToolRouterRepo>,
+    provider: Arc<dyn LLMProvider>,
 }
 
-impl AgentOrchestrator {
-    /// Execute an agent with automatic routing.
+/// Resolved configuration after mode classification.
+/// Contains the merged system prompt, tools, and parameters.
+pub struct ResolvedModeConfig {
+    /// System prompt with mode applied (agent base + mode, merged per append flag).
+    /// Call sites append their own context ON TOP of this.
+    pub system_prompt: String,
+    /// Resolved tool definitions (agent + mode tools, merged per append flag).
+    pub tools: Vec<Tool>,
+    /// Tool name allow-list (parallel to tools vec).
+    pub tool_names: Vec<String>,
+    /// Temperature from mode (or agent default if no mode).
+    pub temperature: f32,
+    /// Max tokens from mode (or agent default if no mode).
+    pub max_tokens: i32,
+    /// Which mode was selected (None if no router).
+    pub selected_mode_id: Option<Uuid>,
+    /// Mode key for logging (None if no router).
+    pub selected_mode_key: Option<String>,
+}
+
+impl ModeResolver {
+    /// Resolve mode config for an agent. Works for ANY execution context.
     ///
-    /// This is the PRIMARY way to execute agents. Use everywhere:
-    /// - Chat messages
-    /// - Workflow steps
-    /// - Room speakers
-    /// - Interactive executions
-    pub async fn execute_agent(
+    /// - `agent`: The agent row (must already be loaded by caller)
+    /// - `user_input`: The user's message (used for classification)
+    /// - `context_hint`: Optional extra context for the router LLM.
+    ///   Chat passes formatted history, rooms pass transcript,
+    ///   DAGs pass step description. This helps the router classify better.
+    ///
+    /// Returns agent defaults if agent has no router_id.
+    pub async fn resolve(
         &self,
-        agent_id: Uuid,
-        input: &str,
-        history: Vec<Message>,  // FULL history for routing context!
-        sink: &dyn StreamSink,
-        recorder: &ExecutionRecorder<'_>,
-        cancel: Option<&CancellationToken>,
-    ) -> Result<OrchestratedResult, OrchestratorError> {
-        // 1. Load agent
-        // 2. Route with full history (if agent.router_id)
-        // 3. Create strategy with mode config
-        // 4. Execute via engine
-        // 5. Return result with routing metadata
+        agent: &AgentRow,
+        user_input: &str,
+        context_hint: Option<&str>,
+    ) -> Result<ResolvedModeConfig, RoutingError> {
+        // 1. If no router_id → return agent defaults
+        // 2. Load router + modes from DB
+        // 3. Build classification prompt (user_input + context_hint + mode list)
+        // 4. Call Router LLM via ExecutionEngine + RouterStrategy
+        // 5. Parse mode key from response (fallback to first mode)
+        // 6. Load mode tools from tool_router_mode_tools
+        // 7. Merge system prompt:
+        //    if mode.append_to_agent_system_prompt → agent.prompt + "\n\n" + mode.prompt
+        //    else → mode.prompt (replaces agent)
+        // 8. Merge tools:
+        //    if mode.append_to_agent_tools → union(agent_tools, mode_tools)
+        //    else → mode_tools (replaces agent)
+        // 9. Return ResolvedModeConfig
     }
-}
-
-pub struct OrchestratedResult {
-    pub execution: ExecutionResult,      // From engine
-    pub selected_mode_id: Option<Uuid>,  // Which mode was selected
-    pub selected_mode_key: Option<String>, // Mode key for logging
 }
 ```
 
-### Routing with Full Context
+### Routing with Context Hints
 
-**Key Feature**: Router sees FULL conversation history, not just current message.
+**Key Feature**: Router sees context from any execution environment, not just chat history.
 
 ```rust
-// Inside AgentOrchestrator::route_with_history()
+// Inside ModeResolver::resolve()
 
 let classification_prompt = format!(
-    "## Conversation History:\n{}\n\n\
-     ## Current User Input:\n{}\n\n\
-     ## Available Modes:\n{}\n\n\
-     Based on the conversation context and current input, \
-     output ONLY the mode key.",
-    format_history(&history, 10),  // Last 10 messages
-    current_input,
-    format_modes(&modes)
+    "{context_block}\
+     ## Current User Input:\n{user_input}\n\n\
+     ## Available Modes:\n{mode_list}\n\n\
+     Based on the context and current input, output ONLY the mode key.",
 );
 ```
 
+**What each call site passes as `context_hint`**:
+
+| Call Site | context_hint | Example |
+|-----------|-------------|---------|
+| **Chat** | Formatted last N messages | `"user: How do I center a div?\nassistant: Use flexbox..."` |
+| **Room** | Room transcript | `"## Recent Discussion\n**SecurityLead**: The API needs auth...\n**ArchLead**: I agree..."` |
+| **DAG** | Step description / workflow name | `"Workflow: Deploy Pipeline, Step: Code Review"` |
+
 **Why this matters**:
-- Router can see conversation flow
-- Better mode selection (e.g., switch from "supportive" to "direct" mid-conversation)
-- Context-aware personality changes
+- Router can see conversation flow in chat
+- Router can see multi-agent discussion tone in rooms
+- Router can see task type in DAG workflows
+- Same classification logic, different context sources
+
+### System Prompt Stacking Order
+
+**Critical**: Mode changes personality. Call-site context is structural. They stack in this order:
+
+```
+Step 1: agent.system_prompt
+           ↓
+Step 2: Apply mode (append or replace)     ← WHO the agent IS
+           ↓
+Step 3: Call site appends its own context   ← WHERE the agent IS
+```
+
+**If mode has `append_to_agent_system_prompt: true`**:
+```
+"You are an expert math tutor."              ← agent base
++ "\n\n"
++ "Be warm, encouraging, patient."           ← mode appends
++ "\n\n"
++ "## Room Context\nYou are MathTutor..."    ← room context (structural)
+```
+
+**If mode has `append_to_agent_system_prompt: false` (REPLACE)**:
+```
+"Be warm, encouraging, patient."             ← mode REPLACES agent base
++ "\n\n"
++ "## Room Context\nYou are MathTutor..."    ← room context preserved
+```
+
+The mode replaces personality but room context is NEVER destroyed — it's added by the call site after mode resolution.
+
+| Call Site | What it appends after mode resolution |
+|-----------|--------------------------------------|
+| **Chat** | Nothing (mode config is final) |
+| **Room** | Room context preamble + agent context documents |
+| **DAG** | Schema enforcement block (`"Respond with JSON matching..."`) |
+
+### Tool Resolution Order
+
+```
+Step 1: ModeResolver merges agent tools + mode tools (per append flag)
+           ↓
+Step 2: Call site applies its own constraints
+```
+
+| Call Site | Constraint | Logic |
+|-----------|-----------|-------|
+| **Chat** | None | Use resolved tools directly |
+| **Room** | `room.tools_enabled` | If false → override to empty, regardless of mode |
+| **DAG** | None | Use resolved tools directly |
+
+### Temperature Override
+
+Both `RoomSpeakerConfig` and `DagStepConfig` currently hardcode temperature to `agent.model_temperature`. To support mode temperature:
+
+**Required code change**: Add `temperature: f32` field to both config structs, and update their strategies:
+
+```rust
+// RoomSpeakerStrategy and DagStepStrategy — change from:
+fn temperature(&self) -> f32 {
+    self.config.agent.model_temperature  // ignores mode
+}
+
+// To:
+fn temperature(&self) -> f32 {
+    self.config.temperature  // set by call site from ResolvedModeConfig
+}
+```
 
 ---
 
 ## Runtime Architecture
 
-### Execution Flow (via AgentOrchestrator)
+### Execution Flow (via ModeResolver)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ 1. APPLICATION LAYER - USER MESSAGE                                      │
+│ 1. CALL SITE LOADS AGENT + CALLS MODE RESOLVER                           │
 │                                                                          │
-│    // chat_consumer.rs, workflow_executor.rs, room_executor.rs          │
-│    orchestrator.execute_agent(                                          │
-│        agent_id,                                                        │
+│    // Each call site loads the agent, then resolves mode config:         │
+│    let agent = repo.get_agent(agent_id).await?;                         │
+│    let mode = mode_resolver.resolve(                                    │
+│        &agent,                                                          │
 │        "Help me debug this React component",                            │
-│        history,  // FULL conversation history!                          │
-│        &sink, &recorder, cancel                                         │
-│    ).await?                                                             │
+│        Some(&context_hint),  // chat history, transcript, or step desc  │
+│    ).await?;                                                            │
 │                                                                          │
 └──────────────────────────┬───────────────────────────────────────────────┘
                            │
                            ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ 2. ORCHESTRATOR - LOAD AGENT                                             │
-│                                                                          │
-│    agent = db.get_agent(agent_id).await?                                │
+│ 2. MODE RESOLVER - CHECK ROUTER                                          │
 │                                                                          │
 │    if agent.router_id.is_some():                                        │
-│        → HAS ROUTER: Proceed to routing with full history               │
+│        → HAS ROUTER: Proceed to classification                          │
 │    else:                                                                │
-│        → NO ROUTER: Use agent's default config (fallback)               │
+│        → NO ROUTER: Return agent defaults as ResolvedModeConfig         │
 │                                                                          │
 └──────────────────────────┬───────────────────────────────────────────────┘
                            │
                            ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ 3. ORCHESTRATOR - ROUTE WITH FULL HISTORY (if agent.router_id exists)   │
+│ 3. MODE RESOLVER - CLASSIFY (if agent.router_id exists)                  │
 │                                                                          │
 │    router = db.get_tool_router(agent.router_id).await?                  │
 │    modes = db.list_router_modes(router.id).await?                       │
 │                                                                          │
-│    → Build classification prompt WITH FULL CONVERSATION CONTEXT:        │
+│    → Build classification prompt with context_hint:                     │
 │                                                                          │
-│      ## Conversation History (last 10 messages):                        │
+│      ## Context (from call site):                                       │
 │      user: How do I center a div?                                       │
 │      assistant: Use flexbox with justify-content: center...             │
-│      user: Help me debug this React component                           │
 │                                                                          │
 │      ## Current User Input:                                             │
 │      Help me debug this React component                                 │
@@ -506,13 +624,9 @@ let classification_prompt = format!(
 │      - research: For information gathering (web_search, read)           │
 │      - chat: For conversation (no tools)                                │
 │                                                                          │
-│      Based on conversation context and current input,                   │
-│      output ONLY the mode key.                                          │
+│      Based on context and current input, output ONLY the mode key.     │
 │                                                                          │
-│    → Call Router LLM via ExecutionEngine:                               │
-│        router_strategy = RouterStrategy::new(router.system_prompt, ...) │
-│        result = engine.execute(&router_strategy, prompt, ...).await?    │
-│                                                                          │
+│    → Call Router LLM via ExecutionEngine + RouterStrategy               │
 │    → Parse response: selected_mode_key = "coding"                       │
 │    → Load mode: mode = db.get_mode_by_key(router.id, "coding").await?  │
 │                                                                          │
@@ -520,142 +634,76 @@ let classification_prompt = format!(
                            │
                            ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ 4. LOAD MODE CONFIGURATION                                               │
+│ 4. MODE RESOLVER - LOAD & MERGE CONFIG                                   │
 │                                                                          │
 │    mode = db.get_router_mode(mode_id)                                   │
-│    → system_prompt: "You are an expert programmer..."                   │
-│    → temperature: 0.3                                                   │
-│    → max_tokens: 8000                                                   │
+│    mode_tool_rows = db.get_mode_tools(mode_id)                          │
+│    mode_tools = mode_tool_rows.map(|r| get_tool_definition(&r.name))   │
 │                                                                          │
-│    tool_ids = db.get_mode_tools(mode_id)                                │
-│    → [uuid1, uuid2, uuid3, uuid4]                                       │
+│    // Merge system prompt (append or replace per mode flag)             │
+│    system_prompt = if mode.append_to_agent_system_prompt {              │
+│        format!("{}\n\n{}", agent.system_prompt, mode.system_prompt)     │
+│    } else {                                                             │
+│        mode.system_prompt.clone()                                       │
+│    };                                                                   │
 │                                                                          │
-└──────────────────────────┬───────────────────────────────────────────────┘
-                           │
-                           ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│ 5. FETCH TOOL METADATA                                                   │
+│    // Merge tools (union or replace per mode flag)                      │
+│    tools = if mode.append_to_agent_tools {                              │
+│        union_by_name(agent_tools, mode_tools)                           │
+│    } else {                                                             │
+│        mode_tools                                                       │
+│    };                                                                   │
 │                                                                          │
-│    tool_rows = db.get_tools_by_ids(tool_ids)                            │
-│    → [                                                                  │
-│        {id: uuid1, name: "bash", description: "...", params: {...}},    │
-│        {id: uuid2, name: "read_file", ...},                             │
-│        {id: uuid3, name: "edit_file", ...},                             │
-│        {id: uuid4, name: "search_code", ...}                            │
-│      ]                                                                  │
-│                                                                          │
-└──────────────────────────┬───────────────────────────────────────────────┘
-                           │
-                           ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│ 6. MAP TO HARDCODED TOOL IMPLEMENTATIONS                                 │
-│                                                                          │
-│    tools = tool_rows.iter().filter_map(|row| {                          │
-│        get_tool_definition(&row.name)  // From code registry            │
-│    }).collect()                                                         │
-│                                                                          │
-│    fn get_tool_definition(name: &str) -> Option<Tool> {                 │
-│        match name {                                                     │
-│            "bash" => Some(BashTool::definition()),                      │
-│            "read_file" => Some(ReadFileTool::definition()),             │
-│            "edit_file" => Some(EditFileTool::definition()),             │
-│            "search_code" => Some(SearchCodeTool::definition()),         │
-│            "web_search" => Some(WebSearchTool::definition()),           │
-│            _ => None  // Unknown tool (log warning)                     │
-│        }                                                                │
+│    → Return ResolvedModeConfig {                                        │
+│        system_prompt,                                                   │
+│        tools, tool_names,                                               │
+│        temperature: mode.temperature,    // 0.3                         │
+│        max_tokens: mode.max_tokens,      // 8000                        │
+│        selected_mode_id: Some(mode.id),                                │
+│        selected_mode_key: Some("coding"),                               │
 │    }                                                                    │
 │                                                                          │
-│    → Result: Vec<Tool> with mode-specific tools                         │
+└──────────────────────────┬───────────────────────────────────────────────┘
+                           │
+                           ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ 5. CALL SITE - APPLY CONTEXT & BUILD STRATEGY                            │
+│                                                                          │
+│    // Each call site applies its own context on top of mode config:     │
+│                                                                          │
+│    CHAT:                                                                │
+│      strategy = ChatStrategy::new(ChatConfig {                          │
+│          system_prompt: mode.system_prompt,  // used directly           │
+│          tool_names: mode.tool_names,                                   │
+│          temperature: mode.temperature,                                 │
+│          model_id: agent.model_id,                                      │
+│      })                                                                 │
+│                                                                          │
+│    ROOM:                                                                │
+│      let mut prompt = mode.system_prompt;                               │
+│      prompt.push_str(&room_context);    // room context ON TOP         │
+│      prompt.push_str(&agent_docs);      // agent docs ON TOP           │
+│      let tools = if room.tools_enabled { mode.tools } else { vec![] }; │
+│      strategy = RoomSpeakerStrategy::new(RoomSpeakerConfig {           │
+│          system_prompt: prompt,                                         │
+│          tools, temperature: mode.temperature, ...                     │
+│      })                                                                 │
+│                                                                          │
+│    DAG:                                                                 │
+│      let mut prompt = mode.system_prompt;                               │
+│      if let Some(schema) = output_schema {                              │
+│          prompt.push_str(&schema_enforcement);  // schema ON TOP       │
+│      }                                                                  │
+│      strategy = DagStepStrategy::new(DagStepConfig {                   │
+│          system_prompt: prompt,                                         │
+│          tools: mode.tools, temperature: mode.temperature, ...         │
+│      })                                                                 │
 │                                                                          │
 └──────────────────────────┬───────────────────────────────────────────────┘
                            │
                            ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ 6b. UNION OR REPLACE TOOLS (based on append_to_agent_tools flag)        │
-│                                                                          │
-│    if mode.append_to_agent_tools == true:                               │
-│        → UNION: Combine agent's base tools + mode tools                 │
-│                                                                          │
-│        agent_tool_ids = db.get_agent_tools(agent.id)                    │
-│        agent_tool_rows = db.get_tools_by_ids(agent_tool_ids)            │
-│        agent_tools = agent_tool_rows.map(get_tool_definition)           │
-│                                                                          │
-│        // Deduplicate by tool name                                      │
-│        final_tools = union_by_name(agent_tools, mode_tools)             │
-│                                                                          │
-│        Example:                                                          │
-│          Agent tools:   [read_file, write_file]                         │
-│          Mode tools:    [bash, git, edit_file]                          │
-│          Final tools:   [read_file, write_file, bash, git, edit_file]  │
-│                                                                          │
-│    else:                                                                │
-│        → REPLACE: Use ONLY mode tools (ignore agent's base tools)       │
-│                                                                          │
-│        final_tools = mode_tools                                         │
-│                                                                          │
-│        Example:                                                          │
-│          Agent tools:   [read_file, write_file, bash, ...]              │
-│          Mode tools:    []  (empty - minimal chat mode)                 │
-│          Final tools:   []  (no tools available)                        │
-│                                                                          │
-│    → Result: Vec<Tool> optimized for this specific interaction          │
-│                                                                          │
-└──────────────────────────┬───────────────────────────────────────────────┘
-                           │
-                           ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│ 6c. CONSTRUCT SYSTEM PROMPT (based on append_to_agent_system_prompt)    │
-│                                                                          │
-│    if mode.append_to_agent_system_prompt == true:                       │
-│        → APPEND: Combine agent's system prompt + mode's system prompt   │
-│                                                                          │
-│        agent_system_prompt = agent.system_prompt                        │
-│        mode_system_prompt = mode.system_prompt                          │
-│                                                                          │
-│        final_system_prompt = format!(                                   │
-│            "{}\n\n{}",                                                  │
-│            agent_system_prompt,                                         │
-│            mode_system_prompt                                           │
-│        )                                                                │
-│                                                                          │
-│        Example:                                                          │
-│          Agent: "You are a helpful coding assistant."                   │
-│          Mode:  "You love science and physics."                         │
-│          Final: "You are a helpful coding assistant.\n\n\               │
-│                  You love science and physics."                         │
-│                                                                          │
-│    else:                                                                │
-│        → REPLACE: Use ONLY mode's system prompt                         │
-│                                                                          │
-│        final_system_prompt = mode.system_prompt                         │
-│                                                                          │
-│        Example:                                                          │
-│          Agent: "You are a helpful coding assistant."                   │
-│          Mode:  "You love science and physics."                         │
-│          Final: "You love science and physics."                         │
-│                                                                          │
-│    → Result: final_system_prompt for execution strategy                 │
-│                                                                          │
-└──────────────────────────┬───────────────────────────────────────────────┘
-                           │
-                           ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│ 7. CREATE EXECUTION STRATEGY                                             │
-│                                                                          │
-│    strategy = ChatStrategy::new(ChatConfig {                             │
-│        system_prompt: final_system_prompt,   ← From step 6c             │
-│        temperature: mode.temperature,        ← From mode                │
-│        max_tokens: mode.max_tokens,          ← From mode                │
-│        tools: tools,                         ← From mode (filtered!)    │
-│        model_id: agent.model_id,             ← From agent (or override) │
-│        ...                                                              │
-│    })                                                                   │
-│                                                                          │
-└──────────────────────────┬───────────────────────────────────────────────┘
-                           │
-                           ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│ 8. EXECUTE MAIN LLM                                                      │
+│ 6. EXECUTE MAIN LLM                                                      │
 │                                                                          │
 │    result = ExecutionEngine::execute(                                   │
 │        strategy: &strategy,                                             │
@@ -675,11 +723,11 @@ let classification_prompt = format!(
                            │
                            ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ 9. SAVE EXECUTION RECORD                                                 │
+│ 7. SAVE EXECUTION RECORD                                                 │
 │                                                                          │
 │    db.insert_agent_execution({                                          │
 │        agent_id: agent.id,                                              │
-│        selected_router_mode_id: mode.id,  ← Track which mode was used  │
+│        selected_router_mode_id: mode.selected_mode_id,  ← Track mode   │
 │        input: message.content,                                          │
 │        output: result.content,                                          │
 │        ...                                                              │
@@ -888,181 +936,227 @@ fn bash_tool() -> Tool {
 // ... other tool definitions
 ```
 
-### Phase 4: Routing Service
+### Phase 4: ModeResolver
 
-**File**: `src/server/routing/mod.rs` (NEW)
+**File**: `src/server/hub/mode_resolver/mod.rs` + `tests.rs` (NEW)
 
 ```rust
-//! Mode classification and tool loading service
+//! Mode resolution service — resolves agent + input into execution config.
+//! Data-only: returns ResolvedModeConfig. Does NOT create strategies or call the engine.
 
+use std::sync::Arc;
 use uuid::Uuid;
-use crate::db::traits::ToolRouterRepo;
+use crate::db::{AgentRow, ToolRouterModeRow};
+use crate::db::traits::{ServerRepo, ToolRouterRepo};
 use crate::llm::{LLMProvider, Tool};
 use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::strategies::router::RouterStrategy;
 use crate::tools::registry;
 
-pub struct RoutingService {
-    repo: Arc<dyn ToolRouterRepo>,
-    engine: ExecutionEngine,
+pub struct ModeResolver {
+    repo: Arc<dyn ServerRepo>,
+    tool_router_repo: Arc<dyn ToolRouterRepo>,
+    provider: Arc<dyn LLMProvider>,
 }
 
-impl RoutingService {
-    /// Classify user input and return selected mode with tools.
-    pub async fn route(
-        &self,
-        router_id: Uuid,
-        user_input: &str,
-    ) -> Result<SelectedMode, RoutingError> {
-        // 1. Load router config
-        let router = self.repo.get_tool_router(router_id).await?
-            .ok_or(RoutingError::RouterNotFound)?;
+/// Resolved configuration after mode classification.
+pub struct ResolvedModeConfig {
+    pub system_prompt: String,
+    pub tools: Vec<Tool>,
+    pub tool_names: Vec<String>,
+    pub temperature: f32,
+    pub max_tokens: i32,
+    pub selected_mode_id: Option<Uuid>,
+    pub selected_mode_key: Option<String>,
+}
 
-        // 2. Load available modes
-        let modes = self.repo.list_router_modes(router_id).await?;
+impl ModeResolver {
+    /// Resolve mode config for an agent. Works for ANY execution context.
+    ///
+    /// - `agent`: The agent row (already loaded by caller)
+    /// - `user_input`: The user's message (for classification)
+    /// - `context_hint`: Optional extra context for the router LLM.
+    ///   Chat passes formatted history, rooms pass transcript,
+    ///   DAGs pass step description.
+    ///
+    /// Returns agent defaults if agent has no router_id.
+    pub async fn resolve(
+        &self,
+        agent: &AgentRow,
+        user_input: &str,
+        context_hint: Option<&str>,
+    ) -> Result<ResolvedModeConfig, RoutingError> {
+        // 1. If no router_id → return agent defaults
+        let router_id = match agent.router_id {
+            Some(id) => id,
+            None => return self.agent_defaults(agent).await,
+        };
+
+        // 2. Load router + modes
+        let router = self.tool_router_repo.get_tool_router(router_id).await?
+            .ok_or(RoutingError::RouterNotFound)?;
+        let modes = self.tool_router_repo.list_router_modes(router_id).await?;
         if modes.is_empty() {
             return Err(RoutingError::NoModesConfigured);
         }
 
-        // 3. Build classification prompt
-        let prompt = build_classification_prompt(user_input, &modes);
+        // 3. Build classification prompt (input + context_hint + mode list)
+        let prompt = build_classification_prompt(user_input, context_hint, &modes);
 
-        // 4. Call router LLM
+        // 4. Call Router LLM via ExecutionEngine + RouterStrategy
         let strategy = RouterStrategy::new(RouterConfig {
             system_prompt: router.system_prompt.clone(),
             model_id: router.model_id.clone(),
             state: None,
             user_id: None,
         });
-
-        let result = self.engine.execute(
-            &strategy,
-            &prompt,
-            &NoOpSink,
-            &NoOpRecorder,
-            None,
+        let result = ExecutionEngine::execute(
+            &strategy, &prompt, &NoOpSink, &NoOpRecorder, None,
         ).await?;
 
-        // 5. Parse mode key from response
+        // 5. Parse mode key (fallback to first mode)
         let mode_key = parse_mode_key(&result.content)?;
+        let mode = self.tool_router_repo
+            .get_router_mode_by_key(router_id, &mode_key).await?
+            .or_else(|| modes.first().cloned())
+            .ok_or(RoutingError::NoModesConfigured)?;
 
-        // 6. Load selected mode
-        let mode = self.repo.get_router_mode_by_key(router_id, &mode_key).await?
-            .ok_or(RoutingError::InvalidModeKey)?;
-
-        // 7. Load mode's tools
-        let tool_rows = self.repo.get_mode_tools(mode.id).await?;
-
-        // 8. Map to tool definitions
-        let tools: Vec<Tool> = tool_rows
-            .iter()
+        // 6. Load mode tools
+        let mode_tool_rows = self.tool_router_repo.get_mode_tools(mode.id).await?;
+        let mode_tools: Vec<Tool> = mode_tool_rows.iter()
             .filter_map(|row| registry::get_tool_definition(&row.name))
             .collect();
 
-        Ok(SelectedMode {
-            mode_id: mode.id,
-            mode_key: mode.mode_key,
-            system_prompt: mode.system_prompt,
+        // 7. Merge system prompt (append or replace)
+        let system_prompt = if mode.append_to_agent_system_prompt {
+            format!("{}\n\n{}", agent.system_prompt, mode.system_prompt)
+        } else {
+            mode.system_prompt.clone()
+        };
+
+        // 8. Merge tools (union or replace)
+        let tools = if mode.append_to_agent_tools {
+            let agent_tool_rows = self.repo.get_agent_tools(agent.id).await?;
+            let agent_tools: Vec<Tool> = agent_tool_rows.iter()
+                .filter_map(|row| registry::get_tool_definition(&row.name))
+                .collect();
+            union_by_name(agent_tools, mode_tools)
+        } else {
+            mode_tools
+        };
+
+        let tool_names = tools.iter().map(|t| t.name.clone()).collect();
+
+        // 9. Return config
+        Ok(ResolvedModeConfig {
+            system_prompt,
+            tools,
+            tool_names,
             temperature: mode.temperature,
             max_tokens: mode.max_tokens,
-            tools,
+            selected_mode_id: Some(mode.id),
+            selected_mode_key: Some(mode.mode_key.clone()),
         })
     }
 }
 
-pub struct SelectedMode {
-    pub mode_id: Uuid,
-    pub mode_key: String,
-    pub system_prompt: String,
-    pub temperature: f32,
-    pub max_tokens: i32,
-    pub tools: Vec<Tool>,
-}
+fn build_classification_prompt(
+    input: &str,
+    context_hint: Option<&str>,
+    modes: &[ToolRouterModeRow],
+) -> String {
+    let context_block = context_hint
+        .map(|c| format!("## Context:\n{}\n\n", c))
+        .unwrap_or_default();
 
-fn build_classification_prompt(input: &str, modes: &[ToolRouterModeRow]) -> String {
-    let mode_descriptions = modes
-        .iter()
+    let mode_list = modes.iter()
         .map(|m| format!("- {}: {}", m.mode_key, m.description))
         .collect::<Vec<_>>()
         .join("\n");
 
     format!(
-        "User input: {}\n\nAvailable modes:\n{}\n\nOutput ONLY the mode key.",
-        input, mode_descriptions
+        "{context_block}\
+         ## Current User Input:\n{input}\n\n\
+         ## Available Modes:\n{mode_list}\n\n\
+         Based on the context and current input, output ONLY the mode key.",
     )
 }
 ```
 
-### Phase 5: Integration into Chat Flow
+### Phase 5: Update Call Sites
 
-**File**: `src/server/chat_consumer/mod.rs` (MODIFY)
+Each call site adds a `mode_resolver.resolve()` call before building its strategy.
+
+**File**: `src/server/hub/mod.rs` (MODIFY — chat)
 
 ```rust
-async fn handle_message(
-    state: &AppState,
-    agent_id: Uuid,
-    user_input: &str,
-) -> Result<ExecutionResult> {
-    // 1. Load agent
-    let agent = state.repo.get_agent(agent_id).await?;
+// In run_chat(), BEFORE building ChatStrategy:
+let agent = repo.get_agent(agent_id).await?;
+let history_text = format_history(&session_history);
+let mode = mode_resolver.resolve(&agent, input, Some(&history_text)).await?;
 
-    // 2. Check if agent has router
-    let (system_prompt, temperature, max_tokens, tools) = if let Some(router_id) = agent.router_id {
-        // Agent has router - classify and select mode
-        let routing_service = RoutingService::new(
-            state.tool_router_repo.clone(),
-            state.llm_provider.clone(),
-        );
-
-        let selected = routing_service.route(router_id, user_input).await?;
-
-        // Record selected mode
-        selected_mode_id = Some(selected.mode_id);
-
-        (
-            selected.system_prompt,
-            selected.temperature,
-            selected.max_tokens,
-            selected.tools,  // Filtered tools (3-5, not 50)
-        )
-    } else {
-        // No router - use agent defaults
-        let all_tools = load_all_agent_tools(&state, agent_id).await?;
-
-        selected_mode_id = None;
-
-        (
-            agent.system_prompt,
-            agent.temperature,
-            agent.max_tokens,
-            all_tools,  // All tools (backward compatible)
-        )
-    };
-
-    // 3. Execute with selected config
-    let strategy = ChatStrategy::new(ChatConfig {
-        system_prompt,
-        temperature,
-        max_tokens,
-        tools,
-        model_id: agent.model_id,
-        ...
-    });
-
-    let result = execution_engine.execute(&strategy, user_input, ...).await?;
-
-    // 4. Save execution record
-    state.repo.insert_agent_execution(AgentExecutionRow {
-        agent_id,
-        selected_router_mode_id,  // Track which mode was used
-        input: user_input,
-        output: result.content,
-        ...
-    }).await?;
-
-    Ok(result)
-}
+let config = ChatConfig {
+    system_prompt: mode.system_prompt,
+    tool_names: mode.tool_names,
+    temperature: mode.temperature,
+    model_id: agent.model_id.clone(),
+    ..Default::default()
+};
+let strategy = ChatStrategy::new(config, state, user_id, session_id, message_id);
+engine.execute(&strategy, input, &sink, &recorder, cancel).await?
 ```
+
+**File**: `src/server/room_executor/mod.rs` (MODIFY — rooms)
+
+```rust
+// In execute_room_turn(), BEFORE building RoomSpeakerStrategy:
+let mode = mode_resolver.resolve(&agent, user_message, Some(&transcript_block)).await?;
+
+let mut system_prompt = mode.system_prompt;
+system_prompt.push_str("\n\n");
+system_prompt.push_str(&room_context);
+system_prompt.push_str(&agent_docs_block);
+
+let (tools, tool_names) = if room.tools_enabled {
+    (mode.tools, mode.tool_names)
+} else {
+    (vec![], vec![])
+};
+
+let config = RoomSpeakerConfig {
+    system_prompt,
+    tools,
+    tool_names,
+    temperature: mode.temperature,  // NEW field
+    ...
+};
+```
+
+**File**: `src/server/hub/dag/mod.rs` (MODIFY — DAG steps)
+
+```rust
+// In run_step_via_engine(), BEFORE building DagStepStrategy:
+let mode = mode_resolver.resolve(&agent, prompt, Some(&step_description)).await?;
+
+let mut system_prompt = mode.system_prompt;
+if let Some(schema) = output_schema {
+    system_prompt.push_str(&format!("\n\nRespond with JSON matching:\n```json\n{}\n```", schema));
+}
+
+let config = DagStepConfig {
+    system_prompt,
+    tools: mode.tools,
+    tool_names: mode.tool_names,
+    temperature: mode.temperature,  // NEW field
+    ...
+};
+```
+
+**Required struct changes** (for temperature override support):
+- Add `temperature: f32` to `RoomSpeakerConfig`
+- Add `temperature: f32` to `DagStepConfig`
+- Update `RoomSpeakerStrategy::temperature()` to use `self.config.temperature`
+- Update `DagStepStrategy::temperature()` to use `self.config.temperature`
 
 ### Phase 6: API Endpoints
 
@@ -1429,20 +1523,29 @@ JOIN tool_routers tr ON tr.name = 'Agent ' || a.name || ' Router';
 ### The Complete Picture
 
 ```
-APPLICATION LAYER (chat_consumer, workflow_executor, room_executor)
+APPLICATION LAYER (each call site builds its own strategy)
     │
-    │ orchestrator.execute_agent(agent_id, input, history, ...)
+    │ mode_resolver.resolve(agent, input, context_hint)
     │
     ▼
-ORCHESTRATION LAYER (AgentOrchestrator) - NEW
+MODE RESOLUTION LAYER (ModeResolver) - NEW
     │
-    ├─ Load agent from DB
-    ├─ Route with FULL history (if agent.router_id)
-    │   └─ Calls engine.execute(RouterStrategy, ...)
-    ├─ Load mode config & tools
-    ├─ Create ChatStrategy with mode config
+    ├─ Check agent.router_id
+    ├─ Load router + modes from DB
+    ├─ Classify via Router LLM (input + context_hint)
+    ├─ Merge system prompt (append/replace)
+    ├─ Merge tools (append/replace)
     │
-    │ engine.execute(ChatStrategy, ...)
+    │ Returns ResolvedModeConfig
+    │
+    ▼
+APPLICATION LAYER (call site applies its own context)
+    │
+    ├─ Chat:  uses config directly → ChatStrategy
+    ├─ Room:  appends room context + agent docs → RoomSpeakerStrategy
+    ├─ DAG:   appends schema enforcement → DagStepStrategy
+    │
+    │ engine.execute(strategy, ...)
     │
     ▼
 EXECUTION LAYER (ExecutionEngine) - UNCHANGED
@@ -1461,59 +1564,97 @@ EXECUTION LAYER (ExecutionEngine) - UNCHANGED
    - Just executes strategies
    - Perfectly designed, leave it unchanged
 
-2. **AgentOrchestrator Wraps Engine** ✅
-   - Handles all agent-specific logic
-   - Routing with full conversation history
-   - Creates appropriate strategies
-   - Single source of truth for agent execution
+2. **ModeResolver Is Data-Only** ✅
+   - Resolves config, does NOT create strategies or call the engine
+   - One function: `resolve(agent, input, context_hint) → ResolvedModeConfig`
+   - Context-agnostic: doesn't know about rooms, DAGs, or chat
+   - Easy to test: input agent + text → output config
 
-3. **Application Layer Simplified** ✅
-   - Just calls `orchestrator.execute_agent()`
-   - No routing logic duplication
-   - Consistent everywhere
+3. **Call Sites Stay In Control** ✅
+   - Each call site knows its own context (room preamble, schema, history)
+   - Each call site builds its own strategy type
+   - No context leaking between execution environments
+   - Room-specific logic stays in room_executor
+   - DAG-specific logic stays in dag/mod.rs
 
-4. **Router Sees Full History** ✅
-   - Classification prompt includes last N messages
-   - Better mode selection with context
-   - Can adapt personality mid-conversation
+4. **Router Sees Context From Any Environment** ✅
+   - Chat passes formatted message history
+   - Rooms pass multi-agent transcript
+   - DAGs pass step/workflow description
+   - Same classification logic, different context sources
 
-5. **Reusable Everywhere** ✅
-   - Chat messages
-   - Workflow steps
-   - Room speakers
-   - Any agent execution
+5. **Modes Work Everywhere** ✅
+   - Chat: mode changes personality + tools
+   - Room: mode changes personality + tools, room context preserved on top
+   - DAG: mode changes personality + tools, schema enforcement preserved on top
+   - Any future execution context: just call `mode_resolver.resolve()`
 
 ### Usage Pattern
 
-**Before** (scattered routing logic):
+**Chat** (hub/mod.rs):
 ```rust
-// ❌ Duplicated in every file
 let agent = repo.get_agent(agent_id).await?;
-if let Some(router_id) = agent.router_id {
-    // Manual routing...
-}
-let strategy = ChatStrategy::new(...);
-let engine = ExecutionEngine::new(provider);
-let result = engine.execute(&strategy, ...).await?;
+let history_text = format_history(&session_history);
+let mode = mode_resolver.resolve(&agent, input, Some(&history_text)).await?;
+
+let config = ChatConfig {
+    system_prompt: mode.system_prompt,  // agent + mode already merged
+    tool_names: mode.tool_names,
+    temperature: mode.temperature,
+    model_id: agent.model_id,
+    ..Default::default()
+};
+let strategy = ChatStrategy::new(config, state, user_id, session_id, message_id);
+engine.execute(&strategy, input, &sink, &recorder, cancel).await?
 ```
 
-**After** (unified orchestrator):
+**Room** (room_executor.rs):
 ```rust
-// ✅ One line, works everywhere
-let result = orchestrator.execute_agent(
-    agent_id,
-    input,
-    history,  // Full context!
-    &sink,
-    &recorder,
-    cancel,
-).await?;
+let mode = mode_resolver.resolve(&agent, user_message, Some(&transcript_block)).await?;
 
-// Result includes routing metadata
-db.insert_agent_execution(AgentExecutionRow {
-    selected_router_mode_id: result.selected_mode_id,
+// Mode resolves personality, room executor adds structural context ON TOP
+let mut system_prompt = mode.system_prompt;
+system_prompt.push_str("\n\n");
+system_prompt.push_str(&room_context);       // "## Room Context\nYou are SecurityLead..."
+system_prompt.push_str(&agent_docs_block);   // agent knowledge docs
+
+// Room.tools_enabled is a master switch
+let (tools, tool_names) = if room.tools_enabled {
+    (mode.tools, mode.tool_names)
+} else {
+    (vec![], vec![])
+};
+
+let config = RoomSpeakerConfig {
+    system_prompt,
+    tools,
+    tool_names,
+    temperature: mode.temperature,  // NEW field, required for mode override
     ...
-});
+};
+let strategy = RoomSpeakerStrategy::new(config, state);
+engine.execute(&strategy, user_message, &sink, &recorder, cancel).await?
+```
+
+**DAG** (dag/mod.rs):
+```rust
+let mode = mode_resolver.resolve(&agent, prompt, Some(&step_description)).await?;
+
+// Mode resolves personality, DAG adds schema enforcement ON TOP
+let mut system_prompt = mode.system_prompt;
+if let Some(schema) = output_schema {
+    system_prompt.push_str(&format!("\n\nRespond with JSON matching:\n```json\n{}\n```", schema));
+}
+
+let config = DagStepConfig {
+    system_prompt,
+    tools: mode.tools,
+    tool_names: mode.tool_names,
+    temperature: mode.temperature,  // NEW field, required for mode override
+    ...
+};
+let strategy = DagStepStrategy::new(config, state);
+engine.execute(&strategy, prompt, &sink, &recorder, cancel).await?
 ```
 
 ---
@@ -1717,17 +1858,17 @@ Tools:
 
 ## Next Steps
 
-1. Review this document with the team
-2. Get approval on schema design
-3. Implement Phase 1 (database migration)
-4. Build Phase 2 (database layer)
-5. Build Phase 3 (tool registry)
-6. Build Phase 4 (routing service)
-7. Integrate into chat flow (Phase 5)
+1. ~~Review this document with the team~~ DONE
+2. ~~Get approval on schema design~~ DONE
+3. ~~Implement Phase 1 (database migration)~~ DONE (`9c32a22`)
+4. ~~Build Phase 2 (database layer)~~ DONE (`725009a`)
+5. ~~Build Phase 3 (tool registry)~~ DONE (`ed2006d`)
+6. ~~Build Phase 4 (ModeResolver)~~ DONE
+7. ~~Update call sites (Phase 5)~~ DONE
 8. Build API endpoints (Phase 6)
 9. Build frontend UI (Phase 7)
 10. Migrate existing agent_modes data
-11. Drop agent_modes table
+11. Drop agent_modes table (see DELETION_PLAN.md)
 12. Document and deploy
 
 ---
@@ -1736,25 +1877,19 @@ Tools:
 
 ## Implementation Phase Updates
 
-**IMPORTANT**: The implementation phases have been updated based on the layered architecture design:
+**IMPORTANT**: The implementation phases have been updated based on the ModeResolver architecture design:
 
-- **Phase 1-3**: Unchanged (Database, DB Layer, Tool Registry)
-- **Phase 4**: ~~Routing Service~~ → **AgentOrchestrator**
-  - Files: `src/server/hub/orchestrator/mod.rs` + `tests.rs` (NEW)
-  - Wraps ExecutionEngine with agent loading + routing logic
-  - Handles routing with full conversation history
-  - Creates strategies and calls engine
-  - See "Layered Architecture" section for details
-- **Phase 5**: ~~Integration~~ → **Update Call Sites**
-  - Replace all `ExecutionEngine` calls with `orchestrator.execute_agent()`
-  - Files: chat_consumer, workflow_executor, room_executor, etc.
-  - Simple one-line replacement everywhere
+- **Phase 1**: DONE — Database migration (`9c32a22`)
+- **Phase 2**: DONE — Database layer (`725009a`)
+- **Phase 3**: DONE — Tool registry (`ed2006d`)
+- **Phase 4**: DONE — ModeResolver
+- **Phase 5**: DONE — Update Call Sites (chat, rooms, DAG)
 - **Phase 6-7**: Unchanged (API endpoints, Frontend UI)
 
-**Key Change**: Instead of scattered routing logic, ALL agent execution goes through `AgentOrchestrator` which handles routing automatically.
+**Key Change**: ModeResolver is a data-only service. Each call site calls `mode_resolver.resolve()` to get config, then applies its own context (room preamble, schema enforcement, etc.) and builds its own strategy type. No monolithic orchestrator.
 
 ---
 
-**Document Version**: 1.1
+**Document Version**: 1.3
 **Last Updated**: 2026-02-04
-**Author**: Claude (Sonnet 4.5)
+**Author**: Claude (Sonnet 4.5 / Opus 4.5)

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Box,
   Button,
@@ -19,12 +19,53 @@ import { ModeToolSelector } from './ModeToolSelector'
 import { useRouterModes } from '@/hooks/useRouterModes'
 import { useRouterModeMutations } from '@/hooks/useRouterModeMutations'
 import { useTools } from '@/hooks/useTools'
-import type { RouterMode } from '@/types'
-
-const DEFAULT_ROUTER_ID = 'default-router'
+import { useToolRouterMutations } from '@/hooks/useToolRouterMutations'
+import { api } from '@/api'
+import type { RouterMode, ToolRouter } from '@/types'
 
 function RouterModesTab() {
-  const { modes, loading, error, reload } = useRouterModes(DEFAULT_ROUTER_ID)
+  const [routers, setRouters] = useState<ToolRouter[]>([])
+  const [routersLoading, setRoutersLoading] = useState(true)
+  const [routersError, setRoutersError] = useState<string | null>(null)
+  const routerMutations = useToolRouterMutations()
+
+  const loadRouters = useCallback(async () => {
+    setRoutersLoading(true)
+    setRoutersError(null)
+    try {
+      const data = await api.toolRouters.list()
+      setRouters(data)
+    } catch (e) {
+      setRoutersError(e instanceof Error ? e.message : 'Failed to load routers')
+    } finally {
+      setRoutersLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const run = async () => {
+      await loadRouters()
+      if (cancelled) return
+    }
+    void run()
+    return () => { cancelled = true }
+  }, [loadRouters])
+
+  const activeRouter = routers.length > 0 ? routers[0] : null
+  const activeRouterId = activeRouter?.id ?? null
+
+  const handleCreateRouter = async () => {
+    const newRouter = await routerMutations.createRouter({
+      name: 'Default Router',
+      description: 'Auto-created default router for mode management',
+      system_prompt: 'You are a routing assistant. Analyze the user message and select the most appropriate mode.',
+      model_id: 'claude-sonnet-4-20250514',
+    })
+    setRouters([newRouter])
+  }
+
+  const { modes, loading, error, reload } = useRouterModes(activeRouterId)
   const {
     deleteMode,
     updating,
@@ -185,6 +226,46 @@ function RouterModesTab() {
     },
   ]
 
+  if (routersLoading) {
+    return (
+      <Box>
+        <PageHeader title="Router Modes" />
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+          <CircularProgress />
+        </Box>
+      </Box>
+    )
+  }
+
+  if (routersError) {
+    return (
+      <Box>
+        <PageHeader title="Router Modes" />
+        <Alert severity="error">{routersError}</Alert>
+      </Box>
+    )
+  }
+
+  if (!activeRouter) {
+    return (
+      <Box>
+        <PageHeader title="Router Modes" />
+        <Box sx={{ textAlign: 'center', py: 4 }}>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+            No tool router exists yet. Create one to start configuring modes.
+          </Typography>
+          <Button
+            variant="contained"
+            onClick={() => { void handleCreateRouter() }}
+            disabled={routerMutations.creating}
+          >
+            {routerMutations.creating ? 'Creating...' : 'Create Default Router'}
+          </Button>
+        </Box>
+      </Box>
+    )
+  }
+
   return (
     <Box>
       <PageHeader title="Router Modes">
@@ -237,7 +318,7 @@ function RouterModesTab() {
           void handleFormSave()
         }}
         mode={selectedMode}
-        routerId={DEFAULT_ROUTER_ID}
+        routerId={activeRouter.id}
       />
 
       {selectedMode && (
