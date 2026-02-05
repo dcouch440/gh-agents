@@ -31,12 +31,7 @@ function AgentsPage() {
 
   // Match agents with their workshop sessions
   const agentsWithSessions = useMemo(() => {
-    // Filter out draft agents (temporary unsaved workshops)
-    const finalizedAgents = agents.filter(
-      (agent) => !agent.name.startsWith("[Workshop Draft]"),
-    );
-
-    return finalizedAgents.map((agent) => {
+    return agents.map((agent) => {
       // Find workshop session for this agent
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       const session = sessions?.find(
