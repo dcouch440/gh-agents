@@ -506,6 +506,20 @@ pub trait AgentExecutionRepo: Send + Sync {
         &self,
         agent_execution_id: Uuid,
     ) -> Result<Vec<ExecutionMessageRow>>;
+
+    /// List completed non-interactive agent executions for a set of workflow step IDs.
+    /// Used to reconstruct DAG state on resume.
+    async fn list_completed_executions_for_step_ids(
+        &self,
+        workflow_step_ids: &[Uuid],
+    ) -> Result<Vec<AgentExecutionRow>>;
+
+    /// List interactive agent executions for a specific workflow step.
+    /// Used to check if all interactive reviews are approved before resuming.
+    async fn list_interactive_executions_for_step(
+        &self,
+        workflow_step_id: Uuid,
+    ) -> Result<Vec<AgentExecutionRow>>;
 }
 
 // ============================================================================

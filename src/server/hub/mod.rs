@@ -33,8 +33,8 @@ pub use mode_resolver::{ModeResolver, ResolvedModeConfig, RoutingError};
 pub use prompt_registry::PromptRegistry;
 pub use recorder::ExecutionRecorder;
 pub use strategies::{
-    ChatConfig, ChatStrategy, DagStepStrategy, RoomSpeakerConfig, RoomSpeakerStrategy,
-    RouterStrategy,
+    ChatConfig, ChatStrategy, DagStepStrategy, InteractiveChatConfig, InteractiveChatStrategy,
+    RoomSpeakerConfig, RoomSpeakerStrategy, RouterStrategy,
 };
 pub use strategy::ExecutionStrategy;
 pub use streaming::{NullSink, StreamSink};
@@ -188,6 +188,74 @@ pub async fn run_chat(
 
     engine
         .execute(&strategy, content, &sink, &recorder, cancel)
+        .await
+}
+
+/// Run an interactive chat turn for a review session.
+///
+/// Loads the interactive agent execution, resolves mode, builds strategy, and
+/// executes with streaming. The response is recorded as an execution_message.
+pub async fn run_interactive_chat(
+    state: &AppState,
+    provider: Arc<dyn LLMProvider + Send + Sync>,
+    agent_execution_id: Uuid,
+    stream_id: Uuid,
+    content: &str,
+    user_id: Uuid,
+) -> Result<ExecutionResult, HubError> {
+    // Load agent_execution row
+    let ae_repo = state
+        .agent_execution_repo
+        .as_ref()
+        .ok_or(HubError::ProviderNotConfigured)?;
+    let ae = ae_repo
+        .get_agent_execution(agent_execution_id)
+        .await
+        .map_err(HubError::Internal)?
+        .ok_or_else(|| HubError::Internal(anyhow::anyhow!("execution not found")))?;
+
+    // Load agent
+    let agent = state
+        .repo
+        .get_persisted_agent(ae.agent_id)
+        .await
+        .map_err(HubError::Internal)?
+        .ok_or_else(|| HubError::Internal(anyhow::anyhow!("agent not found")))?;
+
+    // Resolve mode via ModeResolver
+    let mode = if let Some(resolver) = &state.mode_resolver {
+        resolver
+            .resolve(&agent, content, Some("Interactive review conversation"))
+            .await
+            .map_err(|e| HubError::Internal(anyhow::anyhow!("Mode resolution failed: {}", e)))?
+    } else {
+        construct_agent_defaults(&agent, &state.repo)
+            .await
+            .map_err(HubError::Internal)?
+    };
+
+    // Build config — use original system prompt from the execution
+    let config = InteractiveChatConfig {
+        agent: agent.clone(),
+        agent_execution_id,
+        system_prompt: ae.system_prompt_rendered,
+        tools: mode.tools,
+        tool_names: mode.tool_names,
+        temperature: mode.temperature,
+        user_id,
+    };
+
+    let strategy = InteractiveChatStrategy::new(config, state.clone());
+    let engine = ExecutionEngine::new(provider);
+    let sink = streaming::SseSink::new(state.clone(), stream_id);
+    let recorder = ExecutionRecorder::new(
+        state.repo.as_ref(),
+        state.agent_execution_repo.as_deref(),
+        state.token_ledger_repo.as_deref(),
+    );
+
+    engine
+        .execute(&strategy, content, &sink, &recorder, None)
         .await
 }
 

@@ -1416,6 +1416,39 @@ impl AgentExecutionRepo for PgRepo {
             .await?;
         Ok(rows)
     }
+
+    async fn list_completed_executions_for_step_ids(
+        &self,
+        workflow_step_ids: &[Uuid],
+    ) -> Result<Vec<AgentExecutionRow>> {
+        let rows = sqlx::query_as::<_, AgentExecutionRow>(
+            "SELECT * FROM agent_executions \
+             WHERE workflow_step_id = ANY($1) \
+               AND status = 'completed' \
+               AND is_interactive = false \
+             ORDER BY started_at ASC",
+        )
+        .bind(workflow_step_ids)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn list_interactive_executions_for_step(
+        &self,
+        workflow_step_id: Uuid,
+    ) -> Result<Vec<AgentExecutionRow>> {
+        let rows = sqlx::query_as::<_, AgentExecutionRow>(
+            "SELECT * FROM agent_executions \
+             WHERE workflow_step_id = $1 \
+               AND is_interactive = true \
+             ORDER BY started_at ASC",
+        )
+        .bind(workflow_step_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
 }
 
 #[async_trait]
