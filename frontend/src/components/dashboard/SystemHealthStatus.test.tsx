@@ -17,9 +17,9 @@ const config: Config = {
 }
 
 const stats: AgentPoolStats = {
-  orchestrators: { total: 2, available: 1, max: 3 },
-  workers: { total: 4, available: 2, max: 5 },
-  utilities: { total: 1, available: 1, max: 2 },
+  total: 7,
+  available: 4,
+  max: 10,
 }
 
 describe('SystemHealthStatus', () => {
@@ -38,14 +38,11 @@ describe('SystemHealthStatus', () => {
 
   it('shows disconnected when ws is down', () => {
     render(<SystemHealthStatus config={config} agentStats={stats} wsConnected={false} />)
-    const el = screen.getByText('disconnected')
-    expect(el).toBeInTheDocument()
-    expect(el.classList.contains('sys-health__value--error')).toBe(true)
+    expect(screen.getByText('disconnected')).toBeInTheDocument()
   })
 
   it('shows pool summary', () => {
     render(<SystemHealthStatus config={config} agentStats={stats} wsConnected={true} />)
-    expect(screen.getByText(/1\/3 orch/)).toBeInTheDocument()
-    expect(screen.getByText(/2\/5 work/)).toBeInTheDocument()
+    expect(screen.getByText('3/10 agents')).toBeInTheDocument()
   })
 })

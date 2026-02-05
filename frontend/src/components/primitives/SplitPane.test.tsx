@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { SplitPane } from './SplitPane'
 
 describe('SplitPane', () => {
@@ -26,12 +26,12 @@ describe('SplitPane', () => {
         className="custom"
       />
     )
-    expect(container.querySelector('.split-pane.custom')).toBeInTheDocument()
+    expect(container.firstChild).toHaveClass('custom')
   })
 
   it('handle has onMouseDown', () => {
     const handleMouseDown = vi.fn()
-    const { container } = render(
+    render(
       <SplitPane
         left={<p>L</p>}
         right={<p>R</p>}
@@ -39,14 +39,16 @@ describe('SplitPane', () => {
         onMouseDown={handleMouseDown}
       />
     )
-    const handle = container.querySelector('.split-pane__handle')
+    // The handle is the second child (between left and right panels)
+    const leftText = screen.getByText('L')
+    const handle = leftText.parentElement?.nextElementSibling as HTMLElement
     expect(handle).toBeInTheDocument()
-    handle?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    fireEvent.mouseDown(handle)
     expect(handleMouseDown).toHaveBeenCalled()
   })
 
   it('left panel width style matches splitPercent', () => {
-    const { container } = render(
+    const { container, rerender } = render(
       <SplitPane
         left={<p>L</p>}
         right={<p>R</p>}
@@ -54,7 +56,21 @@ describe('SplitPane', () => {
         onMouseDown={vi.fn()}
       />
     )
-    const leftPanel = container.querySelector('.split-pane__left') as HTMLElement
-    expect(leftPanel.style.width).toBe('35%')
+    // The left panel is the first child of the outer Box
+    const leftPanel = container.firstChild?.firstChild as HTMLElement
+    expect(leftPanel).toBeInTheDocument()
+    // MUI sx applies width via a generated CSS class; verify by re-rendering
+    // with a different splitPercent and checking the class changes
+    const classA = leftPanel.className
+    rerender(
+      <SplitPane
+        left={<p>L</p>}
+        right={<p>R</p>}
+        splitPercent={60}
+        onMouseDown={vi.fn()}
+      />
+    )
+    const classB = leftPanel.className
+    expect(classA).not.toBe(classB)
   })
 })

@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { Box, Typography } from '@mui/material'
+import { FadeIn } from '@/components/animation'
 import { PageHeader } from '@/components/primitives/PageHeader'
 import { LoadingSpinner } from '@/components/primitives/LoadingSpinner'
 import { ErrorMessage } from '@/components/primitives/ErrorMessage'
@@ -51,152 +52,160 @@ function ReviewQueuePage() {
 
   if (loading && executions.length === 0) {
     return (
-      <Box sx={{ p: 3 }}>
-        <PageHeader title="Review Queue" />
-        <LoadingSpinner centered />
-      </Box>
+      <FadeIn>
+        <Box sx={{ p: 3 }}>
+          <PageHeader title="Review Queue" />
+          <LoadingSpinner centered />
+        </Box>
+      </FadeIn>
     )
   }
 
   if (error) {
     return (
-      <Box sx={{ p: 3 }}>
-        <PageHeader title="Review Queue" />
-        <ErrorMessage message={error} onRetry={reload} />
-      </Box>
+      <FadeIn>
+        <Box sx={{ p: 3 }}>
+          <PageHeader title="Review Queue" />
+          <ErrorMessage message={error} onRetry={reload} />
+        </Box>
+      </FadeIn>
     )
   }
 
   if (executions.length === 0) {
     return (
-      <Box sx={{ p: 3 }}>
-        <PageHeader title="Review Queue" />
-        <EmptyState message="No executions awaiting review" />
-      </Box>
+      <FadeIn>
+        <Box sx={{ p: 3 }}>
+          <PageHeader title="Review Queue" />
+          <EmptyState message="No executions awaiting review" />
+        </Box>
+      </FadeIn>
     )
   }
 
   return (
-    <Box sx={{ p: 3, height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column' }}>
-      <PageHeader title="Review Queue" />
-      <Box sx={{ display: 'flex', gap: 2, flex: 1, minHeight: 0 }}>
-        {/* Left panel — execution list */}
-        <Box
-          sx={{
-            width: 340,
-            minWidth: 340,
-            overflowY: 'auto',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 1,
-          }}
-        >
-          {executions.map((execution) => (
-            <ReviewCard
-              key={execution.id}
-              execution={execution}
-              selected={execution.id === selectedId}
-              onSelect={handleSelect}
-            />
-          ))}
-        </Box>
+    <FadeIn>
+      <Box sx={{ p: 3, height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column' }}>
+        <PageHeader title="Review Queue" />
+        <Box sx={{ display: 'flex', gap: 2, flex: 1, minHeight: 0 }}>
+          {/* Left panel — execution list */}
+          <Box
+            sx={{
+              width: 340,
+              minWidth: 340,
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1,
+            }}
+          >
+            {executions.map((execution) => (
+              <ReviewCard
+                key={execution.id}
+                execution={execution}
+                selected={execution.id === selectedId}
+                onSelect={handleSelect}
+              />
+            ))}
+          </Box>
 
-        {/* Right panel — detail + chat */}
-        <Box
-          sx={{
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            border: 1,
-            borderColor: 'divider',
-            borderRadius: 2,
-            overflow: 'hidden',
-            bgcolor: 'background.paper',
-          }}
-        >
-          {selectedExecution ? (
-            <>
-              {/* Collapsible sections */}
-              <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', overflowY: 'auto', maxHeight: '40%' }}>
-                <CollapsibleSection
-                  title="Input"
-                  open={inputOpen}
-                  onToggle={() => setInputOpen((v) => !v)}
-                >
-                  <Typography
-                    variant="body2"
-                    sx={{ fontFamily: 'monospace', fontSize: '0.8125rem', whiteSpace: 'pre-wrap' }}
+          {/* Right panel — detail + chat */}
+          <Box
+            sx={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 2,
+              overflow: 'hidden',
+              bgcolor: 'background.paper',
+            }}
+          >
+            {selectedExecution ? (
+              <>
+                {/* Collapsible sections */}
+                <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', overflowY: 'auto', maxHeight: '40%' }}>
+                  <CollapsibleSection
+                    title="Input"
+                    open={inputOpen}
+                    onToggle={() => setInputOpen((v) => !v)}
                   >
-                    {selectedExecution.input}
-                  </Typography>
-                </CollapsibleSection>
-
-                <CollapsibleSection
-                  title="Output"
-                  open={outputOpen}
-                  onToggle={() => setOutputOpen((v) => !v)}
-                >
-                  {selectedExecution.output ? (
-                    <MarkdownPreview content={selectedExecution.output} />
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">
-                      No output yet
+                    <Typography
+                      variant="body2"
+                      sx={{ fontFamily: 'monospace', fontSize: '0.8125rem', whiteSpace: 'pre-wrap' }}
+                    >
+                      {selectedExecution.input}
                     </Typography>
-                  )}
-                </CollapsibleSection>
-              </Box>
+                  </CollapsibleSection>
 
-              {/* Chat area */}
-              <Box sx={{ flex: 1, minHeight: 0 }}>
-                <ChatPanel
-                  messages={chatMessages}
-                  onSend={handleSend}
-                  streaming={chat.streaming}
-                  disabled={chat.sending}
-                />
-              </Box>
+                  <CollapsibleSection
+                    title="Output"
+                    open={outputOpen}
+                    onToggle={() => setOutputOpen((v) => !v)}
+                  >
+                    {selectedExecution.output ? (
+                      <MarkdownPreview content={selectedExecution.output} />
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        No output yet
+                      </Typography>
+                    )}
+                  </CollapsibleSection>
+                </Box>
 
-              {/* Approve bar */}
+                {/* Chat area */}
+                <Box sx={{ flex: 1, minHeight: 0 }}>
+                  <ChatPanel
+                    messages={chatMessages}
+                    onSend={handleSend}
+                    streaming={chat.streaming}
+                    disabled={chat.sending}
+                  />
+                </Box>
+
+                {/* Approve bar */}
+                <Box
+                  sx={{
+                    p: 1.5,
+                    borderTop: 1,
+                    borderColor: 'divider',
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    alignItems: 'center',
+                    gap: 2,
+                  }}
+                >
+                  {chat.error ? (
+                    <Typography variant="caption" color="error" sx={{ flex: 1 }}>
+                      {chat.error}
+                    </Typography>
+                  ) : null}
+                  <ApproveButton
+                    onApprove={handleApprove}
+                    loading={chat.sending}
+                    disabled={chat.streaming}
+                  />
+                </Box>
+              </>
+            ) : (
               <Box
                 sx={{
-                  p: 1.5,
-                  borderTop: 1,
-                  borderColor: 'divider',
+                  flex: 1,
                   display: 'flex',
-                  justifyContent: 'flex-end',
                   alignItems: 'center',
-                  gap: 2,
+                  justifyContent: 'center',
                 }}
               >
-                {chat.error ? (
-                  <Typography variant="caption" color="error" sx={{ flex: 1 }}>
-                    {chat.error}
-                  </Typography>
-                ) : null}
-                <ApproveButton
-                  onApprove={handleApprove}
-                  loading={chat.sending}
-                  disabled={chat.streaming}
-                />
+                <Typography variant="body2" color="text.secondary">
+                  Select an execution to review
+                </Typography>
               </Box>
-            </>
-          ) : (
-            <Box
-              sx={{
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Typography variant="body2" color="text.secondary">
-                Select an execution to review
-              </Typography>
-            </Box>
-          )}
+            )}
+          </Box>
         </Box>
       </Box>
-    </Box>
+    </FadeIn>
   )
 }
 

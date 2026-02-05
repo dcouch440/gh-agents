@@ -28,21 +28,20 @@ describe('DataTable', () => {
     expect(screen.getByText('85')).toBeInTheDocument()
   })
 
-  it('applies sortable class when column is sortable and onSort provided', () => {
+  it('renders sortable column with TableSortLabel when onSort provided', () => {
     const { container } = render(
       <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} onSort={() => undefined} />,
     )
-    const ths = container.querySelectorAll('th')
-    expect(ths[0]).not.toHaveClass('th--sortable')
-    expect(ths[1]).toHaveClass('th--sortable')
+    const sortLabels = container.querySelectorAll('.MuiTableSortLabel-root')
+    expect(sortLabels).toHaveLength(1)
   })
 
-  it('does not apply sortable class when onSort is not provided', () => {
+  it('does not render TableSortLabel when onSort is not provided', () => {
     const { container } = render(
       <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} />,
     )
-    const ths = container.querySelectorAll('th')
-    expect(ths[1]).not.toHaveClass('th--sortable')
+    const sortLabels = container.querySelectorAll('.MuiTableSortLabel-root')
+    expect(sortLabels).toHaveLength(0)
   })
 
   it('calls onSort with column key when sortable header clicked', () => {
@@ -54,8 +53,8 @@ describe('DataTable', () => {
     expect(onSort).toHaveBeenCalledWith('score')
   })
 
-  it('shows sort direction indicator on active column', () => {
-    render(
+  it('shows active sort label on sorted column', () => {
+    const { container } = render(
       <DataTable
         columns={columns}
         rows={rows}
@@ -65,7 +64,8 @@ describe('DataTable', () => {
         sortDirection="asc"
       />,
     )
-    expect(screen.getByText('Score ↑')).toBeInTheDocument()
+    const activeLabel = container.querySelector('.MuiTableSortLabel-root.Mui-active')
+    expect(activeLabel).toBeInTheDocument()
   })
 
   it('renders empty tbody when no rows', () => {

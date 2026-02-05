@@ -1,18 +1,10 @@
-import { render } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { ChatPage } from './ChatPage'
 
 describe('ChatPage', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-  })
+  it('renders chat heading', () => {
+    render(<ChatPage />)
 
-  it('renders AgentActivityDemo component', () => {
-    vi.useFakeTimers()
-
-    const { container } = render(<ChatPage />)
-
-    expect(container.querySelector('.activity-demo')).toBeInTheDocument()
-
-    vi.useRealTimers()
+    expect(screen.getByText('Chat')).toBeInTheDocument()
   })
 })

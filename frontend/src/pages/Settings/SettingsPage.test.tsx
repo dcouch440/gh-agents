@@ -1,20 +1,28 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { SettingsPage } from './SettingsPage'
 
 vi.mock('./RouterModesTab', () => ({
   RouterModesTab: () => <div data-testid="router-modes-tab">Router Modes Tab</div>,
 }))
 
+const renderPage = () =>
+  render(
+    <MemoryRouter>
+      <SettingsPage />
+    </MemoryRouter>,
+  )
+
 describe('SettingsPage', () => {
   it('renders settings heading', () => {
-    render(<SettingsPage />)
+    renderPage()
 
-    expect(screen.getByText('Settings')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument()
   })
 
   it('renders with overview tab selected by default', () => {
-    render(<SettingsPage />)
+    renderPage()
 
     const overviewTab = screen.getByRole('tab', { name: /overview/i })
     expect(overviewTab).toHaveAttribute('aria-selected', 'true')
@@ -24,7 +32,7 @@ describe('SettingsPage', () => {
   })
 
   it('shows two tabs', () => {
-    render(<SettingsPage />)
+    renderPage()
 
     expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument()
     expect(
@@ -34,7 +42,7 @@ describe('SettingsPage', () => {
 
   it('switches to router modes tab when clicked', async () => {
     const user = userEvent.setup()
-    render(<SettingsPage />)
+    renderPage()
 
     const routerModesTab = screen.getByRole('tab', { name: /router modes/i })
     await user.click(routerModesTab)
@@ -45,7 +53,7 @@ describe('SettingsPage', () => {
 
   it('switches back to overview tab when clicked', async () => {
     const user = userEvent.setup()
-    render(<SettingsPage />)
+    renderPage()
 
     const routerModesTab = screen.getByRole('tab', { name: /router modes/i })
     const overviewTab = screen.getByRole('tab', { name: /overview/i })

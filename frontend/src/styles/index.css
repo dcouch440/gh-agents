@@ -1,12 +1,21 @@
-/* MUI CssBaseline + theme handles CSS resets and typography */
-/* Roboto font is loaded automatically by MUI */
+/* All styling is handled by MUI ThemeProvider + CssBaseline */
+/* Fonts are loaded via index.html (Inter, Roboto) */
 
-/* Keep variables for now during gradual migration */
-@import './variables.css';
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
 
-/* MUI CssBaseline replaces reset.css */
-/* @import './reset.css'; */
+::-webkit-scrollbar-track {
+  background: transparent;
+}
 
-/* Keep component styles for non-MUI components (for now) */
-@import './components.css';
-@import './utilities.css';
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.5);
+}

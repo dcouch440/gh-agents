@@ -1,3 +1,4 @@
+import { Box, Typography } from '@mui/material'
 import type { Config, AgentPoolStats } from '@/types'
 
 type SystemHealthStatusProps = {
@@ -11,34 +12,103 @@ function SystemHealthStatus({ config, agentStats, wsConnected }: SystemHealthSta
   const poolStr = `${agentStats.total - agentStats.available}/${agentStats.max} agents`
 
   return (
-    <div className="sys-health">
-      <div className="sys-health__row">
-        <span className="sys-health__label">MODE</span>
-        <span className="sys-health__value">{config.autonomy}</span>
-      </div>
-      <div className="sys-health__row">
-        <span className="sys-health__label">GIT</span>
-        <span className="sys-health__value">{config.git_strategy}</span>
-      </div>
-      <div className="sys-health__row">
-        <span className="sys-health__label">VERBOSITY</span>
-        <span className="sys-health__value">{config.verbosity}</span>
-      </div>
-      <div className="sys-health__row">
-        <span className="sys-health__label">SANDBOX</span>
-        <span className="sys-health__value">{config.sandbox_mode}</span>
-      </div>
-      <div className="sys-health__row">
-        <span className="sys-health__label">WS</span>
-        <span className={`sys-health__value ${wsConnected ? 'sys-health__value--ok' : 'sys-health__value--error'}`}>
+    <Box sx={{ fontSize: '0.75rem', lineHeight: 1.4 }}>
+      <Box sx={{ display: 'flex', gap: 1, py: '1px' }}>
+        <Typography
+          component="span"
+          sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'text.disabled', width: '10ch', flexShrink: 0 }}
+        >
+          MODE
+        </Typography>
+        <Typography
+          component="span"
+          sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'text.primary' }}
+        >
+          {config.autonomy}
+        </Typography>
+      </Box>
+      <Box sx={{ display: 'flex', gap: 1, py: '1px' }}>
+        <Typography
+          component="span"
+          sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'text.disabled', width: '10ch', flexShrink: 0 }}
+        >
+          GIT
+        </Typography>
+        <Typography
+          component="span"
+          sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'text.primary' }}
+        >
+          {config.git_strategy}
+        </Typography>
+      </Box>
+      <Box sx={{ display: 'flex', gap: 1, py: '1px' }}>
+        <Typography
+          component="span"
+          sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'text.disabled', width: '10ch', flexShrink: 0 }}
+        >
+          VERBOSITY
+        </Typography>
+        <Typography
+          component="span"
+          sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'text.primary' }}
+        >
+          {config.verbosity}
+        </Typography>
+      </Box>
+      <Box sx={{ display: 'flex', gap: 1, py: '1px' }}>
+        <Typography
+          component="span"
+          sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'text.disabled', width: '10ch', flexShrink: 0 }}
+        >
+          SANDBOX
+        </Typography>
+        <Typography
+          component="span"
+          sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'text.primary' }}
+        >
+          {config.sandbox_mode}
+        </Typography>
+      </Box>
+      <Box sx={{ display: 'flex', gap: 1, py: '1px' }}>
+        <Typography
+          component="span"
+          sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'text.disabled', width: '10ch', flexShrink: 0 }}
+        >
+          WS
+        </Typography>
+        <Typography
+          component="span"
+          sx={{
+            fontSize: 'inherit',
+            lineHeight: 'inherit',
+            color: wsConnected ? 'success.main' : 'error.main',
+            ...(wsConnected ? {} : {
+              animation: 'blink 800ms step-end infinite',
+              '@keyframes blink': {
+                '0%, 100%': { opacity: 1 },
+                '50%': { opacity: 0 },
+              },
+            }),
+          }}
+        >
           {wsConnected ? 'connected' : 'disconnected'}
-        </span>
-      </div>
-      <div className="sys-health__row">
-        <span className="sys-health__label">POOL</span>
-        <span className="sys-health__value">{poolStr}</span>
-      </div>
-    </div>
+        </Typography>
+      </Box>
+      <Box sx={{ display: 'flex', gap: 1, py: '1px' }}>
+        <Typography
+          component="span"
+          sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'text.disabled', width: '10ch', flexShrink: 0 }}
+        >
+          POOL
+        </Typography>
+        <Typography
+          component="span"
+          sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'text.primary' }}
+        >
+          {poolStr}
+        </Typography>
+      </Box>
+    </Box>
   )
 }
 

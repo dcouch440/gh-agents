@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react'
+import { Box } from '@mui/material'
 import { EditorView, placeholder as cmPlaceholder, keymap } from '@codemirror/view'
 import { EditorState, type Extension } from '@codemirror/state'
 import { markdown } from '@codemirror/lang-markdown'
@@ -107,10 +108,26 @@ function CodeEditor({
   }, [value])
 
   return (
-    <div
+    <Box
       ref={containerRef}
-      className={`code-editor${className ? ` ${className}` : ''}`}
-      style={{ height }}
+      className={className}
+      sx={{
+        height,
+        border: 1,
+        borderColor: 'divider',
+        borderRadius: 1,
+        overflow: 'hidden',
+        fontFamily: 'monospace',
+        '&:focus-within': {
+          borderColor: 'primary.main',
+        },
+        '& .cm-editor': {
+          height: '100%',
+        },
+        '& .cm-scroller': {
+          overflow: 'auto',
+        },
+      }}
     />
   )
 }

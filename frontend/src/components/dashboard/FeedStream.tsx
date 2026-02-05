@@ -1,3 +1,4 @@
+import { Box, Typography } from '@mui/material'
 import type { FeedItem, FeedItemType } from '@/types'
 
 type FeedStreamProps = {
@@ -15,6 +16,16 @@ const TYPE_ICON: Record<FeedItemType, string> = {
   milestone: '@',
 }
 
+const TYPE_COLOR: Record<FeedItemType, string> = {
+  agent_report: 'text.secondary',
+  task_started: 'info.main',
+  task_completed: 'success.main',
+  error: 'error.main',
+  user_message: 'text.secondary',
+  system_notice: 'text.secondary',
+  milestone: 'success.main',
+}
+
 const formatTime = (iso: string): string => {
   const d = new Date(iso)
   const h = String(d.getHours()).padStart(2, '0')
@@ -27,17 +38,69 @@ function FeedStream({ items, maxVisible }: FeedStreamProps) {
   const visible = items.slice(-maxVisible)
 
   return (
-    <div className="feed-stream">
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'flex-end',
+        gap: 0,
+        height: '12em',
+        overflow: 'hidden',
+        maskImage: 'linear-gradient(to bottom, transparent 0%, black 30%)',
+        WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 30%)',
+        fontSize: '0.75rem',
+        lineHeight: 1.4,
+      }}
+    >
       {visible.map((item) => (
-        <div key={item.id} className="feed-stream__line">
-          <span className="feed-stream__time">{formatTime(item.timestamp)}</span>
-          <span className={`feed-stream__type feed-stream__type--${item.item_type}`}>
+        <Box
+          key={item.id}
+          sx={{
+            display: 'flex',
+            gap: 1,
+            py: '1px',
+          }}
+        >
+          <Typography
+            component="span"
+            sx={{
+              fontSize: 'inherit',
+              lineHeight: 'inherit',
+              color: 'text.disabled',
+              flexShrink: 0,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {formatTime(item.timestamp)}
+          </Typography>
+          <Typography
+            component="span"
+            sx={{
+              fontSize: 'inherit',
+              lineHeight: 'inherit',
+              flexShrink: 0,
+              width: '1ch',
+              color: TYPE_COLOR[item.item_type],
+            }}
+          >
             {TYPE_ICON[item.item_type]}
-          </span>
-          <span className="feed-stream__content">{item.content}</span>
-        </div>
+          </Typography>
+          <Typography
+            component="span"
+            sx={{
+              fontSize: 'inherit',
+              lineHeight: 'inherit',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              color: 'text.secondary',
+            }}
+          >
+            {item.content}
+          </Typography>
+        </Box>
       ))}
-    </div>
+    </Box>
   )
 }
 

@@ -1,3 +1,4 @@
+import { Box, Typography } from '@mui/material'
 import type { Task, TaskStatus, TaskPriority } from '@/types'
 
 type TaskQueueStatusProps = {
@@ -28,6 +29,29 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   failed: 'failed',
 }
 
+const COUNT_COLOR: Record<TaskStatus, string> = {
+  pending: 'text.disabled',
+  in_progress: 'text.primary',
+  review: 'text.secondary',
+  completed: 'text.secondary',
+  failed: 'error.main',
+}
+
+const PRIORITY_COLOR: Record<TaskPriority, string> = {
+  urgent: 'error.main',
+  high: 'warning.main',
+  normal: 'text.disabled',
+  low: 'text.disabled',
+}
+
+const STATUS_COLOR: Record<TaskStatus, string> = {
+  pending: 'text.disabled',
+  in_progress: 'text.secondary',
+  review: 'info.main',
+  completed: 'text.secondary',
+  failed: 'error.main',
+}
+
 const countByStatus = (tasks: Task[]): Record<TaskStatus, number> => {
   const counts: Record<TaskStatus, number> = { pending: 0, in_progress: 0, review: 0, completed: 0, failed: 0 }
   for (const t of tasks) counts[t.status]++
@@ -41,32 +65,118 @@ function TaskQueueStatus({ tasks }: TaskQueueStatusProps) {
     .sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority])
 
   return (
-    <div className="task-queue">
-      <div className="task-queue__summary">
+    <Box sx={{ fontSize: '0.75rem', lineHeight: 1.4 }}>
+      <Box sx={{ display: 'flex', gap: 2, color: 'text.secondary', mb: '2px' }}>
         {STATUS_COUNTS.map((s) => (
-          <span key={s} className={`task-queue__count task-queue__count--${s}`}>
+          <Typography
+            key={s}
+            component="span"
+            sx={{
+              fontSize: 'inherit',
+              lineHeight: 'inherit',
+              color: COUNT_COLOR[s],
+            }}
+          >
             {counts[s]} {STATUS_LABEL[s]}
-          </span>
+          </Typography>
         ))}
-      </div>
+      </Box>
 
       {active.length > 0 ? (
-        <div className="task-queue__list">
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
           {active.map((t) => (
-            <div key={t.id} className="task-queue__item">
-              <span className={`task-queue__priority task-queue__priority--${t.priority}`}>
+            <Box
+              key={t.id}
+              sx={{
+                display: 'flex',
+                gap: 1,
+                py: '1px',
+                alignItems: 'baseline',
+              }}
+            >
+              <Typography
+                component="span"
+                sx={{
+                  fontSize: 'inherit',
+                  lineHeight: 'inherit',
+                  flexShrink: 0,
+                  width: '4ch',
+                  textAlign: 'right',
+                  color: PRIORITY_COLOR[t.priority],
+                }}
+              >
                 {PRIORITY_MARKER[t.priority]}
-              </span>
-              <span className="task-queue__title">{t.title}</span>
-              <span className={`task-queue__status task-queue__status--${t.status}`}>{t.status}</span>
-              <span className="task-queue__agent">{t.assigned_agent ?? '--'}</span>
-              {t.retry_count > 0 ? <span className="task-queue__retry">r:{t.retry_count}</span> : null}
-              {t.depends_on.length > 0 ? <span className="task-queue__deps">dep:{t.depends_on.length}</span> : null}
-            </div>
+              </Typography>
+              <Typography
+                component="span"
+                sx={{
+                  fontSize: 'inherit',
+                  lineHeight: 'inherit',
+                  flex: 1,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  color: 'text.primary',
+                }}
+              >
+                {t.title}
+              </Typography>
+              <Typography
+                component="span"
+                sx={{
+                  fontSize: 'inherit',
+                  lineHeight: 'inherit',
+                  flexShrink: 0,
+                  color: STATUS_COLOR[t.status],
+                }}
+              >
+                {t.status}
+              </Typography>
+              <Typography
+                component="span"
+                sx={{
+                  fontSize: 'inherit',
+                  lineHeight: 'inherit',
+                  flexShrink: 0,
+                  color: 'text.disabled',
+                  width: '8ch',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {t.assigned_agent ?? '--'}
+              </Typography>
+              {t.retry_count > 0 ? (
+                <Typography
+                  component="span"
+                  sx={{
+                    fontSize: 'inherit',
+                    lineHeight: 'inherit',
+                    flexShrink: 0,
+                    color: 'text.disabled',
+                  }}
+                >
+                  r:{t.retry_count}
+                </Typography>
+              ) : null}
+              {t.depends_on.length > 0 ? (
+                <Typography
+                  component="span"
+                  sx={{
+                    fontSize: 'inherit',
+                    lineHeight: 'inherit',
+                    flexShrink: 0,
+                    color: 'text.disabled',
+                  }}
+                >
+                  dep:{t.depends_on.length}
+                </Typography>
+              ) : null}
+            </Box>
           ))}
-        </div>
+        </Box>
       ) : null}
-    </div>
+    </Box>
   )
 }
 

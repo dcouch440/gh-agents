@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Box } from '@mui/material'
 
 type SplitPaneProps = {
   left: ReactNode
@@ -9,18 +10,47 @@ type SplitPaneProps = {
 }
 
 function SplitPane({ left, right, splitPercent, onMouseDown, className }: SplitPaneProps) {
-  const containerClass = className ? `split-pane ${className}` : 'split-pane'
-
   return (
-    <div className={containerClass} style={{ display: 'flex', height: '100%' }}>
-      <div className="split-pane__left" style={{ width: `${splitPercent}%` }}>
+    <Box
+      className={className}
+      sx={{
+        display: 'flex',
+        height: '100%',
+        overflow: 'hidden',
+      }}
+    >
+      <Box
+        sx={{
+          width: `${splitPercent}%`,
+          overflow: 'auto',
+          minWidth: 0,
+        }}
+      >
         {left}
-      </div>
-      <div className="split-pane__handle" onMouseDown={onMouseDown} />
-      <div className="split-pane__right" style={{ flex: 1 }}>
+      </Box>
+      <Box
+        onMouseDown={onMouseDown}
+        sx={{
+          flexShrink: 0,
+          width: 6,
+          cursor: 'col-resize',
+          bgcolor: 'divider',
+          transition: 'background-color 150ms ease',
+          '&:hover, &:active': {
+            bgcolor: 'primary.main',
+          },
+        }}
+      />
+      <Box
+        sx={{
+          flex: 1,
+          overflow: 'auto',
+          minWidth: 0,
+        }}
+      >
         {right}
-      </div>
-    </div>
+      </Box>
+    </Box>
   )
 }
 
