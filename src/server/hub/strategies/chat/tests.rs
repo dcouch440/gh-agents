@@ -3,6 +3,7 @@
 use crate::db::traits::MockServerRepo;
 use crate::server::hub::strategies::chat::{ChatConfig, ChatStrategy};
 use crate::server::hub::strategy::ExecutionStrategy;
+use crate::server::state::test_helpers::default_mock_repos;
 use crate::server::state::AppState;
 use crate::types::{AppConfig, UserId};
 use std::sync::Arc;
@@ -12,7 +13,8 @@ fn make_state() -> AppState {
     let mut mock = MockServerRepo::new();
     mock.expect_health_check().returning(|| true);
     let repo: Arc<dyn crate::db::traits::ServerRepo> = Arc::new(mock);
-    let (state, _rx) = AppState::with_repo(None, repo, AppConfig::default());
+    let repos = default_mock_repos();
+    let (state, _rx) = AppState::with_repo(None, repo, repos, AppConfig::default());
     state
 }
 

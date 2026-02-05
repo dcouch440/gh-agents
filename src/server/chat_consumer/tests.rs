@@ -3,8 +3,9 @@
 use super::*;
 use crate::db::traits::ServerRepo;
 use crate::db::{ChatMessageRow, SessionRow};
+use crate::server::state::test_helpers::default_mock_repos;
 use crate::types::{AppConfig, UserId};
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -210,7 +211,8 @@ async fn chat_consumer_sends_error_when_no_api_key() {
     std::env::remove_var(crate::constants::ENV_ANTHROPIC_API_KEY);
 
     let repo: Arc<dyn ServerRepo> = Arc::new(TestRepo::new());
-    let (state, chat_rx) = AppState::with_repo(None, repo, AppConfig::default());
+    let repos = default_mock_repos();
+    let (state, chat_rx) = AppState::with_repo(None, repo, repos, AppConfig::default());
 
     let msg_id = Uuid::new_v4();
     let (_buf, mut rx, _done) = state.get_response_stream(msg_id);

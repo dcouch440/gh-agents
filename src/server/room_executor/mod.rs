@@ -216,12 +216,8 @@ pub async fn execute_room_turn(
     user_id: Uuid,
     cancel: Option<&CancellationToken>,
 ) -> Result<RoomTurnResult, HubError> {
-    let room_repo = state
-        .room_repo()
-        .ok_or_else(|| HubError::Internal(anyhow::anyhow!("room_repo not configured")))?;
-    let ae_repo = state.agent_execution_repo().ok_or_else(|| {
-        HubError::Internal(anyhow::anyhow!("agent_execution_repo not configured"))
-    })?;
+    let room_repo = &state.repos().rooms;
+    let ae_repo = &state.repos().agent_executions;
 
     // 1. Parse @ mentions
     let roster_rows: Vec<RoomMemberRow> = members.iter().map(|m| m.member.clone()).collect();
@@ -309,14 +305,12 @@ pub async fn execute_room_turn(
         system_prompt.push_str(&room_context);
 
         // Append agent context documents (global knowledge for this agent)
-        if let Some(_doc_repo) = state.doc_repo() {
-            if let Ok(agent_docs) = state.repo().get_agent_context(selection.agent_id).await {
-                for doc in &agent_docs {
-                    system_prompt.push_str(&format!(
-                        "\n\n---\n## {} (Agent Context)\n{}",
-                        doc.title, doc.content
-                    ));
-                }
+        if let Ok(agent_docs) = state.repo().get_agent_context(selection.agent_id).await {
+            for doc in &agent_docs {
+                system_prompt.push_str(&format!(
+                    "\n\n---\n## {} (Agent Context)\n{}",
+                    doc.title, doc.content
+                ));
             }
         }
 

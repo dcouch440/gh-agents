@@ -18,10 +18,7 @@ use crate::llm::LLMProvider;
 use crate::types::{AppConfig, UserId};
 
 use super::hub::{ModeResolver, PromptRegistry};
-use super::ws::{
-    AgentUpdate, ContextUpdateEvent, FeedUpdate, PipelineUpdate, RoomUpdateEvent,
-    RouterRequestEvent, RoutingUpdate, SessionUpdate, TaskUpdate,
-};
+use super::ws::{PipelineUpdate, RoomUpdateEvent, SessionUpdate};
 
 mod builder;
 mod events;
@@ -32,7 +29,7 @@ pub use events::{ChannelSizes, EventBus};
 pub use repos::Repos;
 
 #[cfg(test)]
-mod test_helpers;
+pub mod test_helpers;
 #[cfg(test)]
 mod tests;
 
@@ -78,8 +75,8 @@ pub(crate) struct AppStateInner {
     pub(crate) db: Option<PgPool>,
     /// Repository trait object for DB operations used by API handlers
     pub(crate) server_repo: Arc<dyn ServerRepo>,
-    /// All repository trait objects grouped together (non-optional)
-    pub(crate) repos: Option<Repos>,
+    /// All repository trait objects grouped together
+    pub(crate) repos: Repos,
     /// All broadcast channels grouped together
     pub(crate) events: EventBus,
     /// Application configuration (mutable at runtime via API)
@@ -154,7 +151,7 @@ impl AppState {
         let mut state = Self(Arc::new(AppStateInner {
             db: Some(db),
             server_repo,
-            repos: Some(repos),
+            repos,
             events,
             config: Arc::new(RwLock::new(config)),
             provider,
@@ -190,41 +187,7 @@ impl AppState {
 
     /// Create application state with a custom repo (for testing).
     /// Returns the state and the orchestrator message receiver.
-    ///
-    /// Note: This creates state without Repos populated. For tests that need
-    /// repos, use `with_repos()` or the test helpers.
     pub fn with_repo(
-        db: Option<PgPool>,
-        repo: Arc<dyn ServerRepo>,
-        config: AppConfig,
-    ) -> (Self, mpsc::Receiver<ConsumerMessage>) {
-        let (chat_tx, orchestrator_rx) = mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
-        let events = EventBus::new();
-        let jwt_secret = Self::load_jwt_secret();
-
-        (
-            Self(Arc::new(AppStateInner {
-                db,
-                server_repo: repo,
-                repos: None, // Tests provide repos separately if needed
-                events,
-                config: Arc::new(RwLock::new(config)),
-                provider: None,
-                mode_resolver: None,
-                prompt_registry: Arc::new(PromptRegistry::empty()),
-                jwt_secret,
-                default_agent_id: None,
-                chat_tx,
-                response_streams: DashMap::new(),
-                cancellation_tokens: DashMap::new(),
-            })),
-            orchestrator_rx,
-        )
-    }
-
-    /// Create application state with repos for testing.
-    #[cfg(test)]
-    pub fn with_repos(
         db: Option<PgPool>,
         server_repo: Arc<dyn ServerRepo>,
         repos: Repos,
@@ -238,7 +201,7 @@ impl AppState {
             Self(Arc::new(AppStateInner {
                 db,
                 server_repo,
-                repos: Some(repos),
+                repos,
                 events,
                 config: Arc::new(RwLock::new(config)),
                 provider: None,
@@ -363,17 +326,8 @@ impl AppState {
     }
 
     /// Access the grouped repositories.
-    /// Panics if repos were not initialized (use in tests with `with_repos()`).
     pub fn repos(&self) -> &Repos {
-        self.0
-            .repos
-            .as_ref()
-            .expect("Repos not initialized - use AppState::new() or with_repos() for tests")
-    }
-
-    /// Access the grouped repositories (optional, for migration).
-    pub fn repos_opt(&self) -> Option<&Repos> {
-        self.0.repos.as_ref()
+        &self.0.repos
     }
 
     /// Access the event bus.
@@ -417,141 +371,55 @@ impl AppState {
     }
 
     // =========================================================================
-    // Backward-compatible accessors (delegate to inner fields)
-    // These maintain the old API while we migrate handlers
-    // =========================================================================
-
-    // --- Legacy individual repo accessors (for migration) ---
-    // These return Option<Arc<...>> to match the old field access pattern.
+    // Backward-compatible accessors (delegate to repos)
+    // These maintain the old API while we migrate handlers.
     // After migration, handlers should use state.repos().* directly.
+    // =========================================================================
 
     /// Backward-compatible: User repository.
     pub fn user_repo(&self) -> Option<Arc<dyn crate::db::traits::UserRepo>> {
-        self.0.repos.as_ref().map(|r| r.users.clone())
+        Some(self.0.repos.users.clone())
     }
 
     /// Backward-compatible: Document repository.
     pub fn doc_repo(&self) -> Option<Arc<dyn crate::db::traits::DocumentRepo>> {
-        self.0.repos.as_ref().map(|r| r.documents.clone())
+        Some(self.0.repos.documents.clone())
     }
 
     /// Backward-compatible: Output schema repository.
     pub fn output_schema_repo(&self) -> Option<Arc<dyn crate::db::traits::OutputSchemaRepo>> {
-        self.0.repos.as_ref().map(|r| r.output_schemas.clone())
+        Some(self.0.repos.output_schemas.clone())
     }
 
     /// Backward-compatible: Prompt template repository.
     pub fn prompt_template_repo(&self) -> Option<Arc<dyn crate::db::traits::PromptTemplateRepo>> {
-        self.0.repos.as_ref().map(|r| r.prompt_templates.clone())
+        Some(self.0.repos.prompt_templates.clone())
     }
 
     /// Backward-compatible: Workflow repository.
     pub fn workflow_repo(&self) -> Option<Arc<dyn crate::db::traits::WorkflowRepo>> {
-        self.0.repos.as_ref().map(|r| r.workflows.clone())
+        Some(self.0.repos.workflows.clone())
     }
 
     /// Backward-compatible: Agent execution repository.
     pub fn agent_execution_repo(&self) -> Option<Arc<dyn crate::db::traits::AgentExecutionRepo>> {
-        self.0.repos.as_ref().map(|r| r.agent_executions.clone())
+        Some(self.0.repos.agent_executions.clone())
     }
 
     /// Backward-compatible: Token ledger repository.
     pub fn token_ledger_repo(&self) -> Option<Arc<dyn crate::db::traits::TokenLedgerRepo>> {
-        self.0.repos.as_ref().map(|r| r.token_ledger.clone())
-    }
-
-    /// Backward-compatible: Result repository.
-    pub fn result_repo(&self) -> Option<Arc<dyn crate::db::traits::ResultRepo>> {
-        self.0.repos.as_ref().map(|r| r.results.clone())
-    }
-
-    /// Backward-compatible: Tool router repository.
-    pub fn tool_router_repo(&self) -> Option<Arc<dyn crate::db::traits::ToolRouterRepo>> {
-        self.0.repos.as_ref().map(|r| r.tool_routers.clone())
-    }
-
-    /// Backward-compatible: Context store repository.
-    pub fn context_store_repo(&self) -> Option<Arc<dyn crate::db::traits::ContextStoreRepo>> {
-        self.0.repos.as_ref().map(|r| r.context_store.clone())
-    }
-
-    /// Backward-compatible: Router request repository.
-    pub fn router_request_repo(&self) -> Option<Arc<dyn crate::db::traits::RouterRequestRepo>> {
-        self.0.repos.as_ref().map(|r| r.router_requests.clone())
+        Some(self.0.repos.token_ledger.clone())
     }
 
     /// Backward-compatible: Room repository.
     pub fn room_repo(&self) -> Option<Arc<dyn crate::db::traits::RoomRepo>> {
-        self.0.repos.as_ref().map(|r| r.rooms.clone())
-    }
-
-    // =========================================================================
-    // Event subscription methods (delegate to EventBus)
-    // =========================================================================
-
-    /// Subscribe to feed updates
-    pub fn subscribe_feed(&self) -> broadcast::Receiver<FeedUpdate> {
-        self.0.events.subscribe_feed()
-    }
-
-    /// Subscribe to task updates
-    pub fn subscribe_tasks(&self) -> broadcast::Receiver<TaskUpdate> {
-        self.0.events.subscribe_tasks()
-    }
-
-    /// Subscribe to agent updates
-    pub fn subscribe_agents(&self) -> broadcast::Receiver<AgentUpdate> {
-        self.0.events.subscribe_agents()
-    }
-
-    /// Subscribe to session updates
-    pub fn subscribe_sessions(&self) -> broadcast::Receiver<SessionUpdate> {
-        self.0.events.subscribe_sessions()
-    }
-
-    /// Subscribe to pipeline execution updates
-    pub fn subscribe_pipelines(&self) -> broadcast::Receiver<PipelineUpdate> {
-        self.0.events.subscribe_pipelines()
-    }
-
-    /// Subscribe to routing updates
-    pub fn subscribe_routing(&self) -> broadcast::Receiver<RoutingUpdate> {
-        self.0.events.subscribe_routing()
-    }
-
-    /// Subscribe to router request lifecycle events
-    pub fn subscribe_router_requests(&self) -> broadcast::Receiver<RouterRequestEvent> {
-        self.0.events.subscribe_router_requests()
-    }
-
-    /// Subscribe to context store updates
-    pub fn subscribe_context_updates(&self) -> broadcast::Receiver<ContextUpdateEvent> {
-        self.0.events.subscribe_context_updates()
-    }
-
-    /// Subscribe to room events
-    pub fn subscribe_room_updates(&self) -> broadcast::Receiver<RoomUpdateEvent> {
-        self.0.events.subscribe_room_updates()
+        Some(self.0.repos.rooms.clone())
     }
 
     // =========================================================================
     // Broadcast methods (delegate to EventBus)
+    // Only keeping the ones that are actively used in production code
     // =========================================================================
-
-    /// Broadcast a feed update to all subscribers
-    pub fn broadcast_feed(&self, update: FeedUpdate) {
-        self.0.events.broadcast_feed(update);
-    }
-
-    /// Broadcast a task update to all subscribers
-    pub fn broadcast_task(&self, update: TaskUpdate) {
-        self.0.events.broadcast_task(update);
-    }
-
-    /// Broadcast an agent update to all subscribers
-    pub fn broadcast_agent(&self, update: AgentUpdate) {
-        self.0.events.broadcast_agent(update);
-    }
 
     /// Broadcast a session update to all subscribers
     pub fn broadcast_session(&self, update: SessionUpdate) {
@@ -561,21 +429,6 @@ impl AppState {
     /// Broadcast a pipeline execution update to all subscribers
     pub fn broadcast_pipeline(&self, update: PipelineUpdate) {
         self.0.events.broadcast_pipeline(update);
-    }
-
-    /// Broadcast a routing update to all subscribers
-    pub fn broadcast_routing(&self, update: RoutingUpdate) {
-        self.0.events.broadcast_routing(update);
-    }
-
-    /// Broadcast a router request event
-    pub fn broadcast_router_request(&self, event: RouterRequestEvent) {
-        self.0.events.broadcast_router_request(event);
-    }
-
-    /// Broadcast a context update event
-    pub fn broadcast_context_update(&self, event: ContextUpdateEvent) {
-        self.0.events.broadcast_context_update(event);
     }
 
     /// Broadcast a room event

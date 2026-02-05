@@ -2,12 +2,16 @@
 
 use super::*;
 use crate::db::traits::MockServerRepo;
+use crate::server::ws::{AgentUpdate, FeedUpdate, TaskUpdate};
+
+use super::test_helpers::default_mock_repos;
 
 fn make_state() -> AppState {
     let mut mock = MockServerRepo::new();
     mock.expect_health_check().returning(|| true);
     let repo: Arc<dyn ServerRepo> = Arc::new(mock);
-    let (state, _rx) = AppState::with_repo(None, repo, AppConfig::default());
+    let repos = default_mock_repos();
+    let (state, _rx) = AppState::with_repo(None, repo, repos, AppConfig::default());
     state
 }
 
@@ -49,25 +53,25 @@ fn app_state_new_creates_valid_state() {
 #[test]
 fn subscribe_feed_returns_receiver() {
     let state = make_state();
-    let _rx = state.subscribe_feed();
+    let _rx = state.events().subscribe_feed();
 }
 
 #[test]
 fn subscribe_tasks_returns_receiver() {
     let state = make_state();
-    let _rx = state.subscribe_tasks();
+    let _rx = state.events().subscribe_tasks();
 }
 
 #[test]
 fn subscribe_agents_returns_receiver() {
     let state = make_state();
-    let _rx = state.subscribe_agents();
+    let _rx = state.events().subscribe_agents();
 }
 
 #[test]
 fn broadcast_feed_no_panic() {
     let state = make_state();
-    state.broadcast_feed(FeedUpdate {
+    state.events().broadcast_feed(FeedUpdate {
         id: Uuid::new_v4(),
         agent_id: "a".into(),
         content: "c".into(),
@@ -80,7 +84,7 @@ fn broadcast_feed_no_panic() {
 #[test]
 fn broadcast_task_no_panic() {
     let state = make_state();
-    state.broadcast_task(TaskUpdate {
+    state.events().broadcast_task(TaskUpdate {
         id: Uuid::new_v4(),
         status: "pending".into(),
         progress: None,
@@ -92,7 +96,7 @@ fn broadcast_task_no_panic() {
 #[test]
 fn broadcast_agent_no_panic() {
     let state = make_state();
-    state.broadcast_agent(AgentUpdate {
+    state.events().broadcast_agent(AgentUpdate {
         id: "agent-1".into(),
         status: "idle".into(),
         current_task: None,

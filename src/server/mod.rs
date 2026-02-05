@@ -558,12 +558,13 @@ mod tests {
     use super::*;
     use crate::db::traits::ServerRepo;
     use crate::db::{ChatMessageRow, SessionRow};
+    use crate::server::state::test_helpers::default_mock_repos;
     use crate::types::UserId;
     use axum::{
         body::Body,
         http::{Request, StatusCode},
     };
-    use chrono::{DateTime, Utc};
+    use chrono::Utc;
     use std::sync::Arc;
     use tempfile::TempDir;
     use tower::util::ServiceExt;
@@ -815,7 +816,8 @@ mod tests {
 
     fn setup_mock_state() -> AppState {
         let repo: Arc<dyn ServerRepo> = Arc::new(InMemoryServerRepo::new());
-        let (state, rx) = AppState::with_repo(None, repo, AppConfig::default());
+        let repos = default_mock_repos();
+        let (state, rx) = AppState::with_repo(None, repo, repos, AppConfig::default());
         // Keep the receiver alive so chat_tx.send() doesn't fail in tests
         std::mem::forget(rx);
         state
