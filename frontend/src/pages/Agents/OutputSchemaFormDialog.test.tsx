@@ -21,11 +21,8 @@ const mockMutate = vi.hoisted(() => vi.fn())
 const mockSchema = {
   id: 'mock-schema-id',
   name: 'Mock Schema',
-  description: '',
-  json_schema: {type: 'object', properties: {}},
-  user_id: 'user-1',
+  schema: {type: 'object', properties: {}},
   created_at: '2024-01-01T00:00:00Z',
-  updated_at: '2024-01-01T00:00:00Z',
 }
 
 vi.mock('@/hooks/useOutputSchemaMutations', () => ({
@@ -55,7 +52,7 @@ describe('OutputSchemaFormDialog', () => {
 
     expect(screen.getByText('Create Output Schema')).toBeDefined()
     expect(screen.getByLabelText(/name/i)).toBeDefined()
-    expect(screen.getByLabelText(/description/i)).toBeDefined()
+    expect(screen.getByLabelText(/json schema/i)).toBeDefined()
   })
 
   it('does not render when closed', () => {
@@ -78,14 +75,13 @@ describe('OutputSchemaFormDialog', () => {
     expect(mockMutate).not.toHaveBeenCalled()
   })
 
-  it('prevents typing more than 200 characters', async () => {
-    const user = userEvent.setup()
+  it('prevents typing more than 200 characters', () => {
     render(<OutputSchemaFormDialog {...defaultProps} />)
 
-    const nameInput = screen.getByLabelText(/name/i) as HTMLInputElement
+    const nameInput = screen.getByLabelText(/name/i)
 
     // The maxLength attribute prevents typing more than 200 chars
-    expect(nameInput.maxLength).toBe(200)
+    expect((nameInput as HTMLInputElement).maxLength).toBe(200)
   })
 
   it('shows character count', async () => {
@@ -108,7 +104,7 @@ describe('OutputSchemaFormDialog', () => {
     await user.type(nameInput, 'Test Schema')
 
     // Change JSON to invalid syntax - use paste to avoid userEvent parsing issues
-    const jsonEditor = screen.getByLabelText(/json schema/i) as HTMLTextAreaElement
+    const jsonEditor = screen.getByLabelText(/json schema/i)
     await user.clear(jsonEditor)
     await user.click(jsonEditor)
     await user.paste('not valid json')
@@ -128,11 +124,8 @@ describe('OutputSchemaFormDialog', () => {
     const mockSchema = {
       id: 'new-schema-id',
       name: 'Test Schema',
-      description: 'A test schema',
-      json_schema: {type: 'object', properties: {}},
-      user_id: 'user-1',
+      schema: {type: 'object', properties: {}},
       created_at: '2024-01-01T00:00:00Z',
-      updated_at: '2024-01-01T00:00:00Z',
     }
 
     mockMutate.mockResolvedValue(mockSchema)
@@ -148,47 +141,12 @@ describe('OutputSchemaFormDialog', () => {
     await waitFor(() => {
       expect(mockMutate).toHaveBeenCalledWith({
         name: 'Test Schema',
-        description: undefined,
-        json_schema: {type: 'object', properties: {}},
+        schema: {type: 'object', properties: {}},
       })
     })
 
     expect(defaultProps.onSave).toHaveBeenCalledWith('new-schema-id')
     expect(defaultProps.onClose).toHaveBeenCalled()
-  })
-
-  it('includes description when provided', async () => {
-    const user = userEvent.setup()
-    const mockSchema = {
-      id: 'new-schema-id',
-      name: 'Test Schema',
-      description: 'Test description',
-      json_schema: {type: 'object', properties: {}},
-      user_id: 'user-1',
-      created_at: '2024-01-01T00:00:00Z',
-      updated_at: '2024-01-01T00:00:00Z',
-    }
-
-    mockMutate.mockResolvedValue(mockSchema)
-
-    render(<OutputSchemaFormDialog {...defaultProps} />)
-
-    const nameInput = screen.getByLabelText(/name/i)
-    await user.type(nameInput, 'Test Schema')
-
-    const descriptionInput = screen.getByLabelText(/description/i)
-    await user.type(descriptionInput, 'Test description')
-
-    const createButton = screen.getByRole('button', {name: /create/i})
-    await user.click(createButton)
-
-    await waitFor(() => {
-      expect(mockMutate).toHaveBeenCalledWith({
-        name: 'Test Schema',
-        description: 'Test description',
-        json_schema: {type: 'object', properties: {}},
-      })
-    })
   })
 
   it('handles 409 conflict errors', async () => {
@@ -259,7 +217,7 @@ describe('OutputSchemaFormDialog', () => {
       id: 'new-schema-id',
       name: 'Test Schema',
       description: '',
-      json_schema: {type: 'object', properties: {}},
+      schema: {type: 'object', properties: {}},
       user_id: 'user-1',
       created_at: '2024-01-01T00:00:00Z',
       updated_at: '2024-01-01T00:00:00Z',
@@ -285,16 +243,13 @@ describe('OutputSchemaFormDialog', () => {
     expect((nameInputAfter as HTMLInputElement).value).toBe('')
   })
 
-  it('trims whitespace from name and description', async () => {
+  it('trims whitespace from name', async () => {
     const user = userEvent.setup()
     const mockSchema = {
       id: 'new-schema-id',
       name: 'Test Schema',
-      description: 'Test description',
-      json_schema: {type: 'object', properties: {}},
-      user_id: 'user-1',
+      schema: {type: 'object', properties: {}},
       created_at: '2024-01-01T00:00:00Z',
-      updated_at: '2024-01-01T00:00:00Z',
     }
 
     mockMutate.mockResolvedValue(mockSchema)
@@ -304,17 +259,13 @@ describe('OutputSchemaFormDialog', () => {
     const nameInput = screen.getByLabelText(/name/i)
     await user.type(nameInput, '  Test Schema  ')
 
-    const descriptionInput = screen.getByLabelText(/description/i)
-    await user.type(descriptionInput, '  Test description  ')
-
     const createButton = screen.getByRole('button', {name: /create/i})
     await user.click(createButton)
 
     await waitFor(() => {
       expect(mockMutate).toHaveBeenCalledWith({
         name: 'Test Schema',
-        description: 'Test description',
-        json_schema: {type: 'object', properties: {}},
+        schema: {type: 'object', properties: {}},
       })
     })
   })
