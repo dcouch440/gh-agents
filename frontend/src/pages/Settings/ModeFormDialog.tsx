@@ -10,8 +10,12 @@ import {
   Alert,
   Checkbox,
   FormControlLabel,
+  Divider,
+  Typography,
+  CircularProgress,
 } from '@mui/material'
 import { useRouterModeMutations } from '@/hooks/useRouterModeMutations'
+import { useTools } from '@/hooks/useTools'
 import { ApiError } from '@/api'
 import type { RouterMode } from '@/types'
 
@@ -33,6 +37,7 @@ type FormState = {
   append_to_agent_system_prompt: boolean
   append_to_agent_tools: boolean
   display_order: number
+  selectedToolIds: string[]
   saving: boolean
   error: string | null
 }
@@ -47,9 +52,11 @@ type FormAction =
   | { type: 'SET_APPEND_SYSTEM_PROMPT'; value: boolean }
   | { type: 'SET_APPEND_TOOLS'; value: boolean }
   | { type: 'SET_DISPLAY_ORDER'; value: number }
+  | { type: 'SET_SELECTED_TOOL_IDS'; value: string[] }
+  | { type: 'TOGGLE_TOOL'; toolId: string }
   | { type: 'SET_SAVING'; value: boolean }
   | { type: 'SET_ERROR'; value: string | null }
-  | { type: 'HYDRATE'; payload: Omit<FormState, 'saving' | 'error'> }
+  | { type: 'HYDRATE'; payload: Omit<FormState, 'saving' | 'error' | 'selectedToolIds'> }
   | { type: 'RESET' }
 
 const initialFormState: FormState = {
@@ -62,6 +69,7 @@ const initialFormState: FormState = {
   append_to_agent_system_prompt: false,
   append_to_agent_tools: true,
   display_order: 0,
+  selectedToolIds: [],
   saving: false,
   error: null,
 }
@@ -86,12 +94,21 @@ const formReducer = (state: FormState, action: FormAction): FormState => {
       return { ...state, append_to_agent_tools: action.value }
     case 'SET_DISPLAY_ORDER':
       return { ...state, display_order: action.value }
+    case 'SET_SELECTED_TOOL_IDS':
+      return { ...state, selectedToolIds: action.value }
+    case 'TOGGLE_TOOL':
+      return {
+        ...state,
+        selectedToolIds: state.selectedToolIds.includes(action.toolId)
+          ? state.selectedToolIds.filter((id) => id !== action.toolId)
+          : [...state.selectedToolIds, action.toolId],
+      }
     case 'SET_SAVING':
       return { ...state, saving: action.value }
     case 'SET_ERROR':
       return { ...state, error: action.value }
     case 'HYDRATE':
-      return { ...action.payload, saving: false, error: null }
+      return { ...action.payload, selectedToolIds: [], saving: false, error: null }
     case 'RESET':
       return initialFormState
   }
@@ -155,7 +172,8 @@ function ModeFormDialog({
   routerId,
 }: ModeFormDialogProps) {
   const [state, dispatch] = useReducer(formReducer, initialFormState)
-  const { createMode, updateMode } = useRouterModeMutations()
+  const { createMode, updateMode, loadModeTools, saveModeTools, loadingTools } = useRouterModeMutations()
+  const { tools: allTools = [] } = useTools()
   const isEdit = mode !== null
 
   useEffect(() => {
@@ -174,10 +192,23 @@ function ModeFormDialog({
           display_order: mode.display_order,
         },
       })
+      let cancelled = false
+      const load = async () => {
+        try {
+          const modeTools = await loadModeTools(mode.id)
+          if (!cancelled) {
+            dispatch({ type: 'SET_SELECTED_TOOL_IDS', value: modeTools.map((t) => t.id) })
+          }
+        } catch {
+          // Tools default to empty on error
+        }
+      }
+      void load()
+      return () => { cancelled = true }
     } else {
       dispatch({ type: 'RESET' })
     }
-  }, [mode, open])
+  }, [mode, open, loadModeTools])
 
   const handleSubmit = async () => {
     const validationError = validate(state, isEdit)
@@ -215,6 +246,8 @@ function ModeFormDialog({
           display_order: state.display_order,
         })
       }
+
+      await saveModeTools(savedMode.id, { tool_ids: state.selectedToolIds })
 
       onSave(savedMode)
       onClose()
@@ -382,6 +415,49 @@ function ModeFormDialog({
             fullWidth
             helperText="Lower numbers appear first"
           />
+
+          <Divider />
+
+          <Typography variant="subtitle2">
+            Tools ({state.selectedToolIds.length} selected)
+          </Typography>
+          {loadingTools ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+              <CircularProgress size={24} />
+            </Box>
+          ) : allTools.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              No tools available
+            </Typography>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+              {allTools.map((tool) => (
+                <FormControlLabel
+                  key={tool.id}
+                  control={
+                    <Checkbox
+                      checked={state.selectedToolIds.includes(tool.id)}
+                      onChange={() => dispatch({ type: 'TOGGLE_TOOL', toolId: tool.id })}
+                      size="small"
+                      disabled={state.saving}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {tool.name}
+                      </Typography>
+                      {tool.description ? (
+                        <Typography variant="caption" color="text.secondary">
+                          {tool.description}
+                        </Typography>
+                      ) : null}
+                    </Box>
+                  }
+                />
+              ))}
+            </Box>
+          )}
         </Box>
       </DialogContent>
 
