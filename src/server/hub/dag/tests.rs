@@ -1,7 +1,7 @@
 //! Tests for DAG module
 
 use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
-use crate::server::dag_executor::{resolve_for_each_array, resolve_variables, topological_sort};
+use crate::server::executors::dag::{resolve_for_each_array, resolve_variables, topological_sort};
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use uuid::Uuid;

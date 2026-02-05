@@ -7,12 +7,9 @@
 
 pub mod api;
 pub mod auth;
-pub mod chat_consumer;
-pub mod collection_dag_executor;
-pub mod dag_executor;
+pub mod executors;
 pub mod hub;
 pub mod openapi;
-pub mod room_executor;
 pub mod router_service;
 pub mod state;
 pub mod tools;
@@ -58,7 +55,7 @@ pub async fn start_server(db: PgPool, config: AppConfig, addr: SocketAddr) -> Re
     let (state, chat_rx) = AppState::new(db, config).await;
 
     // Spawn the chat consumer to process chat messages via LLM
-    let _chat_consumer_handle = chat_consumer::spawn_chat_consumer(state.clone(), chat_rx);
+    let _chat_consumer_handle = executors::chat::spawn_chat_consumer(state.clone(), chat_rx);
 
     let app = create_router(state);
 

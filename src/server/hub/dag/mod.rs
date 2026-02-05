@@ -1,7 +1,7 @@
 //! DAG orchestration — topological sort, variable resolution, for-each fan-out,
 //! and workflow execution using the unified ExecutionEngine.
 //!
-//! This module re-exports the pure graph/variable functions from `dag_executor`
+//! This module re-exports the pure graph/variable functions from `executors::dag`
 //! and provides `execute_workflow_via_engine` which delegates step execution
 //! to the hub's `ExecutionEngine` instead of running its own react loop.
 
@@ -24,8 +24,8 @@ use super::recorder::ExecutionRecorder;
 use super::strategies::dag_step::{compute_cost, DagStepConfig, DagStepStrategy};
 use super::streaming::NullSink;
 
-// Re-export pure DAG functions from the existing dag_executor
-pub use crate::server::dag_executor::{
+// Re-export pure DAG functions from executors::dag
+pub use crate::server::executors::dag::{
     compose_prompt, extract_for_each_label, find_entry_steps, get_child_steps, get_parent_steps,
     resolve_for_each_array, resolve_variables, topological_sort, DagPaused, StepOutput,
     WorkflowExecutionContext, WorkflowExecutionResult,
@@ -33,7 +33,7 @@ pub use crate::server::dag_executor::{
 
 /// Execute a complete workflow DAG using the unified ExecutionEngine.
 ///
-/// This replaces `dag_executor::execute_workflow` — same logic (topo sort,
+/// This replaces `executors::dag::execute_workflow` — same logic (topo sort,
 /// variable resolution, for-each fan-out, interactive review) but step
 /// execution goes through `ExecutionEngine::execute()` with `DagStepStrategy`.
 pub async fn execute_workflow_via_engine(

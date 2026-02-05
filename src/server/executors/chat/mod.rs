@@ -10,7 +10,7 @@ use tracing::{error, info, warn};
 
 use crate::llm::{AnthropicClient, LLMProvider, RateLimitedProvider, RetryingProvider};
 
-use super::state::{AppState, ConsumerMessage, StreamChunk};
+use crate::server::state::{AppState, ConsumerMessage, StreamChunk};
 
 /// Spawn the chat consumer as a background task.
 pub fn spawn_chat_consumer(
@@ -86,7 +86,7 @@ async fn handle_message(
     let agent_id = msg.agent_id.or(state.default_agent_id());
 
     match agent_id {
-        Some(aid) => match super::hub::run_chat(
+        Some(aid) => match crate::server::hub::run_chat(
             state,
             provider,
             aid,
@@ -115,7 +115,7 @@ async fn handle_message(
         }
     }
 
-    super::hub::schedule_stream_cleanup(state, message_id);
+    crate::server::hub::schedule_stream_cleanup(state, message_id);
     Ok(())
 }
 

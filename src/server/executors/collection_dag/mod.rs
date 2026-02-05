@@ -14,7 +14,7 @@ use crate::db::{
     CollectionRunRow, CollectionWorkflowEdgeRow, CollectionWorkflowRow, WorkflowExecutionRow,
 };
 use crate::llm::LLMProvider;
-use crate::server::dag_executor::{execute_workflow, WorkflowExecutionContext};
+use crate::server::executors::dag::{execute_workflow, WorkflowExecutionContext};
 use crate::server::state::AppState;
 
 /// Executor for workflow collections (DAG of workflows).
@@ -97,7 +97,7 @@ where
                     .await?
             }
             Err(ref e)
-                if e.downcast_ref::<crate::server::dag_executor::DagPaused>()
+                if e.downcast_ref::<crate::server::executors::dag::DagPaused>()
                     .is_some() =>
             {
                 self.collection_repo
@@ -246,7 +246,7 @@ where
         }
 
         if any_paused.load(std::sync::atomic::Ordering::Relaxed) {
-            return Err(crate::server::dag_executor::DagPaused {
+            return Err(crate::server::executors::dag::DagPaused {
                 step_id: Uuid::nil(),
                 execution_id: Uuid::nil(),
             }
@@ -299,7 +299,7 @@ where
             {
                 Ok(exec) => exec,
                 Err(e)
-                    if e.downcast_ref::<crate::server::dag_executor::DagPaused>()
+                    if e.downcast_ref::<crate::server::executors::dag::DagPaused>()
                         .is_some() =>
                 {
                     any_paused.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -449,11 +449,11 @@ where
                 Ok(workflow_exec)
             }
             Err(e)
-                if e.downcast_ref::<crate::server::dag_executor::DagPaused>()
+                if e.downcast_ref::<crate::server::executors::dag::DagPaused>()
                     .is_some() =>
             {
                 let paused = e
-                    .downcast_ref::<crate::server::dag_executor::DagPaused>()
+                    .downcast_ref::<crate::server::executors::dag::DagPaused>()
                     .unwrap();
                 let pause_metadata = serde_json::json!({
                     "__pause_state": {
@@ -594,7 +594,7 @@ async fn collect_workflow_outputs(
 /// Takes the outputs from all steps in the workflow and combines them into
 /// a single JSON object keyed by step output variable names.
 fn aggregate_step_outputs(
-    step_outputs: &HashMap<String, crate::server::dag_executor::StepOutput>,
+    step_outputs: &HashMap<String, crate::server::executors::dag::StepOutput>,
 ) -> JsonValue {
     use serde_json::json;
 

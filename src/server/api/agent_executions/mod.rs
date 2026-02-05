@@ -431,7 +431,7 @@ pub async fn approve_execution(
 
         if all_approved {
             // Build the step output from the approved execution
-            let step_output = crate::server::dag_executor::StepOutput {
+            let step_output = crate::server::executors::dag::StepOutput {
                 variable_name: String::new(), // Filled by resume logic from step metadata
                 raw_output: updated.output.clone().unwrap_or_default(),
                 structured_output: updated.structured_output.clone(),
