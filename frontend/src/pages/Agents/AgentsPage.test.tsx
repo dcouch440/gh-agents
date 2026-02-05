@@ -7,6 +7,7 @@ import type {Agent} from '@/types/agent'
 
 const mockNavigate = vi.hoisted(() => vi.fn())
 const mockCreateSession = vi.hoisted(() => vi.fn())
+const mockDeleteAgent = vi.hoisted(() => vi.fn())
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom')
@@ -53,6 +54,14 @@ vi.mock('@/hooks/useSessions', () => ({
   useSessions: () => mockUseSessions() as unknown,
 }))
 
+vi.mock('@/hooks/useAgentMutations', () => ({
+  useDeleteAgent: () => ({
+    mutate: mockDeleteAgent,
+    loading: false,
+    error: null,
+  }),
+}))
+
 vi.mock('@/api', () => ({
   api: {
     sessions: {create: mockCreateSession},
@@ -66,6 +75,7 @@ describe('AgentsPage', () => {
       agents: mockAgents,
       loading: false,
       error: null,
+      reload: vi.fn(),
     }))
     mockUseSessions = vi.fn(() => ({
       sessions: [],
@@ -110,7 +120,7 @@ describe('AgentsPage', () => {
     expect(screen.getByText('Temperature')).toBeInTheDocument()
     expect(screen.getByText('Max Tokens')).toBeInTheDocument()
     expect(screen.getByText('Status')).toBeInTheDocument()
-    expect(screen.getByText('Workshop')).toBeInTheDocument()
+    expect(screen.getByText('Actions')).toBeInTheDocument()
 
     // Check data is displayed
     expect(screen.getByText('openai/gpt-4')).toBeInTheDocument()
@@ -124,6 +134,7 @@ describe('AgentsPage', () => {
       agents: [],
       loading: true,
       error: null,
+      reload: vi.fn(),
     }))
 
     render(
@@ -140,6 +151,7 @@ describe('AgentsPage', () => {
       agents: [],
       loading: false,
       error: null,
+      reload: vi.fn(),
     }))
 
     render(
@@ -158,6 +170,7 @@ describe('AgentsPage', () => {
       agents: [],
       loading: false,
       error: 'Failed to load agents',
+      reload: vi.fn(),
     }))
 
     render(
@@ -196,6 +209,7 @@ describe('AgentsPage', () => {
       agents: agentsWithDraft,
       loading: false,
       error: null,
+      reload: vi.fn(),
     }))
 
     render(
@@ -207,18 +221,38 @@ describe('AgentsPage', () => {
     expect(screen.queryByText('[Workshop Draft] Test')).not.toBeInTheDocument()
   })
 
-  it('shows Start Workshop button for agents without sessions', () => {
+  it('shows action menu buttons for each agent', () => {
     render(
       <MemoryRouter>
         <AgentsPage />
       </MemoryRouter>,
     )
 
-    const startButtons = screen.getAllByText('Start Workshop')
-    expect(startButtons).toHaveLength(2)
+    // Should have action menu buttons for each agent
+    const actionButtons = screen.getAllByLabelText(/Actions for/i)
+    expect(actionButtons).toHaveLength(2)
   })
 
-  it('shows Open Workshop button for agents with sessions', () => {
+  it('shows Workshop action in menu', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <AgentsPage />
+      </MemoryRouter>,
+    )
+
+    // Open first action menu
+    const actionButtons = screen.getAllByLabelText(/Actions for/i)
+    await user.click(actionButtons[0])
+
+    // Should show Start Workshop action
+    expect(screen.getByText('Start Workshop')).toBeInTheDocument()
+  })
+
+  it('shows Open Workshop when session exists', async () => {
+    const user = userEvent.setup()
+
     mockUseSessions = vi.fn(() => ({
       sessions: [
         {
@@ -238,7 +272,28 @@ describe('AgentsPage', () => {
       </MemoryRouter>,
     )
 
+    // Open first action menu
+    const actionButtons = screen.getAllByLabelText(/Actions for/i)
+    await user.click(actionButtons[0])
+
     expect(screen.getByText('Open Workshop')).toBeInTheDocument()
+  })
+
+  it('shows View Details and Delete actions in menu', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <AgentsPage />
+      </MemoryRouter>,
+    )
+
+    // Open first action menu
+    const actionButtons = screen.getAllByLabelText(/Actions for/i)
+    await user.click(actionButtons[0])
+
+    expect(screen.getByText('View Details')).toBeInTheDocument()
+    expect(screen.getByText('Delete')).toBeInTheDocument()
   })
 
   it('navigates to workshop on New Workshop button click', async () => {
@@ -287,5 +342,29 @@ describe('AgentsPage', () => {
 
     const columnMenuButton = screen.getByLabelText('Column visibility')
     expect(columnMenuButton).toBeInTheDocument()
+  })
+
+  it('opens delete confirmation modal when delete action clicked', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <AgentsPage />
+      </MemoryRouter>,
+    )
+
+    // Open first action menu
+    const actionButtons = screen.getAllByLabelText(/Actions for/i)
+    await user.click(actionButtons[0])
+
+    // Click delete action
+    const deleteAction = screen.getByText('Delete')
+    await user.click(deleteAction)
+
+    // Confirmation modal should open
+    expect(screen.getByText('Delete Agent')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Are you sure you want to delete "Alice Agent"/i),
+    ).toBeInTheDocument()
   })
 })
