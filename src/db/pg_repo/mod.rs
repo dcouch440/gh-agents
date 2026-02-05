@@ -561,8 +561,18 @@ impl ServerRepo for PgRepo {
         mode_id: &str,
         title: &str,
         agent_id: Option<Uuid>,
+        draft_config: Option<serde_json::Value>,
     ) -> Result<()> {
-        crate::db::create_session(&self.pool, user_id, session_id, mode_id, title, agent_id).await
+        crate::db::create_session(
+            &self.pool,
+            user_id,
+            session_id,
+            mode_id,
+            title,
+            agent_id,
+            draft_config,
+        )
+        .await
     }
 
     async fn list_sessions(&self, user_id: UserId) -> Result<Vec<SessionRow>> {
@@ -617,6 +627,22 @@ impl ServerRepo for PgRepo {
                 .fetch_one(&self.pool)
                 .await?;
         Ok(row.0 as u32)
+    }
+
+    async fn update_session_draft_config(
+        &self,
+        session_id: Uuid,
+        draft_config: Option<serde_json::Value>,
+    ) -> Result<()> {
+        crate::db::update_session_draft_config(&self.pool, session_id, draft_config).await
+    }
+
+    async fn clear_session_messages(&self, session_id: Uuid) -> Result<()> {
+        crate::db::clear_session_messages(&self.pool, session_id).await
+    }
+
+    async fn link_session_agent(&self, session_id: Uuid, agent_id: Uuid) -> Result<()> {
+        crate::db::link_session_agent(&self.pool, session_id, agent_id).await
     }
 
     // --- Agent modes ---

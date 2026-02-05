@@ -106,12 +106,57 @@ async fn handle_message(
             }
         },
         None => {
-            warn!(
-                "No agent_id and no default agent configured for message {}",
-                message_id
-            );
-            state.send_stream_chunk(message_id, StreamChunk::Error("No agent configured".into()));
-            state.send_stream_chunk(message_id, StreamChunk::Done);
+            // No agent_id - check if session has draft_config
+            let draft_config = if let Some(session_id) = msg.session_id {
+                state
+                    .repo()
+                    .get_session(session_id)
+                    .await
+                    .ok()
+                    .flatten()
+                    .and_then(|s| s.draft_config)
+                    .and_then(|v| {
+                        serde_json::from_value::<crate::server::hub::DraftConfig>(v).ok()
+                    })
+            } else {
+                None
+            };
+
+            match draft_config {
+                Some(config) => {
+                    match crate::server::hub::run_chat_with_config(
+                        state,
+                        provider,
+                        msg.session_id.unwrap(), // Safe: we checked above
+                        config,
+                        message_id,
+                        &msg.content,
+                        msg.user_id,
+                        None,
+                    )
+                    .await
+                    {
+                        Ok(_) => {}
+                        Err(e) => {
+                            warn!("Chat error for {} (draft config): {}", message_id, e);
+                            state
+                                .send_stream_chunk(message_id, StreamChunk::Error(format!("{}", e)));
+                            state.send_stream_chunk(message_id, StreamChunk::Done);
+                        }
+                    }
+                }
+                None => {
+                    warn!(
+                        "No agent_id, no default agent, and no draft_config for message {}",
+                        message_id
+                    );
+                    state.send_stream_chunk(
+                        message_id,
+                        StreamChunk::Error("No agent configured".into()),
+                    );
+                    state.send_stream_chunk(message_id, StreamChunk::Done);
+                }
+            }
         }
     }
 

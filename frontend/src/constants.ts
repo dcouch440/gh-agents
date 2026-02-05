@@ -125,6 +125,9 @@ export const API = {
   SESSION_HISTORY: (id: string) => `/sessions/${id}/history`,
   SESSION_CHAT_STREAM: (sessionId: string, messageId: string) =>
     `/sessions/${sessionId}/chat/${messageId}/stream`,
+  SESSION_CONFIG: (id: string) => `/sessions/${id}/config`,
+  SESSION_MESSAGES: (id: string) => `/sessions/${id}/messages`,
+  SESSION_SAVE_AGENT: (id: string) => `/sessions/${id}/save-agent`,
 
   // Chat
   CHAT: "/chat",

@@ -273,6 +273,7 @@ pub struct SessionRow {
     pub title: String,
     pub summary: String,
     pub agent_id: Option<Uuid>,
+    pub draft_config: Option<serde_json::Value>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -285,13 +286,15 @@ pub async fn create_session(
     mode_id: &str,
     title: &str,
     agent_id: Option<Uuid>,
+    draft_config: Option<serde_json::Value>,
 ) -> Result<()> {
-    sqlx::query("INSERT INTO chat_sessions (id, user_id, mode_id, title, agent_id) VALUES ($1, $2, $3, $4, $5)")
+    sqlx::query("INSERT INTO chat_sessions (id, user_id, mode_id, title, agent_id, draft_config) VALUES ($1, $2, $3, $4, $5, $6)")
         .bind(session_id)
         .bind(user_id.0)
         .bind(mode_id)
         .bind(title)
         .bind(agent_id)
+        .bind(draft_config)
         .execute(pool)
         .await
         .context("Failed to create session")?;
@@ -301,7 +304,7 @@ pub async fn create_session(
 /// List sessions for a user
 pub async fn list_sessions(pool: &PgPool, user_id: UserId) -> Result<Vec<SessionRow>> {
     let rows: Vec<SessionRow> =
-        sqlx::query_as("SELECT id, user_id, mode_id, title, summary, agent_id, created_at, updated_at FROM chat_sessions WHERE user_id = $1 ORDER BY updated_at DESC")
+        sqlx::query_as("SELECT id, user_id, mode_id, title, summary, agent_id, draft_config, created_at, updated_at FROM chat_sessions WHERE user_id = $1 ORDER BY updated_at DESC")
             .bind(user_id.0)
             .fetch_all(pool)
             .await
@@ -311,7 +314,7 @@ pub async fn list_sessions(pool: &PgPool, user_id: UserId) -> Result<Vec<Session
 
 /// Get a session by ID
 pub async fn get_session(pool: &PgPool, session_id: Uuid) -> Result<Option<SessionRow>> {
-    let row: Option<SessionRow> = sqlx::query_as("SELECT id, user_id, mode_id, title, summary, agent_id, created_at, updated_at FROM chat_sessions WHERE id = $1")
+    let row: Option<SessionRow> = sqlx::query_as("SELECT id, user_id, mode_id, title, summary, agent_id, draft_config, created_at, updated_at FROM chat_sessions WHERE id = $1")
         .bind(session_id)
         .fetch_optional(pool)
         .await
@@ -390,6 +393,44 @@ pub async fn touch_session(pool: &PgPool, session_id: Uuid) -> Result<()> {
         .execute(pool)
         .await
         .context("Failed to touch session")?;
+    Ok(())
+}
+
+/// Update session draft_config
+pub async fn update_session_draft_config(
+    pool: &PgPool,
+    session_id: Uuid,
+    draft_config: Option<serde_json::Value>,
+) -> Result<()> {
+    sqlx::query("UPDATE chat_sessions SET draft_config = $2, updated_at = NOW() WHERE id = $1")
+        .bind(session_id)
+        .bind(draft_config)
+        .execute(pool)
+        .await
+        .context("Failed to update session draft_config")?;
+    Ok(())
+}
+
+/// Clear all messages for a session
+pub async fn clear_session_messages(pool: &PgPool, session_id: Uuid) -> Result<()> {
+    sqlx::query("DELETE FROM chat_messages WHERE session_id = $1")
+        .bind(session_id)
+        .execute(pool)
+        .await
+        .context("Failed to clear session messages")?;
+    Ok(())
+}
+
+/// Link an agent to a session (and clear draft_config)
+pub async fn link_session_agent(pool: &PgPool, session_id: Uuid, agent_id: Uuid) -> Result<()> {
+    sqlx::query(
+        "UPDATE chat_sessions SET agent_id = $2, draft_config = NULL, updated_at = NOW() WHERE id = $1",
+    )
+    .bind(session_id)
+    .bind(agent_id)
+    .execute(pool)
+    .await
+    .context("Failed to link agent to session")?;
     Ok(())
 }
 

@@ -1,7 +1,7 @@
 export type { User } from './user'
 export type { Agent, AgentStatus, AgentPoolStats, AgentsResponse, AgentToolsResponse, AgentContextResponse, CreateAgentRequest, UpdateAgentRequest } from './agent'
 export type { Task, TaskStatus, TaskPriority, CreateTaskRequest } from './task'
-export type { Session, ChatMessage, Mode, CreateSessionRequest, UpdateSessionRequest, SendMessageRequest } from './session'
+export type { DraftConfig, Session, ChatMessage, Mode, CreateSessionRequest, UpdateSessionRequest, SendMessageRequest, SaveAgentRequest, SaveAgentResponse } from './session'
 export type { Document, DocumentSearchResult, DocumentListItem, CreateDocumentRequest, UpdateDocumentRequest } from './document'
 export type { FeedItem, FeedItemType, VerbosityLevel } from './feed'
 export type { Tool, CreateToolRequest, UpdateToolRequest } from './tool'

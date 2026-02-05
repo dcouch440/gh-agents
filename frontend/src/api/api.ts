@@ -22,6 +22,9 @@ import type {
   UpdateSessionRequest,
   SendMessageRequest,
   ChatMessage,
+  DraftConfig,
+  SaveAgentRequest,
+  SaveAgentResponse,
   Config,
   UpdateConfigRequest,
   UsageSummary,
@@ -181,6 +184,15 @@ const sessions = {
 
   getHistory: (id: string, config?: RequestConfig) =>
     baseApi.get<SessionHistoryResponse>(API.SESSION_HISTORY(id), config),
+
+  updateConfig: (id: string, draftConfig: DraftConfig, config?: RequestConfig) =>
+    baseApi.patch<Session>(API.SESSION_CONFIG(id), {draft_config: draftConfig}, config),
+
+  clearMessages: (id: string, config?: RequestConfig) =>
+    baseApi.del<void>(API.SESSION_MESSAGES(id), config),
+
+  saveAgent: (id: string, body: SaveAgentRequest, config?: RequestConfig) =>
+    baseApi.post<SaveAgentResponse>(API.SESSION_SAVE_AGENT(id), body, config),
 }
 
 const chat = {

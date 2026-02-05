@@ -69,10 +69,11 @@ pub use documents::{
 
 // Re-export session handlers and types
 pub use sessions::{
-    create_agent_mode, create_session, delete_agent_mode, delete_session, get_session,
-    get_session_history, list_agent_modes, list_modes, list_sessions, send_session_chat,
-    update_session, AgentModeResponse, CreateAgentModeRequest, CreateSessionRequest, ModeInfo,
-    SessionResponse, UpdateSessionRequest,
+    clear_session_messages, create_agent_mode, create_session, delete_agent_mode, delete_session,
+    get_session, get_session_history, list_agent_modes, list_modes, list_sessions,
+    save_session_agent, send_session_chat, update_session, update_session_config,
+    AgentModeResponse, CreateAgentModeRequest, CreateSessionRequest, ModeInfo, SaveAgentRequest,
+    SaveAgentResponse, SessionResponse, UpdateDraftConfigRequest, UpdateSessionRequest,
 };
 
 // Re-export output schema handlers and types
