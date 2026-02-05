@@ -1169,4 +1169,5 @@ struct ConflictRegionBuilder {
     in_section: ConflictSection,
 }
 
+#[cfg(test)]
 mod tests;
