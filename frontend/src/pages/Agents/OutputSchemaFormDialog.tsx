@@ -23,7 +23,6 @@ type OutputSchemaFormDialogProps = {
 
 type FormState = {
   name: string
-  description: string
   jsonSchemaText: string
   saving: boolean
   error: string | null
@@ -31,7 +30,6 @@ type FormState = {
 
 type FormAction =
   | {type: 'SET_NAME'; value: string}
-  | {type: 'SET_DESCRIPTION'; value: string}
   | {type: 'SET_JSON_SCHEMA'; value: string}
   | {type: 'SET_SAVING'; value: boolean}
   | {type: 'SET_ERROR'; value: string | null}
@@ -39,7 +37,6 @@ type FormAction =
 
 const initialFormState: FormState = {
   name: '',
-  description: '',
   jsonSchemaText: '{\n  "type": "object",\n  "properties": {}\n}',
   saving: false,
   error: null,
@@ -49,8 +46,6 @@ const formReducer = (state: FormState, action: FormAction): FormState => {
   switch (action.type) {
     case 'SET_NAME':
       return {...state, name: action.value}
-    case 'SET_DESCRIPTION':
-      return {...state, description: action.value}
     case 'SET_JSON_SCHEMA':
       return {...state, jsonSchemaText: action.value}
     case 'SET_SAVING':
@@ -92,8 +87,7 @@ function OutputSchemaFormDialog({open, onClose, onSave}: OutputSchemaFormDialogP
       const parsed = JSON.parse(state.jsonSchemaText) as Record<string, unknown>
       const schema = await mutate({
         name: state.name.trim(),
-        description: state.description.trim() || undefined,
-        json_schema: parsed,
+        schema: parsed,
       })
 
       onSave(schema.id)
@@ -144,15 +138,6 @@ function OutputSchemaFormDialog({open, onClose, onSave}: OutputSchemaFormDialogP
             fullWidth
             inputProps={{maxLength: 200}}
             helperText={`${state.name.length}/200 characters`}
-          />
-          <TextField
-            label="Description"
-            value={state.description}
-            onChange={(e) => dispatch({type: 'SET_DESCRIPTION', value: e.target.value})}
-            disabled={state.saving}
-            multiline
-            rows={3}
-            fullWidth
           />
           <Box>
             <Typography variant="body2" sx={{mb: 1, fontWeight: 500}}>
