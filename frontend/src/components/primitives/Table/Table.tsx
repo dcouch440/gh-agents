@@ -8,24 +8,36 @@ import {
   TableSortLabel,
   Paper,
   Box,
+  Checkbox,
 } from '@mui/material'
+import {useCallback} from 'react'
 import {LoadingSpinner, EmptyState, ErrorMessage, Skeleton} from '@/components/primitives'
 import {useTableState} from './useTableState'
+import {useTableColumns} from './useTableColumns'
 import {TableToolbar} from './TableToolbar'
 import {TablePagination} from './TablePagination'
-import {getDensityPadding} from './utils'
+import {TableColumnMenu} from './TableColumnMenu'
+import {TableExportButton} from './TableExportButton'
+import {getDensityPadding, exportToCSV, exportToJSON} from './utils'
 import type {TableProps, TableColumn} from './types'
 
 function Table<T>({
   data,
   keyExtractor,
   columns,
+  defaultVisibleColumns,
   loading = false,
   error = null,
   emptyMessage = 'No data available',
   enableSorting = false,
   enableSearch = false,
   enablePagination = false,
+  enableSelection = false,
+  enableExport = false,
+  exportFilename,
+  selectionMode = 'multiple',
+  selectedRows = [],
+  onSelectionChange,
   defaultSortColumn,
   defaultSortDirection = 'asc',
   defaultPageSize = 25,
@@ -36,6 +48,18 @@ function Table<T>({
   density = 'normal',
   onRowClick,
 }: TableProps<T>) {
+  // Column visibility management
+  const {
+    visibleColumns,
+    hiddenColumnKeys,
+    toggleColumnVisibility,
+    showAllColumns,
+    hideAllColumns,
+  } = useTableColumns({
+    columns,
+    defaultVisibleColumns,
+  })
+
   const {
     displayedData,
     totalRows,
@@ -49,9 +73,12 @@ function Table<T>({
     pageSize,
     setPage,
     setPageSize,
+    selectedRowKeys,
+    toggleRowSelection,
+    toggleAllSelection,
   } = useTableState({
     data,
-    columns,
+    columns: visibleColumns,
     defaultSortColumn,
     defaultSortDirection,
     defaultPageSize,
@@ -60,6 +87,22 @@ function Table<T>({
     enableSearch,
     enablePagination,
   })
+
+  // Export handlers (must be defined before early returns)
+  const handleExportCSV = useCallback(() => {
+    const dataToExport = displayedData
+    const columnsForExport = visibleColumns.map((col) => ({
+      key: col.key,
+      header: col.header,
+    }))
+    const filename = exportFilename ? `${exportFilename}.csv` : 'export.csv'
+    exportToCSV(dataToExport, columnsForExport, filename)
+  }, [displayedData, visibleColumns, exportFilename])
+
+  const handleExportJSON = useCallback(() => {
+    const filename = exportFilename ? `${exportFilename}.json` : 'export.json'
+    exportToJSON(displayedData, filename)
+  }, [displayedData, exportFilename])
 
   // Loading state
   if (loading && data.length === 0) {
@@ -90,6 +133,30 @@ function Table<T>({
 
   const padding = getDensityPadding(density)
 
+  // Sync selection with parent component
+  if (enableSelection && onSelectionChange) {
+    const currentSelection = Array.from(selectedRowKeys)
+    const isDifferent =
+      currentSelection.length !== selectedRows.length ||
+      currentSelection.some((key) => !selectedRows.includes(key))
+
+    if (isDifferent) {
+      onSelectionChange(currentSelection)
+    }
+  }
+
+  // Check if all displayed rows are selected
+  const allDisplayedKeys = displayedData.map((row) => keyExtractor(row))
+  const allSelected =
+    enableSelection &&
+    allDisplayedKeys.length > 0 &&
+    allDisplayedKeys.every((key) => selectedRowKeys.has(key))
+
+  const someSelected =
+    enableSelection &&
+    allDisplayedKeys.some((key) => selectedRowKeys.has(key)) &&
+    !allSelected
+
   return (
     <TableContainer component={Paper} elevation={0}>
       {enableSearch && (
@@ -99,6 +166,24 @@ function Table<T>({
           searchPlaceholder={searchPlaceholder}
           totalRows={totalRows}
           filteredRows={filteredRows}
+          columnMenu={
+            <TableColumnMenu
+              columns={columns}
+              hiddenColumnKeys={hiddenColumnKeys}
+              onToggleColumn={toggleColumnVisibility}
+              onShowAll={showAllColumns}
+              onHideAll={hideAllColumns}
+            />
+          }
+          exportButton={
+            enableExport ? (
+              <TableExportButton
+                onExportCSV={handleExportCSV}
+                onExportJSON={handleExportJSON}
+                disabled={displayedData.length === 0}
+              />
+            ) : undefined
+          }
         />
       )}
       <MuiTable
@@ -107,7 +192,19 @@ function Table<T>({
       >
         <TableHead>
           <TableRow>
-            {columns.map((column) => {
+            {enableSelection && (
+              <TableCell padding="checkbox" sx={{p: padding}}>
+                {selectionMode === 'multiple' && (
+                  <Checkbox
+                    indeterminate={someSelected}
+                    checked={allSelected}
+                    onChange={() => toggleAllSelection(allDisplayedKeys)}
+                    inputProps={{'aria-label': 'Select all rows'}}
+                  />
+                )}
+              </TableCell>
+            )}
+            {visibleColumns.map((column) => {
               const isSortable = enableSorting && column.sortable
               const isActive = sortColumn === column.key
 
@@ -144,7 +241,12 @@ function Table<T>({
             // Loading skeleton rows
             Array.from({length: 5}).map((_, index) => (
               <TableRow key={index}>
-                {columns.map((column) => (
+                {enableSelection && (
+                  <TableCell padding="checkbox" sx={{p: padding}}>
+                    <Skeleton variant="rectangular" width={24} height={24} />
+                  </TableCell>
+                )}
+                {visibleColumns.map((column) => (
                   <TableCell key={column.key} sx={{p: padding}}>
                     <Skeleton variant="text" />
                   </TableCell>
@@ -154,7 +256,11 @@ function Table<T>({
           ) : displayedData.length === 0 ? (
             // No filtered results
             <TableRow>
-              <TableCell colSpan={columns.length} align="center" sx={{py: 4}}>
+              <TableCell
+                colSpan={visibleColumns.length + (enableSelection ? 1 : 0)}
+                align="center"
+                sx={{py: 4}}
+              >
                 <EmptyState message="No results found" />
               </TableCell>
             </TableRow>
@@ -162,16 +268,28 @@ function Table<T>({
             // Data rows
             displayedData.map((row) => {
               const rowKey = keyExtractor(row)
+              const isSelected = selectedRowKeys.has(rowKey)
               return (
                 <TableRow
                   key={rowKey}
                   hover
+                  selected={enableSelection && isSelected}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                   sx={{
                     cursor: onRowClick ? 'pointer' : 'default',
                   }}
                 >
-                  {columns.map((column) => (
+                  {enableSelection && (
+                    <TableCell padding="checkbox" sx={{p: padding}}>
+                      <Checkbox
+                        checked={isSelected}
+                        onChange={() => toggleRowSelection(rowKey)}
+                        onClick={(e) => e.stopPropagation()}
+                        inputProps={{'aria-label': `Select row ${rowKey}`}}
+                      />
+                    </TableCell>
+                  )}
+                  {visibleColumns.map((column) => (
                     <TableCell
                       key={column.key}
                       align={column.align ?? 'left'}

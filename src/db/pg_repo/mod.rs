@@ -352,7 +352,7 @@ impl ServerRepo for PgRepo {
 
     async fn list_persisted_agents(&self, user_id: UserId) -> Result<Vec<AgentRow>> {
         let rows = sqlx::query_as::<_, PgAgentRow>(
-            "SELECT id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, output_schema_id, version FROM agents WHERE user_id = $1",
+            "SELECT id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, router_id, output_schema_id, version FROM agents WHERE user_id = $1",
         )
         .bind(user_id.0)
         .fetch_all(&self.pool)
@@ -363,7 +363,7 @@ impl ServerRepo for PgRepo {
 
     async fn get_persisted_agent(&self, agent_id: Uuid) -> Result<Option<AgentRow>> {
         let row = sqlx::query_as::<_, PgAgentRow>(
-            "SELECT id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, output_schema_id, version FROM agents WHERE id = $1",
+            "SELECT id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, router_id, output_schema_id, version FROM agents WHERE id = $1",
         )
         .bind(agent_id)
         .fetch_optional(&self.pool)
