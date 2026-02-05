@@ -526,7 +526,7 @@ pub trait AgentExecutionRepo: Send + Sync {
     async fn list_agent_executions(
         &self,
         user_id: Uuid,
-        status: Option<&str>,
+        status: Option<String>,
     ) -> Result<Vec<AgentExecutionRow>>;
 }
 

@@ -128,7 +128,7 @@ pub async fn list_agent_executions(
         .as_ref()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo
-        .list_agent_executions(auth.user_id.0, query.status.as_deref())
+        .list_agent_executions(auth.user_id.0, query.status)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let items: Vec<AgentExecutionResponse> = rows
