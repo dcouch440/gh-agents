@@ -25,6 +25,9 @@ export type { ButtonProps, ButtonVariant, ButtonSize } from './Button'
 export { CodeEditor } from './CodeEditor'
 export type { CodeEditorProps } from './CodeEditor'
 
+export { JsonEditor } from './JsonEditor'
+export type { JsonEditorProps } from './JsonEditor'
+
 export { SplitPane } from './SplitPane'
 export type { SplitPaneProps } from './SplitPane'
 
