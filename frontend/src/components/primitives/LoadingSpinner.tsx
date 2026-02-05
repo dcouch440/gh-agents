@@ -1,10 +1,11 @@
-import { Box, CircularProgress } from '@mui/material'
+import { Box, CircularProgress, Typography } from '@mui/material'
 
 type SpinnerSize = 'sm' | 'md' | 'lg'
 
 type LoadingSpinnerProps = {
   size?: SpinnerSize
   centered?: boolean
+  label?: string
 }
 
 const SIZE_MAP = {
@@ -13,8 +14,17 @@ const SIZE_MAP = {
   lg: 60,
 } as const
 
-function LoadingSpinner({ size = 'md', centered = false }: LoadingSpinnerProps) {
-  const spinner = <CircularProgress size={SIZE_MAP[size]} />
+function LoadingSpinner({ size = 'md', centered = false, label }: LoadingSpinnerProps) {
+  const spinner = (
+    <Box sx={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
+      <CircularProgress size={SIZE_MAP[size]} color="primary" />
+      {label ? (
+        <Typography variant="caption" color="text.secondary">
+          {label}
+        </Typography>
+      ) : null}
+    </Box>
+  )
 
   if (centered) {
     return (

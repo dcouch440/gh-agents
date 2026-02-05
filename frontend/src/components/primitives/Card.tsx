@@ -1,13 +1,15 @@
 import type { ReactNode } from 'react'
 import { Paper, Box, Typography } from '@mui/material'
+import { ANIMATION } from '@/constants'
 
 type CardProps = {
   title?: string
   actions?: ReactNode
   children: ReactNode
+  hoverable?: boolean
 }
 
-function Card({ title, actions, children }: CardProps) {
+function Card({ title, actions, children, hoverable }: CardProps) {
   return (
     <Paper
       elevation={0}
@@ -16,6 +18,15 @@ function Card({ title, actions, children }: CardProps) {
         borderColor: 'divider',
         borderRadius: 2,
         overflow: 'hidden',
+        ...(hoverable
+          ? {
+              transition: `transform ${ANIMATION.FAST}ms ease, box-shadow ${ANIMATION.FAST}ms ease`,
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: 2,
+              },
+            }
+          : {}),
       }}
     >
       {title ? (

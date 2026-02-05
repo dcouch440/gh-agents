@@ -1,27 +1,26 @@
-import { Box, Container } from '@mui/material';
+import Box from '@mui/material/Box';
+import Container from '@mui/material/Container';
 import { Outlet } from 'react-router-dom';
-import { TopNavBar } from './TopNavBar';
+import { Sidebar } from './Sidebar';
+import { useSidebar } from '@/hooks/useSidebar';
+import { SIDEBAR, ANIMATION } from '@/constants';
 
-// Base-level constant: Layout spacing configuration
-const LAYOUT_SPACING = {
-  topPadding: 9,    // 72px (AppBar 56px + 16px margin)
-  horizontalPadding: 3,
-  bottomPadding: 3,
-} as const;
-
-// Stateless component - pure function
 function AppLayout() {
+  const { collapsed } = useSidebar();
+  const sidebarWidth = collapsed ? SIDEBAR.WIDTH_COLLAPSED : SIDEBAR.WIDTH_EXPANDED;
+
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <TopNavBar />
+    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+      <Sidebar />
 
       <Box
         component="main"
         sx={{
           flexGrow: 1,
-          pt: LAYOUT_SPACING.topPadding,
-          px: LAYOUT_SPACING.horizontalPadding,
-          pb: LAYOUT_SPACING.bottomPadding,
+          ml: `${sidebarWidth}px`,
+          transition: `margin-left ${ANIMATION.NORMAL}ms ease`,
+          p: 3,
+          pt: 4,
         }}
       >
         <Container maxWidth="xl" disableGutters>

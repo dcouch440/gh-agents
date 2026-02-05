@@ -11,12 +11,14 @@ export type { EmptyStateProps } from './EmptyState'
 export { PageHeader } from './PageHeader'
 export { Card } from './Card'
 export { DataTable } from './DataTable'
+export { Table } from './Table'
 export { KeyValue } from './KeyValue'
 export { Button } from './Button'
 
-export type { PageHeaderProps } from './PageHeader'
+export type { PageHeaderProps, BreadcrumbItem } from './PageHeader'
 export type { CardProps } from './Card'
 export type { Column, SortDirection, DataTableProps } from './DataTable'
+export type { TableProps, TableColumn, RowAction, TableDensity } from './Table'
 export type { KeyValueProps } from './KeyValue'
 export type { ButtonProps, ButtonVariant, ButtonSize } from './Button'
 
@@ -34,3 +36,9 @@ export type { EditorToolbarProps } from './EditorToolbar'
 
 export { ToggleGroup } from './ToggleGroup'
 export type { ToggleOption, ToggleGroupProps } from './ToggleGroup'
+
+export { SearchInput } from './SearchInput'
+export type { SearchInputProps } from './SearchInput'
+
+export { Skeleton } from './Skeleton'
+export type { SkeletonProps, SkeletonVariant } from './Skeleton'

@@ -10,6 +10,6 @@ describe('EditorToolbar', () => {
 
   it('applies className', () => {
     const { container } = render(<EditorToolbar className="extra">content</EditorToolbar>)
-    expect(container.firstChild).toHaveClass('editor-toolbar', 'extra')
+    expect(container.firstChild).toHaveClass('extra')
   })
 })

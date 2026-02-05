@@ -1,20 +1,17 @@
-import {useMemo, useState} from "react";
+import {useMemo, useState, useCallback} from "react";
 import {useNavigate} from "react-router-dom";
+import {Box, Button, Typography} from "@mui/material";
+import {FadeIn} from "@/components/animation";
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  CardActions,
-  Typography,
-  CircularProgress,
-  Alert,
-  Grid,
-} from "@mui/material";
-import {PageHeader} from "@/components/primitives";
+  PageHeader,
+  Table,
+  StatusBadge,
+  type TableColumn,
+} from "@/components/primitives";
 import {useAgents} from "@/hooks/useAgents";
 import {useSessions} from "@/hooks/useSessions";
 import {api} from "@/api";
+import type {Agent} from "@/types/agent";
 
 function AgentsPage() {
   const navigate = useNavigate();
@@ -39,117 +36,169 @@ function AgentsPage() {
     });
   }, [agents, sessions]);
 
-  const handleAgentClick = async (agentId: string, sessionId?: string) => {
-    if (sessionId) {
-      // Open existing workshop session
-      void navigate(`/agents/workshop/${sessionId}`);
-    } else {
-      // Create a new session for this existing agent
-      setCreatingSession(agentId);
-      try {
-        const session = await api.sessions.create({
-          mode_id: "workshop",
-          agent_id: agentId,
-          title: "Agent Workshop",
-        });
-        void navigate(`/agents/workshop/${session.id}`);
-      } catch (err) {
-        console.error("Failed to create session:", err);
-      } finally {
-        setCreatingSession(null);
+  const handleAgentClick = useCallback(
+    async (agentId: string, sessionId?: string) => {
+      if (sessionId) {
+        // Open existing workshop session
+        void navigate(`/agents/workshop/${sessionId}`);
+      } else {
+        // Create a new session for this existing agent
+        setCreatingSession(agentId);
+        try {
+          const session = await api.sessions.create({
+            mode_id: "workshop",
+            agent_id: agentId,
+            title: "Agent Workshop",
+          });
+          void navigate(`/agents/workshop/${session.id}`);
+        } catch (err) {
+          console.error("Failed to create session:", err);
+        } finally {
+          setCreatingSession(null);
+        }
       }
-    }
-  };
+    },
+    [navigate],
+  );
 
-  const handleNewWorkshop = () => {
+  const handleNewWorkshop = useCallback(() => {
     void navigate("/agents/workshop");
-  };
+  }, [navigate]);
 
   const loading = agentsLoading || sessionsLoading;
 
-  return (
-    <Box>
-      <PageHeader title="Agents">
-        <Button variant="contained" onClick={handleNewWorkshop}>
-          New Workshop
-        </Button>
-      </PageHeader>
+  // Extract just the agents from agentsWithSessions for the table
+  const tableAgents = useMemo(
+    () => agentsWithSessions.map(({agent}) => agent),
+    [agentsWithSessions],
+  );
 
-      {agentsError && (
-        <Alert severity="error" sx={{mb: 2}}>
-          {agentsError}
-        </Alert>
-      )}
-
-      {loading ? (
-        <Box sx={{display: "flex", justifyContent: "center", py: 4}}>
-          <CircularProgress />
-        </Box>
-      ) : agentsWithSessions.length === 0 ? (
-        <Box sx={{textAlign: "center", py: 4}}>
-          <Typography variant="body1" color="text.secondary">
-            No agents yet. Create your first one in the workshop!
+  // Define table columns
+  const columns: TableColumn<Agent>[] = useMemo(
+    () => [
+      {
+        key: 'name',
+        header: 'Name',
+        sortable: true,
+        width: 200,
+        render: (agent) => (
+          <Typography variant="body2" fontWeight={500}>
+            {agent.name}
           </Typography>
-        </Box>
-      ) : (
-        <Grid container spacing={2}>
-          {agentsWithSessions.map(({agent, session}) => (
-            <Grid item xs={12} sm={6} md={4} key={agent.id}>
-              <Card
-                sx={{
-                  height: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                  cursor: "pointer",
-                  transition: "transform 0.2s, box-shadow 0.2s",
-                  "&:hover": {
-                    transform: "translateY(-4px)",
-                    boxShadow: 4,
-                  },
-                }}
-                onClick={() => void handleAgentClick(agent.id, session?.id)}
-              >
-                <CardContent sx={{flexGrow: 1}}>
-                  <Typography variant="h6" gutterBottom>
-                    {agent.name}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      display: "-webkit-box",
-                      WebkitLineClamp: 3,
-                      WebkitBoxOrient: "vertical",
-                    }}
-                  >
-                    {agent.system_prompt || "No system prompt"}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{mt: 1, display: "block"}}>
-                    Model: {agent.model_id}
-                  </Typography>
-                </CardContent>
-                <CardActions>
-                  <Button
-                    size="small"
-                    fullWidth
-                    variant={session ? "contained" : "outlined"}
-                    disabled={creatingSession === agent.id}
-                  >
-                    {creatingSession === agent.id
-                      ? "Creating..."
-                      : session
-                        ? "Open Workshop"
-                        : "Start Workshop"}
-                  </Button>
-                </CardActions>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
-      )}
-    </Box>
+        ),
+      },
+      {
+        key: 'system_prompt',
+        header: 'System Prompt',
+        truncate: true,
+        width: 300,
+        render: (agent) => (
+          <Typography variant="body2" color="text.secondary">
+            {agent.system_prompt || 'No system prompt'}
+          </Typography>
+        ),
+      },
+      {
+        key: 'model',
+        header: 'Model',
+        sortable: true,
+        width: 220,
+        render: (agent) => (
+          <Typography variant="body2">
+            {agent.model_provider}/{agent.model_id}
+          </Typography>
+        ),
+      },
+      {
+        key: 'temperature',
+        header: 'Temperature',
+        sortable: true,
+        align: 'right' as const,
+        width: 120,
+        render: (agent) => (
+          <Typography variant="body2">{agent.model_temperature}</Typography>
+        ),
+      },
+      {
+        key: 'max_tokens',
+        header: 'Max Tokens',
+        sortable: true,
+        align: 'right' as const,
+        width: 120,
+        render: (agent) => (
+          <Typography variant="body2">
+            {agent.model_max_tokens.toLocaleString()}
+          </Typography>
+        ),
+      },
+      {
+        key: 'status',
+        header: 'Status',
+        sortable: true,
+        width: 120,
+        render: (agent) => <StatusBadge status={agent.status} />,
+      },
+      {
+        key: 'workshop',
+        header: 'Workshop',
+        width: 140,
+        render: (agent) => {
+          const {session} = agentsWithSessions.find((a) => a.agent.id === agent.id) ?? {};
+          const isCreating = creatingSession === agent.id;
+          return (
+            <Button
+              size="small"
+              variant={session ? 'contained' : 'outlined'}
+              disabled={isCreating}
+              onClick={(e) => {
+                e.stopPropagation();
+                void handleAgentClick(agent.id, session?.id);
+              }}
+              sx={{minWidth: 120}}
+            >
+              {isCreating ? 'Creating...' : session ? 'Open Workshop' : 'Start Workshop'}
+            </Button>
+          );
+        },
+      },
+    ],
+    [agentsWithSessions, creatingSession, handleAgentClick],
+  );
+
+  return (
+    <FadeIn>
+      <Box>
+        <PageHeader title="Agents">
+          <Button variant="contained" onClick={handleNewWorkshop}>
+            New Workshop
+          </Button>
+        </PageHeader>
+
+        <Table
+          data={tableAgents}
+          keyExtractor={(agent) => agent.id}
+          columns={columns}
+          loading={loading}
+          error={agentsError}
+          emptyMessage="No agents yet. Create your first one in the workshop!"
+          enableSorting
+          enableSearch
+          enablePagination
+          searchPlaceholder="Search agents by name, model, or prompt..."
+          searchFields={['name', 'model_id', 'model_provider', 'system_prompt']}
+          defaultSortColumn="name"
+          defaultSortDirection="asc"
+          defaultPageSize={25}
+          pageSizeOptions={[10, 25, 50, 100]}
+          onRowClick={(agent) => {
+            const {session} = agentsWithSessions.find((a) => a.agent.id === agent.id) ?? {};
+            void handleAgentClick(agent.id, session?.id);
+          }}
+          stickyHeader
+          density="normal"
+        />
+      </Box>
+    </FadeIn>
   );
 }
 

@@ -21,13 +21,15 @@ describe('MarkdownPreview', () => {
 
   it('applies className', () => {
     const { container } = render(<MarkdownPreview content="test" className="custom" />)
-    expect(container.firstChild).toHaveClass('markdown-preview', 'custom')
+    expect(container.firstChild).toHaveClass('custom')
   })
 
-  it('renders code blocks with code-block class', () => {
+  it('renders code blocks inside pre elements', () => {
     const md = '```js\nconsole.log("hi")\n```'
     const { container } = render(<MarkdownPreview content={md} />)
-    const codeBlock = container.querySelector('.markdown-preview__code-block')
-    expect(codeBlock).toBeInTheDocument()
+    const preElement = container.querySelector('pre')
+    expect(preElement).toBeInTheDocument()
+    const codeElement = preElement?.querySelector('code')
+    expect(codeElement).toBeInTheDocument()
   })
 })

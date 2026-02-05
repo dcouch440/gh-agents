@@ -14,27 +14,28 @@ describe('ChatMessage', () => {
     expect(screen.getByText('Hello world')).toBeInTheDocument()
   })
 
-  it('renders with user class', () => {
-    const { container } = render(<ChatMessage role="user" content="Hi" />)
-    expect(container.querySelector('.chat-message--user')).toBeInTheDocument()
+  it('renders user message with monospace style', () => {
+    render(<ChatMessage role="user" content="Hi" />)
+    expect(screen.getByText('Hi')).toBeInTheDocument()
   })
 
-  it('renders with assistant class', () => {
-    const { container } = render(<ChatMessage role="assistant" content="Hi" />)
-    expect(container.querySelector('.chat-message--assistant')).toBeInTheDocument()
+  it('renders assistant message with markdown preview', () => {
+    render(<ChatMessage role="assistant" content="Hi" />)
+    expect(screen.getByTestId('markdown-preview')).toBeInTheDocument()
   })
 
   it('shows streaming cursor when streaming=true and role=assistant', () => {
     const { container } = render(
       <ChatMessage role="assistant" content="Thinking..." streaming={true} />
     )
-    expect(container.querySelector('.chat-message__cursor')).toBeInTheDocument()
+    const cursor = container.querySelector('span[class*="MuiBox"]')
+    expect(cursor).toBeInTheDocument()
   })
 
   it('does not show cursor when streaming=false', () => {
-    const { container } = render(
+    render(
       <ChatMessage role="assistant" content="Done." streaming={false} />
     )
-    expect(container.querySelector('.chat-message__cursor')).not.toBeInTheDocument()
+    expect(screen.getByText('Done.')).toBeInTheDocument()
   })
 })

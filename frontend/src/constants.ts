@@ -216,3 +216,25 @@ export const API = {
 // Local Storage
 export const LS_AUTH_TOKEN = "nexor_auth_token";
 export const LS_THEME = "nexor_theme";
+export const LS_SIDEBAR_COLLAPSED = "nexor_sidebar_collapsed";
+export const LS_RECENT_COMMANDS = "nexor_recent_commands";
+
+// Sidebar
+export const SIDEBAR = {
+  WIDTH_EXPANDED: 260,
+  WIDTH_COLLAPSED: 64,
+} as const;
+
+// Animation
+export const ANIMATION = {
+  FAST: 150,
+  NORMAL: 200,
+  SLOW: 300,
+  PAGE_TRANSITION: 250,
+} as const;
+
+// Command Palette
+export const COMMAND_PALETTE = {
+  MAX_RECENT: 5,
+  MAX_RESULTS: 10,
+} as const;

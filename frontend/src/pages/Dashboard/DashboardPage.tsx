@@ -1,5 +1,12 @@
+import { FadeIn } from '@/components/animation'
+import { PageHeader } from '@/components/primitives'
+
 function DashboardPage() {
-  return <h1>Dashboard</h1>
+  return (
+    <FadeIn>
+      <PageHeader title="Dashboard" description="Overview of your agents and tasks" />
+    </FadeIn>
+  )
 }
 
 export { DashboardPage }

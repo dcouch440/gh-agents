@@ -1,3 +1,4 @@
+import { Box } from '@mui/material'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
@@ -14,51 +15,58 @@ function MarkdownPreview({ content, className }: MarkdownPreviewProps) {
   const cleaned = stripThinkingTags(content)
 
   return (
-    <div
-      className={`markdown-preview${className ? ` ${className}` : ''}`}
-      style={{ overflow: 'auto', height: '100%' }}
+    <Box
+      className={className}
+      sx={{
+        overflow: 'auto',
+        height: '100%',
+        fontSize: '0.875rem',
+        lineHeight: 1.6,
+        color: 'text.primary',
+        '& p': { mb: 0.5, '&:last-child': { mb: 0 } },
+        '& code:not(pre code)': {
+          color: 'primary.main',
+          fontFamily: 'monospace',
+          fontSize: '0.875em',
+        },
+        '& pre': { my: 0.5 },
+        '& pre code': {
+          display: 'block',
+          borderLeft: 2,
+          borderColor: 'divider',
+          py: 1,
+          px: 1.5,
+          fontFamily: 'monospace',
+          fontSize: '0.8125rem',
+          whiteSpace: 'pre',
+          overflowX: 'auto',
+        },
+        '& ul': { listStyleType: 'disc', listStylePosition: 'inside', mb: 0.5 },
+        '& ol': { listStyleType: 'decimal', listStylePosition: 'inside', mb: 0.5 },
+        '& table': { width: '100%', borderCollapse: 'collapse' },
+        '& th': {
+          fontWeight: 600,
+          color: 'text.secondary',
+          borderBottom: 1,
+          borderColor: 'divider',
+          py: 0.5,
+          px: 1,
+          textAlign: 'left',
+        },
+        '& td': {
+          borderBottom: 1,
+          borderColor: 'divider',
+          py: 0.5,
+          px: 1,
+        },
+      }}
     >
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkBreaks]}
-        components={{
-          code: ({ className: codeClassName, children, ...rest }) => {
-            const isBlock = typeof codeClassName === 'string' && codeClassName.startsWith('language-')
-            return (
-              <code
-                className={isBlock ? 'markdown-preview__code-block' : 'markdown-preview__code-inline'}
-                {...rest}
-              >
-                {children}
-              </code>
-            )
-          },
-          pre: ({ children }) => (
-            <pre className="markdown-preview__pre">{children}</pre>
-          ),
-          p: ({ children }) => (
-            <p className="markdown-preview__p">{children}</p>
-          ),
-          ul: ({ children }) => (
-            <ul className="markdown-preview__ul">{children}</ul>
-          ),
-          ol: ({ children }) => (
-            <ol className="markdown-preview__ol">{children}</ol>
-          ),
-          table: ({ children }) => (
-            <table className="markdown-preview__table">{children}</table>
-          ),
-          th: ({ children }) => (
-            <th className="markdown-preview__th">{children}</th>
-          ),
-          td: ({ children }) => (
-            <td className="markdown-preview__td">{children}</td>
-          ),
-        }}
-      >
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
         {cleaned}
       </ReactMarkdown>
-    </div>
+    </Box>
   )
 }
 
 export { MarkdownPreview }
+export type { MarkdownPreviewProps }

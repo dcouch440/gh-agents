@@ -17,10 +17,12 @@ describe('ToggleGroup', () => {
     expect(screen.getByText('Gamma')).toBeInTheDocument()
   })
 
-  it('active option has active class', () => {
+  it('active option has Mui-selected class', () => {
     render(<ToggleGroup options={options} value="b" onChange={vi.fn()} />)
-    expect(screen.getByText('Beta')).toHaveClass('toggle-group__btn--active')
-    expect(screen.getByText('Alpha')).not.toHaveClass('toggle-group__btn--active')
+    const betaButton = screen.getByText('Beta').closest('button')
+    const alphaButton = screen.getByText('Alpha').closest('button')
+    expect(betaButton).toHaveClass('Mui-selected')
+    expect(alphaButton).not.toHaveClass('Mui-selected')
   })
 
   it('clicking calls onChange with value', () => {
@@ -35,6 +37,6 @@ describe('ToggleGroup', () => {
     const { container } = render(
       <ToggleGroup options={options} value="a" onChange={vi.fn()} className="extra" />
     )
-    expect(container.firstChild).toHaveClass('toggle-group', 'extra')
+    expect(container.firstChild).toHaveClass('extra')
   })
 })

@@ -1,3 +1,4 @@
+import { Box, Typography } from '@mui/material'
 import type { UsageSummary } from '@/types'
 
 type TokenUsageStatusProps = {
@@ -16,30 +17,201 @@ function TokenUsageStatus({ usage }: TokenUsageStatusProps) {
   const totalCalls = usage.reduce((s, r) => s + r.call_count, 0)
 
   return (
-    <div className="token-usage">
-      <div className="token-usage__row token-usage__row--header">
-        <span className="token-usage__cell token-usage__cell--model">MODEL</span>
-        <span className="token-usage__cell token-usage__cell--num">CALLS</span>
-        <span className="token-usage__cell token-usage__cell--num">IN</span>
-        <span className="token-usage__cell token-usage__cell--num">OUT</span>
-      </div>
+    <Box sx={{ fontSize: '0.75rem', lineHeight: 1.4 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          gap: 2,
+          py: '1px',
+          color: 'text.disabled',
+          borderBottom: 1,
+          borderColor: 'divider',
+        }}
+      >
+        <Typography
+          component="span"
+          sx={{
+            fontSize: 'inherit',
+            lineHeight: 'inherit',
+            flex: 1,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          MODEL
+        </Typography>
+        <Typography
+          component="span"
+          sx={{
+            fontSize: 'inherit',
+            lineHeight: 'inherit',
+            width: '6ch',
+            flexShrink: 0,
+            textAlign: 'right',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          CALLS
+        </Typography>
+        <Typography
+          component="span"
+          sx={{
+            fontSize: 'inherit',
+            lineHeight: 'inherit',
+            width: '6ch',
+            flexShrink: 0,
+            textAlign: 'right',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          IN
+        </Typography>
+        <Typography
+          component="span"
+          sx={{
+            fontSize: 'inherit',
+            lineHeight: 'inherit',
+            width: '6ch',
+            flexShrink: 0,
+            textAlign: 'right',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          OUT
+        </Typography>
+      </Box>
 
       {usage.map((row) => (
-        <div key={row.model_id} className="token-usage__row">
-          <span className="token-usage__cell token-usage__cell--model">{row.model_id}</span>
-          <span className="token-usage__cell token-usage__cell--num">{row.call_count}</span>
-          <span className="token-usage__cell token-usage__cell--num">{fmtTokens(row.total_input)}</span>
-          <span className="token-usage__cell token-usage__cell--num">{fmtTokens(row.total_output)}</span>
-        </div>
+        <Box
+          key={row.model_id}
+          sx={{
+            display: 'flex',
+            gap: 2,
+            py: '1px',
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+          }}
+        >
+          <Typography
+            component="span"
+            sx={{
+              fontSize: 'inherit',
+              lineHeight: 'inherit',
+              flex: 1,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {row.model_id}
+          </Typography>
+          <Typography
+            component="span"
+            sx={{
+              fontSize: 'inherit',
+              lineHeight: 'inherit',
+              width: '6ch',
+              flexShrink: 0,
+              textAlign: 'right',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {row.call_count}
+          </Typography>
+          <Typography
+            component="span"
+            sx={{
+              fontSize: 'inherit',
+              lineHeight: 'inherit',
+              width: '6ch',
+              flexShrink: 0,
+              textAlign: 'right',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {fmtTokens(row.total_input)}
+          </Typography>
+          <Typography
+            component="span"
+            sx={{
+              fontSize: 'inherit',
+              lineHeight: 'inherit',
+              width: '6ch',
+              flexShrink: 0,
+              textAlign: 'right',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {fmtTokens(row.total_output)}
+          </Typography>
+        </Box>
       ))}
 
-      <div className="token-usage__row token-usage__row--total">
-        <span className="token-usage__cell token-usage__cell--model">TOTAL</span>
-        <span className="token-usage__cell token-usage__cell--num">{totalCalls}</span>
-        <span className="token-usage__cell token-usage__cell--num">{fmtTokens(totalInput)}</span>
-        <span className="token-usage__cell token-usage__cell--num">{fmtTokens(totalOutput)}</span>
-      </div>
-    </div>
+      <Box
+        sx={{
+          display: 'flex',
+          gap: 2,
+          py: '1px',
+          borderTop: 1,
+          borderColor: 'divider',
+          color: 'text.primary',
+        }}
+      >
+        <Typography
+          component="span"
+          sx={{
+            fontSize: 'inherit',
+            lineHeight: 'inherit',
+            flex: 1,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          TOTAL
+        </Typography>
+        <Typography
+          component="span"
+          sx={{
+            fontSize: 'inherit',
+            lineHeight: 'inherit',
+            width: '6ch',
+            flexShrink: 0,
+            textAlign: 'right',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {totalCalls}
+        </Typography>
+        <Typography
+          component="span"
+          sx={{
+            fontSize: 'inherit',
+            lineHeight: 'inherit',
+            width: '6ch',
+            flexShrink: 0,
+            textAlign: 'right',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {fmtTokens(totalInput)}
+        </Typography>
+        <Typography
+          component="span"
+          sx={{
+            fontSize: 'inherit',
+            lineHeight: 'inherit',
+            width: '6ch',
+            flexShrink: 0,
+            textAlign: 'right',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {fmtTokens(totalOutput)}
+        </Typography>
+      </Box>
+    </Box>
   )
 }
 

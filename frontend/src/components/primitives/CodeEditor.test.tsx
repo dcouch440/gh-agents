@@ -7,7 +7,8 @@ describe('CodeEditor', () => {
     const { container } = render(
       <CodeEditor value="" onChange={() => {}} />
     )
-    const editor = container.querySelector('.code-editor')
+    // The outer Box renders as a div; it is the first child
+    const editor = container.firstChild as HTMLElement
     expect(editor).toBeInTheDocument()
   })
 
@@ -15,16 +16,20 @@ describe('CodeEditor', () => {
     const { container } = render(
       <CodeEditor value="" onChange={() => {}} className="custom" />
     )
-    const editor = container.querySelector('.code-editor')
+    const editor = container.firstChild as HTMLElement
     expect(editor).toHaveClass('custom')
   })
 
   it('applies custom height', () => {
-    const { container } = render(
+    const { container, rerender } = render(
       <CodeEditor value="" onChange={() => {}} height="500px" />
     )
-    const editor = container.querySelector('.code-editor') as HTMLElement
-    expect(editor.style.height).toBe('500px')
+    const editor = container.firstChild as HTMLElement
+    const classA = editor.className
+    // Re-render with a different height to verify the sx prop updates
+    rerender(<CodeEditor value="" onChange={() => {}} height="800px" />)
+    const classB = editor.className
+    expect(classA).not.toBe(classB)
   })
 
   it('initializes CodeMirror editor inside container', () => {

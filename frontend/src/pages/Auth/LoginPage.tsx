@@ -1,118 +1,119 @@
-import {useState, type FormEvent} from "react";
-import {useNavigate} from "react-router-dom";
-import {useAuth} from "@/hooks/useAuth";
-import {ROUTES} from "@/constants";
-import "@/styles/components.css";
+import { useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
+import Box from '@mui/material/Box'
+import Paper from '@mui/material/Paper'
+import Typography from '@mui/material/Typography'
+import TextField from '@mui/material/TextField'
+import Alert from '@mui/material/Alert'
+import { useAuth } from '@/hooks/useAuth'
+import { ROUTES, APP_NAME } from '@/constants'
+import { Button } from '@/components/primitives'
+import { FadeIn } from '@/components/animation'
 
 function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const {login} = useAuth();
-  const navigate = useNavigate();
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const { login } = useAuth()
+  const navigate = useNavigate()
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
 
     void (async () => {
       try {
-        await login(email, password);
-        void navigate(ROUTES.DASHBOARD);
+        await login(email, password)
+        void navigate(ROUTES.DASHBOARD)
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Login failed");
+        setError(err instanceof Error ? err.message : 'Login failed')
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
-    })();
-  };
+    })()
+  }
 
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        minHeight: "100vh",
-        padding: "1rem",
+    <Box
+      sx={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '100vh',
+        p: 2,
+        bgcolor: 'background.default',
       }}
     >
-      <div className="card" style={{maxWidth: "400px", width: "100%"}}>
-        <h1
-          style={{
-            fontSize: "var(--text-2xl)",
-            fontWeight: "var(--weight-bold)",
-            marginBottom: "var(--space-xl)",
-            textAlign: "center",
+      <FadeIn>
+        <Paper
+          elevation={0}
+          sx={{
+            maxWidth: 400,
+            width: '100%',
+            p: 4,
+            border: 1,
+            borderColor: 'divider',
+            borderRadius: 2,
           }}
         >
-          Login to nexor
-        </h1>
-
-        {error && (
-          <div
-            style={{
-              padding: "var(--space-md)",
-              marginBottom: "var(--space-lg)",
-              backgroundColor: "var(--color-error-bg)",
-              color: "var(--color-error)",
-              borderRadius: "var(--radius-md)",
-              fontSize: "var(--text-sm)",
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: 700,
+              mb: 3,
+              textAlign: 'center',
             }}
           >
-            {error}
-          </div>
-        )}
+            Login to {APP_NAME}
+          </Typography>
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label" htmlFor="email">
-              Email
-            </label>
-            <input
-              id="email"
+          {error ? (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          ) : null}
+
+          <form onSubmit={handleSubmit}>
+            <TextField
+              label="Email"
               type="email"
-              className="form-input"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              fullWidth
               autoComplete="email"
               disabled={loading}
+              sx={{ mb: 2 }}
             />
-          </div>
 
-          <div className="form-group">
-            <label className="form-label" htmlFor="password">
-              Password
-            </label>
-            <input
-              id="password"
+            <TextField
+              label="Password"
               type="password"
-              className="form-input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              fullWidth
               autoComplete="current-password"
               disabled={loading}
+              sx={{ mb: 3 }}
             />
-          </div>
 
-          <div className="form-actions">
-            <button
+            <Button
+              onClick={() => {}}
               type="submit"
-              className="btn btn--primary"
-              disabled={loading}
-              style={{width: "100%"}}
+              variant="primary"
+              size="medium"
+              loading={loading}
             >
-              {loading ? "Logging in..." : "Login"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
+              {loading ? 'Logging in...' : 'Login'}
+            </Button>
+          </form>
+        </Paper>
+      </FadeIn>
+    </Box>
+  )
 }
 
-export {LoginPage};
+export { LoginPage }

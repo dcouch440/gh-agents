@@ -18,9 +18,10 @@ describe('FeedStream', () => {
   })
 
   it('respects maxVisible limit', () => {
-    const { container } = render(<FeedStream items={items} maxVisible={2} />)
-    const lines = container.querySelectorAll('.feed-stream__line')
-    expect(lines.length).toBe(2)
+    render(<FeedStream items={items} maxVisible={2} />)
+    expect(screen.queryByText('Started search')).not.toBeInTheDocument()
+    expect(screen.getByText('Found 3 files')).toBeInTheDocument()
+    expect(screen.getByText('Auth module updated')).toBeInTheDocument()
   })
 
   it('shows most recent items when limited', () => {
@@ -30,10 +31,9 @@ describe('FeedStream', () => {
   })
 
   it('renders type icons', () => {
-    const { container } = render(<FeedStream items={items} maxVisible={10} />)
-    const types = container.querySelectorAll('.feed-stream__type')
-    expect(types[0]?.textContent).toBe('+')
-    expect(types[1]?.textContent).toBe('>')
-    expect(types[2]?.textContent).toBe('@')
+    render(<FeedStream items={items} maxVisible={10} />)
+    expect(screen.getByText('+')).toBeInTheDocument()
+    expect(screen.getByText('>')).toBeInTheDocument()
+    expect(screen.getByText('@')).toBeInTheDocument()
   })
 })

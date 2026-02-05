@@ -13,7 +13,6 @@ describe('ChatInput', () => {
   it('renders textarea', () => {
     const { textarea } = setup()
     expect(textarea).toBeInTheDocument()
-    expect(textarea).toHaveClass('chat-input__textarea')
   })
 
   it('typing updates the textarea value', () => {
