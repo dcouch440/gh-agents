@@ -1,16 +1,23 @@
 //! Agent execution and interactive chat endpoints
 
+use std::convert::Infallible;
+
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
+    response::sse::{Event, Sse},
     Json,
 };
 use chrono::{DateTime, Utc};
+use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
+use tokio::sync::broadcast;
+use tracing::error;
 use uuid::Uuid;
 
 use crate::server::auth as auth_utils;
-use crate::server::state::AppState;
+use crate::server::hub;
+use crate::server::state::{AppState, StreamChunk};
 
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct AgentExecutionResponse {
@@ -79,6 +86,16 @@ impl From<crate::db::ExecutionMessageRow> for ExecutionMessageResponse {
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct SendMessageRequest {
     pub content: String,
+}
+
+/// Response from sending a message to an interactive execution.
+/// Includes the recorded user message and a stream_id for SSE streaming.
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct SendMessageResponse {
+    pub message: ExecutionMessageResponse,
+    /// Connect to the SSE stream at /api/agent-executions/:id/messages/:stream_id/stream
+    /// to receive the agent's streamed response.
+    pub stream_id: Uuid,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -151,6 +168,9 @@ pub async fn list_execution_messages(
 }
 
 /// POST /api/agent-executions/:id/messages — send a user message to an interactive agent execution.
+///
+/// Records the user message, triggers an LLM response in the background, and returns
+/// the recorded message along with a `stream_id` for streaming the agent's response via SSE.
 #[utoipa::path(
     post,
     path = "/api/agent-executions/{id}/messages",
@@ -159,17 +179,17 @@ pub async fn list_execution_messages(
     params(("id" = Uuid, Path, description = "Agent execution ID")),
     request_body = SendMessageRequest,
     responses(
-        (status = 200, description = "Message sent", body = ExecutionMessageResponse),
-        (status = 400, description = "Not interactive"),
+        (status = 202, description = "Message sent, LLM response streaming", body = SendMessageResponse),
+        (status = 400, description = "Not interactive or not awaiting user"),
         (status = 404, description = "Not found")
     )
 )]
 pub async fn send_execution_message(
     State(state): State<AppState>,
-    _auth: auth_utils::AuthUser,
+    auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
     Json(req): Json<SendMessageRequest>,
-) -> Result<Json<ExecutionMessageResponse>, StatusCode> {
+) -> Result<(StatusCode, Json<SendMessageResponse>), StatusCode> {
     let repo = state
         .agent_execution_repo
         .as_ref()
@@ -183,6 +203,9 @@ pub async fn send_execution_message(
     if !ae.is_interactive {
         return Err(StatusCode::BAD_REQUEST);
     }
+    if ae.status != "awaiting_user" {
+        return Err(StatusCode::BAD_REQUEST);
+    }
 
     // Record the user message
     let msg = repo
@@ -190,13 +213,165 @@ pub async fn send_execution_message(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok(Json(ExecutionMessageResponse::from(msg)))
+    // Create a stream ID for the agent's response
+    let stream_id = Uuid::new_v4();
+    state.ensure_response_stream(stream_id).await;
+
+    // Spawn background LLM call
+    let state_clone = state.clone();
+    let content = req.content.clone();
+    let user_id = auth.user_id.0;
+    tokio::spawn(async move {
+        let provider = match state_clone.provider.as_ref() {
+            Some(p) => p.clone(),
+            None => {
+                state_clone
+                    .send_stream_chunk(stream_id, StreamChunk::Error("No LLM provider".into()))
+                    .await;
+                state_clone
+                    .send_stream_chunk(stream_id, StreamChunk::Done)
+                    .await;
+                return;
+            }
+        };
+        match hub::run_interactive_chat(&state_clone, provider, id, stream_id, &content, user_id)
+            .await
+        {
+            Ok(_) => {
+                state_clone
+                    .send_stream_chunk(stream_id, StreamChunk::Done)
+                    .await;
+            }
+            Err(e) => {
+                error!("Interactive chat failed: {}", e);
+                state_clone
+                    .send_stream_chunk(stream_id, StreamChunk::Error(format!("{}", e)))
+                    .await;
+                state_clone
+                    .send_stream_chunk(stream_id, StreamChunk::Done)
+                    .await;
+            }
+        }
+        hub::schedule_stream_cleanup(&state_clone, stream_id);
+    });
+
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(SendMessageResponse {
+            message: ExecutionMessageResponse::from(msg),
+            stream_id,
+        }),
+    ))
+}
+
+/// GET /api/agent-executions/:id/messages/:stream_id/stream — SSE stream for agent response.
+///
+/// Streams the agent's response tokens as Server-Sent Events. The `stream_id` is
+/// returned by `POST /api/agent-executions/:id/messages`.
+#[utoipa::path(
+    get,
+    path = "/api/agent-executions/{id}/messages/{stream_id}/stream",
+    tag = "Agent Executions",
+    params(
+        ("id" = Uuid, Path, description = "Agent execution ID"),
+        ("stream_id" = Uuid, Path, description = "Stream ID from send message response")
+    ),
+    responses(
+        (status = 200, description = "SSE event stream")
+    )
+)]
+pub async fn execution_message_stream(
+    State(state): State<AppState>,
+    Path((_execution_id, stream_id)): Path<(Uuid, Uuid)>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    // Reuse the same streaming infrastructure as chat — keyed by stream_id
+    let stream = async_stream::stream! {
+        let (buffered, mut rx, already_done) = state.get_response_stream(stream_id).await;
+
+        // Replay any buffered chunks
+        for chunk in buffered {
+            match chunk {
+                StreamChunk::Token(text) => {
+                    yield Ok(Event::default().event("token").data(serde_json::to_string(&text).unwrap_or(text)));
+                }
+                StreamChunk::ToolStart { name, tool_id } => {
+                    let data = format!(r#"{{"name":"{}","id":"{}"}}"#, name, tool_id);
+                    yield Ok(Event::default().event("tool_start").data(data));
+                }
+                StreamChunk::ToolEnd { name, tool_id } => {
+                    let data = format!(r#"{{"name":"{}","id":"{}"}}"#, name, tool_id);
+                    yield Ok(Event::default().event("tool_end").data(data));
+                }
+                StreamChunk::DocUpdate { doc_id, title } => {
+                    let data = format!(r#"{{"doc_id":"{}","title":"{}"}}"#, doc_id, title);
+                    yield Ok(Event::default().event("doc_update").data(data));
+                }
+                StreamChunk::Done => {
+                    yield Ok(Event::default().event("done").data(""));
+                    return;
+                }
+                StreamChunk::Error(e) => {
+                    yield Ok(Event::default().event("error").data(e));
+                    return;
+                }
+            }
+        }
+
+        if already_done {
+            yield Ok(Event::default().event("done").data(""));
+            return;
+        }
+
+        // Listen for live chunks
+        loop {
+            match rx.recv().await {
+                Ok(chunk) => {
+                    match chunk {
+                        StreamChunk::Token(text) => {
+                            yield Ok(Event::default().event("token").data(serde_json::to_string(&text).unwrap_or(text)));
+                        }
+                        StreamChunk::ToolStart { name, tool_id } => {
+                            let data = format!(r#"{{"name":"{}","id":"{}"}}"#, name, tool_id);
+                            yield Ok(Event::default().event("tool_start").data(data));
+                        }
+                        StreamChunk::ToolEnd { name, tool_id } => {
+                            let data = format!(r#"{{"name":"{}","id":"{}"}}"#, name, tool_id);
+                            yield Ok(Event::default().event("tool_end").data(data));
+                        }
+                        StreamChunk::DocUpdate { doc_id, title } => {
+                            let data = format!(r#"{{"doc_id":"{}","title":"{}"}}"#, doc_id, title);
+                            yield Ok(Event::default().event("doc_update").data(data));
+                        }
+                        StreamChunk::Done => {
+                            yield Ok(Event::default().event("done").data(""));
+                            break;
+                        }
+                        StreamChunk::Error(e) => {
+                            yield Ok(Event::default().event("error").data(e));
+                            break;
+                        }
+                    }
+                }
+                Err(broadcast::error::RecvError::Closed) => {
+                    break;
+                }
+                Err(broadcast::error::RecvError::Lagged(_)) => {
+                    continue;
+                }
+            }
+        }
+    };
+
+    Sse::new(stream)
 }
 
 /// POST /api/agent-executions/:id/approve — approve an interactive agent execution.
 ///
 /// With no `structured_output` body → approve as-is (main output used).
 /// With `structured_output` → approve with changes (revised output used downstream).
+///
+/// After approval, if all interactive reviews for the workflow step are complete,
+/// the paused DAG is resumed in the background.
 #[utoipa::path(
     post,
     path = "/api/agent-executions/{id}/approve",
@@ -235,6 +410,34 @@ pub async fn approve_execution(
         .update_agent_execution_status(id, "completed", ae.output.clone(), req.structured_output)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Check if we should resume the paused DAG
+    if let Some(step_id) = ae.workflow_step_id {
+        let all_approved = match repo.list_interactive_executions_for_step(step_id).await {
+            Ok(interactive_execs) => interactive_execs
+                .iter()
+                .all(|iae| iae.status == "completed" || iae.id == id),
+            Err(_) => false,
+        };
+
+        if all_approved {
+            // Build the step output from the approved execution
+            let step_output = crate::server::dag_executor::StepOutput {
+                variable_name: String::new(), // Filled by resume logic from step metadata
+                raw_output: updated.output.clone().unwrap_or_default(),
+                structured_output: updated.structured_output.clone(),
+            };
+
+            let state_clone = state.clone();
+            tokio::spawn(async move {
+                if let Err(e) =
+                    hub::dag::resume_dag_from_approval(&state_clone, step_id, step_output).await
+                {
+                    error!("DAG resume failed after approval: {}", e);
+                }
+            });
+        }
+    }
 
     Ok(Json(AgentExecutionResponse::from(updated)))
 }

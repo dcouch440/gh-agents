@@ -91,8 +91,9 @@ pub use prompt_templates::{
 
 // Re-export agent execution handlers and types
 pub use agent_executions::{
-    approve_execution, get_agent_execution, list_execution_messages, send_execution_message,
-    AgentExecutionResponse, ApproveExecutionRequest, ExecutionMessageResponse, SendMessageRequest,
+    approve_execution, execution_message_stream, get_agent_execution, list_execution_messages,
+    send_execution_message, AgentExecutionResponse, ApproveExecutionRequest,
+    ExecutionMessageResponse, SendMessageRequest, SendMessageResponse,
 };
 
 // Re-export cost handlers and types

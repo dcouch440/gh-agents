@@ -303,6 +303,10 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             get(api::list_execution_messages).post(api::send_execution_message),
         )
         .route(
+            routes::AGENT_EXECUTION_MESSAGE_STREAM,
+            get(api::execution_message_stream),
+        )
+        .route(
             routes::AGENT_EXECUTION_APPROVE,
             post(api::approve_execution),
         )
