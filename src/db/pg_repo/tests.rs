@@ -614,46 +614,19 @@ async fn test_list_router_modes_ordering() {
 
     // Create modes with different display_order
     repo.create_router_mode(
-        router.id,
-        "mode_c",
-        "Mode C",
-        "Third",
-        "Prompt C",
-        0.7,
-        4096,
-        false,
-        true,
-        15,
+        router.id, "mode_c", "Mode C", "Third", "Prompt C", 0.7, 4096, false, true, 15,
     )
     .await
     .unwrap();
 
     repo.create_router_mode(
-        router.id,
-        "mode_a",
-        "Mode A",
-        "First",
-        "Prompt A",
-        0.7,
-        4096,
-        false,
-        true,
-        5,
+        router.id, "mode_a", "Mode A", "First", "Prompt A", 0.7, 4096, false, true, 5,
     )
     .await
     .unwrap();
 
     repo.create_router_mode(
-        router.id,
-        "mode_b",
-        "Mode B",
-        "Second",
-        "Prompt B",
-        0.7,
-        4096,
-        false,
-        true,
-        10,
+        router.id, "mode_b", "Mode B", "Second", "Prompt B", 0.7, 4096, false, true, 10,
     )
     .await
     .unwrap();

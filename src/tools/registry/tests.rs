@@ -9,9 +9,18 @@ mod tests {
     #[test]
     fn test_all_execution_tools_mapped() {
         let execution_tools = vec![
-            "read_file", "write_file", "edit_file", "list_files",
-            "git_status", "git_diff", "git_add", "git_commit", "git_branch",
-            "run_tests", "run_command", "web_research",
+            "read_file",
+            "write_file",
+            "edit_file",
+            "list_files",
+            "git_status",
+            "git_diff",
+            "git_add",
+            "git_commit",
+            "git_branch",
+            "run_tests",
+            "run_command",
+            "web_research",
         ];
 
         for tool_name in execution_tools {
@@ -28,9 +37,15 @@ mod tests {
     #[test]
     fn test_all_orchestrator_tools_mapped() {
         let orchestrator_tools = vec![
-            "read_file", "list_files", "search_files", "think",
-            "create_doc", "update_doc", "search_docs",
-            "submit_prd", "submit_ticket",
+            "read_file",
+            "list_files",
+            "search_files",
+            "think",
+            "create_doc",
+            "update_doc",
+            "search_docs",
+            "submit_prd",
+            "submit_ticket",
         ];
 
         for tool_name in orchestrator_tools {
@@ -55,18 +70,36 @@ mod tests {
     fn test_tool_count() {
         // 19 unique tool names total
         let all_names = vec![
-            "read_file", "write_file", "edit_file", "list_files",
-            "git_status", "git_diff", "git_add", "git_commit", "git_branch",
-            "run_tests", "run_command", "web_research",
-            "search_files", "think", "create_doc", "update_doc",
-            "search_docs", "submit_prd", "submit_ticket",
+            "read_file",
+            "write_file",
+            "edit_file",
+            "list_files",
+            "git_status",
+            "git_diff",
+            "git_add",
+            "git_commit",
+            "git_branch",
+            "run_tests",
+            "run_command",
+            "web_research",
+            "search_files",
+            "think",
+            "create_doc",
+            "update_doc",
+            "search_docs",
+            "submit_prd",
+            "submit_ticket",
         ];
 
         assert_eq!(all_names.len(), 19);
 
         // Verify all map to tools
         for name in all_names {
-            assert!(get_tool_definition(name).is_some(), "Tool {} not found", name);
+            assert!(
+                get_tool_definition(name).is_some(),
+                "Tool {} not found",
+                name
+            );
         }
     }
 
@@ -77,11 +110,25 @@ mod tests {
     #[test]
     fn test_all_tool_schemas_valid() {
         let all_tools = vec![
-            "read_file", "write_file", "edit_file", "list_files",
-            "git_status", "git_diff", "git_add", "git_commit", "git_branch",
-            "run_tests", "run_command", "web_research",
-            "search_files", "think", "create_doc", "update_doc",
-            "search_docs", "submit_prd", "submit_ticket",
+            "read_file",
+            "write_file",
+            "edit_file",
+            "list_files",
+            "git_status",
+            "git_diff",
+            "git_add",
+            "git_commit",
+            "git_branch",
+            "run_tests",
+            "run_command",
+            "web_research",
+            "search_files",
+            "think",
+            "create_doc",
+            "update_doc",
+            "search_docs",
+            "submit_prd",
+            "submit_ticket",
         ];
 
         for tool_name in all_tools {
@@ -89,7 +136,11 @@ mod tests {
 
             // Verify basic fields
             assert!(!tool.name.is_empty(), "{}: name is empty", tool_name);
-            assert!(!tool.description.is_empty(), "{}: description is empty", tool_name);
+            assert!(
+                !tool.description.is_empty(),
+                "{}: description is empty",
+                tool_name
+            );
 
             // Verify schema is an object
             assert!(
@@ -173,7 +224,9 @@ mod tests {
         // Verify complexity enum
         let complexity = &props["complexity"]["enum"];
         assert!(complexity.is_array());
-        let enums: Vec<&str> = complexity.as_array().unwrap()
+        let enums: Vec<&str> = complexity
+            .as_array()
+            .unwrap()
             .iter()
             .filter_map(|v| v.as_str())
             .collect();

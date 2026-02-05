@@ -3,17 +3,17 @@
 //! Data-only: resolves agent + input → ResolvedModeConfig.
 //! Does NOT create strategies or call ExecutionEngine.
 
-use std::sync::Arc;
 use std::collections::HashSet;
+use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::db::{AgentRow, ToolRouterModeRow};
 use crate::db::traits::{ServerRepo, ToolRouterRepo};
+use crate::db::{AgentRow, ToolRouterModeRow};
 use crate::llm::{LLMProvider, Tool};
 use crate::server::hub::engine::ExecutionEngine;
-use crate::server::hub::strategies::router::{RouterStrategy, RouterConfig};
-use crate::server::hub::streaming::NullSink;
 use crate::server::hub::recorder::ExecutionRecorder;
+use crate::server::hub::strategies::router::{RouterConfig, RouterStrategy};
+use crate::server::hub::streaming::NullSink;
 use crate::tools::registry;
 
 #[cfg(test)]
@@ -143,7 +143,10 @@ impl ModeResolver {
             .find(|m| m.mode_key == mode_key)
             .cloned()
             .unwrap_or_else(|| {
-                tracing::warn!("Router selected unknown mode '{}', using first mode", mode_key);
+                tracing::warn!(
+                    "Router selected unknown mode '{}', using first mode",
+                    mode_key
+                );
                 modes[0].clone()
             });
 

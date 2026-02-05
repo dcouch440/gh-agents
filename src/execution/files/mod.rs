@@ -10,7 +10,6 @@ pub enum FileError {
     #[error("path outside project directory: {path}")]
     PathOutsideProject { path: PathBuf },
 
-
     #[error("file not found: {path}")]
     NotFound { path: PathBuf },
 

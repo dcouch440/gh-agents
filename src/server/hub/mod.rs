@@ -39,8 +39,8 @@ pub use strategies::{
 pub use strategy::ExecutionStrategy;
 pub use streaming::{NullSink, StreamSink};
 
-use crate::db::AgentRow;
 use crate::db::traits::ServerRepo;
+use crate::db::AgentRow;
 use crate::llm::Tool;
 
 /// Construct agent defaults when mode_resolver is unavailable.
@@ -49,10 +49,7 @@ pub async fn construct_agent_defaults(
     agent: &AgentRow,
     repo: &Arc<dyn ServerRepo>,
 ) -> Result<ResolvedModeConfig, anyhow::Error> {
-    let agent_tool_rows = repo
-        .get_agent_tools(agent.id)
-        .await
-        .unwrap_or_default();
+    let agent_tool_rows = repo.get_agent_tools(agent.id).await.unwrap_or_default();
 
     let tools: Vec<Tool> = agent_tool_rows
         .iter()
@@ -290,7 +287,11 @@ fn format_history(history: &[crate::db::ChatMessageRow]) -> String {
     history
         .iter()
         .map(|msg| {
-            let role = if msg.role == "user" { "User" } else { "Assistant" };
+            let role = if msg.role == "user" {
+                "User"
+            } else {
+                "Assistant"
+            };
             format!("{}: {}", role, msg.content)
         })
         .collect::<Vec<_>>()
