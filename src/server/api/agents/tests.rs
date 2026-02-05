@@ -14,6 +14,7 @@ fn test_agent_response() -> AgentResponse {
         model_temperature: 0.7,
         status: "idle".to_string(),
         output_schema_id: None,
+        router_id: None,
         version: 1,
     }
 }

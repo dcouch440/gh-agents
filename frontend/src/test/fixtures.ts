@@ -13,6 +13,7 @@ import type { PromptTemplate } from '@/types/template'
 import type { OutputSchema } from '@/types/schema'
 import type { Workflow, WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 import type { RouterMode } from '@/types/router'
+import type { ToolRouter } from '@/types/toolRouter'
 
 export const mockAgent: Agent = {
   id: 'agent-001',
@@ -23,6 +24,8 @@ export const mockAgent: Agent = {
   model_max_tokens: 8192,
   model_temperature: 0.7,
   status: 'idle',
+  output_schema_id: null,
+  router_id: null,
   version: 1,
 }
 
@@ -167,6 +170,20 @@ export const mockRouterMode: RouterMode = {
   append_to_agent_system_prompt: false,
   append_to_agent_tools: true,
   display_order: 0,
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
+}
+
+export const mockToolRouter: ToolRouter = {
+  id: 'router-001',
+  user_id: 'user-001',
+  name: 'Default Router',
+  description: 'Main tool router',
+  system_prompt: 'You are a tool router.',
+  model_id: 'claude-sonnet-4-20250514',
+  is_active: true,
+  parent_router_id: null,
+  level: 1,
   created_at: '2025-01-01T00:00:00Z',
   updated_at: '2025-01-01T00:00:00Z',
 }

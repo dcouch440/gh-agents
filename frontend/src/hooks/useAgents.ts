@@ -38,6 +38,24 @@ const useAgent = (id: string | null) => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const load = useCallback(async () => {
+    if (!id) {
+      setAgent(null)
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await api.agents.get(id)
+      setAgent(data)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load agent')
+    } finally {
+      setLoading(false)
+    }
+  }, [id])
+
   useEffect(() => {
     if (!id) {
       setAgent(null)
@@ -46,7 +64,7 @@ const useAgent = (id: string | null) => {
     }
 
     let cancelled = false
-    const load = async () => {
+    const run = async () => {
       setLoading(true)
       setError(null)
       try {
@@ -58,11 +76,11 @@ const useAgent = (id: string | null) => {
         if (!cancelled) setLoading(false)
       }
     }
-    void load()
+    void run()
     return () => { cancelled = true }
   }, [id])
 
-  return { agent, loading, error }
+  return { agent, loading, error, reload: load }
 }
 
 export { useAgents, useAgent }

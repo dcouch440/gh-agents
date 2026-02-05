@@ -50,6 +50,10 @@ import type {
   SendExecutionMessageRequest,
   ApproveExecutionRequest,
   SendMessageResponse,
+  ToolRouter,
+  CreateToolRouterRequest,
+  UpdateToolRouterRequest,
+  SetRouterToolsRequest,
 } from '@/types'
 
 // ============================================================================
@@ -319,6 +323,29 @@ const modes = {
   list: (config?: RequestConfig) => baseApi.get<unknown>(API.MODES, config),
 }
 
+const toolRouters = {
+  list: (config?: RequestConfig) =>
+    baseApi.get<ToolRouter[]>(API.TOOL_ROUTERS, config),
+
+  get: (id: string, config?: RequestConfig) =>
+    baseApi.get<ToolRouter>(API.TOOL_ROUTER(id), config),
+
+  create: (body: CreateToolRouterRequest, config?: RequestConfig) =>
+    baseApi.post<ToolRouter>(API.TOOL_ROUTERS, body, config),
+
+  update: (id: string, body: UpdateToolRouterRequest, config?: RequestConfig) =>
+    baseApi.put<ToolRouter>(API.TOOL_ROUTER(id), body, config),
+
+  delete: (id: string, config?: RequestConfig) =>
+    baseApi.del<void>(API.TOOL_ROUTER(id), config),
+
+  getTools: (id: string, config?: RequestConfig) =>
+    baseApi.get<Tool[]>(API.TOOL_ROUTER_TOOLS(id), config),
+
+  setTools: (id: string, body: SetRouterToolsRequest, config?: RequestConfig) =>
+    baseApi.put<void>(API.TOOL_ROUTER_TOOLS(id), body, config),
+}
+
 const routerModes = {
   /**
    * List all modes for a router
@@ -403,5 +430,6 @@ export const api = {
   workflows,
   contextResponse,
   modes,
+  toolRouters,
   routerModes,
 }

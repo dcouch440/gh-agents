@@ -2,12 +2,17 @@ import { useState, useEffect, useCallback } from "react";
 import type { RouterMode } from "@/types";
 import { api } from "@/api";
 
-const useRouterModes = (routerId: string) => {
+const useRouterModes = (routerId: string | null) => {
   const [modes, setModes] = useState<RouterMode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!routerId) {
+      setModes([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -21,6 +26,11 @@ const useRouterModes = (routerId: string) => {
   }, [routerId]);
 
   useEffect(() => {
+    if (!routerId) {
+      setModes([]);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     const run = async () => {
       await load();
@@ -30,7 +40,7 @@ const useRouterModes = (routerId: string) => {
     return () => {
       cancelled = true;
     };
-  }, [load]);
+  }, [load, routerId]);
 
   return { modes, loading, error, reload: load };
 };
