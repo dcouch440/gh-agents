@@ -608,7 +608,7 @@ fn spawn_summary_task(doc_repo: Arc<dyn DocumentRepo>, doc_id: uuid::Uuid, conte
 }
 
 async fn execute_create_doc(input: &Value, state: &AppState, user_id: UserId) -> Value {
-    let Some(doc_repo) = &state.doc_repo else {
+    let Some(doc_repo) = state.doc_repo() else {
         return json!({ "error": "Document repository not initialized" });
     };
 
@@ -644,7 +644,7 @@ async fn execute_create_doc(input: &Value, state: &AppState, user_id: UserId) ->
     {
         Ok(row) => {
             // Spawn background summary generation
-            spawn_summary_task(Arc::clone(doc_repo), row.id, content.to_string());
+            spawn_summary_task(Arc::clone(&doc_repo), row.id, content.to_string());
 
             json!({
                 "doc_id": row.id.to_string(),
@@ -657,7 +657,7 @@ async fn execute_create_doc(input: &Value, state: &AppState, user_id: UserId) ->
 }
 
 async fn execute_update_doc(input: &Value, state: &AppState) -> Value {
-    let Some(doc_repo) = &state.doc_repo else {
+    let Some(doc_repo) = state.doc_repo() else {
         return json!({ "error": "Document repository not initialized" });
     };
 
@@ -683,7 +683,7 @@ async fn execute_update_doc(input: &Value, state: &AppState) -> Value {
         Ok(row) => {
             // Spawn background summary regeneration using updated content
             let summary_content = content.unwrap_or(row.content.clone());
-            spawn_summary_task(Arc::clone(doc_repo), doc_id, summary_content);
+            spawn_summary_task(Arc::clone(&doc_repo), doc_id, summary_content);
 
             json!({
                 "updated": true,
@@ -696,7 +696,7 @@ async fn execute_update_doc(input: &Value, state: &AppState) -> Value {
 }
 
 async fn execute_search_docs(input: &Value, state: &AppState, user_id: UserId) -> Value {
-    let Some(doc_repo) = &state.doc_repo else {
+    let Some(doc_repo) = state.doc_repo() else {
         return json!({ "error": "Document repository not initialized" });
     };
 
@@ -851,7 +851,7 @@ async fn execute_submit_prd(input: &Value, state: &AppState, user_id: UserId) ->
     }
 
     // Store as document
-    let Some(doc_repo) = &state.doc_repo else {
+    let Some(doc_repo) = state.doc_repo() else {
         return json!({ "error": "Document repository not initialized" });
     };
 
@@ -870,7 +870,7 @@ async fn execute_submit_prd(input: &Value, state: &AppState, user_id: UserId) ->
         .await
     {
         Ok(row) => {
-            spawn_summary_task(Arc::clone(doc_repo), row.id, md);
+            spawn_summary_task(Arc::clone(&doc_repo), row.id, md);
             json!({
                 "valid": true,
                 "doc_id": row.id.to_string(),

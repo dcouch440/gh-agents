@@ -3,8 +3,6 @@
 //! Handles interactive chat sessions: loads history, streams tokens, saves
 //! messages, auto-names sessions, and triggers compaction.
 
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use serde_json::Value;
 use tracing::error;
@@ -110,7 +108,7 @@ impl ExecutionStrategy for ChatStrategy {
         if let Some(session_id) = self.session_id {
             let history = self
                 .state
-                .repo
+                .repo()
                 .get_session_history(session_id, self.config.max_history)
                 .await
                 .map_err(|e| anyhow::anyhow!("failed to load session history: {}", e))?;
@@ -125,7 +123,7 @@ impl ExecutionStrategy for ChatStrategy {
             }
 
             // Inject prior context from session summary via distiller
-            if let Ok(Some(session)) = self.state.repo.get_session(session_id).await {
+            if let Ok(Some(session)) = self.state.repo().get_session(session_id).await {
                 if !session.summary.is_empty() {
                     if let Some(targeted) =
                         tools::haiku_extract_context(&session.summary, input).await
@@ -163,7 +161,7 @@ impl ExecutionStrategy for ChatStrategy {
 
     async fn on_complete(&self, response: &str, usage: &TokenUsage) -> Result<(), HubError> {
         // Record token usage to ledger
-        if let Some(tl_repo) = &self.state.token_ledger_repo {
+        if let Some(tl_repo) = self.state.token_ledger_repo() {
             let cost = super::compute_cost(
                 &self.config.model_id,
                 usage.input_tokens as i64,
@@ -186,7 +184,7 @@ impl ExecutionStrategy for ChatStrategy {
             let response_id = Uuid::new_v4();
             let save_result = if let Some(session_id) = self.session_id {
                 self.state
-                    .repo
+                    .repo()
                     .insert_session_message(
                         self.user_id,
                         session_id,
@@ -197,7 +195,7 @@ impl ExecutionStrategy for ChatStrategy {
                     .await
             } else {
                 self.state
-                    .repo
+                    .repo()
                     .insert_chat_message(
                         self.user_id,
                         response_id,
@@ -218,7 +216,7 @@ impl ExecutionStrategy for ChatStrategy {
                                   // Spawn auto-naming in background
                 let input_preview = response[..response.len().min(500)].to_string();
                 tokio::spawn(async move {
-                    if let Ok(Some(session)) = state.repo.get_session(session_id).await {
+                    if let Ok(Some(session)) = state.repo().get_session(session_id).await {
                         if session.title.starts_with("New ") {
                             if let Some(title) = tools::haiku_summarize_title(&format!(
                                 "Conversation opener: {}",
@@ -226,7 +224,7 @@ impl ExecutionStrategy for ChatStrategy {
                             ))
                             .await
                             {
-                                let _ = state.repo.update_session_title(session_id, &title).await;
+                                let _ = state.repo().update_session_title(session_id, &title).await;
                                 state.broadcast_session(crate::server::ws::SessionUpdate {
                                     id: session_id,
                                     action: "updated".to_string(),
@@ -245,13 +243,13 @@ impl ExecutionStrategy for ChatStrategy {
                 let state = self.state.clone();
                 tokio::spawn(async move {
                     let count = state
-                        .repo
+                        .repo()
                         .count_session_messages(session_id)
                         .await
                         .unwrap_or(0);
                     if count > crate::constants::SUMMARIZE_THRESHOLD as u32 {
                         let history = state
-                            .repo
+                            .repo()
                             .get_session_history(session_id, count)
                             .await
                             .unwrap_or_default();
@@ -271,7 +269,7 @@ impl ExecutionStrategy for ChatStrategy {
                             if let Some(summary) = tools::haiku_summarize(&conversation_text).await
                             {
                                 let _ = state
-                                    .repo
+                                    .repo()
                                     .update_session_summary(session_id, &summary)
                                     .await;
                             }

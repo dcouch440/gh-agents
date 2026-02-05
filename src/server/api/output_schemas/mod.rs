@@ -51,8 +51,7 @@ pub async fn list_output_schemas(
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<OutputSchemaResponse>>, StatusCode> {
     let repo = state
-        .output_schema_repo
-        .as_ref()
+        .output_schema_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo
         .list_output_schemas(auth.user_id.0)
@@ -91,8 +90,7 @@ pub async fn create_output_schema(
         return Err(StatusCode::BAD_REQUEST);
     }
     let repo = state
-        .output_schema_repo
-        .as_ref()
+        .output_schema_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo
         .create_output_schema(auth.user_id.0, request.name, request.schema)
@@ -127,8 +125,7 @@ pub async fn get_output_schema(
     Path(id): Path<Uuid>,
 ) -> Result<Json<OutputSchemaResponse>, StatusCode> {
     let repo = state
-        .output_schema_repo
-        .as_ref()
+        .output_schema_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo
         .get_output_schema(id)
@@ -166,8 +163,7 @@ pub async fn update_output_schema(
     Json(request): Json<UpdateOutputSchemaRequest>,
 ) -> Result<Json<OutputSchemaResponse>, StatusCode> {
     let repo = state
-        .output_schema_repo
-        .as_ref()
+        .output_schema_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo
         .get_output_schema(id)
@@ -212,8 +208,7 @@ pub async fn delete_output_schema(
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
     let repo = state
-        .output_schema_repo
-        .as_ref()
+        .output_schema_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo
         .get_output_schema(id)

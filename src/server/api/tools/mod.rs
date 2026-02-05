@@ -81,7 +81,7 @@ pub async fn list_tools(
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
     let rows = state
-        .repo
+        .repo()
         .list_tools(auth.user_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -126,7 +126,7 @@ pub async fn create_tool(
     };
 
     state
-        .repo
+        .repo()
         .upsert_tool(auth.user_id, row.clone())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -152,7 +152,7 @@ pub async fn get_tool(
     Path(id): Path<Uuid>,
 ) -> Result<Json<ToolResponse>, StatusCode> {
     let row = state
-        .repo
+        .repo()
         .get_tool(id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -181,7 +181,7 @@ pub async fn update_tool(
     Json(request): Json<UpdateToolRequest>,
 ) -> Result<Json<ToolResponse>, StatusCode> {
     let existing = state
-        .repo
+        .repo()
         .get_tool(id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -199,7 +199,7 @@ pub async fn update_tool(
     };
 
     state
-        .repo
+        .repo()
         .upsert_tool(auth.user_id, updated.clone())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -225,7 +225,7 @@ pub async fn delete_tool(
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
     state
-        .repo
+        .repo()
         .delete_tool(id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -250,7 +250,7 @@ pub async fn get_agent_tools(
     Path(agent_id): Path<Uuid>,
 ) -> Result<Json<AgentToolsResponse>, StatusCode> {
     let rows = state
-        .repo
+        .repo()
         .get_agent_tools(agent_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -291,13 +291,13 @@ pub async fn set_agent_tools(
     let tool_ids = tool_ids.map_err(|_| StatusCode::BAD_REQUEST)?;
 
     state
-        .repo
+        .repo()
         .set_agent_tools(agent_id, tool_ids)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let rows = state
-        .repo
+        .repo()
         .get_agent_tools(agent_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

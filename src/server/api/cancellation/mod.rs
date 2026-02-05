@@ -27,13 +27,13 @@ pub async fn cancel_agent_execution(
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let exec_uuid = Uuid::parse_str(&execution_id).map_err(|_| StatusCode::BAD_REQUEST)?;
 
-    let cancelled = state.cancel_execution(exec_uuid).await;
+    let cancelled = state.cancel_execution(exec_uuid);
     if !cancelled {
         return Err(StatusCode::NOT_FOUND);
     }
 
     // Update execution status in DB
-    if let Some(ae_repo) = &state.agent_execution_repo {
+    if let Some(ae_repo) = state.agent_execution_repo() {
         let _ = ae_repo
             .update_agent_execution_status(exec_uuid, "cancelled", None, None)
             .await;

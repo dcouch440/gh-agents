@@ -25,7 +25,7 @@ pub struct HealthResponse {
     )
 )]
 pub async fn health_check(State(state): State<AppState>) -> Json<HealthResponse> {
-    let db_connected = state.repo.health_check().await;
+    let db_connected = state.repo().health_check().await;
 
     Json(HealthResponse {
         status: "ok".to_string(),

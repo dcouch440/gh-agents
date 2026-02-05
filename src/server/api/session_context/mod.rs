@@ -27,8 +27,7 @@ pub async fn get_session_context(
     Path(session_id): Path<Uuid>,
 ) -> Result<Json<Vec<crate::db::ContextStoreRow>>, StatusCode> {
     let repo = state
-        .context_store_repo
-        .as_ref()
+        .context_store_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo
         .get_active_context(session_id, 100)
@@ -54,8 +53,7 @@ pub async fn list_session_requests(
     Path(session_id): Path<Uuid>,
 ) -> Result<Json<Vec<crate::db::RouterRequestRow>>, StatusCode> {
     let repo = state
-        .router_request_repo
-        .as_ref()
+        .router_request_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo
         .list_session_requests(session_id)

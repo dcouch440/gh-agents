@@ -74,7 +74,7 @@ pub async fn execute_workflow_via_engine(
 
         // Load agent
         let agent = state
-            .repo
+            .repo()
             .get_persisted_agent(step.agent_id)
             .await
             .map_err(|e| anyhow::anyhow!("failed to load agent: {}", e))?
@@ -93,10 +93,7 @@ pub async fn execute_workflow_via_engine(
                     step.id
                 ))
             })?;
-            let room_repo = state
-                .room_repo
-                .as_ref()
-                .ok_or(HubError::ProviderNotConfigured)?;
+            let room_repo = state.room_repo().ok_or(HubError::ProviderNotConfigured)?;
             let session = room_repo
                 .create_room_session(room_id, Some(ctx.run_id))
                 .await
@@ -197,10 +194,10 @@ async fn execute_single_step(
 ) -> Result<(), HubError> {
     let prompt = compose_prompt(
         step,
-        state.prompt_template_repo.as_deref(),
-        state.doc_repo.as_deref(),
-        state.workflow_repo.as_deref(),
-        &*state.repo,
+        state.prompt_template_repo().as_deref(),
+        state.doc_repo().as_deref(),
+        state.workflow_repo().as_deref(),
+        &**state.repo(),
         var_outputs,
         &ctx.prior_outputs,
         None,
@@ -271,10 +268,10 @@ async fn execute_for_each_step(
 
         let prompt = compose_prompt(
             step,
-            state.prompt_template_repo.as_deref(),
-            state.doc_repo.as_deref(),
-            state.workflow_repo.as_deref(),
-            &*state.repo,
+            state.prompt_template_repo().as_deref(),
+            state.doc_repo().as_deref(),
+            state.workflow_repo().as_deref(),
+            &**state.repo(),
             var_outputs,
             &ctx.prior_outputs,
             Some(element),
@@ -327,19 +324,18 @@ async fn run_step_via_engine(
     cancel: Option<&CancellationToken>,
 ) -> Result<(StepOutput, i64, i64, f32), HubError> {
     let ae_repo = state
-        .agent_execution_repo
-        .as_ref()
+        .agent_execution_repo()
         .ok_or_else(|| anyhow::anyhow!("agent_execution_repo not configured"))?;
 
     // Resolve mode (no context hint initially - future: pass step description)
-    let mode = if let Some(resolver) = &state.mode_resolver {
+    let mode = if let Some(resolver) = state.mode_resolver() {
         resolver
             .resolve(agent, prompt, None)
             .await
             .map_err(|e| HubError::Internal(anyhow!("Mode resolution failed: {}", e)))?
     } else {
         // Fallback: construct agent defaults for backward compatibility
-        construct_agent_defaults(agent, &state.repo)
+        construct_agent_defaults(agent, state.repo())
             .await
             .map_err(HubError::Internal)?
     };
@@ -347,7 +343,7 @@ async fn run_step_via_engine(
     // Build system prompt: mode result + schema enforcement
     let mut system_prompt = mode.system_prompt; // agent + mode already merged
     if let Some(schema_id) = step.output_schema_id {
-        if let Some(os_repo) = &state.output_schema_repo {
+        if let Some(os_repo) = state.output_schema_repo() {
             if let Ok(Some(schema)) = os_repo.get_output_schema(schema_id).await {
                 system_prompt.push_str(&format!(
                     "\n\nYou MUST respond with valid JSON matching this schema:\n```json\n{}\n```\nRespond ONLY with the JSON object, no other text.",
@@ -398,10 +394,12 @@ async fn run_step_via_engine(
     let strategy = DagStepStrategy::new(config, state.clone());
 
     // Build recorder (strategy handles its own recording in on_complete)
+    let ae_repo = state.agent_execution_repo();
+    let tl_repo = state.token_ledger_repo();
     let recorder = ExecutionRecorder::new(
-        state.repo.as_ref(),
-        state.agent_execution_repo.as_deref(),
-        state.token_ledger_repo.as_deref(),
+        state.repo().as_ref(),
+        ae_repo.as_deref(),
+        tl_repo.as_deref(),
     );
 
     let sink = NullSink;
@@ -481,7 +479,7 @@ pub async fn resume_workflow_via_engine(
         }
 
         let agent = state
-            .repo
+            .repo()
             .get_persisted_agent(step.agent_id)
             .await
             .map_err(|e| anyhow::anyhow!("failed to load agent: {}", e))?
@@ -553,12 +551,10 @@ pub async fn resume_dag_from_approval(
     approved_output: StepOutput,
 ) -> Result<(), HubError> {
     let wf_repo = state
-        .workflow_repo
-        .as_ref()
+        .workflow_repo()
         .ok_or(HubError::ProviderNotConfigured)?;
     let ae_repo = state
-        .agent_execution_repo
-        .as_ref()
+        .agent_execution_repo()
         .ok_or(HubError::ProviderNotConfigured)?;
 
     // Load the step to get workflow_id
@@ -649,8 +645,7 @@ pub async fn resume_dag_from_approval(
 
     // Create engine and resume
     let provider = state
-        .provider
-        .as_ref()
+        .provider()
         .ok_or(HubError::ProviderNotConfigured)?
         .clone();
     let engine = ExecutionEngine::new(provider);
@@ -676,7 +671,7 @@ pub async fn resume_dag_from_approval(
 
     // Update workflow_execution status if we know which one it is
     if let Some(wf_exec_id) = workflow_execution_id {
-        if let Some(db) = &state.db {
+        if let Some(db) = state.db() {
             let coll_repo = crate::db::pg_repo::PgRepo::new(db.clone());
             match &result {
                 Ok(wf_result) => {

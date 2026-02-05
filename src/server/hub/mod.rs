@@ -85,21 +85,21 @@ pub async fn run_chat(
 ) -> Result<ExecutionResult, HubError> {
     // Load agent from DB
     let agent = state
-        .repo
+        .repo()
         .get_persisted_agent(agent_id)
         .await
         .map_err(HubError::Internal)?
         .ok_or_else(|| HubError::Internal(anyhow::anyhow!("Agent {agent_id} not found")))?;
 
     // Build ChatConfig based on whether agent uses router_modes or legacy agent_modes
-    let chat_config = if agent.router_id.is_some() && state.mode_resolver.is_some() {
+    let chat_config = if agent.router_id.is_some() && state.mode_resolver().is_some() {
         // NEW: Use router_modes system via ModeResolver
         debug!(agent_id = %agent_id, router_id = ?agent.router_id, "Using router_modes system");
 
         // Load conversation history for context
         let history = if let Some(sid) = session_id {
             state
-                .repo
+                .repo()
                 .get_session_history(sid, 10)
                 .await
                 .map_err(HubError::Internal)?
@@ -110,7 +110,7 @@ pub async fn run_chat(
 
         // Resolve mode
         let mode = state
-            .mode_resolver
+            .mode_resolver()
             .as_ref()
             .unwrap()
             .resolve(&agent, content, Some(&history_text))
@@ -138,7 +138,7 @@ pub async fn run_chat(
 
         // Load agent tools
         let tools = state
-            .repo
+            .repo()
             .get_agent_tools(agent_id)
             .await
             .map_err(HubError::Internal)?;
@@ -147,7 +147,7 @@ pub async fn run_chat(
 
         // Load agent modes and classify if applicable
         let modes = state
-            .repo
+            .repo()
             .get_agent_modes(agent_id)
             .await
             .map_err(HubError::Internal)?;
@@ -180,10 +180,12 @@ pub async fn run_chat(
     let strategy = ChatStrategy::new(chat_config, state.clone(), user_id, session_id, message_id);
     let engine = ExecutionEngine::new(provider);
     let sink = streaming::SseSink::new(state.clone(), message_id);
+    let ae_repo = state.agent_execution_repo();
+    let tl_repo = state.token_ledger_repo();
     let recorder = ExecutionRecorder::new(
-        state.repo.as_ref(),
-        state.agent_execution_repo.as_deref(),
-        state.token_ledger_repo.as_deref(),
+        state.repo().as_ref(),
+        ae_repo.as_deref(),
+        tl_repo.as_deref(),
     );
 
     engine
@@ -205,8 +207,7 @@ pub async fn run_interactive_chat(
 ) -> Result<ExecutionResult, HubError> {
     // Load agent_execution row
     let ae_repo = state
-        .agent_execution_repo
-        .as_ref()
+        .agent_execution_repo()
         .ok_or(HubError::ProviderNotConfigured)?;
     let ae = ae_repo
         .get_agent_execution(agent_execution_id)
@@ -216,20 +217,20 @@ pub async fn run_interactive_chat(
 
     // Load agent
     let agent = state
-        .repo
+        .repo()
         .get_persisted_agent(ae.agent_id)
         .await
         .map_err(HubError::Internal)?
         .ok_or_else(|| HubError::Internal(anyhow::anyhow!("agent not found")))?;
 
     // Resolve mode via ModeResolver
-    let mode = if let Some(resolver) = &state.mode_resolver {
+    let mode = if let Some(resolver) = state.mode_resolver() {
         resolver
             .resolve(&agent, content, Some("Interactive review conversation"))
             .await
             .map_err(|e| HubError::Internal(anyhow::anyhow!("Mode resolution failed: {}", e)))?
     } else {
-        construct_agent_defaults(&agent, &state.repo)
+        construct_agent_defaults(&agent, state.repo())
             .await
             .map_err(HubError::Internal)?
     };
@@ -248,10 +249,12 @@ pub async fn run_interactive_chat(
     let strategy = InteractiveChatStrategy::new(config, state.clone());
     let engine = ExecutionEngine::new(provider);
     let sink = streaming::SseSink::new(state.clone(), stream_id);
+    let ae_repo2 = state.agent_execution_repo();
+    let tl_repo = state.token_ledger_repo();
     let recorder = ExecutionRecorder::new(
-        state.repo.as_ref(),
-        state.agent_execution_repo.as_deref(),
-        state.token_ledger_repo.as_deref(),
+        state.repo().as_ref(),
+        ae_repo2.as_deref(),
+        tl_repo.as_deref(),
     );
 
     engine
@@ -293,10 +296,12 @@ async fn classify_mode(
     let strategy = RouterStrategy::new(router_config);
     let engine = ExecutionEngine::new(provider.clone());
     let sink = NullSink;
+    let ae_repo = state.agent_execution_repo();
+    let tl_repo = state.token_ledger_repo();
     let recorder = ExecutionRecorder::new(
-        state.repo.as_ref(),
-        state.agent_execution_repo.as_deref(),
-        state.token_ledger_repo.as_deref(),
+        state.repo().as_ref(),
+        ae_repo.as_deref(),
+        tl_repo.as_deref(),
     );
 
     let result = engine
@@ -371,7 +376,7 @@ pub fn schedule_stream_cleanup(state: &AppState, message_id: Uuid) {
     let cleanup_state = state.clone();
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_secs(120)).await;
-        cleanup_state.remove_response_stream(message_id).await;
+        cleanup_state.remove_response_stream(message_id);
     });
 }
 

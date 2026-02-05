@@ -96,7 +96,7 @@ pub async fn auth_setup(
 ) -> Result<Json<SetupResponse>, (StatusCode, String)> {
     // Check if already setup
     if state
-        .repo
+        .repo()
         .has_password()
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
@@ -120,7 +120,7 @@ pub async fn auth_setup(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     state
-        .repo
+        .repo()
         .set_password(hash)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -157,7 +157,7 @@ pub async fn auth_register(
         ));
     }
 
-    let user_repo = state.user_repo.as_ref().ok_or((
+    let user_repo = state.user_repo().ok_or((
         StatusCode::INTERNAL_SERVER_ERROR,
         "User service unavailable".into(),
     ))?;
@@ -181,9 +181,9 @@ pub async fn auth_register(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // Seed built-in execution tools for the new user
-    let _ = state.repo.seed_builtin_tools(user.id).await;
+    let _ = state.repo().seed_builtin_tools(user.id).await;
 
-    let token = auth::create_token(&state.jwt_secret, 24, user.id, &user.email)
+    let token = auth::create_token(&state.jwt_secret(), 24, user.id, &user.email)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok((
@@ -217,7 +217,7 @@ pub async fn auth_login(
     State(state): State<AppState>,
     Json(request): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, StatusCode> {
-    let user_repo = state.user_repo.as_ref().ok_or_else(|| {
+    let user_repo = state.user_repo().ok_or_else(|| {
         tracing::error!("user_repo is None");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
@@ -239,7 +239,7 @@ pub async fn auth_login(
         return Err(StatusCode::UNAUTHORIZED);
     }
 
-    let token = auth::create_token(&state.jwt_secret, 24, user.id, &user.email).map_err(|e| {
+    let token = auth::create_token(&state.jwt_secret(), 24, user.id, &user.email).map_err(|e| {
         tracing::error!("JWT token creation error: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
@@ -266,10 +266,7 @@ pub async fn auth_me(
     State(state): State<AppState>,
     auth: auth::AuthUser,
 ) -> Result<Json<MeResponse>, StatusCode> {
-    let user_repo = state
-        .user_repo
-        .as_ref()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let user_repo = state.user_repo().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let user = user_repo
         .get_user_by_id(auth.user_id)

@@ -75,11 +75,11 @@ pub async fn send_chat(
 
     // Pre-create the buffered stream so chunks are captured even before
     // the SSE client connects
-    state.ensure_response_stream(message_id).await;
+    state.ensure_response_stream(message_id);
 
     // Store the user message in the database
     state
-        .repo
+        .repo()
         .insert_chat_message(
             auth.user_id,
             message_id,
@@ -91,7 +91,7 @@ pub async fn send_chat(
 
     // Queue message to chat consumer
     state
-        .chat_tx
+        .chat_tx()
         .send(ConsumerMessage {
             id: message_id,
             user_id: auth.user_id,
@@ -134,7 +134,7 @@ pub async fn get_chat_history(
     let offset = query.offset.unwrap_or(0);
 
     let rows = state
-        .repo
+        .repo()
         .get_chat_history(auth.user_id, limit, offset)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -200,7 +200,7 @@ fn chat_stream_inner(
     message_id: Uuid,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let stream = async_stream::stream! {
-        let (buffered, mut rx, already_done) = state.get_response_stream(message_id).await;
+        let (buffered, mut rx, already_done) = state.get_response_stream(message_id);
 
         // Replay any buffered chunks that arrived before we connected
         for chunk in buffered {
@@ -295,7 +295,7 @@ pub async fn clear_chat_history(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
 ) -> StatusCode {
-    match state.repo.clear_chat_history(auth.user_id).await {
+    match state.repo().clear_chat_history(auth.user_id).await {
         Ok(_) => StatusCode::NO_CONTENT,
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }

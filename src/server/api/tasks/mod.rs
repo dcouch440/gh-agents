@@ -52,7 +52,7 @@ pub async fn list_tasks(
     Query(query): Query<TasksQuery>,
 ) -> Result<Json<Vec<Task>>, StatusCode> {
     let tasks = state
-        .repo
+        .repo()
         .list_tasks(auth.user_id, query.status, query.limit)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -80,7 +80,7 @@ pub async fn get_task(
     Path(id): Path<Uuid>,
 ) -> Result<Json<Task>, StatusCode> {
     let task = state
-        .repo
+        .repo()
         .get_task_by_uuid(auth.user_id, id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -139,7 +139,7 @@ pub async fn create_task(
 
     // Insert into database
     state
-        .repo
+        .repo()
         .insert_task(auth.user_id, task.clone())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

@@ -149,8 +149,7 @@ pub async fn list_router_modes(
     Path(router_id): Path<Uuid>,
 ) -> Result<Json<Vec<RouterModeResponse>>, StatusCode> {
     let repo = state
-        .tool_router_repo
-        .as_ref()
+        .tool_router_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Verify user owns the router
@@ -217,8 +216,7 @@ pub async fn create_router_mode(
     }
 
     let repo = state
-        .tool_router_repo
-        .as_ref()
+        .tool_router_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Verify user owns the router
@@ -283,8 +281,7 @@ pub async fn get_router_mode(
     Path(id): Path<Uuid>,
 ) -> Result<Json<RouterModeResponse>, StatusCode> {
     let repo = state
-        .tool_router_repo
-        .as_ref()
+        .tool_router_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let mode = repo
@@ -329,8 +326,7 @@ pub async fn update_router_mode(
     Json(request): Json<UpdateRouterModeRequest>,
 ) -> Result<Json<RouterModeResponse>, StatusCode> {
     let repo = state
-        .tool_router_repo
-        .as_ref()
+        .tool_router_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Get existing mode
@@ -428,8 +424,7 @@ pub async fn delete_router_mode(
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
     let repo = state
-        .tool_router_repo
-        .as_ref()
+        .tool_router_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let existing = repo
@@ -474,8 +469,7 @@ pub async fn get_mode_tools(
     Path(id): Path<Uuid>,
 ) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
     let repo = state
-        .tool_router_repo
-        .as_ref()
+        .tool_router_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let mode = repo
@@ -525,8 +519,7 @@ pub async fn set_mode_tools(
     Json(request): Json<SetModeToolsRequest>,
 ) -> Result<StatusCode, StatusCode> {
     let repo = state
-        .tool_router_repo
-        .as_ref()
+        .tool_router_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let mode = repo

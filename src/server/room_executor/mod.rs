@@ -217,10 +217,9 @@ pub async fn execute_room_turn(
     cancel: Option<&CancellationToken>,
 ) -> Result<RoomTurnResult, HubError> {
     let room_repo = state
-        .room_repo
-        .as_ref()
+        .room_repo()
         .ok_or_else(|| HubError::Internal(anyhow::anyhow!("room_repo not configured")))?;
-    let ae_repo = state.agent_execution_repo.as_ref().ok_or_else(|| {
+    let ae_repo = state.agent_execution_repo().ok_or_else(|| {
         HubError::Internal(anyhow::anyhow!("agent_execution_repo not configured"))
     })?;
 
@@ -291,14 +290,14 @@ pub async fn execute_room_turn(
         });
 
         // Resolve mode with transcript as context
-        let mode = if let Some(resolver) = &state.mode_resolver {
+        let mode = if let Some(resolver) = state.mode_resolver() {
             resolver
                 .resolve(&ma.agent, user_message, Some(&transcript_block))
                 .await
                 .map_err(|e| HubError::Internal(anyhow::anyhow!("Mode resolution failed: {}", e)))?
         } else {
             // Fallback: construct agent defaults for backward compatibility
-            construct_agent_defaults(&ma.agent, &state.repo)
+            construct_agent_defaults(&ma.agent, &state.repo())
                 .await
                 .map_err(HubError::Internal)?
         };
@@ -310,8 +309,8 @@ pub async fn execute_room_turn(
         system_prompt.push_str(&room_context);
 
         // Append agent context documents (global knowledge for this agent)
-        if let Some(_doc_repo) = &state.doc_repo {
-            if let Ok(agent_docs) = state.repo.get_agent_context(selection.agent_id).await {
+        if let Some(_doc_repo) = state.doc_repo() {
+            if let Ok(agent_docs) = state.repo().get_agent_context(selection.agent_id).await {
                 for doc in &agent_docs {
                     system_prompt.push_str(&format!(
                         "\n\n---\n## {} (Agent Context)\n{}",
@@ -386,10 +385,12 @@ pub async fn execute_room_turn(
             user_id,
         };
 
+        let ae_repo2 = state.agent_execution_repo();
+        let tl_repo = state.token_ledger_repo();
         let recorder = ExecutionRecorder::new(
-            state.repo.as_ref(),
-            state.agent_execution_repo.as_deref(),
-            state.token_ledger_repo.as_deref(),
+            state.repo().as_ref(),
+            ae_repo2.as_deref(),
+            tl_repo.as_deref(),
         );
 
         let exec_result = engine

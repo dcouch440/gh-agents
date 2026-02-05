@@ -107,7 +107,7 @@ impl FromRequestParts<AppState> for AuthUser {
         let token = &token;
 
         let claims =
-            verify_token(token, &state.jwt_secret).map_err(|_| StatusCode::UNAUTHORIZED)?;
+            verify_token(token, &state.jwt_secret()).map_err(|_| StatusCode::UNAUTHORIZED)?;
 
         let user_id = claims
             .sub

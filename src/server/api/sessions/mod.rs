@@ -38,7 +38,7 @@ pub async fn list_modes(
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<ModeInfo>>, StatusCode> {
     let agents = state
-        .repo
+        .repo()
         .list_persisted_agents(auth.user_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -121,7 +121,7 @@ pub async fn list_agent_modes(
     Path(agent_id): Path<Uuid>,
 ) -> Result<Json<Vec<AgentModeResponse>>, StatusCode> {
     let modes = state
-        .repo
+        .repo()
         .get_agent_modes(agent_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -162,7 +162,7 @@ pub async fn create_agent_mode(
     };
 
     state
-        .repo
+        .repo()
         .create_agent_mode(&mode)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -187,7 +187,7 @@ pub async fn delete_agent_mode(
     Path(mode_id): Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
     state
-        .repo
+        .repo()
         .delete_agent_mode(mode_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -246,7 +246,7 @@ pub async fn create_session(
     // Validate agent exists if provided
     if let Some(aid) = request.agent_id {
         if state
-            .repo
+            .repo()
             .get_persisted_agent(aid)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -269,13 +269,13 @@ pub async fn create_session(
     };
 
     state
-        .repo
+        .repo()
         .create_session(auth.user_id, session_id, &mode_id, &title, request.agent_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let session = state
-        .repo
+        .repo()
         .get_session(session_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -317,7 +317,7 @@ pub async fn list_sessions(
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<SessionResponse>>, StatusCode> {
     let sessions = state
-        .repo
+        .repo()
         .list_sessions(auth.user_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -355,7 +355,7 @@ pub async fn get_session(
     Path(session_id): Path<Uuid>,
 ) -> Result<Json<SessionResponse>, StatusCode> {
     let session = state
-        .repo
+        .repo()
         .get_session(session_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -395,7 +395,7 @@ pub async fn delete_session(
 ) -> Result<StatusCode, StatusCode> {
     // Verify ownership
     let session = state
-        .repo
+        .repo()
         .get_session(session_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -406,7 +406,7 @@ pub async fn delete_session(
     }
 
     state
-        .repo
+        .repo()
         .delete_session(session_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -442,7 +442,7 @@ pub async fn update_session(
     Json(request): Json<UpdateSessionRequest>,
 ) -> Result<Json<SessionResponse>, StatusCode> {
     let session = state
-        .repo
+        .repo()
         .get_session(session_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -453,13 +453,13 @@ pub async fn update_session(
     }
 
     state
-        .repo
+        .repo()
         .update_session_title(session_id, &request.title)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let updated = state
-        .repo
+        .repo()
         .get_session(session_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -509,7 +509,7 @@ pub async fn send_session_chat(
 
     // Verify session exists and belongs to user
     let session = state
-        .repo
+        .repo()
         .get_session(session_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -521,11 +521,11 @@ pub async fn send_session_chat(
 
     let message_id = Uuid::new_v4();
 
-    state.ensure_response_stream(message_id).await;
+    state.ensure_response_stream(message_id);
 
     // Store user message scoped to session
     state
-        .repo
+        .repo()
         .insert_session_message(
             auth.user_id,
             session_id,
@@ -538,7 +538,7 @@ pub async fn send_session_chat(
 
     // Queue to chat consumer with session context
     state
-        .chat_tx
+        .chat_tx()
         .send(ConsumerMessage {
             id: message_id,
             user_id: auth.user_id,
@@ -582,7 +582,7 @@ pub async fn get_session_history(
 ) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
     // Verify session ownership
     let session = state
-        .repo
+        .repo()
         .get_session(session_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -594,7 +594,7 @@ pub async fn get_session_history(
 
     let limit = query.limit.unwrap_or(50);
     let rows = state
-        .repo
+        .repo()
         .get_session_history(session_id, limit)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

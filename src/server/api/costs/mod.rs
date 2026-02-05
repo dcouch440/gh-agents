@@ -38,8 +38,7 @@ pub async fn get_costs(
     Query(q): Query<CostQuery>,
 ) -> Result<Json<CostResponse>, StatusCode> {
     let repo = state
-        .token_ledger_repo
-        .as_ref()
+        .token_ledger_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let total_spend = repo
         .get_user_spend(auth.user_id.0, q.since)

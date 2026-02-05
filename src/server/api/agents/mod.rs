@@ -108,11 +108,11 @@ pub async fn list_agents(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
 ) -> Result<Json<AgentsListResponse>, StatusCode> {
-    let config = state.config.read().await;
+    let config = state.config().read().await;
     let pool_config = &config.pool;
 
     let rows = state
-        .repo
+        .repo()
         .list_persisted_agents(auth.user_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -184,7 +184,7 @@ pub async fn create_agent(
     };
 
     state
-        .repo
+        .repo()
         .upsert_agent(auth.user_id, row.clone())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -210,7 +210,7 @@ pub async fn get_agent(
     Path(id): Path<Uuid>,
 ) -> Result<Json<AgentResponse>, StatusCode> {
     let row = state
-        .repo
+        .repo()
         .get_persisted_agent(id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -239,7 +239,7 @@ pub async fn update_agent(
     Json(request): Json<UpdateAgentRequest>,
 ) -> Result<Json<AgentResponse>, StatusCode> {
     let existing = state
-        .repo
+        .repo()
         .get_persisted_agent(id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -270,7 +270,7 @@ pub async fn update_agent(
     };
 
     state
-        .repo
+        .repo()
         .upsert_agent(auth.user_id, updated.clone())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -296,7 +296,7 @@ pub async fn delete_agent(
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
     state
-        .repo
+        .repo()
         .delete_persisted_agent(id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

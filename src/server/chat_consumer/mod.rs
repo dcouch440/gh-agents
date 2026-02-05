@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
-use uuid::Uuid;
 
 use crate::llm::{AnthropicClient, LLMProvider, RateLimitedProvider, RetryingProvider};
 
@@ -38,19 +37,17 @@ async fn run_chat_consumer(state: AppState, mut chat_rx: mpsc::Receiver<Consumer
                 e
             );
             while let Some(msg) = chat_rx.recv().await {
-                state
-                    .send_stream_chunk(
-                        msg.id,
-                        StreamChunk::Error(
-                            "LLM provider not configured. Set ANTHROPIC_API_KEY.".into(),
-                        ),
-                    )
-                    .await;
+                state.send_stream_chunk(
+                    msg.id,
+                    StreamChunk::Error(
+                        "LLM provider not configured. Set ANTHROPIC_API_KEY.".into(),
+                    ),
+                );
                 let cleanup_state = state.clone();
                 let mid = msg.id;
                 tokio::spawn(async move {
                     tokio::time::sleep(std::time::Duration::from_secs(120)).await;
-                    cleanup_state.remove_response_stream(mid).await;
+                    cleanup_state.remove_response_stream(mid);
                 });
             }
             return;
@@ -64,13 +61,14 @@ async fn run_chat_consumer(state: AppState, mut chat_rx: mpsc::Receiver<Consumer
         tokio::spawn(async move {
             if let Err(e) = handle_message(&state, provider, msg).await {
                 warn!("Chat message handling failed: {}", e);
-                state
-                    .send_stream_chunk(message_id, StreamChunk::Error(format!("Chat error: {}", e)))
-                    .await;
+                state.send_stream_chunk(
+                    message_id,
+                    StreamChunk::Error(format!("Chat error: {}", e)),
+                );
                 let cleanup_state = state.clone();
                 tokio::spawn(async move {
                     tokio::time::sleep(std::time::Duration::from_secs(120)).await;
-                    cleanup_state.remove_response_stream(message_id).await;
+                    cleanup_state.remove_response_stream(message_id);
                 });
             }
         });
@@ -85,7 +83,7 @@ async fn handle_message(
     msg: ConsumerMessage,
 ) -> anyhow::Result<()> {
     let message_id = msg.id;
-    let agent_id = msg.agent_id.or(state.default_agent_id);
+    let agent_id = msg.agent_id.or(state.default_agent_id());
 
     match agent_id {
         Some(aid) => match super::hub::run_chat(
@@ -103,10 +101,8 @@ async fn handle_message(
             Ok(_) => {}
             Err(e) => {
                 warn!("Chat error for {}: {}", message_id, e);
-                state
-                    .send_stream_chunk(message_id, StreamChunk::Error(format!("{}", e)))
-                    .await;
-                state.send_stream_chunk(message_id, StreamChunk::Done).await;
+                state.send_stream_chunk(message_id, StreamChunk::Error(format!("{}", e)));
+                state.send_stream_chunk(message_id, StreamChunk::Done);
             }
         },
         None => {
@@ -114,10 +110,8 @@ async fn handle_message(
                 "No agent_id and no default agent configured for message {}",
                 message_id
             );
-            state
-                .send_stream_chunk(message_id, StreamChunk::Error("No agent configured".into()))
-                .await;
-            state.send_stream_chunk(message_id, StreamChunk::Done).await;
+            state.send_stream_chunk(message_id, StreamChunk::Error("No agent configured".into()));
+            state.send_stream_chunk(message_id, StreamChunk::Done);
         }
     }
 

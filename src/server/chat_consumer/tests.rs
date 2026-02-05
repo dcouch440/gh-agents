@@ -6,6 +6,7 @@ use crate::db::{ChatMessageRow, SessionRow};
 use crate::types::{AppConfig, UserId};
 use chrono::{DateTime, Utc};
 use std::sync::Arc;
+use uuid::Uuid;
 
 /// Minimal in-memory repo for orchestrator tests
 struct TestRepo {
@@ -212,10 +213,10 @@ async fn chat_consumer_sends_error_when_no_api_key() {
     let (state, chat_rx) = AppState::with_repo(None, repo, AppConfig::default());
 
     let msg_id = Uuid::new_v4();
-    let (_buf, mut rx, _done) = state.get_response_stream(msg_id).await;
+    let (_buf, mut rx, _done) = state.get_response_stream(msg_id);
 
     state
-        .chat_tx
+        .chat_tx()
         .send(ConsumerMessage {
             id: msg_id,
             user_id: UserId::new(),

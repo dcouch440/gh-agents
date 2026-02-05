@@ -53,8 +53,7 @@ pub async fn list_tool_routers(
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<crate::db::ToolRouterRow>>, StatusCode> {
     let repo = state
-        .tool_router_repo
-        .as_ref()
+        .tool_router_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo
         .list_tool_routers(auth.user_id.0)
@@ -84,8 +83,7 @@ pub async fn create_tool_router(
         return Err(StatusCode::BAD_REQUEST);
     }
     let repo = state
-        .tool_router_repo
-        .as_ref()
+        .tool_router_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo
         .create_tool_router(
@@ -118,8 +116,7 @@ pub async fn get_tool_router(
     Path(id): Path<Uuid>,
 ) -> Result<Json<crate::db::ToolRouterRow>, StatusCode> {
     let repo = state
-        .tool_router_repo
-        .as_ref()
+        .tool_router_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo
         .get_tool_router(id)
@@ -152,8 +149,7 @@ pub async fn update_tool_router(
     Json(request): Json<UpdateToolRouterRequest>,
 ) -> Result<Json<crate::db::ToolRouterRow>, StatusCode> {
     let repo = state
-        .tool_router_repo
-        .as_ref()
+        .tool_router_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo
         .get_tool_router(id)
@@ -200,8 +196,7 @@ pub async fn delete_tool_router(
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
     let repo = state
-        .tool_router_repo
-        .as_ref()
+        .tool_router_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo
         .get_tool_router(id)
@@ -235,8 +230,7 @@ pub async fn get_router_tools(
     Path(id): Path<Uuid>,
 ) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
     let repo = state
-        .tool_router_repo
-        .as_ref()
+        .tool_router_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo
         .get_tool_router(id)
@@ -274,8 +268,7 @@ pub async fn set_router_tools(
     Json(request): Json<SetRouterToolsRequest>,
 ) -> Result<StatusCode, StatusCode> {
     let repo = state
-        .tool_router_repo
-        .as_ref()
+        .tool_router_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo
         .get_tool_router(id)

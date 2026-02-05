@@ -43,7 +43,7 @@ fn orchestrator_message_construction() {
 #[test]
 fn app_state_new_creates_valid_state() {
     let state = make_state();
-    assert_eq!(state.jwt_secret.len(), 32);
+    assert_eq!(state.jwt_secret().len(), 32);
 }
 
 #[test]
@@ -100,60 +100,52 @@ fn broadcast_agent_no_panic() {
     });
 }
 
-#[tokio::test]
-async fn get_response_stream_creates_new() {
+#[test]
+fn get_response_stream_creates_new() {
     let state = make_state();
     let msg_id = Uuid::new_v4();
-    let (buf, _rx, done) = state.get_response_stream(msg_id).await;
+    let (buf, _rx, done) = state.get_response_stream(msg_id);
     assert!(buf.is_empty());
     assert!(!done);
 }
 
-#[tokio::test]
-async fn get_response_stream_returns_existing() {
+#[test]
+fn get_response_stream_returns_existing() {
     let state = make_state();
     let msg_id = Uuid::new_v4();
-    let (_buf1, _rx1, _) = state.get_response_stream(msg_id).await;
-    let (_buf2, _rx2, _) = state.get_response_stream(msg_id).await;
+    let (_buf1, _rx1, _) = state.get_response_stream(msg_id);
+    let (_buf2, _rx2, _) = state.get_response_stream(msg_id);
 }
 
-#[tokio::test]
-async fn send_stream_chunk_no_stream() {
+#[test]
+fn send_stream_chunk_no_stream() {
     let state = make_state();
-    let result = state
-        .send_stream_chunk(Uuid::new_v4(), StreamChunk::Token("hi".into()))
-        .await;
+    let result = state.send_stream_chunk(Uuid::new_v4(), StreamChunk::Token("hi".into()));
     assert!(!result);
 }
 
-#[tokio::test]
-async fn send_stream_chunk_with_stream() {
+#[test]
+fn send_stream_chunk_with_stream() {
     let state = make_state();
     let msg_id = Uuid::new_v4();
-    state.ensure_response_stream(msg_id).await;
-    let result = state
-        .send_stream_chunk(msg_id, StreamChunk::Token("hi".into()))
-        .await;
+    state.ensure_response_stream(msg_id);
+    let result = state.send_stream_chunk(msg_id, StreamChunk::Token("hi".into()));
     assert!(result);
 }
 
-#[tokio::test]
-async fn buffered_stream_replays_chunks() {
+#[test]
+fn buffered_stream_replays_chunks() {
     let state = make_state();
     let msg_id = Uuid::new_v4();
-    state.ensure_response_stream(msg_id).await;
+    state.ensure_response_stream(msg_id);
 
     // Send chunks with no SSE client connected
-    state
-        .send_stream_chunk(msg_id, StreamChunk::Token("hello ".into()))
-        .await;
-    state
-        .send_stream_chunk(msg_id, StreamChunk::Token("world".into()))
-        .await;
-    state.send_stream_chunk(msg_id, StreamChunk::Done).await;
+    state.send_stream_chunk(msg_id, StreamChunk::Token("hello ".into()));
+    state.send_stream_chunk(msg_id, StreamChunk::Token("world".into()));
+    state.send_stream_chunk(msg_id, StreamChunk::Done);
 
     // Late subscriber gets the full buffer
-    let (buf, _rx, done) = state.get_response_stream(msg_id).await;
+    let (buf, _rx, done) = state.get_response_stream(msg_id);
     assert_eq!(buf.len(), 3);
     assert!(done);
     assert!(matches!(&buf[0], StreamChunk::Token(t) if t == "hello "));
@@ -161,12 +153,12 @@ async fn buffered_stream_replays_chunks() {
     assert!(matches!(&buf[2], StreamChunk::Done));
 }
 
-#[tokio::test]
-async fn remove_response_stream() {
+#[test]
+fn remove_response_stream() {
     let state = make_state();
     let msg_id = Uuid::new_v4();
-    state.ensure_response_stream(msg_id).await;
-    state.remove_response_stream(msg_id).await;
-    let result = state.send_stream_chunk(msg_id, StreamChunk::Done).await;
+    state.ensure_response_stream(msg_id);
+    state.remove_response_stream(msg_id);
+    let result = state.send_stream_chunk(msg_id, StreamChunk::Done);
     assert!(!result);
 }

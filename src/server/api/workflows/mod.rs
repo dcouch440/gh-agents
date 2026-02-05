@@ -164,8 +164,7 @@ pub async fn list_workflows(
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<WorkflowResponse>>, StatusCode> {
     let repo = state
-        .workflow_repo
-        .as_ref()
+        .workflow_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = repo
         .list_workflows(auth.user_id.0)
@@ -204,8 +203,7 @@ pub async fn create_workflow(
         return Err(StatusCode::BAD_REQUEST);
     }
     let repo = state
-        .workflow_repo
-        .as_ref()
+        .workflow_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo
         .create_workflow(
@@ -244,8 +242,7 @@ pub async fn get_workflow(
     Path(id): Path<Uuid>,
 ) -> Result<Json<WorkflowResponse>, StatusCode> {
     let repo = state
-        .workflow_repo
-        .as_ref()
+        .workflow_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let row = repo
         .get_workflow(id)
@@ -283,8 +280,7 @@ pub async fn update_workflow(
     Json(req): Json<UpdateWorkflowRequest>,
 ) -> Result<Json<WorkflowResponse>, StatusCode> {
     let repo = state
-        .workflow_repo
-        .as_ref()
+        .workflow_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo
         .get_workflow(id)
@@ -329,8 +325,7 @@ pub async fn delete_workflow(
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
     let repo = state
-        .workflow_repo
-        .as_ref()
+        .workflow_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing = repo
         .get_workflow(id)
@@ -370,8 +365,7 @@ pub async fn create_workflow_step(
     Json(req): Json<CreateStepRequest>,
 ) -> Result<(StatusCode, Json<WorkflowStepResponse>), StatusCode> {
     let repo = state
-        .workflow_repo
-        .as_ref()
+        .workflow_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo
         .get_workflow(wid)
@@ -423,8 +417,7 @@ pub async fn list_workflow_steps(
     Path(wid): Path<Uuid>,
 ) -> Result<Json<Vec<WorkflowStepResponse>>, StatusCode> {
     let repo = state
-        .workflow_repo
-        .as_ref()
+        .workflow_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo
         .get_workflow(wid)
@@ -462,8 +455,7 @@ pub async fn get_workflow_step(
     Path(p): Path<(Uuid, Uuid)>,
 ) -> Result<Json<WorkflowStepResponse>, StatusCode> {
     let repo = state
-        .workflow_repo
-        .as_ref()
+        .workflow_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo
         .get_workflow(p.0)
@@ -507,8 +499,7 @@ pub async fn update_workflow_step(
     Json(req): Json<UpdateStepRequest>,
 ) -> Result<Json<WorkflowStepResponse>, StatusCode> {
     let repo = state
-        .workflow_repo
-        .as_ref()
+        .workflow_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo
         .get_workflow(p.wid)
@@ -571,8 +562,7 @@ pub async fn delete_workflow_step(
     Path(p): Path<WorkflowStepPath>,
 ) -> Result<StatusCode, StatusCode> {
     let repo = state
-        .workflow_repo
-        .as_ref()
+        .workflow_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo
         .get_workflow(p.wid)
@@ -618,8 +608,7 @@ pub async fn list_workflow_edges(
     Path(wid): Path<Uuid>,
 ) -> Result<Json<Vec<EdgeResponse>>, StatusCode> {
     let repo = state
-        .workflow_repo
-        .as_ref()
+        .workflow_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo
         .get_workflow(wid)
@@ -663,8 +652,7 @@ pub async fn add_workflow_edge(
     Json(req): Json<EdgeRequest>,
 ) -> Result<StatusCode, StatusCode> {
     let repo = state
-        .workflow_repo
-        .as_ref()
+        .workflow_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo
         .get_workflow(wid)
@@ -700,8 +688,7 @@ pub async fn remove_workflow_edge(
     Json(req): Json<EdgeRequest>,
 ) -> Result<StatusCode, StatusCode> {
     let repo = state
-        .workflow_repo
-        .as_ref()
+        .workflow_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo
         .get_workflow(wid)
@@ -744,8 +731,7 @@ pub async fn add_step_document(
     Json(req): Json<StepDocumentRequest>,
 ) -> Result<StatusCode, StatusCode> {
     let repo = state
-        .workflow_repo
-        .as_ref()
+        .workflow_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo
         .get_workflow(p.wid)
@@ -792,8 +778,7 @@ pub async fn remove_step_document(
     Json(req): Json<StepDocumentRequest>,
 ) -> Result<StatusCode, StatusCode> {
     let repo = state
-        .workflow_repo
-        .as_ref()
+        .workflow_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo
         .get_workflow(p.wid)
@@ -838,8 +823,7 @@ pub async fn list_step_documents(
     Path(p): Path<WorkflowStepPath>,
 ) -> Result<Json<Vec<StepDocumentResponse>>, StatusCode> {
     let repo = state
-        .workflow_repo
-        .as_ref()
+        .workflow_repo()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let wf = repo
         .get_workflow(p.wid)
