@@ -297,6 +297,7 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         // LEGACY: Pipeline stage member routes removed
         // .route(routes::PIPELINE_STAGE_MEMBERS, get(api::list_stage_members).post(api::add_stage_member))
         // .route(routes::PIPELINE_STAGE_MEMBER, delete(api::delete_stage_member).put(api::update_stage_member))
+        .route(routes::AGENT_EXECUTIONS, get(api::list_agent_executions))
         .route(routes::AGENT_EXECUTION, get(api::get_agent_execution))
         .route(
             routes::AGENT_EXECUTION_MESSAGES,

@@ -2,13 +2,18 @@ import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
+import Badge from '@mui/material/Badge';
 import Box from '@mui/material/Box';
 import { Link as RouterLink } from 'react-router-dom';
 import { useNavigation } from '@/hooks/useNavigation';
+import { useReviewQueue } from '@/hooks/useReviewQueue';
+import { ROUTES } from '@/constants';
 import type { NavItem } from '@/hooks/useNavigation';
 
+type NavItemWithActive = NavItem & { isActive: boolean };
+
 // Base-level helper: Render single nav item
-const renderNavItem = (item: NavItem & { isActive: boolean }) => (
+const renderNavButton = (item: NavItemWithActive) => (
   <Button
     key={item.path}
     component={RouterLink}
@@ -32,9 +37,9 @@ const renderNavItem = (item: NavItem & { isActive: boolean }) => (
   </Button>
 );
 
-// Stateless component - pure function
 function TopNavBar() {
   const { navItems } = useNavigation();
+  const { pendingCount } = useReviewQueue();
 
   return (
     <AppBar position="fixed" color="default">
@@ -53,7 +58,21 @@ function TopNavBar() {
         </Typography>
 
         <Box sx={{ display: 'flex', gap: 0.5, flexGrow: 1 }}>
-          {navItems.map(renderNavItem)}
+          {navItems.map((item) => {
+            if (item.path === ROUTES.REVIEW_QUEUE && pendingCount > 0) {
+              return (
+                <Badge
+                  key={item.path}
+                  badgeContent={pendingCount}
+                  color="warning"
+                  sx={{ '& .MuiBadge-badge': { fontSize: '0.7rem', minWidth: 18, height: 18 } }}
+                >
+                  {renderNavButton(item)}
+                </Badge>
+              );
+            }
+            return renderNavButton(item);
+          })}
         </Box>
 
         <Box sx={{ ml: 'auto' }}>

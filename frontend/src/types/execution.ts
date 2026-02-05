@@ -53,6 +53,11 @@ type ApproveExecutionRequest = {
   structured_output?: Record<string, unknown>
 }
 
+type SendMessageResponse = {
+  message: ExecutionMessage
+  stream_id: string
+}
+
 export type {
   AgentExecution,
   AgentExecutionStatus,
@@ -60,4 +65,5 @@ export type {
   TreeAgentExecution,
   SendExecutionMessageRequest,
   ApproveExecutionRequest,
+  SendMessageResponse,
 }

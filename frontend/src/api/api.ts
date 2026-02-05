@@ -47,6 +47,9 @@ import type {
   CreateRouterModeRequest,
   UpdateRouterModeRequest,
   SetModeToolsRequest,
+  SendExecutionMessageRequest,
+  ApproveExecutionRequest,
+  SendMessageResponse,
 } from '@/types'
 
 // ============================================================================
@@ -196,14 +199,25 @@ const stats = {
 }
 
 const agentExecutions = {
+  list: (params?: { status?: string }, config?: RequestConfig) =>
+    baseApi.get<AgentExecution[]>(
+      params?.status
+        ? `${API.AGENT_EXECUTIONS}?status=${params.status}`
+        : API.AGENT_EXECUTIONS,
+      config,
+    ),
+
   get: (id: string, config?: RequestConfig) =>
     baseApi.get<AgentExecution>(API.AGENT_EXECUTION(id), config),
 
   getMessages: (id: string, config?: RequestConfig) =>
     baseApi.get<ExecutionMessagesResponse>(API.EXECUTION_MESSAGES(id), config),
 
-  approve: (id: string, config?: RequestConfig) =>
-    baseApi.post<void>(API.EXECUTION_APPROVE(id), undefined, config),
+  sendMessage: (id: string, body: SendExecutionMessageRequest, config?: RequestConfig) =>
+    baseApi.post<SendMessageResponse>(API.EXECUTION_MESSAGES(id), body, config),
+
+  approve: (id: string, body?: ApproveExecutionRequest, config?: RequestConfig) =>
+    baseApi.post<void>(API.EXECUTION_APPROVE(id), body, config),
 }
 
 const outputSchemas = {

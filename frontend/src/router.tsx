@@ -11,6 +11,7 @@ import {
   AgentDetailWithProvider,
   TasksWithProvider,
 } from "./RouteWrappers";
+import {ReviewQueuePage} from "./pages/ReviewQueue";
 
 export const router = createBrowserRouter([
   {
@@ -25,6 +26,7 @@ export const router = createBrowserRouter([
       {path: ROUTES.AGENT_WORKSHOP, element: <AgentWorkshopWithProvider />},
       {path: ROUTES.AGENT_DETAIL, element: <AgentDetailWithProvider />},
       {path: ROUTES.TASKS, element: <TasksWithProvider />},
+      {path: ROUTES.REVIEW_QUEUE, element: <ReviewQueuePage />},
       {path: ROUTES.DOCUMENTS, element: <DocumentsPage />},
       {path: ROUTES.SETTINGS, element: <SettingsPage />},
     ],

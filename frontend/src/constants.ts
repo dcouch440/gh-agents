@@ -61,6 +61,7 @@ export const ROUTES = {
   COSTS: "/costs",
   SETTINGS: "/settings",
   SHOWCASE: "/showcase",
+  REVIEW_QUEUE: "/review-queue",
 } as const;
 
 // Reducer Action Types
@@ -84,6 +85,10 @@ export const ACTION = {
   CLEAR_CURRENT: "CLEAR_CURRENT",
   SET_MESSAGES: "SET_MESSAGES",
   APPEND_MESSAGE: "APPEND_MESSAGE",
+  SET_QUEUE: "SET_QUEUE",
+  ADD_TO_QUEUE: "ADD_TO_QUEUE",
+  REMOVE_FROM_QUEUE: "REMOVE_FROM_QUEUE",
+  DISMISS_NOTIFICATION: "DISMISS_NOTIFICATION",
 } as const;
 
 // API Endpoints
@@ -168,8 +173,11 @@ export const API = {
     `/pipelines/${pid}/stages/${num}/members/${mid}`,
 
   // Agent Executions
+  AGENT_EXECUTIONS: "/agent-executions",
   AGENT_EXECUTION: (id: string) => `/agent-executions/${id}`,
   EXECUTION_MESSAGES: (id: string) => `/agent-executions/${id}/messages`,
+  EXECUTION_MESSAGE_STREAM: (id: string, streamId: string) =>
+    `/agent-executions/${id}/messages/${streamId}/stream`,
   EXECUTION_APPROVE: (id: string) => `/agent-executions/${id}/approve`,
   AGENT_EXECUTION_CANCEL: (id: string) => `/agent-executions/${id}/cancel`,
 

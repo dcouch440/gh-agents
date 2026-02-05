@@ -3,7 +3,7 @@
 use std::convert::Infallible;
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::sse::{Event, Sse},
     Json,
@@ -101,6 +101,41 @@ pub struct SendMessageResponse {
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct ApproveExecutionRequest {
     pub structured_output: Option<serde_json::Value>,
+}
+
+#[derive(Deserialize)]
+pub struct ListExecutionsQuery {
+    pub status: Option<String>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/agent-executions",
+    tag = "Agent Executions",
+    security(("bearer_auth" = [])),
+    params(("status" = Option<String>, Query, description = "Filter by status")),
+    responses(
+        (status = 200, description = "List of agent executions", body = Vec<AgentExecutionResponse>),
+    )
+)]
+pub async fn list_agent_executions(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Query(query): Query<ListExecutionsQuery>,
+) -> Result<Json<Vec<AgentExecutionResponse>>, StatusCode> {
+    let repo = state
+        .agent_execution_repo
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = repo
+        .list_agent_executions(auth.user_id.0, query.status.as_deref())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let items: Vec<AgentExecutionResponse> = rows
+        .into_iter()
+        .map(AgentExecutionResponse::from)
+        .collect();
+    Ok(Json(items))
 }
 
 #[utoipa::path(

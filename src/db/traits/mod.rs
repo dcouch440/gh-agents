@@ -520,6 +520,14 @@ pub trait AgentExecutionRepo: Send + Sync {
         &self,
         workflow_step_id: Uuid,
     ) -> Result<Vec<AgentExecutionRow>>;
+
+    /// List interactive agent executions for a user, optionally filtered by status.
+    /// Joins through workflow_executions to filter by user_id.
+    async fn list_agent_executions(
+        &self,
+        user_id: Uuid,
+        status: Option<&str>,
+    ) -> Result<Vec<AgentExecutionRow>>;
 }
 
 // ============================================================================
