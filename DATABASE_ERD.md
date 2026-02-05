@@ -1,5 +1,12 @@
 # Nexor Database Entity Relationship Diagram
 
+**Last Updated:** 2026-02-05
+**Migration Version:** 065 (Unused tables cleanup)
+
+This document describes the **active** database schema for the Nexor AI agent orchestration system. All tables listed here have corresponding Rust code in the application.
+
+---
+
 ## Core Entities
 
 ### users
@@ -8,13 +15,11 @@
 │ users           │
 ├─────────────────┤
 │ id (PK)         │
-│ username        │
 │ email           │
 │ password_hash   │
+│ github_token    │
 │ created_at      │
 │ updated_at      │
-│ api_key         │
-│ github_token    │
 └─────────────────┘
 ```
 
@@ -26,17 +31,16 @@
 │ id (PK)                  │
 │ user_id (FK → users)     │
 │ name                     │
-│ description              │
 │ system_prompt            │
-│ model                    │
-│ temperature              │
-│ max_tokens               │
+│ model_provider           │
+│ model_id                 │
+│ model_max_tokens         │
+│ model_temperature        │
 │ router_id (FK)           │
 │ output_schema_id (FK)    │
-│ current_task (FK)        │
+│ version                  │
 │ created_at               │
 │ updated_at               │
-│ version                  │
 └──────────────────────────┘
 ```
 
@@ -47,11 +51,17 @@
 ├─────────────────────────┤
 │ id (PK)                 │
 │ user_id (FK → users)    │
+│ slice_id (FK)           │
 │ title                   │
 │ description             │
+│ assigned_agent          │
 │ status                  │
 │ priority                │
-│ assigned_agent_id       │
+│ context_files           │
+│ metadata                │
+│ retry_count             │
+│ max_retries             │
+│ last_error              │
 │ created_at              │
 │ updated_at              │
 │ completed_at            │
@@ -66,11 +76,10 @@
 │ id (PK)                 │
 │ user_id (FK → users)    │
 │ name                    │
+│ display_name            │
 │ description             │
-│ schema                  │
-│ implementation          │
+│ parameters              │
 │ created_at              │
-│ updated_at              │
 │ version                 │
 └─────────────────────────┘
 ```
@@ -85,11 +94,16 @@
 │ session_id (FK)         │
 │ title                   │
 │ content                 │
-│ metadata                │
+│ summary                 │
+│ doc_type                │
+│ ref_tag                 │
+│ tags                    │
 │ created_at              │
 │ updated_at              │
 └─────────────────────────┘
 ```
+
+---
 
 ## Workflow System
 
@@ -102,8 +116,8 @@
 │ user_id (FK → users)     │
 │ name                     │
 │ description              │
+│ execution_mode           │
 │ created_at               │
-│ updated_at               │
 │ version                  │
 └──────────────────────────┘
 ```
@@ -116,15 +130,17 @@
 │ id (PK)                         │
 │ workflow_id (FK → workflows)    │
 │ agent_id (FK → agents)          │
-│ room_id (FK → rooms)            │
-│ name                            │
-│ description                     │
+│ execution_mode                  │
+│ agent_execution_mode            │
+│ for_each_ref                    │
 │ prompt_template_id (FK)         │
+│ prompt_template                 │
 │ output_schema_id (FK)           │
+│ output_variable_name            │
 │ interactive_agent_id (FK)       │
-│ step_order                      │
-│ created_at                      │
-│ updated_at                      │
+│ for_each_label_field            │
+│ room_id (FK → rooms)            │
+│ display_order                   │
 │ version                         │
 └─────────────────────────────────┘
 ```
@@ -136,8 +152,6 @@
 ├────────────────────────────────┤
 │ from_step_id (FK → steps)      │
 │ to_step_id (FK → steps)        │
-│ condition                      │
-│ created_at                     │
 └────────────────────────────────┘
 ```
 
@@ -150,6 +164,7 @@
 │ user_id (FK → users)            │
 │ name                            │
 │ description                     │
+│ execution_mode                  │
 │ created_at                      │
 │ updated_at                      │
 └─────────────────────────────────┘
@@ -162,8 +177,8 @@
 ├─────────────────────────────────────┤
 │ collection_id (FK → collections)    │
 │ workflow_id (FK → workflows)        │
-│ workflow_order                      │
-│ created_at                          │
+│ display_order                       │
+│ execution_mode                      │
 └─────────────────────────────────────┘
 ```
 
@@ -175,12 +190,27 @@
 │ collection_id (FK → collections)    │
 │ from_workflow_id (FK → workflows)   │
 │ to_workflow_id (FK → workflows)     │
-│ condition                           │
-│ created_at                          │
 └─────────────────────────────────────┘
 ```
 
+---
+
 ## Execution & Runtime
+
+### collection_runs
+```
+┌─────────────────────────────────┐
+│ collection_runs                 │
+├─────────────────────────────────┤
+│ id (PK)                         │
+│ collection_id (FK → collections)│
+│ user_id (FK → users)            │
+│ status                          │
+│ started_at                      │
+│ completed_at                    │
+│ error                           │
+└─────────────────────────────────┘
+```
 
 ### workflow_executions
 ```
@@ -188,14 +218,13 @@
 │ workflow_executions                 │
 ├─────────────────────────────────────┤
 │ id (PK)                             │
-│ workflow_id (FK → workflows)        │
 │ collection_run_id (FK)              │
+│ workflow_id (FK → workflows)        │
 │ user_id (FK → users)                │
 │ status                              │
-│ input                               │
-│ output                              │
 │ started_at                          │
 │ completed_at                        │
+│ outputs                             │
 │ error                               │
 └─────────────────────────────────────┘
 ```
@@ -209,21 +238,18 @@
 │ agent_id (FK → agents)                  │
 │ workflow_step_id (FK → steps)           │
 │ workflow_execution_id (FK)              │
-│ room_session_id (FK)                    │
-│ parent_agent_execution_id (FK → self)   │
-│ selected_mode_id (FK → agent_modes)     │
-│ selected_router_mode_id (FK)            │
 │ is_interactive                          │
+│ parent_agent_execution_id (FK → self)   │
 │ system_prompt_rendered                  │
 │ input                                   │
 │ output                                  │
 │ structured_output                       │
+│ selected_mode_id (FK → agent_modes)     │
+│ room_session_id (FK)                    │
+│ speaker_order                           │
 │ status                                  │
 │ started_at                              │
 │ completed_at                            │
-│ error                                   │
-│ total_tokens                            │
-│ cost                                    │
 └─────────────────────────────────────────┘
 ```
 
@@ -236,8 +262,9 @@
 │ agent_execution_id (FK)              │
 │ role                                 │
 │ content                              │
-│ tool_calls                           │
-│ tool_results                         │
+│ tool_call_id                         │
+│ input_tokens                         │
+│ output_tokens                        │
 │ created_at                           │
 └──────────────────────────────────────┘
 ```
@@ -251,28 +278,14 @@
 │ collection_run_id (FK)               │
 │ workflow_execution_id (FK)           │
 │ step_execution_id (FK)               │
-│ key                                  │
+│ variable_name                        │
+│ variable_path                        │
 │ value                                │
 │ created_at                           │
 └──────────────────────────────────────┘
 ```
 
-### collection_runs
-```
-┌─────────────────────────────────────┐
-│ collection_runs                     │
-├─────────────────────────────────────┤
-│ id (PK)                             │
-│ collection_id (FK → collections)    │
-│ user_id (FK → users)                │
-│ status                              │
-│ input                               │
-│ output                              │
-│ started_at                          │
-│ completed_at                        │
-│ error                               │
-└─────────────────────────────────────┘
-```
+---
 
 ## Chat & Sessions
 
@@ -283,8 +296,10 @@
 ├─────────────────────────┤
 │ id (PK)                 │
 │ user_id (FK → users)    │
-│ agent_id (FK → agents)  │
+│ mode_id                 │
 │ title                   │
+│ summary                 │
+│ agent_id (FK → agents)  │
 │ created_at              │
 │ updated_at              │
 └─────────────────────────┘
@@ -297,11 +312,16 @@
 ├──────────────────────────┤
 │ id (PK)                  │
 │ user_id (FK → users)     │
+│ session_id (FK)          │
 │ role                     │
 │ content                  │
-│ created_at               │
+│ timestamp                │
 └──────────────────────────┘
 ```
+
+---
+
+## Rooms & Collaboration
 
 ### rooms
 ```
@@ -312,7 +332,11 @@
 │ user_id (FK → users)            │
 │ collection_id (FK)              │
 │ name                            │
-│ description                     │
+│ gatekeeper_enabled              │
+│ gatekeeper_model_id             │
+│ max_speakers_per_turn           │
+│ max_turns                       │
+│ tools_enabled                   │
 │ created_at                      │
 │ updated_at                      │
 └─────────────────────────────────┘
@@ -325,8 +349,9 @@
 ├─────────────────────────┤
 │ room_id (FK → rooms)    │
 │ agent_id (FK → agents)  │
-│ role                    │
-│ joined_at               │
+│ display_name            │
+│ role_description        │
+│ display_order           │
 └─────────────────────────┘
 ```
 
@@ -338,10 +363,14 @@
 │ id (PK)                 │
 │ room_id (FK → rooms)    │
 │ status                  │
+│ current_turn            │
+│ transcript_summary      │
 │ started_at              │
 │ completed_at            │
 └─────────────────────────┘
 ```
+
+---
 
 ## Tool Router System
 
@@ -355,6 +384,10 @@
 │ parent_router_id (FK → self)   │
 │ name                           │
 │ description                    │
+│ system_prompt                  │
+│ model_id                       │
+│ is_active                      │
+│ level                          │
 │ created_at                     │
 │ updated_at                     │
 └────────────────────────────────┘
@@ -362,15 +395,23 @@
 
 ### tool_router_modes
 ```
-┌─────────────────────────────┐
-│ tool_router_modes           │
-├─────────────────────────────┤
-│ id (PK)                     │
-│ router_id (FK → routers)    │
-│ name                        │
-│ description                 │
-│ created_at                  │
-└─────────────────────────────┘
+┌─────────────────────────────────┐
+│ tool_router_modes               │
+├─────────────────────────────────┤
+│ id (PK)                         │
+│ router_id (FK → routers)        │
+│ mode_key                        │
+│ display_name                    │
+│ description                     │
+│ system_prompt                   │
+│ temperature                     │
+│ max_tokens                      │
+│ append_to_agent_system_prompt   │
+│ append_to_agent_tools           │
+│ display_order                   │
+│ created_at                      │
+│ updated_at                      │
+└─────────────────────────────────┘
 ```
 
 ### tool_router_mode_tools
@@ -395,7 +436,27 @@
 └─────────────────────────────┘
 ```
 
-## Agent Relations
+---
+
+## Agent Configuration
+
+### agent_modes
+```
+┌─────────────────────────────┐
+│ agent_modes                 │
+├─────────────────────────────┤
+│ id (PK)                     │
+│ agent_id (FK → agents)      │
+│ name                        │
+│ system_prompt_suffix        │
+│ temperature_override        │
+│ model_override              │
+│ tool_overrides              │
+│ classifier_hint             │
+│ created_at                  │
+│ version                     │
+└─────────────────────────────┘
+```
 
 ### agent_tools
 ```
@@ -405,22 +466,6 @@
 │ agent_id (FK → agents)  │
 │ tool_id (FK → tools)    │
 │ created_at              │
-└─────────────────────────┘
-```
-
-### agent_modes
-```
-┌─────────────────────────┐
-│ agent_modes             │
-├─────────────────────────┤
-│ id (PK)                 │
-│ agent_id (FK → agents)  │
-│ name                    │
-│ description             │
-│ system_prompt           │
-│ created_at              │
-│ updated_at              │
-│ version                 │
 └─────────────────────────┘
 ```
 
@@ -442,10 +487,12 @@
 ├─────────────────────────────┤
 │ step_id (FK → steps)        │
 │ agent_id (FK → agents)      │
+│ execution_strategy          │
 │ agent_order                 │
-│ created_at                  │
 └─────────────────────────────┘
 ```
+
+---
 
 ## Templates & Schemas
 
@@ -457,10 +504,8 @@
 │ id (PK)                 │
 │ user_id (FK → users)    │
 │ name                    │
-│ template                │
-│ variables               │
+│ content                 │
 │ created_at              │
-│ updated_at              │
 │ version                 │
 └─────────────────────────┘
 ```
@@ -475,7 +520,6 @@
 │ name                    │
 │ schema                  │
 │ created_at              │
-│ updated_at              │
 │ version                 │
 └─────────────────────────┘
 ```
@@ -489,146 +533,15 @@
 │ user_id (FK → users)          │
 │ agent_execution_id (FK)       │
 │ output_schema_id (FK)         │
+│ name                          │
 │ data                          │
 │ created_at                    │
 └───────────────────────────────┘
 ```
 
-## Task & Project Management
+---
 
-### task_dependencies
-```
-┌─────────────────────────┐
-│ task_dependencies       │
-├─────────────────────────┤
-│ task_id (FK → tasks)    │
-│ depends_on_id (FK)      │
-│ created_at              │
-└─────────────────────────┘
-```
-
-### task_events
-```
-┌─────────────────────────┐
-│ task_events             │
-├─────────────────────────┤
-│ id (PK)                 │
-│ task_id (FK → tasks)    │
-│ event_type              │
-│ data                    │
-│ created_at              │
-└─────────────────────────┘
-```
-
-### tickets
-```
-┌─────────────────────────┐
-│ tickets                 │
-├─────────────────────────┤
-│ id (PK)                 │
-│ user_id (FK → users)    │
-│ title                   │
-│ description             │
-│ status                  │
-│ priority                │
-│ created_at              │
-│ updated_at              │
-└─────────────────────────┘
-```
-
-### vertical_slices
-```
-┌─────────────────────────────┐
-│ vertical_slices             │
-├─────────────────────────────┤
-│ id (PK)                     │
-│ ticket_id (FK → tickets)    │
-│ user_id (FK → users)        │
-│ description                 │
-│ acceptance_criteria         │
-│ created_at                  │
-│ updated_at                  │
-└─────────────────────────────┘
-```
-
-### prds
-```
-┌─────────────────────────┐
-│ prds                    │
-├─────────────────────────┤
-│ id (PK)                 │
-│ user_id (FK → users)    │
-│ title                   │
-│ content                 │
-│ created_at              │
-│ updated_at              │
-└─────────────────────────┘
-```
-
-### planning_sessions
-```
-┌─────────────────────────┐
-│ planning_sessions       │
-├─────────────────────────┤
-│ id (PK)                 │
-│ prd_id (FK → prds)      │
-│ user_id (FK → users)    │
-│ status                  │
-│ output                  │
-│ created_at              │
-│ updated_at              │
-└─────────────────────────┘
-```
-
-## Monitoring & Analytics
-
-### cost_records
-```
-┌─────────────────────────┐
-│ cost_records            │
-├─────────────────────────┤
-│ id (PK)                 │
-│ user_id (FK → users)    │
-│ agent_id (FK → agents)  │
-│ task_id (FK → tasks)    │
-│ model                   │
-│ tokens                  │
-│ cost                    │
-│ created_at              │
-└─────────────────────────┘
-```
-
-### llm_calls
-```
-┌─────────────────────────┐
-│ llm_calls               │
-├─────────────────────────┤
-│ id (PK)                 │
-│ user_id (FK → users)    │
-│ model                   │
-│ input                   │
-│ output                  │
-│ tokens_used             │
-│ cost                    │
-│ duration_ms             │
-│ created_at              │
-└─────────────────────────┘
-```
-
-### token_usage
-```
-┌─────────────────────────┐
-│ token_usage             │
-├─────────────────────────┤
-│ id (PK)                 │
-│ model                   │
-│ input_tokens            │
-│ output_tokens           │
-│ total_tokens            │
-│ cost                    │
-│ created_at              │
-└─────────────────────────┘
-```
+## Storage & Tracking
 
 ### token_ledger
 ```
@@ -638,140 +551,12 @@
 │ id (PK)                     │
 │ user_id (FK → users)        │
 │ agent_execution_id (FK)     │
+│ model_id                    │
 │ input_tokens                │
 │ output_tokens               │
-│ total_tokens                │
-│ cost                        │
+│ cost_usd                    │
 │ created_at                  │
 └─────────────────────────────┘
-```
-
-## Automation & Scheduling
-
-### schedules
-```
-┌─────────────────────────┐
-│ schedules               │
-├─────────────────────────┤
-│ id (PK)                 │
-│ user_id (FK → users)    │
-│ name                    │
-│ cron_expression         │
-│ action                  │
-│ enabled                 │
-│ created_at              │
-│ updated_at              │
-└─────────────────────────┘
-```
-
-### triggers
-```
-┌─────────────────────────┐
-│ triggers                │
-├─────────────────────────┤
-│ id (PK)                 │
-│ user_id (FK → users)    │
-│ name                    │
-│ event_type              │
-│ condition               │
-│ action                  │
-│ enabled                 │
-│ created_at              │
-│ updated_at              │
-└─────────────────────────┘
-```
-
-## Refactoring & Code Management
-
-### refactor_sessions
-```
-┌─────────────────────────┐
-│ refactor_sessions       │
-├─────────────────────────┤
-│ id (PK)                 │
-│ user_id (FK → users)    │
-│ description             │
-│ status                  │
-│ created_at              │
-│ updated_at              │
-└─────────────────────────┘
-```
-
-### refactor_changes
-```
-┌──────────────────────────────────┐
-│ refactor_changes                 │
-├──────────────────────────────────┤
-│ id (PK)                          │
-│ session_id (FK → sessions)       │
-│ file_path                        │
-│ old_content                      │
-│ new_content                      │
-│ status                           │
-│ created_at                       │
-└──────────────────────────────────┘
-```
-
-### pr_merge_queue
-```
-┌─────────────────────────┐
-│ pr_merge_queue          │
-├─────────────────────────┤
-│ id (PK)                 │
-│ user_id (FK → users)    │
-│ pr_number               │
-│ repo                    │
-│ status                  │
-│ priority                │
-│ created_at              │
-│ updated_at              │
-└─────────────────────────┘
-```
-
-## Miscellaneous
-
-### decisions
-```
-┌─────────────────────────┐
-│ decisions               │
-├─────────────────────────┤
-│ id (PK)                 │
-│ user_id (FK → users)    │
-│ title                   │
-│ description             │
-│ options                 │
-│ selected_option         │
-│ rationale               │
-│ created_at              │
-│ updated_at              │
-└─────────────────────────┘
-```
-
-### messages
-```
-┌─────────────────────────┐
-│ messages                │
-├─────────────────────────┤
-│ id (PK)                 │
-│ from_agent (FK)         │
-│ to_agent (FK)           │
-│ task_id (FK → tasks)    │
-│ content                 │
-│ created_at              │
-└─────────────────────────┘
-```
-
-### sessions
-```
-┌─────────────────────────┐
-│ sessions                │
-├─────────────────────────┤
-│ id (PK)                 │
-│ session_key             │
-│ data                    │
-│ created_at              │
-│ updated_at              │
-└─────────────────────────┘
 ```
 
 ### context_store
@@ -780,12 +565,38 @@
 │ context_store                │
 ├──────────────────────────────┤
 │ id (PK)                      │
-│ session_id (FK → sessions)   │
-│ key                          │
-│ value                        │
+│ session_id (FK)              │
+│ source                       │
+│ priority                     │
+│ content                      │
+│ metadata                     │
+│ status                       │
 │ created_at                   │
-│ updated_at                   │
+│ expires_at                   │
 └──────────────────────────────┘
+```
+
+### router_requests
+```
+┌─────────────────────────────┐
+│ router_requests             │
+├─────────────────────────────┤
+│ id (PK)                     │
+│ session_id (FK)             │
+│ agent_execution_id (FK)     │
+│ intent                      │
+│ priority                    │
+│ callback_hint               │
+│ routed_tool                 │
+│ routed_args                 │
+│ is_async                    │
+│ passdown                    │
+│ chain                       │
+│ status                      │
+│ result                      │
+│ created_at                  │
+│ completed_at                │
+└─────────────────────────────┘
 ```
 
 ### step_documents
@@ -799,19 +610,9 @@
 └──────────────────────────────┘
 ```
 
-### router_requests
-```
-┌─────────────────────────────┐
-│ router_requests             │
-├─────────────────────────────┤
-│ id (PK)                     │
-│ session_id (FK)             │
-│ agent_execution_id (FK)     │
-│ request                     │
-│ response                    │
-│ created_at                  │
-└─────────────────────────────┘
-```
+---
+
+## Infrastructure
 
 ### auth_config
 ```
@@ -819,45 +620,44 @@
 │ auth_config             │
 ├─────────────────────────┤
 │ id (PK)                 │
-│ provider                │
-│ config                  │
+│ password_hash           │
 │ created_at              │
 │ updated_at              │
 └─────────────────────────┘
 ```
 
-### system_state
+### pr_merge_queue
 ```
 ┌─────────────────────────┐
-│ system_state            │
+│ pr_merge_queue          │
 ├─────────────────────────┤
 │ id (PK)                 │
-│ key                     │
-│ value                   │
+│ repo_owner              │
+│ repo_name               │
+│ pr_number               │
+│ queue_position          │
+│ status                  │
+│ conflict_info           │
+│ error_message           │
+│ created_at              │
 │ updated_at              │
 └─────────────────────────┘
 ```
 
-## Version Tables
+---
 
-All versioned entities have corresponding `_versions` tables that reference the parent:
+## Versioning Tables
 
-- **agents_versions** → agents
-- **agent_modes_versions** → agent_modes
-- **tools_versions** → tools
-- **workflows_versions** → workflows
-- **workflow_steps_versions** → workflow_steps
-- **output_schemas_versions** → output_schemas
-- **prompt_templates_versions** → prompt_templates
+All versioned entities have corresponding `_versions` tables that track historical changes:
 
-## Backup Tables
+### agents_versions
+Tracks agent configuration history (from migration 053).
 
-Some tables have backup versions:
+### agent_modes_versions
+Tracks agent mode history (from migration 053).
 
-- **agent_executions_backup**
-- **room_sessions_backup**
-- **rooms_backup**
-- **pipelines_backup**
+### tools_versions
+Tracks tool definition history (from migration 053).
 
 ---
 
@@ -865,17 +665,18 @@ Some tables have backup versions:
 
 ### User-Centric (user_id FK)
 Almost all major entities are owned by users:
-- agents, tasks, tools, documents, workflows, chat_sessions, tickets, prds, etc.
+- `agents`, `tasks`, `tools`, `documents`, `workflows`, `chat_sessions`, `rooms`
 
 ### Workflow Execution Chain
 ```
 users → workflow_collections → collection_runs → workflow_executions → agent_executions
 ```
 
-### Agent-Task Relationship
+### Agent Execution Hierarchy
 ```
-users → tasks ← messages → agents
-agents.current_task → tasks
+agent_executions (parent) → agent_executions (children)
+agent_executions → execution_messages
+agent_executions → execution_variables
 ```
 
 ### Tool Router Hierarchy
@@ -890,24 +691,56 @@ users → rooms → room_members → agents
 rooms → room_sessions → agent_executions
 ```
 
+### Chat System
+```
+users → chat_sessions → chat_messages
+chat_sessions → agents (via mode_id/agent_id)
+```
+
 ### Context & Documents
 ```
-users → chat_sessions → documents
+users → documents
 agents → agent_context → documents
 workflow_steps → step_documents → documents
 ```
 
-### Execution Hierarchy
-```
-agent_executions (parent) → agent_executions (children)
-agent_executions → execution_messages
-agent_executions → execution_variables
-```
+---
+
+## Migration History
+
+**Recent Cleanup (Migration 065):**
+Removed 17 unused tables that were created but never implemented:
+- Task management: `task_events`, `task_dependencies`, `cost_records`, `messages`
+- Project management: `tickets`, `vertical_slices`, `prds`, `planning_sessions`
+- Automation: `schedules`, `triggers`
+- Refactoring: `refactor_sessions`, `refactor_changes`
+- Observability: `decisions`, `llm_calls`, `token_usage`
+- Legacy: `sessions`, `system_state`
+
+**Previous Cleanup:**
+- Migration 061: Dropped pipeline system (6 tables)
+- Migration 062: Dropped cluster system (3 tables)
+- Migration 046: Dropped legacy `tool_calls` table
 
 ---
 
-**Total Tables:** 67 (including migrations and backup tables)
-**Core Entity Types:** ~15 (users, agents, tasks, tools, workflows, documents, etc.)
-**Junction/Relation Tables:** ~12 (agent_tools, room_members, step_documents, etc.)
-**Versioning Tables:** 7
-**Backup Tables:** 4
+## Schema Statistics
+
+**Active Tables:** 48
+- Core entities: 5 (users, agents, tasks, tools, documents)
+- Workflow system: 7
+- Execution & runtime: 5
+- Chat & sessions: 2
+- Rooms: 3
+- Tool router system: 4
+- Agent configuration: 4
+- Templates & schemas: 3
+- Storage & tracking: 4
+- Infrastructure: 2
+- Versioning: 3
+- Junction/relation tables: 6
+
+**Total Storage Requirements:** ~48 active tables (down from 67 pre-cleanup)
+
+**Database Engine:** PostgreSQL 14+
+**Connection Pooling:** 10 connections (configurable via ENV)
