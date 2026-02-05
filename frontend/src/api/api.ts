@@ -43,6 +43,10 @@ import type {
   UpdateStepRequest,
   WorkflowStepEdge,
   EdgeRequest,
+  RouterMode,
+  CreateRouterModeRequest,
+  UpdateRouterModeRequest,
+  SetModeToolsRequest,
 } from '@/types'
 
 // ============================================================================
@@ -301,6 +305,60 @@ const modes = {
   list: (config?: RequestConfig) => baseApi.get<unknown>(API.MODES, config),
 }
 
+const routerModes = {
+  /**
+   * List all modes for a router
+   * GET /api/tool-routers/:router_id/modes
+   */
+  listByRouter: (routerId: string, config?: RequestConfig) =>
+    baseApi.get<RouterMode[]>(API.ROUTER_MODES_BY_ROUTER(routerId), config),
+
+  /**
+   * Create new mode for a router
+   * POST /api/tool-routers/:router_id/modes
+   */
+  createForRouter: (
+    routerId: string,
+    body: CreateRouterModeRequest,
+    config?: RequestConfig
+  ) => baseApi.post<RouterMode>(API.ROUTER_MODES_BY_ROUTER(routerId), body, config),
+
+  /**
+   * Get single mode by ID
+   * GET /api/router-modes/:id
+   */
+  get: (id: string, config?: RequestConfig) =>
+    baseApi.get<RouterMode>(API.ROUTER_MODE(id), config),
+
+  /**
+   * Update mode
+   * PUT /api/router-modes/:id
+   */
+  update: (id: string, body: UpdateRouterModeRequest, config?: RequestConfig) =>
+    baseApi.put<RouterMode>(API.ROUTER_MODE(id), body, config),
+
+  /**
+   * Delete mode
+   * DELETE /api/router-modes/:id
+   */
+  delete: (id: string, config?: RequestConfig) =>
+    baseApi.del<void>(API.ROUTER_MODE(id), config),
+
+  /**
+   * Get tools assigned to mode
+   * GET /api/router-modes/:id/tools
+   */
+  getTools: (id: string, config?: RequestConfig) =>
+    baseApi.get<Tool[]>(API.MODE_TOOLS(id), config),
+
+  /**
+   * Set tools for mode (replaces all)
+   * PUT /api/router-modes/:id/tools
+   */
+  setTools: (id: string, body: SetModeToolsRequest, config?: RequestConfig) =>
+    baseApi.put<void>(API.MODE_TOOLS(id), body, config),
+}
+
 // ============================================================================
 // Merge base API methods with typed endpoints into single `api` export
 // ============================================================================
@@ -331,4 +389,5 @@ export const api = {
   workflows,
   contextResponse,
   modes,
+  routerModes,
 }
