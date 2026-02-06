@@ -1,4 +1,4 @@
-.PHONY: build check test fmt lint clean run run-opus run-haiku release help \
+.PHONY: build check test fmt lint clean run run-opus run-haiku release help sync \
        ui-install ui-dev ui-build ui-lint ui-preview \
        cli-install cli-dev cli-build \
        dev build-all lint-all test-all ci \
@@ -20,6 +20,7 @@ help:
 	@echo "    make run-haiku   - Run with Haiku model (cheap)"
 	@echo "    make run-debug   - Run with debug logging"
 	@echo "    make watch       - Watch and rebuild on changes"
+	@echo "    make sync        - Sync config files to database"
 	@echo ""
 	@echo "  Frontend (React):"
 	@echo "    make ui-install  - Install npm dependencies"
@@ -85,6 +86,9 @@ run-haiku:
 
 watch:
 	cargo watch -x check -x test
+
+sync:
+	cargo run -- sync-config
 
 # --- Frontend (React) ---
 

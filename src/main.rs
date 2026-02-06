@@ -81,6 +81,35 @@ async fn run_sync_config(config_dir: &Path, dry_run: bool, verbose: bool) -> Res
     // Initialize database
     let pool = init_db().await?;
 
+    // Seed built-in tools for system user (idempotent)
+    if !dry_run {
+        if verbose {
+            println!("🔧 Seeding built-in tools...");
+        }
+
+        // Get system user ID (the user that owns all built-in tools)
+        let system_user_id = sqlx::query_scalar::<_, uuid::Uuid>(
+            "SELECT DISTINCT user_id FROM tools LIMIT 1"
+        )
+        .fetch_optional(&pool)
+        .await?;
+
+        if let Some(user_id) = system_user_id {
+            use nexor::db::pg_repo::PgRepo;
+            use nexor::db::traits::ServerRepo;
+            use nexor::types::UserId;
+
+            let repo = PgRepo::new(pool.clone());
+            repo.seed_builtin_tools(UserId(user_id)).await?;
+
+            if verbose {
+                println!("✓ Tools seeded");
+            }
+        } else if verbose {
+            println!("⚠ No existing tools found, skipping tool seeding");
+        }
+    }
+
     // Run sync
     let stats = sync_config(&pool, config_dir, dry_run, verbose).await?;
 

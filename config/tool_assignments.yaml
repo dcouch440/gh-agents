@@ -75,15 +75,6 @@ tool_assignments:
       Use for reviewing modifications before committing.
     priority: 10
 
-  git_log:
-    capabilities:
-      - git_read
-      - git_history
-    notes: >
-      View commit history with authors, dates, messages.
-      Supports filtering by path, author, date range.
-    priority: 10
-
   git_branch:
     capabilities:
       - git_read    # Can list and show current branch
