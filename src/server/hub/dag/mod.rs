@@ -44,6 +44,22 @@ pub use utils::{
     StepOutput, WorkflowExecutionContext, WorkflowExecutionResult,
 };
 
+/// Determine the output key for a step: prefer the first output port name,
+/// fall back to the legacy `output_variable_name` field.
+fn resolve_output_key(
+    step: &WorkflowStepRow,
+    step_outputs: &HashMap<Uuid, Vec<StepOutputRow>>,
+) -> String {
+    if let Some(ports) = step_outputs.get(&step.id) {
+        if let Some(first) = ports.first() {
+            if !first.port_name.is_empty() {
+                return first.port_name.clone();
+            }
+        }
+    }
+    step.output_variable_name.clone().unwrap_or_default()
+}
+
 /// Wrap a step output into a StepExecutionEnvelope for port-based data flow.
 fn wrap_in_envelope(
     output: &StepOutput,
@@ -554,8 +570,17 @@ async fn execute_single_step(
         prompt.push_str(&build_routing_instruction_block(routing_ctx));
     }
 
-    let (output, in_tok, out_tok, cost) =
-        run_step_via_engine(engine, state, ctx, step, agent, &prompt, cancel).await?;
+    let (output, in_tok, out_tok, cost) = run_step_via_engine(
+        engine,
+        state,
+        ctx,
+        step,
+        agent,
+        &prompt,
+        &port_meta.step_outputs,
+        cancel,
+    )
+    .await?;
 
     *total_input_tokens += in_tok;
     *total_output_tokens += out_tok;
@@ -638,10 +663,15 @@ async fn execute_room_step(
                                     .await
                                     .unwrap_or_default();
 
-                                let (envelope_data, output) = extract_room_outputs_from_transcript(
-                                    &transcript,
-                                    step.output_variable_name.as_deref(),
-                                );
+                                let resolved_key =
+                                    resolve_output_key(step, &port_meta.step_outputs);
+                                let key_ref = if resolved_key.is_empty() {
+                                    None
+                                } else {
+                                    Some(resolved_key.as_str())
+                                };
+                                let (envelope_data, output) =
+                                    extract_room_outputs_from_transcript(&transcript, key_ref);
 
                                 if !output.variable_name.is_empty() {
                                     if let Some(ref structured) = output.structured_output {
@@ -792,7 +822,7 @@ async fn execute_room_step(
 
         // Store partial output for resume detection
         let partial = StepOutput {
-            variable_name: step.output_variable_name.clone().unwrap_or_default(),
+            variable_name: resolve_output_key(step, &port_meta.step_outputs),
             raw_output: format!(
                 "{{\"room_session_id\":\"{}\",\"status\":\"awaiting_room\"}}",
                 session.id
@@ -857,17 +887,20 @@ async fn execute_room_step(
     }
 
     // 10. Extract per-agent outputs from final turn
+    let room_output_key = resolve_output_key(step, &port_meta.step_outputs);
+    let room_key_ref = if room_output_key.is_empty() {
+        None
+    } else {
+        Some(room_output_key.as_str())
+    };
     let (envelope_data, output) = if let Some(ref final_turn) = last_turn_result {
-        extract_room_outputs_from_speakers(
-            &final_turn.speakers,
-            step.output_variable_name.as_deref(),
-        )
+        extract_room_outputs_from_speakers(&final_turn.speakers, room_key_ref)
     } else {
         // No rounds executed (max_turns = 0)
         (
             JsonValue::Object(serde_json::Map::new()),
             StepOutput {
-                variable_name: step.output_variable_name.clone().unwrap_or_default(),
+                variable_name: room_output_key.clone(),
                 raw_output: "{}".to_string(),
                 structured_output: Some(JsonValue::Object(serde_json::Map::new())),
             },
@@ -1083,7 +1116,17 @@ async fn execute_for_each_step(
         )
         .await;
 
-        match run_step_via_engine(engine, state, ctx, step, iteration_agent, &prompt, cancel).await
+        match run_step_via_engine(
+            engine,
+            state,
+            ctx,
+            step,
+            iteration_agent,
+            &prompt,
+            &port_meta.step_outputs,
+            cancel,
+        )
+        .await
         {
             Ok((output, in_tok, out_tok, cost)) => {
                 *total_input_tokens += in_tok;
@@ -1102,7 +1145,7 @@ async fn execute_for_each_step(
 
     // Aggregate outputs as array
     let aggregated = JsonValue::Array(iteration_outputs.into_iter().flatten().collect());
-    let variable_name = step.output_variable_name.clone().unwrap_or_default();
+    let variable_name = resolve_output_key(step, &port_meta.step_outputs);
 
     let output = StepOutput {
         variable_name: variable_name.clone(),
@@ -1135,6 +1178,7 @@ async fn run_step_via_engine(
     step: &WorkflowStepRow,
     agent: &AgentRow,
     prompt: &str,
+    step_outputs: &HashMap<Uuid, Vec<StepOutputRow>>,
     cancel: Option<&CancellationToken>,
 ) -> Result<(StepOutput, i64, i64, f32), HubError> {
     let ae_repo = state
@@ -1228,7 +1272,7 @@ async fn run_step_via_engine(
         result.output_tokens as i64,
     );
 
-    let variable_name = step.output_variable_name.clone().unwrap_or_default();
+    let variable_name = resolve_output_key(step, step_outputs);
     let structured = super::strategies::dag_step::DagStepStrategy::parse_output(&result.content);
 
     let output = StepOutput {
@@ -1379,6 +1423,7 @@ async fn execute_for_each_chain(
         let element_clone = element.clone();
         let cancel_clone = cancel_token.clone();
         let provider_clone = engine_provider.clone();
+        let step_outputs_clone = port_meta.step_outputs.clone();
 
         join_set.spawn(async move {
             let task_engine = ExecutionEngine::new(provider_clone);
@@ -1389,6 +1434,7 @@ async fn execute_for_each_chain(
                 &stages_clone,
                 idx,
                 &element_clone,
+                &step_outputs_clone,
                 cancel_clone.as_ref(),
             )
             .await
@@ -1419,7 +1465,7 @@ async fn execute_for_each_chain(
     // 5. Build per-step aggregates
     for (stage_idx, step_id) in chain.step_ids.iter().enumerate() {
         let step = step_map.get(step_id).unwrap();
-        let variable_name = step.output_variable_name.clone().unwrap_or_default();
+        let variable_name = resolve_output_key(step, &port_meta.step_outputs);
 
         // Collect iteration outputs for this stage
         let mut iteration_outputs: Vec<Option<JsonValue>> = Vec::with_capacity(array.len());
@@ -1499,6 +1545,7 @@ async fn execute_pipeline_item(
     stages: &[PipelineStageData],
     item_index: usize,
     element: &JsonValue,
+    step_outputs: &HashMap<Uuid, Vec<StepOutputRow>>,
     cancel: Option<&CancellationToken>,
 ) -> Result<PipelineItemResult, HubError> {
     let mut stage_envelopes: Vec<(Uuid, StepExecutionEnvelope)> = Vec::with_capacity(stages.len());
@@ -1569,7 +1616,17 @@ async fn execute_pipeline_item(
             prompt
         };
 
-        match run_step_via_engine(engine, state, ctx, step, iteration_agent, &prompt, cancel).await
+        match run_step_via_engine(
+            engine,
+            state,
+            ctx,
+            step,
+            iteration_agent,
+            &prompt,
+            step_outputs,
+            cancel,
+        )
+        .await
         {
             Ok((output, in_tok, out_tok, cost)) => {
                 total_input_tokens += in_tok;
@@ -1950,6 +2007,8 @@ pub async fn resume_dag_from_approval(
         .await
         .map_err(|e| HubError::Internal(anyhow!("edges load failed: {}", e)))?;
 
+    let port_meta = prefetch_port_metadata(state, &steps).await;
+
     // Find the paused workflow_execution via agent_executions
     let step_ids: Vec<Uuid> = steps.iter().map(|s| s.id).collect();
     let completed_executions = ae_repo
@@ -1974,7 +2033,7 @@ pub async fn resume_dag_from_approval(
     for ae in &completed_executions {
         if let Some(ae_step_id) = ae.workflow_step_id {
             if let Some(ws) = step_map.get(&ae_step_id) {
-                let variable_name = ws.output_variable_name.clone().unwrap_or_default();
+                let variable_name = resolve_output_key(ws, &port_meta.step_outputs);
                 let output = StepOutput {
                     variable_name: variable_name.clone(),
                     raw_output: ae.output.clone().unwrap_or_default(),
@@ -1991,7 +2050,7 @@ pub async fn resume_dag_from_approval(
     }
 
     // Inject the approved step's output
-    let approved_var_name = step.output_variable_name.clone().unwrap_or_default();
+    let approved_var_name = resolve_output_key(&step, &port_meta.step_outputs);
     let mut approved_output = approved_output;
     approved_output.variable_name = approved_var_name.clone();
     if !approved_var_name.is_empty() {
@@ -2408,7 +2467,7 @@ async fn execute_cavernous_step(
         &subtask_order,
     );
 
-    let variable_name = step.output_variable_name.clone().unwrap_or_default();
+    let variable_name = resolve_output_key(step, &port_meta.step_outputs);
     let output = StepOutput {
         variable_name: variable_name.clone(),
         structured_output: Some(aggregated.clone()),
