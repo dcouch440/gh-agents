@@ -532,5 +532,35 @@ impl StreamSink for RoomStreamSink {
     }
 }
 
+// ---------------------------------------------------------------------------
+// DAG room prompt builder
+// ---------------------------------------------------------------------------
+
+/// Build the "user message" for a DAG-driven room round.
+///
+/// Round 0: returns the composed workflow prompt directly.
+/// Middle rounds: continuation prompt encouraging new perspectives.
+/// Final round: closing prompt requesting final positions.
+pub fn build_dag_room_prompt(composed_prompt: &str, round: i32, max_rounds: i32) -> String {
+    if round == 0 {
+        // First round or single-round room: use the composed prompt as-is
+        if max_rounds <= 1 {
+            // Single round — also signal this is the final round
+            format!(
+                "{}\n\nThis is the only round. Provide your complete analysis and final recommendation.",
+                composed_prompt
+            )
+        } else {
+            composed_prompt.to_string()
+        }
+    } else if round >= max_rounds - 1 {
+        // Final round
+        "This is the final round. Summarize your key findings and provide your final recommendation.".to_string()
+    } else {
+        // Middle round
+        "Continue the discussion. Build on previous points and consider perspectives not yet explored.".to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests;

@@ -550,6 +550,9 @@ pub trait WorkflowRepo: Send + Sync {
 
     /// Delete a routing rule
     async fn delete_routing_rule(&self, id: Uuid) -> Result<()>;
+
+    /// Find a workflow step by its room_id reference.
+    async fn find_step_by_room_id(&self, room_id: Uuid) -> Result<Option<WorkflowStepRow>>;
 }
 
 // ============================================================================

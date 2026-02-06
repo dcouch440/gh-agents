@@ -55,6 +55,12 @@ impl ExecutionEngine {
         }
     }
 
+    /// Get a clone of the underlying LLM provider.
+    /// Used by room execution which needs `Arc<dyn LLMProvider>` directly.
+    pub fn provider(&self) -> Arc<dyn LLMProvider> {
+        Arc::clone(&self.provider)
+    }
+
     /// Run the execution loop.
     ///
     /// 1. Build messages from strategy

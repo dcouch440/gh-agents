@@ -113,6 +113,9 @@ mod tests {
                 selected_routing_document_id: None,
                 upstream_agent_id: None,
                 upstream_routing_label: None,
+                room_session_id: None,
+                room_id: None,
+                total_rounds: None,
             },
             error: None,
         }
@@ -1072,5 +1075,58 @@ That's the output."#;
 
         assert!(block.contains("## Routing Instructions"));
         assert!(!block.contains("Routed to:"));
+    }
+
+    // =========================================================================
+    // resolve_dot_path with colon-containing keys (Room Outputs)
+    // =========================================================================
+
+    #[test]
+    fn resolve_dot_path_colon_key() {
+        // Room envelopes use "agent:<uuid>" keys
+        let agent_id = Uuid::new_v4();
+        let key = format!("agent:{}", agent_id);
+
+        let value = serde_json::json!({
+            key.clone(): {"findings": "important data", "score": 95}
+        });
+
+        // Colon is NOT a split delimiter — only dot is — so this should work
+        let result = resolve_dot_path(&value, &key);
+        assert!(result.is_some());
+        let inner = result.unwrap();
+        assert_eq!(inner["findings"], "important data");
+        assert_eq!(inner["score"], 95);
+    }
+
+    #[test]
+    fn resolve_dot_path_colon_nested() {
+        // Navigate into a colon-key object with dot path
+        let agent_id = Uuid::new_v4();
+        let key = format!("agent:{}", agent_id);
+
+        let value = serde_json::json!({
+            key.clone(): {"findings": "deep insight", "details": {"confidence": 0.9}}
+        });
+
+        let path = format!("{}.findings", key);
+        let result = resolve_dot_path(&value, &path);
+        assert_eq!(result, Some(serde_json::json!("deep insight")));
+
+        let path2 = format!("{}.details.confidence", key);
+        let result2 = resolve_dot_path(&value, &path2);
+        assert_eq!(result2, Some(serde_json::json!(0.9)));
+    }
+
+    #[test]
+    fn resolve_dot_path_empty_returns_full_composite() {
+        // Empty path returns the entire object — useful for a "combined" port
+        let value = serde_json::json!({
+            "agent:aaa": {"a": 1},
+            "agent:bbb": {"b": 2}
+        });
+
+        let result = resolve_dot_path(&value, "");
+        assert_eq!(result, Some(value));
     }
 }

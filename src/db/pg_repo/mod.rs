@@ -1553,6 +1553,16 @@ impl WorkflowRepo for PgRepo {
             .await?;
         Ok(())
     }
+
+    async fn find_step_by_room_id(&self, room_id: Uuid) -> Result<Option<WorkflowStepRow>> {
+        let row = sqlx::query_as::<_, WorkflowStepRow>(
+            "SELECT * FROM workflow_steps WHERE room_id = $1 LIMIT 1",
+        )
+        .bind(room_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
 }
 
 #[async_trait]

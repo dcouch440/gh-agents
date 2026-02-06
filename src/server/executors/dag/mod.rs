@@ -966,6 +966,9 @@ async fn execute_step(
             selected_routing_document_id: None,
             upstream_agent_id: None,
             upstream_routing_label: None,
+            room_session_id: None,
+            room_id: None,
+            total_rounds: None,
         },
         error: None,
     };
@@ -1313,6 +1316,9 @@ pub async fn execute_workflow(
                                 selected_routing_document_id: None,
                                 upstream_agent_id: None,
                                 upstream_routing_label: None,
+                                room_session_id: None,
+                                room_id: None,
+                                total_rounds: None,
                             },
                             error: Some(ExecutionError {
                                 message: error_message,
