@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use crate::db::traits::{
     AgentExecutionRepo, ContextStoreRepo, DocumentRepo, OutputSchemaRepo, PromptTemplateRepo,
-    ResultRepo, RoomRepo, RouterRequestRepo, TokenLedgerRepo, ToolCapabilityRepo, ToolRouterRepo,
-    UserRepo, WorkflowRepo,
+    ResultRepo, RoomRepo, RouterRequestRepo, SystemConfigRepo, TokenLedgerRepo, ToolCapabilityRepo,
+    ToolRouterRepo, UserRepo, WorkflowRepo,
 };
 
 /// All repository trait objects grouped together.
@@ -43,6 +43,8 @@ pub struct Repos {
     pub rooms: Arc<dyn RoomRepo>,
     /// Tool capability taxonomy and assignments
     pub tool_capabilities: Arc<dyn ToolCapabilityRepo>,
+    /// System-wide configuration
+    pub system_config: Arc<dyn SystemConfigRepo>,
 }
 
 impl Repos {
@@ -62,6 +64,7 @@ impl Repos {
         router_requests: Arc<dyn RouterRequestRepo>,
         rooms: Arc<dyn RoomRepo>,
         tool_capabilities: Arc<dyn ToolCapabilityRepo>,
+        system_config: Arc<dyn SystemConfigRepo>,
     ) -> Self {
         Self {
             users,
@@ -77,6 +80,7 @@ impl Repos {
             router_requests,
             rooms,
             tool_capabilities,
+            system_config,
         }
     }
 }

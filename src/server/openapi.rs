@@ -39,6 +39,10 @@ use utoipa::OpenApi;
         (name = "Results", description = "Saved structured outputs"),
         (name = "Tool Routers", description = "Intelligent tool routing agents"),
         (name = "Session Context", description = "Context store and router requests for sessions"),
+        (name = "Step Ports", description = "Input and output port definitions for workflow steps"),
+        (name = "Routing Rules", description = "Label-based routing rules for for-each steps"),
+        (name = "Room Outputs", description = "Structured outputs from room sessions"),
+        (name = "System Config", description = "System-wide configuration entries"),
     ),
     paths(
         // Health & Auth
@@ -147,6 +151,24 @@ use utoipa::OpenApi;
         // Session Context
         super::api::session_context::get_session_context,
         super::api::session_context::list_session_requests,
+        // Step Ports
+        super::api::step_ports::list_step_inputs,
+        super::api::step_ports::create_step_input,
+        super::api::step_ports::delete_step_input,
+        super::api::step_ports::list_step_outputs,
+        super::api::step_ports::create_step_output,
+        super::api::step_ports::delete_step_output,
+        // Routing Rules
+        super::api::routing_rules::list_routing_rules,
+        super::api::routing_rules::create_routing_rule,
+        super::api::routing_rules::update_routing_rule,
+        super::api::routing_rules::delete_routing_rule,
+        // Room Outputs
+        super::api::rooms::list_room_outputs,
+        // System Config
+        super::api::system_config::list_system_configs,
+        super::api::system_config::upsert_system_config,
+        super::api::system_config::delete_system_config,
     ),
     components(schemas(
         // API response/request types
@@ -216,6 +238,20 @@ use utoipa::OpenApi;
         super::api::tool_routers::CreateToolRouterRequest,
         super::api::tool_routers::UpdateToolRouterRequest,
         super::api::tool_routers::SetRouterToolsRequest,
+        // Step Ports
+        super::api::step_ports::CreateStepInputRequest,
+        super::api::step_ports::CreateStepOutputRequest,
+        super::api::step_ports::StepInputResponse,
+        super::api::step_ports::StepOutputResponse,
+        // Routing Rules
+        super::api::routing_rules::CreateRoutingRuleRequest,
+        super::api::routing_rules::UpdateRoutingRuleRequest,
+        super::api::routing_rules::RoutingRuleResponse,
+        // Room Outputs
+        super::api::rooms::RoomOutputResponse,
+        // System Config
+        super::api::system_config::CreateSystemConfigRequest,
+        super::api::system_config::SystemConfigResponse,
         // DB types used directly in responses
         crate::db::DocumentSearchResult,
         crate::db::ToolRouterRow,
