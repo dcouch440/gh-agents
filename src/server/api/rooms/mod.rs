@@ -9,6 +9,8 @@ use chrono::Utc;
 use serde::Deserialize;
 use uuid::Uuid;
 
+use serde::Serialize;
+
 use crate::constants::MAX_TITLE_LENGTH;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
@@ -377,6 +379,10 @@ pub async fn get_room_transcript(
 }
 
 /// POST /api/room-sessions/:id/close - Close a room session.
+///
+/// If the session is linked to a DAG workflow (has a `run_id`), closing it
+/// triggers DAG resume: per-agent outputs are extracted from the room transcript
+/// and the workflow continues from the paused room step.
 pub async fn close_room_session(
     State(state): State<AppState>,
     _auth: auth_utils::AuthUser,
@@ -398,7 +404,7 @@ pub async fn close_room_session(
 
     state.broadcast_room_update(crate::server::ws::RoomUpdateEvent {
         room_session_id: session_id,
-        run_id: None,
+        run_id: session.run_id,
         event: "session_complete".into(),
         agent_id: None,
         agent_name: None,
@@ -409,7 +415,127 @@ pub async fn close_room_session(
         user_id: None,
     });
 
+    // If this session is DAG-linked, trigger workflow resume
+    if session.run_id.is_some() {
+        if let Some(wf_repo) = state.workflow_repo() {
+            if let Ok(Some(step)) = wf_repo.find_step_by_room_id(session.room_id).await {
+                // Extract per-agent outputs from the room transcript
+                let transcript = repo
+                    .get_room_transcript(session_id)
+                    .await
+                    .unwrap_or_default();
+
+                let room_output = build_room_step_output(&transcript, &step);
+
+                // Resume the DAG in the background
+                let state_clone = state.clone();
+                let step_id = step.id;
+                tokio::spawn(async move {
+                    if let Err(e) = crate::server::hub::dag::resume_dag_from_approval(
+                        &state_clone,
+                        step_id,
+                        room_output,
+                    )
+                    .await
+                    {
+                        tracing::warn!(
+                            step_id = %step_id,
+                            session_id = %session_id,
+                            "Failed to resume DAG after room close: {}",
+                            e
+                        );
+                    }
+                });
+            }
+        }
+    }
+
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Build a StepOutput from a room transcript for DAG resume.
+///
+/// Groups transcript entries by agent, takes each agent's last message,
+/// and builds a composite JSON object.
+fn build_room_step_output(
+    transcript: &[crate::db::RoomTranscriptEntry],
+    step: &crate::db::WorkflowStepRow,
+) -> crate::server::hub::dag::StepOutput {
+    use std::collections::HashMap;
+
+    let mut last_by_agent: HashMap<String, String> = HashMap::new();
+    for entry in transcript {
+        last_by_agent.insert(entry.agent_name.clone(), entry.content.clone());
+    }
+
+    let mut composite = serde_json::Map::new();
+    for (agent_name, content) in &last_by_agent {
+        let key = agent_name.to_lowercase().replace(' ', "_");
+        let value: serde_json::Value = serde_json::from_str(content)
+            .unwrap_or_else(|_| serde_json::Value::String(content.clone()));
+        composite.insert(key, value);
+    }
+    let envelope_data = serde_json::Value::Object(composite);
+
+    crate::server::hub::dag::StepOutput {
+        variable_name: step.output_variable_name.clone().unwrap_or_default(),
+        raw_output: serde_json::to_string(&envelope_data).unwrap_or_default(),
+        structured_output: Some(envelope_data),
+    }
+}
+
+/// Structured output from a room session member.
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct RoomOutputResponse {
+    pub id: Uuid,
+    pub agent_id: Uuid,
+    pub speaker_order: i32,
+    pub turn_number: i32,
+    pub output_name: String,
+    pub structured_output: serde_json::Value,
+    pub raw_output: String,
+}
+
+/// GET /api/room-sessions/:id/outputs - List structured outputs for a room session.
+#[utoipa::path(
+    get,
+    path = "/api/room-sessions/{id}/outputs",
+    tag = "Room Outputs",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Room session ID")),
+    responses(
+        (status = 200, description = "List of structured outputs", body = Vec<RoomOutputResponse>),
+        (status = 404, description = "Session not found")
+    )
+)]
+pub async fn list_room_outputs(
+    State(state): State<AppState>,
+    _auth: auth_utils::AuthUser,
+    Path(session_id): Path<Uuid>,
+) -> Result<Json<Vec<RoomOutputResponse>>, StatusCode> {
+    let repo = &state.repos().rooms;
+    // Verify session exists
+    repo.get_room_session(session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let rows = repo
+        .get_room_execution_outputs(session_id, None)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(
+        rows.into_iter()
+            .map(|r| RoomOutputResponse {
+                id: r.id,
+                agent_id: r.agent_id,
+                speaker_order: r.speaker_order,
+                turn_number: r.turn_number,
+                output_name: r.output_name,
+                structured_output: r.structured_output,
+                raw_output: r.raw_output,
+            })
+            .collect(),
+    ))
 }
 
 #[cfg(test)]

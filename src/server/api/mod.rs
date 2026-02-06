@@ -142,9 +142,32 @@ pub use session_context::{get_session_context, list_session_requests};
 // Re-export room handlers and types
 pub use rooms::{
     add_room_member, close_room_session, create_room, create_room_session, delete_room, get_room,
-    get_room_session, get_room_transcript, list_room_members, remove_room_member,
-    send_room_message, set_room_members, update_room, AddRoomMemberRequest, CreateRoomRequest,
-    RoomMessageRequest, SetRoomMembersRequest, UpdateRoomRequest,
+    get_room_session, get_room_transcript, list_room_members, list_room_outputs,
+    remove_room_member, send_room_message, set_room_members, update_room, AddRoomMemberRequest,
+    CreateRoomRequest, RoomMessageRequest, RoomOutputResponse, SetRoomMembersRequest,
+    UpdateRoomRequest,
+};
+
+// Re-export step port handlers and types
+pub mod step_ports;
+pub use step_ports::{
+    create_step_input, create_step_output, delete_step_input, delete_step_output, list_step_inputs,
+    list_step_outputs, CreateStepInputRequest, CreateStepOutputRequest, StepInputResponse,
+    StepOutputResponse,
+};
+
+// Re-export routing rule handlers and types
+pub mod routing_rules;
+pub use routing_rules::{
+    create_routing_rule, delete_routing_rule, list_routing_rules, update_routing_rule,
+    CreateRoutingRuleRequest, RoutingRuleResponse, UpdateRoutingRuleRequest,
+};
+
+// Re-export system config handlers and types
+pub mod system_config;
+pub use system_config::{
+    delete_system_config, list_system_configs, upsert_system_config, CreateSystemConfigRequest,
+    SystemConfigQuery, SystemConfigResponse,
 };
 
 // Re-export health handler and type

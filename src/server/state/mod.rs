@@ -134,6 +134,7 @@ impl AppState {
             Arc::new(PgRepo::new(db.clone())), // router_requests
             Arc::new(PgRepo::new(db.clone())), // rooms
             Arc::new(PgRepo::new(db.clone())), // tool_capabilities
+            Arc::new(PgRepo::new(db.clone())), // system_config
         );
 
         let (chat_tx, orchestrator_rx) = mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);

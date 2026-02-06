@@ -318,6 +318,21 @@ pub mod routes {
     pub const ROOM_SESSION_MESSAGES: &str = "/room-sessions/:id/messages";
     pub const ROOM_SESSION_TRANSCRIPT: &str = "/room-sessions/:id/transcript";
     pub const ROOM_SESSION_CLOSE: &str = "/room-sessions/:id/close";
+    pub const ROOM_SESSION_OUTPUTS: &str = "/room-sessions/:id/outputs";
+
+    // Step Ports
+    pub const STEP_INPUTS: &str = "/workflows/:wid/steps/:sid/inputs";
+    pub const STEP_INPUT: &str = "/workflows/:wid/steps/:sid/inputs/:pid";
+    pub const STEP_OUTPUTS: &str = "/workflows/:wid/steps/:sid/outputs";
+    pub const STEP_OUTPUT: &str = "/workflows/:wid/steps/:sid/outputs/:pid";
+
+    // Routing Rules
+    pub const STEP_ROUTING_RULES: &str = "/workflows/:wid/steps/:sid/routing-rules";
+    pub const STEP_ROUTING_RULE: &str = "/workflows/:wid/steps/:sid/routing-rules/:rid";
+
+    // System Config
+    pub const SYSTEM_CONFIGS: &str = "/system-config";
+    pub const SYSTEM_CONFIG: &str = "/system-config/:key";
 
     // WebSocket
     pub const WS: &str = "/ws";

@@ -24,7 +24,7 @@ use axum::{
     http::{header::CACHE_CONTROL, HeaderName, HeaderValue, Request, StatusCode},
     middleware::{self, Next},
     response::Response,
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
     Router,
 };
 use sqlx::PgPool;
@@ -377,6 +377,33 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             get(api::get_room_transcript),
         )
         .route(routes::ROOM_SESSION_CLOSE, post(api::close_room_session))
+        .route(routes::ROOM_SESSION_OUTPUTS, get(api::list_room_outputs))
+        // Step Ports
+        .route(
+            routes::STEP_INPUTS,
+            get(api::list_step_inputs).post(api::create_step_input),
+        )
+        .route(routes::STEP_INPUT, delete(api::delete_step_input))
+        .route(
+            routes::STEP_OUTPUTS,
+            get(api::list_step_outputs).post(api::create_step_output),
+        )
+        .route(routes::STEP_OUTPUT, delete(api::delete_step_output))
+        // Routing Rules
+        .route(
+            routes::STEP_ROUTING_RULES,
+            get(api::list_routing_rules).post(api::create_routing_rule),
+        )
+        .route(
+            routes::STEP_ROUTING_RULE,
+            put(api::update_routing_rule).delete(api::delete_routing_rule),
+        )
+        // System Config
+        .route(
+            routes::SYSTEM_CONFIGS,
+            get(api::list_system_configs).post(api::upsert_system_config),
+        )
+        .route(routes::SYSTEM_CONFIG, delete(api::delete_system_config))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth))
 }
 
