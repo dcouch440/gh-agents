@@ -219,5 +219,6 @@ frontend/src/
 - **Shared fixtures** in `src/test/fixtures.ts` — reusable typed mock objects
 - **`vi.hoisted()` + inline `vi.mock()`** — hoisted fn refs for mock setup, module mocking per file
 - **`vi.clearAllMocks()`** in `beforeEach`, mock return values set per test or per describe
-- Mock the API (`../api`), constants (`USE_MOCK_DATA: false`), and WS (`useWebSocket`) as needed
-- Prioritize small files large module.
+- **`Mock the API`** (`../api`), constants (`USE_MOCK_DATA: false`), and WS (`useWebSocket`) as needed
+- **`Prioritize`** small files large module.
+- **`Prioritize`** PRODUCTION READY ALWAYS.
