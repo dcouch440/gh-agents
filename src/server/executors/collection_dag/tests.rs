@@ -236,7 +236,10 @@ async fn test_variable_resolution() {
         async fn delete_step_output(&self, _: Uuid) -> Result<()> {
             unimplemented!()
         }
-        async fn get_step_routing_rules(&self, _: Uuid) -> Result<Vec<crate::db::StepRoutingRuleRow>> {
+        async fn get_step_routing_rules(
+            &self,
+            _: Uuid,
+        ) -> Result<Vec<crate::db::StepRoutingRuleRow>> {
             unimplemented!()
         }
         async fn create_routing_rule(

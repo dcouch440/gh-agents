@@ -115,9 +115,7 @@ async fn handle_message(
                     .ok()
                     .flatten()
                     .and_then(|s| s.draft_config)
-                    .and_then(|v| {
-                        serde_json::from_value::<crate::server::hub::DraftConfig>(v).ok()
-                    })
+                    .and_then(|v| serde_json::from_value::<crate::server::hub::DraftConfig>(v).ok())
             } else {
                 None
             };
@@ -139,8 +137,10 @@ async fn handle_message(
                         Ok(_) => {}
                         Err(e) => {
                             warn!("Chat error for {} (draft config): {}", message_id, e);
-                            state
-                                .send_stream_chunk(message_id, StreamChunk::Error(format!("{}", e)));
+                            state.send_stream_chunk(
+                                message_id,
+                                StreamChunk::Error(format!("{}", e)),
+                            );
                             state.send_stream_chunk(message_id, StreamChunk::Done);
                         }
                     }

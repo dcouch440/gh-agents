@@ -7,7 +7,7 @@ use uuid::Uuid;
 /// Room state accumulator (not persisted, runtime only)
 #[derive(Debug, Clone, Default)]
 pub struct RoomState {
-    outputs: HashMap<String, RoomExecutionOutput>,  // Latest by output_name
+    outputs: HashMap<String, RoomExecutionOutput>, // Latest by output_name
     all_outputs: Vec<RoomExecutionOutput>,
 }
 
@@ -17,7 +17,8 @@ impl RoomState {
     }
 
     pub fn add_output(&mut self, output: RoomExecutionOutput) {
-        self.outputs.insert(output.output_name.clone(), output.clone());
+        self.outputs
+            .insert(output.output_name.clone(), output.clone());
         self.all_outputs.push(output);
     }
 

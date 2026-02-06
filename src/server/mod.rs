@@ -209,8 +209,14 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         .route(routes::SESSION_CHAT, post(api::send_session_chat))
         .route(routes::SESSION_HISTORY, get(api::get_session_history))
         .route(routes::SESSION_CHAT_STREAM, get(api::session_chat_stream))
-        .route(routes::SESSION_CONFIG, axum::routing::patch(api::update_session_config))
-        .route(routes::SESSION_MESSAGES, delete(api::clear_session_messages))
+        .route(
+            routes::SESSION_CONFIG,
+            axum::routing::patch(api::update_session_config),
+        )
+        .route(
+            routes::SESSION_MESSAGES,
+            delete(api::clear_session_messages),
+        )
         .route(routes::SESSION_SAVE_AGENT, post(api::save_session_agent))
         .route(
             routes::DOCUMENTS,
@@ -708,10 +714,7 @@ mod tests {
         async fn get_tool(&self, _tool_id: Uuid) -> anyhow::Result<Option<crate::db::ToolRow>> {
             Ok(None)
         }
-        async fn upsert_tool(
-            &self,
-            _tool: crate::db::ToolRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_tool(&self, _tool: crate::db::ToolRow) -> anyhow::Result<()> {
             Ok(())
         }
         async fn delete_tool(&self, _tool_id: Uuid) -> anyhow::Result<()> {

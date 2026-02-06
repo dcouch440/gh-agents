@@ -4,8 +4,10 @@ use super::*;
 
 use crate::db::pg_repo::PgRepo;
 use crate::db::test_utils::TestDb;
-use crate::db::traits::{SystemConfigRepo, ToolCapabilityRepo, WorkflowRepo, RoomRepo};
-use crate::db::{AgentRow, AgentExecutionRow, WorkflowRow, WorkflowStepRow, RoomRow, RoomSessionRow};
+use crate::db::traits::{RoomRepo, SystemConfigRepo, ToolCapabilityRepo, WorkflowRepo};
+use crate::db::{
+    AgentExecutionRow, AgentRow, RoomRow, RoomSessionRow, WorkflowRow, WorkflowStepRow,
+};
 use crate::types::UserId;
 
 fn test_user_id() -> UserId {
@@ -220,7 +222,10 @@ async fn test_tool_capability_crud() {
 
     // Get all capabilities (seeded by migration)
     let caps = repo.get_tool_capabilities().await.unwrap();
-    assert!(caps.len() >= 15, "Should have at least 15 seeded capabilities");
+    assert!(
+        caps.len() >= 15,
+        "Should have at least 15 seeded capabilities"
+    );
 
     // Get by key
     let file_read = repo.get_tool_capability_by_key("file_read").await.unwrap();
@@ -257,7 +262,10 @@ async fn test_tool_capability_assignments() {
     // Get capabilities for tool
     let caps = repo.get_capabilities_by_tool(tool.id).await.unwrap();
     // Should have at least some capabilities assigned
-    assert!(!caps.is_empty() || true, "Tool may or may not have capabilities initially");
+    assert!(
+        !caps.is_empty() || true,
+        "Tool may or may not have capabilities initially"
+    );
 
     db.cleanup().await;
 }
@@ -272,7 +280,7 @@ async fn test_set_tool_capabilities() {
 
     // Create test tool
     let tool = sqlx::query_as::<_, ToolRow>(
-        "INSERT INTO tools (name, description, input_schema) VALUES ($1, $2, $3) RETURNING *"
+        "INSERT INTO tools (name, description, input_schema) VALUES ($1, $2, $3) RETURNING *",
     )
     .bind("test_tool")
     .bind("Test tool")
@@ -282,11 +290,21 @@ async fn test_set_tool_capabilities() {
     .unwrap();
 
     // Get capability IDs
-    let file_read = repo.get_tool_capability_by_key("file_read").await.unwrap().unwrap();
-    let file_write = repo.get_tool_capability_by_key("file_write").await.unwrap().unwrap();
+    let file_read = repo
+        .get_tool_capability_by_key("file_read")
+        .await
+        .unwrap()
+        .unwrap();
+    let file_write = repo
+        .get_tool_capability_by_key("file_write")
+        .await
+        .unwrap()
+        .unwrap();
 
     // Set capabilities
-    repo.set_tool_capabilities(tool.id, &[file_read.id, file_write.id]).await.unwrap();
+    repo.set_tool_capabilities(tool.id, &[file_read.id, file_write.id])
+        .await
+        .unwrap();
 
     // Verify
     let caps = repo.get_capabilities_by_tool(tool.id).await.unwrap();
@@ -310,13 +328,16 @@ async fn test_system_config_crud() {
     let repo = test_repo(&db);
 
     // Upsert new config
-    let config = repo.upsert_system_config(
-        "test",
-        "test:key",
-        &serde_json::json!({"value": "test"}),
-        Some("Test config".to_string()),
-        None,
-    ).await.unwrap();
+    let config = repo
+        .upsert_system_config(
+            "test",
+            "test:key",
+            &serde_json::json!({"value": "test"}),
+            Some("Test config".to_string()),
+            None,
+        )
+        .await
+        .unwrap();
 
     assert_eq!(config.config_key, "test:key");
     assert_eq!(config.config_type, "test");
@@ -324,18 +345,27 @@ async fn test_system_config_crud() {
     // Get config
     let retrieved = repo.get_system_config("test:key").await.unwrap();
     assert!(retrieved.is_some());
-    assert_eq!(retrieved.unwrap().config_value, serde_json::json!({"value": "test"}));
+    assert_eq!(
+        retrieved.unwrap().config_value,
+        serde_json::json!({"value": "test"})
+    );
 
     // Update config (upsert)
-    let updated = repo.upsert_system_config(
-        "test",
-        "test:key",
-        &serde_json::json!({"value": "updated"}),
-        None,
-        None,
-    ).await.unwrap();
+    let updated = repo
+        .upsert_system_config(
+            "test",
+            "test:key",
+            &serde_json::json!({"value": "updated"}),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
 
-    assert_eq!(updated.config_value, serde_json::json!({"value": "updated"}));
+    assert_eq!(
+        updated.config_value,
+        serde_json::json!({"value": "updated"})
+    );
 
     // Delete config
     repo.delete_system_config("test:key").await.unwrap();
@@ -355,9 +385,11 @@ async fn test_get_execution_constraints() {
     let constraints = repo.get_execution_constraints().await.unwrap();
     assert!(!constraints.is_empty(), "Should have seeded constraints");
 
-    assert!(constraints.contains_key("max_subtasks_per_cavernous_step") ||
-            constraints.contains_key("unsafe_operations_enabled"),
-            "Should have at least some constraint keys");
+    assert!(
+        constraints.contains_key("max_subtasks_per_cavernous_step")
+            || constraints.contains_key("unsafe_operations_enabled"),
+        "Should have at least some constraint keys"
+    );
 
     db.cleanup().await;
 }
@@ -370,7 +402,10 @@ async fn test_unsafe_operations_flag() {
 
     // Should default to false from migration
     let unsafe_ops = repo.get_unsafe_operations_enabled().await.unwrap();
-    assert!(!unsafe_ops, "unsafe_operations_enabled should default to false");
+    assert!(
+        !unsafe_ops,
+        "unsafe_operations_enabled should default to false"
+    );
 
     // Set to true
     repo.upsert_system_config(
@@ -379,7 +414,9 @@ async fn test_unsafe_operations_flag() {
         &serde_json::json!(true),
         None,
         None,
-    ).await.unwrap();
+    )
+    .await
+    .unwrap();
 
     // Verify
     let unsafe_ops = repo.get_unsafe_operations_enabled().await.unwrap();
@@ -403,7 +440,7 @@ async fn test_step_input_output_crud() {
     // Create test workflow + step (minimal)
     let user_id = Uuid::new_v4();
     let agent = sqlx::query_as::<_, AgentRow>(
-        "INSERT INTO agents (user_id, name, system_prompt) VALUES ($1, $2, $3) RETURNING *"
+        "INSERT INTO agents (user_id, name, system_prompt) VALUES ($1, $2, $3) RETURNING *",
     )
     .bind(user_id)
     .bind("Port Test Agent")
@@ -413,7 +450,7 @@ async fn test_step_input_output_crud() {
     .unwrap();
 
     let workflow = sqlx::query_as::<_, WorkflowRow>(
-        "INSERT INTO workflows (user_id, name, description) VALUES ($1, $2, $3) RETURNING *"
+        "INSERT INTO workflows (user_id, name, description) VALUES ($1, $2, $3) RETURNING *",
     )
     .bind(user_id)
     .bind("Test Workflow")
@@ -424,7 +461,7 @@ async fn test_step_input_output_crud() {
 
     let step = sqlx::query_as::<_, WorkflowStepRow>(
         "INSERT INTO workflow_steps (workflow_id, agent_id, execution_mode, display_order)
-         VALUES ($1, $2, $3, $4) RETURNING *"
+         VALUES ($1, $2, $3, $4) RETURNING *",
     )
     .bind(workflow.id)
     .bind(agent.id)
@@ -435,29 +472,35 @@ async fn test_step_input_output_crud() {
     .unwrap();
 
     // Create input port
-    let input = repo.create_step_input(
-        step.id,
-        "data",
-        "object",
-        true,
-        None,
-        Some("Input data".to_string()),
-        None,
-    ).await.unwrap();
+    let input = repo
+        .create_step_input(
+            step.id,
+            "data",
+            "object",
+            true,
+            None,
+            Some("Input data".to_string()),
+            None,
+        )
+        .await
+        .unwrap();
 
     assert_eq!(input.port_name, "data");
     assert_eq!(input.port_type, "object");
     assert!(input.required);
 
     // Create output port
-    let output = repo.create_step_output(
-        step.id,
-        "result",
-        "string",
-        "result",
-        Some("Output result".to_string()),
-        None,
-    ).await.unwrap();
+    let output = repo
+        .create_step_output(
+            step.id,
+            "result",
+            "string",
+            "result",
+            Some("Output result".to_string()),
+            None,
+        )
+        .await
+        .unwrap();
 
     assert_eq!(output.port_name, "result");
     assert_eq!(output.json_path, "result");
@@ -493,7 +536,7 @@ async fn test_routing_rule_crud() {
     // Create test workflow + step + agent
     let user_id = Uuid::new_v4();
     let agent = sqlx::query_as::<_, AgentRow>(
-        "INSERT INTO agents (user_id, name, system_prompt) VALUES ($1, $2, $3) RETURNING *"
+        "INSERT INTO agents (user_id, name, system_prompt) VALUES ($1, $2, $3) RETURNING *",
     )
     .bind(user_id)
     .bind("Test Agent")
@@ -503,7 +546,7 @@ async fn test_routing_rule_crud() {
     .unwrap();
 
     let workflow = sqlx::query_as::<_, WorkflowRow>(
-        "INSERT INTO workflows (user_id, name, description) VALUES ($1, $2, $3) RETURNING *"
+        "INSERT INTO workflows (user_id, name, description) VALUES ($1, $2, $3) RETURNING *",
     )
     .bind(user_id)
     .bind("Test Workflow")
@@ -527,13 +570,16 @@ async fn test_routing_rule_crud() {
     .unwrap();
 
     // Create routing rule
-    let rule = repo.create_routing_rule(
-        step.id,
-        "frontend",
-        agent.id,
-        Some("Frontend tasks".to_string()),
-        0,
-    ).await.unwrap();
+    let rule = repo
+        .create_routing_rule(
+            step.id,
+            "frontend",
+            agent.id,
+            Some("Frontend tasks".to_string()),
+            0,
+        )
+        .await
+        .unwrap();
 
     assert_eq!(rule.label_value, "frontend");
     assert_eq!(rule.agent_id, agent.id);
@@ -545,7 +591,7 @@ async fn test_routing_rule_crud() {
 
     // Update rule
     let agent2 = sqlx::query_as::<_, AgentRow>(
-        "INSERT INTO agents (user_id, name, system_prompt) VALUES ($1, $2, $3) RETURNING *"
+        "INSERT INTO agents (user_id, name, system_prompt) VALUES ($1, $2, $3) RETURNING *",
     )
     .bind(user_id)
     .bind("Agent 2")
@@ -554,12 +600,10 @@ async fn test_routing_rule_crud() {
     .await
     .unwrap();
 
-    let updated = repo.update_routing_rule(
-        rule.id,
-        Some(agent2.id),
-        None,
-        Some(1),
-    ).await.unwrap();
+    let updated = repo
+        .update_routing_rule(rule.id, Some(agent2.id), None, Some(1))
+        .await
+        .unwrap();
 
     assert_eq!(updated.agent_id, agent2.id);
     assert_eq!(updated.display_order, 1);
@@ -587,7 +631,7 @@ async fn test_room_execution_outputs() {
     // Create test room + session + execution (minimal)
     let user_id = Uuid::new_v4();
     let room = sqlx::query_as::<_, RoomRow>(
-        "INSERT INTO rooms (user_id, name) VALUES ($1, $2) RETURNING *"
+        "INSERT INTO rooms (user_id, name) VALUES ($1, $2) RETURNING *",
     )
     .bind(user_id)
     .bind("Test Room")
@@ -596,7 +640,7 @@ async fn test_room_execution_outputs() {
     .unwrap();
 
     let session = sqlx::query_as::<_, RoomSessionRow>(
-        "INSERT INTO room_sessions (room_id, status) VALUES ($1, $2) RETURNING *"
+        "INSERT INTO room_sessions (room_id, status) VALUES ($1, $2) RETURNING *",
     )
     .bind(room.id)
     .bind("active")
@@ -605,7 +649,7 @@ async fn test_room_execution_outputs() {
     .unwrap();
 
     let agent = sqlx::query_as::<_, AgentRow>(
-        "INSERT INTO agents (user_id, name, system_prompt) VALUES ($1, $2, $3) RETURNING *"
+        "INSERT INTO agents (user_id, name, system_prompt) VALUES ($1, $2, $3) RETURNING *",
     )
     .bind(user_id)
     .bind("Test Agent")
@@ -616,7 +660,7 @@ async fn test_room_execution_outputs() {
 
     let execution = sqlx::query_as::<_, AgentExecutionRow>(
         "INSERT INTO agent_executions (agent_id, status, execution_mode, structured_output)
-         VALUES ($1, $2, $3, $4) RETURNING *"
+         VALUES ($1, $2, $3, $4) RETURNING *",
     )
     .bind(agent.id)
     .bind("completed")
@@ -627,27 +671,36 @@ async fn test_room_execution_outputs() {
     .unwrap();
 
     // Save room execution output
-    let output = repo.save_room_execution_output(
-        session.id,
-        execution.id,
-        agent.id,
-        0,
-        1,
-        "analysis",
-        &serde_json::json!({"findings": ["item1", "item2"]}),
-        "Raw output text",
-        None,
-    ).await.unwrap();
+    let output = repo
+        .save_room_execution_output(
+            session.id,
+            execution.id,
+            agent.id,
+            0,
+            1,
+            "analysis",
+            &serde_json::json!({"findings": ["item1", "item2"]}),
+            "Raw output text",
+            None,
+        )
+        .await
+        .unwrap();
 
     assert_eq!(output.output_name, "analysis");
     assert_eq!(output.turn_number, 1);
 
     // Get outputs
-    let outputs = repo.get_room_execution_outputs(session.id, None).await.unwrap();
+    let outputs = repo
+        .get_room_execution_outputs(session.id, None)
+        .await
+        .unwrap();
     assert_eq!(outputs.len(), 1);
 
     // Get outputs by turn
-    let turn_outputs = repo.get_room_execution_outputs(session.id, Some(1)).await.unwrap();
+    let turn_outputs = repo
+        .get_room_execution_outputs(session.id, Some(1))
+        .await
+        .unwrap();
     assert_eq!(turn_outputs.len(), 1);
 
     db.cleanup().await;

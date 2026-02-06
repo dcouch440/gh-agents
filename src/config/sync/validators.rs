@@ -91,7 +91,10 @@ pub fn validate_constraint(constraint: &ConstraintConfig) -> Result<()> {
     match constraint.config_type.as_str() {
         "integer" => {
             if !constraint.value.is_i64() {
-                bail!("Constraint value must be integer, got: {}", constraint.value);
+                bail!(
+                    "Constraint value must be integer, got: {}",
+                    constraint.value
+                );
             }
         }
         "float" => {
@@ -101,7 +104,10 @@ pub fn validate_constraint(constraint: &ConstraintConfig) -> Result<()> {
         }
         "boolean" => {
             if !constraint.value.is_boolean() {
-                bail!("Constraint value must be boolean, got: {}", constraint.value);
+                bail!(
+                    "Constraint value must be boolean, got: {}",
+                    constraint.value
+                );
             }
         }
         "string" => {
@@ -193,7 +199,10 @@ fn validate_dag(subtasks: &[Subtask]) -> Result<()> {
 
         for dep in &subtask.depends_on {
             *in_degree.entry(&subtask.id).or_insert(0) += 1;
-            graph.entry(dep.as_str()).or_insert_with(Vec::new).push(&subtask.id);
+            graph
+                .entry(dep.as_str())
+                .or_insert_with(Vec::new)
+                .push(&subtask.id);
         }
     }
 
