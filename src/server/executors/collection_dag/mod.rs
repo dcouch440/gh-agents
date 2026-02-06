@@ -13,8 +13,8 @@ use crate::db::traits::{WorkflowCollectionRepo, WorkflowRepo};
 use crate::db::{
     CollectionRunRow, CollectionWorkflowEdgeRow, CollectionWorkflowRow, WorkflowExecutionRow,
 };
-use crate::server::executors::dag::{DagPaused, WorkflowExecutionContext};
 use crate::server::hub::dag::execute_workflow_via_engine;
+use crate::server::hub::dag::{DagPaused, WorkflowExecutionContext};
 use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::error::HubError;
 use crate::server::state::AppState;
@@ -104,7 +104,7 @@ where
                     .await?
             }
             Err(ref e)
-                if e.downcast_ref::<crate::server::executors::dag::DagPaused>()
+                if e.downcast_ref::<crate::server::hub::dag::DagPaused>()
                     .is_some() =>
             {
                 self.collection_repo
@@ -253,7 +253,7 @@ where
         }
 
         if any_paused.load(std::sync::atomic::Ordering::Relaxed) {
-            return Err(crate::server::executors::dag::DagPaused {
+            return Err(crate::server::hub::dag::DagPaused {
                 step_id: Uuid::nil(),
                 execution_id: Uuid::nil(),
             }
@@ -306,7 +306,7 @@ where
             {
                 Ok(exec) => exec,
                 Err(e)
-                    if e.downcast_ref::<crate::server::executors::dag::DagPaused>()
+                    if e.downcast_ref::<crate::server::hub::dag::DagPaused>()
                         .is_some() =>
                 {
                     any_paused.store(true, std::sync::atomic::Ordering::Relaxed);

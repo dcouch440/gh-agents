@@ -1,7 +1,7 @@
 //! Tests for DAG module
 
+use super::{resolve_for_each_array, resolve_variables, topological_sort};
 use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
-use crate::server::executors::dag::{resolve_for_each_array, resolve_variables, topological_sort};
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -292,8 +292,8 @@ fn detect_chains_fan_in_breaks() {
 // Phase 7: Cavernous Routing Tests
 // =========================================================================
 
+use super::StepOutput;
 use super::{aggregate_subtask_outputs, topo_sort_subtasks};
-use crate::server::executors::dag::StepOutput;
 use crate::types::Subtask;
 
 fn make_subtask(id: &str, depends_on: Vec<&str>) -> Subtask {
@@ -448,7 +448,7 @@ fn aggregate_final_output_skips_missing() {
 // =========================================================================
 
 use super::extract_room_outputs_from_speakers;
-use crate::server::executors::dag::resolve_dot_path;
+use super::resolve_dot_path;
 use crate::server::executors::room::SpeakerResult;
 
 #[test]
