@@ -1,11 +1,13 @@
 //! ExecutionStrategy implementations.
 
+pub mod cavernous;
 pub mod chat;
 pub mod dag_step;
 pub mod interactive_chat;
 pub mod room_speaker;
 pub mod router;
 
+pub use cavernous::CavernousStepStrategy;
 pub use chat::{ChatConfig, ChatStrategy};
 pub use dag_step::DagStepStrategy;
 pub use interactive_chat::{InteractiveChatConfig, InteractiveChatStrategy};

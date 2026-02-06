@@ -47,6 +47,14 @@ impl ExecutionEngine {
         Self { provider }
     }
 
+    /// Create a new `ExecutionEngine` sharing the same LLM provider.
+    /// Useful for spawning parallel subtask executions.
+    pub fn clone_with_provider(&self) -> Self {
+        Self {
+            provider: Arc::clone(&self.provider),
+        }
+    }
+
     /// Run the execution loop.
     ///
     /// 1. Build messages from strategy

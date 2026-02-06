@@ -990,6 +990,33 @@ impl DocumentRepo for PgRepo {
             .await?;
         Ok(())
     }
+
+    async fn search_routing_documents(
+        &self,
+        user_id: Uuid,
+        query: &str,
+        limit: i64,
+    ) -> Result<Vec<DocumentSearchResult>> {
+        let rows: Vec<DocumentSearchResult> = sqlx::query_as(
+            r#"
+            SELECT id, title, summary, ref_tag,
+                   ts_headline('english', content, plainto_tsquery('english', $2),
+                       'StartSel=**, StopSel=**, MaxWords=35, MinWords=15') AS snippet
+            FROM documents
+            WHERE user_id = $1
+              AND title LIKE 'routing:%'
+              AND to_tsvector('english', title || ' ' || content) @@ plainto_tsquery('english', $2)
+            ORDER BY ts_rank(to_tsvector('english', title || ' ' || content), plainto_tsquery('english', $2)) DESC
+            LIMIT $3
+            "#,
+        )
+        .bind(user_id)
+        .bind(query)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
 }
 
 #[async_trait]
@@ -1682,6 +1709,23 @@ impl AgentExecutionRepo for PgRepo {
             .await?
         };
         Ok(rows)
+    }
+
+    async fn update_agent_execution_routing(
+        &self,
+        id: Uuid,
+        routing_analysis: &serde_json::Value,
+        selected_routing_document_id: Option<Uuid>,
+    ) -> Result<()> {
+        sqlx::query(
+            "UPDATE agent_executions SET routing_analysis = $2, selected_routing_document_id = $3 WHERE id = $1",
+        )
+        .bind(id)
+        .bind(routing_analysis)
+        .bind(selected_routing_document_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 }
 

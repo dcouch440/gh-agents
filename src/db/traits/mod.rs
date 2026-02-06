@@ -363,6 +363,14 @@ pub trait DocumentRepo: Send + Sync {
 
     /// Delete a document by ID.
     async fn delete_document(&self, doc_id: Uuid) -> Result<()>;
+
+    /// Full-text search documents with title prefix "routing:" for cavernous routing.
+    async fn search_routing_documents(
+        &self,
+        user_id: Uuid,
+        query: &str,
+        limit: i64,
+    ) -> Result<Vec<DocumentSearchResult>>;
 }
 
 // ============================================================================
@@ -610,6 +618,14 @@ pub trait AgentExecutionRepo: Send + Sync {
         user_id: Uuid,
         status: Option<String>,
     ) -> Result<Vec<AgentExecutionRow>>;
+
+    /// Update routing analysis and selected routing document for cavernous executions.
+    async fn update_agent_execution_routing(
+        &self,
+        id: Uuid,
+        routing_analysis: &serde_json::Value,
+        selected_routing_document_id: Option<Uuid>,
+    ) -> Result<()>;
 }
 
 // ============================================================================
