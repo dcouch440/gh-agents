@@ -13,8 +13,10 @@ use crate::db::traits::{WorkflowCollectionRepo, WorkflowRepo};
 use crate::db::{
     CollectionRunRow, CollectionWorkflowEdgeRow, CollectionWorkflowRow, WorkflowExecutionRow,
 };
-use crate::llm::LLMProvider;
-use crate::server::executors::dag::{execute_workflow, WorkflowExecutionContext};
+use crate::server::executors::dag::{DagPaused, WorkflowExecutionContext};
+use crate::server::hub::dag::execute_workflow_via_engine;
+use crate::server::hub::engine::ExecutionEngine;
+use crate::server::hub::error::HubError;
 use crate::server::state::AppState;
 
 /// Executor for workflow collections (DAG of workflows).
@@ -50,6 +52,11 @@ where
         collection_id: Uuid,
         user_id: Uuid,
     ) -> Result<CollectionRunRow> {
+        // 0. Verify LLM provider is configured before starting execution
+        if self.state.provider().is_none() {
+            return Err(anyhow!("LLM provider not configured"));
+        }
+
         // 1. Load collection
         let collection = self
             .collection_repo
@@ -368,8 +375,6 @@ where
         user_id: Uuid,
         prior_workflow_outputs: &HashMap<String, JsonValue>,
     ) -> Result<WorkflowExecutionRow> {
-        use crate::llm::{AnthropicClient, RateLimitedProvider, RetryingProvider};
-
         // 1. Create workflow_execution record
         let workflow_exec = self
             .collection_repo
@@ -386,37 +391,29 @@ where
         let steps = self.workflow_repo.list_steps(workflow_id).await?;
         let edges = self.workflow_repo.list_edges(workflow_id).await?;
 
-        // 4. Create LLM provider
-        let provider: Arc<dyn LLMProvider> = match AnthropicClient::from_env() {
-            Ok(p) => Arc::new(RetryingProvider::with_defaults(
-                RateLimitedProvider::with_defaults(p),
-            )),
-            Err(e) => {
-                let error_msg = format!("Failed to initialize LLM provider: {}", e);
-                self.collection_repo
-                    .update_workflow_execution_status(
-                        workflow_exec.id,
-                        "failed",
-                        None,
-                        Some(error_msg.clone()),
-                    )
-                    .await?;
-                return Err(anyhow!(error_msg));
-            }
+        // 4. Create ExecutionEngine from centralized provider
+        let engine = {
+            let provider = self
+                .state
+                .provider()
+                .ok_or_else(|| anyhow!("LLM provider not configured"))?
+                .clone();
+            ExecutionEngine::new(provider)
         };
 
         // 5. Create execution context
         let ctx = WorkflowExecutionContext {
-            stage_execution_id: workflow_exec.id, // Reuse workflow_execution_id as stage_execution_id
+            stage_execution_id: workflow_exec.id,
             run_id: collection_run_id,
             user_id,
-            initial_input: String::new(), // TODO: support initial input from collection
+            initial_input: String::new(),
             prior_outputs: prior_workflow_outputs.clone(),
-            execution_context: None, // TODO: support tool execution context
+            execution_context: None,
         };
 
-        // 6. Execute workflow DAG
-        let result = execute_workflow(&self.state, provider, ctx, steps, edges).await;
+        // 6. Execute workflow DAG via unified hub engine
+        let result =
+            execute_workflow_via_engine(&engine, &self.state, &ctx, &steps, &edges, None).await;
 
         // 7. Handle result and update workflow_execution
         match result {
@@ -448,21 +445,17 @@ where
 
                 Ok(workflow_exec)
             }
-            Err(e)
-                if e.downcast_ref::<crate::server::executors::dag::DagPaused>()
-                    .is_some() =>
-            {
-                let paused = e
-                    .downcast_ref::<crate::server::executors::dag::DagPaused>()
-                    .unwrap();
+            Err(HubError::AwaitingUser {
+                step_id,
+                execution_id,
+            }) => {
                 let pause_metadata = serde_json::json!({
                     "__pause_state": {
-                        "step_id": paused.step_id.to_string(),
-                        "execution_id": paused.execution_id.to_string(),
+                        "step_id": step_id.to_string(),
+                        "execution_id": execution_id.to_string(),
                     }
                 });
-                let _workflow_exec = self
-                    .collection_repo
+                self.collection_repo
                     .update_workflow_execution_status(
                         workflow_exec.id,
                         "paused",
@@ -470,13 +463,16 @@ where
                         None,
                     )
                     .await?;
-                // Propagate the pause error so the collection level also pauses
-                Err(e)
+                // Propagate as DagPaused so collection-level pause detection still works
+                Err(DagPaused {
+                    step_id,
+                    execution_id,
+                }
+                .into())
             }
             Err(e) => {
                 let error_msg = format!("{:#}", e);
-                let _workflow_exec = self
-                    .collection_repo
+                self.collection_repo
                     .update_workflow_execution_status(
                         workflow_exec.id,
                         "failed",
@@ -594,7 +590,7 @@ async fn collect_workflow_outputs(
 /// Takes the outputs from all steps in the workflow and combines them into
 /// a single JSON object keyed by step output variable names.
 fn aggregate_step_outputs(
-    step_outputs: &HashMap<String, crate::server::executors::dag::StepOutput>,
+    step_outputs: &HashMap<String, crate::server::hub::dag::StepOutput>,
 ) -> JsonValue {
     use serde_json::json;
 
