@@ -216,6 +216,56 @@ pub fn execution_tools() -> Vec<Tool> {
                 "required": ["query"]
             }),
         },
+        Tool {
+            name: "create_doc".into(),
+            description: "Create a new document with auto-generated summary.".into(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Document title"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Document content (markdown supported)"
+                    }
+                },
+                "required": ["title", "content"]
+            }),
+        },
+        Tool {
+            name: "search_docs".into(),
+            description: "Full-text search across all documents.".into(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query"
+                    }
+                },
+                "required": ["query"]
+            }),
+        },
+        Tool {
+            name: "update_doc".into(),
+            description: "Update existing document content.".into(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "document_id": {
+                        "type": "string",
+                        "description": "Document UUID"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "New document content"
+                    }
+                },
+                "required": ["document_id", "content"]
+            }),
+        },
     ]
 }
 
