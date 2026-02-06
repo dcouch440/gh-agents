@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests {
     use crate::db::{StepInputRow, StepOutputRow, WorkflowStepEdgeRow, WorkflowStepRow};
-    use crate::server::executors::dag::{
+    use crate::server::hub::dag::utils::{
         extract_for_each_label, find_entry_steps, get_child_steps, get_parent_steps,
         resolve_dot_path, resolve_for_each_array, resolve_port_inputs, resolve_variables,
         topological_sort, DagPaused,
@@ -863,7 +863,7 @@ mod tests {
     // build_routing_instruction_block Tests (Phase 6)
     // =========================================================================
 
-    use crate::server::executors::dag::build_routing_instruction_block;
+    use crate::server::hub::dag::utils::build_routing_instruction_block;
     use crate::types::{DownstreamRoutingContext, RouteDescription};
 
     #[test]

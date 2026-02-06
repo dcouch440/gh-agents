@@ -1,9 +1,8 @@
 //! DAG orchestration — topological sort, variable resolution, for-each fan-out,
 //! port-based data flow, and workflow execution using the unified ExecutionEngine.
 //!
-//! This module re-exports the pure graph/variable/port functions from `executors::dag`
-//! and provides `execute_workflow_via_engine` which delegates step execution
-//! to the hub's `ExecutionEngine` instead of running its own react loop.
+//! Pure utility functions live in the `utils` submodule and are re-exported here.
+//! Execution functions use the hub's `ExecutionEngine` for step execution.
 
 use std::collections::{HashMap, HashSet};
 
@@ -37,8 +36,8 @@ use crate::server::executors::room::{
     build_dag_room_prompt, execute_room_turn, RoomMemberWithAgent,
 };
 
-// Re-export pure DAG functions from executors::dag
-pub use crate::server::executors::dag::{
+pub mod utils;
+pub use utils::{
     build_routing_instruction_block, compose_prompt, extract_for_each_label, find_entry_steps,
     get_child_steps, get_parent_steps, resolve_dot_path, resolve_for_each_array,
     resolve_port_inputs, resolve_variables, topological_sort, DagPaused, PortResolutionError,
@@ -299,9 +298,9 @@ async fn gather_downstream_routing_context(
 
 /// Execute a complete workflow DAG using the unified ExecutionEngine.
 ///
-/// This replaces `executors::dag::execute_workflow` — same logic (topo sort,
-/// variable resolution, for-each fan-out, interactive review) but step
-/// execution goes through `ExecutionEngine::execute()` with `DagStepStrategy`.
+/// Executes a DAG via topo sort, variable resolution, for-each fan-out,
+/// and interactive review. Step execution goes through
+/// `ExecutionEngine::execute()` with `DagStepStrategy`.
 ///
 /// Supports port-based data flow: if steps define input/output ports and edges
 /// connect them, data flows through envelopes with structured extraction.
