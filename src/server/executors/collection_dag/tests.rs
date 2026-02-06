@@ -264,6 +264,12 @@ async fn test_variable_resolution() {
         async fn delete_routing_rule(&self, _: Uuid) -> Result<()> {
             unimplemented!()
         }
+        async fn find_step_by_room_id(
+            &self,
+            _: Uuid,
+        ) -> Result<Option<crate::db::WorkflowStepRow>> {
+            unimplemented!()
+        }
     }
 
     // Create test data

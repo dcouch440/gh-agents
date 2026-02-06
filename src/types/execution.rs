@@ -39,6 +39,11 @@ pub struct ExecutionMetadata {
     // For chained for-each pipeline (Phase 6B)
     pub upstream_agent_id: Option<Uuid>,
     pub upstream_routing_label: Option<String>,
+
+    // For room step execution
+    pub room_session_id: Option<Uuid>,
+    pub room_id: Option<Uuid>,
+    pub total_rounds: Option<i32>,
 }
 
 /// Execution error details
@@ -152,6 +157,9 @@ mod tests {
                 selected_routing_document_id: None,
                 upstream_agent_id: None,
                 upstream_routing_label: None,
+                room_session_id: None,
+                room_id: None,
+                total_rounds: None,
             },
             error: None,
         };

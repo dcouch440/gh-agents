@@ -4,11 +4,6 @@
 
 Rust backend + React frontend + Ink CLI that orchestrates AI agents for software engineering tasks on GitHub repos.
 
-# DB Login
-
-Email: user@example.com
-Password: password123
-
 ## Architecture
 
 ```
@@ -44,10 +39,14 @@ npx vite build                              # Production build
 - Tokio for async, always timeout external calls
 - Newtypes for IDs: `TaskId(Uuid)`, `AgentId(Uuid)`
 - Commit format: `type(scope): description` (feat, fix, docs, refactor, test, chore)
+- Always write tests when completing a ticket
+- Verify with `cargo check` and `cargo test` before committing
+- Axum handlers return `Result<Json<T>, StatusCode>` — never unwrap or panic in handlers
+- In frontend/ always prefer reusable components
 
 ## Module Organization
 
-**Prefer folder-based modules with separate test files:**
+**Always use folder-based modules with separate test files:**
 
 ```
 src/server/api/
@@ -77,7 +76,7 @@ mod tests {
 }
 ```
 
-This keeps test code separate from implementation while maintaining rust-analyzer integration.
+Never inline `#[cfg(test)]` blocks in `mod.rs`. Tests always go in a separate `tests.rs` file. This keeps test code separate from implementation while maintaining rust-analyzer integration.
 
 ## Off-limits directories
 
@@ -94,12 +93,6 @@ PostgreSQL runs in Docker. Container: `gh-agents-postgres-1` (image: `postgres:1
 docker exec gh-agents-postgres-1 psql -U nexor -d nexor -c "SELECT 1;"   # Quick query
 docker exec -it gh-agents-postgres-1 psql -U nexor -d nexor              # Interactive shell
 ```
-
-## Working with this repo
-
-- Always write tests when completing a ticket
-- Verify with `cargo check` and `cargo test` before committing
-- In frontend/ always prefer reusable components
 
 ## Frontend Conventions (frontend/)
 
@@ -122,64 +115,7 @@ docker exec -it gh-agents-postgres-1 psql -U nexor -d nexor              # Inter
 
 ## Frontend API Client (frontend/src/api/)
 
-**ALWAYS use the typed endpoints from `api.ts`.** Never call raw HTTP methods unless absolutely necessary.
-
-```typescript
-import {api} from "@/api";
-
-// ✅ CORRECT: Use typed endpoints
-const {agents} = await api.agents.list();
-const agent = await api.agents.get(id);
-await api.tasks.create({title, description});
-
-// ❌ WRONG: Don't use raw HTTP methods
-const agents = await api.get("/agents"); // No! Use api.agents.list()
-```
-
-**Features:**
-
-- Typed endpoints for all resources (agents, tasks, tools, documents, sessions, etc.)
-- Automatic retry with exponential backoff
-- Request deduplication (prevents duplicate in-flight GET requests)
-- Request/response/error interceptors
-- AbortController support for cancellation
-- Comprehensive error handling with typed errors
-
-**Error handling:**
-
-```typescript
-import {api, ApiError} from "@/api";
-
-try {
-  const agent = await api.agents.get(id);
-} catch (error) {
-  if (error instanceof ApiError) {
-    switch (error.type) {
-      case "http_error": // 4xx/5xx errors
-        if (error.status === 404) console.log("Not found");
-        break;
-      case "network_error": // Connection failed
-      case "timeout_error": // Request timed out
-      case "abort_error": // Request cancelled
-        break;
-    }
-  }
-}
-```
-
-**Request configuration:**
-
-```typescript
-// Custom timeout, retries, headers, cancellation
-const agent = await api.agents.get(id, {
-  timeout: 5000,
-  retries: 3,
-  signal: abortController.signal,
-  headers: {"X-Custom": "value"},
-});
-```
-
-**Only use raw HTTP methods** (`api.get`, `api.post`, etc.) **for truly custom endpoints** not covered by typed methods. This is rare.
+**ALWAYS use the typed endpoints from `api.ts`.** Never call raw `api.get`/`api.post` unless the endpoint has no typed method. Read `api.ts` for available endpoints, error types (`ApiError`), and request options.
 
 ## Frontend Testing (frontend/)
 
@@ -219,6 +155,6 @@ frontend/src/
 - **Shared fixtures** in `src/test/fixtures.ts` — reusable typed mock objects
 - **`vi.hoisted()` + inline `vi.mock()`** — hoisted fn refs for mock setup, module mocking per file
 - **`vi.clearAllMocks()`** in `beforeEach`, mock return values set per test or per describe
-- **`Mock the API`** (`../api`), constants (`USE_MOCK_DATA: false`), and WS (`useWebSocket`) as needed
-- **`Prioritize`** small files large module.
-- **`Prioritize`** PRODUCTION READY ALWAYS.
+- **Mock the API** (`../api`), constants (`USE_MOCK_DATA: false`), and WS (`useWebSocket`) as needed
+- **Split large test files** by unit — one test file per context/hook, not one mega test file per feature
+- **No skipped tests, no `TODO` tests** — every test must pass or be removed

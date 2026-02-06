@@ -386,6 +386,7 @@ pub struct RoomMemberRow {
 pub struct RoomSessionRow {
     pub id: Uuid,
     pub room_id: Uuid,
+    pub run_id: Option<Uuid>,
     pub status: String,
     pub current_turn: i32,
     pub transcript_summary: Option<String>,

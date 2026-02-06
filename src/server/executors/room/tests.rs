@@ -386,4 +386,52 @@ mod tests {
         assert_eq!(cloned.turn_number, 1);
         assert!(!cloned.session_completed);
     }
+
+    // =========================================================================
+    // DAG Room Prompt Tests
+    // =========================================================================
+
+    use crate::server::executors::room::build_dag_room_prompt;
+
+    #[test]
+    fn build_dag_room_prompt_first_round() {
+        let prompt = "Analyze the architecture of this system.";
+        let result = build_dag_room_prompt(prompt, 0, 5);
+
+        // First round of multi-round: returns composed prompt verbatim
+        assert_eq!(result, prompt);
+    }
+
+    #[test]
+    fn build_dag_room_prompt_middle_round() {
+        let result = build_dag_room_prompt("Initial prompt", 2, 5);
+
+        // Middle rounds give continuation prompt
+        assert!(result.contains("Continue the discussion"));
+        assert!(result.contains("perspectives not yet explored"));
+        // Should NOT contain the original prompt
+        assert!(!result.contains("Initial prompt"));
+    }
+
+    #[test]
+    fn build_dag_room_prompt_final_round() {
+        let result = build_dag_room_prompt("Initial prompt", 4, 5);
+
+        // Final round (index 4 of 5 = last)
+        assert!(result.contains("final round"));
+        assert!(result.contains("Summarize"));
+        assert!(result.contains("final recommendation"));
+        assert!(!result.contains("Initial prompt"));
+    }
+
+    #[test]
+    fn build_dag_room_prompt_single_round() {
+        let prompt = "Give your complete analysis.";
+        let result = build_dag_room_prompt(prompt, 0, 1);
+
+        // Single round: includes original prompt + "only round" signal
+        assert!(result.contains(prompt));
+        assert!(result.contains("only round"));
+        assert!(result.contains("complete analysis"));
+    }
 }
