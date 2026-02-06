@@ -59,7 +59,7 @@ async fn seed_builtin_tools(pool: &PgPool, verbose: bool) -> Result<()> {
 
     // Get system user ID (the user that owns all built-in tools)
     let system_user_id = sqlx::query_scalar::<_, uuid::Uuid>(
-        "SELECT DISTINCT user_id FROM tools LIMIT 1",
+        "SELECT id FROM users ORDER BY created_at LIMIT 1",
     )
     .fetch_optional(pool)
     .await?;
@@ -72,7 +72,7 @@ async fn seed_builtin_tools(pool: &PgPool, verbose: bool) -> Result<()> {
             println!("✓ Tools seeded");
         }
     } else if verbose {
-        println!("⚠ No existing tools found, skipping tool seeding");
+        println!("⚠ No users found, skipping tool seeding");
     }
 
     Ok(())
