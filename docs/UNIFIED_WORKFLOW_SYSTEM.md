@@ -2472,7 +2472,7 @@ Step 2 expects input port "message" connected to step-1.result
 
 ---
 
-### Phase 1: Foundation (3-4 days)
+### Phase 1: Foundation (3-4 days) ✅
 
 **Database Schema**
 
@@ -2519,7 +2519,7 @@ SELECT COUNT(*) FROM tool_capabilities;  -- Should have 15+ rows
 
 ---
 
-### Phase 2: Type Definitions (2 days)
+### Phase 2: Type Definitions (2 days) ✅
 
 **Rust Types**
 
@@ -2625,7 +2625,7 @@ SELECT COUNT(*) FROM tool_capabilities;  -- Should have 15+ rows
 
 ---
 
-### Phase 3: Database Queries (3-4 days)
+### Phase 3: Database Queries (3-4 days) ✅
 
 **Repository Extensions**
 
@@ -2680,33 +2680,6 @@ SELECT COUNT(*) FROM tool_capabilities;  -- Should have 15+ rows
 - `/src/db/queries/documents.rs`
 - `/src/db/queries/rooms.rs`
 - `/src/db/queries/system_config.rs` (NEW)
-
----
-
-### Phase 2: Type Definitions (1 day)
-
-**Goal:** Define envelope and port types
-
-**Tasks:**
-1. Create `/src/types/execution.rs` (or add to existing types file):
-   - `StepExecutionEnvelope`
-   - `ExecutionStatus` enum
-   - `ExecutionMetadata`
-   - `ExecutionError`
-   - `ForEachAggregateEnvelope`
-   - `ForEachMetadata`
-2. Create port types:
-   - `StepInputRow`
-   - `StepOutputRow`
-   - `RoutingRuleRow`
-   - `EdgeWithPorts`
-3. Update existing types:
-   - `WorkflowStepRow` with new columns
-   - `AgentExecutionRow` (ensure `structured_output` field exists)
-
-**Verification:**
-- `cargo check` passes
-- No compilation errors
 
 ---
 
@@ -2907,7 +2880,7 @@ impl ModeResolver {
 
 ---
 
-### Phase 7: Enhanced Rooms (4-5 days)
+### Phase 8: Enhanced Rooms (4-5 days)
 
 **Structured Agent Collaboration**
 
@@ -2951,7 +2924,7 @@ impl ModeResolver {
 
 ---
 
-### Phase 8: API Endpoints (3-4 days)
+### Phase 9: API Endpoints (3-4 days)
 
 **REST APIs for All Systems**
 
@@ -3005,7 +2978,7 @@ impl ModeResolver {
 
 ---
 
-### Phase 9: Integration Testing (3-4 days)
+### Phase 10: Integration Testing (3-4 days)
 
 **End-to-End Workflows**
 
@@ -3041,7 +3014,7 @@ impl ModeResolver {
 
 ---
 
-### Phase 10: Documentation & Polish (2-3 days)
+### Phase 11: Documentation & Polish (2-3 days)
 
 1. **README Update:**
    - New architecture diagram
@@ -3068,293 +3041,22 @@ impl ModeResolver {
 
 ---
 
-### Phase 3: Database Queries (2-3 days)
-
-**Goal:** CRUD operations for ports and routing
-
-**Tasks:**
-1. Add to `/src/db/queries/workflows.rs`:
-   - `query_step_inputs(workflow_id)` → Vec<StepInputRow>
-   - `query_step_outputs(workflow_id)` → Vec<StepOutputRow>
-   - `query_step_routing_rules(step_id)` → Vec<RoutingRuleRow>
-   - `create_step_input(...)`
-   - `create_step_output(...)`
-   - `create_routing_rule(...)`
-   - `update_edge_with_ports(...)`
-2. Update existing queries:
-   - `get_workflow_with_ports(workflow_id)` - Load workflow + ports + routing
-   - `get_workflow_step(step_id)` - Include new columns
-
-**Verification:**
-- Write unit tests for each query
-- Test with sample data
-- `cargo test db::queries::workflows`
-
-### Phase 4: Refactor DAG Executor - Core (3-5 days)
-
-**Goal:** Replace variable system with port-based flow
-
-**Tasks:**
-1. **Remove variable code:**
-   - Delete `resolve_variable()` functions
-   - Remove `execution_variables` table access
-   - Remove `{variable_name}` interpolation from prompt rendering
-
-2. **Add envelope wrapping:**
-   ```rust
-   fn wrap_in_envelope(
-       execution_id: Uuid,
-       agent_id: Uuid,
-       output: Option<JsonValue>,
-       error: Option<anyhow::Error>,
-       timing: ExecutionTiming,
-       tokens: TokenUsage,
-   ) -> StepExecutionEnvelope {
-       // Build envelope with status, data, metadata, error
-   }
-   ```
-
-3. **Implement port-based input resolution:**
-   ```rust
-   async fn build_step_inputs(
-       step_id: Uuid,
-       workflow_execution_id: Uuid,
-       edges: &[EdgeWithPorts],
-       pool: &PgPool,
-   ) -> Result<HashMap<String, JsonValue>> {
-       // For each incoming edge:
-       //   1. Get source execution
-       //   2. Parse envelope
-       //   3. Extract data from .data.<output_port>
-       //   4. Apply optional JSONPath transform
-       //   5. Map to input port
-       // Fill in defaults for missing optional inputs
-   }
-   ```
-
-4. **Update `execute_step()` signature:**
-   - Input: `HashMap<String, JsonValue>` (from ports)
-   - Output: `StepExecutionEnvelope`
-   - Store envelope in `agent_executions.structured_output`
-
-**Verification:**
-- Single-step workflow executes
-- Output wrapped in envelope
-- `cargo test executors::dag::single_step`
-
-### Phase 5: Refactor DAG Executor - For-Each (3-4 days)
-
-**Goal:** Add label-based routing
-
-**Tasks:**
-1. **Refactor for-each input resolution:**
-   ```rust
-   async fn resolve_for_each_array(
-       step: &WorkflowStepRow,
-       inputs: &HashMap<String, JsonValue>,
-   ) -> Result<Vec<JsonValue>> {
-       // Find array input (should be only one for for_each steps)
-       // Extract elements
-       // Return vector
-   }
-   ```
-
-2. **Implement label routing:**
-   ```rust
-   async fn execute_for_each_label_routing(
-       step: &WorkflowStepRow,
-       array: Vec<JsonValue>,
-       routing_field: &str,
-       routing_rules: &HashMap<String, Uuid>,
-       default_agent_id: Uuid,
-       workflow_execution_id: Uuid,
-   ) -> Result<ForEachAggregateEnvelope> {
-       // For each element:
-       //   1. Read routing_field value (category)
-       //   2. Look up agent_id from routing_rules
-       //   3. Use default_agent_id if not found
-       //   4. Spawn execution (in parallel)
-       // Aggregate all envelopes
-       // Build ForEachAggregateEnvelope with stats
-   }
-   ```
-
-3. **Update for-each aggregation:**
-   - Collect ALL iteration envelopes (including errors)
-   - Set `status: "partial"` if any failures
-   - Set `status: "error"` if all failures
-   - Include `routing_distribution` in metadata
-
-4. **Error handling:**
-   - Failed iterations preserved in aggregate
-   - `errors` array populated with details
-
-**Verification:**
-- For-each sequential works
-- For-each parallel (same agent) works
-- For-each label routing works
-- Failed iterations tracked correctly
-- `cargo test executors::dag::for_each`
-
-### Phase 6: API Endpoints (2-3 days)
-
-**Goal:** CRUD APIs for ports and routing
-
-**Tasks:**
-1. Create `/src/server/api/workflow_ports.rs`:
-   ```rust
-   // Port management
-   GET    /api/workflows/{id}/ports
-   POST   /api/steps/{id}/inputs
-   PUT    /api/step-inputs/{id}
-   DELETE /api/step-inputs/{id}
-   POST   /api/steps/{id}/outputs
-   PUT    /api/step-outputs/{id}
-   DELETE /api/step-outputs/{id}
-
-   // Routing rules
-   GET    /api/steps/{id}/routing-rules
-   POST   /api/steps/{id}/routing-rules
-   PUT    /api/routing-rules/{id}
-   DELETE /api/routing-rules/{id}
-
-   // Configuration
-   PATCH  /api/steps/{id}/routing
-   PATCH  /api/steps/{id}/position
-   ```
-
-2. Update `/src/server/api/workflows.rs`:
-   - Return ports when getting workflow
-   - Update edge creation to include port mapping
-
-3. Add validation:
-   - Port names must be unique per step
-   - Edge port references must exist
-   - Routing field must exist in output schema
-   - Label values in routing rules must match schema enum
-
-**Verification:**
-- Test all endpoints with curl/Postman
-- Create workflow with ports via API
-- Update routing rules
-- `cargo test api::workflow_ports`
-
-### Phase 7: Interactive Review Rooms (2 days)
-
-**Goal:** Human-in-loop review with agent conversation
-
-**Tasks:**
-1. Add review step type detection:
-   ```rust
-   if step.is_interactive && step.agent_execution_mode == "room" {
-       // Open review room
-   }
-   ```
-
-2. Implement review room flow:
-   - Create room session
-   - Add review agent to room
-   - Agent receives step inputs via ports (context)
-   - Agent presents data, asks for feedback
-   - User approves/rejects/modifies via chat
-   - Agent outputs decision to port
-   - Workflow resumes
-
-3. Integration with existing room executor:
-   - Use `/src/server/executors/room/mod.rs`
-   - Pass input data as room context
-   - Capture final decision as output
-
-**Verification:**
-- Create workflow with review step
-- Execute, verify room opens
-- Chat with agent, approve
-- Verify workflow continues
-- Check output contains decision
-
-### Phase 8: Collection Executor Update (1 day)
-
-**Goal:** Update multi-workflow executor for envelopes
-
-**Tasks:**
-1. Update `/src/server/executors/collection_dag/mod.rs`:
-   - Read workflow outputs from envelopes
-   - Pass data between workflows via ports
-   - Handle envelope status checks
-
-**Verification:**
-- Create collection with 2 workflows
-- Execute, verify data flows between them
-- `cargo test executors::collection_dag`
-
-### Phase 9: Integration Testing (2-3 days)
-
-**Goal:** End-to-end workflow testing
-
-**Tasks:**
-1. **Test Case 1: Simple Pipeline**
-   - PRD Analyzer → Summarizer
-   - Verify port connections
-   - Verify envelope structure
-
-2. **Test Case 2: Label Routing**
-   - Decomposer → Label-routed implementation (4-8 items)
-   - Verify routing to correct agents
-   - Verify routing_distribution in output
-
-3. **Test Case 3: Interactive Review**
-   - Analysis → Review Room → Implementation
-   - Test approval flow
-   - Test rejection/modification flow
-
-4. **Test Case 4: Error Handling**
-   - Intentional failures in for-each
-   - Verify partial status
-   - Verify errors array populated
-
-5. **Test Case 5: Complex Multi-Step**
-   - Full PRD → Decompose → Route → Review → Implement workflow
-   - Verify all features together
-
-**Verification:**
-- All test cases pass
-- No panics or unwraps
-- Error messages clear and actionable
-
-### Phase 10: Documentation & Cleanup (1-2 days)
-
-**Goal:** Polish and document
-
-**Tasks:**
-1. Update README with new architecture
-2. Add code comments to complex functions
-3. Remove dead code (old variable system remnants)
-4. Run `cargo fmt` and `cargo clippy`
-5. Fix all clippy warnings
-6. Add API documentation (OpenAPI/Swagger)
-
-**Verification:**
-- `cargo clippy` clean
-- `cargo test` all passing
-- Documentation readable
-
----
-
 ## Total Estimated Timeline
 
 **Breakdown:**
-- Phase 1 (Schema): 1-2 days
-- Phase 2 (Types): 1 day
-- Phase 3 (Queries): 2-3 days
-- Phase 4 (DAG Core): 3-5 days
-- Phase 5 (For-Each): 3-4 days
-- Phase 6 (API): 2-3 days
-- Phase 7 (Review Rooms): 2 days
-- Phase 8 (Collections): 1 day
-- Phase 9 (Integration): 2-3 days
-- Phase 10 (Docs): 1-2 days
+- Phase 1 (Foundation): 3-4 days ✅
+- Phase 2 (Type Definitions): 2 days ✅
+- Phase 3 (Database Queries): 3-4 days ✅
+- Phase 4 (Mode Resolver Enhancement): 2-3 days
+- Phase 5 (Port-Based DAG Executor): 4-5 days
+- Phase 6 (Routing Rule Descriptions): 2-3 days
+- Phase 7 (Cavernous Routing): 5-6 days
+- Phase 8 (Enhanced Rooms): 4-5 days
+- Phase 9 (API Endpoints): 3-4 days
+- Phase 10 (Integration Testing): 3-4 days
+- Phase 11 (Documentation & Polish): 2-3 days
 
-**Total:** 18-27 days (3.5-5.5 weeks)
+**Total:** 34-45 days (7-9 weeks)
 
 **Recommendation:** Work in order, complete each phase before moving to next. Each phase builds on previous work.
 
