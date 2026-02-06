@@ -610,5 +610,20 @@ async fn test_downstream_routing_context_injection() {
 
 ---
 
-**Last Updated:** 2025-02-05
-**Status:** Ready for implementation after Phase 5 complete
+## Phase 6B: Chained Fan-Out Patterns (Future)
+
+Chained for-each steps already work today: a second for-each step can iterate over the first's aggregate output, maintaining per-item processing across multiple stages.
+
+**Pattern:** `Planner -> For-Each-1 (specialists) -> For-Each-2 (reviewers) -> Synthesizer`
+
+Phase 6B would add convenience helpers:
+- Auto-reference upstream aggregate outputs without manual `for_each_ref` wiring
+- Per-item routing context propagation across chained for-each stages
+- Documentation and examples for the fan-out / process / fan-in pattern
+
+**Note:** Each for-each step is an aggregate checkpoint (all iterations complete before the next step). True per-item streaming (item 1 flows to reviewer while item 5 is still at specialist) would require a different execution model and is not planned for 6B.
+
+---
+
+**Last Updated:** 2025-02-06
+**Status:** Phase 6 implemented (routing context injection). Phase 6B planned.

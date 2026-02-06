@@ -35,6 +35,10 @@ pub struct ExecutionMetadata {
 
     // For cavernous routing
     pub selected_routing_document_id: Option<Uuid>,
+
+    // For chained for-each pipeline (Phase 6B)
+    pub upstream_agent_id: Option<Uuid>,
+    pub upstream_routing_label: Option<String>,
 }
 
 /// Execution error details
@@ -89,6 +93,42 @@ pub struct ForEachAggregateEnvelope {
     pub errors: Vec<IterationError>,
 }
 
+// ============================================================================
+// Chained For-Each Pipeline (Phase 6B)
+// ============================================================================
+
+/// Result of one pipeline stage for one item in a chained for-each execution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PipelineStageResult {
+    pub step_id: Uuid,
+    pub status: ExecutionStatus,
+    pub execution_time_ms: u64,
+    pub agent_id: Option<Uuid>,
+    pub routing_label: Option<String>,
+}
+
+// ============================================================================
+// Downstream Routing Context (Phase 6)
+// ============================================================================
+
+/// Context about a downstream label-routing step, used to inject
+/// routing instructions into the upstream planner's prompt.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownstreamRoutingContext {
+    pub downstream_step_id: Uuid,
+    pub routing_field: String,
+    pub routes: Vec<RouteDescription>,
+}
+
+/// Description of a single routing rule for prompt injection.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RouteDescription {
+    pub label_value: String,
+    pub description: Option<String>,
+    pub agent_name: String,
+    pub agent_tools: Vec<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -110,6 +150,8 @@ mod tests {
                 iteration_label: None,
                 routing_label: None,
                 selected_routing_document_id: None,
+                upstream_agent_id: None,
+                upstream_routing_label: None,
             },
             error: None,
         };

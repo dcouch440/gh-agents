@@ -111,6 +111,8 @@ mod tests {
                 iteration_label: None,
                 routing_label: None,
                 selected_routing_document_id: None,
+                upstream_agent_id: None,
+                upstream_routing_label: None,
             },
             error: None,
         }
@@ -980,5 +982,95 @@ That's the output."#;
         assert_eq!(result.len(), 2);
         assert_eq!(result["left"], serde_json::json!("from_a"));
         assert_eq!(result["right"], serde_json::json!("from_b"));
+    }
+
+    // =========================================================================
+    // build_routing_instruction_block Tests (Phase 6)
+    // =========================================================================
+
+    use crate::server::executors::dag::build_routing_instruction_block;
+    use crate::types::{DownstreamRoutingContext, RouteDescription};
+
+    #[test]
+    fn routing_block_basic() {
+        let ctx = DownstreamRoutingContext {
+            downstream_step_id: Uuid::new_v4(),
+            routing_field: "category".to_string(),
+            routes: vec![
+                RouteDescription {
+                    label_value: "frontend".to_string(),
+                    description: Some("UI components and styling".to_string()),
+                    agent_name: "Frontend Specialist".to_string(),
+                    agent_tools: vec!["file_write".to_string(), "file_read".to_string()],
+                },
+                RouteDescription {
+                    label_value: "backend".to_string(),
+                    description: Some("API endpoints and server logic".to_string()),
+                    agent_name: "Backend Specialist".to_string(),
+                    agent_tools: vec!["file_write".to_string(), "test_execution".to_string()],
+                },
+            ],
+        };
+
+        let block = build_routing_instruction_block(&ctx);
+
+        assert!(block.contains("## Routing Instructions"));
+        assert!(block.contains("\"category\""));
+        assert!(block.contains("- frontend: UI components and styling"));
+        assert!(block.contains("Routed to: Frontend Specialist (tools: file_write, file_read)"));
+        assert!(block.contains("- backend: API endpoints and server logic"));
+        assert!(block.contains("Routed to: Backend Specialist (tools: file_write, test_execution)"));
+    }
+
+    #[test]
+    fn routing_block_no_description() {
+        let ctx = DownstreamRoutingContext {
+            downstream_step_id: Uuid::new_v4(),
+            routing_field: "type".to_string(),
+            routes: vec![RouteDescription {
+                label_value: "misc".to_string(),
+                description: None,
+                agent_name: "General Agent".to_string(),
+                agent_tools: vec!["file_read".to_string()],
+            }],
+        };
+
+        let block = build_routing_instruction_block(&ctx);
+
+        assert!(block.contains("- misc\n"));
+        assert!(!block.contains("- misc:"));
+        assert!(block.contains("Routed to: General Agent"));
+    }
+
+    #[test]
+    fn routing_block_no_tools() {
+        let ctx = DownstreamRoutingContext {
+            downstream_step_id: Uuid::new_v4(),
+            routing_field: "category".to_string(),
+            routes: vec![RouteDescription {
+                label_value: "review".to_string(),
+                description: Some("Code review tasks".to_string()),
+                agent_name: "Reviewer".to_string(),
+                agent_tools: vec![],
+            }],
+        };
+
+        let block = build_routing_instruction_block(&ctx);
+
+        assert!(block.contains("Routed to: Reviewer (no tools)"));
+    }
+
+    #[test]
+    fn routing_block_empty_routes() {
+        let ctx = DownstreamRoutingContext {
+            downstream_step_id: Uuid::new_v4(),
+            routing_field: "category".to_string(),
+            routes: vec![],
+        };
+
+        let block = build_routing_instruction_block(&ctx);
+
+        assert!(block.contains("## Routing Instructions"));
+        assert!(!block.contains("Routed to:"));
     }
 }
