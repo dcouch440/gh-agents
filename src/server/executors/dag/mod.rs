@@ -22,8 +22,8 @@ use crate::db::traits::{DocumentRepo, WorkflowRepo};
 use crate::db::{AgentRow, StepInputRow, StepOutputRow, WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::llm::{ContentBlock, LLMProvider, LLMRequest, Message, StopReason, Tool};
 use crate::types::{
-    ExecutionError, ExecutionMetadata, ExecutionStatus, ForEachAggregateEnvelope, ForEachMetadata,
-    IterationError, StepExecutionEnvelope,
+    DownstreamRoutingContext, ExecutionError, ExecutionMetadata, ExecutionStatus,
+    ForEachAggregateEnvelope, ForEachMetadata, IterationError, StepExecutionEnvelope,
 };
 
 use crate::server::state::AppState;
@@ -60,6 +60,7 @@ impl std::fmt::Display for DagPaused {
 impl std::error::Error for DagPaused {}
 
 /// Context passed into the DAG executor for one workflow run.
+#[derive(Clone)]
 pub struct WorkflowExecutionContext {
     pub stage_execution_id: Uuid,
     pub run_id: Uuid,
@@ -391,6 +392,47 @@ pub async fn compose_prompt(
     }
 
     full_prompt
+}
+
+// ============================================================================
+// Downstream Routing Context Injection (Phase 6)
+// ============================================================================
+
+/// Build a routing instruction text block from downstream routing context.
+///
+/// Appended to a planner step's prompt to inform the LLM about valid label
+/// values, their meanings, and which agents handle each route.
+pub fn build_routing_instruction_block(ctx: &DownstreamRoutingContext) -> String {
+    let mut block = String::new();
+
+    block.push_str("\n\n## Routing Instructions\n\n");
+    block.push_str(&format!(
+        "Each item MUST include a \"{}\" field set to exactly one of the following values.\n",
+        ctx.routing_field
+    ));
+    block.push_str("Pick the single best match for each item. Do not use any other values.\n\n");
+
+    for route in &ctx.routes {
+        block.push_str(&format!("- {}", route.label_value));
+
+        if let Some(ref desc) = route.description {
+            block.push_str(&format!(": {}", desc));
+        }
+
+        block.push('\n');
+
+        if route.agent_tools.is_empty() {
+            block.push_str(&format!("  Routed to: {} (no tools)\n\n", route.agent_name));
+        } else {
+            let tools_str = route.agent_tools.join(", ");
+            block.push_str(&format!(
+                "  Routed to: {} (tools: {})\n\n",
+                route.agent_name, tools_str
+            ));
+        }
+    }
+
+    block
 }
 
 /// Resolve a for_each prompt where `$` represents the current element.
@@ -922,6 +964,8 @@ async fn execute_step(
             iteration_label: _for_each_label.clone(),
             routing_label: None,
             selected_routing_document_id: None,
+            upstream_agent_id: None,
+            upstream_routing_label: None,
         },
         error: None,
     };
@@ -1267,6 +1311,8 @@ pub async fn execute_workflow(
                                 iteration_label: label,
                                 routing_label: None,
                                 selected_routing_document_id: None,
+                                upstream_agent_id: None,
+                                upstream_routing_label: None,
                             },
                             error: Some(ExecutionError {
                                 message: error_message,
