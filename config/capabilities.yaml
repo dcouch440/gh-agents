@@ -194,6 +194,28 @@ capabilities:
       Internet search capabilities. Useful for research and fact-checking.
       Rate-limited by search API providers.
 
+  - key: x_search
+    display_name: X/Twitter Search
+    category: web
+    safety_level: safe
+    description: Search X (Twitter) for real-time posts, trends, and conversations
+    examples: [web_research, grok_search]
+    notes: >
+      Real-time social media search. Powered by xAI Grok.
+      Useful for understanding current events, public sentiment, trending topics.
+      Requires XAI_API_KEY environment variable.
+
+  - key: real_time_search
+    display_name: Real-Time Web Search
+    category: web
+    safety_level: safe
+    description: Search the web for up-to-date information and current events
+    examples: [web_research, grok_search]
+    notes: >
+      Real-time internet search. Powered by xAI Grok.
+      Returns current information, not cached or historical data.
+      Essential for time-sensitive queries and breaking news.
+
   - key: api_call
     display_name: HTTP API Calls
     category: integration
