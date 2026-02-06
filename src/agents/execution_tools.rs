@@ -665,7 +665,7 @@ mod tests {
     #[test]
     fn tool_schemas_are_valid() {
         let tools = execution_tools();
-        assert_eq!(tools.len(), 12);
+        assert_eq!(tools.len(), 15);
         for tool in &tools {
             assert!(!tool.name.is_empty());
             assert!(!tool.description.is_empty());
@@ -683,9 +683,9 @@ mod tests {
     }
 
     #[test]
-    fn builtin_tool_rows_returns_12() {
+    fn builtin_tool_rows_returns_15() {
         let rows = builtin_tool_rows();
-        assert_eq!(rows.len(), 12);
+        assert_eq!(rows.len(), 15);
         for row in &rows {
             assert!(!row.name.is_empty());
             assert!(!row.display_name.is_empty());

@@ -65,6 +65,7 @@ CREATE TABLE step_routing_rules (
     workflow_step_id UUID NOT NULL REFERENCES workflow_steps(id) ON DELETE CASCADE,
     label_value TEXT NOT NULL,  -- Category/label value (e.g., "frontend", "backend", "database", "testing")
     agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    description TEXT,
     display_order INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(workflow_step_id, label_value)

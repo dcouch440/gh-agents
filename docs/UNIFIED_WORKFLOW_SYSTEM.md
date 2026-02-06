@@ -21,6 +21,18 @@
 
 ---
 
+## Related Documents
+
+This master plan is supported by detailed feature documentation:
+
+- **[ROUTING_RULE_DESCRIPTIONS.md](./ROUTING_RULE_DESCRIPTIONS.md)** - Phase 6: Routing rule descriptions with downstream context injection. Enables routing rules to include human-authored descriptions that automatically guide upstream planner agents via prompt injection.
+- **[PHASE_5B_DOWNSTREAM_ROUTING_CONTEXT.md](./PHASE_5B_DOWNSTREAM_ROUTING_CONTEXT.md)** - Original design rationale for routing rule descriptions feature
+- **[TOOL_CAPABILITY_SYSTEM.md](./TOOL_CAPABILITY_SYSTEM.md)** - Database schema reference for the tool capability system (capabilities, tools, assignments)
+- **[STACKED_PROMPT_EXAMPLE.md](./STACKED_PROMPT_EXAMPLE.md)** - Real-world example showing how agent prompts, mode prompts, and tool descriptions stack together
+- **[SYNC_CONFIG_PLAN.md](./SYNC_CONFIG_PLAN.md)** - Implementation plan for config sync command (capabilities and tool assignments from YAML)
+
+---
+
 ## Context & Prerequisites
 
 ### What is Nexor?
@@ -2822,7 +2834,35 @@ impl ModeResolver {
 
 ---
 
-### Phase 6: Cavernous Routing (5-6 days)
+### Phase 6: Routing Rule Descriptions & Downstream Context Injection (2-3 days)
+
+**See:** [ROUTING_RULE_DESCRIPTIONS.md](./ROUTING_RULE_DESCRIPTIONS.md) for complete implementation plan
+
+**Purpose:** Enable routing rules to include human-authored descriptions that automatically guide upstream planner agents via prompt injection.
+
+**Key Insight:** Routing rule descriptions become part of the prompt that guides planner agents, bridging the gap between "fuzzy LLM label generation" and "strict string matching in routing."
+
+**Summary:**
+- **Migration 073**: Adds `description` column to `step_routing_rules` table
+- **Prompt injection**: System automatically appends routing instructions to planner prompts based on downstream routing rules
+- **Three-layer reinforcement**: Soft guidance (prompt) + hard validation (schema) + safety net (fallback agent)
+- **Single source of truth**: Routing rules table defines everything - no manual sync needed
+
+**Critical deliverables:**
+- Migration 073 (add description column)
+- DownstreamRoutingContext types
+- query_downstream_routing_context() query
+- build_routing_instruction_block() function
+- API endpoints with description field
+- Tests (prompt injection, end-to-end, edge cases)
+
+**Related docs:**
+- [Full implementation plan](./ROUTING_RULE_DESCRIPTIONS.md)
+- [Original design rationale](./PHASE_5B_DOWNSTREAM_ROUTING_CONTEXT.md)
+
+---
+
+### Phase 7: Cavernous Routing (5-6 days)
 
 **Document-Based Dynamic Execution**
 

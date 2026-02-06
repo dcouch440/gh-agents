@@ -12,10 +12,12 @@ use crate::db::{
     AgentExecutionRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow,
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
     DocumentSearchResult, ExecutionMessageRow, ExecutionVariableRow, OutputSchemaRow,
-    PromptTemplateRow, ResultRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry,
-    RouterRequestRow, SessionRow, StepDocumentRow, TokenLedgerRow, ToolRouterModeRow,
-    ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow,
-    WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepRow,
+    PromptTemplateRow, ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow,
+    RoomSessionRow, RoomTranscriptEntry, RouterRequestRow, SessionRow, StepDocumentRow,
+    StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow, TokenLedgerRow,
+    ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow,
+    ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
+    WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -474,6 +476,70 @@ pub trait WorkflowRepo: Send + Sync {
     async fn list_step_documents(&self, step_id: Uuid) -> Result<Vec<StepDocumentRow>>;
     async fn add_step_document(&self, step_id: Uuid, document_id: Uuid) -> Result<()>;
     async fn remove_step_document(&self, step_id: Uuid, document_id: Uuid) -> Result<()>;
+
+    // --- Port Management (Phase 3) ---
+
+    /// Get all input ports for a workflow step
+    async fn get_step_inputs(&self, workflow_step_id: Uuid) -> Result<Vec<StepInputRow>>;
+
+    /// Get all output ports for a workflow step
+    async fn get_step_outputs(&self, workflow_step_id: Uuid) -> Result<Vec<StepOutputRow>>;
+
+    /// Create an input port for a workflow step
+    async fn create_step_input(
+        &self,
+        workflow_step_id: Uuid,
+        port_name: &str,
+        port_type: &str,
+        required: bool,
+        default_value: Option<serde_json::Value>,
+        description: Option<String>,
+        json_schema: Option<serde_json::Value>,
+    ) -> Result<StepInputRow>;
+
+    /// Create an output port for a workflow step
+    async fn create_step_output(
+        &self,
+        workflow_step_id: Uuid,
+        port_name: &str,
+        port_type: &str,
+        json_path: &str,
+        description: Option<String>,
+        json_schema: Option<serde_json::Value>,
+    ) -> Result<StepOutputRow>;
+
+    /// Delete an input port
+    async fn delete_step_input(&self, id: Uuid) -> Result<()>;
+
+    /// Delete an output port
+    async fn delete_step_output(&self, id: Uuid) -> Result<()>;
+
+    // --- Routing Rules (Phase 3) ---
+
+    /// Get all routing rules for a workflow step
+    async fn get_step_routing_rules(&self, workflow_step_id: Uuid) -> Result<Vec<StepRoutingRuleRow>>;
+
+    /// Create a routing rule for label-based agent assignment
+    async fn create_routing_rule(
+        &self,
+        workflow_step_id: Uuid,
+        label_value: &str,
+        agent_id: Uuid,
+        description: Option<String>,
+        display_order: i32,
+    ) -> Result<StepRoutingRuleRow>;
+
+    /// Update a routing rule
+    async fn update_routing_rule(
+        &self,
+        id: Uuid,
+        agent_id: Option<Uuid>,
+        description: Option<String>,
+        display_order: Option<i32>,
+    ) -> Result<StepRoutingRuleRow>;
+
+    /// Delete a routing rule
+    async fn delete_routing_rule(&self, id: Uuid) -> Result<()>;
 }
 
 // ============================================================================
@@ -852,6 +918,36 @@ pub trait RoomRepo: Send + Sync {
 
     /// Load the full room transcript (cross-execution message join).
     async fn get_room_transcript(&self, room_session_id: Uuid) -> Result<Vec<RoomTranscriptEntry>>;
+
+    // --- Room Execution Outputs (Phase 3) ---
+
+    /// Save a structured output from a room speaker
+    async fn save_room_execution_output(
+        &self,
+        room_session_id: Uuid,
+        agent_execution_id: Uuid,
+        agent_id: Uuid,
+        speaker_order: i32,
+        turn_number: i32,
+        output_name: &str,
+        structured_output: &serde_json::Value,
+        raw_output: &str,
+        schema_id: Option<Uuid>,
+    ) -> Result<RoomExecutionOutputRow>;
+
+    /// Get room execution outputs, optionally filtered by turn number
+    async fn get_room_execution_outputs(
+        &self,
+        room_session_id: Uuid,
+        turn_number: Option<i32>,
+    ) -> Result<Vec<RoomExecutionOutputRow>>;
+
+    /// Get room execution outputs by schema ID
+    async fn get_room_outputs_by_schema(
+        &self,
+        room_session_id: Uuid,
+        schema_id: Uuid,
+    ) -> Result<Vec<RoomExecutionOutputRow>>;
 }
 
 // ============================================================================
@@ -1020,4 +1116,87 @@ pub trait WorkflowStepAgentRepo: Send + Sync {
     /// Replace all agents for a step (for bulk updates).
     async fn set_step_agents(&self, step_id: Uuid, agents: Vec<WorkflowStepAgentRow>)
         -> Result<()>;
+}
+
+// ============================================================================
+// Tool Capability Repository (Phase 3)
+// ============================================================================
+
+/// Repository for tool capability taxonomy and assignments
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait ToolCapabilityRepo: Send + Sync {
+    // Capability taxonomy queries
+
+    /// Get all tool capabilities
+    async fn get_tool_capabilities(&self) -> Result<Vec<ToolCapabilityRow>>;
+
+    /// Get a capability by ID
+    async fn get_tool_capability(&self, id: Uuid) -> Result<Option<ToolCapabilityRow>>;
+
+    /// Get a capability by key
+    async fn get_tool_capability_by_key(&self, key: &str) -> Result<Option<ToolCapabilityRow>>;
+
+    // Tool-to-capability assignments
+
+    /// Get all capabilities assigned to a tool
+    async fn get_capabilities_by_tool(&self, tool_id: Uuid) -> Result<Vec<ToolCapabilityRow>>;
+
+    /// Get all tools that provide a capability
+    async fn get_tools_by_capability(&self, capability_key: &str) -> Result<Vec<ToolRow>>;
+
+    /// Assign a capability to a tool
+    async fn assign_capability_to_tool(&self, tool_id: Uuid, capability_id: Uuid) -> Result<()>;
+
+    /// Remove a capability from a tool
+    async fn remove_capability_from_tool(&self, tool_id: Uuid, capability_id: Uuid) -> Result<()>;
+
+    /// Set all capabilities for a tool (replaces existing)
+    async fn set_tool_capabilities(&self, tool_id: Uuid, capability_ids: &[Uuid]) -> Result<()>;
+
+    // Mode-to-capability requirements
+
+    /// Get all capabilities required by a mode
+    async fn get_mode_capabilities(&self, mode_id: Uuid) -> Result<Vec<ToolCapabilityRow>>;
+
+    /// Set capabilities required by a mode (replaces existing)
+    async fn set_mode_capabilities(&self, mode_id: Uuid, capability_ids: &[Uuid], is_required: bool) -> Result<()>;
+}
+
+// ============================================================================
+// System Configuration Repository (Phase 3)
+// ============================================================================
+
+/// Repository for system-wide configuration (admin-controlled)
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait SystemConfigRepo: Send + Sync {
+    // Basic config operations
+
+    /// Get a system config by key
+    async fn get_system_config(&self, config_key: &str) -> Result<Option<SystemConfigRow>>;
+
+    /// List system configs, optionally filtered by type
+    async fn list_system_configs(&self, config_type: Option<String>) -> Result<Vec<SystemConfigRow>>;
+
+    /// Upsert a system config (insert or update)
+    async fn upsert_system_config(
+        &self,
+        config_type: &str,
+        config_key: &str,
+        config_value: &serde_json::Value,
+        description: Option<String>,
+        created_by: Option<Uuid>,
+    ) -> Result<SystemConfigRow>;
+
+    /// Delete a system config
+    async fn delete_system_config(&self, config_key: &str) -> Result<()>;
+
+    // Specialized config queries
+
+    /// Get all execution constraints as a map
+    async fn get_execution_constraints(&self) -> Result<std::collections::HashMap<String, serde_json::Value>>;
+
+    /// Check if unsafe operations are enabled
+    async fn get_unsafe_operations_enabled(&self) -> Result<bool>;
 }
