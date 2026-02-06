@@ -1,0 +1,430 @@
+# ============================================================================
+# Routing Strategy: Full Stack Implementation
+# ============================================================================
+# Document-based routing configuration for cavernous execution.
+# Title format: routing:full_stack_implementation
+#
+# Use case: Implement a complete feature across frontend, backend, and database
+# Complexity: High
+# Estimated time: 30-60 minutes
+# Estimated cost: $5-10 USD
+# ============================================================================
+
+strategy_name: full_stack_implementation
+version: "1.0"
+description: >
+  Multi-agent workflow for implementing a complete full-stack feature with proper
+  separation of concerns and specialist expertise.
+
+  Flow:
+  1. Database Architect: Design schema and migrations
+  2. Backend Specialist: Implement API endpoints and business logic
+  3. Frontend Specialist: Build UI components and integration
+  4. Test Engineer: Create comprehensive test suite
+  5. Integration Validator: Verify end-to-end functionality
+
+  Best for: Feature implementation, API development, data-driven applications
+
+capabilities_required:
+  - file_read
+  - file_write
+  - database_query
+  - code_analysis
+  - test_execution
+
+complexity_level: high
+
+# ============================================================================
+# SUBTASK DEFINITIONS
+# ============================================================================
+
+subtasks:
+  # --------------------------------------------------------------------------
+  # SUBTASK 1: Database Schema Design
+  # --------------------------------------------------------------------------
+  - id: database_schema
+    task_name: Design Database Schema
+    agent_role: database_architect
+    agent_id: null
+
+    tools:
+      - file_read
+      - file_write
+      - code_analysis
+
+    prompt_template: |
+      Design the database schema for this feature:
+
+      Feature: {input.feature_description}
+      Requirements: {input.requirements}
+      Existing schema: {input.existing_schema_files}
+
+      Your task:
+      1. Design normalized database schema (tables, columns, types)
+      2. Define relationships and foreign keys
+      3. Create indexes for performance
+      4. Write SQL migration (CREATE TABLE, ALTER TABLE)
+      5. Consider data integrity and constraints
+      6. Plan for future extensibility
+
+      Output a complete migration file and schema documentation.
+
+    depends_on: []
+
+    input_mapping:
+      feature_description: input.feature_description
+      requirements: input.requirements
+      existing_schema_files: input.existing_schema_files
+
+    output_schema:
+      type: object
+      required: [migration_sql, tables, migration_file_path]
+      properties:
+        migration_sql:
+          type: string
+          description: Complete SQL migration script
+
+        tables:
+          type: array
+          description: Tables created or modified
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              columns: { type: array, items: { type: object } }
+              indexes: { type: array, items: { type: string } }
+              relationships: { type: array, items: { type: string } }
+
+        migration_file_path:
+          type: string
+          description: Path where migration was written
+
+        rollback_sql:
+          type: string
+          description: SQL to rollback this migration
+
+    estimated_time_minutes: 10
+    estimated_cost_usd: 1.00
+
+  # --------------------------------------------------------------------------
+  # SUBTASK 2: Backend API Implementation
+  # --------------------------------------------------------------------------
+  - id: backend_api
+    task_name: Implement Backend API
+    agent_role: backend_specialist
+    agent_id: null
+
+    tools:
+      - file_read
+      - file_write
+      - test_execution
+
+    prompt_template: |
+      Implement backend API using the database schema:
+
+      Database schema: {database_schema.tables}
+      Migration file: {database_schema.migration_file_path}
+
+      Feature requirements: {input.requirements}
+      API style: {input.api_style}  # REST, GraphQL, gRPC
+
+      Your task:
+      1. Implement API endpoints (routes, handlers, controllers)
+      2. Write business logic and validation
+      3. Add error handling and logging
+      4. Implement database queries (SELECT, INSERT, UPDATE, DELETE)
+      5. Follow project conventions and patterns
+      6. Add inline documentation
+
+      Create production-ready backend code with proper error handling.
+
+    depends_on: [database_schema]
+
+    input_mapping:
+      database_schema: database_schema
+      requirements: input.requirements
+      api_style: input.api_style
+
+    output_schema:
+      type: object
+      required: [endpoints, files_created]
+      properties:
+        endpoints:
+          type: array
+          description: API endpoints implemented
+          items:
+            type: object
+            properties:
+              method: { type: string, enum: [GET, POST, PUT, DELETE, PATCH] }
+              path: { type: string }
+              description: { type: string }
+              request_schema: { type: object }
+              response_schema: { type: object }
+
+        files_created:
+          type: array
+          description: Files created or modified
+          items: { type: string }
+
+        tests_written:
+          type: array
+          description: Test files created
+          items: { type: string }
+
+    estimated_time_minutes: 15
+    estimated_cost_usd: 2.50
+
+  # --------------------------------------------------------------------------
+  # SUBTASK 3: Frontend UI Implementation
+  # --------------------------------------------------------------------------
+  - id: frontend_ui
+    task_name: Build Frontend UI
+    agent_role: frontend_specialist
+    agent_id: null
+
+    tools:
+      - file_read
+      - file_write
+
+    prompt_template: |
+      Build React frontend UI consuming the backend API:
+
+      API endpoints: {backend_api.endpoints}
+      Feature requirements: {input.requirements}
+      Design system: {input.design_system}
+
+      Your task:
+      1. Create React components following project structure
+      2. Implement API client calls using the api endpoints
+      3. Add form validation and error handling
+      4. Implement loading and error states
+      5. Follow accessibility best practices
+      6. Use TypeScript with strict types
+      7. Add component-level tests
+
+      Build production-ready, accessible UI components.
+
+    depends_on: [backend_api]
+
+    input_mapping:
+      api_endpoints: backend_api.endpoints
+      requirements: input.requirements
+      design_system: input.design_system
+
+    output_schema:
+      type: object
+      required: [components, files_created]
+      properties:
+        components:
+          type: array
+          description: React components created
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              file_path: { type: string }
+              props_interface: { type: string }
+              dependencies: { type: array, items: { type: string } }
+
+        files_created:
+          type: array
+          items: { type: string }
+
+        api_integration_points:
+          type: array
+          description: Where API calls are made
+          items: { type: string }
+
+    estimated_time_minutes: 20
+    estimated_cost_usd: 3.00
+
+  # --------------------------------------------------------------------------
+  # SUBTASK 4: Comprehensive Testing (Parallel with Frontend)
+  # --------------------------------------------------------------------------
+  - id: test_suite
+    task_name: Create Test Suite
+    agent_role: qa_engineer
+    agent_id: null
+
+    tools:
+      - file_read
+      - file_write
+      - test_execution
+
+    prompt_template: |
+      Create comprehensive test suite for the implemented feature:
+
+      Backend endpoints: {backend_api.endpoints}
+      Database schema: {database_schema.tables}
+
+      Your task:
+      1. Write unit tests for backend logic
+      2. Write integration tests for API endpoints
+      3. Write database tests (migrations, queries)
+      4. Test error scenarios and edge cases
+      5. Achieve >80% code coverage
+      6. Add test documentation
+
+      Ensure robust test coverage for production deployment.
+
+    depends_on: [backend_api]  # Can run in parallel with frontend
+
+    input_mapping:
+      backend_api: backend_api
+      database_schema: database_schema
+
+    output_schema:
+      type: object
+      required: [test_files, coverage]
+      properties:
+        test_files:
+          type: array
+          items: { type: string }
+
+        test_count:
+          type: object
+          properties:
+            unit: { type: integer }
+            integration: { type: integer }
+            e2e: { type: integer }
+
+        coverage:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Code coverage percentage
+
+    estimated_time_minutes: 10
+    estimated_cost_usd: 1.50
+
+  # --------------------------------------------------------------------------
+  # SUBTASK 5: Integration Validation
+  # --------------------------------------------------------------------------
+  - id: integration_validation
+    task_name: Validate Integration
+    agent_role: integration_validator
+    agent_id: null
+
+    tools:
+      - test_execution
+      - code_analysis
+
+    prompt_template: |
+      Validate that all components work together correctly:
+
+      Backend: {backend_api.files_created}
+      Frontend: {frontend_ui.files_created}
+      Tests: {test_suite.test_files}
+
+      Your task:
+      1. Run all tests and verify they pass
+      2. Check for integration issues between layers
+      3. Verify error handling across the stack
+      4. Check for security vulnerabilities
+      5. Validate performance considerations
+      6. Create integration test report
+
+      Provide go/no-go recommendation for deployment.
+
+    depends_on: [frontend_ui, test_suite]
+
+    input_mapping:
+      backend_api: backend_api
+      frontend_ui: frontend_ui
+      test_suite: test_suite
+
+    output_schema:
+      type: object
+      required: [validation_passed, issues_found]
+      properties:
+        validation_passed:
+          type: boolean
+          description: Overall integration validation result
+
+        test_results:
+          type: object
+          properties:
+            total_tests: { type: integer }
+            passed: { type: integer }
+            failed: { type: integer }
+            skipped: { type: integer }
+
+        issues_found:
+          type: array
+          description: Integration issues discovered
+          items:
+            type: object
+            properties:
+              severity: { type: string, enum: [critical, high, medium, low] }
+              component: { type: string }
+              description: { type: string }
+              recommendation: { type: string }
+
+        deployment_recommendation:
+          type: string
+          enum: [go, no-go, go-with-caveats]
+
+        deployment_notes:
+          type: string
+          description: Important notes for deployment
+
+    estimated_time_minutes: 10
+    estimated_cost_usd: 1.00
+
+# ============================================================================
+# AGGREGATION CONFIGURATION
+# ============================================================================
+
+aggregation_mode: all_outputs  # Return outputs from all subtasks
+
+# Allow parallel execution where possible
+max_parallel: 2  # frontend_ui and test_suite can run in parallel
+
+timeout_minutes: 60
+cost_limit_usd: 10.0
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+use_cases:
+  - New feature implementation
+  - API development with frontend
+  - Database-backed applications
+  - CRUD operations with UI
+
+avoid_when:
+  - Feature scope is unclear (define requirements first)
+  - No database changes needed (use simpler strategy)
+  - Pure frontend or pure backend task (use specialized strategy)
+
+example_inputs:
+  - feature_description: "User profile management system"
+    requirements:
+      - "Users can view and edit their profile"
+      - "Profile includes: name, email, bio, avatar"
+      - "Email validation required"
+      - "Avatar upload with size limits"
+    api_style: "REST"
+    design_system: "Material-UI"
+    existing_schema_files: ["migrations/", "src/db/schema.sql"]
+
+expected_output:
+  database_schema:
+    migration_file_path: "migrations/XXX_user_profiles.sql"
+    tables: ["user_profiles"]
+  backend_api:
+    endpoints:
+      - { method: "GET", path: "/api/profile", description: "Get user profile" }
+      - { method: "PUT", path: "/api/profile", description: "Update user profile" }
+  frontend_ui:
+    components: ["ProfileView", "ProfileEdit", "AvatarUpload"]
+  integration_validation:
+    validation_passed: true
+    deployment_recommendation: "go"
+
+success_metrics:
+  - all_tests_pass: true
+  - code_coverage: "> 80%"
+  - integration_validation: "passed"
+  - no_critical_issues: true
