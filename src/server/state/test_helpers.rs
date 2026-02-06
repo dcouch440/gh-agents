@@ -7,7 +7,8 @@ use std::sync::Arc;
 use crate::db::traits::{
     MockAgentExecutionRepo, MockContextStoreRepo, MockDocumentRepo, MockOutputSchemaRepo,
     MockPromptTemplateRepo, MockResultRepo, MockRoomRepo, MockRouterRequestRepo,
-    MockTokenLedgerRepo, MockToolRouterRepo, MockUserRepo, MockWorkflowRepo,
+    MockTokenLedgerRepo, MockToolCapabilityRepo, MockToolRouterRepo, MockUserRepo,
+    MockWorkflowRepo,
 };
 
 use super::Repos;
@@ -30,6 +31,7 @@ pub fn default_mock_repos() -> Repos {
         Arc::new(MockContextStoreRepo::new()),
         Arc::new(MockRouterRequestRepo::new()),
         Arc::new(MockRoomRepo::new()),
+        Arc::new(MockToolCapabilityRepo::new()),
     )
 }
 
@@ -133,6 +135,15 @@ impl MockReposBuilder {
     /// Override the rooms repository.
     pub fn with_rooms(mut self, repo: Arc<dyn crate::db::traits::RoomRepo>) -> Self {
         self.repos.rooms = repo;
+        self
+    }
+
+    /// Override the tool capabilities repository.
+    pub fn with_tool_capabilities(
+        mut self,
+        repo: Arc<dyn crate::db::traits::ToolCapabilityRepo>,
+    ) -> Self {
+        self.repos.tool_capabilities = repo;
         self
     }
 

@@ -133,6 +133,7 @@ impl AppState {
             Arc::new(PgRepo::new(db.clone())), // context_store
             Arc::new(PgRepo::new(db.clone())), // router_requests
             Arc::new(PgRepo::new(db.clone())), // rooms
+            Arc::new(PgRepo::new(db.clone())), // tool_capabilities
         );
 
         let (chat_tx, orchestrator_rx) = mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
@@ -145,8 +146,11 @@ impl AppState {
         let prompt_registry = Self::load_prompt_registry();
 
         // Initialize LLM provider and mode resolver
-        let (provider, mode_resolver) =
-            Self::init_provider(server_repo.clone(), repos.tool_routers.clone());
+        let (provider, mode_resolver) = Self::init_provider(
+            server_repo.clone(),
+            repos.tool_routers.clone(),
+            repos.tool_capabilities.clone(),
+        );
 
         let mut state = Self(Arc::new(AppStateInner {
             db: Some(db),
@@ -275,6 +279,7 @@ impl AppState {
     fn init_provider(
         server_repo: Arc<dyn ServerRepo>,
         tool_router_repo: Arc<dyn crate::db::traits::ToolRouterRepo>,
+        tool_capability_repo: Arc<dyn crate::db::traits::ToolCapabilityRepo>,
     ) -> (
         Option<Arc<dyn LLMProvider + Send + Sync>>,
         Option<Arc<ModeResolver>>,
@@ -290,6 +295,7 @@ impl AppState {
                 let mode_resolver = Arc::new(ModeResolver::new(
                     server_repo,
                     tool_router_repo,
+                    tool_capability_repo,
                     provider.clone(),
                 ));
 

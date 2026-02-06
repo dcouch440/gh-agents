@@ -66,6 +66,7 @@ pub async fn construct_agent_defaults(
         max_tokens: agent.model_max_tokens,
         selected_mode_id: None,
         selected_mode_key: None,
+        capabilities: vec![],
     })
 }
 

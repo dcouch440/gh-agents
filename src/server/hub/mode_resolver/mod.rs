@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::db::traits::{ServerRepo, ToolRouterRepo};
+use crate::db::traits::{ServerRepo, ToolCapabilityRepo, ToolRouterRepo};
 use crate::db::{AgentRow, ToolRouterModeRow};
 use crate::llm::{LLMProvider, Tool};
 use crate::server::hub::engine::ExecutionEngine;
@@ -29,6 +29,7 @@ pub struct ResolvedModeConfig {
     pub max_tokens: i32,
     pub selected_mode_id: Option<Uuid>,
     pub selected_mode_key: Option<String>,
+    pub capabilities: Vec<String>,
 }
 
 /// Error types for mode resolution.
@@ -51,6 +52,7 @@ pub enum RoutingError {
 pub struct ModeResolver {
     repo: Arc<dyn ServerRepo>,
     tool_router_repo: Arc<dyn ToolRouterRepo>,
+    tool_capability_repo: Arc<dyn ToolCapabilityRepo>,
     provider: Arc<dyn LLMProvider>,
 }
 
@@ -58,11 +60,13 @@ impl ModeResolver {
     pub fn new(
         repo: Arc<dyn ServerRepo>,
         tool_router_repo: Arc<dyn ToolRouterRepo>,
+        tool_capability_repo: Arc<dyn ToolCapabilityRepo>,
         provider: Arc<dyn LLMProvider>,
     ) -> Self {
         Self {
             repo,
             tool_router_repo,
+            tool_capability_repo,
             provider,
         }
     }
@@ -150,17 +154,44 @@ impl ModeResolver {
                 modes[0].clone()
             });
 
-        // 7. Load mode tools
+        // 7. Load mode tools (explicit)
         let mode_tool_rows = self
             .tool_router_repo
             .get_mode_tools(mode.id)
             .await
             .map_err(|e| RoutingError::Database(e.into()))?;
 
-        let mode_tools: Vec<Tool> = mode_tool_rows
+        let mut mode_tools: Vec<Tool> = mode_tool_rows
             .iter()
             .filter_map(|row| registry::get_tool_definition(&row.name))
             .collect();
+
+        // 7b. Load capability-based tools
+        let capability_rows = self
+            .tool_capability_repo
+            .get_mode_capabilities(mode.id)
+            .await
+            .map_err(|e| RoutingError::Database(e.into()))?;
+
+        let capability_keys: Vec<String> = capability_rows
+            .iter()
+            .map(|c| c.capability_key.clone())
+            .collect();
+
+        for cap_key in &capability_keys {
+            let tool_rows = self
+                .tool_capability_repo
+                .get_tools_by_capability(cap_key)
+                .await
+                .map_err(|e| RoutingError::Database(e.into()))?;
+
+            let cap_tools: Vec<Tool> = tool_rows
+                .iter()
+                .filter_map(|row| registry::get_tool_definition(&row.name))
+                .collect();
+
+            mode_tools = union_by_name(mode_tools, cap_tools);
+        }
 
         // 8. Merge system prompt (append or replace)
         let system_prompt = if mode.append_to_agent_system_prompt {
@@ -198,6 +229,7 @@ impl ModeResolver {
             max_tokens: mode.max_tokens,
             selected_mode_id: Some(mode.id),
             selected_mode_key: Some(mode.mode_key.clone()),
+            capabilities: capability_keys,
         })
     }
 
@@ -224,6 +256,7 @@ impl ModeResolver {
             max_tokens: agent.model_max_tokens,
             selected_mode_id: None,
             selected_mode_key: None,
+            capabilities: vec![],
         })
     }
 }
