@@ -4,9 +4,9 @@
 mod tests {
     use crate::db::{StepInputRow, StepOutputRow, WorkflowStepEdgeRow, WorkflowStepRow};
     use crate::server::executors::dag::{
-        compute_cost, extract_for_each_label, find_entry_steps, get_child_steps, get_parent_steps,
-        parse_structured_output, resolve_dot_path, resolve_for_each_array, resolve_port_inputs,
-        resolve_variables, topological_sort, DagPaused,
+        extract_for_each_label, find_entry_steps, get_child_steps, get_parent_steps,
+        resolve_dot_path, resolve_for_each_array, resolve_port_inputs, resolve_variables,
+        topological_sort, DagPaused,
     };
     use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
     use std::collections::HashMap;
@@ -567,134 +567,6 @@ mod tests {
 
         let label = extract_for_each_label(&element, Some("name"));
         assert!(label.is_none());
-    }
-
-    // =========================================================================
-    // Parse Structured Output Tests
-    // =========================================================================
-
-    #[test]
-    fn parse_raw_json() {
-        let content = r#"{"key": "value", "num": 42}"#;
-        let result = parse_structured_output(content);
-        assert!(result.is_some());
-        let json = result.unwrap();
-        assert_eq!(json["key"], "value");
-        assert_eq!(json["num"], 42);
-    }
-
-    #[test]
-    fn parse_json_in_markdown_fence() {
-        let content = r#"Here is the result:
-
-```json
-{"status": "success"}
-```
-
-That's the output."#;
-
-        let result = parse_structured_output(content);
-        assert!(result.is_some());
-        let json = result.unwrap();
-        assert_eq!(json["status"], "success");
-    }
-
-    #[test]
-    fn parse_json_in_generic_code_block() {
-        let content = r#"Result:
-
-```
-{"data": [1, 2, 3]}
-```
-"#;
-
-        let result = parse_structured_output(content);
-        assert!(result.is_some());
-        let json = result.unwrap();
-        assert_eq!(json["data"], serde_json::json!([1, 2, 3]));
-    }
-
-    #[test]
-    fn parse_returns_none_for_invalid() {
-        let content = "This is just plain text with no JSON.";
-        let result = parse_structured_output(content);
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn parse_handles_whitespace() {
-        let content = "   \n  {\"trimmed\": true}  \n  ";
-        let result = parse_structured_output(content);
-        // This actually succeeds because serde_json handles whitespace
-        assert!(result.is_some());
-    }
-
-    // =========================================================================
-    // Cost Calculation Tests
-    // =========================================================================
-
-    #[test]
-    fn compute_cost_opus_model() {
-        let cost = compute_cost("claude-3-opus", 1_000_000, 1_000_000);
-        // Input: 1M * 15 / 1M = 15.0
-        // Output: 1M * 75 / 1M = 75.0
-        // Total: 90.0
-        assert!((cost - 90.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn compute_cost_sonnet_model() {
-        let cost = compute_cost("claude-3-sonnet", 1_000_000, 1_000_000);
-        // Input: 1M * 3 / 1M = 3.0
-        // Output: 1M * 15 / 1M = 15.0
-        // Total: 18.0
-        assert!((cost - 18.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn compute_cost_haiku_model() {
-        let cost = compute_cost("claude-3-haiku", 1_000_000, 1_000_000);
-        // Input: 1M * 0.25 / 1M = 0.25
-        // Output: 1M * 1.25 / 1M = 1.25
-        // Total: 1.5
-        assert!((cost - 1.5).abs() < 0.01);
-    }
-
-    #[test]
-    fn compute_cost_gpt4o_model() {
-        let cost = compute_cost("gpt-4o-2024", 1_000_000, 1_000_000);
-        // Input: 1M * 2.5 / 1M = 2.5
-        // Output: 1M * 10 / 1M = 10.0
-        // Total: 12.5
-        assert!((cost - 12.5).abs() < 0.01);
-    }
-
-    #[test]
-    fn compute_cost_gpt4_model() {
-        let cost = compute_cost("gpt-4-turbo", 1_000_000, 1_000_000);
-        // Input: 1M * 30 / 1M = 30.0
-        // Output: 1M * 60 / 1M = 60.0
-        // Total: 90.0
-        assert!((cost - 90.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn compute_cost_unknown_model() {
-        let cost = compute_cost("unknown-model", 1_000_000, 1_000_000);
-        // Input: 1M * 1 / 1M = 1.0
-        // Output: 1M * 3 / 1M = 3.0
-        // Total: 4.0
-        assert!((cost - 4.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn compute_cost_realistic_usage() {
-        // Typical API call: ~1000 input tokens, ~500 output tokens
-        let cost = compute_cost("claude-3-sonnet", 1000, 500);
-        // Input: 1000 * 3 / 1M = 0.003
-        // Output: 500 * 15 / 1M = 0.0075
-        // Total: 0.0105
-        assert!((cost - 0.0105).abs() < 0.0001);
     }
 
     // =========================================================================
