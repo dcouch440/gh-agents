@@ -1,0 +1,324 @@
+# ============================================================================
+# Routing Strategy: Research and Documentation
+# ============================================================================
+# Document-based routing configuration for cavernous execution.
+# Title format: routing:research_and_documentation
+#
+# Use case: Research a topic, synthesize findings, create documentation
+# Complexity: Medium
+# Estimated time: 15-30 minutes
+# Estimated cost: $1-3 USD
+# ============================================================================
+
+strategy_name: research_and_documentation
+version: "1.0"
+description: >
+  Multi-agent workflow for researching a topic and creating comprehensive documentation.
+
+  Flow:
+  1. Researcher: Search web and documents, gather authoritative sources
+  2. Synthesizer: Analyze findings, create coherent outline
+  3. Writer: Produce documentation from outline
+
+  Best for: Technical research, competitive analysis, documentation tasks
+
+# Required capabilities for this strategy
+capabilities_required:
+  - web_search
+  - web_fetch
+  - document_search
+  - document_create
+
+# Complexity level (low, medium, high)
+complexity_level: medium
+
+# ============================================================================
+# SUBTASK DEFINITIONS
+# ============================================================================
+# Each subtask is executed by a specialist agent.
+# Subtasks can depend on previous subtasks (DAG structure).
+
+subtasks:
+  # --------------------------------------------------------------------------
+  # SUBTASK 1: Research
+  # --------------------------------------------------------------------------
+  - id: research
+    task_name: Research Topic
+    agent_role: researcher
+    agent_id: null  # Will use system researcher agent or mode-selected agent
+
+    # Tools this subtask needs
+    tools:
+      - web_search
+      - web_fetch
+      - document_search
+
+    # Prompt template (variables: from input or previous subtasks)
+    prompt_template: |
+      Research the following topic comprehensively:
+
+      Topic: {input.topic}
+      Focus areas: {input.focus_areas}
+
+      Your task:
+      1. Search for 5-10 authoritative sources (academic papers, documentation, reputable articles)
+      2. Identify key concepts, challenges, and best practices
+      3. Note any conflicting information or debates
+      4. Gather specific examples and case studies
+
+      Provide structured output with sources and findings.
+
+    # No dependencies - this is the first task
+    depends_on: []
+
+    # Input mapping (from workflow input or previous subtasks)
+    input_mapping:
+      topic: input.topic              # From workflow input
+      focus_areas: input.focus_areas  # From workflow input
+
+    # Expected output schema
+    output_schema:
+      type: object
+      required: [sources, key_findings, concepts]
+      properties:
+        sources:
+          type: array
+          description: List of authoritative sources found
+          items:
+            type: object
+            properties:
+              url: { type: string }
+              title: { type: string }
+              credibility: { type: string, enum: [high, medium, low] }
+              key_points: { type: array, items: { type: string } }
+
+        key_findings:
+          type: array
+          description: Main findings from research
+          items: { type: string }
+
+        concepts:
+          type: array
+          description: Key concepts and terminology
+          items:
+            type: object
+            properties:
+              term: { type: string }
+              definition: { type: string }
+              importance: { type: string, enum: [critical, important, supplementary] }
+
+        debates:
+          type: array
+          description: Conflicting viewpoints or debates found
+          items:
+            type: object
+            properties:
+              topic: { type: string }
+              viewpoint_a: { type: string }
+              viewpoint_b: { type: string }
+
+    # Time and cost estimates
+    estimated_time_minutes: 10
+    estimated_cost_usd: 0.50
+
+  # --------------------------------------------------------------------------
+  # SUBTASK 2: Synthesize
+  # --------------------------------------------------------------------------
+  - id: synthesize
+    task_name: Synthesize Findings
+    agent_role: synthesizer
+    agent_id: null
+
+    tools:
+      - think  # Internal reasoning, no external tools needed
+
+    prompt_template: |
+      Analyze the research findings and create a coherent outline for documentation.
+
+      Research findings:
+      Sources: {research.sources}
+      Key findings: {research.key_findings}
+      Concepts: {research.concepts}
+
+      Your task:
+      1. Identify the most important information
+      2. Organize findings into logical sections
+      3. Determine the narrative flow
+      4. Highlight areas that need more detail
+      5. Note any gaps in the research
+
+      Create a detailed outline for comprehensive documentation.
+
+    # Depends on research subtask completing first
+    depends_on: [research]
+
+    # Input mapping: pulls from research subtask output
+    input_mapping:
+      sources: research.sources
+      key_findings: research.key_findings
+      concepts: research.concepts
+      debates: research.debates
+
+    output_schema:
+      type: object
+      required: [outline, narrative_flow]
+      properties:
+        outline:
+          type: object
+          description: Hierarchical documentation outline
+          properties:
+            sections:
+              type: array
+              items:
+                type: object
+                properties:
+                  title: { type: string }
+                  subsections: { type: array, items: { type: string } }
+                  key_points: { type: array, items: { type: string } }
+                  priority: { type: string, enum: [high, medium, low] }
+
+        narrative_flow:
+          type: string
+          description: How sections should connect and flow
+
+        emphasis_areas:
+          type: array
+          description: Topics that need extra detail or explanation
+          items: { type: string }
+
+        gaps:
+          type: array
+          description: Areas where more research may be needed
+          items: { type: string }
+
+    estimated_time_minutes: 5
+    estimated_cost_usd: 0.30
+
+  # --------------------------------------------------------------------------
+  # SUBTASK 3: Write Documentation
+  # --------------------------------------------------------------------------
+  - id: write_documentation
+    task_name: Write Documentation
+    agent_role: technical_writer
+    agent_id: null
+
+    tools:
+      - document_create
+      - document_update
+
+    prompt_template: |
+      Write comprehensive, well-structured documentation based on the research and outline.
+
+      Outline: {synthesize.outline}
+      Narrative flow: {synthesize.narrative_flow}
+      Emphasis areas: {synthesize.emphasis_areas}
+
+      Original topic: {input.topic}
+      Target audience: {input.audience}
+
+      Your task:
+      1. Write clear, comprehensive documentation following the outline
+      2. Use appropriate technical depth for the audience
+      3. Include examples and code snippets where relevant
+      4. Add cross-references and links to sources
+      5. Ensure consistent terminology and style
+
+      Create a polished documentation artifact.
+
+    depends_on: [synthesize]
+
+    input_mapping:
+      outline: synthesize.outline
+      narrative_flow: synthesize.narrative_flow
+      emphasis_areas: synthesize.emphasis_areas
+      topic: input.topic
+      audience: input.audience
+
+    output_schema:
+      type: object
+      required: [document_id, title]
+      properties:
+        document_id:
+          type: string
+          description: UUID of created document
+
+        title:
+          type: string
+          description: Documentation title
+
+        word_count:
+          type: integer
+          description: Approximate word count
+
+        sections_completed:
+          type: array
+          description: List of completed sections
+          items: { type: string }
+
+        quality_score:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Self-assessed quality (0-1)
+
+    estimated_time_minutes: 15
+    estimated_cost_usd: 1.50
+
+# ============================================================================
+# AGGREGATION CONFIGURATION
+# ============================================================================
+
+# How to aggregate subtask outputs into final result
+# Options: "final_output", "all_outputs", "merge"
+aggregation_mode: final_output  # Return only the last subtask's output (documentation)
+
+# Maximum parallel subtasks (respects dependencies)
+# Sequential execution: max_parallel = 1
+# Parallel where possible: max_parallel > 1
+max_parallel: 1  # Sequential for this strategy (each depends on previous)
+
+# Overall constraints for this strategy
+timeout_minutes: 30
+cost_limit_usd: 5.0
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+# When this strategy is appropriate
+use_cases:
+  - Technical research and documentation
+  - Competitive analysis reports
+  - Architecture decision records (ADRs)
+  - Feature specification documents
+  - Onboarding materials creation
+
+# When NOT to use this strategy
+avoid_when:
+  - Topic is too broad (refine scope first)
+  - Requires real-time data (research may be stale)
+  - Needs domain-specific expertise (use specialist agents)
+
+# Example inputs
+example_inputs:
+  - topic: "React Server Components"
+    focus_areas: ["performance benefits", "migration strategies", "use cases"]
+    audience: "senior frontend developers"
+
+  - topic: "Database indexing strategies"
+    focus_areas: ["B-tree vs hash indexes", "covering indexes", "index maintenance"]
+    audience: "backend engineers and DBAs"
+
+# Expected output format
+expected_output:
+  document_id: "uuid-of-created-document"
+  title: "Comprehensive Guide to [Topic]"
+  sections_completed: ["Introduction", "Core Concepts", "Best Practices", "Conclusion"]
+  quality_score: 0.85
+
+# Success criteria
+success_metrics:
+  - documentation_completeness: "> 90%"
+  - source_quality: "mostly high credibility sources"
+  - readability: "appropriate for target audience"
+  - actionability: "includes practical examples and recommendations"

@@ -1,0 +1,221 @@
+# ============================================================================
+# Tool → Capability Assignments
+# ============================================================================
+# Maps tool names to the capabilities they provide.
+#
+# When a mode requires a capability, the system automatically selects tools
+# that provide that capability. A single tool can provide multiple capabilities.
+#
+# Sync to database: cargo run -- sync-config
+# ============================================================================
+
+# Assignment Structure:
+# ---------------------
+# tool_name:           Must match tool.name in database
+#   capabilities:      List of capability keys this tool provides
+#   notes:             Optional context about this tool's capabilities
+#   priority:          Optional: Higher priority tools selected first (default: 0)
+
+tool_assignments:
+  # ==========================================================================
+  # FILE OPERATIONS
+  # ==========================================================================
+
+  read_file:
+    capabilities:
+      - file_read
+      - file_metadata
+    notes: >
+      Primary file reading tool. Can read any file type including
+      text, images (displays visually), PDFs (by page range).
+    priority: 10
+
+  write_file:
+    capabilities:
+      - file_write
+    notes: >
+      Creates new files. Overwrites existing files completely.
+      Use edit_file for modifications to existing files.
+    priority: 5
+
+  edit_file:
+    capabilities:
+      - file_write
+    notes: >
+      Modifies existing files via exact string replacement.
+      Preferred over write_file for editing existing code.
+    priority: 10
+
+  list_files:
+    capabilities:
+      - file_search
+      - file_metadata
+    notes: >
+      Lists files and directories. Provides metadata (size, permissions).
+      Use for directory exploration and file discovery.
+    priority: 10
+
+  # ==========================================================================
+  # GIT OPERATIONS
+  # ==========================================================================
+
+  git_status:
+    capabilities:
+      - git_read
+    notes: >
+      Shows working tree status (staged, modified, untracked files).
+      Essential for understanding repository state.
+    priority: 10
+
+  git_diff:
+    capabilities:
+      - git_read
+    notes: >
+      Shows unstaged changes in working tree.
+      Use for reviewing modifications before committing.
+    priority: 10
+
+  git_log:
+    capabilities:
+      - git_read
+      - git_history
+    notes: >
+      View commit history with authors, dates, messages.
+      Supports filtering by path, author, date range.
+    priority: 10
+
+  git_branch:
+    capabilities:
+      - git_read    # Can list and show current branch
+      - git_write   # Can create new branches
+    notes: >
+      DUAL CAPABILITY: Both read (list branches) and write (create branches).
+      Read operations are safe, write operations require approval.
+    priority: 10
+
+  git_add:
+    capabilities:
+      - git_write
+    notes: >
+      Stage files for commit. Modifies git index.
+    priority: 10
+
+  git_commit:
+    capabilities:
+      - git_write
+    notes: >
+      Create commits with staged changes.
+      Requires meaningful commit messages following conventions.
+    priority: 10
+
+  # ==========================================================================
+  # SYSTEM OPERATIONS
+  # ==========================================================================
+
+  run_command:
+    capabilities:
+      - shell_execution
+      - process_management
+    notes: >
+      DANGEROUS: Executes arbitrary shell commands.
+      Full system access. Use only when no safer alternative exists.
+      Sandboxed execution when possible.
+    priority: 0  # Lowest priority - use as last resort
+    requires_approval: true
+
+  # ==========================================================================
+  # DEVELOPMENT & TESTING
+  # ==========================================================================
+
+  run_tests:
+    capabilities:
+      - test_execution
+    notes: >
+      Runs project test suite. Can execute unit, integration, e2e tests.
+      May take significant time for large test suites.
+    priority: 10
+
+  # Future tools (examples):
+  # lint_code:
+  #   capabilities:
+  #     - code_analysis
+  #   notes: Run linters (eslint, clippy, etc.)
+
+  # build_project:
+  #   capabilities:
+  #     - build_execution
+  #   notes: Compile and bundle project
+
+  # ==========================================================================
+  # WEB OPERATIONS
+  # ==========================================================================
+
+  web_research:
+    capabilities:
+      - web_search
+      - web_fetch
+    notes: >
+      Research topics using real-time web and X/Twitter search via xAI Grok.
+      Returns synthesized answers with citations.
+      Requires XAI_API_KEY environment variable.
+    priority: 10
+
+  # Future tools (examples):
+  # http_request:
+  #   capabilities:
+  #     - api_call
+  #     - web_fetch
+  #   notes: Generic HTTP client for API calls
+
+  # ==========================================================================
+  # KNOWLEDGE MANAGEMENT
+  # ==========================================================================
+
+  # Future tools (examples):
+  # create_document:
+  #   capabilities:
+  #     - document_create
+  #   notes: Create structured knowledge documents
+
+  # search_documents:
+  #   capabilities:
+  #     - document_search
+  #   notes: Full-text search across knowledge base
+
+# =============================================================================
+# Usage Notes
+# =============================================================================
+#
+# Priority System:
+# ----------------
+# When multiple tools provide the same capability, higher priority tools
+# are selected first. Use this to prefer safer or more specialized tools.
+#
+# Priority ranges:
+#   10: Preferred tool for this capability (primary)
+#   5:  Acceptable alternative
+#   0:  Use only as last resort (e.g., shell_execution)
+#
+# Multiple Capabilities:
+# ----------------------
+# Tools can provide multiple capabilities. For example:
+# - git_branch provides both git_read (list) and git_write (create)
+# - read_file provides both file_read and file_metadata
+#
+# This allows the system to select the most appropriate tool based on
+# what capabilities a mode requires.
+#
+# Approval Requirements:
+# ----------------------
+# Tools marked with requires_approval: true need explicit user approval
+# before execution. This is enforced by the system_config constraint:
+#   dangerous_tools_require_approval: true
+#
+# Sync Process:
+# -------------
+# When syncing:
+# 1. Tool assignments are matched by tool.name in database
+# 2. If tool doesn't exist, assignment is skipped (warning logged)
+# 3. Existing assignments for that tool are replaced (not merged)
+# 4. Idempotent - safe to run multiple times
+# =============================================================================

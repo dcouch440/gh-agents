@@ -1,0 +1,280 @@
+# ============================================================================
+# Tool Capabilities Taxonomy
+# ============================================================================
+# Defines the semantic capability system for tool selection and mode routing.
+#
+# Each capability represents a specific type of operation that tools can provide.
+# Modes declare required capabilities, and the system auto-selects tools that
+# provide those capabilities.
+#
+# Sync to database: cargo run -- sync-config
+# ============================================================================
+
+# Capability Definition Structure:
+# ---------------------------------
+# key:           Unique snake_case identifier (must match ^[a-z][a-z0-9_]*$)
+# display_name:  Human-readable name for UI
+# category:      Grouping for organization (filesystem, web, system, etc.)
+# safety_level:  Risk assessment (safe, caution, unsafe)
+# description:   What this capability enables
+# examples:      Optional: Which tools typically provide this
+
+capabilities:
+  # ==========================================================================
+  # FILESYSTEM OPERATIONS
+  # ==========================================================================
+
+  - key: file_read
+    display_name: File Reading
+    category: filesystem
+    safety_level: safe
+    description: Read file contents from disk, including text files, images, PDFs
+    examples: [read_file, cat, head, tail]
+    notes: >
+      Basic file reading operations. Safe for all modes.
+      No modification of filesystem state.
+
+  - key: file_write
+    display_name: File Writing
+    category: filesystem
+    safety_level: caution
+    description: Create new files or modify existing files on disk
+    examples: [write_file, edit_file, sed, awk]
+    notes: >
+      Modifies filesystem state. Requires approval in production environments.
+      Can overwrite existing files - use with caution.
+
+  - key: file_search
+    display_name: File Search
+    category: filesystem
+    safety_level: safe
+    description: Search for files by name, pattern, or glob
+    examples: [list_files, find, glob]
+    notes: >
+      Pattern-based file discovery. Read-only operation.
+      Useful for exploring codebases and finding resources.
+
+  - key: content_search
+    display_name: Content Search
+    category: filesystem
+    safety_level: safe
+    description: Search file contents using grep-like functionality
+    examples: [grep, ripgrep, ag, search_code]
+    notes: >
+      Full-text search within files. Essential for code navigation.
+      Supports regex patterns and multi-file search.
+
+  - key: file_metadata
+    display_name: File Metadata
+    category: filesystem
+    safety_level: safe
+    description: Read file metadata (size, permissions, timestamps, ownership)
+    examples: [stat, ls, file_info]
+
+  # ==========================================================================
+  # VERSION CONTROL (GIT)
+  # ==========================================================================
+
+  - key: git_read
+    display_name: Git Read Operations
+    category: version_control
+    safety_level: safe
+    description: View git history, diffs, status, branches (read-only)
+    examples: [git_status, git_diff, git_log, git_show]
+    notes: >
+      Read-only git operations. Safe for analysis and review.
+      No modifications to repository state.
+
+  - key: git_write
+    display_name: Git Write Operations
+    category: version_control
+    safety_level: caution
+    description: Commit changes, create branches, merge, push to remote
+    examples: [git_add, git_commit, git_branch, git_merge, git_push]
+    notes: >
+      Modifies git repository state. Requires approval for main/master branches.
+      Can create commits, branches, and push to remotes.
+
+  - key: git_history
+    display_name: Git History Analysis
+    category: version_control
+    safety_level: safe
+    description: Deep analysis of git history, blame, contributors
+    examples: [git_log, git_blame, git_shortlog]
+
+  # ==========================================================================
+  # SYSTEM OPERATIONS
+  # ==========================================================================
+
+  - key: shell_execution
+    display_name: Shell Command Execution
+    category: system
+    safety_level: unsafe
+    description: Execute arbitrary shell commands with full system access
+    examples: [run_command, bash, sh, exec]
+    notes: >
+      DANGEROUS: Full shell access. Can execute any command.
+      Requires explicit approval. Disabled by default in production.
+      Use only when absolutely necessary. Consider safer alternatives first.
+    requires_approval: true
+    default_enabled: false
+
+  - key: process_management
+    display_name: Process Management
+    category: system
+    safety_level: unsafe
+    description: Start, stop, monitor system processes
+    examples: [ps, kill, systemctl]
+    requires_approval: true
+
+  # ==========================================================================
+  # DEVELOPMENT & TESTING
+  # ==========================================================================
+
+  - key: test_execution
+    display_name: Test Execution
+    category: development
+    safety_level: caution
+    description: Run test suites (unit, integration, e2e)
+    examples: [run_tests, pytest, jest, cargo_test]
+    notes: >
+      Executes test commands. Generally safe but can be slow/expensive.
+      May have side effects if tests are poorly written.
+
+  - key: code_analysis
+    display_name: Code Analysis
+    category: development
+    safety_level: safe
+    description: Analyze code structure, complexity, quality metrics
+    examples: [lint, clippy, eslint, analyze_code]
+    notes: >
+      Static analysis operations. Read-only, safe for all modes.
+      Includes linting, complexity analysis, and code quality checks.
+
+  - key: code_generation
+    display_name: Code Generation
+    category: development
+    safety_level: caution
+    description: Generate code from templates, schemas, or specifications
+    examples: [codegen, scaffold, generate]
+    notes: >
+      Creates new code files. Review generated code before committing.
+
+  - key: build_execution
+    display_name: Build Execution
+    category: development
+    safety_level: caution
+    description: Run build commands (compile, bundle, package)
+    examples: [cargo_build, npm_build, make]
+    notes: >
+      Executes build tools. Can be resource-intensive.
+      May modify build artifacts and caches.
+
+  # ==========================================================================
+  # WEB & NETWORK
+  # ==========================================================================
+
+  - key: web_fetch
+    display_name: Web Content Fetching
+    category: web
+    safety_level: safe
+    description: Fetch content from URLs (HTTP/HTTPS)
+    examples: [fetch, curl, wget, http_get]
+    notes: >
+      Read-only web requests. Safe for public URLs.
+      Be cautious with authenticated endpoints.
+
+  - key: web_search
+    display_name: Web Search
+    category: web
+    safety_level: safe
+    description: Search the internet using search engines
+    examples: [web_research, google_search, bing_search]
+    notes: >
+      Internet search capabilities. Useful for research and fact-checking.
+      Rate-limited by search API providers.
+
+  - key: api_call
+    display_name: HTTP API Calls
+    category: integration
+    safety_level: caution
+    description: Make HTTP requests to external APIs (GET, POST, PUT, DELETE)
+    examples: [http_request, api_client]
+    notes: >
+      Can modify remote state via POST/PUT/DELETE.
+      Requires careful review of API endpoints and payloads.
+
+  # ==========================================================================
+  # DATA & DATABASE
+  # ==========================================================================
+
+  - key: database_query
+    display_name: Database Queries
+    category: data
+    safety_level: caution
+    description: Query databases (SELECT, INSERT, UPDATE, DELETE)
+    examples: [sql_query, db_execute]
+    notes: >
+      Read/write database access. Write operations require approval.
+      Can modify production data - use with extreme caution.
+    requires_approval: true
+
+  - key: database_schema
+    display_name: Database Schema Operations
+    category: data
+    safety_level: unsafe
+    description: Modify database schema (CREATE TABLE, ALTER, DROP)
+    examples: [create_migration, alter_table, drop_table]
+    notes: >
+      DANGEROUS: Schema modifications. Can break applications.
+      Always use migrations. Requires explicit approval.
+    requires_approval: true
+
+  # ==========================================================================
+  # KNOWLEDGE & DOCUMENTS
+  # ==========================================================================
+
+  - key: document_create
+    display_name: Document Creation
+    category: knowledge
+    safety_level: safe
+    description: Create knowledge documents (notes, specs, architecture docs)
+    examples: [create_document, write_doc]
+    notes: >
+      Creates structured documents in the knowledge base.
+      Safe operation, no external side effects.
+
+  - key: document_search
+    display_name: Document Search
+    category: knowledge
+    safety_level: safe
+    description: Search knowledge documents by content, tags, or metadata
+    examples: [search_documents, find_docs]
+    notes: >
+      Full-text search across knowledge base.
+      Essential for retrieving context and reference material.
+
+  - key: document_update
+    display_name: Document Updates
+    category: knowledge
+    safety_level: safe
+    description: Update existing knowledge documents
+    examples: [update_document, edit_doc]
+
+# =============================================================================
+# Categories Reference
+# =============================================================================
+# filesystem:        File and directory operations
+# version_control:   Git and other VCS operations
+# system:            OS-level operations (shell, processes)
+# development:       Code analysis, testing, building
+# web:               HTTP requests, web scraping
+# integration:       External API calls
+# data:              Database operations
+# knowledge:         Document management
+#
+# Safety Levels:
+# - safe:     No side effects, read-only operations
+# - caution:  Can modify state, requires review
+# - unsafe:   Dangerous operations, requires explicit approval
+# =============================================================================
