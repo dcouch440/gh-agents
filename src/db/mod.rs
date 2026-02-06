@@ -120,6 +120,8 @@ pub struct WorkflowStepRow {
     pub interactive_agent_id: Option<Uuid>,
     pub for_each_label_field: Option<String>,
     pub room_id: Option<Uuid>,
+    pub routing_mode: Option<String>,
+    pub routing_field: Option<String>,
     pub display_order: i32,
     pub version: i32,
 }
@@ -127,8 +129,16 @@ pub struct WorkflowStepRow {
 /// Row type for a workflow step edge (DAG edge).
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct WorkflowStepEdgeRow {
+    pub id: Uuid,
     pub from_step_id: Uuid,
     pub to_step_id: Uuid,
+    pub from_output_port: Option<String>,
+    pub to_input_port: Option<String>,
+    pub transform_jsonpath: Option<String>,
+    pub condition_type: Option<String>,
+    pub condition_value: Option<serde_json::Value>,
+    pub edge_label: Option<String>,
+    pub workflow_id: Uuid,
 }
 
 /// Row type for workflow collections (DAG of workflows).
