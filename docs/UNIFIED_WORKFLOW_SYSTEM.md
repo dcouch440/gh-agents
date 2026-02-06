@@ -21,6 +21,222 @@
 
 ---
 
+## Context & Prerequisites
+
+### What is Nexor?
+
+**Nexor** is an AI agent orchestration platform with:
+- **Backend:** Rust (Axum) - REST API, WebSocket, LLM provider integrations, workflow execution
+- **Frontend:** React (Vite) - Workflow builder, agent management, execution monitoring
+- **CLI:** Ink (TypeScript) - Terminal interface for agent interactions
+- **Database:** PostgreSQL - Stores workflows, agents, executions, tools, documents
+
+**Core Capabilities:**
+- Multi-agent collaboration (rooms with gatekeeper-based speaker selection)
+- Workflow DAG execution (topological sort with dependencies)
+- Tool/mode routing (dynamic agent personality and tool selection)
+- Document management (searchable knowledge base for agents)
+- Real-time execution streaming (WebSocket updates)
+
+**Current Status:** Early development, has not run in production. Clean slate for redesign.
+
+---
+
+### Current Architecture (Pre-Redesign)
+
+**Execution Flow:**
+```
+API Request
+    ↓
+Executor Selection (DAG, Room, Chat, Collection)
+    ↓
+ExecutionEngine (unified loop in hub/engine/mod.rs)
+    ├─ Parameterized by ExecutionStrategy trait
+    ├─ Strategies: ChatStrategy, DagStepStrategy, RoomSpeakerStrategy, RouterStrategy
+    ├─ Tool execution loop (max rounds with LLM)
+    └─ Streaming via StreamSink trait
+    ↓
+Result stored in agent_executions table
+```
+
+**Key Components:**
+
+1. **ExecutionEngine** (`/src/server/hub/engine/mod.rs`)
+   - Unified execution loop for all agent interactions
+   - Parameterized by `ExecutionStrategy` trait (strategy pattern)
+   - Handles: message building, LLM calls, tool execution, streaming, recording
+
+2. **ExecutionStrategy Trait** (`/src/server/hub/strategy.rs`)
+   - Defines behavior for different execution contexts
+   - Methods: `build_messages()`, `execute_tool()`, `on_complete()`
+   - Implementations:
+     - `DagStepStrategy` - Workflow step execution
+     - `RoomSpeakerStrategy` - Multi-agent room turns
+     - `ChatStrategy` - Interactive chat sessions
+     - `RouterStrategy` - Mode classification
+
+3. **DAG Executor** (`/src/server/executors/dag/mod.rs`)
+   - Executes workflow DAGs via topological sort
+   - **Current limitation:** Uses variable system (`execution_variables` table)
+   - Variable interpolation: `{variable_name}` in prompts
+   - For-each mode: Expands arrays, but all iterations use same agent
+   - **Bug:** For-each failures are logged but not tracked in database
+
+4. **Room Executor** (`/src/server/executors/room/mod.rs`)
+   - Multi-agent collaboration with gatekeeper
+   - Gatekeeper LLM selects speaker order
+   - Sequential execution (one speaker at a time)
+   - **Current limitation:** Only unstructured text in transcript, no structured output passing
+
+5. **Mode Resolver** (`/src/server/hub/mode_resolver/mod.rs`)
+   - Router LLM classifies user input → selects mode
+   - Mode = personality + tool set + temperature
+   - Modes defined in `tool_router_modes` table
+   - **Current limitation:** No capability-based abstraction, tools explicitly assigned per mode
+
+6. **Tool System** (`/src/tools/registry/mod.rs`, `/src/agents/execution_tools.rs`)
+   - Static tool registry (12 execution tools: read_file, git_commit, run_tests, etc.)
+   - Tools assigned to agents via `agent_tools` join table
+   - Mode-based dynamic tool selection via `tool_router_mode_tools`
+   - **Current limitation:** No semantic capability taxonomy
+
+**Database Structure (Relevant Tables):**
+- `workflow_steps` - DAG nodes (has `output_variable_name` - deprecated)
+- `workflow_step_edges` - DAG edges (minimal: from_step_id, to_step_id)
+- `execution_variables` - Variable storage (currently **empty**, will be dropped)
+- `agent_executions` - Execution records (has `structured_output` JSONB)
+- `tools`, `agent_tools`, `tool_routers`, `tool_router_modes` - Tool/mode system
+- `rooms`, `room_members`, `room_sessions` - Multi-agent collaboration
+- `documents` - Searchable knowledge base (will be used for routing configs)
+
+---
+
+### Why This Redesign?
+
+**Problems Being Solved:**
+
+1. **Variable System is Unnecessary Abstraction**
+   - `execution_variables` table adds indirection
+   - `{variable}` interpolation in prompts is opaque
+   - No visual representation for workflow builders
+   - **Solution:** Port-based explicit input/output connections
+
+2. **For-Each Execution Limitations**
+   - All iterations use same agent (can't route heterogeneous items)
+   - No support for dynamic array sizes with specialist routing
+   - Silent failures (errors logged but not tracked)
+   - **Solution:** Label-based routing to specialist agents, error tracking in envelopes
+
+3. **No Dynamic Task Decomposition**
+   - Workflows are static (defined upfront)
+   - Complex tasks can't adapt execution strategy at runtime
+   - **Solution:** Cavernous routing with document-based configs
+
+4. **Room Collaboration is Limited**
+   - Agents only see unstructured transcript text
+   - No structured data passing between speakers
+   - Gatekeeper can't make informed decisions based on output types
+   - **Solution:** Enhanced rooms with structured outputs and schema-aware gatekeeper
+
+5. **Tool Selection is Manual**
+   - No semantic capability abstraction
+   - Tools must be explicitly assigned to modes
+   - Can't auto-select tools based on task requirements
+   - **Solution:** Tool capability registry with semantic matching
+
+6. **No System-Level Configuration**
+   - Capabilities, constraints, routing strategies scattered
+   - No single source of truth for admin control
+   - **Solution:** Master system config with admin-only management
+
+7. **No Adaptive Mode Evolution**
+   - Mode selected once at step start, doesn't adapt
+   - No feedback from step outputs to inform next mode
+   - **Solution:** Progressive mode evolution with feedback-driven layering
+
+**Vision:**
+Transform nexor from a basic workflow executor into a **complete agentic orchestration platform** with three execution tiers, adaptive intelligence, and full configurability - suitable for building complex multi-agent systems beyond just code generation.
+
+---
+
+### Key Files & Their Roles
+
+**Execution Engine (Core):**
+- `/src/server/hub/engine/mod.rs` - ExecutionEngine, main LLM loop
+- `/src/server/hub/strategy.rs` - ExecutionStrategy trait definition
+- `/src/server/hub/strategies/*/mod.rs` - Strategy implementations
+
+**Executors (Orchestration):**
+- `/src/server/executors/dag/mod.rs` - DAG workflow executor (to be refactored)
+- `/src/server/executors/room/mod.rs` - Multi-agent room executor (to be enhanced)
+- `/src/server/executors/collection_dag/mod.rs` - Multi-workflow orchestrator
+
+**Mode & Tool System:**
+- `/src/server/hub/mode_resolver/mod.rs` - Mode selection and resolution (to be extended)
+- `/src/tools/registry/mod.rs` - Tool definitions
+- `/src/agents/execution_tools.rs` - Tool execution dispatcher
+
+**Database:**
+- `/migrations/*.sql` - Schema definitions
+- `/src/db/queries/*.rs` - Database query functions
+- `/src/types/*.rs` - Row type definitions
+
+**API:**
+- `/src/server/api/*.rs` - REST endpoints
+- `/src/server/ws/mod.rs` - WebSocket real-time updates
+
+---
+
+### How to Read This Document
+
+**Document Structure:**
+
+1. **System Overview** - High-level architecture, three execution tiers, core concepts
+2. **Master System Configuration** - Admin-controlled truth (capabilities, constraints, routing strategies)
+3. **Complete Database Schema** - All migrations (067-072) with SQL
+4. **Design Sections** - Detailed designs for each major component:
+   - Port-based workflows
+   - Tool capability registry
+   - Cavernous routing (document-based)
+   - Enhanced rooms
+   - Progressive mode evolution
+5. **Implementation Roadmap** - 10 phases with time estimates (29-42 days total)
+6. **Critical Files Reference** - Which files to modify/create, organized by phase
+
+**For Implementers:**
+
+- **Start with Executive Summary** - Understand goals and scope
+- **Read System Overview** - Grasp high-level architecture
+- **Skim Database Schema** - See what's being added
+- **Deep dive into phases** - Follow implementation order (Phase 1 → Phase 10)
+- **Reference Critical Files** - Know which files to modify for each component
+
+**For Reviewers:**
+
+- **Executive Summary** - Is the vision clear?
+- **Why This Redesign** - Are problems well-defined?
+- **Design Decisions** - Are trade-offs explained? (see individual component sections)
+- **Success Criteria** - Are outcomes measurable?
+
+**Design Rationale Notes:**
+
+Throughout the document, design decisions include reasoning:
+- **Port system:** Explicit contracts for visual workflow builders, automatic envelope unwrapping
+- **Document-based routing:** Rich configs without bloating LLM context, versionable, searchable
+- **Capability taxonomy:** Semantic tool selection, reusable across modes
+- **Enhanced rooms:** Structured collaboration, schema-aware orchestration
+- **Mode evolution:** Adaptive intelligence based on actual execution results, not assumptions
+
+**Time Estimates:**
+
+All phase durations are estimates assuming single developer working full-time. Actual time may vary based on:
+- Complexity uncovered during implementation
+- Testing thoroughness
+- Documentation depth
+- Parallelization of independent components
+
+---
+
 ## System Overview
 
 ### High-Level Architecture
