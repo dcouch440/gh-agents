@@ -196,19 +196,6 @@ pub struct WorkflowExecutionRow {
     pub error: Option<String>,
 }
 
-/// Row type for execution variables (for text editor variable capture).
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
-pub struct ExecutionVariableRow {
-    pub id: Uuid,
-    pub collection_run_id: Option<Uuid>,
-    pub workflow_execution_id: Option<Uuid>,
-    pub step_execution_id: Option<Uuid>,
-    pub variable_name: String,
-    pub variable_path: String,
-    pub value: serde_json::Value,
-    pub created_at: DateTime<Utc>,
-}
-
 /// Row type for workflow step agents (multi-agent step support).
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct WorkflowStepAgentRow {

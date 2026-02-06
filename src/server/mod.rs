@@ -296,10 +296,6 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::COLLECTION_RUN_STATUS,
             get(api::get_collection_run_status),
         )
-        .route(
-            routes::COLLECTION_RUN_VARIABLES,
-            get(api::get_collection_variables),
-        )
         // LEGACY: Pipeline stage member routes removed
         // .route(routes::PIPELINE_STAGE_MEMBERS, get(api::list_stage_members).post(api::add_stage_member))
         // .route(routes::PIPELINE_STAGE_MEMBER, delete(api::delete_stage_member).put(api::update_stage_member))

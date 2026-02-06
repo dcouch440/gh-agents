@@ -117,9 +117,8 @@ pub use workflows::{
 // Re-export collection handlers and types
 pub use collections::{
     create_collection, delete_collection, get_collection, get_collection_run_status,
-    get_collection_variables, list_collections, run_collection, update_collection,
-    CollectionResponse, CollectionRunResponse, CreateCollectionRequest, ExecutionVariableResponse,
-    UpdateCollectionRequest,
+    list_collections, run_collection, update_collection, CollectionResponse, CollectionRunResponse,
+    CreateCollectionRequest, UpdateCollectionRequest,
 };
 
 // Re-export tool router handlers and types
