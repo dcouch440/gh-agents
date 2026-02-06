@@ -331,11 +331,16 @@ pub async fn compose_prompt(
 
     let mut full_prompt = prompt;
 
-    // Append structured port input data block
+    // Append structured port input data block — only for ports NOT referenced in the template.
+    // If the user wrote {port_name} or {port_name.field}, the data is already inlined.
     if let Some(ports) = port_inputs {
-        if !ports.is_empty() {
+        let unreferenced: Vec<_> = ports
+            .iter()
+            .filter(|(name, _)| !raw_prompt.contains(&format!("{{{}", name)))
+            .collect();
+        if !unreferenced.is_empty() {
             full_prompt.push_str("\n\n## Input Data\n");
-            for (port_name, value) in ports {
+            for (port_name, value) in unreferenced {
                 let formatted =
                     serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string());
                 full_prompt.push_str(&format!(
