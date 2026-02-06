@@ -5,8 +5,8 @@ use std::net::SocketAddr;
 use std::path::Path;
 use tracing::{debug, info};
 
-use nexor::cli::Args;
-use nexor::config::load_config;
+use nexor::cli::{Args, Commands};
+use nexor::config::{load_config, sync_config};
 use nexor::db::init_db;
 use nexor::logging::{init_logging_with_file, LOG_DIR};
 use nexor::server::start_server;
@@ -26,14 +26,24 @@ async fn main() -> Result<()> {
         std::process::exit(1);
     }
 
-    run_server_mode(args).await
+    // Handle subcommands
+    match &args.command {
+        Some(Commands::SyncConfig { config_dir, dry_run }) => {
+            let verbose = args.verbose > 0;
+            run_sync_config(config_dir, *dry_run, verbose).await
+        }
+        Some(Commands::Serve { .. }) | None => {
+            // Default to server mode if no command specified
+            run_server_mode(args).await
+        }
+    }
 }
 
 /// Run in server mode (HTTP + WebSocket)
 async fn run_server_mode(args: Args) -> Result<()> {
     // Initialize logging with file output
     let log_path = args
-        .config
+        .config()
         .as_ref()
         .and_then(|p| p.parent())
         .map(|p| p.to_path_buf())
@@ -50,11 +60,45 @@ async fn run_server_mode(args: Args) -> Result<()> {
     let pool = init_db().await?;
 
     // Server address from CLI
-    let addr: SocketAddr = format!("0.0.0.0:{}", args.port).parse()?;
+    let addr: SocketAddr = format!("0.0.0.0:{}", args.port()).parse()?;
 
     // Run server
     start_server(pool, config, addr).await?;
 
     info!("nexor shutting down");
+    Ok(())
+}
+
+/// Run config sync command
+async fn run_sync_config(config_dir: &Path, dry_run: bool, verbose: bool) -> Result<()> {
+    println!("🔄 nexor Config Sync");
+    println!("   Directory: {}", config_dir.display());
+    if dry_run {
+        println!("   Mode: DRY RUN (validation only)");
+    }
+    println!();
+
+    // Initialize database
+    let pool = init_db().await?;
+
+    // Run sync
+    let stats = sync_config(&pool, config_dir, dry_run, verbose).await?;
+
+    // Print summary
+    if !dry_run {
+        println!("\n✅ Sync completed successfully!");
+        println!("\n📊 Summary:");
+        println!("   Capabilities: {} created, {} updated",
+            stats.capabilities_created, stats.capabilities_updated);
+        println!("   Tool Assignments: {} updated", stats.tool_assignments_updated);
+
+        if !stats.errors.is_empty() {
+            println!("\n⚠️  {} warnings:", stats.errors.len());
+            for err in &stats.errors {
+                println!("   - {}", err);
+            }
+        }
+    }
+
     Ok(())
 }

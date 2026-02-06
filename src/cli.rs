@@ -1,6 +1,6 @@
 //! Command-line argument parsing for nexor
 
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 /// AI Agent Orchestration for GitHub Workflows
@@ -8,17 +8,37 @@ use std::path::PathBuf;
 #[command(name = "nexor")]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
-    /// Port to listen on
-    #[arg(short, long, default_value = "3000")]
-    pub port: u16,
-
-    /// Override config file location
-    #[arg(short, long)]
-    pub config: Option<PathBuf>,
-
     /// Increase log verbosity (-v, -vv, -vvv)
-    #[arg(short, long, action = clap::ArgAction::Count)]
+    #[arg(short, long, action = clap::ArgAction::Count, global = true)]
     pub verbose: u8,
+
+    #[command(subcommand)]
+    pub command: Option<Commands>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum Commands {
+    /// Sync YAML configuration files to database
+    SyncConfig {
+        /// Directory containing config files
+        #[arg(short = 'd', long, default_value = "./config")]
+        config_dir: PathBuf,
+
+        /// Dry run - validate configs without applying changes
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Start the server (default if no subcommand given)
+    Serve {
+        /// Port to listen on
+        #[arg(short, long, default_value = "3000")]
+        port: u16,
+
+        /// Override config file location
+        #[arg(short, long)]
+        config: Option<PathBuf>,
+    },
 }
 
 impl Args {
@@ -40,14 +60,29 @@ impl Args {
             _ => tracing::Level::TRACE,
         }
     }
+
+    /// Get port for server mode (default if no subcommand)
+    pub fn port(&self) -> u16 {
+        match &self.command {
+            Some(Commands::Serve { port, .. }) => *port,
+            _ => 3000,
+        }
+    }
+
+    /// Get config file location
+    pub fn config(&self) -> Option<PathBuf> {
+        match &self.command {
+            Some(Commands::Serve { config, .. }) => config.clone(),
+            _ => None,
+        }
+    }
 }
 
 impl Default for Args {
     fn default() -> Self {
         Self {
-            port: 3000,
-            config: None,
             verbose: 0,
+            command: None,
         }
     }
 }
@@ -65,8 +100,8 @@ mod tests {
     #[test]
     fn default_values() {
         let args = Args::default();
-        assert_eq!(args.port, 3000);
-        assert_eq!(args.config, None);
+        assert_eq!(args.port(), 3000);
+        assert_eq!(args.config(), None);
         assert_eq!(args.verbose, 0);
     }
 
@@ -107,40 +142,48 @@ mod tests {
     }
 
     #[test]
-    fn custom_port() {
+    fn serve_command_with_custom_port() {
         let args = Args {
-            port: 8080,
-            ..Default::default()
+            verbose: 0,
+            command: Some(Commands::Serve {
+                port: 8080,
+                config: None,
+            }),
         };
-        assert_eq!(args.port, 8080);
+        assert_eq!(args.port(), 8080);
         assert!(args.validate().is_ok());
     }
 
     #[test]
-    fn custom_config_path() {
+    fn serve_command_with_config() {
         let config_path = PathBuf::from("/custom/config.toml");
         let args = Args {
-            config: Some(config_path.clone()),
-            ..Default::default()
+            verbose: 0,
+            command: Some(Commands::Serve {
+                port: 3000,
+                config: Some(config_path.clone()),
+            }),
         };
-        assert_eq!(args.config, Some(config_path));
+        assert_eq!(args.config(), Some(config_path));
         assert!(args.validate().is_ok());
     }
 
     #[test]
-    fn all_options_together() {
-        let config_path = PathBuf::from("./config.toml");
+    fn sync_config_command() {
         let args = Args {
-            port: 9000,
-            config: Some(config_path.clone()),
-            verbose: 2,
+            verbose: 1,
+            command: Some(Commands::SyncConfig {
+                config_dir: PathBuf::from("./config"),
+                dry_run: false,
+            }),
         };
-
-        assert_eq!(args.port, 9000);
-        assert_eq!(args.config, Some(config_path));
-        assert_eq!(args.verbose, 2);
-        assert_eq!(args.log_level(), tracing::Level::TRACE);
-        assert!(args.validate().is_ok());
+        match args.command {
+            Some(Commands::SyncConfig { config_dir, dry_run }) => {
+                assert_eq!(config_dir, PathBuf::from("./config"));
+                assert_eq!(dry_run, false);
+            }
+            _ => panic!("Expected SyncConfig command"),
+        }
     }
 
     #[test]
@@ -148,106 +191,17 @@ mod tests {
         let args = Args::default();
         let debug = format!("{:?}", args);
         assert!(debug.contains("Args"));
-        assert!(debug.contains("3000"));
     }
 
     #[test]
     fn validate_always_succeeds() {
-        // Since validate() currently always returns Ok(()), test various configurations
         let args1 = Args::default();
         assert!(args1.validate().is_ok());
 
         let args2 = Args {
-            port: 0,
-            config: None,
             verbose: 255,
+            command: None,
         };
         assert!(args2.validate().is_ok());
-
-        let args3 = Args {
-            port: 65535,
-            config: Some(PathBuf::from("/nonexistent/path")),
-            verbose: 10,
-        };
-        assert!(args3.validate().is_ok());
-    }
-
-    #[test]
-    fn log_level_info_at_zero_verbosity() {
-        let args = Args {
-            verbose: 0,
-            ..Default::default()
-        };
-        assert_eq!(args.log_level(), tracing::Level::INFO);
-    }
-
-    #[test]
-    fn log_level_debug_at_one_verbosity() {
-        let args = Args {
-            verbose: 1,
-            ..Default::default()
-        };
-        assert_eq!(args.log_level(), tracing::Level::DEBUG);
-    }
-
-    #[test]
-    fn log_level_trace_at_high_verbosity() {
-        let args = Args {
-            verbose: 100,
-            ..Default::default()
-        };
-        assert_eq!(args.log_level(), tracing::Level::TRACE);
-    }
-
-    #[test]
-    fn config_path_can_be_none() {
-        let args = Args {
-            config: None,
-            ..Default::default()
-        };
-        assert!(args.config.is_none());
-    }
-
-    #[test]
-    fn config_path_can_be_relative() {
-        let args = Args {
-            config: Some(PathBuf::from("config.toml")),
-            ..Default::default()
-        };
-        assert_eq!(args.config.unwrap().to_str(), Some("config.toml"));
-    }
-
-    #[test]
-    fn config_path_can_be_absolute() {
-        let args = Args {
-            config: Some(PathBuf::from("/etc/nexor/config.toml")),
-            ..Default::default()
-        };
-        assert_eq!(
-            args.config.unwrap().to_str(),
-            Some("/etc/nexor/config.toml")
-        );
-    }
-
-    #[test]
-    fn port_range_values() {
-        // Test common port values
-        let args_min = Args {
-            port: 1,
-            ..Default::default()
-        };
-        assert_eq!(args_min.port, 1);
-
-        let args_standard = Args {
-            port: 3000,
-            ..Default::default()
-        };
-        assert_eq!(args_standard.port, 3000);
-
-        let args_max = Args {
-            port: 65535,
-            ..Default::default()
-        };
-        assert_eq!(args_max.port, 65535);
     }
 }

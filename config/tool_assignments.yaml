@@ -154,10 +154,18 @@ tool_assignments:
     capabilities:
       - web_search
       - web_fetch
+      - x_search          # X/Twitter search via Grok
+      - real_time_search  # Real-time web data via Grok
     notes: >
       Research topics using real-time web and X/Twitter search via xAI Grok.
       Returns synthesized answers with citations.
       Requires XAI_API_KEY environment variable.
+
+      Grok-powered capabilities:
+      - General web search with real-time data
+      - X/Twitter search for trends and conversations
+      - Synthesized answers from multiple sources
+      - Automatic citation generation
     priority: 10
 
   # Future tools (examples):
@@ -171,16 +179,38 @@ tool_assignments:
   # KNOWLEDGE MANAGEMENT
   # ==========================================================================
 
-  # Future tools (examples):
-  # create_document:
-  #   capabilities:
-  #     - document_create
-  #   notes: Create structured knowledge documents
+  create_doc:
+    capabilities:
+      - document_create
+    notes: >
+      Create structured knowledge documents (notes, specs, architecture docs).
+      Documents are stored in the system knowledge base with metadata.
+      Supports markdown formatting and tagging.
 
-  # search_documents:
-  #   capabilities:
-  #     - document_search
-  #   notes: Full-text search across knowledge base
+      Orchestrator tool - used by planning and documentation workflows.
+    priority: 10
+
+  search_docs:
+    capabilities:
+      - document_search
+    notes: >
+      Search knowledge base using full-text search, tags, or metadata.
+      Returns matching documents with relevance scores.
+      Essential for retrieving context and reference material.
+
+      Orchestrator tool - used for finding relevant documentation.
+    priority: 10
+
+  update_doc:
+    capabilities:
+      - document_update
+    notes: >
+      Update existing knowledge documents.
+      Preserves version history and metadata.
+      Use for refining documentation and correcting information.
+
+      Orchestrator tool - used for iterative documentation improvement.
+    priority: 10
 
 # =============================================================================
 # Usage Notes

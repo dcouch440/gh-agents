@@ -3,11 +3,13 @@
 mod credentials;
 mod global;
 mod project;
+pub mod sync;
 mod validation;
 
 pub use credentials::{CredentialsError, CredentialsStore, StoredCredentials};
 pub use global::{global_config_path, load_global_config};
 pub use project::{load_project_config, project_config_path};
+pub use sync::*;
 pub use validation::{validate_config, ConfigValidationError};
 
 use crate::types::AppConfig;
