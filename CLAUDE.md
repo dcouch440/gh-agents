@@ -61,6 +61,7 @@ src/server/api/
 ```
 
 **In `mod.rs`:**
+
 ```rust
 // Implementation code here
 
@@ -68,6 +69,7 @@ mod tests;  // Links to tests.rs
 ```
 
 **In `tests.rs`:**
+
 ```rust
 #[cfg(test)]
 mod tests {
@@ -218,3 +220,4 @@ frontend/src/
 - **`vi.hoisted()` + inline `vi.mock()`** — hoisted fn refs for mock setup, module mocking per file
 - **`vi.clearAllMocks()`** in `beforeEach`, mock return values set per test or per describe
 - Mock the API (`../api`), constants (`USE_MOCK_DATA: false`), and WS (`useWebSocket`) as needed
+- Prioritize small files large module.
