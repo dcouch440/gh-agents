@@ -377,6 +377,8 @@ pub async fn create_workflow_step(
         interactive_agent_id: req.interactive_agent_id,
         for_each_label_field: req.for_each_label_field,
         room_id: None,
+        routing_mode: None,
+        routing_field: None,
         display_order: req.display_order.unwrap_or(0),
         version: 1,
     };
@@ -513,6 +515,8 @@ pub async fn update_workflow_step(
         interactive_agent_id: req.interactive_agent_id,
         for_each_label_field: req.for_each_label_field.or(existing.for_each_label_field),
         room_id: existing.room_id,
+        routing_mode: existing.routing_mode,
+        routing_field: existing.routing_field,
         display_order: req.display_order.unwrap_or(existing.display_order),
         version: existing.version,
     };
