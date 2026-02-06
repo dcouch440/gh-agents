@@ -14,7 +14,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 /// Row type for persisted agent definitions.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct AgentRow {
     pub id: Uuid,
     pub tier: Option<String>,
@@ -389,6 +389,117 @@ pub struct RoomTranscriptEntry {
     pub content: String,
     pub speaker_order: Option<i32>,
     pub created_at: DateTime<Utc>,
+}
+
+// ============================================================================
+// Phase 2: Port-Based Workflow Row Types
+// ============================================================================
+
+/// Input port definition for workflow steps
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct StepInputRow {
+    pub id: Uuid,
+    pub workflow_step_id: Uuid,
+    pub port_name: String,
+    pub port_type: String,
+    pub required: bool,
+    pub default_value: Option<serde_json::Value>,
+    pub description: Option<String>,
+    pub json_schema: Option<serde_json::Value>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Output port definition for workflow steps
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct StepOutputRow {
+    pub id: Uuid,
+    pub workflow_step_id: Uuid,
+    pub port_name: String,
+    pub port_type: String,
+    pub json_path: String,
+    pub description: Option<String>,
+    pub json_schema: Option<serde_json::Value>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Routing rule for label-based agent assignment
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct StepRoutingRuleRow {
+    pub id: Uuid,
+    pub workflow_step_id: Uuid,
+    pub label_value: String,
+    pub description: Option<String>,
+    pub agent_id: Uuid,
+    pub display_order: i32,
+    pub created_at: DateTime<Utc>,
+}
+
+// ============================================================================
+// Phase 2: Tool Capability Row Types
+// ============================================================================
+
+/// Tool capability taxonomy (semantic capabilities)
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow, utoipa::ToSchema)]
+pub struct ToolCapabilityRow {
+    pub id: Uuid,
+    pub capability_key: String,
+    pub display_name: String,
+    pub category: String,
+    pub safety_level: String,
+    pub description: String,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Tool-to-capability assignment (which capabilities each tool provides)
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct ToolCapabilityAssignmentRow {
+    pub tool_id: Uuid,
+    pub capability_id: Uuid,
+}
+
+/// Mode-to-capability requirement (which capabilities each mode requires)
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct ModeRequiredCapabilityRow {
+    pub mode_id: Uuid,
+    pub capability_id: Uuid,
+    pub is_required: bool,
+}
+
+// ============================================================================
+// Phase 2: Room Execution Row Types
+// ============================================================================
+
+/// Structured output from a room member for agent-to-agent data passing
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct RoomExecutionOutputRow {
+    pub id: Uuid,
+    pub room_session_id: Uuid,
+    pub agent_execution_id: Uuid,
+    pub agent_id: Uuid,
+    pub speaker_order: i32,
+    pub turn_number: i32,
+    pub output_name: String,
+    pub structured_output: serde_json::Value,
+    pub raw_output: String,
+    pub schema_id: Option<Uuid>,
+    pub created_at: DateTime<Utc>,
+}
+
+// ============================================================================
+// Phase 3: System Config Row Type
+// ============================================================================
+
+/// System configuration entry (admin-controlled)
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct SystemConfigRow {
+    pub id: Uuid,
+    pub config_type: String,
+    pub config_key: String,
+    pub config_value: serde_json::Value,
+    pub description: Option<String>,
+    pub created_by: Option<Uuid>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 /// Type alias for the database pool

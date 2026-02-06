@@ -9,17 +9,18 @@ use uuid::Uuid;
 use crate::db::traits::{
     AgentExecutionRepo, ContextStoreRepo, DocumentRepo, MergeQueueRepo, ModelSpendRow,
     OutputSchemaRepo, PromptTemplateRepo, ResultRepo, RoomMemberInput, RoomRepo, RouterRequestRepo,
-    ServerRepo, TokenLedgerRepo, ToolRouterRepo, UserRepo, WorkflowCollectionRepo, WorkflowRepo,
-    WorkflowStepAgentRepo,
+    ServerRepo, SystemConfigRepo, TokenLedgerRepo, ToolCapabilityRepo, ToolRouterRepo, UserRepo,
+    WorkflowCollectionRepo, WorkflowRepo, WorkflowStepAgentRepo,
 };
 use crate::db::{
     AgentExecutionRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow,
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
     DocumentSearchResult, ExecutionMessageRow, ExecutionVariableRow, OutputSchemaRow,
-    PromptTemplateRow, ResultRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry,
-    RouterRequestRow, SessionRow, StepDocumentRow, TokenLedgerRow, ToolRouterModeRow,
-    ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow,
-    WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepRow,
+    PromptTemplateRow, ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow,
+    RoomTranscriptEntry, RouterRequestRow, SessionRow, StepDocumentRow, StepInputRow,
+    StepOutputRow, StepRoutingRuleRow, SystemConfigRow, TokenLedgerRow, ToolCapabilityRow,
+    ToolRouterModeRow, ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow,
+    WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -1355,6 +1356,172 @@ impl WorkflowRepo for PgRepo {
             .await?;
         Ok(())
     }
+
+    // --- Port Management (Phase 3) ---
+
+    async fn get_step_inputs(&self, workflow_step_id: Uuid) -> Result<Vec<StepInputRow>> {
+        let rows = sqlx::query_as::<_, StepInputRow>(
+            "SELECT id, workflow_step_id, port_name, port_type, required, default_value, description, json_schema, created_at
+             FROM step_inputs
+             WHERE workflow_step_id = $1
+             ORDER BY port_name"
+        )
+        .bind(workflow_step_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn get_step_outputs(&self, workflow_step_id: Uuid) -> Result<Vec<StepOutputRow>> {
+        let rows = sqlx::query_as::<_, StepOutputRow>(
+            "SELECT id, workflow_step_id, port_name, port_type, json_path, description, json_schema, created_at
+             FROM step_outputs
+             WHERE workflow_step_id = $1
+             ORDER BY port_name"
+        )
+        .bind(workflow_step_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn create_step_input(
+        &self,
+        workflow_step_id: Uuid,
+        port_name: &str,
+        port_type: &str,
+        required: bool,
+        default_value: Option<serde_json::Value>,
+        description: Option<String>,
+        json_schema: Option<serde_json::Value>,
+    ) -> Result<StepInputRow> {
+        let row = sqlx::query_as::<_, StepInputRow>(
+            "INSERT INTO step_inputs (workflow_step_id, port_name, port_type, required, default_value, description, json_schema)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             RETURNING id, workflow_step_id, port_name, port_type, required, default_value, description, json_schema, created_at"
+        )
+        .bind(workflow_step_id)
+        .bind(port_name)
+        .bind(port_type)
+        .bind(required)
+        .bind(default_value)
+        .bind(description)
+        .bind(json_schema)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn create_step_output(
+        &self,
+        workflow_step_id: Uuid,
+        port_name: &str,
+        port_type: &str,
+        json_path: &str,
+        description: Option<String>,
+        json_schema: Option<serde_json::Value>,
+    ) -> Result<StepOutputRow> {
+        let row = sqlx::query_as::<_, StepOutputRow>(
+            "INSERT INTO step_outputs (workflow_step_id, port_name, port_type, json_path, description, json_schema)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING id, workflow_step_id, port_name, port_type, json_path, description, json_schema, created_at"
+        )
+        .bind(workflow_step_id)
+        .bind(port_name)
+        .bind(port_type)
+        .bind(json_path)
+        .bind(description)
+        .bind(json_schema)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn delete_step_input(&self, id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM step_inputs WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn delete_step_output(&self, id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM step_outputs WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    // --- Routing Rules (Phase 3) ---
+
+    async fn get_step_routing_rules(&self, workflow_step_id: Uuid) -> Result<Vec<StepRoutingRuleRow>> {
+        let rows = sqlx::query_as::<_, StepRoutingRuleRow>(
+            "SELECT id, workflow_step_id, label_value, description, agent_id, display_order, created_at
+             FROM step_routing_rules
+             WHERE workflow_step_id = $1
+             ORDER BY display_order, label_value"
+        )
+        .bind(workflow_step_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn create_routing_rule(
+        &self,
+        workflow_step_id: Uuid,
+        label_value: &str,
+        agent_id: Uuid,
+        description: Option<String>,
+        display_order: i32,
+    ) -> Result<StepRoutingRuleRow> {
+        let row = sqlx::query_as::<_, StepRoutingRuleRow>(
+            "INSERT INTO step_routing_rules (workflow_step_id, label_value, agent_id, description, display_order)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING id, workflow_step_id, label_value, description, agent_id, display_order, created_at"
+        )
+        .bind(workflow_step_id)
+        .bind(label_value)
+        .bind(agent_id)
+        .bind(description)
+        .bind(display_order)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn update_routing_rule(
+        &self,
+        id: Uuid,
+        agent_id: Option<Uuid>,
+        description: Option<String>,
+        display_order: Option<i32>,
+    ) -> Result<StepRoutingRuleRow> {
+        let row = sqlx::query_as::<_, StepRoutingRuleRow>(
+            "UPDATE step_routing_rules SET
+                agent_id = COALESCE($2, agent_id),
+                description = COALESCE($3, description),
+                display_order = COALESCE($4, display_order)
+             WHERE id = $1
+             RETURNING id, workflow_step_id, label_value, description, agent_id, display_order, created_at"
+        )
+        .bind(id)
+        .bind(agent_id)
+        .bind(description)
+        .bind(display_order)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn delete_routing_rule(&self, id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM step_routing_rules WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -2301,6 +2468,88 @@ impl RoomRepo for PgRepo {
         .await?;
         Ok(rows)
     }
+
+    // --- Room Execution Outputs (Phase 3) ---
+
+    async fn save_room_execution_output(
+        &self,
+        room_session_id: Uuid,
+        agent_execution_id: Uuid,
+        agent_id: Uuid,
+        speaker_order: i32,
+        turn_number: i32,
+        output_name: &str,
+        structured_output: &serde_json::Value,
+        raw_output: &str,
+        schema_id: Option<Uuid>,
+    ) -> Result<RoomExecutionOutputRow> {
+        let row = sqlx::query_as::<_, RoomExecutionOutputRow>(
+            "INSERT INTO room_execution_outputs
+             (room_session_id, agent_execution_id, agent_id, speaker_order, turn_number, output_name, structured_output, raw_output, schema_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             RETURNING id, room_session_id, agent_execution_id, agent_id, speaker_order, turn_number, output_name, structured_output, raw_output, schema_id, created_at"
+        )
+        .bind(room_session_id)
+        .bind(agent_execution_id)
+        .bind(agent_id)
+        .bind(speaker_order)
+        .bind(turn_number)
+        .bind(output_name)
+        .bind(structured_output)
+        .bind(raw_output)
+        .bind(schema_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn get_room_execution_outputs(
+        &self,
+        room_session_id: Uuid,
+        turn_number: Option<i32>,
+    ) -> Result<Vec<RoomExecutionOutputRow>> {
+        let rows = if let Some(turn) = turn_number {
+            sqlx::query_as::<_, RoomExecutionOutputRow>(
+                "SELECT id, room_session_id, agent_execution_id, agent_id, speaker_order, turn_number, output_name, structured_output, raw_output, schema_id, created_at
+                 FROM room_execution_outputs
+                 WHERE room_session_id = $1 AND turn_number = $2
+                 ORDER BY speaker_order"
+            )
+            .bind(room_session_id)
+            .bind(turn)
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query_as::<_, RoomExecutionOutputRow>(
+                "SELECT id, room_session_id, agent_execution_id, agent_id, speaker_order, turn_number, output_name, structured_output, raw_output, schema_id, created_at
+                 FROM room_execution_outputs
+                 WHERE room_session_id = $1
+                 ORDER BY turn_number, speaker_order"
+            )
+            .bind(room_session_id)
+            .fetch_all(&self.pool)
+            .await?
+        };
+        Ok(rows)
+    }
+
+    async fn get_room_outputs_by_schema(
+        &self,
+        room_session_id: Uuid,
+        schema_id: Uuid,
+    ) -> Result<Vec<RoomExecutionOutputRow>> {
+        let rows = sqlx::query_as::<_, RoomExecutionOutputRow>(
+            "SELECT id, room_session_id, agent_execution_id, agent_id, speaker_order, turn_number, output_name, structured_output, raw_output, schema_id, created_at
+             FROM room_execution_outputs
+             WHERE room_session_id = $1 AND schema_id = $2
+             ORDER BY turn_number, speaker_order"
+        )
+        .bind(room_session_id)
+        .bind(schema_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
 }
 
 // ============================================================================
@@ -2812,6 +3061,274 @@ impl WorkflowStepAgentRepo for PgRepo {
 
         tx.commit().await?;
         Ok(())
+    }
+}
+
+// ============================================================================
+// Tool Capability Repository Implementation (Phase 3)
+// ============================================================================
+
+#[async_trait]
+impl ToolCapabilityRepo for PgRepo {
+    async fn get_tool_capabilities(&self) -> Result<Vec<ToolCapabilityRow>> {
+        let rows = sqlx::query_as::<_, ToolCapabilityRow>(
+            "SELECT id, capability_key, display_name, category, safety_level, description, created_at
+             FROM tool_capabilities
+             ORDER BY category, capability_key"
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn get_tool_capability(&self, id: Uuid) -> Result<Option<ToolCapabilityRow>> {
+        let row = sqlx::query_as::<_, ToolCapabilityRow>(
+            "SELECT id, capability_key, display_name, category, safety_level, description, created_at
+             FROM tool_capabilities
+             WHERE id = $1"
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn get_tool_capability_by_key(&self, key: &str) -> Result<Option<ToolCapabilityRow>> {
+        let row = sqlx::query_as::<_, ToolCapabilityRow>(
+            "SELECT id, capability_key, display_name, category, safety_level, description, created_at
+             FROM tool_capabilities
+             WHERE capability_key = $1"
+        )
+        .bind(key)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn get_capabilities_by_tool(&self, tool_id: Uuid) -> Result<Vec<ToolCapabilityRow>> {
+        let rows = sqlx::query_as::<_, ToolCapabilityRow>(
+            "SELECT tc.id, tc.capability_key, tc.display_name, tc.category, tc.safety_level, tc.description, tc.created_at
+             FROM tool_capabilities tc
+             JOIN tool_capability_assignments tca ON tc.id = tca.capability_id
+             WHERE tca.tool_id = $1
+             ORDER BY tc.category, tc.capability_key"
+        )
+        .bind(tool_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn get_tools_by_capability(&self, capability_key: &str) -> Result<Vec<ToolRow>> {
+        let rows = sqlx::query_as::<_, ToolRow>(
+            "SELECT t.id, t.name, t.description, t.input_schema, t.created_at, t.updated_at
+             FROM tools t
+             JOIN tool_capability_assignments tca ON t.id = tca.tool_id
+             JOIN tool_capabilities tc ON tc.id = tca.capability_id
+             WHERE tc.capability_key = $1
+             ORDER BY t.name"
+        )
+        .bind(capability_key)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn assign_capability_to_tool(&self, tool_id: Uuid, capability_id: Uuid) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO tool_capability_assignments (tool_id, capability_id)
+             VALUES ($1, $2)
+             ON CONFLICT DO NOTHING"
+        )
+        .bind(tool_id)
+        .bind(capability_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn remove_capability_from_tool(&self, tool_id: Uuid, capability_id: Uuid) -> Result<()> {
+        sqlx::query(
+            "DELETE FROM tool_capability_assignments
+             WHERE tool_id = $1 AND capability_id = $2"
+        )
+        .bind(tool_id)
+        .bind(capability_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn set_tool_capabilities(&self, tool_id: Uuid, capability_ids: &[Uuid]) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        // Delete existing assignments
+        sqlx::query("DELETE FROM tool_capability_assignments WHERE tool_id = $1")
+            .bind(tool_id)
+            .execute(&mut *tx)
+            .await?;
+
+        // Insert new assignments
+        for capability_id in capability_ids {
+            sqlx::query(
+                "INSERT INTO tool_capability_assignments (tool_id, capability_id)
+                 VALUES ($1, $2)"
+            )
+            .bind(tool_id)
+            .bind(capability_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    async fn get_mode_capabilities(&self, mode_id: Uuid) -> Result<Vec<ToolCapabilityRow>> {
+        let rows = sqlx::query_as::<_, ToolCapabilityRow>(
+            "SELECT tc.id, tc.capability_key, tc.display_name, tc.category, tc.safety_level, tc.description, tc.created_at
+             FROM tool_capabilities tc
+             JOIN mode_required_capabilities mrc ON tc.id = mrc.capability_id
+             WHERE mrc.mode_id = $1 AND mrc.is_required = true
+             ORDER BY tc.category, tc.capability_key"
+        )
+        .bind(mode_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn set_mode_capabilities(&self, mode_id: Uuid, capability_ids: &[Uuid], is_required: bool) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        // Delete existing requirements
+        sqlx::query("DELETE FROM mode_required_capabilities WHERE mode_id = $1")
+            .bind(mode_id)
+            .execute(&mut *tx)
+            .await?;
+
+        // Insert new requirements
+        for capability_id in capability_ids {
+            sqlx::query(
+                "INSERT INTO mode_required_capabilities (mode_id, capability_id, is_required)
+                 VALUES ($1, $2, $3)"
+            )
+            .bind(mode_id)
+            .bind(capability_id)
+            .bind(is_required)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+        Ok(())
+    }
+}
+
+// ============================================================================
+// System Configuration Repository Implementation (Phase 3)
+// ============================================================================
+
+#[async_trait]
+impl SystemConfigRepo for PgRepo {
+    async fn get_system_config(&self, config_key: &str) -> Result<Option<SystemConfigRow>> {
+        let row = sqlx::query_as::<_, SystemConfigRow>(
+            "SELECT id, config_type, config_key, config_value, description, created_by, created_at, updated_at
+             FROM system_config
+             WHERE config_key = $1"
+        )
+        .bind(config_key)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn list_system_configs(&self, config_type: Option<String>) -> Result<Vec<SystemConfigRow>> {
+        let rows = if let Some(ct) = config_type {
+            sqlx::query_as::<_, SystemConfigRow>(
+                "SELECT id, config_type, config_key, config_value, description, created_by, created_at, updated_at
+                 FROM system_config
+                 WHERE config_type = $1
+                 ORDER BY config_key"
+            )
+            .bind(ct)
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query_as::<_, SystemConfigRow>(
+                "SELECT id, config_type, config_key, config_value, description, created_by, created_at, updated_at
+                 FROM system_config
+                 ORDER BY config_type, config_key"
+            )
+            .fetch_all(&self.pool)
+            .await?
+        };
+        Ok(rows)
+    }
+
+    async fn upsert_system_config(
+        &self,
+        config_type: &str,
+        config_key: &str,
+        config_value: &serde_json::Value,
+        description: Option<String>,
+        created_by: Option<Uuid>,
+    ) -> Result<SystemConfigRow> {
+        let row = sqlx::query_as::<_, SystemConfigRow>(
+            "INSERT INTO system_config (config_type, config_key, config_value, description, created_by)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (config_key) DO UPDATE SET
+                config_value = EXCLUDED.config_value,
+                description = COALESCE(EXCLUDED.description, system_config.description),
+                updated_at = NOW()
+             RETURNING id, config_type, config_key, config_value, description, created_by, created_at, updated_at"
+        )
+        .bind(config_type)
+        .bind(config_key)
+        .bind(config_value)
+        .bind(description)
+        .bind(created_by)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn delete_system_config(&self, config_key: &str) -> Result<()> {
+        sqlx::query("DELETE FROM system_config WHERE config_key = $1")
+            .bind(config_key)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn get_execution_constraints(&self) -> Result<std::collections::HashMap<String, serde_json::Value>> {
+        let rows = sqlx::query_as::<_, SystemConfigRow>(
+            "SELECT id, config_type, config_key, config_value, description, created_by, created_at, updated_at
+             FROM system_config
+             WHERE config_type = 'constraint'"
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut constraints = std::collections::HashMap::new();
+        for row in rows {
+            constraints.insert(row.config_key, row.config_value);
+        }
+        Ok(constraints)
+    }
+
+    async fn get_unsafe_operations_enabled(&self) -> Result<bool> {
+        let row = sqlx::query_as::<_, SystemConfigRow>(
+            "SELECT id, config_type, config_key, config_value, description, created_by, created_at, updated_at
+             FROM system_config
+             WHERE config_key = 'unsafe_operations_enabled'"
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row
+            .and_then(|r| r.config_value.as_bool())
+            .unwrap_or(false))
     }
 }
 

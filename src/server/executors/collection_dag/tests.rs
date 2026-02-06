@@ -200,6 +200,67 @@ async fn test_variable_resolution() {
         async fn remove_step_document(&self, _: Uuid, _: Uuid) -> Result<()> {
             unimplemented!()
         }
+        // Phase 3 methods (stubs for tests)
+        async fn get_step_inputs(&self, _: Uuid) -> Result<Vec<crate::db::StepInputRow>> {
+            unimplemented!()
+        }
+        async fn get_step_outputs(&self, _: Uuid) -> Result<Vec<crate::db::StepOutputRow>> {
+            unimplemented!()
+        }
+        async fn create_step_input(
+            &self,
+            _: Uuid,
+            _: &str,
+            _: &str,
+            _: bool,
+            _: Option<serde_json::Value>,
+            _: Option<String>,
+            _: Option<serde_json::Value>,
+        ) -> Result<crate::db::StepInputRow> {
+            unimplemented!()
+        }
+        async fn create_step_output(
+            &self,
+            _: Uuid,
+            _: &str,
+            _: &str,
+            _: &str,
+            _: Option<String>,
+            _: Option<serde_json::Value>,
+        ) -> Result<crate::db::StepOutputRow> {
+            unimplemented!()
+        }
+        async fn delete_step_input(&self, _: Uuid) -> Result<()> {
+            unimplemented!()
+        }
+        async fn delete_step_output(&self, _: Uuid) -> Result<()> {
+            unimplemented!()
+        }
+        async fn get_step_routing_rules(&self, _: Uuid) -> Result<Vec<crate::db::StepRoutingRuleRow>> {
+            unimplemented!()
+        }
+        async fn create_routing_rule(
+            &self,
+            _: Uuid,
+            _: &str,
+            _: Uuid,
+            _: Option<String>,
+            _: i32,
+        ) -> Result<crate::db::StepRoutingRuleRow> {
+            unimplemented!()
+        }
+        async fn update_routing_rule(
+            &self,
+            _: Uuid,
+            _: Option<Uuid>,
+            _: Option<String>,
+            _: Option<i32>,
+        ) -> Result<crate::db::StepRoutingRuleRow> {
+            unimplemented!()
+        }
+        async fn delete_routing_rule(&self, _: Uuid) -> Result<()> {
+            unimplemented!()
+        }
     }
 
     // Create test data
