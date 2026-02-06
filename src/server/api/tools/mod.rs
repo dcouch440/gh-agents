@@ -78,11 +78,11 @@ pub struct AgentToolsResponse {
 )]
 pub async fn list_tools(
     State(state): State<AppState>,
-    auth: auth_utils::AuthUser,
+    _auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
     let rows = state
         .repo()
-        .list_tools(auth.user_id)
+        .list_tools()
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -104,7 +104,7 @@ pub async fn list_tools(
 )]
 pub async fn create_tool(
     State(state): State<AppState>,
-    auth: auth_utils::AuthUser,
+    _auth: auth_utils::AuthUser,
     Json(request): Json<CreateToolRequest>,
 ) -> Result<(StatusCode, Json<ToolResponse>), StatusCode> {
     if request.name.trim().is_empty() {
@@ -116,7 +116,6 @@ pub async fn create_tool(
 
     let row = crate::db::ToolRow {
         id: Uuid::new_v4(),
-        user_id: auth.user_id.0,
         name,
         display_name,
         description: request.description.unwrap_or_default(),
@@ -127,7 +126,7 @@ pub async fn create_tool(
 
     state
         .repo()
-        .upsert_tool(auth.user_id, row.clone())
+        .upsert_tool(row.clone())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -176,7 +175,7 @@ pub async fn get_tool(
 )]
 pub async fn update_tool(
     State(state): State<AppState>,
-    auth: auth_utils::AuthUser,
+    _auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateToolRequest>,
 ) -> Result<Json<ToolResponse>, StatusCode> {
@@ -189,7 +188,6 @@ pub async fn update_tool(
 
     let updated = crate::db::ToolRow {
         id: existing.id,
-        user_id: existing.user_id,
         name: request.name.unwrap_or(existing.name),
         display_name: request.display_name.unwrap_or(existing.display_name),
         description: request.description.unwrap_or(existing.description),
@@ -200,7 +198,7 @@ pub async fn update_tool(
 
     state
         .repo()
-        .upsert_tool(auth.user_id, updated.clone())
+        .upsert_tool(updated.clone())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 

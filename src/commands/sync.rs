@@ -8,7 +8,6 @@ use crate::config::sync_config;
 use crate::db::init_db;
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::ServerRepo;
-use crate::types::UserId;
 
 /// Run config sync command
 pub async fn run_sync(config_dir: &Path, dry_run: bool, verbose: bool) -> Result<()> {
@@ -51,28 +50,17 @@ pub async fn run_sync(config_dir: &Path, dry_run: bool, verbose: bool) -> Result
     Ok(())
 }
 
-/// Seed built-in tools for the system user (idempotent)
+/// Seed built-in tools (system-wide, idempotent)
 async fn seed_builtin_tools(pool: &PgPool, verbose: bool) -> Result<()> {
     if verbose {
         println!("🔧 Seeding built-in tools...");
     }
 
-    // Get system user ID (the user that owns all built-in tools)
-    let system_user_id = sqlx::query_scalar::<_, uuid::Uuid>(
-        "SELECT id FROM users ORDER BY created_at LIMIT 1",
-    )
-    .fetch_optional(pool)
-    .await?;
+    let repo = PgRepo::new(pool.clone());
+    repo.seed_builtin_tools().await?;
 
-    if let Some(user_id) = system_user_id {
-        let repo = PgRepo::new(pool.clone());
-        repo.seed_builtin_tools(UserId(user_id)).await?;
-
-        if verbose {
-            println!("✓ Tools seeded");
-        }
-    } else if verbose {
-        println!("⚠ No users found, skipping tool seeding");
+    if verbose {
+        println!("✓ Tools seeded");
     }
 
     Ok(())

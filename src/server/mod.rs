@@ -702,7 +702,7 @@ mod tests {
         async fn delete_persisted_agent(&self, _agent_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn list_tools(&self, _user_id: UserId) -> anyhow::Result<Vec<crate::db::ToolRow>> {
+        async fn list_tools(&self) -> anyhow::Result<Vec<crate::db::ToolRow>> {
             Ok(vec![])
         }
         async fn get_tool(&self, _tool_id: Uuid) -> anyhow::Result<Option<crate::db::ToolRow>> {
@@ -710,7 +710,6 @@ mod tests {
         }
         async fn upsert_tool(
             &self,
-            _user_id: UserId,
             _tool: crate::db::ToolRow,
         ) -> anyhow::Result<()> {
             Ok(())
@@ -731,7 +730,7 @@ mod tests {
         ) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn seed_builtin_tools(&self, _user_id: UserId) -> anyhow::Result<()> {
+        async fn seed_builtin_tools(&self) -> anyhow::Result<()> {
             Ok(())
         }
         async fn get_agent_context(
