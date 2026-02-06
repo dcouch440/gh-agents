@@ -175,14 +175,14 @@ pub trait ServerRepo: Send + Sync {
 
     // --- Tool persistence ---
 
-    /// List all tools for a user.
-    async fn list_tools(&self, user_id: UserId) -> Result<Vec<ToolRow>>;
+    /// List all tools (system-wide).
+    async fn list_tools(&self) -> Result<Vec<ToolRow>>;
 
     /// Get a tool by ID.
     async fn get_tool(&self, tool_id: Uuid) -> Result<Option<ToolRow>>;
 
-    /// Insert or update a tool.
-    async fn upsert_tool(&self, user_id: UserId, tool: ToolRow) -> Result<()>;
+    /// Insert or update a tool (system-wide).
+    async fn upsert_tool(&self, tool: ToolRow) -> Result<()>;
 
     /// Delete a tool by ID.
     async fn delete_tool(&self, tool_id: Uuid) -> Result<()>;
@@ -193,8 +193,8 @@ pub trait ServerRepo: Send + Sync {
     /// Set the full tool list for an agent (replaces existing).
     async fn set_agent_tools(&self, agent_id: Uuid, tool_ids: Vec<Uuid>) -> Result<()>;
 
-    /// Seed the 11 built-in execution tools for a user. Idempotent.
-    async fn seed_builtin_tools(&self, user_id: UserId) -> Result<()>;
+    /// Seed the built-in execution tools (system-wide). Idempotent.
+    async fn seed_builtin_tools(&self) -> Result<()>;
 
     // --- Agent context (document linkage) ---
 

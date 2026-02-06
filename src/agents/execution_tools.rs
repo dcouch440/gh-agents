@@ -42,7 +42,6 @@ pub fn builtin_tool_rows() -> Vec<ToolRow> {
             let display_name = tool_display_name(&t.name);
             ToolRow {
                 id: Uuid::new_v5(&TOOLS_NS, t.name.as_bytes()),
-                user_id: Uuid::nil(), // Placeholder — overwritten by seed_builtin_tools
                 name: t.name,
                 display_name,
                 description: t.description,

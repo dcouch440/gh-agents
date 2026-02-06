@@ -426,9 +426,8 @@ impl ServerRepo for PgRepo {
 
     // --- Tool persistence ---
 
-    async fn list_tools(&self, user_id: UserId) -> Result<Vec<ToolRow>> {
-        let rows = sqlx::query_as::<_, PgToolRow>("SELECT id, user_id, name, display_name, description, parameters, created_at, version FROM tools WHERE user_id = $1 ORDER BY name")
-            .bind(user_id.0)
+    async fn list_tools(&self) -> Result<Vec<ToolRow>> {
+        let rows = sqlx::query_as::<_, PgToolRow>("SELECT id, name, display_name, description, parameters, created_at, version FROM tools ORDER BY name")
             .fetch_all(&self.pool)
             .await?;
 
@@ -436,7 +435,7 @@ impl ServerRepo for PgRepo {
     }
 
     async fn get_tool(&self, tool_id: Uuid) -> Result<Option<ToolRow>> {
-        let row = sqlx::query_as::<_, PgToolRow>("SELECT id, user_id, name, display_name, description, parameters, created_at, version FROM tools WHERE id = $1")
+        let row = sqlx::query_as::<_, PgToolRow>("SELECT id, name, display_name, description, parameters, created_at, version FROM tools WHERE id = $1")
             .bind(tool_id)
             .fetch_optional(&self.pool)
             .await?;
@@ -444,11 +443,11 @@ impl ServerRepo for PgRepo {
         Ok(row.map(tool_row_from_pg))
     }
 
-    async fn upsert_tool(&self, user_id: UserId, tool: ToolRow) -> Result<()> {
+    async fn upsert_tool(&self, tool: ToolRow) -> Result<()> {
         sqlx::query(
             r#"
-            INSERT INTO tools (id, user_id, name, display_name, description, parameters)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO tools (id, name, display_name, description, parameters)
+            VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
                 display_name = EXCLUDED.display_name,
@@ -458,7 +457,6 @@ impl ServerRepo for PgRepo {
         "#,
         )
         .bind(tool.id)
-        .bind(user_id.0)
         .bind(&tool.name)
         .bind(&tool.display_name)
         .bind(&tool.description)
@@ -478,7 +476,7 @@ impl ServerRepo for PgRepo {
 
     async fn get_agent_tools(&self, agent_id: Uuid) -> Result<Vec<ToolRow>> {
         let rows = sqlx::query_as::<_, PgToolRow>(
-            "SELECT t.id, t.user_id, t.name, t.display_name, t.description, t.parameters, t.created_at, t.version FROM tools t INNER JOIN agent_tools at ON t.id = at.tool_id WHERE at.agent_id = $1 ORDER BY t.name",
+            "SELECT t.id, t.name, t.display_name, t.description, t.parameters, t.created_at, t.version FROM tools t INNER JOIN agent_tools at ON t.id = at.tool_id WHERE at.agent_id = $1 ORDER BY t.name",
         )
         .bind(agent_id)
         .fetch_all(&self.pool)
@@ -507,17 +505,16 @@ impl ServerRepo for PgRepo {
         Ok(())
     }
 
-    async fn seed_builtin_tools(&self, user_id: UserId) -> Result<()> {
+    async fn seed_builtin_tools(&self) -> Result<()> {
         for tool in crate::agents::execution_tools::builtin_tool_rows() {
             sqlx::query(
                 r#"
-                INSERT INTO tools (id, user_id, name, display_name, description, parameters)
-                VALUES ($1, $2, $3, $4, $5, $6)
-                ON CONFLICT (user_id, name) DO NOTHING
+                INSERT INTO tools (id, name, display_name, description, parameters)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (name) DO NOTHING
             "#,
             )
             .bind(tool.id)
-            .bind(user_id.0)
             .bind(&tool.name)
             .bind(&tool.display_name)
             .bind(&tool.description)
@@ -711,7 +708,6 @@ fn agent_row_from_pg(r: PgAgentRow) -> AgentRow {
 #[derive(sqlx::FromRow)]
 struct PgToolRow {
     id: Uuid,
-    user_id: Uuid,
     name: String,
     display_name: String,
     description: String,
@@ -723,7 +719,6 @@ struct PgToolRow {
 fn tool_row_from_pg(r: PgToolRow) -> ToolRow {
     ToolRow {
         id: r.id,
-        user_id: r.user_id,
         name: r.name,
         display_name: r.display_name,
         description: r.description,
@@ -1894,7 +1889,7 @@ impl ToolRouterRepo for PgRepo {
 
     async fn get_router_tools(&self, router_id: Uuid) -> Result<Vec<ToolRow>> {
         let rows: Vec<ToolRow> = sqlx::query_as(
-            "SELECT t.id, t.user_id, t.name, t.display_name, t.description, t.parameters, t.created_at FROM tools t INNER JOIN tool_router_tools trt ON t.id = trt.tool_id WHERE trt.router_id = $1 ORDER BY t.name",
+            "SELECT t.id, t.name, t.display_name, t.description, t.parameters, t.created_at, t.version FROM tools t INNER JOIN tool_router_tools trt ON t.id = trt.tool_id WHERE trt.router_id = $1 ORDER BY t.name",
         )
         .bind(router_id)
         .fetch_all(&self.pool)

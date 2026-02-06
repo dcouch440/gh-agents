@@ -180,8 +180,8 @@ pub async fn auth_register(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // Seed built-in execution tools for the new user
-    let _ = state.repo().seed_builtin_tools(user.id).await;
+    // Seed built-in execution tools (system-wide)
+    let _ = state.repo().seed_builtin_tools().await;
 
     let token = auth::create_token(&state.jwt_secret(), 24, user.id, &user.email)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

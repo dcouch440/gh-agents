@@ -485,7 +485,6 @@ pub async fn list_tools_for_user(pool: &PgPool, user_id: Uuid) -> Result<Vec<sup
         .into_iter()
         .map(|r| super::ToolRow {
             id: r.id,
-            user_id: r.user_id,
             name: r.name,
             display_name: r.display_name,
             description: r.description,
@@ -499,7 +498,6 @@ pub async fn list_tools_for_user(pool: &PgPool, user_id: Uuid) -> Result<Vec<sup
 #[derive(sqlx::FromRow)]
 struct ToolRowDb {
     id: Uuid,
-    user_id: Uuid,
     name: String,
     display_name: String,
     description: String,

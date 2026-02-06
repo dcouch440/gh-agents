@@ -374,7 +374,6 @@ async fn document_repo_create_and_get() {
     // Create document
     let doc = repo
         .create_document(
-            user_id,
             None,
             title.clone(),
             content.clone(),
@@ -412,7 +411,6 @@ async fn document_repo_update() {
     // Create document
     let doc = repo
         .create_document(
-            user_id,
             None,
             "Original Title".to_string(),
             "Original Content".to_string(),
@@ -451,7 +449,6 @@ async fn document_repo_delete() {
     // Create document
     let doc = repo
         .create_document(
-            user_id,
             None,
             "Title".to_string(),
             "Content".to_string(),
@@ -483,7 +480,6 @@ async fn document_repo_list_by_user() {
     // Create multiple documents
     for i in 1..=3 {
         repo.create_document(
-            user_id,
             None,
             format!("Doc {}", i),
             "Content".to_string(),
@@ -511,7 +507,6 @@ async fn document_repo_list_by_user() {
 
 async fn create_test_router(repo: &PgRepo, user_id: Uuid) -> ToolRouterRow {
     repo.create_tool_router(
-        user_id,
         "Test Router",
         Some("Test description".to_string()),
         "You are a test router",
@@ -743,7 +738,6 @@ async fn test_get_mode_tools() {
     // Create 3 tools
     let tool1 = ToolRow {
         id: Uuid::new_v4(),
-        user_id,
         name: "tool_a".to_string(),
         display_name: "Tool A".to_string(),
         description: "First".to_string(),
@@ -751,13 +745,12 @@ async fn test_get_mode_tools() {
         created_at: Utc::now(),
         version: 1,
     };
-    repo.upsert_tool(UserId(user_id), tool1.clone())
+    repo.upsert_tool(tool1.clone())
         .await
         .unwrap();
 
     let tool2 = ToolRow {
         id: Uuid::new_v4(),
-        user_id,
         name: "tool_c".to_string(),
         display_name: "Tool C".to_string(),
         description: "Third".to_string(),
@@ -765,13 +758,12 @@ async fn test_get_mode_tools() {
         created_at: Utc::now(),
         version: 1,
     };
-    repo.upsert_tool(UserId(user_id), tool2.clone())
+    repo.upsert_tool(tool2.clone())
         .await
         .unwrap();
 
     let tool3 = ToolRow {
         id: Uuid::new_v4(),
-        user_id,
         name: "tool_b".to_string(),
         display_name: "Tool B".to_string(),
         description: "Second".to_string(),
@@ -779,7 +771,7 @@ async fn test_get_mode_tools() {
         created_at: Utc::now(),
         version: 1,
     };
-    repo.upsert_tool(UserId(user_id), tool3.clone())
+    repo.upsert_tool(tool3.clone())
         .await
         .unwrap();
 
@@ -828,7 +820,6 @@ async fn test_set_mode_tools_replaces() {
     // Create tools
     let tool_a = ToolRow {
         id: Uuid::new_v4(),
-        user_id,
         name: "tool_a".to_string(),
         display_name: "Tool A".to_string(),
         description: "A".to_string(),
@@ -836,13 +827,12 @@ async fn test_set_mode_tools_replaces() {
         created_at: Utc::now(),
         version: 1,
     };
-    repo.upsert_tool(UserId(user_id), tool_a.clone())
+    repo.upsert_tool(tool_a.clone())
         .await
         .unwrap();
 
     let tool_b = ToolRow {
         id: Uuid::new_v4(),
-        user_id,
         name: "tool_b".to_string(),
         display_name: "Tool B".to_string(),
         description: "B".to_string(),
@@ -850,13 +840,12 @@ async fn test_set_mode_tools_replaces() {
         created_at: Utc::now(),
         version: 1,
     };
-    repo.upsert_tool(UserId(user_id), tool_b.clone())
+    repo.upsert_tool(tool_b.clone())
         .await
         .unwrap();
 
     let tool_c = ToolRow {
         id: Uuid::new_v4(),
-        user_id,
         name: "tool_c".to_string(),
         display_name: "Tool C".to_string(),
         description: "C".to_string(),
@@ -864,13 +853,12 @@ async fn test_set_mode_tools_replaces() {
         created_at: Utc::now(),
         version: 1,
     };
-    repo.upsert_tool(UserId(user_id), tool_c.clone())
+    repo.upsert_tool(tool_c.clone())
         .await
         .unwrap();
 
     let tool_d = ToolRow {
         id: Uuid::new_v4(),
-        user_id,
         name: "tool_d".to_string(),
         display_name: "Tool D".to_string(),
         description: "D".to_string(),
@@ -878,7 +866,7 @@ async fn test_set_mode_tools_replaces() {
         created_at: Utc::now(),
         version: 1,
     };
-    repo.upsert_tool(UserId(user_id), tool_d.clone())
+    repo.upsert_tool(tool_d.clone())
         .await
         .unwrap();
 
@@ -932,7 +920,6 @@ async fn test_set_mode_tools_empty() {
     // Create tool
     let tool = ToolRow {
         id: Uuid::new_v4(),
-        user_id,
         name: "tool".to_string(),
         display_name: "Tool".to_string(),
         description: "Test".to_string(),
@@ -940,7 +927,7 @@ async fn test_set_mode_tools_empty() {
         created_at: Utc::now(),
         version: 1,
     };
-    repo.upsert_tool(UserId(user_id), tool.clone())
+    repo.upsert_tool(tool.clone())
         .await
         .unwrap();
 

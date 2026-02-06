@@ -36,7 +36,6 @@ pub struct AgentRow {
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct ToolRow {
     pub id: Uuid,
-    pub user_id: Uuid,
     pub name: String,
     pub display_name: String,
     pub description: String,
