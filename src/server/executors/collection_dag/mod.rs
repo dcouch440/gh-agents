@@ -432,17 +432,6 @@ where
                     )
                     .await?;
 
-                // Store execution variables for cross-workflow variable resolution
-                store_workflow_variables(
-                    &*self.collection_repo,
-                    &*self.workflow_repo,
-                    collection_run_id,
-                    workflow_exec.id,
-                    workflow_id,
-                    &workflow_outputs,
-                )
-                .await?;
-
                 Ok(workflow_exec)
             }
             Err(HubError::AwaitingUser {
@@ -604,47 +593,6 @@ fn aggregate_step_outputs(
     }
 
     json!(aggregated)
-}
-
-/// Store workflow execution variables for cross-workflow variable resolution.
-///
-/// Creates execution_variables rows for each output variable from the workflow.
-/// Uses workflow names (not UUIDs) for user-friendly variable paths.
-async fn store_workflow_variables<R>(
-    collection_repo: &R,
-    workflow_repo: &dyn WorkflowRepo,
-    collection_run_id: Uuid,
-    workflow_execution_id: Uuid,
-    workflow_id: Uuid,
-    workflow_outputs: &JsonValue,
-) -> Result<()>
-where
-    R: WorkflowCollectionRepo + Send + Sync,
-{
-    // Load workflow to get its name
-    let workflow = workflow_repo.get_workflow(workflow_id).await?;
-    let workflow_name = workflow
-        .map(|w| w.name.clone())
-        .unwrap_or_else(|| workflow_id.to_string());
-
-    if let Some(obj) = workflow_outputs.as_object() {
-        for (key, value) in obj {
-            let variable_path = format!("$workflow_{}.{}", workflow_name, key);
-
-            collection_repo
-                .create_execution_variable(
-                    Some(collection_run_id),
-                    Some(workflow_execution_id),
-                    None, // step_execution_id
-                    key,
-                    &variable_path,
-                    value.clone(),
-                )
-                .await?;
-        }
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]

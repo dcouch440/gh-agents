@@ -65,16 +65,6 @@ pub struct CollectionRunResponse {
     pub error: Option<String>,
 }
 
-/// Response for execution variables.
-#[derive(Serialize, utoipa::ToSchema)]
-pub struct ExecutionVariableResponse {
-    pub id: Uuid,
-    pub variable_name: String,
-    pub variable_path: String,
-    pub value: serde_json::Value,
-    pub created_at: DateTime<Utc>,
-}
-
 // ============================================================================
 // Collection CRUD Endpoints
 // ============================================================================
@@ -417,56 +407,4 @@ pub async fn get_collection_run_status(
         completed_at: row.completed_at,
         error: row.error,
     }))
-}
-
-/// GET /api/collections/runs/:run_id/variables - Get execution variables.
-#[utoipa::path(
-    get,
-    path = "/api/collections/runs/{run_id}/variables",
-    tag = "Collections",
-    security(("bearer_auth" = [])),
-    params(
-        ("run_id" = Uuid, Path, description = "Collection run ID")
-    ),
-    responses(
-        (status = 200, description = "Execution variables", body = Vec<ExecutionVariableResponse>),
-        (status = 404, description = "Run not found")
-    )
-)]
-pub async fn get_collection_variables(
-    State(state): State<AppState>,
-    auth: auth_utils::AuthUser,
-    Path(run_id): Path<Uuid>,
-) -> Result<Json<Vec<ExecutionVariableResponse>>, StatusCode> {
-    let db = state.db().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?.clone();
-    let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
-
-    // Verify ownership
-    let run = repo
-        .get_collection_run(run_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
-
-    if run.user_id != auth.user_id.0 {
-        return Err(StatusCode::FORBIDDEN);
-    }
-
-    let rows = repo
-        .get_execution_variables(run_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let items = rows
-        .into_iter()
-        .map(|r| ExecutionVariableResponse {
-            id: r.id,
-            variable_name: r.variable_name,
-            variable_path: r.variable_path,
-            value: r.value,
-            created_at: r.created_at,
-        })
-        .collect();
-
-    Ok(Json(items))
 }

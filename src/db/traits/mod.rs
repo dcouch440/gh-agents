@@ -11,12 +11,12 @@ use uuid::Uuid;
 use crate::db::{
     AgentExecutionRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow,
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
-    DocumentSearchResult, ExecutionMessageRow, ExecutionVariableRow, OutputSchemaRow,
-    PromptTemplateRow, ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow,
-    RoomTranscriptEntry, RouterRequestRow, SessionRow, StepDocumentRow, StepInputRow,
-    StepOutputRow, StepRoutingRuleRow, SystemConfigRow, TokenLedgerRow, ToolCapabilityRow,
-    ToolRouterModeRow, ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow,
-    WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepRow,
+    DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow, ResultRow,
+    RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry,
+    RouterRequestRow, SessionRow, StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow,
+    SystemConfigRow, TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow, ToolRow,
+    WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
+    WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -1080,26 +1080,6 @@ pub trait WorkflowCollectionRepo: Send + Sync {
         outputs: Option<serde_json::Value>,
         error: Option<String>,
     ) -> Result<WorkflowExecutionRow>;
-
-    // --- Execution Variables (Variable capture) ---
-    async fn create_execution_variable(
-        &self,
-        collection_run_id: Option<Uuid>,
-        workflow_execution_id: Option<Uuid>,
-        step_execution_id: Option<Uuid>,
-        variable_name: &str,
-        variable_path: &str,
-        value: serde_json::Value,
-    ) -> Result<ExecutionVariableRow>;
-    async fn get_execution_variables(
-        &self,
-        collection_run_id: Uuid,
-    ) -> Result<Vec<ExecutionVariableRow>>;
-    async fn get_execution_variable_by_path(
-        &self,
-        collection_run_id: Uuid,
-        variable_path: &str,
-    ) -> Result<Option<ExecutionVariableRow>>;
 }
 
 // ============================================================================

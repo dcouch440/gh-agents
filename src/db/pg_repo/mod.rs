@@ -15,12 +15,12 @@ use crate::db::traits::{
 use crate::db::{
     AgentExecutionRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow,
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
-    DocumentSearchResult, ExecutionMessageRow, ExecutionVariableRow, OutputSchemaRow,
-    PromptTemplateRow, ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow,
-    RoomTranscriptEntry, RouterRequestRow, SessionRow, StepDocumentRow, StepInputRow,
-    StepOutputRow, StepRoutingRuleRow, SystemConfigRow, TokenLedgerRow, ToolCapabilityRow,
-    ToolRouterModeRow, ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow,
-    WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepRow,
+    DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow, ResultRow,
+    RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry,
+    RouterRequestRow, SessionRow, StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow,
+    SystemConfigRow, TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow, ToolRow,
+    WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
+    WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -2964,61 +2964,6 @@ impl WorkflowCollectionRepo for PgRepo {
         .bind(outputs)
         .bind(error)
         .fetch_one(&self.pool)
-        .await?;
-        Ok(row)
-    }
-
-    // --- Execution Variables (Variable capture) ---
-
-    async fn create_execution_variable(
-        &self,
-        collection_run_id: Option<Uuid>,
-        workflow_execution_id: Option<Uuid>,
-        step_execution_id: Option<Uuid>,
-        variable_name: &str,
-        variable_path: &str,
-        value: serde_json::Value,
-    ) -> Result<ExecutionVariableRow> {
-        let row = sqlx::query_as::<_, ExecutionVariableRow>(
-            "INSERT INTO execution_variables (collection_run_id, workflow_execution_id, step_execution_id, variable_name, variable_path, value) \
-             VALUES ($1, $2, $3, $4, $5, $6) \
-             RETURNING *",
-        )
-        .bind(collection_run_id)
-        .bind(workflow_execution_id)
-        .bind(step_execution_id)
-        .bind(variable_name)
-        .bind(variable_path)
-        .bind(value)
-        .fetch_one(&self.pool)
-        .await?;
-        Ok(row)
-    }
-
-    async fn get_execution_variables(
-        &self,
-        collection_run_id: Uuid,
-    ) -> Result<Vec<ExecutionVariableRow>> {
-        let rows = sqlx::query_as::<_, ExecutionVariableRow>(
-            "SELECT * FROM execution_variables WHERE collection_run_id = $1 ORDER BY created_at",
-        )
-        .bind(collection_run_id)
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(rows)
-    }
-
-    async fn get_execution_variable_by_path(
-        &self,
-        collection_run_id: Uuid,
-        variable_path: &str,
-    ) -> Result<Option<ExecutionVariableRow>> {
-        let row = sqlx::query_as::<_, ExecutionVariableRow>(
-            "SELECT * FROM execution_variables WHERE collection_run_id = $1 AND variable_path = $2",
-        )
-        .bind(collection_run_id)
-        .bind(variable_path)
-        .fetch_optional(&self.pool)
         .await?;
         Ok(row)
     }
