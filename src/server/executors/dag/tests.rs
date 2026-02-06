@@ -2,12 +2,13 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
+    use crate::db::{StepInputRow, StepOutputRow, WorkflowStepEdgeRow, WorkflowStepRow};
     use crate::server::executors::dag::{
         compute_cost, extract_for_each_label, find_entry_steps, get_child_steps, get_parent_steps,
-        parse_structured_output, resolve_for_each_array, resolve_variables, topological_sort,
-        DagPaused,
+        parse_structured_output, resolve_dot_path, resolve_for_each_array, resolve_port_inputs,
+        resolve_variables, topological_sort, DagPaused,
     };
+    use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
     use std::collections::HashMap;
     use uuid::Uuid;
 
@@ -30,6 +31,8 @@ mod tests {
             interactive_agent_id: None,
             for_each_label_field: None,
             room_id: None,
+            routing_mode: None,
+            routing_field: None,
             display_order,
             version: 1,
         }
@@ -37,8 +40,79 @@ mod tests {
 
     fn make_edge(from: Uuid, to: Uuid) -> WorkflowStepEdgeRow {
         WorkflowStepEdgeRow {
+            id: Uuid::new_v4(),
             from_step_id: from,
             to_step_id: to,
+            from_output_port: None,
+            to_input_port: None,
+            transform_jsonpath: None,
+            condition_type: None,
+            condition_value: None,
+            edge_label: None,
+            workflow_id: Uuid::new_v4(),
+        }
+    }
+
+    fn make_port_edge(from: Uuid, to: Uuid, from_port: &str, to_port: &str) -> WorkflowStepEdgeRow {
+        WorkflowStepEdgeRow {
+            id: Uuid::new_v4(),
+            from_step_id: from,
+            to_step_id: to,
+            from_output_port: Some(from_port.to_string()),
+            to_input_port: Some(to_port.to_string()),
+            transform_jsonpath: None,
+            condition_type: None,
+            condition_value: None,
+            edge_label: None,
+            workflow_id: Uuid::new_v4(),
+        }
+    }
+
+    fn make_step_input(step_id: Uuid, port_name: &str, required: bool) -> StepInputRow {
+        StepInputRow {
+            id: Uuid::new_v4(),
+            workflow_step_id: step_id,
+            port_name: port_name.to_string(),
+            port_type: "string".to_string(),
+            required,
+            default_value: None,
+            description: None,
+            json_schema: None,
+            created_at: chrono::Utc::now(),
+        }
+    }
+
+    fn make_step_output(step_id: Uuid, port_name: &str, json_path: &str) -> StepOutputRow {
+        StepOutputRow {
+            id: Uuid::new_v4(),
+            workflow_step_id: step_id,
+            port_name: port_name.to_string(),
+            port_type: "string".to_string(),
+            json_path: json_path.to_string(),
+            description: None,
+            json_schema: None,
+            created_at: chrono::Utc::now(),
+        }
+    }
+
+    fn make_envelope(data: serde_json::Value) -> StepExecutionEnvelope {
+        StepExecutionEnvelope {
+            status: ExecutionStatus::Success,
+            data: Some(data),
+            metadata: ExecutionMetadata {
+                execution_id: Uuid::new_v4(),
+                execution_time_ms: 100,
+                tokens_in: None,
+                tokens_out: None,
+                cost_usd: None,
+                model: None,
+                agent_id: None,
+                iteration_index: None,
+                iteration_label: None,
+                routing_label: None,
+                selected_routing_document_id: None,
+            },
+            error: None,
         }
     }
 
@@ -636,5 +710,275 @@ That's the output."#;
         assert!(display.contains(&step_id.to_string()));
         assert!(display.contains(&execution_id.to_string()));
         assert!(display.contains("awaiting user input"));
+    }
+
+    // =========================================================================
+    // resolve_dot_path Tests
+    // =========================================================================
+
+    #[test]
+    fn resolve_dot_path_simple_field() {
+        let value = serde_json::json!({"name": "Alice", "age": 30});
+        assert_eq!(
+            resolve_dot_path(&value, "name"),
+            Some(serde_json::json!("Alice"))
+        );
+        assert_eq!(resolve_dot_path(&value, "age"), Some(serde_json::json!(30)));
+    }
+
+    #[test]
+    fn resolve_dot_path_nested() {
+        let value = serde_json::json!({"user": {"profile": {"name": "Bob"}}});
+        assert_eq!(
+            resolve_dot_path(&value, "user.profile.name"),
+            Some(serde_json::json!("Bob"))
+        );
+    }
+
+    #[test]
+    fn resolve_dot_path_array_index() {
+        let value = serde_json::json!({"items": ["first", "second", "third"]});
+        assert_eq!(
+            resolve_dot_path(&value, "items.0"),
+            Some(serde_json::json!("first"))
+        );
+        assert_eq!(
+            resolve_dot_path(&value, "items.2"),
+            Some(serde_json::json!("third"))
+        );
+    }
+
+    #[test]
+    fn resolve_dot_path_missing_returns_none() {
+        let value = serde_json::json!({"name": "Alice"});
+        assert_eq!(resolve_dot_path(&value, "missing"), None);
+        assert_eq!(resolve_dot_path(&value, "name.nested"), None);
+    }
+
+    #[test]
+    fn resolve_dot_path_null_returns_none() {
+        let value = serde_json::json!({"field": null});
+        assert_eq!(resolve_dot_path(&value, "field"), None);
+    }
+
+    #[test]
+    fn resolve_dot_path_empty_path_returns_root() {
+        let value = serde_json::json!({"name": "Alice"});
+        assert_eq!(
+            resolve_dot_path(&value, ""),
+            Some(serde_json::json!({"name": "Alice"}))
+        );
+    }
+
+    // =========================================================================
+    // resolve_port_inputs Tests
+    // =========================================================================
+
+    #[test]
+    fn resolve_port_inputs_basic() {
+        let step_a = Uuid::new_v4();
+        let step_b = Uuid::new_v4();
+
+        // Edge: step_a:result -> step_b:context
+        let edges = vec![make_port_edge(step_a, step_b, "result", "context")];
+
+        // step_b has one input port
+        let step_inputs = vec![make_step_input(step_b, "context", true)];
+
+        // step_a has one output port with json_path "summary"
+        let mut source_outputs = HashMap::new();
+        source_outputs.insert(step_a, vec![make_step_output(step_a, "result", "summary")]);
+
+        // step_a completed with data containing "summary" field
+        let mut completed = HashMap::new();
+        completed.insert(
+            step_a,
+            make_envelope(serde_json::json!({"summary": "Hello world"})),
+        );
+
+        let result =
+            resolve_port_inputs(step_b, &edges, &step_inputs, &source_outputs, &completed).unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result["context"], serde_json::json!("Hello world"));
+    }
+
+    #[test]
+    fn resolve_port_inputs_with_json_path() {
+        let step_a = Uuid::new_v4();
+        let step_b = Uuid::new_v4();
+
+        let edges = vec![make_port_edge(step_a, step_b, "analysis", "input_data")];
+        let step_inputs = vec![make_step_input(step_b, "input_data", true)];
+
+        // Output port with nested json_path
+        let mut source_outputs = HashMap::new();
+        source_outputs.insert(
+            step_a,
+            vec![make_step_output(step_a, "analysis", "results.data.items")],
+        );
+
+        let mut completed = HashMap::new();
+        completed.insert(
+            step_a,
+            make_envelope(serde_json::json!({
+                "results": {
+                    "data": {
+                        "items": [1, 2, 3]
+                    }
+                }
+            })),
+        );
+
+        let result =
+            resolve_port_inputs(step_b, &edges, &step_inputs, &source_outputs, &completed).unwrap();
+
+        assert_eq!(result["input_data"], serde_json::json!([1, 2, 3]));
+    }
+
+    #[test]
+    fn resolve_port_inputs_with_transform() {
+        let step_a = Uuid::new_v4();
+        let step_b = Uuid::new_v4();
+
+        // Edge with a transform
+        let mut edge = make_port_edge(step_a, step_b, "output", "input");
+        edge.transform_jsonpath = Some("name".to_string());
+
+        let edges = vec![edge];
+        let step_inputs = vec![make_step_input(step_b, "input", true)];
+
+        let mut source_outputs = HashMap::new();
+        source_outputs.insert(step_a, vec![make_step_output(step_a, "output", "data")]);
+
+        let mut completed = HashMap::new();
+        completed.insert(
+            step_a,
+            make_envelope(serde_json::json!({
+                "data": {"name": "Alice", "age": 30}
+            })),
+        );
+
+        let result =
+            resolve_port_inputs(step_b, &edges, &step_inputs, &source_outputs, &completed).unwrap();
+
+        // The transform extracts "name" from the data object
+        assert_eq!(result["input"], serde_json::json!("Alice"));
+    }
+
+    #[test]
+    fn resolve_port_inputs_default_value() {
+        let step_b = Uuid::new_v4();
+
+        // No edges — input has a default value
+        let edges: Vec<WorkflowStepEdgeRow> = vec![];
+        let mut input = make_step_input(step_b, "config", false);
+        input.default_value = Some(serde_json::json!({"timeout": 30}));
+        let step_inputs = vec![input];
+
+        let result = resolve_port_inputs(
+            step_b,
+            &edges,
+            &step_inputs,
+            &HashMap::new(),
+            &HashMap::new(),
+        )
+        .unwrap();
+
+        assert_eq!(result["config"], serde_json::json!({"timeout": 30}));
+    }
+
+    #[test]
+    fn resolve_port_inputs_missing_required_errors() {
+        let step_b = Uuid::new_v4();
+
+        // No edges, required input, no default
+        let edges: Vec<WorkflowStepEdgeRow> = vec![];
+        let step_inputs = vec![make_step_input(step_b, "required_data", true)];
+
+        let result = resolve_port_inputs(
+            step_b,
+            &edges,
+            &step_inputs,
+            &HashMap::new(),
+            &HashMap::new(),
+        );
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        let msg = format!("{}", err);
+        assert!(msg.contains("required_data"));
+        assert!(msg.contains("missing"));
+    }
+
+    #[test]
+    fn resolve_port_inputs_no_ports_returns_empty() {
+        let step_b = Uuid::new_v4();
+
+        let result =
+            resolve_port_inputs(step_b, &[], &[], &HashMap::new(), &HashMap::new()).unwrap();
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn resolve_port_inputs_source_not_completed_errors() {
+        let step_a = Uuid::new_v4();
+        let step_b = Uuid::new_v4();
+
+        let edges = vec![make_port_edge(step_a, step_b, "output", "input")];
+        let step_inputs = vec![make_step_input(step_b, "input", true)];
+
+        // No completed envelopes — step_a hasn't run
+        let result = resolve_port_inputs(
+            step_b,
+            &edges,
+            &step_inputs,
+            &HashMap::new(),
+            &HashMap::new(),
+        );
+
+        assert!(result.is_err());
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("not completed"));
+    }
+
+    #[test]
+    fn resolve_port_inputs_multiple_edges() {
+        let step_a = Uuid::new_v4();
+        let step_b = Uuid::new_v4();
+        let step_c = Uuid::new_v4();
+
+        // Two edges into step_c from different sources
+        let edges = vec![
+            make_port_edge(step_a, step_c, "result", "left"),
+            make_port_edge(step_b, step_c, "result", "right"),
+        ];
+
+        let step_inputs = vec![
+            make_step_input(step_c, "left", true),
+            make_step_input(step_c, "right", true),
+        ];
+
+        let mut source_outputs = HashMap::new();
+        source_outputs.insert(step_a, vec![make_step_output(step_a, "result", "value")]);
+        source_outputs.insert(step_b, vec![make_step_output(step_b, "result", "value")]);
+
+        let mut completed = HashMap::new();
+        completed.insert(
+            step_a,
+            make_envelope(serde_json::json!({"value": "from_a"})),
+        );
+        completed.insert(
+            step_b,
+            make_envelope(serde_json::json!({"value": "from_b"})),
+        );
+
+        let result =
+            resolve_port_inputs(step_c, &edges, &step_inputs, &source_outputs, &completed).unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result["left"], serde_json::json!("from_a"));
+        assert_eq!(result["right"], serde_json::json!("from_b"));
     }
 }

@@ -19,11 +19,11 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::db::traits::{DocumentRepo, WorkflowRepo};
-use crate::db::{AgentRow, WorkflowStepEdgeRow, WorkflowStepRow};
+use crate::db::{AgentRow, StepInputRow, StepOutputRow, WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::llm::{ContentBlock, LLMProvider, LLMRequest, Message, StopReason, Tool};
 use crate::types::{
-    ExecutionError, ExecutionMetadata, ExecutionStatus, ForEachAggregateEnvelope,
-    ForEachMetadata, IterationError, StepExecutionEnvelope,
+    ExecutionError, ExecutionMetadata, ExecutionStatus, ForEachAggregateEnvelope, ForEachMetadata,
+    IterationError, StepExecutionEnvelope,
 };
 
 use crate::server::state::AppState;
@@ -290,6 +290,8 @@ pub fn extract_for_each_label(element: &JsonValue, label_field: Option<&str>) ->
 /// Build the full prompt for a step execution.
 ///
 /// Resolves the prompt template, appends attached document content.
+/// If `port_inputs` is provided, port values are injected as structured context
+/// and made available for `{port_name}` variable resolution.
 pub async fn compose_prompt(
     step: &WorkflowStepRow,
     prompt_template_repo: Option<&dyn crate::db::traits::PromptTemplateRepo>,
@@ -299,6 +301,7 @@ pub async fn compose_prompt(
     outputs: &HashMap<String, JsonValue>,
     prior_outputs: &HashMap<String, JsonValue>,
     for_each_element: Option<&JsonValue>,
+    port_inputs: Option<&HashMap<String, JsonValue>>,
 ) -> String {
     // Get prompt text: prefer saved template, fall back to inline
     let raw_prompt = if let Some(pt_id) = step.prompt_template_id {
@@ -316,18 +319,48 @@ pub async fn compose_prompt(
         step.prompt_template.clone()
     };
 
+    // Merge port inputs into the variable resolution scope so {port_name} works
+    let effective_outputs = if let Some(ports) = port_inputs {
+        if !ports.is_empty() {
+            let mut merged = outputs.clone();
+            for (k, v) in ports {
+                merged.insert(k.clone(), v.clone());
+            }
+            merged
+        } else {
+            outputs.clone()
+        }
+    } else {
+        outputs.clone()
+    };
+
     // For for_each steps, replace `$` with the current element in variable refs
     let prompt = if let Some(element) = for_each_element {
         // In for_each mode, `{var.content.$.name}` means current element's .name
         // We resolve $ by injecting the element into a special "__for_each_element" key
-        let augmented_outputs = outputs.clone();
+        let augmented_outputs = effective_outputs.clone();
         // Replace $ references by pre-resolving them
         resolve_for_each_prompt(&raw_prompt, element, &augmented_outputs, prior_outputs)
     } else {
-        resolve_variables(&raw_prompt, outputs, prior_outputs)
+        resolve_variables(&raw_prompt, &effective_outputs, prior_outputs)
     };
 
     let mut full_prompt = prompt;
+
+    // Append structured port input data block
+    if let Some(ports) = port_inputs {
+        if !ports.is_empty() {
+            full_prompt.push_str("\n\n## Input Data\n");
+            for (port_name, value) in ports {
+                let formatted =
+                    serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string());
+                full_prompt.push_str(&format!(
+                    "\n<{}>\n{}\n</{}>\n",
+                    port_name, formatted, port_name
+                ));
+            }
+        }
+    }
 
     // Append agent context documents (global to agent)
     if let Some(_d_repo) = doc_repo {
@@ -436,6 +469,199 @@ fn resolve_for_each_path(
         JsonValue::Null => format!("{{{}}}", path),
         other => other.to_string(),
     }
+}
+
+// ============================================================================
+// Port-Based Data Flow
+// ============================================================================
+
+/// Error types for port resolution failures.
+#[derive(Debug)]
+pub enum PortResolutionError {
+    /// A required input port has no incoming edge and no default value.
+    MissingRequiredInput { port_name: String, step_id: Uuid },
+    /// The source step hasn't completed yet (shouldn't happen in topo order).
+    SourceStepNotCompleted {
+        from_step_id: Uuid,
+        port_name: String,
+    },
+    /// The output port definition was not found on the source step.
+    OutputPortNotFound { step_id: Uuid, port_name: String },
+    /// Data extraction from the envelope failed (json_path didn't match).
+    DataExtractionFailed {
+        step_id: Uuid,
+        port_name: String,
+        json_path: String,
+    },
+}
+
+impl std::fmt::Display for PortResolutionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingRequiredInput { port_name, step_id } => {
+                write!(
+                    f,
+                    "required input '{}' missing for step {}",
+                    port_name, step_id
+                )
+            }
+            Self::SourceStepNotCompleted {
+                from_step_id,
+                port_name,
+            } => {
+                write!(
+                    f,
+                    "source step {} not completed for port '{}'",
+                    from_step_id, port_name
+                )
+            }
+            Self::OutputPortNotFound { step_id, port_name } => {
+                write!(
+                    f,
+                    "output port '{}' not found on step {}",
+                    port_name, step_id
+                )
+            }
+            Self::DataExtractionFailed {
+                step_id,
+                port_name,
+                json_path,
+            } => {
+                write!(
+                    f,
+                    "data extraction failed for port '{}' on step {} (json_path: {})",
+                    port_name, step_id, json_path
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for PortResolutionError {}
+
+/// Navigate a JSON value using dot-path notation.
+///
+/// Supports field access (`"name"`), array index (`"0"`), and nesting (`"data.items.0.name"`).
+/// Returns `None` if any segment fails to resolve or the final value is null.
+pub fn resolve_dot_path(value: &JsonValue, path: &str) -> Option<JsonValue> {
+    if path.is_empty() {
+        return Some(value.clone());
+    }
+    let parts: Vec<&str> = path.split('.').collect();
+    let mut current = value.clone();
+    for part in &parts {
+        current = if let Ok(idx) = part.parse::<usize>() {
+            current.get(idx).cloned()?
+        } else {
+            current.get(*part).cloned()?
+        };
+    }
+    if current.is_null() {
+        None
+    } else {
+        Some(current)
+    }
+}
+
+/// Resolve all input port values for a step from upstream envelopes.
+///
+/// For each incoming edge with `from_output_port` and `to_input_port` set:
+/// 1. Gets the source step's completed envelope
+/// 2. Finds the output port definition to get its `json_path`
+/// 3. Extracts data from `envelope.data` via the json_path
+/// 4. Optionally applies `transform_jsonpath` from the edge
+/// 5. Maps to the `to_input_port` key in the result
+///
+/// Missing optional inputs are filled from `StepInputRow.default_value`.
+/// Missing required inputs with no default produce an error.
+pub fn resolve_port_inputs(
+    step_id: Uuid,
+    edges: &[WorkflowStepEdgeRow],
+    step_inputs: &[StepInputRow],
+    source_outputs_map: &HashMap<Uuid, Vec<StepOutputRow>>,
+    completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
+) -> std::result::Result<HashMap<String, JsonValue>, PortResolutionError> {
+    let mut resolved: HashMap<String, JsonValue> = HashMap::new();
+
+    // Find all incoming edges with port wiring
+    let incoming_edges: Vec<&WorkflowStepEdgeRow> = edges
+        .iter()
+        .filter(|e| {
+            e.to_step_id == step_id && e.from_output_port.is_some() && e.to_input_port.is_some()
+        })
+        .collect();
+
+    for edge in &incoming_edges {
+        let from_port = edge.from_output_port.as_ref().unwrap();
+        let to_port = edge.to_input_port.as_ref().unwrap();
+
+        // Get source envelope
+        let envelope = completed_envelopes.get(&edge.from_step_id).ok_or_else(|| {
+            PortResolutionError::SourceStepNotCompleted {
+                from_step_id: edge.from_step_id,
+                port_name: from_port.clone(),
+            }
+        })?;
+
+        // Find output port definition for json_path
+        let source_outputs = source_outputs_map.get(&edge.from_step_id);
+        let output_port =
+            source_outputs.and_then(|outputs| outputs.iter().find(|o| o.port_name == *from_port));
+
+        // Extract data from envelope
+        let extracted = if let Some(port_def) = output_port {
+            // Use the output port's json_path to extract from envelope.data
+            if let Some(ref data) = envelope.data {
+                resolve_dot_path(data, &port_def.json_path)
+            } else {
+                None
+            }
+        } else {
+            // No output port definition — try using the port name as json_path
+            if let Some(ref data) = envelope.data {
+                resolve_dot_path(data, from_port)
+            } else {
+                None
+            }
+        };
+
+        let mut value = extracted.ok_or_else(|| {
+            let json_path = output_port
+                .map(|p| p.json_path.clone())
+                .unwrap_or_else(|| from_port.clone());
+            PortResolutionError::DataExtractionFailed {
+                step_id: edge.from_step_id,
+                port_name: from_port.clone(),
+                json_path,
+            }
+        })?;
+
+        // Apply edge transform if present
+        if let Some(ref transform) = edge.transform_jsonpath {
+            if let Some(transformed) = resolve_dot_path(&value, transform) {
+                value = transformed;
+            }
+        }
+
+        resolved.insert(to_port.clone(), value);
+    }
+
+    // Fill defaults for missing optional inputs, error on missing required
+    for input in step_inputs {
+        if resolved.contains_key(&input.port_name) {
+            continue;
+        }
+        if let Some(ref default_val) = input.default_value {
+            resolved.insert(input.port_name.clone(), default_val.clone());
+        } else if input.required {
+            return Err(PortResolutionError::MissingRequiredInput {
+                port_name: input.port_name.clone(),
+                step_id,
+            });
+        }
+    }
+
+    Ok(resolved)
 }
 
 // ============================================================================
@@ -967,6 +1193,7 @@ pub async fn execute_workflow(
                     &current_outputs,
                     &ctx.prior_outputs,
                     Some(element),
+                    None,
                 )
                 .await;
 
@@ -1106,6 +1333,7 @@ pub async fn execute_workflow(
                 &current_outputs,
                 &ctx.prior_outputs,
                 None,
+                None,
             )
             .await;
 
@@ -1127,10 +1355,14 @@ pub async fn execute_workflow(
 
             // Handle interactive review
             if let Some(interactive_agent_id) = step.interactive_agent_id {
-                if let Ok(Some(_ia)) = state.repo().get_persisted_agent(interactive_agent_id).await {
+                if let Ok(Some(_ia)) = state.repo().get_persisted_agent(interactive_agent_id).await
+                {
                     // TODO: Interactive review not yet supported with envelopes
                     // Need to retrieve raw output from database or add it to envelope
-                    warn!("Interactive review not yet supported with envelopes for step {}", step.id);
+                    warn!(
+                        "Interactive review not yet supported with envelopes for step {}",
+                        step.id
+                    );
                 }
             }
 

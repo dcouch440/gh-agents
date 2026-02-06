@@ -51,7 +51,8 @@ mod tests {
         async fn send_message_stream(
             &self,
             _request: LLMRequest,
-        ) -> LLMResult<Pin<Box<dyn futures::Stream<Item = LLMResult<StreamChunk>> + Send>>> {
+        ) -> LLMResult<Pin<Box<dyn futures::Stream<Item = LLMResult<StreamChunk>> + Send>>>
+        {
             Ok(Box::pin(stream::empty()))
         }
 
@@ -169,7 +170,10 @@ mod tests {
             Arc::new(provider),
         );
 
-        let result = resolver.resolve(&agent, "hello", None::<&str>).await.unwrap();
+        let result = resolver
+            .resolve(&agent, "hello", None::<&str>)
+            .await
+            .unwrap();
 
         assert!(result.selected_mode_id.is_none());
         assert!(result.capabilities.is_empty());
@@ -228,7 +232,10 @@ mod tests {
             Arc::new(provider),
         );
 
-        let result = resolver.resolve(&agent, "read this file", None::<&str>).await.unwrap();
+        let result = resolver
+            .resolve(&agent, "read this file", None::<&str>)
+            .await
+            .unwrap();
 
         assert_eq!(result.selected_mode_key.as_deref(), Some("coding"));
         assert_eq!(result.capabilities, vec!["file_read"]);
@@ -286,7 +293,10 @@ mod tests {
             Arc::new(provider),
         );
 
-        let result = resolver.resolve(&agent, "edit code", None::<&str>).await.unwrap();
+        let result = resolver
+            .resolve(&agent, "edit code", None::<&str>)
+            .await
+            .unwrap();
 
         let tool_names: Vec<&str> = result.tools.iter().map(|t| t.name.as_str()).collect();
         assert!(tool_names.contains(&"write_file"));
@@ -338,7 +348,10 @@ mod tests {
             Arc::new(provider),
         );
 
-        let result = resolver.resolve(&agent, "git status", None::<&str>).await.unwrap();
+        let result = resolver
+            .resolve(&agent, "git status", None::<&str>)
+            .await
+            .unwrap();
 
         assert!(result.capabilities.is_empty());
         assert_eq!(result.tools.len(), 1);
@@ -394,7 +407,10 @@ mod tests {
             Arc::new(provider),
         );
 
-        let result = resolver.resolve(&agent, "read file", None::<&str>).await.unwrap();
+        let result = resolver
+            .resolve(&agent, "read file", None::<&str>)
+            .await
+            .unwrap();
 
         // Should only appear once despite being in both explicit and capability sources
         assert_eq!(result.tools.len(), 1);

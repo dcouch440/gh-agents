@@ -12,7 +12,7 @@ use uuid::Uuid;
 pub enum ExecutionStatus {
     Success,
     Error,
-    Partial,  // For for-each with some failures
+    Partial, // For for-each with some failures
 }
 
 /// Execution metadata (timing, costs, routing info)

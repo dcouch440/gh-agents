@@ -1456,7 +1456,10 @@ impl WorkflowRepo for PgRepo {
 
     // --- Routing Rules (Phase 3) ---
 
-    async fn get_step_routing_rules(&self, workflow_step_id: Uuid) -> Result<Vec<StepRoutingRuleRow>> {
+    async fn get_step_routing_rules(
+        &self,
+        workflow_step_id: Uuid,
+    ) -> Result<Vec<StepRoutingRuleRow>> {
         let rows = sqlx::query_as::<_, StepRoutingRuleRow>(
             "SELECT id, workflow_step_id, label_value, description, agent_id, display_order, created_at
              FROM step_routing_rules
@@ -3127,7 +3130,7 @@ impl ToolCapabilityRepo for PgRepo {
              JOIN tool_capability_assignments tca ON t.id = tca.tool_id
              JOIN tool_capabilities tc ON tc.id = tca.capability_id
              WHERE tc.capability_key = $1
-             ORDER BY t.name"
+             ORDER BY t.name",
         )
         .bind(capability_key)
         .fetch_all(&self.pool)
@@ -3139,7 +3142,7 @@ impl ToolCapabilityRepo for PgRepo {
         sqlx::query(
             "INSERT INTO tool_capability_assignments (tool_id, capability_id)
              VALUES ($1, $2)
-             ON CONFLICT DO NOTHING"
+             ON CONFLICT DO NOTHING",
         )
         .bind(tool_id)
         .bind(capability_id)
@@ -3151,7 +3154,7 @@ impl ToolCapabilityRepo for PgRepo {
     async fn remove_capability_from_tool(&self, tool_id: Uuid, capability_id: Uuid) -> Result<()> {
         sqlx::query(
             "DELETE FROM tool_capability_assignments
-             WHERE tool_id = $1 AND capability_id = $2"
+             WHERE tool_id = $1 AND capability_id = $2",
         )
         .bind(tool_id)
         .bind(capability_id)
@@ -3173,7 +3176,7 @@ impl ToolCapabilityRepo for PgRepo {
         for capability_id in capability_ids {
             sqlx::query(
                 "INSERT INTO tool_capability_assignments (tool_id, capability_id)
-                 VALUES ($1, $2)"
+                 VALUES ($1, $2)",
             )
             .bind(tool_id)
             .bind(capability_id)
@@ -3199,7 +3202,12 @@ impl ToolCapabilityRepo for PgRepo {
         Ok(rows)
     }
 
-    async fn set_mode_capabilities(&self, mode_id: Uuid, capability_ids: &[Uuid], is_required: bool) -> Result<()> {
+    async fn set_mode_capabilities(
+        &self,
+        mode_id: Uuid,
+        capability_ids: &[Uuid],
+        is_required: bool,
+    ) -> Result<()> {
         let mut tx = self.pool.begin().await?;
 
         // Delete existing requirements
@@ -3212,7 +3220,7 @@ impl ToolCapabilityRepo for PgRepo {
         for capability_id in capability_ids {
             sqlx::query(
                 "INSERT INTO mode_required_capabilities (mode_id, capability_id, is_required)
-                 VALUES ($1, $2, $3)"
+                 VALUES ($1, $2, $3)",
             )
             .bind(mode_id)
             .bind(capability_id)
@@ -3244,7 +3252,10 @@ impl SystemConfigRepo for PgRepo {
         Ok(row)
     }
 
-    async fn list_system_configs(&self, config_type: Option<String>) -> Result<Vec<SystemConfigRow>> {
+    async fn list_system_configs(
+        &self,
+        config_type: Option<String>,
+    ) -> Result<Vec<SystemConfigRow>> {
         let rows = if let Some(ct) = config_type {
             sqlx::query_as::<_, SystemConfigRow>(
                 "SELECT id, config_type, config_key, config_value, description, created_by, created_at, updated_at
@@ -3302,7 +3313,9 @@ impl SystemConfigRepo for PgRepo {
         Ok(())
     }
 
-    async fn get_execution_constraints(&self) -> Result<std::collections::HashMap<String, serde_json::Value>> {
+    async fn get_execution_constraints(
+        &self,
+    ) -> Result<std::collections::HashMap<String, serde_json::Value>> {
         let rows = sqlx::query_as::<_, SystemConfigRow>(
             "SELECT id, config_type, config_key, config_value, description, created_by, created_at, updated_at
              FROM system_config
@@ -3327,9 +3340,7 @@ impl SystemConfigRepo for PgRepo {
         .fetch_optional(&self.pool)
         .await?;
 
-        Ok(row
-            .and_then(|r| r.config_value.as_bool())
-            .unwrap_or(false))
+        Ok(row.and_then(|r| r.config_value.as_bool()).unwrap_or(false))
     }
 }
 

@@ -178,7 +178,10 @@ mod tests {
             }),
         };
         match args.command {
-            Some(Commands::SyncConfig { config_dir, dry_run }) => {
+            Some(Commands::SyncConfig {
+                config_dir,
+                dry_run,
+            }) => {
                 assert_eq!(config_dir, PathBuf::from("./config"));
                 assert_eq!(dry_run, false);
             }

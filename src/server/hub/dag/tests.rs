@@ -6,50 +6,57 @@ use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+fn make_step(
+    id: Uuid,
+    prompt: &str,
+    var_name: Option<&str>,
+    display_order: i32,
+) -> WorkflowStepRow {
+    WorkflowStepRow {
+        id,
+        workflow_id: Uuid::new_v4(),
+        agent_id: Uuid::new_v4(),
+        execution_mode: "single".into(),
+        agent_execution_mode: None,
+        for_each_ref: None,
+        prompt_template_id: None,
+        prompt_template: prompt.into(),
+        output_schema_id: None,
+        output_variable_name: var_name.map(|s| s.into()),
+        interactive_agent_id: None,
+        for_each_label_field: None,
+        room_id: None,
+        routing_mode: None,
+        routing_field: None,
+        display_order,
+        version: 1,
+    }
+}
+
+fn make_edge(from: Uuid, to: Uuid) -> WorkflowStepEdgeRow {
+    WorkflowStepEdgeRow {
+        id: Uuid::new_v4(),
+        from_step_id: from,
+        to_step_id: to,
+        from_output_port: None,
+        to_input_port: None,
+        transform_jsonpath: None,
+        condition_type: None,
+        condition_value: None,
+        edge_label: None,
+        workflow_id: Uuid::new_v4(),
+    }
+}
+
 #[test]
 fn topo_sort_linear() {
     let s1 = Uuid::new_v4();
     let s2 = Uuid::new_v4();
     let steps = vec![
-        WorkflowStepRow {
-            id: s1,
-            workflow_id: Uuid::new_v4(),
-            agent_id: Uuid::new_v4(),
-            execution_mode: "single".into(),
-            agent_execution_mode: None,
-            for_each_ref: None,
-            prompt_template_id: None,
-            prompt_template: "p1".into(),
-            output_schema_id: None,
-            output_variable_name: Some("v1".into()),
-            interactive_agent_id: None,
-            for_each_label_field: None,
-            display_order: 0,
-            version: 1,
-            room_id: None,
-        },
-        WorkflowStepRow {
-            id: s2,
-            workflow_id: Uuid::new_v4(),
-            agent_id: Uuid::new_v4(),
-            execution_mode: "single".into(),
-            agent_execution_mode: None,
-            for_each_ref: None,
-            prompt_template_id: None,
-            prompt_template: "p2".into(),
-            output_schema_id: None,
-            output_variable_name: Some("v2".into()),
-            interactive_agent_id: None,
-            for_each_label_field: None,
-            display_order: 1,
-            version: 1,
-            room_id: None,
-        },
+        make_step(s1, "p1", Some("v1"), 0),
+        make_step(s2, "p2", Some("v2"), 1),
     ];
-    let edges = vec![WorkflowStepEdgeRow {
-        from_step_id: s1,
-        to_step_id: s2,
-    }];
+    let edges = vec![make_edge(s1, s2)];
 
     let sorted = topological_sort(&steps, &edges).unwrap();
     assert_eq!(sorted[0], s1);
@@ -60,52 +67,8 @@ fn topo_sort_linear() {
 fn topo_sort_cycle_detected() {
     let s1 = Uuid::new_v4();
     let s2 = Uuid::new_v4();
-    let steps = vec![
-        WorkflowStepRow {
-            id: s1,
-            workflow_id: Uuid::new_v4(),
-            agent_id: Uuid::new_v4(),
-            execution_mode: "single".into(),
-            agent_execution_mode: None,
-            for_each_ref: None,
-            prompt_template_id: None,
-            prompt_template: "p".into(),
-            output_schema_id: None,
-            output_variable_name: None,
-            interactive_agent_id: None,
-            for_each_label_field: None,
-            display_order: 0,
-            version: 1,
-            room_id: None,
-        },
-        WorkflowStepRow {
-            id: s2,
-            workflow_id: Uuid::new_v4(),
-            agent_id: Uuid::new_v4(),
-            execution_mode: "single".into(),
-            agent_execution_mode: None,
-            for_each_ref: None,
-            prompt_template_id: None,
-            prompt_template: "p".into(),
-            output_schema_id: None,
-            output_variable_name: None,
-            interactive_agent_id: None,
-            for_each_label_field: None,
-            display_order: 1,
-            version: 1,
-            room_id: None,
-        },
-    ];
-    let edges = vec![
-        WorkflowStepEdgeRow {
-            from_step_id: s1,
-            to_step_id: s2,
-        },
-        WorkflowStepEdgeRow {
-            from_step_id: s2,
-            to_step_id: s1,
-        },
-    ];
+    let steps = vec![make_step(s1, "p", None, 0), make_step(s2, "p", None, 1)];
+    let edges = vec![make_edge(s1, s2), make_edge(s2, s1)];
 
     assert!(topological_sort(&steps, &edges).is_err());
 }

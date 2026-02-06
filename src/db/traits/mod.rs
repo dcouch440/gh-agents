@@ -12,12 +12,11 @@ use crate::db::{
     AgentExecutionRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow,
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
     DocumentSearchResult, ExecutionMessageRow, ExecutionVariableRow, OutputSchemaRow,
-    PromptTemplateRow, ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow,
-    RoomSessionRow, RoomTranscriptEntry, RouterRequestRow, SessionRow, StepDocumentRow,
-    StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow, TokenLedgerRow,
-    ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow,
-    ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
-    WorkflowStepEdgeRow, WorkflowStepRow,
+    PromptTemplateRow, ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow,
+    RoomTranscriptEntry, RouterRequestRow, SessionRow, StepDocumentRow, StepInputRow,
+    StepOutputRow, StepRoutingRuleRow, SystemConfigRow, TokenLedgerRow, ToolCapabilityRow,
+    ToolRouterModeRow, ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow,
+    WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -517,7 +516,10 @@ pub trait WorkflowRepo: Send + Sync {
     // --- Routing Rules (Phase 3) ---
 
     /// Get all routing rules for a workflow step
-    async fn get_step_routing_rules(&self, workflow_step_id: Uuid) -> Result<Vec<StepRoutingRuleRow>>;
+    async fn get_step_routing_rules(
+        &self,
+        workflow_step_id: Uuid,
+    ) -> Result<Vec<StepRoutingRuleRow>>;
 
     /// Create a routing rule for label-based agent assignment
     async fn create_routing_rule(
@@ -1160,7 +1162,12 @@ pub trait ToolCapabilityRepo: Send + Sync {
     async fn get_mode_capabilities(&self, mode_id: Uuid) -> Result<Vec<ToolCapabilityRow>>;
 
     /// Set capabilities required by a mode (replaces existing)
-    async fn set_mode_capabilities(&self, mode_id: Uuid, capability_ids: &[Uuid], is_required: bool) -> Result<()>;
+    async fn set_mode_capabilities(
+        &self,
+        mode_id: Uuid,
+        capability_ids: &[Uuid],
+        is_required: bool,
+    ) -> Result<()>;
 }
 
 // ============================================================================
@@ -1177,7 +1184,10 @@ pub trait SystemConfigRepo: Send + Sync {
     async fn get_system_config(&self, config_key: &str) -> Result<Option<SystemConfigRow>>;
 
     /// List system configs, optionally filtered by type
-    async fn list_system_configs(&self, config_type: Option<String>) -> Result<Vec<SystemConfigRow>>;
+    async fn list_system_configs(
+        &self,
+        config_type: Option<String>,
+    ) -> Result<Vec<SystemConfigRow>>;
 
     /// Upsert a system config (insert or update)
     async fn upsert_system_config(
@@ -1195,7 +1205,9 @@ pub trait SystemConfigRepo: Send + Sync {
     // Specialized config queries
 
     /// Get all execution constraints as a map
-    async fn get_execution_constraints(&self) -> Result<std::collections::HashMap<String, serde_json::Value>>;
+    async fn get_execution_constraints(
+        &self,
+    ) -> Result<std::collections::HashMap<String, serde_json::Value>>;
 
     /// Check if unsafe operations are enabled
     async fn get_unsafe_operations_enabled(&self) -> Result<bool>;

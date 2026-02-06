@@ -37,7 +37,10 @@ pub async fn run_sync(config_dir: &Path, dry_run: bool, verbose: bool) -> Result
             "   Capabilities: {} created, {} updated",
             stats.capabilities_created, stats.capabilities_updated
         );
-        println!("   Tool Assignments: {} updated", stats.tool_assignments_updated);
+        println!(
+            "   Tool Assignments: {} updated",
+            stats.tool_assignments_updated
+        );
 
         if !stats.errors.is_empty() {
             println!("\n⚠️  {} warnings:", stats.errors.len());

@@ -47,6 +47,9 @@ pub enum HubError {
     #[error("interactive step {step_id} (execution {execution_id}) awaiting user input")]
     AwaitingUser { step_id: Uuid, execution_id: Uuid },
 
+    #[error("port resolution failed for step {step_id}: {reason}")]
+    PortResolutionFailed { step_id: Uuid, reason: String },
+
     #[error("execution cancelled")]
     Cancelled,
 

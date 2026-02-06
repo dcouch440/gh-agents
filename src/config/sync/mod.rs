@@ -38,9 +38,11 @@ pub async fn sync_config(
     }
 
     if dry_run {
-        println!("🔍 DRY RUN: Would sync {} capabilities and {} tool assignments",
+        println!(
+            "🔍 DRY RUN: Would sync {} capabilities and {} tool assignments",
             capabilities.capabilities.len(),
-            tool_assignments.tool_assignments.len());
+            tool_assignments.tool_assignments.len()
+        );
         return Ok(stats);
     }
 
@@ -78,8 +80,7 @@ fn load_capabilities(config_dir: &Path, verbose: bool) -> Result<CapabilitiesYam
     let content = std::fs::read_to_string(&path)
         .with_context(|| format!("Failed to read {}", path.display()))?;
 
-    serde_yaml::from_str(&content)
-        .with_context(|| format!("Failed to parse {}", path.display()))
+    serde_yaml::from_str(&content).with_context(|| format!("Failed to parse {}", path.display()))
 }
 
 /// Load tool_assignments.yaml
@@ -91,8 +92,7 @@ fn load_tool_assignments(config_dir: &Path, verbose: bool) -> Result<ToolAssignm
     let content = std::fs::read_to_string(&path)
         .with_context(|| format!("Failed to read {}", path.display()))?;
 
-    serde_yaml::from_str(&content)
-        .with_context(|| format!("Failed to parse {}", path.display()))
+    serde_yaml::from_str(&content).with_context(|| format!("Failed to parse {}", path.display()))
 }
 
 /// Sync capabilities to tool_capabilities table
@@ -153,12 +153,9 @@ async fn sync_tool_assignments(
 ) -> Result<()> {
     for (tool_name, assignment) in &assignments.tool_assignments {
         // Get tool ID
-        let tool = sqlx::query!(
-            r#"SELECT id FROM tools WHERE name = $1"#,
-            tool_name
-        )
-        .fetch_optional(&mut **tx)
-        .await?;
+        let tool = sqlx::query!(r#"SELECT id FROM tools WHERE name = $1"#, tool_name)
+            .fetch_optional(&mut **tx)
+            .await?;
 
         let Some(tool) = tool else {
             if verbose {
@@ -188,8 +185,10 @@ async fn sync_tool_assignments(
 
             let Some(cap) = cap else {
                 if verbose {
-                    println!("  ⚠ Capability '{}' not found, skipping assignment to '{}'",
-                        cap_key, tool_name);
+                    println!(
+                        "  ⚠ Capability '{}' not found, skipping assignment to '{}'",
+                        cap_key, tool_name
+                    );
                 }
                 stats.add_error(format!(
                     "Capability '{}' not found for tool '{}'",
@@ -213,8 +212,11 @@ async fn sync_tool_assignments(
 
         stats.tool_assignments_updated += 1;
         if verbose {
-            println!("  ✓ Updated assignments for tool: {} ({} capabilities)",
-                tool_name, assignment.capabilities.len());
+            println!(
+                "  ✓ Updated assignments for tool: {} ({} capabilities)",
+                tool_name,
+                assignment.capabilities.len()
+            );
         }
     }
 
@@ -224,9 +226,14 @@ async fn sync_tool_assignments(
 /// Print sync statistics
 fn print_stats(stats: &SyncStats) {
     println!("\n📊 Sync Statistics:");
-    println!("  Capabilities: {} created, {} updated",
-        stats.capabilities_created, stats.capabilities_updated);
-    println!("  Tool Assignments: {} updated", stats.tool_assignments_updated);
+    println!(
+        "  Capabilities: {} created, {} updated",
+        stats.capabilities_created, stats.capabilities_updated
+    );
+    println!(
+        "  Tool Assignments: {} updated",
+        stats.tool_assignments_updated
+    );
 
     if !stats.errors.is_empty() {
         println!("\n⚠️  {} warnings:", stats.errors.len());
