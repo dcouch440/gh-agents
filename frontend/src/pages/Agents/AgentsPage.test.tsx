@@ -195,7 +195,7 @@ describe('AgentsPage', () => {
     expect(searchInput).toBeInTheDocument()
   })
 
-  it('filters out draft agents', () => {
+  it('renders draft agents alongside regular agents', () => {
     const agentsWithDraft = [
       ...mockAgents,
       {
@@ -218,7 +218,9 @@ describe('AgentsPage', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.queryByText('[Workshop Draft] Test')).not.toBeInTheDocument()
+    expect(screen.getByText('[Workshop Draft] Test')).toBeInTheDocument()
+    expect(screen.getByText('Alice Agent')).toBeInTheDocument()
+    expect(screen.getByText('Bob Agent')).toBeInTheDocument()
   })
 
   it('shows action menu buttons for each agent', () => {

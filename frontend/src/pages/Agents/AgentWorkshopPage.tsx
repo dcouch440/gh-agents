@@ -236,7 +236,7 @@ const reducer = (
       // Remove mock data for variables that no longer exist
       const newMockData: Record<string, string> = {};
       for (const variable of action.variables) {
-        newMockData[variable] = state.variableSimulation.mockData[variable] || "";
+        newMockData[variable] = state.variableSimulation.mockData[variable] ?? "";
       }
       return {
         ...state,

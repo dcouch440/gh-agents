@@ -6,21 +6,38 @@ import type { User } from '@/types/user'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-const { mockGet, mockPost } = vi.hoisted(() => ({
-  mockGet: vi.fn(),
-  mockPost: vi.fn(),
+const { mockLogin, mockRegister, mockMe } = vi.hoisted(() => ({
+  mockLogin: vi.fn(),
+  mockRegister: vi.fn(),
+  mockMe: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
   api: {
-    get: mockGet,
-    post: mockPost,
+    auth: {
+      login: mockLogin,
+      register: mockRegister,
+      me: mockMe,
+    },
   },
 }))
 
 vi.mock('@/constants', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('@/constants')
   return { ...actual, LS_AUTH_TOKEN: 'test_auth_token' }
+})
+
+const mockStorage = vi.hoisted(() => {
+  const store = new Map<string, string>()
+  return {
+    store,
+    getItem: vi.fn((key: string) => store.get(key) ?? null),
+    setItem: vi.fn((key: string, value: string) => { store.set(key, value) }),
+    removeItem: vi.fn((key: string) => { store.delete(key) }),
+    clear: vi.fn(() => { store.clear() }),
+    get length() { return store.size },
+    key: vi.fn(() => null),
+  }
 })
 
 // ── Test consumer ────────────────────────────────────────────────────────────
@@ -53,7 +70,12 @@ const mockUser: User = {
 describe('AuthContext', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    localStorage.clear()
+    mockStorage.store.clear()
+
+    Object.defineProperty(window, 'localStorage', {
+      value: mockStorage,
+      writable: true,
+    })
   })
 
   describe('AuthProvider', () => {
@@ -70,8 +92,14 @@ describe('AuthContext', () => {
     })
 
     it('hydrates user from stored token on mount', async () => {
-      localStorage.setItem('test_auth_token', 'stored-token-123')
-      mockGet.mockResolvedValue(mockUser)
+      mockStorage.store.set('test_auth_token', 'stored-token-123')
+      mockMe.mockResolvedValue({
+        id: mockUser.id,
+        email: mockUser.email,
+        github_login: mockUser.github_login,
+        authenticated: true,
+        token_expires: 3600,
+      })
 
       render(
         <AuthProvider>
@@ -86,13 +114,13 @@ describe('AuthContext', () => {
         expect(screen.getByTestId('user')).toHaveTextContent('test@example.com')
       })
 
-      expect(mockGet).toHaveBeenCalledWith('/auth/me')
+      expect(mockMe).toHaveBeenCalled()
       expect(screen.queryByText('loading')).not.toBeInTheDocument()
     })
 
     it('clears token when hydration fails', async () => {
-      localStorage.setItem('test_auth_token', 'invalid-token')
-      mockGet.mockRejectedValue(new Error('Unauthorized'))
+      mockStorage.store.set('test_auth_token', 'invalid-token')
+      mockMe.mockRejectedValue(new Error('Unauthorized'))
 
       render(
         <AuthProvider>
@@ -108,13 +136,20 @@ describe('AuthContext', () => {
 
       expect(screen.queryByTestId('token')).not.toBeInTheDocument()
       expect(screen.queryByTestId('user')).not.toBeInTheDocument()
-      expect(localStorage.getItem('test_auth_token')).toBeNull()
+      expect(mockStorage.store.has('test_auth_token')).toBe(false)
     })
 
     it('logs in user and saves token', async () => {
-      mockPost.mockResolvedValue({
+      mockLogin.mockResolvedValue({
         token: 'new-token-456',
-        user: mockUser,
+        expires_in: 3600,
+      })
+      mockMe.mockResolvedValue({
+        id: mockUser.id,
+        email: mockUser.email,
+        github_login: mockUser.github_login,
+        authenticated: true,
+        token_expires: 3600,
       })
 
       render(
@@ -132,24 +167,23 @@ describe('AuthContext', () => {
         expect(screen.getByTestId('user')).toHaveTextContent('test@example.com')
       })
 
-      expect(mockPost).toHaveBeenCalledWith('/auth/login', {
+      expect(mockLogin).toHaveBeenCalledWith({
         email: 'test@example.com',
         password: 'password',
       })
-      expect(localStorage.getItem('test_auth_token')).toBe('new-token-456')
+      expect(mockStorage.store.get('test_auth_token')).toBe('new-token-456')
     })
 
     it('registers user and saves token', async () => {
-      const newUser: User = {
+      const newUser = {
         id: 'user-002',
         email: 'new@example.com',
         github_login: null,
-        created_at: '2025-01-01T00:00:00Z',
-        updated_at: '2025-01-01T00:00:00Z',
       }
 
-      mockPost.mockResolvedValue({
+      mockRegister.mockResolvedValue({
         token: 'register-token-789',
+        expires_in: 3600,
         user: newUser,
       })
 
@@ -168,16 +202,22 @@ describe('AuthContext', () => {
         expect(screen.getByTestId('user')).toHaveTextContent('new@example.com')
       })
 
-      expect(mockPost).toHaveBeenCalledWith('/auth/register', {
+      expect(mockRegister).toHaveBeenCalledWith({
         email: 'new@example.com',
         password: 'password',
       })
-      expect(localStorage.getItem('test_auth_token')).toBe('register-token-789')
+      expect(mockStorage.store.get('test_auth_token')).toBe('register-token-789')
     })
 
     it('logs out user and clears token', async () => {
-      localStorage.setItem('test_auth_token', 'stored-token-123')
-      mockGet.mockResolvedValue(mockUser)
+      mockStorage.store.set('test_auth_token', 'stored-token-123')
+      mockMe.mockResolvedValue({
+        id: mockUser.id,
+        email: mockUser.email,
+        github_login: mockUser.github_login,
+        authenticated: true,
+        token_expires: 3600,
+      })
 
       render(
         <AuthProvider>
@@ -195,7 +235,7 @@ describe('AuthContext', () => {
 
       expect(screen.queryByTestId('token')).not.toBeInTheDocument()
       expect(screen.queryByTestId('user')).not.toBeInTheDocument()
-      expect(localStorage.getItem('test_auth_token')).toBeNull()
+      expect(mockStorage.store.has('test_auth_token')).toBe(false)
     })
 
     it('throws when useAuth is used outside provider', () => {

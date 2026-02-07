@@ -9,18 +9,18 @@ describe('Card', () => {
   })
 
   it('does not render title when not provided', () => {
-    const { container } = render(<Card><p>Content</p></Card>)
-    expect(container.querySelector('.card__title')).not.toBeInTheDocument()
+    render(<Card><p>Content</p></Card>)
+    expect(screen.queryByRole('heading')).not.toBeInTheDocument()
   })
 
   it('renders title when provided', () => {
     render(<Card title="Stats"><p>Content</p></Card>)
-    expect(screen.getByText('Stats')).toBeInTheDocument()
-    expect(screen.getByText('Stats').closest('.card__title')).toBeInTheDocument()
+    const heading = screen.getByRole('heading', { name: 'Stats' })
+    expect(heading).toBeInTheDocument()
   })
 
-  it('applies card class', () => {
+  it('applies Paper as root element', () => {
     const { container } = render(<Card><p>Hi</p></Card>)
-    expect(container.querySelector('.card')).toBeInTheDocument()
+    expect(container.querySelector('.MuiPaper-root')).toBeInTheDocument()
   })
 })

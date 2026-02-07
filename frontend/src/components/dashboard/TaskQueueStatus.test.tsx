@@ -18,11 +18,14 @@ describe('TaskQueueStatus', () => {
   })
 
   it('shows active tasks sorted by priority', () => {
-    const { container } = render(<TaskQueueStatus tasks={tasks} />)
-    const items = container.querySelectorAll('.task-queue__item')
-    expect(items.length).toBe(2)
-    expect(items[0]?.textContent).toContain('Fix auth bug')
-    expect(items[1]?.textContent).toContain('Add tests')
+    render(<TaskQueueStatus tasks={tasks} />)
+    const titles = screen.getAllByText(/Fix auth bug|Add tests/)
+    expect(titles).toHaveLength(2)
+    // high priority 'Fix auth bug' should come before normal priority 'Add tests'
+    const allText = document.body.textContent ?? '' // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- textContent is nullable per DOM spec
+    const fixIndex = allText.indexOf('Fix auth bug')
+    const addIndex = allText.indexOf('Add tests')
+    expect(fixIndex).toBeLessThan(addIndex)
   })
 
   it('shows retry count', () => {
