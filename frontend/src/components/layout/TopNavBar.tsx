@@ -3,7 +3,7 @@ import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import { Tooltip } from '@/components/primitives/Tooltip';
 import Badge from '@mui/material/Badge';
-import { LAYOUT, LAYOUT_COLORS, ANIMATION } from '@/constants';
+import { LAYOUT, LAYOUT_COLORS, ANIMATION, DESIGN } from '@/constants';
 import type { NavBarItem } from './types';
 
 type TopNavBarProps = {
@@ -23,12 +23,12 @@ function TopNavBar({ navItems, utilityItems, trailing }: TopNavBarProps) {
             height: 28,
             borderRadius: '6px',
             position: 'relative',
-            color: item.isActive ? '#3b82f6' : 'text.secondary',
+            color: item.isActive ? 'primary.main' : 'text.secondary',
             backgroundColor: 'transparent',
             transition: `color ${ANIMATION.FAST}ms ease, filter ${ANIMATION.FAST}ms ease`,
-            filter: item.isActive ? 'drop-shadow(0 0 4px rgba(59, 130, 246, 0.4))' : 'none',
+            filter: item.isActive ? DESIGN.ACTIVE_GLOW : 'none',
             '&:hover': {
-              color: item.isActive ? '#60a5fa' : 'text.primary',
+              color: item.isActive ? 'primary.light' : 'text.primary',
               backgroundColor: 'transparent',
             },
             '&::after': item.isActive
@@ -40,7 +40,7 @@ function TopNavBar({ navItems, utilityItems, trailing }: TopNavBarProps) {
                   right: 4,
                   height: 2,
                   borderRadius: 1,
-                  background: 'linear-gradient(90deg, #3b82f6, #2dd4bf)',
+                  background: DESIGN.ACTIVE_GRADIENT,
                 }
               : undefined,
           }}

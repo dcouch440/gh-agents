@@ -87,7 +87,7 @@ const fetchAll = async (): Promise<void> => {
   store.setState({ loading: true, error: null })
   try {
     const data = await api.workflows.list()
-    store.setState({ items: nmFromArray(data.items), loading: false, lastFetched: Date.now() })
+    store.setState({ items: nmFromArray(data), loading: false, lastFetched: Date.now() })
   } catch (e) {
     store.setState({ loading: false, error: extractError(e) })
   }

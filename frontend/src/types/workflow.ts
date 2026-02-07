@@ -1,10 +1,12 @@
 type Workflow = {
   id: string
-  user_id: string
   name: string
   description: string | null
   created_at: string
-  updated_at: string
+  container_enabled: boolean
+  target_repo_url: string | null
+  target_branch: string | null
+  vpn_enabled: boolean
 }
 
 type WorkflowStep = {
