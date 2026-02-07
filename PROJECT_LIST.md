@@ -1,0 +1,1 @@
+Talking to a single agent while the dag system interjects between stream. Only posting relevant information to the main LLM. There should be summery checkmarks through "passdown" the LLM can call on to ease the customer.
