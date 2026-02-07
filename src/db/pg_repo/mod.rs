@@ -1192,29 +1192,45 @@ impl WorkflowRepo for PgRepo {
         user_id: Uuid,
         name: String,
         description: String,
+        container_enabled: bool,
+        target_repo_url: Option<String>,
+        target_branch: Option<String>,
     ) -> Result<WorkflowRow> {
-        let row: WorkflowRow = sqlx::query_as("INSERT INTO workflows (user_id, name, description) VALUES ($1, $2, $3) RETURNING id, user_id, name, description, created_at, version")
-            .bind(user_id)
-            .bind(&name)
-            .bind(&description)
-            .fetch_one(&self.pool)
-            .await?;
+        let row: WorkflowRow = sqlx::query_as(
+            "INSERT INTO workflows (user_id, name, description, container_enabled, target_repo_url, target_branch) \
+             VALUES ($1, $2, $3, $4, $5, $6) \
+             RETURNING id, user_id, name, description, execution_mode, created_at, version, container_enabled, target_repo_url, target_branch",
+        )
+        .bind(user_id)
+        .bind(&name)
+        .bind(&description)
+        .bind(container_enabled)
+        .bind(&target_repo_url)
+        .bind(&target_branch)
+        .fetch_one(&self.pool)
+        .await?;
         Ok(row)
     }
 
     async fn get_workflow(&self, id: Uuid) -> Result<Option<WorkflowRow>> {
-        let row: Option<WorkflowRow> = sqlx::query_as("SELECT id, user_id, name, description, created_at, version FROM workflows WHERE id = $1")
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?;
+        let row: Option<WorkflowRow> = sqlx::query_as(
+            "SELECT id, user_id, name, description, execution_mode, created_at, version, container_enabled, target_repo_url, target_branch \
+             FROM workflows WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
         Ok(row)
     }
 
     async fn list_workflows(&self, user_id: Uuid) -> Result<Vec<WorkflowRow>> {
-        let rows: Vec<WorkflowRow> = sqlx::query_as("SELECT id, user_id, name, description, created_at, version FROM workflows WHERE user_id = $1 ORDER BY created_at DESC")
-            .bind(user_id)
-            .fetch_all(&self.pool)
-            .await?;
+        let rows: Vec<WorkflowRow> = sqlx::query_as(
+            "SELECT id, user_id, name, description, execution_mode, created_at, version, container_enabled, target_repo_url, target_branch \
+             FROM workflows WHERE user_id = $1 ORDER BY created_at DESC",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
         Ok(rows)
     }
 
@@ -1223,14 +1239,32 @@ impl WorkflowRepo for PgRepo {
         id: Uuid,
         name: Option<String>,
         description: Option<String>,
+        container_enabled: Option<bool>,
+        target_repo_url: Option<Option<String>>,
+        target_branch: Option<Option<String>>,
     ) -> Result<WorkflowRow> {
-        let row: WorkflowRow =
-            sqlx::query_as("UPDATE workflows SET name = COALESCE($1, name), description = COALESCE($2, description), version = version + 1 WHERE id = $3 RETURNING id, user_id, name, description, created_at, version")
-                .bind(name)
-                .bind(description)
-                .bind(id)
-                .fetch_one(&self.pool)
-                .await?;
+        // Build dynamic SET clauses for optional container fields
+        let row: WorkflowRow = sqlx::query_as(
+            "UPDATE workflows SET \
+             name = COALESCE($1, name), \
+             description = COALESCE($2, description), \
+             container_enabled = COALESCE($3, container_enabled), \
+             target_repo_url = CASE WHEN $4 THEN $5 ELSE target_repo_url END, \
+             target_branch = CASE WHEN $6 THEN $7 ELSE target_branch END, \
+             version = version + 1 \
+             WHERE id = $8 \
+             RETURNING id, user_id, name, description, execution_mode, created_at, version, container_enabled, target_repo_url, target_branch",
+        )
+        .bind(name)
+        .bind(description)
+        .bind(container_enabled)
+        .bind(target_repo_url.is_some()) // $4: whether to update target_repo_url
+        .bind(target_repo_url.unwrap_or(None)) // $5: the value (may be None to clear)
+        .bind(target_branch.is_some()) // $6: whether to update target_branch
+        .bind(target_branch.unwrap_or(None)) // $7: the value (may be None to clear)
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await?;
         Ok(row)
     }
 
@@ -1247,8 +1281,8 @@ impl WorkflowRepo for PgRepo {
     async fn create_step(&self, step: WorkflowStepRow) -> Result<WorkflowStepRow> {
         let row: WorkflowStepRow = sqlx::query_as(
             r#"
-            INSERT INTO workflow_steps (id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, for_each_label_field, display_order)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            INSERT INTO workflow_steps (id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, for_each_label_field, display_order, reasoning_trace)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             RETURNING *
             "#,
         )
@@ -1264,6 +1298,7 @@ impl WorkflowRepo for PgRepo {
         .bind(step.interactive_agent_id)
         .bind(&step.for_each_label_field)
         .bind(step.display_order)
+        .bind(step.reasoning_trace)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -1294,8 +1329,8 @@ impl WorkflowRepo for PgRepo {
             UPDATE workflow_steps
             SET agent_id = $1, execution_mode = $2, for_each_ref = $3, prompt_template_id = $4, prompt_template = $5,
                 output_schema_id = $6, output_variable_name = $7, interactive_agent_id = $8, for_each_label_field = $9, display_order = $10,
-                version = version + 1
-            WHERE id = $11
+                reasoning_trace = $11, version = version + 1
+            WHERE id = $12
             RETURNING *
             "#,
         )
@@ -1309,6 +1344,7 @@ impl WorkflowRepo for PgRepo {
         .bind(step.interactive_agent_id)
         .bind(&step.for_each_label_field)
         .bind(step.display_order)
+        .bind(step.reasoning_trace)
         .bind(step.id)
         .fetch_one(&self.pool)
         .await?;

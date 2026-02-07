@@ -465,6 +465,9 @@ pub trait WorkflowRepo: Send + Sync {
         user_id: Uuid,
         name: String,
         description: String,
+        container_enabled: bool,
+        target_repo_url: Option<String>,
+        target_branch: Option<String>,
     ) -> Result<WorkflowRow>;
     async fn get_workflow(&self, id: Uuid) -> Result<Option<WorkflowRow>>;
     async fn list_workflows(&self, user_id: Uuid) -> Result<Vec<WorkflowRow>>;
@@ -473,6 +476,9 @@ pub trait WorkflowRepo: Send + Sync {
         id: Uuid,
         name: Option<String>,
         description: Option<String>,
+        container_enabled: Option<bool>,
+        target_repo_url: Option<Option<String>>,
+        target_branch: Option<Option<String>>,
     ) -> Result<WorkflowRow>;
     async fn delete_workflow(&self, id: Uuid) -> Result<()>;
 

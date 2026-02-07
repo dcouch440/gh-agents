@@ -30,6 +30,7 @@ fn make_step(
         routing_field: None,
         display_order,
         version: 1,
+        reasoning_trace: false,
     }
 }
 
@@ -153,6 +154,7 @@ fn make_for_each_step(id: Uuid, var_name: Option<&str>, display_order: i32) -> W
         routing_field: None,
         display_order,
         version: 1,
+        reasoning_trace: false,
     }
 }
 

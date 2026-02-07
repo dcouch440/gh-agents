@@ -35,6 +35,7 @@ mod tests {
             routing_field: None,
             display_order,
             version: 1,
+            reasoning_trace: false,
         }
     }
 

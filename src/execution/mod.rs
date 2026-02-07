@@ -1,6 +1,7 @@
 //! Execution layer for file, git, and test operations
 
 mod approval;
+pub mod container;
 mod files;
 mod git;
 mod sandbox;
@@ -10,6 +11,9 @@ pub use approval::{
     approval_channel, ApprovalContext, ApprovalError, ApprovalGate, ApprovalGatesConfig,
     ApprovalRequest, ApprovalRequestReceiver, ApprovalRequestSender, ApprovalResponse,
     AutoApprovalGate, AutonomyLevel, DangerLevel, DangerousOperation, InteractiveApprovalGate,
+};
+pub use container::{
+    ContainerConfig, ContainerError, ContainerExecResult, ContainerHandle, ContainerManager,
 };
 pub use files::{FileError, FileOps};
 pub use git::{

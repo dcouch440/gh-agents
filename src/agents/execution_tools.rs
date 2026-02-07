@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::db::ToolRow;
-use crate::execution::{ExecutionContext, FileOps, GitOps, Sandbox, TestRunner};
+use crate::execution::{ContainerHandle, ExecutionContext, FileOps, GitOps, Sandbox, TestRunner};
 use crate::llm::{
     GrokResearchClient, ResearchRequest, ResearchSource, Tool, WebSearchFilters, XSearchFilters,
 };
@@ -653,6 +653,330 @@ async fn exec_web_research(input: &Value) -> Value {
             }
         }),
         Err(e) => json!({ "error": format!("Research failed: {}", e) }),
+    }
+}
+
+// ── Container-aware tool dispatch ──────────────────────────────────────────
+
+/// Execute a tool inside a persistent Docker container.
+///
+/// File/git/command tools delegate to `ContainerHandle`; host-only tools
+/// (web_research, create_doc, search_docs, update_doc) are executed locally.
+pub async fn execute_tool_in_container(
+    name: &str,
+    input: &Value,
+    handle: &ContainerHandle,
+    allowed_tools: Option<&[String]>,
+) -> Value {
+    if let Some(allowed) = allowed_tools {
+        if !allowed.iter().any(|t| t == name) {
+            return json!({ "error": format!("Tool '{}' is not allowed for this agent", name) });
+        }
+    }
+
+    match name {
+        "read_file" => container_read_file(input, handle).await,
+        "write_file" => container_write_file(input, handle).await,
+        "edit_file" => container_edit_file(input, handle).await,
+        "list_files" => container_list_files(input, handle).await,
+        "git_status" => container_git_status(handle).await,
+        "git_diff" => container_git_diff(input, handle).await,
+        "git_add" => container_git_add(input, handle).await,
+        "git_commit" => container_git_commit(input, handle).await,
+        "git_branch" => container_git_branch(input, handle).await,
+        "run_tests" => container_run_tests(input, handle).await,
+        "run_command" => container_run_command(input, handle).await,
+        // Host-side tools — no filesystem needed
+        "web_research" => exec_web_research(input).await,
+        "create_doc" | "search_docs" | "update_doc" => {
+            json!({ "error": format!("Tool '{}' is not supported in container mode", name) })
+        }
+        _ => json!({ "error": format!("Unknown tool: {}", name) }),
+    }
+}
+
+// ── Container tool implementations ────────────────────────────────────────
+
+async fn container_read_file(input: &Value, handle: &ContainerHandle) -> Value {
+    let path = match input["path"].as_str() {
+        Some(p) => p,
+        None => return json!({ "error": "Missing required parameter: path" }),
+    };
+    match handle.read_file(path).await {
+        Ok(content) => json!({ "content": content }),
+        Err(e) => json!({ "error": e.to_string() }),
+    }
+}
+
+async fn container_write_file(input: &Value, handle: &ContainerHandle) -> Value {
+    let path = match input["path"].as_str() {
+        Some(p) => p,
+        None => return json!({ "error": "Missing required parameter: path" }),
+    };
+    let content = match input["content"].as_str() {
+        Some(c) => c,
+        None => return json!({ "error": "Missing required parameter: content" }),
+    };
+    match handle.write_file(path, content).await {
+        Ok(()) => json!({ "success": true, "path": path }),
+        Err(e) => json!({ "error": e.to_string() }),
+    }
+}
+
+async fn container_edit_file(input: &Value, handle: &ContainerHandle) -> Value {
+    let path = match input["path"].as_str() {
+        Some(p) => p,
+        None => return json!({ "error": "Missing required parameter: path" }),
+    };
+    let old_string = match input["old_string"].as_str() {
+        Some(s) => s,
+        None => return json!({ "error": "Missing required parameter: old_string" }),
+    };
+    let new_string = match input["new_string"].as_str() {
+        Some(s) => s,
+        None => return json!({ "error": "Missing required parameter: new_string" }),
+    };
+
+    // Read current content from container
+    let content = match handle.read_file(path).await {
+        Ok(c) => c,
+        Err(e) => return json!({ "error": e.to_string() }),
+    };
+
+    // Handle append mode: empty old_string means append to end
+    if old_string.is_empty() {
+        let new_content = if content.is_empty() {
+            new_string.to_string()
+        } else if content.ends_with('\n') {
+            format!("{}{}", content, new_string)
+        } else {
+            format!("{}\n{}", content, new_string)
+        };
+        return match handle.write_file(path, &new_content).await {
+            Ok(()) => json!({ "success": true, "path": path, "action": "appended" }),
+            Err(e) => json!({ "error": e.to_string() }),
+        };
+    }
+
+    // Count occurrences
+    let matches: Vec<_> = content.match_indices(old_string).collect();
+
+    if matches.is_empty() {
+        return json!({
+            "error": format!("old_string not found in {}", path),
+            "hint": "Check for exact whitespace and newline matches. Use read_file to see the current content."
+        });
+    }
+
+    if matches.len() > 1 {
+        return json!({
+            "error": format!("old_string matches {} locations in {}. Add surrounding context to make it unique.", matches.len(), path),
+            "match_count": matches.len()
+        });
+    }
+
+    // Exactly one match — perform the replacement
+    let byte_offset = matches[0].0;
+    let new_content = format!(
+        "{}{}{}",
+        &content[..byte_offset],
+        new_string,
+        &content[byte_offset + old_string.len()..]
+    );
+
+    match handle.write_file(path, &new_content).await {
+        Ok(()) => {
+            let line_start = content[..byte_offset].matches('\n').count() + 1;
+            let line_end = line_start + new_string.matches('\n').count();
+
+            let new_lines: Vec<&str> = new_content.lines().collect();
+            let preview_start = line_start.saturating_sub(2);
+            let preview_end = (line_end + 2).min(new_lines.len());
+            let preview: Vec<String> = new_lines[preview_start..preview_end]
+                .iter()
+                .enumerate()
+                .map(|(i, line)| format!("{:>4} | {}", preview_start + i + 1, line))
+                .collect();
+
+            json!({
+                "success": true,
+                "path": path,
+                "line_start": line_start,
+                "line_end": line_end,
+                "preview": preview.join("\n")
+            })
+        }
+        Err(e) => json!({ "error": e.to_string() }),
+    }
+}
+
+async fn container_list_files(input: &Value, handle: &ContainerHandle) -> Value {
+    let path = input["path"].as_str().unwrap_or(".");
+    match handle.list_files(path).await {
+        Ok(files) => json!({ "files": files }),
+        Err(e) => json!({ "error": e.to_string() }),
+    }
+}
+
+async fn container_git_status(handle: &ContainerHandle) -> Value {
+    match handle.git(&["status", "--porcelain=v1", "-b"]).await {
+        Ok(output) => {
+            let mut branch = String::new();
+            let mut staged = Vec::new();
+            let mut unstaged = Vec::new();
+            let mut untracked = Vec::new();
+
+            for line in output.lines() {
+                if let Some(rest) = line.strip_prefix("## ") {
+                    // Branch header: "## main...origin/main"
+                    branch = rest.split("...").next().unwrap_or("").to_string();
+                    continue;
+                }
+                if line.len() < 3 {
+                    continue;
+                }
+                let index_status = line.as_bytes()[0];
+                let worktree_status = line.as_bytes()[1];
+                let file_path = &line[3..];
+
+                if index_status == b'?' {
+                    untracked.push(file_path.to_string());
+                } else {
+                    if index_status != b' ' && index_status != b'?' {
+                        staged.push(json!({
+                            "path": file_path,
+                            "change_type": porcelain_status_label(index_status)
+                        }));
+                    }
+                    if worktree_status != b' ' && worktree_status != b'?' {
+                        unstaged.push(json!({
+                            "path": file_path,
+                            "change_type": porcelain_status_label(worktree_status)
+                        }));
+                    }
+                }
+            }
+
+            json!({
+                "branch": branch,
+                "staged": staged,
+                "unstaged": unstaged,
+                "untracked": untracked,
+            })
+        }
+        Err(e) => json!({ "error": e.to_string() }),
+    }
+}
+
+/// Map porcelain v1 status byte to a human label.
+fn porcelain_status_label(byte: u8) -> &'static str {
+    match byte {
+        b'M' => "Modified",
+        b'A' => "Added",
+        b'D' => "Deleted",
+        b'R' => "Renamed",
+        b'C' => "Copied",
+        b'U' => "Unmerged",
+        _ => "Unknown",
+    }
+}
+
+async fn container_git_diff(input: &Value, handle: &ContainerHandle) -> Value {
+    let staged = input["staged"].as_bool().unwrap_or(false);
+    let args = if staged {
+        vec!["diff", "--cached"]
+    } else {
+        vec!["diff"]
+    };
+    match handle.git(&args).await {
+        Ok(diff) => json!({ "diff": diff }),
+        Err(e) => json!({ "error": e.to_string() }),
+    }
+}
+
+async fn container_git_add(input: &Value, handle: &ContainerHandle) -> Value {
+    let paths = match input["paths"].as_array() {
+        Some(arr) => arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>(),
+        None => return json!({ "error": "Missing required parameter: paths" }),
+    };
+    let mut args = vec!["add", "--"];
+    args.extend(paths.iter().copied());
+    match handle.git(&args).await {
+        Ok(_) => json!({ "success": true, "staged": paths }),
+        Err(e) => json!({ "error": e.to_string() }),
+    }
+}
+
+async fn container_git_commit(input: &Value, handle: &ContainerHandle) -> Value {
+    let message = match input["message"].as_str() {
+        Some(m) => m,
+        None => return json!({ "error": "Missing required parameter: message" }),
+    };
+    match handle.git(&["commit", "-m", message]).await {
+        Ok(output) => {
+            // Parse commit SHA from git output: "[branch hash] message"
+            let sha = output
+                .lines()
+                .next()
+                .and_then(|line| line.split_whitespace().nth(1))
+                .map(|s| s.trim_end_matches(']'))
+                .unwrap_or("unknown");
+            json!({
+                "success": true,
+                "sha": sha,
+                "message": message,
+            })
+        }
+        Err(e) => json!({ "error": e.to_string() }),
+    }
+}
+
+async fn container_git_branch(input: &Value, handle: &ContainerHandle) -> Value {
+    if let Some(name) = input["create"].as_str() {
+        match handle.git(&["checkout", "-b", name]).await {
+            Ok(_) => json!({ "created": name }),
+            Err(e) => json!({ "error": e.to_string() }),
+        }
+    } else {
+        match handle.git(&["rev-parse", "--abbrev-ref", "HEAD"]).await {
+            Ok(branch) => json!({ "branch": branch.trim() }),
+            Err(e) => json!({ "error": e.to_string() }),
+        }
+    }
+}
+
+async fn container_run_command(input: &Value, handle: &ContainerHandle) -> Value {
+    let command = match input["command"].as_str() {
+        Some(c) => c,
+        None => return json!({ "error": "Missing required parameter: command" }),
+    };
+    match handle.exec_shell(command).await {
+        Ok(result) => json!({
+            "exit_code": result.exit_code,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "success": result.success,
+        }),
+        Err(e) => json!({ "error": e.to_string() }),
+    }
+}
+
+async fn container_run_tests(input: &Value, handle: &ContainerHandle) -> Value {
+    // In container mode, run_tests just shells out to the test command
+    let pattern = input["pattern"].as_str();
+    let command = match pattern {
+        Some(p) => format!("cargo test {} 2>&1 || npm test -- {} 2>&1", p, p),
+        None => "cargo test 2>&1 || npm test 2>&1".to_string(),
+    };
+    match handle.exec_shell(&command).await {
+        Ok(result) => json!({
+            "exit_code": result.exit_code,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "success": result.success,
+            "duration_ms": result.duration_ms,
+        }),
+        Err(e) => json!({ "error": e.to_string() }),
     }
 }
 

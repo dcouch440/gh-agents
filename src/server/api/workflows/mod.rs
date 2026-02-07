@@ -23,18 +23,27 @@ pub struct WorkflowResponse {
     pub name: String,
     pub description: String,
     pub created_at: DateTime<Utc>,
+    pub container_enabled: bool,
+    pub target_repo_url: Option<String>,
+    pub target_branch: Option<String>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateWorkflowRequest {
     pub name: String,
     pub description: Option<String>,
+    pub container_enabled: Option<bool>,
+    pub target_repo_url: Option<String>,
+    pub target_branch: Option<String>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateWorkflowRequest {
     pub name: Option<String>,
     pub description: Option<String>,
+    pub container_enabled: Option<bool>,
+    pub target_repo_url: Option<Option<String>>,
+    pub target_branch: Option<Option<String>>,
 }
 
 // ============================================================================
@@ -56,6 +65,7 @@ pub struct WorkflowStepResponse {
     pub for_each_label_field: Option<String>,
     pub display_order: i32,
     pub version: i32,
+    pub reasoning_trace: bool,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -70,6 +80,7 @@ pub struct CreateStepRequest {
     pub interactive_agent_id: Option<Uuid>,
     pub for_each_label_field: Option<String>,
     pub display_order: Option<i32>,
+    pub reasoning_trace: Option<bool>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -84,6 +95,7 @@ pub struct UpdateStepRequest {
     pub interactive_agent_id: Option<Uuid>,
     pub for_each_label_field: Option<String>,
     pub display_order: Option<i32>,
+    pub reasoning_trace: Option<bool>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -142,6 +154,7 @@ fn step_response(r: crate::db::WorkflowStepRow) -> WorkflowStepResponse {
         for_each_label_field: r.for_each_label_field,
         display_order: r.display_order,
         version: r.version,
+        reasoning_trace: r.reasoning_trace,
     }
 }
 
@@ -175,6 +188,9 @@ pub async fn list_workflows(
             name: r.name,
             description: r.description,
             created_at: r.created_at,
+            container_enabled: r.container_enabled,
+            target_repo_url: r.target_repo_url,
+            target_branch: r.target_branch,
         })
         .collect();
     Ok(Json(items))
@@ -206,6 +222,9 @@ pub async fn create_workflow(
             auth.user_id.0,
             req.name,
             req.description.unwrap_or_default(),
+            req.container_enabled.unwrap_or(false),
+            req.target_repo_url,
+            req.target_branch,
         )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -216,6 +235,9 @@ pub async fn create_workflow(
             name: row.name,
             description: row.description,
             created_at: row.created_at,
+            container_enabled: row.container_enabled,
+            target_repo_url: row.target_repo_url,
+            target_branch: row.target_branch,
         }),
     ))
 }
@@ -251,6 +273,9 @@ pub async fn get_workflow(
         name: row.name,
         description: row.description,
         created_at: row.created_at,
+        container_enabled: row.container_enabled,
+        target_repo_url: row.target_repo_url,
+        target_branch: row.target_branch,
     }))
 }
 
@@ -288,7 +313,14 @@ pub async fn update_workflow(
         }
     }
     let row = repo
-        .update_workflow(id, req.name, req.description)
+        .update_workflow(
+            id,
+            req.name,
+            req.description,
+            req.container_enabled,
+            req.target_repo_url,
+            req.target_branch,
+        )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(WorkflowResponse {
@@ -296,6 +328,9 @@ pub async fn update_workflow(
         name: row.name,
         description: row.description,
         created_at: row.created_at,
+        container_enabled: row.container_enabled,
+        target_repo_url: row.target_repo_url,
+        target_branch: row.target_branch,
     }))
 }
 
@@ -381,6 +416,7 @@ pub async fn create_workflow_step(
         routing_field: None,
         display_order: req.display_order.unwrap_or(0),
         version: 1,
+        reasoning_trace: req.reasoning_trace.unwrap_or(false),
     };
     let row = repo
         .create_step(step)
@@ -519,6 +555,7 @@ pub async fn update_workflow_step(
         routing_field: existing.routing_field,
         display_order: req.display_order.unwrap_or(existing.display_order),
         version: existing.version,
+        reasoning_trace: req.reasoning_trace.unwrap_or(existing.reasoning_trace),
     };
     let row = repo
         .update_step(step)
