@@ -5,6 +5,8 @@ export { useSplitPane } from './useSplitPane'
 export { useReducedMotion } from './useReducedMotion'
 export { useHoverAnimation } from './useHoverAnimation'
 export { usePageTransition } from './usePageTransition'
+export { useCollapsible } from './useCollapsible'
+export { useTabState } from './useTabState'
 
 // Feature
 export { useInteractiveChat } from './useInteractiveChat'

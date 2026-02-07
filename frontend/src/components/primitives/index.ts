@@ -54,3 +54,24 @@ export type { ActionMenuProps, MenuAction } from './ActionMenu'
 
 export { Tooltip } from './Tooltip'
 export type { TooltipProps } from './Tooltip'
+
+export { PropertySection } from './PropertySection'
+export type { PropertySectionProps } from './PropertySection'
+
+export { PropertyRow } from './PropertyRow'
+export type { PropertyRowProps } from './PropertyRow'
+
+export { AccentBar } from './AccentBar'
+export type { AccentBarProps } from './AccentBar'
+
+export { AccentBarRow } from './AccentBarRow'
+export type { AccentBarRowProps } from './AccentBarRow'
+
+export { TabSelector } from './TabSelector'
+export type { TabOption, TabSelectorProps } from './TabSelector'
+
+export { AddButton } from './AddButton'
+export type { AddButtonProps } from './AddButton'
+
+export { PanelToggle } from './PanelToggle'
+export type { PanelToggleProps } from './PanelToggle'
