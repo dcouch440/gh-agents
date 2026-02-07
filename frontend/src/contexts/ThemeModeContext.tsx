@@ -1,5 +1,6 @@
-import { createContext, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { LS_THEME } from '@/constants';
+import { createContext, useMemo, type ReactNode } from 'react';
+import { useStore } from '@/stores/lib';
+import { uiStore } from '@/stores/uiStore';
 
 type ThemeModeState = {
   mode: 'light' | 'dark';
@@ -9,40 +10,14 @@ type ThemeModeState = {
 
 const ThemeModeContext = createContext<ThemeModeState | null>(null);
 
-const getSystemPreference = (): 'light' | 'dark' =>
-  window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-
-const getInitialMode = (): 'light' | 'dark' => {
-  const stored = localStorage.getItem(LS_THEME);
-  if (stored === 'light' || stored === 'dark') return stored;
-  return getSystemPreference();
-};
-
 function ThemeModeProvider({ children }: { children: ReactNode }) {
-  const [mode, setModeState] = useState<'light' | 'dark'>(getInitialMode);
+  const mode = useStore(uiStore.store, uiStore.selectTheme);
 
-  const setMode = useCallback((newMode: 'light' | 'dark') => {
-    setModeState(newMode);
-    localStorage.setItem(LS_THEME, newMode);
-  }, []);
-
-  const toggleMode = useCallback(() => {
-    setMode(mode === 'light' ? 'dark' : 'light');
-  }, [mode, setMode]);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = (e: MediaQueryListEvent) => {
-      const stored = localStorage.getItem(LS_THEME);
-      if (!stored) {
-        setModeState(e.matches ? 'dark' : 'light');
-      }
-    };
-    mediaQuery.addEventListener('change', handler);
-    return () => mediaQuery.removeEventListener('change', handler);
-  }, []);
-
-  const value = useMemo(() => ({ mode, toggleMode, setMode }), [mode, toggleMode, setMode]);
+  const value = useMemo<ThemeModeState>(() => ({
+    mode,
+    toggleMode: uiStore.toggleTheme,
+    setMode: uiStore.setTheme,
+  }), [mode]);
 
   return (
     <ThemeModeContext.Provider value={value}>
