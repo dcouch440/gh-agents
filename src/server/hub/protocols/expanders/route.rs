@@ -63,6 +63,11 @@ impl ProtocolExpander for RouteExpander {
                 execution_mode: "single".to_string(),
                 prompt_template: None,
                 output_schema: None,
+                routing_mode: None,
+                routing_field: None,
+                for_each_label_field: None,
+                for_each_ref: None,
+                routing_rules: vec![],
             })
             .collect();
 
@@ -131,6 +136,7 @@ mod tests {
                     description: "Urgent handler".to_string(),
                     agent_id: Uuid::new_v4(),
                     agent_name: "Urgent Agent".to_string(),
+                    agent_tools: vec![],
                     display_order: 0,
                 },
                 PortConfig {
@@ -138,6 +144,7 @@ mod tests {
                     description: "Normal handler".to_string(),
                     agent_id: Uuid::new_v4(),
                     agent_name: "Normal Agent".to_string(),
+                    agent_tools: vec![],
                     display_order: 1,
                 },
             ],

@@ -110,6 +110,7 @@ mod tests {
                 description: "Frontend agent".to_string(),
                 agent_id: Uuid::new_v4(),
                 agent_name: "Frontend Dev".to_string(),
+                agent_tools: vec![],
                 display_order: 0,
             },
             PortConfig {
@@ -117,6 +118,7 @@ mod tests {
                 description: "Backend agent".to_string(),
                 agent_id: Uuid::new_v4(),
                 agent_name: "Backend Dev".to_string(),
+                agent_tools: vec![],
                 display_order: 1,
             },
         ]

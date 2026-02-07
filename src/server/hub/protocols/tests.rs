@@ -17,6 +17,7 @@ mod tests {
                     description: "Handles UI/UX tasks".to_string(),
                     agent_id: Uuid::new_v4(),
                     agent_name: "Frontend Dev".to_string(),
+                    agent_tools: vec![],
                     display_order: 0,
                 },
                 PortConfig {
@@ -24,6 +25,7 @@ mod tests {
                     description: "Handles API and server tasks".to_string(),
                     agent_id: Uuid::new_v4(),
                     agent_name: "Backend Dev".to_string(),
+                    agent_tools: vec![],
                     display_order: 1,
                 },
             ],
@@ -47,13 +49,15 @@ mod tests {
         let config = make_decomp_config();
         let expansion = engine.expand(&config).unwrap();
 
-        // Should create 2 downstream steps
-        assert_eq!(expansion.steps.len(), 2);
-        assert_eq!(expansion.steps[0].port_name, "frontend");
-        assert_eq!(expansion.steps[1].port_name, "backend");
+        // Should create 1 dispatch step with label routing
+        assert_eq!(expansion.steps.len(), 1);
+        assert_eq!(expansion.steps[0].port_name, "dispatch");
+        assert_eq!(expansion.steps[0].execution_mode, "for_each");
+        assert_eq!(expansion.steps[0].routing_mode.as_deref(), Some("label"));
+        assert_eq!(expansion.steps[0].routing_rules.len(), 2);
 
-        // Should create 2 edges
-        assert_eq!(expansion.edges.len(), 2);
+        // Should create 1 edge
+        assert_eq!(expansion.edges.len(), 1);
 
         // Output schema should have port enum
         let port_enum = &expansion.output_schema["items"]["properties"]["port"]["enum"];
@@ -107,7 +111,14 @@ mod tests {
         agent_names.insert(agent_id_1, "FE Agent".to_string());
         agent_names.insert(agent_id_2, "BE Agent".to_string());
 
-        let config = engine.build_config("decomp", serde_json::json!({}), &ports, &agent_names);
+        let agent_tools = HashMap::new();
+        let config = engine.build_config(
+            "decomp",
+            serde_json::json!({}),
+            &ports,
+            &agent_names,
+            &agent_tools,
+        );
 
         assert_eq!(config.ports[0].agent_name, "FE Agent");
         assert_eq!(config.ports[1].agent_name, "BE Agent");

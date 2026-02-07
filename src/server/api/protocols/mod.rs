@@ -7,6 +7,8 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use once_cell::sync::Lazy;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -14,6 +16,12 @@ use super::AppError;
 use crate::server::auth as auth_utils;
 use crate::server::hub::protocols::types::ProtocolExpansion;
 use crate::server::state::AppState;
+
+/// Valid port name pattern: lowercase alphanumeric + underscores, starting with a letter.
+static PORT_NAME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[a-z][a-z0-9_]*$").unwrap());
+
+/// Maximum allowed port name length.
+const MAX_PORT_NAME_LEN: usize = 50;
 
 mod tests;
 
@@ -317,6 +325,17 @@ pub async fn create_port(
     Path(protocol_id): Path<Uuid>,
     Json(request): Json<CreatePortRequest>,
 ) -> Result<(StatusCode, Json<ProtocolPortResponse>), AppError> {
+    // Validate port name format
+    if request.port_name.is_empty()
+        || request.port_name.len() > MAX_PORT_NAME_LEN
+        || !PORT_NAME_REGEX.is_match(&request.port_name)
+    {
+        return Err(AppError::bad_request(format!(
+            "Invalid port name \"{}\": must match [a-z][a-z0-9_]* and be at most {} characters",
+            request.port_name, MAX_PORT_NAME_LEN
+        )));
+    }
+
     let repo = &state.repos().protocols;
 
     // Verify protocol exists
@@ -354,6 +373,16 @@ pub async fn update_port(
     Path((_, port_id)): Path<(Uuid, Uuid)>,
     Json(request): Json<UpdatePortRequest>,
 ) -> Result<Json<ProtocolPortResponse>, AppError> {
+    // Validate port name if being updated
+    if let Some(ref name) = request.port_name {
+        if name.is_empty() || name.len() > MAX_PORT_NAME_LEN || !PORT_NAME_REGEX.is_match(name) {
+            return Err(AppError::bad_request(format!(
+                "Invalid port name \"{}\": must match [a-z][a-z0-9_]* and be at most {} characters",
+                name, MAX_PORT_NAME_LEN
+            )));
+        }
+    }
+
     let repo = &state.repos().protocols;
     let port = repo
         .update_protocol_port(
@@ -408,8 +437,9 @@ pub async fn preview_expansion(
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    // Resolve agent names for prompt injection
+    // Resolve agent names and tools for prompt injection
     let agent_names = resolve_agent_names(&state, &ports).await?;
+    let agent_tools = resolve_agent_tools(&state, &ports).await?;
 
     let engine = state.protocol_engine();
     let config = engine.build_config(
@@ -417,6 +447,7 @@ pub async fn preview_expansion(
         protocol.config,
         &ports,
         &agent_names,
+        &agent_tools,
     );
 
     let expansion = engine
@@ -455,8 +486,9 @@ pub async fn apply_protocol(
         .map_err(|e| AppError::Internal(e.to_string()))?
         .ok_or_else(|| AppError::not_found("workflow step"))?;
 
-    // Resolve agent names
+    // Resolve agent names and tools
     let agent_names = resolve_agent_names(&state, &ports).await?;
+    let agent_tools = resolve_agent_tools(&state, &ports).await?;
 
     // Expand
     let engine = state.protocol_engine();
@@ -465,6 +497,7 @@ pub async fn apply_protocol(
         protocol.config.clone(),
         &ports,
         &agent_names,
+        &agent_tools,
     );
     let expansion = engine
         .expand(&config)
@@ -477,9 +510,15 @@ pub async fn apply_protocol(
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    // 2. Update anchor step with output schema and prompt injection
+    // 2. Update anchor step with output schema and prompt injection.
+    // Resolve the anchor's output variable name for for_each_ref resolution.
+    let anchor_output_var = anchor_step
+        .output_variable_name
+        .clone()
+        .unwrap_or_else(|| format!("protocol_{}", protocol_id));
     let mut updated_step = anchor_step.clone();
     updated_step.output_schema_id = Some(schema_row.id);
+    updated_step.output_variable_name = Some(anchor_output_var.clone());
     if !expansion.prompt_injection.is_empty() {
         updated_step.prompt_template = format!(
             "{}\n\n{}",
@@ -491,16 +530,25 @@ pub async fn apply_protocol(
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    // 3. Create downstream steps and edges
+    // 3. Create downstream steps, routing rules, and edges
     let mut created_steps = Vec::new();
     for step_def in &expansion.steps {
+        // Resolve the {anchor_output} sentinel in for_each_ref
+        let resolved_for_each_ref = step_def.for_each_ref.as_ref().map(|r| {
+            if r == "{anchor_output}" {
+                anchor_output_var.clone()
+            } else {
+                r.clone()
+            }
+        });
+
         let new_step = crate::db::WorkflowStepRow {
             id: Uuid::new_v4(),
             workflow_id: anchor_step.workflow_id,
             agent_id: step_def.agent_id,
             execution_mode: step_def.execution_mode.clone(),
             agent_execution_mode: None,
-            for_each_ref: None,
+            for_each_ref: resolved_for_each_ref,
             prompt_template_id: None,
             prompt_template: step_def
                 .prompt_template
@@ -509,10 +557,10 @@ pub async fn apply_protocol(
             output_schema_id: None,
             output_variable_name: Some(step_def.port_name.clone()),
             interactive_agent_id: None,
-            for_each_label_field: None,
+            for_each_label_field: step_def.for_each_label_field.clone(),
             room_id: None,
-            routing_mode: None,
-            routing_field: None,
+            routing_mode: step_def.routing_mode.clone(),
+            routing_field: step_def.routing_field.clone(),
             display_order: created_steps.len() as i32 + anchor_step.display_order + 1,
             version: 1,
             reasoning_trace: false,
@@ -524,6 +572,20 @@ pub async fn apply_protocol(
             .await
             .map_err(|e| AppError::Internal(e.to_string()))?;
 
+        // Create routing rules for label-routed steps
+        for rule in &step_def.routing_rules {
+            wf_repo
+                .create_routing_rule(
+                    created.id,
+                    &rule.label_value,
+                    rule.agent_id,
+                    rule.description.clone(),
+                    rule.display_order,
+                )
+                .await
+                .map_err(|e| AppError::Internal(e.to_string()))?;
+        }
+
         created_steps.push(CreatedStepResponse {
             port_name: step_def.port_name.clone(),
             step_id: created.id,
@@ -532,8 +594,13 @@ pub async fn apply_protocol(
     }
 
     // 4. Create edges from anchor → downstream steps
+    let mut all_edges = wf_repo
+        .list_edges(anchor_step.workflow_id)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
     for (edge_def, created) in expansion.edges.iter().zip(created_steps.iter()) {
-        let edge = crate::db::WorkflowStepEdgeRow {
+        all_edges.push(crate::db::WorkflowStepEdgeRow {
             id: Uuid::new_v4(),
             from_step_id: step_id,
             to_step_id: created.step_id,
@@ -544,19 +611,13 @@ pub async fn apply_protocol(
             condition_value: edge_def.condition_value.clone(),
             edge_label: Some(edge_def.target_port_name.clone()),
             workflow_id: anchor_step.workflow_id,
-        };
-
-        // Get existing edges and append new one
-        let mut edges = wf_repo
-            .list_edges(anchor_step.workflow_id)
-            .await
-            .map_err(|e| AppError::Internal(e.to_string()))?;
-        edges.push(edge);
-        wf_repo
-            .set_edges(anchor_step.workflow_id, edges)
-            .await
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+        });
     }
+
+    wf_repo
+        .set_edges(anchor_step.workflow_id, all_edges)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     // 5. Store protocol linkage snapshot
     let snapshot =
@@ -615,4 +676,25 @@ async fn resolve_agent_names(
         names.insert(port.agent_id, agent.name);
     }
     Ok(names)
+}
+
+/// Resolve agent tool names from agent IDs in the port rows.
+async fn resolve_agent_tools(
+    state: &AppState,
+    ports: &[crate::db::ProtocolPortRow],
+) -> Result<HashMap<Uuid, Vec<String>>, AppError> {
+    let mut tools_map = HashMap::new();
+    for port in ports {
+        if tools_map.contains_key(&port.agent_id) {
+            continue;
+        }
+        let tools = state
+            .repo()
+            .get_agent_tools(port.agent_id)
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let tool_names: Vec<String> = tools.into_iter().map(|t| t.name).collect();
+        tools_map.insert(port.agent_id, tool_names);
+    }
+    Ok(tools_map)
 }

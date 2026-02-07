@@ -15,6 +15,9 @@ pub enum ProtocolError {
     #[error("Duplicate port name: {0}")]
     DuplicatePortName(String),
 
+    #[error("Invalid port name \"{0}\": must match [a-z][a-z0-9_]* and be at most 50 characters")]
+    InvalidPortName(String),
+
     #[error("Database error: {0}")]
     Database(#[from] anyhow::Error),
 }

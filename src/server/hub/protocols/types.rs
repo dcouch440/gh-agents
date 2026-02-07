@@ -29,6 +29,8 @@ pub struct PortConfig {
     pub agent_id: Uuid,
     /// Agent name (resolved from DB, used for prompt injection).
     pub agent_name: String,
+    /// Tool names available to this port's agent (for prompt injection).
+    pub agent_tools: Vec<String>,
     /// Display ordering.
     pub display_order: i32,
 }
@@ -60,7 +62,7 @@ pub struct ProtocolExpansion {
 pub struct StepDefinition {
     /// Which protocol port this step fulfills.
     pub port_name: String,
-    /// Assigned agent ID.
+    /// Assigned agent ID (fallback agent for label-routed steps).
     pub agent_id: Uuid,
     /// Step execution mode ("single", "for_each", etc.).
     pub execution_mode: String,
@@ -68,6 +70,30 @@ pub struct StepDefinition {
     pub prompt_template: Option<String>,
     /// Optional output schema for the step.
     pub output_schema: Option<serde_json::Value>,
+    /// Routing mode for label-based dispatch (e.g., "label").
+    pub routing_mode: Option<String>,
+    /// Field name used for routing lookup on the step (e.g., "port").
+    pub routing_field: Option<String>,
+    /// For for_each steps: field in each element to extract the label from.
+    pub for_each_label_field: Option<String>,
+    /// Reference to the variable containing the array to iterate.
+    /// Use `"{anchor_output}"` as sentinel; the apply handler resolves it.
+    pub for_each_ref: Option<String>,
+    /// Routing rules for label-based agent dispatch.
+    pub routing_rules: Vec<RoutingRuleDefinition>,
+}
+
+/// A routing rule to create on a step during protocol application.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoutingRuleDefinition {
+    /// Label value that triggers this rule (matches for_each_label_field).
+    pub label_value: String,
+    /// Human-readable description of what this route handles.
+    pub description: Option<String>,
+    /// Agent to dispatch to when this label matches.
+    pub agent_id: Uuid,
+    /// Display ordering.
+    pub display_order: i32,
 }
 
 /// An edge to be created between the orchestrator and a downstream step.
