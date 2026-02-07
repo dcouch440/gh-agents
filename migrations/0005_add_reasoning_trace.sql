@@ -4,4 +4,4 @@
 -- before passing output downstream.
 
 ALTER TABLE public.workflow_steps
-    ADD COLUMN reasoning_trace BOOLEAN NOT NULL DEFAULT false;
+    ADD COLUMN IF NOT EXISTS reasoning_trace BOOLEAN NOT NULL DEFAULT false;
