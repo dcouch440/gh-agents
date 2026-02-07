@@ -15,7 +15,7 @@ import {
   CircularProgress,
 } from '@mui/material'
 import { useRouterModeMutations } from '@/hooks/useRouterModeMutations'
-import { useTools } from '@/hooks/useTools'
+import { useStore, toolStore } from '@/stores'
 import { ApiError } from '@/api'
 import type { RouterMode } from '@/types'
 
@@ -173,7 +173,9 @@ function ModeFormDialog({
 }: ModeFormDialogProps) {
   const [state, dispatch] = useReducer(formReducer, initialFormState)
   const { createMode, updateMode, loadModeTools, saveModeTools, loadingTools } = useRouterModeMutations()
-  const { tools: allTools = [] } = useTools()
+  const allTools = useStore(toolStore.store, toolStore.selectAll)
+
+  useEffect(() => { void toolStore.fetchAll() }, [])
   const isEdit = mode !== null
 
   useEffect(() => {

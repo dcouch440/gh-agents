@@ -4,15 +4,13 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { AgentDetailPage } from './AgentDetailPage'
 import type { Agent } from '@/types/agent'
 
-const { mockUseAgent, mockUseAgentDocuments, mockUseDocuments, mockUseToolRouter, mockUseToolRouterMutations, mockUseRouterModes, mockUseRouterModeMutations, mockUseTools } = vi.hoisted(() => ({
+const { mockUseAgent, mockUseAgentDocuments, mockUseToolRouter, mockUseToolRouterMutations, mockUseRouterModes, mockUseRouterModeMutations } = vi.hoisted(() => ({
   mockUseAgent: vi.fn(),
   mockUseAgentDocuments: vi.fn(),
-  mockUseDocuments: vi.fn(),
   mockUseToolRouter: vi.fn(),
   mockUseToolRouterMutations: vi.fn(),
   mockUseRouterModes: vi.fn(),
   mockUseRouterModeMutations: vi.fn(),
-  mockUseTools: vi.fn(),
 }))
 
 vi.mock('@/hooks/useAgents', () => ({
@@ -21,10 +19,6 @@ vi.mock('@/hooks/useAgents', () => ({
 
 vi.mock('@/hooks/useAgentDocuments', () => ({
   useAgentDocuments: mockUseAgentDocuments,
-}))
-
-vi.mock('@/hooks/useDocuments', () => ({
-  useDocuments: mockUseDocuments,
 }))
 
 vi.mock('@/hooks/useToolRouter', () => ({
@@ -43,13 +37,11 @@ vi.mock('@/hooks/useRouterModeMutations', () => ({
   useRouterModeMutations: mockUseRouterModeMutations,
 }))
 
-vi.mock('@/hooks/useTools', () => ({
-  useTools: mockUseTools,
-}))
-
 vi.mock('@/api', () => ({
   api: {
     agents: { update: vi.fn() },
+    tools: { list: vi.fn().mockResolvedValue({ items: [] }), get: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    documents: { list: vi.fn().mockResolvedValue({ items: [] }), get: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), search: vi.fn() },
   },
 }))
 
@@ -81,11 +73,6 @@ const defaultHookReturns = (agentId: string) => {
     saving: false,
     addDocument: vi.fn(),
     removeDocument: vi.fn(),
-  })
-  mockUseDocuments.mockReturnValue({
-    documents: [],
-    loading: false,
-    error: null,
   })
   mockUseToolRouter.mockReturnValue({
     router: null,
@@ -124,11 +111,6 @@ const defaultHookReturns = (agentId: string) => {
     loadingTools: false,
     savingTools: false,
     toolsError: null,
-  })
-  mockUseTools.mockReturnValue({
-    tools: [],
-    loading: false,
-    error: null,
   })
 }
 

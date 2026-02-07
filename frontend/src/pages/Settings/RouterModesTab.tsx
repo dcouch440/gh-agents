@@ -18,7 +18,7 @@ import { ModeFormDialog } from './ModeFormDialog'
 import { ModeToolSelector } from './ModeToolSelector'
 import { useRouterModes } from '@/hooks/useRouterModes'
 import { useRouterModeMutations } from '@/hooks/useRouterModeMutations'
-import { useTools } from '@/hooks/useTools'
+import { useStore, toolStore } from '@/stores'
 import { useToolRouterMutations } from '@/hooks/useToolRouterMutations'
 import { api } from '@/api'
 import type { RouterMode, ToolRouter } from '@/types'
@@ -76,7 +76,9 @@ function RouterModesTab() {
     savingTools,
     toolsError,
   } = useRouterModeMutations()
-  const { tools } = useTools()
+  const tools = useStore(toolStore.store, toolStore.selectAll)
+
+  useEffect(() => { void toolStore.fetchAll() }, [])
 
   const [formDialogOpen, setFormDialogOpen] = useState(false)
   const [toolSelectorOpen, setToolSelectorOpen] = useState(false)

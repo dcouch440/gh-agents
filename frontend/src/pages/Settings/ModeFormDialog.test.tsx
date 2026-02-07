@@ -26,11 +26,18 @@ vi.mock('@/hooks/useRouterModeMutations', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useTools', () => ({
-  useTools: () => ({
-    tools: [],
-  }),
-}))
+vi.mock('@/stores/toolStore', () => {
+  const emptyArray: never[] = []
+  const state = { items: { byId: new Map(), _array: emptyArray, _version: 0 }, loading: false, error: null }
+  return {
+    toolStore: {
+      store: { getState: () => state, subscribe: () => () => {} },
+      selectAll: () => emptyArray,
+      selectLoading: () => false,
+      fetchAll: vi.fn().mockResolvedValue(undefined),
+    },
+  }
+})
 
 describe('ModeFormDialog', () => {
   const mockOnClose = vi.fn()
