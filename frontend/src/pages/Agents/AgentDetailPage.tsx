@@ -1,13 +1,7 @@
 import { useParams } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Box, Typography, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material'
-import { useAgent } from '@/hooks/useAgents'
-import { useAgentDocuments } from '@/hooks/useAgentDocuments'
-import { useToolRouter } from '@/hooks/useToolRouter'
-import { useToolRouterMutations } from '@/hooks/useToolRouterMutations'
-import { useRouterModes } from '@/hooks/useRouterModes'
-import { useRouterModeMutations } from '@/hooks/useRouterModeMutations'
-import { useStore, toolStore, documentStore } from '@/stores'
+import { useStore, toolStore, documentStore, agentStore, toolRouterStore } from '@/stores'
 import { api } from '@/api'
 import {
   PageHeader,
@@ -32,27 +26,105 @@ import type { RouterMode, CreateToolRouterRequest, CreateRouterModeRequest } fro
 
 function AgentDetailPage() {
   const { id } = useParams()
-  const { agent, loading: agentLoading, error: agentError, reload: reloadAgent } = useAgent(id ?? null)
-  const {
-    documents: agentDocs,
-    loading: docsLoading,
-    error: docsError,
-    saving,
-    addDocument,
-    removeDocument,
-  } = useAgentDocuments(id ?? null)
+
+  // Agent data from store
+  const agent = useStore(agentStore.store, agentStore.selectById(id ?? ''))
+  const agentLoading = useStore(agentStore.store, agentStore.selectLoading)
+  const agentError = useStore(agentStore.store, agentStore.selectError)
+
+  // Agent context documents from store
+  const agentDocs = useStore(agentStore.store, agentStore.selectContext(id ?? ''))
+  const [docsLoading, setDocsLoading] = useState(true)
+  const [docsError, setDocsError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
   const allDocuments = useStore(documentStore.store, documentStore.selectAll)
   const allDocsLoading = useStore(documentStore.store, documentStore.selectLoading)
   const [showAddDialog, setShowAddDialog] = useState(false)
 
-  // Router & Modes hooks
-  const toolRouter = useToolRouter(agent?.router_id ?? null)
-  const toolRouterMutations = useToolRouterMutations()
-  const modes = useRouterModes(agent?.router_id ?? null)
-  const modeMutations = useRouterModeMutations()
+  // Router data from store
+  const routerId = agent?.router_id ?? null
+  const router = useStore(toolRouterStore.store, toolRouterStore.selectById(routerId ?? ''))
+  const routerLoading = useStore(toolRouterStore.store, toolRouterStore.selectLoading)
+  const routerError = useStore(toolRouterStore.store, toolRouterStore.selectError)
+  const routerModes = useStore(toolRouterStore.store, toolRouterStore.selectModes(routerId ?? ''))
+  const [modesLoading, setModesLoading] = useState(false)
+  const [modesError, setModesError] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [savingTools, setSavingTools] = useState(false)
+  const [loadingToolsFlag, setLoadingToolsFlag] = useState(false)
+
   const allTools = useStore(toolStore.store, toolStore.selectAll)
 
   useEffect(() => { void toolStore.fetchAll(); void documentStore.fetchAll() }, [])
+
+  // Fetch agent
+  useEffect(() => {
+    if (!id) return
+    void agentStore.fetchOne(id)
+  }, [id])
+
+  // Fetch agent context documents
+  useEffect(() => {
+    if (!id) return
+    setDocsLoading(true)
+    setDocsError(null)
+    agentStore.fetchContext(id)
+      .catch((e: unknown) => setDocsError(e instanceof Error ? e.message : 'Failed to load context'))
+      .finally(() => setDocsLoading(false))
+  }, [id])
+
+  // Fetch router + modes when agent has a router
+  useEffect(() => {
+    if (!routerId) return
+    void toolRouterStore.fetchOne(routerId)
+    setModesLoading(true)
+    setModesError(null)
+    toolRouterStore.fetchModes(routerId)
+      .catch((e: unknown) => setModesError(e instanceof Error ? e.message : 'Failed to load modes'))
+      .finally(() => setModesLoading(false))
+  }, [routerId])
+
+  const reloadAgent = useCallback(async () => {
+    if (!id) return
+    await agentStore.fetchOne(id)
+  }, [id])
+
+  const addDocument = useCallback(async (documentId: string) => {
+    if (!id) return
+    const currentIds = agentDocs.map((d) => d.id)
+    if (currentIds.includes(documentId)) return
+    setSaving(true)
+    try {
+      await agentStore.setContext(id, [...currentIds, documentId])
+    } finally {
+      setSaving(false)
+    }
+  }, [id, agentDocs])
+
+  const removeDocument = useCallback(async (documentId: string) => {
+    if (!id) return
+    const currentIds = agentDocs.map((d) => d.id).filter((did) => did !== documentId)
+    setSaving(true)
+    try {
+      await agentStore.setContext(id, currentIds)
+    } finally {
+      setSaving(false)
+    }
+  }, [id, agentDocs])
+
+  const reloadModes = useCallback(async () => {
+    if (!routerId) return
+    setModesLoading(true)
+    setModesError(null)
+    try {
+      await toolRouterStore.fetchModes(routerId)
+    } catch (e) {
+      setModesError(e instanceof Error ? e.message : 'Failed to load modes')
+    } finally {
+      setModesLoading(false)
+    }
+  }, [routerId])
 
   // Router dialog state
   const [showRouterForm, setShowRouterForm] = useState(false)
@@ -121,24 +193,28 @@ function AgentDetailPage() {
 
   // Router handlers
   const handleCreateRouter = async (data: CreateToolRouterRequest) => {
-    const newRouter = await toolRouterMutations.createRouter(data)
-    await api.agents.update(id, { router_id: newRouter.id })
-    setShowRouterForm(false)
-    await reloadAgent()
+    setCreating(true)
+    try {
+      const newRouter = await toolRouterStore.create(data)
+      await api.agents.update(id, { router_id: newRouter.id })
+      setShowRouterForm(false)
+      await reloadAgent()
+    } finally {
+      setCreating(false)
+    }
   }
 
   const handleUpdateRouter = async (data: CreateToolRouterRequest) => {
     if (!agent.router_id) return
-    await toolRouterMutations.updateRouter(agent.router_id, data)
+    await toolRouterStore.update(agent.router_id, data)
     setShowRouterForm(false)
     setEditingRouter(false)
-    await toolRouter.reload()
   }
 
   const handleDeleteRouter = async () => {
     if (!agent.router_id) return
     if (!confirm('Delete this router and all its modes?')) return
-    await toolRouterMutations.deleteRouter(agent.router_id)
+    await toolRouterStore.remove(agent.router_id)
     await api.agents.update(id, {})
     await reloadAgent()
   }
@@ -146,59 +222,70 @@ function AgentDetailPage() {
   // Mode handlers
   const handleCreateMode = async (data: CreateRouterModeRequest, toolIds: string[]) => {
     if (!agent.router_id) return
-    const newMode = await modeMutations.createMode(agent.router_id, data)
+    const newMode = await toolRouterStore.createMode(agent.router_id, data)
     if (toolIds.length > 0) {
-      await modeMutations.saveModeTools(newMode.id, { tool_ids: toolIds })
+      await toolRouterStore.setModeTools(newMode.id, { tool_ids: toolIds })
     }
     setShowModeForm(false)
-    await modes.reload()
+    await reloadModes()
   }
 
   const handleUpdateMode = async (data: CreateRouterModeRequest, toolIds: string[]) => {
     if (!editingMode) return
-    await modeMutations.updateMode(editingMode.id, data)
-    await modeMutations.saveModeTools(editingMode.id, { tool_ids: toolIds })
+    await toolRouterStore.updateMode(editingMode.id, data)
+    await toolRouterStore.setModeTools(editingMode.id, { tool_ids: toolIds })
     setEditingMode(null)
     setShowModeForm(false)
-    await modes.reload()
+    await reloadModes()
   }
 
   const handleDeleteMode = async (mode: RouterMode) => {
     if (!confirm(`Delete mode "${mode.display_name}"?`)) return
-    await modeMutations.deleteMode(mode.id)
-    await modes.reload()
+    await toolRouterStore.deleteMode(mode.id)
+    await reloadModes()
   }
 
   // Tool assignment handlers
   const handleOpenRouterTools = async () => {
     if (!agent.router_id) return
     setToolAssignmentTarget({ type: 'router', id: agent.router_id })
+    setLoadingToolsFlag(true)
     try {
-      const tools = await toolRouterMutations.loadRouterTools(agent.router_id)
+      const tools = await toolRouterStore.fetchRouterTools(agent.router_id)
       setAssignedToolIds(tools.map((t) => t.id))
     } catch {
       setAssignedToolIds([])
+    } finally {
+      setLoadingToolsFlag(false)
     }
     setShowToolAssignment(true)
   }
 
   const handleOpenModeTools = async (mode: RouterMode) => {
     setToolAssignmentTarget({ type: 'mode', id: mode.id })
+    setLoadingToolsFlag(true)
     try {
-      const tools = await modeMutations.loadModeTools(mode.id)
+      const tools = await toolRouterStore.fetchModeTools(mode.id)
       setAssignedToolIds(tools.map((t) => t.id))
     } catch {
       setAssignedToolIds([])
+    } finally {
+      setLoadingToolsFlag(false)
     }
     setShowToolAssignment(true)
   }
 
   const handleSaveTools = async (toolIds: string[]) => {
     if (!toolAssignmentTarget) return
-    if (toolAssignmentTarget.type === 'router') {
-      await toolRouterMutations.saveRouterTools(toolAssignmentTarget.id, { tool_ids: toolIds })
-    } else {
-      await modeMutations.saveModeTools(toolAssignmentTarget.id, { tool_ids: toolIds })
+    setSavingTools(true)
+    try {
+      if (toolAssignmentTarget.type === 'router') {
+        await toolRouterStore.setRouterTools(toolAssignmentTarget.id, { tool_ids: toolIds })
+      } else {
+        await toolRouterStore.setModeTools(toolAssignmentTarget.id, { tool_ids: toolIds })
+      }
+    } finally {
+      setSavingTools(false)
     }
     setShowToolAssignment(false)
     setToolAssignmentTarget(null)
@@ -218,7 +305,7 @@ function AgentDetailPage() {
   const handleOpenEditMode = async (mode: RouterMode) => {
     setEditingMode(mode)
     try {
-      const tools = await modeMutations.loadModeTools(mode.id)
+      const tools = await toolRouterStore.fetchModeTools(mode.id)
       setEditingModeToolIds(tools.map((t) => t.id))
     } catch {
       setEditingModeToolIds([])
@@ -226,12 +313,12 @@ function AgentDetailPage() {
     setShowModeForm(true)
   }
 
-  const routerFormInitialValues = editingRouter && toolRouter.router
+  const routerFormInitialValues = editingRouter && router
     ? {
-        name: toolRouter.router.name,
-        description: toolRouter.router.description ?? undefined,
-        system_prompt: toolRouter.router.system_prompt,
-        model_id: toolRouter.router.model_id,
+        name: router.name,
+        description: router.description ?? undefined,
+        system_prompt: router.system_prompt,
+        model_id: router.model_id,
       }
     : null
 
@@ -331,31 +418,31 @@ function AgentDetailPage() {
           {!agent.router_id ? (
             <NoRouterState
               onCreateRouter={() => setShowRouterForm(true)}
-              creating={toolRouterMutations.creating}
+              creating={creating}
             />
-          ) : toolRouter.loading ? (
+          ) : routerLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
               <LoadingSpinner size="md" />
             </Box>
-          ) : toolRouter.error ? (
-            <ErrorMessage message={toolRouter.error} />
-          ) : toolRouter.router ? (
+          ) : routerError ? (
+            <ErrorMessage message={routerError} />
+          ) : router ? (
             <>
               <RouterInfoCard
-                router={toolRouter.router}
+                router={router}
                 onEdit={handleOpenEditRouter}
                 onDelete={() => { void handleDeleteRouter() }}
                 onManageTools={() => { void handleOpenRouterTools() }}
               />
-              {modes.loading ? (
+              {modesLoading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
                   <LoadingSpinner size="sm" />
                 </Box>
-              ) : modes.error ? (
-                <ErrorMessage message={modes.error} />
+              ) : modesError ? (
+                <ErrorMessage message={modesError} />
               ) : (
                 <RouterModesList
-                  modes={modes.modes}
+                  modes={routerModes}
                   onEditMode={(m) => { void handleOpenEditMode(m) }}
                   onDeleteMode={(m) => { void handleDeleteMode(m) }}
                   onManageTools={(m) => { void handleOpenModeTools(m) }}
@@ -411,7 +498,7 @@ function AgentDetailPage() {
         onClose={() => { setShowRouterForm(false); setEditingRouter(false) }}
         onSubmit={(data) => { void (editingRouter ? handleUpdateRouter(data) : handleCreateRouter(data)) }}
         initialValues={routerFormInitialValues}
-        saving={toolRouterMutations.creating || toolRouterMutations.updating}
+        saving={creating}
         title={editingRouter ? 'Edit Router' : 'Create Router'}
       />
 
@@ -423,7 +510,7 @@ function AgentDetailPage() {
         initialValues={modeFormInitialValues}
         allTools={allTools}
         initialToolIds={editingModeToolIds}
-        saving={modeMutations.creating || modeMutations.updating}
+        saving={false}
         title={editingMode ? 'Edit Mode' : 'Create Mode'}
       />
 
@@ -434,8 +521,8 @@ function AgentDetailPage() {
         onSave={(toolIds) => { void handleSaveTools(toolIds) }}
         allTools={allTools}
         assignedToolIds={assignedToolIds}
-        saving={toolRouterMutations.savingTools || modeMutations.savingTools}
-        loading={toolRouterMutations.loadingTools || modeMutations.loadingTools}
+        saving={savingTools}
+        loading={loadingToolsFlag}
         title={toolAssignmentTarget?.type === 'router' ? 'Router Tools' : 'Mode Tools'}
       />
     </Box>

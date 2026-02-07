@@ -12,10 +12,8 @@ import {
   FormControlLabel,
   Divider,
   Typography,
-  CircularProgress,
 } from '@mui/material'
-import { useRouterModeMutations } from '@/hooks/useRouterModeMutations'
-import { useStore, toolStore } from '@/stores'
+import { useStore, toolStore, toolRouterStore } from '@/stores'
 import { ApiError } from '@/api'
 import type { RouterMode } from '@/types'
 
@@ -172,7 +170,6 @@ function ModeFormDialog({
   routerId,
 }: ModeFormDialogProps) {
   const [state, dispatch] = useReducer(formReducer, initialFormState)
-  const { createMode, updateMode, loadModeTools, saveModeTools, loadingTools } = useRouterModeMutations()
   const allTools = useStore(toolStore.store, toolStore.selectAll)
 
   useEffect(() => { void toolStore.fetchAll() }, [])
@@ -197,7 +194,7 @@ function ModeFormDialog({
       let cancelled = false
       const load = async () => {
         try {
-          const modeTools = await loadModeTools(mode.id)
+          const modeTools = await toolRouterStore.fetchModeTools(mode.id)
           if (!cancelled) {
             dispatch({ type: 'SET_SELECTED_TOOL_IDS', value: modeTools.map((t) => t.id) })
           }
@@ -210,7 +207,7 @@ function ModeFormDialog({
     } else {
       dispatch({ type: 'RESET' })
     }
-  }, [mode, open, loadModeTools])
+  }, [mode, open])
 
   const handleSubmit = async () => {
     const validationError = validate(state, isEdit)
@@ -225,7 +222,7 @@ function ModeFormDialog({
     try {
       let savedMode: RouterMode
       if (isEdit) {
-        savedMode = await updateMode(mode.id, {
+        savedMode = await toolRouterStore.updateMode(mode.id, {
           display_name: state.display_name,
           description: state.description,
           system_prompt: state.system_prompt,
@@ -236,7 +233,7 @@ function ModeFormDialog({
           display_order: state.display_order,
         })
       } else {
-        savedMode = await createMode(routerId, {
+        savedMode = await toolRouterStore.createMode(routerId, {
           mode_key: state.mode_key,
           display_name: state.display_name,
           description: state.description,
@@ -249,7 +246,7 @@ function ModeFormDialog({
         })
       }
 
-      await saveModeTools(savedMode.id, { tool_ids: state.selectedToolIds })
+      await toolRouterStore.setModeTools(savedMode.id, { tool_ids: state.selectedToolIds })
 
       onSave(savedMode)
       onClose()
@@ -423,11 +420,7 @@ function ModeFormDialog({
           <Typography variant="subtitle2">
             Tools ({state.selectedToolIds.length} selected)
           </Typography>
-          {loadingTools ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-              <CircularProgress size={24} />
-            </Box>
-          ) : allTools.length === 0 ? (
+          {allTools.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
               No tools available
             </Typography>

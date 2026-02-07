@@ -4,69 +4,54 @@ import { RouterModesTab } from './RouterModesTab'
 import { mockRouterMode, mockToolRouter } from '@/test/fixtures'
 
 const {
-  mockListByRouter,
   mockDeleteMode,
-  mockLoadModeTools,
-  mockSaveModeTools,
-  mockToolRoutersList,
-  mockCreateRouter,
+  mockFetchAll,
+  mockFetchModes,
+  mockCreate,
+  mockFetchModeTools,
+  mockSetModeTools,
+  _mockState,
 } = vi.hoisted(() => ({
-  mockListByRouter: vi.fn(),
   mockDeleteMode: vi.fn(),
-  mockLoadModeTools: vi.fn(),
-  mockSaveModeTools: vi.fn(),
-  mockToolRoutersList: vi.fn(),
-  mockCreateRouter: vi.fn(),
+  mockFetchAll: vi.fn(),
+  mockFetchModes: vi.fn(),
+  mockCreate: vi.fn(),
+  mockFetchModeTools: vi.fn().mockResolvedValue([]),
+  mockSetModeTools: vi.fn().mockResolvedValue(undefined),
+  _mockState: { routers: [] as unknown[], modes: [] as unknown[] },
 }))
 
-vi.mock('@/api', () => ({
-  api: {
-    toolRouters: {
-      list: mockToolRoutersList,
+vi.mock('@/stores/toolRouterStore', () => ({
+  toolRouterStore: {
+    store: {
+      getState: () => ({}),
+      subscribe: () => () => {},
     },
-    tools: { list: vi.fn().mockResolvedValue({ items: [] }), get: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    selectAll: () => _mockState.routers,
+    selectLoading: () => false,
+    selectError: () => null,
+    selectModes: () => () => _mockState.modes,
+    fetchAll: mockFetchAll,
+    create: mockCreate,
+    fetchModes: mockFetchModes,
+    deleteMode: mockDeleteMode,
+    fetchModeTools: mockFetchModeTools,
+    setModeTools: mockSetModeTools,
   },
 }))
 
-vi.mock('@/hooks/useRouterModes', () => ({
-  useRouterModes: () => ({
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    modes: mockListByRouter(),
-    loading: false,
-    error: null,
-    reload: vi.fn(),
-  }),
-}))
-
-vi.mock('@/hooks/useRouterModeMutations', () => ({
-  useRouterModeMutations: () => ({
-    deleteMode: mockDeleteMode,
-    updating: false,
-    deleting: false,
-    loadModeTools: mockLoadModeTools,
-    saveModeTools: mockSaveModeTools,
-    loadingTools: false,
-    savingTools: false,
-    toolsError: null,
-  }),
-}))
-
-vi.mock('@/hooks/useToolRouterMutations', () => ({
-  useToolRouterMutations: () => ({
-    createRouter: mockCreateRouter,
-    creating: false,
-    updateRouter: vi.fn(),
-    updating: false,
-    deleteRouter: vi.fn(),
-    deleting: false,
-    loadRouterTools: vi.fn(),
-    loadingTools: false,
-    saveRouterTools: vi.fn(),
-    savingTools: false,
-    toolsError: null,
-  }),
-}))
-
+vi.mock('@/stores/toolStore', () => {
+  const emptyArray: never[] = []
+  const state = { items: { byId: new Map(), _array: emptyArray, _version: 0 }, loading: false, error: null }
+  return {
+    toolStore: {
+      store: { getState: () => state, subscribe: () => () => {} },
+      selectAll: () => emptyArray,
+      selectLoading: () => false,
+      fetchAll: vi.fn().mockResolvedValue(undefined),
+    },
+  }
+})
 
 vi.mock('./ModeFormDialog', () => ({
   ModeFormDialog: ({
@@ -91,8 +76,11 @@ vi.mock('./ModeToolSelector', () => ({
 describe('RouterModesTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockToolRoutersList.mockResolvedValue([mockToolRouter])
-    mockListByRouter.mockReturnValue([mockRouterMode])
+    _mockState.routers = [mockToolRouter]
+    _mockState.modes = [mockRouterMode]
+    mockFetchAll.mockResolvedValue(undefined)
+    mockFetchModes.mockResolvedValue([mockRouterMode])
+    mockCreate.mockResolvedValue(mockToolRouter)
     vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
 
@@ -101,20 +89,8 @@ describe('RouterModesTab', () => {
   })
 
   describe('rendering', () => {
-    it('shows loading spinner while loading', () => {
-      vi.mocked(vi.fn()).mockImplementation(() => ({
-        modes: [],
-        loading: true,
-        error: null,
-        reload: vi.fn(),
-      }))
-
-      // We can't easily override the hook return in this test setup
-      // Skip this test or refactor to use proper mocking
-    })
-
     it('shows empty state when modes is empty', async () => {
-      mockListByRouter.mockReturnValue([])
+      _mockState.modes = []
       render(<RouterModesTab />)
 
       expect(

@@ -4,44 +4,98 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { AgentDetailPage } from './AgentDetailPage'
 import type { Agent } from '@/types/agent'
 
-const { mockUseAgent, mockUseAgentDocuments, mockUseToolRouter, mockUseToolRouterMutations, mockUseRouterModes, mockUseRouterModeMutations } = vi.hoisted(() => ({
-  mockUseAgent: vi.fn(),
-  mockUseAgentDocuments: vi.fn(),
-  mockUseToolRouter: vi.fn(),
-  mockUseToolRouterMutations: vi.fn(),
-  mockUseRouterModes: vi.fn(),
-  mockUseRouterModeMutations: vi.fn(),
+const {
+  mockFetchOne,
+  mockFetchContext,
+  mockFetchRouterOne,
+  mockFetchModes,
+  _agentState,
+  _routerState,
+} = vi.hoisted(() => ({
+  mockFetchOne: vi.fn(),
+  mockFetchContext: vi.fn(),
+  mockFetchRouterOne: vi.fn(),
+  mockFetchModes: vi.fn(),
+  _agentState: { agent: undefined as Agent | undefined, context: [] as unknown[] },
+  _routerState: { router: undefined as unknown, modes: [] as unknown[] },
 }))
 
-vi.mock('@/hooks/useAgents', () => ({
-  useAgent: mockUseAgent,
+vi.mock('@/stores/agentStore', () => ({
+  agentStore: {
+    store: {
+      getState: () => ({}),
+      subscribe: () => () => {},
+    },
+    selectById: () => () => _agentState.agent,
+    selectLoading: () => false,
+    selectError: () => null,
+    selectContext: () => () => _agentState.context,
+    fetchAll: vi.fn().mockResolvedValue(undefined),
+    fetchOne: mockFetchOne,
+    fetchContext: mockFetchContext,
+    setContext: vi.fn().mockResolvedValue(undefined),
+    create: vi.fn(),
+    update: vi.fn(),
+    remove: vi.fn(),
+  },
 }))
 
-vi.mock('@/hooks/useAgentDocuments', () => ({
-  useAgentDocuments: mockUseAgentDocuments,
+vi.mock('@/stores/toolRouterStore', () => ({
+  toolRouterStore: {
+    store: {
+      getState: () => ({}),
+      subscribe: () => () => {},
+    },
+    selectById: () => () => _routerState.router,
+    selectLoading: () => false,
+    selectError: () => null,
+    selectModes: () => () => _routerState.modes,
+    fetchOne: mockFetchRouterOne,
+    fetchModes: mockFetchModes,
+    create: vi.fn(),
+    update: vi.fn(),
+    remove: vi.fn(),
+    createMode: vi.fn(),
+    updateMode: vi.fn(),
+    deleteMode: vi.fn(),
+    fetchRouterTools: vi.fn().mockResolvedValue([]),
+    setRouterTools: vi.fn(),
+    fetchModeTools: vi.fn().mockResolvedValue([]),
+    setModeTools: vi.fn(),
+  },
 }))
 
-vi.mock('@/hooks/useToolRouter', () => ({
-  useToolRouter: mockUseToolRouter,
-}))
+vi.mock('@/stores/toolStore', () => {
+  const emptyArray: never[] = []
+  return {
+    toolStore: {
+      store: { getState: () => ({}), subscribe: () => () => {} },
+      selectAll: () => emptyArray,
+      selectLoading: () => false,
+      fetchAll: vi.fn().mockResolvedValue(undefined),
+    },
+  }
+})
 
-vi.mock('@/hooks/useToolRouterMutations', () => ({
-  useToolRouterMutations: mockUseToolRouterMutations,
-}))
-
-vi.mock('@/hooks/useRouterModes', () => ({
-  useRouterModes: mockUseRouterModes,
-}))
-
-vi.mock('@/hooks/useRouterModeMutations', () => ({
-  useRouterModeMutations: mockUseRouterModeMutations,
-}))
+vi.mock('@/stores/documentStore', () => {
+  const emptyArray: never[] = []
+  return {
+    documentStore: {
+      store: { getState: () => ({}), subscribe: () => () => {} },
+      selectAll: () => emptyArray,
+      selectLoading: () => false,
+      fetchAll: vi.fn().mockResolvedValue(undefined),
+    },
+  }
+})
 
 vi.mock('@/api', () => ({
   api: {
-    agents: { update: vi.fn() },
+    agents: { update: vi.fn(), getContext: vi.fn().mockResolvedValue({ documents: [] }) },
     tools: { list: vi.fn().mockResolvedValue({ items: [] }), get: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
     documents: { list: vi.fn().mockResolvedValue({ items: [] }), get: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), search: vi.fn() },
+    toolRouters: { list: vi.fn().mockResolvedValue([]), get: vi.fn() },
+    routerModes: { listByRouter: vi.fn().mockResolvedValue([]) },
   },
 }))
 
@@ -59,68 +113,17 @@ const makeAgent = (id: string): Agent => ({
   version: 1,
 })
 
-const defaultHookReturns = (agentId: string) => {
-  mockUseAgent.mockReturnValue({
-    agent: makeAgent(agentId),
-    loading: false,
-    error: null,
-    reload: vi.fn(),
-  })
-  mockUseAgentDocuments.mockReturnValue({
-    documents: [],
-    loading: false,
-    error: null,
-    saving: false,
-    addDocument: vi.fn(),
-    removeDocument: vi.fn(),
-  })
-  mockUseToolRouter.mockReturnValue({
-    router: null,
-    loading: false,
-    error: null,
-    reload: vi.fn(),
-  })
-  mockUseToolRouterMutations.mockReturnValue({
-    createRouter: vi.fn(),
-    creating: false,
-    updateRouter: vi.fn(),
-    updating: false,
-    deleteRouter: vi.fn(),
-    deleting: false,
-    loadRouterTools: vi.fn(),
-    loadingTools: false,
-    saveRouterTools: vi.fn(),
-    savingTools: false,
-    toolsError: null,
-  })
-  mockUseRouterModes.mockReturnValue({
-    modes: [],
-    loading: false,
-    error: null,
-    reload: vi.fn(),
-  })
-  mockUseRouterModeMutations.mockReturnValue({
-    createMode: vi.fn(),
-    creating: false,
-    updateMode: vi.fn(),
-    updating: false,
-    deleteMode: vi.fn(),
-    deleting: false,
-    loadModeTools: vi.fn(),
-    saveModeTools: vi.fn(),
-    loadingTools: false,
-    savingTools: false,
-    toolsError: null,
-  })
-}
-
 describe('AgentDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockFetchOne.mockResolvedValue(undefined)
+    mockFetchContext.mockResolvedValue([])
+    mockFetchRouterOne.mockResolvedValue(undefined)
+    mockFetchModes.mockResolvedValue([])
   })
 
   it('renders agent detail with id from params', async () => {
-    defaultHookReturns('test-agent-id')
+    _agentState.agent = makeAgent('test-agent-id')
 
     render(
       <MemoryRouter initialEntries={['/agents/test-agent-id']}>
@@ -136,7 +139,7 @@ describe('AgentDetailPage', () => {
   })
 
   it('displays agent id from route params', async () => {
-    defaultHookReturns('agent-123')
+    _agentState.agent = makeAgent('agent-123')
 
     render(
       <MemoryRouter initialEntries={['/agents/agent-123']}>

@@ -7,23 +7,26 @@ import { ApiError } from '@/api'
 const {
   mockCreateMode,
   mockUpdateMode,
-  mockLoadModeTools,
-  mockSaveModeTools,
+  mockFetchModeTools,
+  mockSetModeTools,
 } = vi.hoisted(() => ({
   mockCreateMode: vi.fn(),
   mockUpdateMode: vi.fn(),
-  mockLoadModeTools: vi.fn(),
-  mockSaveModeTools: vi.fn(),
+  mockFetchModeTools: vi.fn(),
+  mockSetModeTools: vi.fn(),
 }))
 
-vi.mock('@/hooks/useRouterModeMutations', () => ({
-  useRouterModeMutations: () => ({
+vi.mock('@/stores/toolRouterStore', () => ({
+  toolRouterStore: {
+    store: {
+      getState: () => ({}),
+      subscribe: () => () => {},
+    },
     createMode: mockCreateMode,
     updateMode: mockUpdateMode,
-    loadModeTools: mockLoadModeTools,
-    saveModeTools: mockSaveModeTools,
-    loadingTools: false,
-  }),
+    fetchModeTools: mockFetchModeTools,
+    setModeTools: mockSetModeTools,
+  },
 }))
 
 vi.mock('@/stores/toolStore', () => {
@@ -46,8 +49,8 @@ describe('ModeFormDialog', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    mockLoadModeTools.mockResolvedValue([])
-    mockSaveModeTools.mockResolvedValue(undefined)
+    mockFetchModeTools.mockResolvedValue([])
+    mockSetModeTools.mockResolvedValue(undefined)
   })
 
   describe('rendering', () => {
