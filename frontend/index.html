@@ -2,14 +2,145 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+
+    <!-- Theme detection — must run before first paint (mirrors uiStore.ts:46-58) -->
+    <script>
+      (function() {
+        var t = 'dark';
+        try {
+          var s = localStorage.getItem('nexor_theme');
+          if (s === 'light' || s === 'dark') t = s;
+          else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) t = 'light';
+        } catch(e) {}
+        document.documentElement.setAttribute('data-theme', t);
+        document.documentElement.style.backgroundColor = t === 'dark' ? '#080c12' : '#f8f9fb';
+      })();
+    </script>
+
+    <!-- Splash screen styles — inline so they're available before any bundled CSS -->
+    <style>
+      html, body { margin: 0; padding: 0; }
+      html[data-theme="dark"]  { background-color: #080c12; }
+      html[data-theme="light"] { background-color: #f8f9fb; }
+
+      #nexor-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        opacity: 1;
+        transition: opacity 600ms cubic-bezier(0.4, 0, 0.2, 1);
+        pointer-events: none;
+      }
+      html[data-theme="dark"]  #nexor-splash { background-color: #080c12; }
+      html[data-theme="light"] #nexor-splash { background-color: #f8f9fb; }
+
+      #nexor-splash.splash-exit  { opacity: 0; }
+      #nexor-splash.splash-hidden { display: none; }
+
+      /* Gear rotation */
+      @keyframes nexor-spin {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(360deg); }
+      }
+      .nexor-gear {
+        width: 72px;
+        height: 72px;
+        animation: nexor-spin 4s linear infinite;
+      }
+
+      /* Wordmark pulse */
+      @keyframes nexor-pulse {
+        0%, 100% { opacity: 0.35; }
+        50%      { opacity: 1; }
+      }
+      .nexor-wordmark {
+        font-family: 'VT323', monospace;
+        font-size: 26px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        animation: nexor-pulse 2.4s ease-in-out infinite;
+      }
+      html[data-theme="dark"]  .nexor-wordmark { color: #3b82f6; }
+      html[data-theme="light"] .nexor-wordmark { color: #2563eb; }
+
+      /* Light mode: softer glow */
+      html[data-theme="light"] .nexor-gear-stroke {
+        stroke: #2563eb;
+      }
+      html[data-theme="light"] .nexor-gear-group {
+        filter: drop-shadow(0 0 4px rgba(37, 99, 235, 0.18));
+      }
+
+      /* Accessibility: respect reduced motion */
+      @media (prefers-reduced-motion: reduce) {
+        .nexor-gear     { animation-duration: 0s; }
+        .nexor-wordmark { animation-duration: 0s; opacity: 1; }
+        #nexor-splash   { transition-duration: 0s; }
+      }
+    </style>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=VT323&display=swap" rel="stylesheet" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+    <title>nexor</title>
   </head>
   <body>
+    <!-- Splash screen — visible until React signals ready -->
+    <div id="nexor-splash">
+      <svg class="nexor-gear" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="gear-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#3b82f6" />
+            <stop offset="100%" stop-color="#2dd4bf" />
+          </linearGradient>
+          <filter id="gear-glow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="1.8" result="blur" />
+            <feFlood flood-color="#3b82f6" flood-opacity="0.35" />
+            <feComposite in2="blur" operator="in" result="glow" />
+            <feMerge>
+              <feMergeNode in="glow" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+        <g class="nexor-gear-group" filter="url(#gear-glow)" transform="translate(50,50)">
+          <!-- 12-tooth gear: outer r=38, root r=30, computed for perfect symmetry -->
+          <path
+            class="nexor-gear-stroke"
+            fill="none"
+            stroke="url(#gear-grad)"
+            stroke-width="2"
+            stroke-linejoin="round"
+            d="
+              M -4,-37.8 L 4,-37.8 L 4.7,-29.6 L 10.8,-28
+              L 15.5,-34.7 L 22.3,-30.7 L 18.9,-23.3 L 23.3,-18.9
+              L 30.7,-22.3 L 34.7,-15.5 L 28,-10.8 L 29.6,-4.7
+              L 37.8,-4 L 37.8,4 L 29.6,4.7 L 28,10.8
+              L 34.7,15.5 L 30.7,22.3 L 23.3,18.9 L 18.9,23.3
+              L 22.3,30.7 L 15.5,34.7 L 10.8,28 L 4.7,29.6
+              L 4,37.8 L -4,37.8 L -4.7,29.6 L -10.8,28
+              L -15.5,34.7 L -22.3,30.7 L -18.9,23.3 L -23.3,18.9
+              L -30.7,22.3 L -34.7,15.5 L -28,10.8 L -29.6,4.7
+              L -37.8,4 L -37.8,-4 L -29.6,-4.7 L -28,-10.8
+              L -34.7,-15.5 L -30.7,-22.3 L -23.3,-18.9 L -18.9,-23.3
+              L -22.3,-30.7 L -15.5,-34.7 L -10.8,-28 L -4.7,-29.6 Z
+            "
+          />
+          <!-- Hub ring -->
+          <circle cx="0" cy="0" r="13" fill="none" stroke="url(#gear-grad)" stroke-width="2" />
+          <!-- Bore -->
+          <circle cx="0" cy="0" r="5" fill="none" stroke="url(#gear-grad)" stroke-width="1.5" />
+        </g>
+      </svg>
+      <div class="nexor-wordmark">nexor</div>
+    </div>
+
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
