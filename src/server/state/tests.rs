@@ -2,7 +2,9 @@
 
 use super::*;
 use crate::db::traits::MockServerRepo;
-use crate::server::ws::{AgentUpdate, FeedUpdate, TaskUpdate};
+use crate::server::ws::events::{
+    RoomEvent, RoomEventKind, SessionEvent, SessionEventKind, WorkflowEvent, WorkflowEventKind,
+};
 
 use super::test_helpers::default_mock_repos;
 
@@ -51,57 +53,57 @@ fn app_state_new_creates_valid_state() {
 }
 
 #[test]
-fn subscribe_feed_returns_receiver() {
+fn subscribe_returns_receiver() {
     let state = make_state();
-    let _rx = state.events().subscribe_feed();
+    let _rx = state.events().subscribe();
 }
 
 #[test]
-fn subscribe_tasks_returns_receiver() {
+fn broadcast_session_no_panic() {
     let state = make_state();
-    let _rx = state.events().subscribe_tasks();
-}
-
-#[test]
-fn subscribe_agents_returns_receiver() {
-    let state = make_state();
-    let _rx = state.events().subscribe_agents();
-}
-
-#[test]
-fn broadcast_feed_no_panic() {
-    let state = make_state();
-    state.events().broadcast_feed(FeedUpdate {
-        id: Uuid::new_v4(),
-        agent_id: "a".into(),
-        content: "c".into(),
-        item_type: "info".into(),
-        timestamp: Utc::now(),
+    state.broadcast_session(SessionEvent {
+        session_id: Uuid::new_v4(),
         user_id: None,
+        kind: SessionEventKind::Created {
+            title: "Test".to_string(),
+            mode_id: "chat".to_string(),
+        },
     });
 }
 
 #[test]
-fn broadcast_task_no_panic() {
+fn broadcast_room_no_panic() {
     let state = make_state();
-    state.events().broadcast_task(TaskUpdate {
-        id: Uuid::new_v4(),
-        status: "pending".into(),
-        progress: None,
-        assigned_agent: None,
+    state.broadcast_room(RoomEvent {
+        room_session_id: Uuid::new_v4(),
+        run_id: None,
         user_id: None,
+        kind: RoomEventKind::TurnComplete { turn_number: 1 },
     });
 }
 
 #[test]
-fn broadcast_agent_no_panic() {
+fn broadcast_workflow_no_panic() {
     let state = make_state();
-    state.events().broadcast_agent(AgentUpdate {
-        id: "agent-1".into(),
-        status: "idle".into(),
-        current_task: None,
+    state.broadcast_workflow(WorkflowEvent {
+        run_id: Uuid::new_v4(),
+        workflow_id: Uuid::new_v4(),
         user_id: None,
+        kind: WorkflowEventKind::Started { total_steps: 3 },
     });
+}
+
+#[test]
+fn broadcast_and_receive() {
+    let state = make_state();
+    let mut rx = state.events().subscribe();
+    state.broadcast_session(SessionEvent {
+        session_id: Uuid::new_v4(),
+        user_id: None,
+        kind: SessionEventKind::Deleted,
+    });
+    let event = rx.try_recv().unwrap();
+    assert!(matches!(event, crate::server::ws::events::ServerEvent::Session(_)));
 }
 
 #[test]

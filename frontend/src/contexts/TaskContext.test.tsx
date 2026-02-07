@@ -5,18 +5,6 @@ import { mockTask } from '@/test/fixtures'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-let wsHandler: ((data: unknown) => void) | null = null
-
-vi.mock('@/hooks/useWebSocket', () => ({
-  useWebSocket: () => ({
-    status: 'connected' as const,
-    subscribe: (_channel: string, handler: (data: unknown) => void) => {
-      wsHandler = handler
-      return () => { wsHandler = null }
-    },
-  }),
-}))
-
 const { mockList } = vi.hoisted(() => ({ mockList: vi.fn() }))
 
 vi.mock('@/api', () => ({
@@ -45,7 +33,6 @@ function TestConsumer() {
 describe('TaskContext', () => {
   describe('TaskProvider', () => {
     beforeEach(() => {
-      wsHandler = null
       vi.clearAllMocks()
       mockList.mockResolvedValue({ items: [mockTask] })
     })
@@ -60,43 +47,6 @@ describe('TaskContext', () => {
       await waitFor(() => {
         expect(screen.getByTestId('task-task-001')).toHaveTextContent('Test task:pending')
       })
-    })
-
-    it('updates a task status via WS partial update', async () => {
-      render(
-        <TaskProvider>
-          <TestConsumer />
-        </TaskProvider>,
-      )
-
-      await waitFor(() => {
-        expect(screen.getByTestId('task-task-001')).toBeInTheDocument()
-      })
-
-      // Backend sends partial update: { id, status, progress, assigned_agent, user_id }
-      wsHandler?.({ id: 'task-001', status: 'completed', progress: 1.0, assigned_agent: 'agent-001' })
-
-      await waitFor(() => {
-        expect(screen.getByTestId('task-task-001')).toHaveTextContent('Test task:completed')
-      })
-    })
-
-    it('ignores WS update for unknown task id', async () => {
-      render(
-        <TaskProvider>
-          <TestConsumer />
-        </TaskProvider>,
-      )
-
-      await waitFor(() => {
-        expect(screen.getByTestId('task-task-001')).toBeInTheDocument()
-      })
-
-      wsHandler?.({ id: 'task-999', status: 'completed', progress: null, assigned_agent: null })
-
-      // Original task unchanged, no new task added
-      expect(screen.getByTestId('task-task-001')).toHaveTextContent('Test task:pending')
-      expect(screen.queryByTestId('task-task-999')).not.toBeInTheDocument()
     })
 
     it('throws when hook is used outside provider', () => {

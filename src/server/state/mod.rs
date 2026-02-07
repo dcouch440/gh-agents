@@ -18,14 +18,16 @@ use crate::llm::LLMProvider;
 use crate::types::{AppConfig, UserId};
 
 use super::hub::{ModeResolver, PromptRegistry};
-use super::ws::{PipelineUpdate, RoomUpdateEvent, SessionUpdate};
+use super::ws::events::{
+    RoomEvent, ServerEvent, SessionEvent, WorkflowEvent,
+};
 
 mod builder;
 mod events;
 mod repos;
 
 pub use builder::{AppStateBuilder, BuilderError};
-pub use events::{ChannelSizes, EventBus};
+pub use events::EventBus;
 pub use repos::Repos;
 
 #[cfg(test)]
@@ -425,22 +427,26 @@ impl AppState {
 
     // =========================================================================
     // Broadcast methods (delegate to EventBus)
-    // Only keeping the ones that are actively used in production code
     // =========================================================================
 
-    /// Broadcast a session update to all subscribers
-    pub fn broadcast_session(&self, update: SessionUpdate) {
-        self.0.events.broadcast_session(update);
+    /// Broadcast any event to all WebSocket subscribers.
+    pub fn broadcast(&self, event: ServerEvent) {
+        self.0.events.broadcast(event);
     }
 
-    /// Broadcast a pipeline execution update to all subscribers
-    pub fn broadcast_pipeline(&self, update: PipelineUpdate) {
-        self.0.events.broadcast_pipeline(update);
+    /// Broadcast a workflow execution event.
+    pub fn broadcast_workflow(&self, event: WorkflowEvent) {
+        self.broadcast(ServerEvent::Workflow(event));
     }
 
-    /// Broadcast a room event
-    pub fn broadcast_room_update(&self, event: RoomUpdateEvent) {
-        self.0.events.broadcast_room_update(event);
+    /// Broadcast a room event.
+    pub fn broadcast_room(&self, event: RoomEvent) {
+        self.broadcast(ServerEvent::Room(event));
+    }
+
+    /// Broadcast a session event.
+    pub fn broadcast_session(&self, event: SessionEvent) {
+        self.broadcast(ServerEvent::Session(event));
     }
 
     // =========================================================================

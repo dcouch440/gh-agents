@@ -5,7 +5,6 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use chrono::Utc;
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -402,17 +401,13 @@ pub async fn close_room_session(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    state.broadcast_room_update(crate::server::ws::RoomUpdateEvent {
+    state.broadcast_room(crate::server::ws::events::RoomEvent {
         room_session_id: session_id,
         run_id: session.run_id,
-        event: "session_complete".into(),
-        agent_id: None,
-        agent_name: None,
-        content: None,
-        speaker_order: None,
-        turn_number: Some(session.current_turn),
-        timestamp: Utc::now(),
         user_id: None,
+        kind: crate::server::ws::events::RoomEventKind::SessionComplete {
+            turn_number: session.current_turn,
+        },
     });
 
     // If this session is DAG-linked, trigger workflow resume

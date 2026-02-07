@@ -5,18 +5,6 @@ import { mockAgent } from '@/test/fixtures'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-let wsHandler: ((data: unknown) => void) | null = null
-
-vi.mock('@/hooks/useWebSocket', () => ({
-  useWebSocket: () => ({
-    status: 'connected' as const,
-    subscribe: (_channel: string, handler: (data: unknown) => void) => {
-      wsHandler = handler
-      return () => { wsHandler = null }
-    },
-  }),
-}))
-
 const { mockList } = vi.hoisted(() => ({ mockList: vi.fn() }))
 
 vi.mock('@/api', () => ({
@@ -49,7 +37,6 @@ describe('AgentContext', () => {
 
   describe('AgentProvider', () => {
     beforeEach(() => {
-      wsHandler = null
       vi.clearAllMocks()
       mockList.mockResolvedValue({ agents: [mockAgent] })
     })
@@ -65,44 +52,6 @@ describe('AgentContext', () => {
 
       await waitFor(() => {
         expect(screen.getByTestId('agent-agent-001')).toHaveTextContent('TestBot:idle')
-      })
-    })
-
-    it('updates an agent status via WS partial update', async () => {
-      render(
-        <AgentProvider>
-          <TestConsumer />
-        </AgentProvider>,
-      )
-
-      await waitFor(() => {
-        expect(screen.getByTestId('agent-agent-001')).toBeInTheDocument()
-      })
-
-      // Backend sends partial update: { id, status, current_task, user_id }
-      wsHandler?.({ id: 'agent-001', status: 'working', current_task: null })
-
-      await waitFor(() => {
-        expect(screen.getByTestId('agent-agent-001')).toHaveTextContent('TestBot:working')
-      })
-    })
-
-    it('ignores WS update for unknown agent id', async () => {
-      render(
-        <AgentProvider>
-          <TestConsumer />
-        </AgentProvider>,
-      )
-
-      await waitFor(() => {
-        expect(screen.getByTestId('agent-agent-001')).toBeInTheDocument()
-      })
-
-      // Unknown agent — should not add a new entry
-      wsHandler?.({ id: 'agent-999', status: 'idle', current_task: null })
-
-      await waitFor(() => {
-        expect(screen.queryByTestId('agent-agent-999')).not.toBeInTheDocument()
       })
     })
 

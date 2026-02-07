@@ -5,7 +5,6 @@
 
 use std::sync::Arc;
 
-use chrono::Utc;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -19,7 +18,7 @@ use crate::server::hub::{
     RoomSpeakerStrategy,
 };
 use crate::server::state::AppState;
-use crate::server::ws::RoomUpdateEvent;
+use crate::server::ws::events::{RoomEvent, RoomEventKind};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -275,17 +274,16 @@ pub async fn execute_room_turn(
             .to_string();
 
         // Broadcast speaker_start
-        state.broadcast_room_update(RoomUpdateEvent {
+        state.broadcast_room(RoomEvent {
             room_session_id: session.id,
             run_id: None,
-            event: "speaker_start".into(),
-            agent_id: Some(selection.agent_id),
-            agent_name: Some(speaker_name.clone()),
-            content: None,
-            speaker_order: Some(i as i32),
-            turn_number: Some(session.current_turn + 1),
-            timestamp: Utc::now(),
             user_id: Some(user_id),
+            kind: RoomEventKind::SpeakerStart {
+                agent_id: selection.agent_id,
+                agent_name: speaker_name.clone(),
+                speaker_order: i as i32,
+                turn_number: session.current_turn + 1,
+            },
         });
 
         // Resolve mode with transcript as context
@@ -409,17 +407,17 @@ pub async fn execute_room_turn(
                     .await;
 
                 // Broadcast speaker_end
-                state.broadcast_room_update(RoomUpdateEvent {
+                state.broadcast_room(RoomEvent {
                     room_session_id: session.id,
                     run_id: None,
-                    event: "speaker_end".into(),
-                    agent_id: Some(selection.agent_id),
-                    agent_name: Some(speaker_name.clone()),
-                    content: Some(result.content.clone()),
-                    speaker_order: Some(i as i32),
-                    turn_number: Some(session.current_turn + 1),
-                    timestamp: Utc::now(),
                     user_id: Some(user_id),
+                    kind: RoomEventKind::SpeakerEnd {
+                        agent_id: selection.agent_id,
+                        agent_name: speaker_name.clone(),
+                        content: result.content.clone(),
+                        speaker_order: i as i32,
+                        turn_number: session.current_turn + 1,
+                    },
                 });
 
                 results.push(SpeakerResult {
@@ -456,23 +454,17 @@ pub async fn execute_room_turn(
             .await;
     }
 
-    // Broadcast turn_complete
-    state.broadcast_room_update(RoomUpdateEvent {
+    // Broadcast turn_complete or session_complete
+    let kind = if session_completed {
+        RoomEventKind::SessionComplete { turn_number: new_turn }
+    } else {
+        RoomEventKind::TurnComplete { turn_number: new_turn }
+    };
+    state.broadcast_room(RoomEvent {
         room_session_id: session.id,
         run_id: None,
-        event: if session_completed {
-            "session_complete"
-        } else {
-            "turn_complete"
-        }
-        .into(),
-        agent_id: None,
-        agent_name: None,
-        content: None,
-        speaker_order: None,
-        turn_number: Some(new_turn),
-        timestamp: Utc::now(),
         user_id: Some(user_id),
+        kind,
     });
 
     Ok(RoomTurnResult {
@@ -501,17 +493,17 @@ struct RoomStreamSink {
 #[async_trait::async_trait]
 impl StreamSink for RoomStreamSink {
     async fn token(&self, text: &str) {
-        self.state.broadcast_room_update(RoomUpdateEvent {
+        self.state.broadcast_room(RoomEvent {
             room_session_id: self.room_session_id,
             run_id: self.run_id,
-            event: "speaker_token".into(),
-            agent_id: Some(self.agent_id),
-            agent_name: Some(self.agent_name.clone()),
-            content: Some(text.to_string()),
-            speaker_order: Some(self.speaker_order),
-            turn_number: Some(self.turn_number),
-            timestamp: Utc::now(),
             user_id: Some(self.user_id),
+            kind: RoomEventKind::SpeakerToken {
+                agent_id: self.agent_id,
+                agent_name: self.agent_name.clone(),
+                content: text.to_string(),
+                speaker_order: self.speaker_order,
+                turn_number: self.turn_number,
+            },
         });
     }
 

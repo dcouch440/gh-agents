@@ -1,6 +1,5 @@
 import { createContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react'
-import { useWebSocket } from '@/hooks/useWebSocket'
-import { ACTION, WS_EVENT } from '@/constants'
+import { ACTION } from '@/constants'
 import { api } from '@/api'
 import { NotificationSnackbar } from '@/components/primitives/NotificationSnackbar'
 import type { AgentExecution } from '@/types/execution'
@@ -73,15 +72,8 @@ const ReviewQueueContext = createContext<ReviewQueueContextValue | null>(null)
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 
-type ExecutionUpdate = {
-  id: string
-  status: string
-  is_interactive?: boolean
-}
-
 function ReviewQueueProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
-  const { subscribe } = useWebSocket()
   const mountedRef = useRef(true)
 
   const load = useCallback(async () => {
@@ -107,26 +99,6 @@ function ReviewQueueProvider({ children }: { children: ReactNode }) {
       mountedRef.current = false
     }
   }, [load])
-
-  // WS subscription for execution updates
-  useEffect(() => {
-    const unsub = subscribe(WS_EVENT.AGENT_EXECUTION_UPDATE as string, (data) => {
-      const update = data as ExecutionUpdate
-      if (!update.id) return
-
-      if (update.status === 'awaiting_user' && update.is_interactive) {
-        // New interactive execution — reload to get full data
-        void load()
-      } else if (
-        update.status === 'completed' ||
-        update.status === 'failed' ||
-        update.status === 'cancelled'
-      ) {
-        dispatch({ type: ACTION.REMOVE_FROM_QUEUE, id: update.id })
-      }
-    })
-    return unsub
-  }, [subscribe, load])
 
   const dismissNotification = useCallback(() => {
     dispatch({ type: ACTION.DISMISS_NOTIFICATION })

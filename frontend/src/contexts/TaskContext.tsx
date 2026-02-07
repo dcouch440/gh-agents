@@ -1,6 +1,5 @@
 import { createContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react'
-import { useWebSocket } from '@/hooks/useWebSocket'
-import { ACTION, WS_CHANNEL } from '@/constants'
+import { ACTION } from '@/constants'
 import { api } from '@/api'
 import type { Task } from '@/types/task'
 
@@ -71,7 +70,6 @@ const TaskContext = createContext<TaskContextValue | null>(null)
 
 function TaskProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
-  const { subscribe } = useWebSocket()
   const mountedRef = useRef(true)
 
   const load = useCallback(async () => {
@@ -90,16 +88,6 @@ function TaskProvider({ children }: { children: ReactNode }) {
     void load()
     return () => { mountedRef.current = false }
   }, [load])
-
-  useEffect(() => {
-    const unsub = subscribe(WS_CHANNEL.TASKS, (data) => {
-      const update = data as TaskUpdate
-      if (update.id) {
-        dispatch({ type: ACTION.UPDATE, update })
-      }
-    })
-    return unsub
-  }, [subscribe])
 
   return (
     <TaskContext.Provider value={{ ...state, reload: () => { void load() } }}>

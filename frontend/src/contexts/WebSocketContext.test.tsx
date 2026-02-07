@@ -4,7 +4,7 @@ import { WebSocketProvider } from './WebSocketContext'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { AuthProvider } from './AuthContext'
 import type { User } from '@/types/user'
-import type { WsChannel } from '@/constants'
+import type { WsTopic, WsWireMessage } from '@/types/ws'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -42,7 +42,6 @@ class MockWebSocket {
 
   constructor(url: string) {
     this.url = url
-    // Store instance for test access
     ;(global as { mockWsInstance?: MockWebSocket }).mockWsInstance = this
   }
 
@@ -58,7 +57,6 @@ class MockWebSocket {
   }
 
   send(data: string) {
-    // Store sent messages for assertions
     if (!(global as { mockWsSentMessages?: string[] }).mockWsSentMessages) {
       ;(global as { mockWsSentMessages?: string[] }).mockWsSentMessages = []
     }
@@ -101,17 +99,18 @@ global.WebSocket = MockWebSocket
 // ── Test consumer ────────────────────────────────────────────────────────────
 
 function TestConsumer() {
-  const { status, subscribe } = useWebSocket()
+  const { status, latency, subscribe } = useWebSocket()
 
   return (
     <div>
       <div data-testid="status">{status}</div>
+      <div data-testid="latency">{latency === null ? 'null' : String(latency)}</div>
       <button
         onClick={() => {
-          subscribe('feed' as WsChannel, (data) => {
+          subscribe('workflow' as WsTopic, (msg: WsWireMessage) => {
             const el = document.createElement('div')
             el.setAttribute('data-testid', 'message')
-            el.textContent = JSON.stringify(data)
+            el.textContent = `${msg.topic}:${msg.event}`
             document.body.appendChild(el)
           })
         }}
@@ -131,7 +130,6 @@ describe('WebSocketContext', () => {
     ;(global as { mockWsInstance?: MockWebSocket }).mockWsInstance = undefined
     ;(global as { mockWsSentMessages?: string[] }).mockWsSentMessages = []
 
-    // Setup auth with token
     localStorage.setItem('test_auth_token', 'test-token-123')
     mockGet.mockResolvedValue(mockUser)
   })
@@ -185,7 +183,7 @@ describe('WebSocketContext', () => {
       })
     })
 
-    it('subscribes to channels and receives messages', async () => {
+    it('subscribes to topics and receives wire messages', async () => {
       render(
         <AuthProvider>
           <WebSocketProvider>
@@ -209,23 +207,67 @@ describe('WebSocketContext', () => {
         screen.getByText('subscribe').click()
       })
 
-      // Check subscription message was sent
+      // Check subscription message uses topic-based format
       const sentMessages = (global as { mockWsSentMessages: string[] }).mockWsSentMessages
       expect(sentMessages.some((msg) => {
-        const parsed = JSON.parse(msg) as { type: string; channels: string[] }
-        return parsed.type === 'subscribe' && parsed.channels.includes('feed')
+        const parsed = JSON.parse(msg) as { type: string; topics?: string[] }
+        return parsed.type === 'subscribe' && parsed.topics?.includes('workflow')
       })).toBe(true)
 
-      // Send a message
+      // Send a wire message
       act(() => {
-        ws.message({ channel: 'feed', data: 'test-data' })
+        ws.message({
+          topic: 'workflow',
+          event: 'step_started',
+          ts: '2024-01-01T00:00:00Z',
+          run_id: 'run-123',
+          user_id: null,
+          data: { workflow_id: 'wf-1', step_id: 'step-1', step_name: 'Research' },
+        })
       })
 
       await waitFor(() => {
         const messageEl = screen.getByTestId('message')
-        expect(messageEl).toHaveTextContent('feed')
-        expect(messageEl).toHaveTextContent('test-data')
+        expect(messageEl).toHaveTextContent('workflow:step_started')
       })
+    })
+
+    it('handles control messages without dispatching to topic handlers', async () => {
+      render(
+        <AuthProvider>
+          <WebSocketProvider>
+            <TestConsumer />
+          </WebSocketProvider>
+        </AuthProvider>,
+      )
+
+      const ws = (global as { mockWsInstance?: MockWebSocket }).mockWsInstance!
+      await waitFor(() => expect(ws).toBeDefined())
+
+      act(() => {
+        ws.open()
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('status')).toHaveTextContent('connected')
+      })
+
+      // Subscribe to workflow
+      act(() => {
+        screen.getByText('subscribe').click()
+      })
+
+      // Send a control message (pong)
+      act(() => {
+        ws.message({
+          type: 'pong',
+          client_ts: new Date(Date.now() - 50).toISOString(),
+          server_ts: new Date().toISOString(),
+        })
+      })
+
+      // Should not create a topic message element
+      expect(screen.queryByTestId('message')).not.toBeInTheDocument()
     })
 
     it('reconnects with exponential backoff on disconnect', async () => {
@@ -239,7 +281,6 @@ describe('WebSocketContext', () => {
         </AuthProvider>,
       )
 
-      // Wait for initial connection with real timers momentarily
       await vi.waitFor(() => {
         const ws1 = (global as { mockWsInstance?: MockWebSocket }).mockWsInstance
         expect(ws1).toBeDefined()
@@ -253,14 +294,12 @@ describe('WebSocketContext', () => {
 
       expect(screen.getByTestId('status')).toHaveTextContent('connected')
 
-      // Close connection
       act(() => {
         ws1.close()
       })
 
       expect(screen.getByTestId('status')).toHaveTextContent('disconnected')
 
-      // Fast-forward to first reconnect (100ms base delay)
       act(() => {
         vi.advanceTimersByTime(100)
       })
@@ -289,7 +328,6 @@ describe('WebSocketContext', () => {
         </AuthProvider>,
       )
 
-      // Wait for initial connection with real timers momentarily
       await vi.waitFor(() => {
         const ws1 = (global as { mockWsInstance?: MockWebSocket }).mockWsInstance
         expect(ws1).toBeDefined()
@@ -303,13 +341,16 @@ describe('WebSocketContext', () => {
 
       expect(screen.getByTestId('status')).toHaveTextContent('connected')
 
-      // Subscribe to a channel
+      // Subscribe to a topic
       act(() => {
         screen.getByText('subscribe').click()
       })
 
       const sentMessages1 = [...(global as { mockWsSentMessages: string[] }).mockWsSentMessages]
-      expect(sentMessages1.some((msg) => (JSON.parse(msg) as { channels?: string[] }).channels?.includes('feed'))).toBe(true)
+      expect(sentMessages1.some((msg) => {
+        const parsed = JSON.parse(msg) as { topics?: string[] }
+        return parsed.topics?.includes('workflow')
+      })).toBe(true)
 
       // Clear sent messages
       ;(global as { mockWsSentMessages: string[] }).mockWsSentMessages = []
@@ -331,9 +372,12 @@ describe('WebSocketContext', () => {
 
       expect(screen.getByTestId('status')).toHaveTextContent('connected')
 
-      // Check that subscription was re-sent
+      // Check that subscription was re-sent with topics
       const sentMessages2 = (global as { mockWsSentMessages: string[] }).mockWsSentMessages
-      expect(sentMessages2.some((msg) => (JSON.parse(msg) as { channels?: string[] }).channels?.includes('feed'))).toBe(true)
+      expect(sentMessages2.some((msg) => {
+        const parsed = JSON.parse(msg) as { topics?: string[] }
+        return parsed.topics?.includes('workflow')
+      })).toBe(true)
 
       vi.useRealTimers()
     })

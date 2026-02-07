@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::server::auth as auth_utils;
 use crate::server::state::{AppState, ConsumerMessage};
-use crate::server::ws::SessionUpdate;
+use crate::server::ws::events::{SessionEvent, SessionEventKind};
 
 use super::chat::{ChatMessage, ChatRequest, ChatResponse, HistoryQuery};
 
@@ -311,12 +311,13 @@ pub async fn create_session(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    state.broadcast_session(SessionUpdate {
-        id: session.id,
-        action: "created".to_string(),
-        title: Some(session.title.clone()),
-        mode_id: Some(session.mode_id.clone()),
+    state.broadcast_session(SessionEvent {
+        session_id: session.id,
         user_id: Some(auth.user_id.0),
+        kind: SessionEventKind::Created {
+            title: session.title.clone(),
+            mode_id: session.mode_id.clone(),
+        },
     });
 
     Ok((
@@ -444,12 +445,10 @@ pub async fn delete_session(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    state.broadcast_session(SessionUpdate {
-        id: session_id,
-        action: "deleted".to_string(),
-        title: None,
-        mode_id: None,
+    state.broadcast_session(SessionEvent {
+        session_id,
         user_id: Some(auth.user_id.0),
+        kind: SessionEventKind::Deleted,
     });
 
     Ok(StatusCode::NO_CONTENT)
@@ -498,12 +497,13 @@ pub async fn update_session(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    state.broadcast_session(SessionUpdate {
-        id: updated.id,
-        action: "updated".to_string(),
-        title: Some(updated.title.clone()),
-        mode_id: Some(updated.mode_id.clone()),
+    state.broadcast_session(SessionEvent {
+        session_id: updated.id,
         user_id: Some(auth.user_id.0),
+        kind: SessionEventKind::Updated {
+            title: Some(updated.title.clone()),
+            mode_id: Some(updated.mode_id.clone()),
+        },
     });
 
     Ok(Json(SessionResponse {

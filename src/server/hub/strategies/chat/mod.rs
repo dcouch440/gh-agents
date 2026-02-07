@@ -225,12 +225,13 @@ impl ExecutionStrategy for ChatStrategy {
                             .await
                             {
                                 let _ = state.repo().update_session_title(session_id, &title).await;
-                                state.broadcast_session(crate::server::ws::SessionUpdate {
-                                    id: session_id,
-                                    action: "updated".to_string(),
-                                    title: Some(title),
-                                    mode_id: None,
+                                state.broadcast_session(crate::server::ws::events::SessionEvent {
+                                    session_id,
                                     user_id: None,
+                                    kind: crate::server::ws::events::SessionEventKind::Updated {
+                                        title: Some(title),
+                                        mode_id: None,
+                                    },
                                 });
                             }
                         }
