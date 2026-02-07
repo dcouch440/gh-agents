@@ -1,4 +1,4 @@
-import {useMemo, useState, useCallback} from 'react'
+import {useEffect, useMemo, useState, useCallback} from 'react'
 import {useNavigate} from 'react-router-dom'
 import {Box, Button, Typography} from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -14,19 +14,21 @@ import {
   type TableColumn,
   type MenuAction,
 } from '@/components/primitives'
-import {useAgents} from '@/hooks/useAgents'
 import {useSessions} from '@/hooks/useSessions'
-import {useDeleteAgent} from '@/hooks/useAgentMutations'
 import {useConfirmModal} from '@/hooks/useConfirmModal'
+import {useStore, agentStore} from '@/stores'
 import {api} from '@/api'
 import type {Agent} from '@/types/agent'
 
 function AgentsPage() {
   const navigate = useNavigate()
-  const {agents, loading: agentsLoading, error: agentsError, reload: refetchAgents} = useAgents()
+  const agents = useStore(agentStore.store, agentStore.selectAll)
+  const agentsLoading = useStore(agentStore.store, agentStore.selectLoading)
+  const agentsError = useStore(agentStore.store, agentStore.selectError)
   const {sessions, loading: sessionsLoading} = useSessions()
-  const {mutate: deleteAgent} = useDeleteAgent()
   const confirm = useConfirmModal()
+
+  useEffect(() => { void agentStore.fetchAll() }, [])
   const [creatingSession, setCreatingSession] = useState<string | null>(null)
 
   // Match agents with their workshop sessions
@@ -80,15 +82,14 @@ function AgentsPage() {
       })
 
       const confirmed = await confirm.confirmAsync(async () => {
-        await deleteAgent(agent.id)
-        await refetchAgents()
+        await agentStore.remove(agent.id)
       })
 
       if (confirmed) {
         // Agent deleted successfully
       }
     },
-    [confirm, deleteAgent, refetchAgents],
+    [confirm],
   )
 
   const loading = agentsLoading || sessionsLoading

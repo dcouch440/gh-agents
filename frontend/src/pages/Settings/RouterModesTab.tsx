@@ -16,69 +16,94 @@ import { DataTable } from '@/components/primitives/DataTable'
 import type { Column } from '@/components/primitives/DataTable'
 import { ModeFormDialog } from './ModeFormDialog'
 import { ModeToolSelector } from './ModeToolSelector'
-import { useRouterModes } from '@/hooks/useRouterModes'
-import { useRouterModeMutations } from '@/hooks/useRouterModeMutations'
-import { useStore, toolStore } from '@/stores'
-import { useToolRouterMutations } from '@/hooks/useToolRouterMutations'
-import { api } from '@/api'
-import type { RouterMode, ToolRouter } from '@/types'
+import { useStore, toolStore, toolRouterStore } from '@/stores'
+import type { RouterMode } from '@/types'
 
 function RouterModesTab() {
-  const [routers, setRouters] = useState<ToolRouter[]>([])
-  const [routersLoading, setRoutersLoading] = useState(true)
-  const [routersError, setRoutersError] = useState<string | null>(null)
-  const routerMutations = useToolRouterMutations()
+  const routers = useStore(toolRouterStore.store, toolRouterStore.selectAll)
+  const routersLoading = useStore(toolRouterStore.store, toolRouterStore.selectLoading)
+  const routersError = useStore(toolRouterStore.store, toolRouterStore.selectError)
+  const [creating, setCreating] = useState(false)
 
-  const loadRouters = useCallback(async () => {
-    setRoutersLoading(true)
-    setRoutersError(null)
-    try {
-      const data = await api.toolRouters.list()
-      setRouters(data)
-    } catch (e) {
-      setRoutersError(e instanceof Error ? e.message : 'Failed to load routers')
-    } finally {
-      setRoutersLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    const run = async () => {
-      await loadRouters()
-      if (cancelled) return
-    }
-    void run()
-    return () => { cancelled = true }
-  }, [loadRouters])
+  useEffect(() => { void toolRouterStore.fetchAll() }, [])
 
   const activeRouter = routers.length > 0 ? routers[0] : null
   const activeRouterId = activeRouter?.id ?? null
 
   const handleCreateRouter = async () => {
-    const newRouter = await routerMutations.createRouter({
-      name: 'Default Router',
-      description: 'Auto-created default router for mode management',
-      system_prompt: 'You are a routing assistant. Analyze the user message and select the most appropriate mode.',
-      model_id: 'claude-sonnet-4-20250514',
-    })
-    setRouters([newRouter])
+    setCreating(true)
+    try {
+      await toolRouterStore.create({
+        name: 'Default Router',
+        description: 'Auto-created default router for mode management',
+        system_prompt: 'You are a routing assistant. Analyze the user message and select the most appropriate mode.',
+        model_id: 'claude-sonnet-4-20250514',
+      })
+    } finally {
+      setCreating(false)
+    }
   }
 
-  const { modes, loading, error, reload } = useRouterModes(activeRouterId)
-  const {
-    deleteMode,
-    updating,
-    deleting,
-    loadModeTools,
-    saveModeTools,
-    loadingTools,
-    savingTools,
-    toolsError,
-  } = useRouterModeMutations()
+  const modes = useStore(toolRouterStore.store, toolRouterStore.selectModes(activeRouterId ?? ''))
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [loadingTools, setLoadingTools] = useState(false)
+  const [savingTools, setSavingTools] = useState(false)
+  const [toolsError, setToolsError] = useState<string | null>(null)
   const tools = useStore(toolStore.store, toolStore.selectAll)
 
   useEffect(() => { void toolStore.fetchAll() }, [])
+
+  useEffect(() => {
+    if (!activeRouterId) return
+    setLoading(true)
+    setError(null)
+    toolRouterStore.fetchModes(activeRouterId)
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Failed to load modes'))
+      .finally(() => setLoading(false))
+  }, [activeRouterId])
+
+  const reload = useCallback(async () => {
+    if (!activeRouterId) return
+    setLoading(true)
+    setError(null)
+    try {
+      await toolRouterStore.fetchModes(activeRouterId)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load modes')
+    } finally {
+      setLoading(false)
+    }
+  }, [activeRouterId])
+
+  const loadModeTools = useCallback(async (modeId: string) => {
+    setLoadingTools(true)
+    setToolsError(null)
+    try {
+      return await toolRouterStore.fetchModeTools(modeId)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to load mode tools'
+      setToolsError(msg)
+      throw e
+    } finally {
+      setLoadingTools(false)
+    }
+  }, [])
+
+  const saveModeTools = useCallback(async (modeId: string, body: { tool_ids: string[] }) => {
+    setSavingTools(true)
+    setToolsError(null)
+    try {
+      await toolRouterStore.setModeTools(modeId, body)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to save mode tools'
+      setToolsError(msg)
+      throw e
+    } finally {
+      setSavingTools(false)
+    }
+  }, [])
 
   const [formDialogOpen, setFormDialogOpen] = useState(false)
   const [toolSelectorOpen, setToolSelectorOpen] = useState(false)
@@ -122,11 +147,14 @@ function RouterModesTab() {
     }
 
     setDeleteError(null)
+    setDeleting(true)
     try {
-      await deleteMode(mode.id)
+      await toolRouterStore.deleteMode(mode.id)
       await reload()
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : 'Failed to delete mode')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -199,7 +227,7 @@ function RouterModesTab() {
           <IconButton
             size="small"
             onClick={() => handleEdit(row)}
-            disabled={updating || deleting}
+            disabled={deleting}
             aria-label="Edit mode"
           >
             <EditIcon fontSize="small" />
@@ -207,7 +235,7 @@ function RouterModesTab() {
           <IconButton
             size="small"
             onClick={() => handleToolsClick(row)}
-            disabled={updating || deleting}
+            disabled={deleting}
             aria-label="Manage tools"
           >
             <BuildIcon fontSize="small" />
@@ -217,7 +245,7 @@ function RouterModesTab() {
             onClick={() => {
               void handleDelete(row)
             }}
-            disabled={updating || deleting}
+            disabled={deleting}
             aria-label="Delete mode"
             color="error"
           >
@@ -259,9 +287,9 @@ function RouterModesTab() {
           <Button
             variant="contained"
             onClick={() => { void handleCreateRouter() }}
-            disabled={routerMutations.creating}
+            disabled={creating}
           >
-            {routerMutations.creating ? 'Creating...' : 'Create Default Router'}
+            {creating ? 'Creating...' : 'Create Default Router'}
           </Button>
         </Box>
       </Box>

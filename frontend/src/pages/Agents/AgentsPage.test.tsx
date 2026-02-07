@@ -7,7 +7,7 @@ import type {Agent} from '@/types/agent'
 
 const mockNavigate = vi.hoisted(() => vi.fn())
 const mockCreateSession = vi.hoisted(() => vi.fn())
-const mockDeleteAgent = vi.hoisted(() => vi.fn())
+const mockRemoveAgent = vi.hoisted(() => vi.fn())
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom')
@@ -43,23 +43,28 @@ const mockAgents: Agent[] = [
   },
 ]
 
-let mockUseAgents: () => ReturnType<typeof vi.fn> = vi.fn()
-let mockUseSessions: () => ReturnType<typeof vi.fn> = vi.fn()
+let mockStoreAgents = mockAgents
+let mockStoreLoading = false
+let mockStoreError: string | null = null
 
-vi.mock('@/hooks/useAgents', () => ({
-  useAgents: () => mockUseAgents() as unknown,
+vi.mock('@/stores/agentStore', () => ({
+  agentStore: {
+    store: {
+      getState: () => ({}),
+      subscribe: () => () => {},
+    },
+    selectAll: () => mockStoreAgents,
+    selectLoading: () => mockStoreLoading,
+    selectError: () => mockStoreError,
+    fetchAll: vi.fn().mockResolvedValue(undefined),
+    remove: mockRemoveAgent,
+  },
 }))
+
+let mockUseSessions: () => ReturnType<typeof vi.fn> = vi.fn()
 
 vi.mock('@/hooks/useSessions', () => ({
   useSessions: () => mockUseSessions() as unknown,
-}))
-
-vi.mock('@/hooks/useAgentMutations', () => ({
-  useDeleteAgent: () => ({
-    mutate: mockDeleteAgent,
-    loading: false,
-    error: null,
-  }),
 }))
 
 vi.mock('@/api', () => ({
@@ -71,12 +76,9 @@ vi.mock('@/api', () => ({
 describe('AgentsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockUseAgents = vi.fn(() => ({
-      agents: mockAgents,
-      loading: false,
-      error: null,
-      reload: vi.fn(),
-    }))
+    mockStoreAgents = mockAgents
+    mockStoreLoading = false
+    mockStoreError = null
     mockUseSessions = vi.fn(() => ({
       sessions: [],
       loading: false,
@@ -130,12 +132,8 @@ describe('AgentsPage', () => {
   })
 
   it('shows loading state', () => {
-    mockUseAgents = vi.fn(() => ({
-      agents: [],
-      loading: true,
-      error: null,
-      reload: vi.fn(),
-    }))
+    mockStoreAgents = []
+    mockStoreLoading = true
 
     render(
       <MemoryRouter>
@@ -147,12 +145,7 @@ describe('AgentsPage', () => {
   })
 
   it('shows empty state when no agents', () => {
-    mockUseAgents = vi.fn(() => ({
-      agents: [],
-      loading: false,
-      error: null,
-      reload: vi.fn(),
-    }))
+    mockStoreAgents = []
 
     render(
       <MemoryRouter>
@@ -166,12 +159,8 @@ describe('AgentsPage', () => {
   })
 
   it('shows error message', () => {
-    mockUseAgents = vi.fn(() => ({
-      agents: [],
-      loading: false,
-      error: 'Failed to load agents',
-      reload: vi.fn(),
-    }))
+    mockStoreAgents = []
+    mockStoreError = 'Failed to load agents'
 
     render(
       <MemoryRouter>
@@ -205,12 +194,7 @@ describe('AgentsPage', () => {
       },
     ]
 
-    mockUseAgents = vi.fn(() => ({
-      agents: agentsWithDraft,
-      loading: false,
-      error: null,
-      reload: vi.fn(),
-    }))
+    mockStoreAgents = agentsWithDraft
 
     render(
       <MemoryRouter>
