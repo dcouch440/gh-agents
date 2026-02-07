@@ -53,7 +53,6 @@ import type { UIState } from './uiStore'
 const resetStore = () => {
   uiStore.store.setState({
     theme: 'light',
-    sidebarCollapsed: false,
     toasts: [],
     commandPaletteOpen: false,
   })
@@ -128,41 +127,6 @@ describe('uiStore', () => {
     it('selectTheme returns current theme', () => {
       uiStore.store.setState({ theme: 'dark' })
       expect(uiStore.selectTheme(getState())).toBe('dark')
-    })
-  })
-
-  // ── Sidebar ────────────────────────────────────────────────────────────
-
-  describe('sidebar', () => {
-    it('setSidebarCollapsed updates state and persists', () => {
-      uiStore.setSidebarCollapsed(true)
-
-      expect(getState().sidebarCollapsed).toBe(true)
-      expect(mockStorage.setItem).toHaveBeenCalledWith('nexor_sidebar_collapsed', 'true')
-    })
-
-    it('setSidebarCollapsed(false) persists false', () => {
-      uiStore.store.setState({ sidebarCollapsed: true })
-
-      uiStore.setSidebarCollapsed(false)
-
-      expect(getState().sidebarCollapsed).toBe(false)
-      expect(mockStorage.setItem).toHaveBeenCalledWith('nexor_sidebar_collapsed', 'false')
-    })
-
-    it('toggleSidebar flips collapsed state', () => {
-      expect(getState().sidebarCollapsed).toBe(false)
-
-      uiStore.toggleSidebar()
-      expect(getState().sidebarCollapsed).toBe(true)
-
-      uiStore.toggleSidebar()
-      expect(getState().sidebarCollapsed).toBe(false)
-    })
-
-    it('selectSidebarCollapsed returns current value', () => {
-      uiStore.store.setState({ sidebarCollapsed: true })
-      expect(uiStore.selectSidebarCollapsed(getState())).toBe(true)
     })
   })
 

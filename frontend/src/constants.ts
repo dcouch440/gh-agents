@@ -222,8 +222,16 @@ export const LS_AUTH_TOKEN = "nexor_auth_token";
 export const LS_THEME = "nexor_theme";
 export const LS_SIDEBAR_COLLAPSED = "nexor_sidebar_collapsed";
 export const LS_RECENT_COMMANDS = "nexor_recent_commands";
+export const LS_LEFT_PANEL_OPEN = "nexor_left_panel_open";
+export const LS_LEFT_PANEL_SECTION = "nexor_left_panel_section";
 
-// Sidebar
+// Layout
+export const LAYOUT = {
+  RAIL_WIDTH: 52,
+  PANEL_WIDTH: 260,
+} as const;
+
+/** @deprecated Use LAYOUT instead */
 export const SIDEBAR = {
   WIDTH_EXPANDED: 260,
   WIDTH_COLLAPSED: 64,

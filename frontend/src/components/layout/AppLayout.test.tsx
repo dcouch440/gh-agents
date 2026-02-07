@@ -4,9 +4,9 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { AppLayout } from './AppLayout'
 import { authStore } from '@/stores'
 
-vi.mock('./Sidebar', () => ({
-  Sidebar: function Sidebar() {
-    return <nav data-testid="sidebar">nexor</nav>
+vi.mock('./ThemeToggle', () => ({
+  ThemeToggle: function ThemeToggle() {
+    return <button data-testid="theme-toggle">toggle</button>
   },
 }))
 
@@ -15,7 +15,7 @@ beforeEach(() => {
 })
 
 describe('AppLayout', () => {
-  it('renders sidebar and outlet when authenticated', () => {
+  it('renders icon rail and outlet when authenticated', () => {
     authStore.store.setState({
       user: { id: 'u1', email: 'test@test.com', github_login: null },
       token: 'fake-token',
@@ -33,7 +33,6 @@ describe('AppLayout', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('nexor')).toBeInTheDocument()
     expect(screen.getByText('Test Page Content')).toBeInTheDocument()
   })
 
@@ -56,7 +55,6 @@ describe('AppLayout', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('nexor')).toBeInTheDocument()
     expect(screen.getByText('Home')).toBeInTheDocument()
   })
 

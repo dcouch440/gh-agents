@@ -3,11 +3,13 @@ import type { Components, Theme } from '@mui/material/styles';
 const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
   const isDark = mode === 'dark';
 
+  const glassBg = isDark ? 'rgba(20, 24, 32, 0.85)' : 'rgba(241, 245, 249, 0.85)';
+
   return {
     MuiCssBaseline: {
       styleOverrides: {
         body: {
-          scrollbarColor: isDark ? '#484f58 #161b22' : '#c1c8cd #f6f8fa',
+          scrollbarColor: isDark ? '#484f58 #141820' : '#c1c8cd #f1f5f9',
           '&::-webkit-scrollbar, & *::-webkit-scrollbar': {
             width: 8,
             height: 8,
@@ -17,7 +19,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
             backgroundColor: isDark ? '#484f58' : '#c1c8cd',
           },
           '&::-webkit-scrollbar-track, & *::-webkit-scrollbar-track': {
-            backgroundColor: isDark ? '#161b22' : '#f6f8fa',
+            backgroundColor: isDark ? '#141820' : '#f1f5f9',
           },
         },
       },
@@ -29,7 +31,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
       },
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          borderRadius: 6,
           padding: '8px 16px',
           fontSize: '0.875rem',
           fontWeight: 500,
@@ -58,8 +60,10 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
       styleOverrides: {
         root: ({ theme }) => ({
           backgroundImage: 'none',
+          backgroundColor: glassBg,
+          backdropFilter: 'blur(8px)',
           border: `1px solid ${theme.palette.divider}`,
-          borderRadius: 8,
+          borderRadius: 4,
         }),
       },
     },
@@ -70,7 +74,10 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
       styleOverrides: {
         root: ({ theme }) => ({
           backgroundImage: 'none',
+          backgroundColor: glassBg,
+          backdropFilter: 'blur(8px)',
           border: `1px solid ${theme.palette.divider}`,
+          borderRadius: 4,
         }),
       },
     },
@@ -120,8 +127,10 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
       styleOverrides: {
         paper: ({ theme }) => ({
           backgroundImage: 'none',
+          backgroundColor: glassBg,
+          backdropFilter: 'blur(12px)',
           border: `1px solid ${theme.palette.divider}`,
-          borderRadius: 12,
+          borderRadius: 8,
         }),
       },
     },
@@ -131,7 +140,8 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
       },
       styleOverrides: {
         root: ({ theme }) => ({
-          backgroundColor: theme.palette.background.paper,
+          backgroundColor: glassBg,
+          backdropFilter: 'blur(12px)',
           borderBottom: `1px solid ${theme.palette.divider}`,
         }),
       },
@@ -139,7 +149,8 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
     MuiDrawer: {
       styleOverrides: {
         paper: ({ theme }) => ({
-          backgroundColor: theme.palette.background.paper,
+          backgroundColor: glassBg,
+          backdropFilter: 'blur(12px)',
           borderRight: `1px solid ${theme.palette.divider}`,
         }),
       },
@@ -148,7 +159,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
       styleOverrides: {
         tooltip: {
           fontSize: '0.75rem',
-          borderRadius: 6,
+          borderRadius: 4,
         },
       },
     },
