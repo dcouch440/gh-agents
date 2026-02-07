@@ -25,7 +25,8 @@ mod tests {
             .await
             .unwrap();
         assert!(sys.starts_with("Base prompt."));
-        assert!(sys.contains("Output Format Rules"));
+        assert!(sys.contains("<output_rules>"));
+        assert!(sys.contains("</output_rules>"));
         assert!(sys.contains("Do NOT wrap"));
         assert!(sys.contains("Do NOT include any text"));
     }

@@ -503,7 +503,10 @@ pub async fn compose_prompt(
         resolve_variables(&raw_prompt, &effective_outputs, prior_outputs)
     };
 
-    let mut full_prompt = prompt;
+    let mut full_prompt = format!("<task>\n{}\n</task>", prompt);
+
+    // Track whether we've opened a <context> block (for port inputs + documents).
+    let mut context_opened = false;
 
     // Append structured port input data block — only for ports NOT referenced in the template.
     // If the user wrote {port_name} or {port_name.field}, the data is already inlined.
@@ -513,13 +516,14 @@ pub async fn compose_prompt(
             .filter(|(name, _)| !raw_prompt.contains(&format!("{{{}", name)))
             .collect();
         if !unreferenced.is_empty() {
-            full_prompt.push_str("\n\n## Input Data\n");
+            full_prompt.push_str("\n\n<context>");
+            context_opened = true;
             for (port_name, value) in unreferenced {
                 let formatted =
                     serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string());
                 full_prompt.push_str(&format!(
-                    "\n<{}>\n{}\n</{}>\n",
-                    port_name, formatted, port_name
+                    "\n<input name=\"{}\">\n{}\n</input>",
+                    port_name, formatted
                 ));
             }
         }
@@ -528,9 +532,13 @@ pub async fn compose_prompt(
     // Append agent context documents (global to agent)
     if let Some(_d_repo) = doc_repo {
         if let Ok(agent_docs) = server_repo.get_agent_context(step.agent_id).await {
+            if !agent_docs.is_empty() && !context_opened {
+                full_prompt.push_str("\n\n<context>");
+                context_opened = true;
+            }
             for doc in &agent_docs {
                 full_prompt.push_str(&format!(
-                    "\n\n---\n## {} (Agent Context)\n{}",
+                    "\n<document title=\"{}\" source=\"agent\">\n{}\n</document>",
                     doc.title, doc.content
                 ));
             }
@@ -541,16 +549,29 @@ pub async fn compose_prompt(
     if let Some(wf_repo) = workflow_repo {
         if let Ok(step_docs) = wf_repo.list_step_documents(step.id).await {
             if let Some(d_repo) = doc_repo {
+                let mut step_doc_contents = Vec::new();
                 for sd in &step_docs {
                     if let Ok(Some(doc)) = d_repo.get_document(sd.document_id).await {
-                        full_prompt.push_str(&format!(
-                            "\n\n---\n## {} (Step Context)\n{}",
-                            doc.title, doc.content
-                        ));
+                        step_doc_contents.push(doc);
                     }
+                }
+                if !step_doc_contents.is_empty() && !context_opened {
+                    full_prompt.push_str("\n\n<context>");
+                    context_opened = true;
+                }
+                for doc in &step_doc_contents {
+                    full_prompt.push_str(&format!(
+                        "\n<document title=\"{}\" source=\"step\">\n{}\n</document>",
+                        doc.title, doc.content
+                    ));
                 }
             }
         }
+    }
+
+    // Close context block if it was opened
+    if context_opened {
+        full_prompt.push_str("\n</context>");
     }
 
     full_prompt
@@ -567,7 +588,7 @@ pub async fn compose_prompt(
 pub fn build_routing_instruction_block(ctx: &DownstreamRoutingContext) -> String {
     let mut block = String::new();
 
-    block.push_str("\n\n## Routing Instructions\n\n");
+    block.push_str("\n\n<routing>\n");
     block.push_str(&format!(
         "Each item MUST include a \"{}\" field set to exactly one of the following values.\n",
         ctx.routing_field
@@ -593,6 +614,8 @@ pub fn build_routing_instruction_block(ctx: &DownstreamRoutingContext) -> String
             ));
         }
     }
+
+    block.push_str("</routing>");
 
     block
 }

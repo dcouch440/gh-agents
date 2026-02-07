@@ -64,10 +64,13 @@ impl ExecutionFilter for AgentGuidanceFilter {
         }
 
         let mut augmented = system_prompt;
-        augmented.push_str("\n\n## Agent Guidance\nYou MUST follow these instructions derived from prior feedback:\n");
+        augmented.push_str(
+            "\n\n<guidance>\nYou MUST follow these instructions derived from prior feedback:\n",
+        );
         for suggestion in &suggestions {
             augmented.push_str(&format!("- {}\n", suggestion));
         }
+        augmented.push_str("</guidance>");
 
         Ok((augmented, messages))
     }

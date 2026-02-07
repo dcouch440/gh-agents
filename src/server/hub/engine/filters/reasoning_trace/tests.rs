@@ -36,7 +36,8 @@ mod tests {
             .await
             .unwrap();
         assert!(sys.starts_with("Base prompt."));
-        assert!(sys.contains("Reasoning Trace"));
+        assert!(sys.contains("<reasoning_format>"));
+        assert!(sys.contains("</reasoning_format>"));
         assert!(sys.contains("reasoning"));
         assert!(sys.contains("result"));
     }

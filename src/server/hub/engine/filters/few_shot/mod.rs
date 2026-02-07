@@ -70,9 +70,10 @@ impl ExecutionFilter for FewShotFilter {
         // Augment system prompt with a note about examples.
         let mut augmented = system_prompt;
         augmented.push_str(concat!(
-            "\n\n## Few-Shot Examples\n",
+            "\n\n<examples>\n",
             "The following conversation turns demonstrate successful input/output ",
-            "examples for this task. Use them as reference for format and quality.",
+            "examples for this task. Use them as reference for format and quality.\n",
+            "</examples>",
         ));
 
         // Prepend example pairs before existing messages.

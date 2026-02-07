@@ -84,7 +84,8 @@ mod tests {
             .unwrap();
 
         // System prompt should contain the few-shot note.
-        assert!(sys.contains("Few-Shot Examples"));
+        assert!(sys.contains("<examples>"));
+        assert!(sys.contains("</examples>"));
         assert!(sys.contains("Base prompt."));
 
         // 2 example pairs (4 messages) + 1 original user message = 5
@@ -120,7 +121,8 @@ mod tests {
             .unwrap();
 
         // Only 1 example pair (2 messages) + 1 original = 3
-        assert!(sys.contains("Few-Shot Examples"));
+        assert!(sys.contains("<examples>"));
+        assert!(sys.contains("</examples>"));
         assert_eq!(msgs.len(), 3);
         assert_eq!(msgs[0].text(), "input1");
         assert_eq!(msgs[1].text(), "output1");

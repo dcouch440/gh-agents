@@ -42,14 +42,15 @@ impl ExecutionFilter for ReasoningTraceFilter {
 
         let mut augmented = system_prompt;
         augmented.push_str(concat!(
-            "\n\n## Reasoning Trace\n",
+            "\n\n<reasoning_format>\n",
             "You MUST wrap your response in the following structure:\n",
             "{\n",
             "  \"reasoning\": \"Your step-by-step thought process for arriving at the answer\",\n",
             "  \"result\": <your response matching the schema above>\n",
             "}\n",
             "Think through the problem carefully in the \"reasoning\" field ",
-            "before producing your final answer in \"result\".",
+            "before producing your final answer in \"result\".\n",
+            "</reasoning_format>",
         ));
 
         Ok((augmented, messages))
