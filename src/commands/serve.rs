@@ -31,6 +31,15 @@ pub async fn run_serve(args: Args) -> Result<()> {
     // Initialize database
     let pool = init_db().await?;
 
+    // Reap orphaned containers from previous crashes
+    let reaped = crate::execution::ContainerManager::reap_orphaned_containers(
+        std::time::Duration::from_secs(crate::constants::CONTAINER_REAPER_MAX_AGE_SECS),
+    )
+    .await;
+    if reaped > 0 {
+        info!("Reaped {} orphaned container(s)", reaped);
+    }
+
     // Server address from CLI
     let addr: SocketAddr = format!("0.0.0.0:{}", args.port()).parse()?;
 
