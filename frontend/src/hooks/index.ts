@@ -15,3 +15,4 @@ export { useConfirmModal } from './useConfirmModal'
 
 // Data
 export { useSendSessionMessage } from './useChatMutations'
+export { useWebSocket } from './useWebSocket'

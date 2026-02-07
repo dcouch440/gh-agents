@@ -1,5 +1,5 @@
 import { sessionStore } from './sessionStore'
-import { nmSize, nmGet, createNormalizedMap } from './lib'
+import { nmSize, nmGet, nmSet, createNormalizedMap } from './lib'
 
 const {
   mockList,
@@ -129,6 +129,79 @@ describe('sessionStore', () => {
     it('selectById returns undefined for missing', () => {
       const result = sessionStore.selectById('missing')(sessionStore.store.getState())
       expect(result).toBeUndefined()
+    })
+  })
+
+  describe('handleWsEvent', () => {
+    it('SESSION_EVENT.CREATED upserts a new session', () => {
+      sessionStore.handleWsEvent({
+        topic: 'session',
+        event: 'created',
+        ts: '2025-06-01T00:00:00Z',
+        run_id: null,
+        user_id: null,
+        data: { session_id: 's-new', title: 'New Session', mode_id: 'home' },
+      })
+
+      const session = nmGet(sessionStore.store.getState().items, 's-new')
+      expect(session).toBeDefined()
+      expect(session!.id).toBe('s-new')
+      expect(session!.title).toBe('New Session')
+      expect(session!.mode_id).toBe('home')
+      expect(session!.agent_id).toBeNull()
+      expect(session!.draft_config).toBeNull()
+      expect(session!.created_at).toBe('2025-06-01T00:00:00Z')
+      expect(session!.updated_at).toBe('2025-06-01T00:00:00Z')
+    })
+
+    it('SESSION_EVENT.UPDATED patches existing session fields', () => {
+      sessionStore.store.setState((s) => ({
+        items: nmSet(s.items, 's1', session1),
+      }))
+
+      sessionStore.handleWsEvent({
+        topic: 'session',
+        event: 'updated',
+        ts: '2025-06-01T12:00:00Z',
+        run_id: null,
+        user_id: null,
+        data: { session_id: 's1', title: 'Updated Title' },
+      })
+
+      const session = nmGet(sessionStore.store.getState().items, 's1')
+      expect(session!.title).toBe('Updated Title')
+      expect(session!.mode_id).toBe('home')
+      expect(session!.updated_at).toBe('2025-06-01T12:00:00Z')
+    })
+
+    it('SESSION_EVENT.UPDATED ignores unknown session', () => {
+      sessionStore.handleWsEvent({
+        topic: 'session',
+        event: 'updated',
+        ts: '2025-06-01T12:00:00Z',
+        run_id: null,
+        user_id: null,
+        data: { session_id: 'unknown', title: 'Nope' },
+      })
+
+      expect(nmSize(sessionStore.store.getState().items)).toBe(0)
+    })
+
+    it('SESSION_EVENT.DELETED removes session from store', () => {
+      sessionStore.store.setState((s) => ({
+        items: nmSet(s.items, 's1', session1),
+      }))
+
+      sessionStore.handleWsEvent({
+        topic: 'session',
+        event: 'deleted',
+        ts: '2025-06-01T12:00:00Z',
+        run_id: null,
+        user_id: null,
+        data: { session_id: 's1' },
+      })
+
+      expect(nmGet(sessionStore.store.getState().items, 's1')).toBeUndefined()
     })
   })
 })
