@@ -24,7 +24,7 @@ import {DocumentSelector} from "@/components/DocumentSelector";
 import {OutputSchemaFormDialog} from "./OutputSchemaFormDialog";
 import {useSplitPane} from "@/hooks/useSplitPane";
 import {useSendSessionMessage} from "@/hooks/useChatMutations";
-import {useOutputSchemaContext} from "@/hooks/useOutputSchemaContext";
+import {useStore, outputSchemaStore} from "@/stores";
 import {api} from "@/api";
 import type {ChatMessageData} from "@/components/chat/ChatPanel";
 import type {SSEEvent} from "@/api";
@@ -293,11 +293,13 @@ function AgentWorkshopPage() {
     max: 75,
   });
   const {send, streaming: sseStreaming} = useSendSessionMessage();
-  const {schemas = []} = useOutputSchemaContext();
+  const schemas = useStore(outputSchemaStore.store, outputSchemaStore.selectAll);
   const [showDocumentSelector, setShowDocumentSelector] = useState(false);
   const [showSchemaDialog, setShowSchemaDialog] = useState(false);
   const contentRef = useRef("");
   const justNavigatedRef = useRef(false);
+
+  useEffect(() => { void outputSchemaStore.fetchAll() }, []);
 
   // Load existing session or create new one on mount
   useEffect(() => {

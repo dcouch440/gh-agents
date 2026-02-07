@@ -1,14 +1,13 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RouterModesTab } from './RouterModesTab'
-import { mockRouterMode, mockTool, mockToolRouter } from '@/test/fixtures'
+import { mockRouterMode, mockToolRouter } from '@/test/fixtures'
 
 const {
   mockListByRouter,
   mockDeleteMode,
   mockLoadModeTools,
   mockSaveModeTools,
-  mockListTools,
   mockToolRoutersList,
   mockCreateRouter,
 } = vi.hoisted(() => ({
@@ -16,7 +15,6 @@ const {
   mockDeleteMode: vi.fn(),
   mockLoadModeTools: vi.fn(),
   mockSaveModeTools: vi.fn(),
-  mockListTools: vi.fn(),
   mockToolRoutersList: vi.fn(),
   mockCreateRouter: vi.fn(),
 }))
@@ -26,6 +24,7 @@ vi.mock('@/api', () => ({
     toolRouters: {
       list: mockToolRoutersList,
     },
+    tools: { list: vi.fn().mockResolvedValue({ items: [] }), get: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
   },
 }))
 
@@ -68,14 +67,6 @@ vi.mock('@/hooks/useToolRouterMutations', () => ({
   }),
 }))
 
-vi.mock('@/hooks/useTools', () => ({
-  useTools: () => ({
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    tools: mockListTools(),
-    loading: false,
-    error: null,
-  }),
-}))
 
 vi.mock('./ModeFormDialog', () => ({
   ModeFormDialog: ({
@@ -102,7 +93,6 @@ describe('RouterModesTab', () => {
     vi.clearAllMocks()
     mockToolRoutersList.mockResolvedValue([mockToolRouter])
     mockListByRouter.mockReturnValue([mockRouterMode])
-    mockListTools.mockReturnValue([mockTool])
     vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
 

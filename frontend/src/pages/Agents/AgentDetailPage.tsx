@@ -1,14 +1,13 @@
 import { useParams } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Box, Typography, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material'
 import { useAgent } from '@/hooks/useAgents'
 import { useAgentDocuments } from '@/hooks/useAgentDocuments'
-import { useDocuments } from '@/hooks/useDocuments'
 import { useToolRouter } from '@/hooks/useToolRouter'
 import { useToolRouterMutations } from '@/hooks/useToolRouterMutations'
 import { useRouterModes } from '@/hooks/useRouterModes'
 import { useRouterModeMutations } from '@/hooks/useRouterModeMutations'
-import { useTools } from '@/hooks/useTools'
+import { useStore, toolStore, documentStore } from '@/stores'
 import { api } from '@/api'
 import {
   PageHeader,
@@ -42,7 +41,8 @@ function AgentDetailPage() {
     addDocument,
     removeDocument,
   } = useAgentDocuments(id ?? null)
-  const { documents: allDocuments, loading: allDocsLoading } = useDocuments()
+  const allDocuments = useStore(documentStore.store, documentStore.selectAll)
+  const allDocsLoading = useStore(documentStore.store, documentStore.selectLoading)
   const [showAddDialog, setShowAddDialog] = useState(false)
 
   // Router & Modes hooks
@@ -50,7 +50,9 @@ function AgentDetailPage() {
   const toolRouterMutations = useToolRouterMutations()
   const modes = useRouterModes(agent?.router_id ?? null)
   const modeMutations = useRouterModeMutations()
-  const { tools: allTools } = useTools()
+  const allTools = useStore(toolStore.store, toolStore.selectAll)
+
+  useEffect(() => { void toolStore.fetchAll(); void documentStore.fetchAll() }, [])
 
   // Router dialog state
   const [showRouterForm, setShowRouterForm] = useState(false)

@@ -26,6 +26,7 @@ vi.mock('@/api', () => ({
       getHistory: vi.fn(),
       clearMessages: vi.fn(),
     },
+    outputSchemas: { list: vi.fn().mockResolvedValue({ items: [] }), get: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
   },
 }))
 
@@ -37,25 +38,6 @@ vi.mock('@/hooks/useChatMutations', () => ({
     abort: vi.fn(),
     loading: false,
     streaming: false,
-    error: null,
-  }),
-}))
-
-vi.mock('@/hooks/useOutputSchemaContext', () => ({
-  useOutputSchemaContext: () => ({
-    schemas: [],
-    loading: false,
-    error: null,
-    reload: vi.fn(),
-    addSchema: vi.fn(),
-    removeSchema: vi.fn(),
-  }),
-}))
-
-vi.mock('@/hooks/useOutputSchemaMutations', () => ({
-  useCreateOutputSchema: () => ({
-    mutate: vi.fn(),
-    loading: false,
     error: null,
   }),
 }))

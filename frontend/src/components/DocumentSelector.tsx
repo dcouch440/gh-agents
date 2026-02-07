@@ -1,4 +1,4 @@
-import {useState} from "react";
+import {useState, useEffect} from "react";
 import {
   Dialog,
   DialogTitle,
@@ -16,7 +16,7 @@ import {
   ListItemIcon,
   ListItemText,
 } from "@mui/material";
-import {useDocuments} from "@/hooks/useDocuments";
+import {useStore, documentStore} from "@/stores";
 import {LoadingSpinner, EmptyState} from "@/components/primitives";
 import {api} from "@/api";
 import type {DocumentListItem, Document} from "@/types/document";
@@ -34,7 +34,10 @@ function DocumentSelector({
   open,
   onClose,
 }: DocumentSelectorProps) {
-  const {documents, loading} = useDocuments();
+  const documents = useStore(documentStore.store, documentStore.selectAll);
+  const loading = useStore(documentStore.store, documentStore.selectLoading);
+
+  useEffect(() => { void documentStore.fetchAll() }, []);
   const [localSelectedIds, setLocalSelectedIds] = useState<string[]>(selectedIds);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loadedDocs, setLoadedDocs] = useState<Map<string, Document>>(new Map());

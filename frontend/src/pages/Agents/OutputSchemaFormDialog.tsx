@@ -10,7 +10,7 @@ import {
   Alert,
   Typography,
 } from '@mui/material'
-import {useCreateOutputSchema} from '@/hooks/useOutputSchemaMutations'
+import {outputSchemaStore} from '@/stores'
 import {JsonEditor} from '@/components/primitives'
 import {validateJsonObject} from '@/utils/json'
 import {ApiError} from '@/api'
@@ -71,7 +71,6 @@ const validate = (state: FormState): string | null => {
 
 function OutputSchemaFormDialog({open, onClose, onSave}: OutputSchemaFormDialogProps) {
   const [state, dispatch] = useReducer(formReducer, initialFormState)
-  const {mutate} = useCreateOutputSchema()
 
   const handleSubmit = async () => {
     const error = validate(state)
@@ -85,7 +84,7 @@ function OutputSchemaFormDialog({open, onClose, onSave}: OutputSchemaFormDialogP
 
     try {
       const parsed = JSON.parse(state.jsonSchemaText) as Record<string, unknown>
-      const schema = await mutate({
+      const schema = await outputSchemaStore.create({
         name: state.name.trim(),
         schema: parsed,
       })

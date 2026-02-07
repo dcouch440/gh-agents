@@ -16,7 +16,7 @@ vi.mock('@/components/primitives', () => ({
   ),
 }))
 
-const mockMutate = vi.hoisted(() => vi.fn())
+const mockCreate = vi.hoisted(() => vi.fn())
 
 const mockSchema = {
   id: 'mock-schema-id',
@@ -25,16 +25,14 @@ const mockSchema = {
   created_at: '2024-01-01T00:00:00Z',
 }
 
-vi.mock('@/hooks/useOutputSchemaMutations', () => ({
-  useCreateOutputSchema: () => ({
-    mutate: mockMutate,
-    loading: false,
-    error: null,
-  }),
+vi.mock('@/stores/outputSchemaStore', () => ({
+  outputSchemaStore: {
+    create: mockCreate,
+  },
 }))
 
 // Setup default mock behavior to prevent undefined errors
-mockMutate.mockResolvedValue(mockSchema)
+mockCreate.mockResolvedValue(mockSchema)
 
 describe('OutputSchemaFormDialog', () => {
   const defaultProps = {
@@ -72,7 +70,7 @@ describe('OutputSchemaFormDialog', () => {
       expect(screen.getByText('Name is required')).toBeDefined()
     })
 
-    expect(mockMutate).not.toHaveBeenCalled()
+    expect(mockCreate).not.toHaveBeenCalled()
   })
 
   it('prevents typing more than 200 characters', () => {
@@ -116,7 +114,7 @@ describe('OutputSchemaFormDialog', () => {
       expect(screen.getByText(/invalid json/i)).toBeDefined()
     })
 
-    expect(mockMutate).not.toHaveBeenCalled()
+    expect(mockCreate).not.toHaveBeenCalled()
   })
 
   it('calls onSave with new schema ID on success', async () => {
@@ -128,7 +126,7 @@ describe('OutputSchemaFormDialog', () => {
       created_at: '2024-01-01T00:00:00Z',
     }
 
-    mockMutate.mockResolvedValue(mockSchema)
+    mockCreate.mockResolvedValue(mockSchema)
 
     render(<OutputSchemaFormDialog {...defaultProps} />)
 
@@ -139,7 +137,7 @@ describe('OutputSchemaFormDialog', () => {
     await user.click(createButton)
 
     await waitFor(() => {
-      expect(mockMutate).toHaveBeenCalledWith({
+      expect(mockCreate).toHaveBeenCalledWith({
         name: 'Test Schema',
         schema: {type: 'object', properties: {}},
       })
@@ -159,7 +157,7 @@ describe('OutputSchemaFormDialog', () => {
     )
 
     // Override the default mock behavior for this test
-    mockMutate.mockRejectedValueOnce(conflictError)
+    mockCreate.mockRejectedValueOnce(conflictError)
 
     render(<OutputSchemaFormDialog {...defaultProps} />)
 
@@ -181,7 +179,7 @@ describe('OutputSchemaFormDialog', () => {
     const user = userEvent.setup()
     const genericError = new Error('Network error')
 
-    mockMutate.mockRejectedValue(genericError)
+    mockCreate.mockRejectedValue(genericError)
 
     render(<OutputSchemaFormDialog {...defaultProps} />)
 
@@ -223,7 +221,7 @@ describe('OutputSchemaFormDialog', () => {
       updated_at: '2024-01-01T00:00:00Z',
     }
 
-    mockMutate.mockResolvedValue(mockSchema)
+    mockCreate.mockResolvedValue(mockSchema)
 
     const {rerender} = render(<OutputSchemaFormDialog {...defaultProps} />)
 
@@ -252,7 +250,7 @@ describe('OutputSchemaFormDialog', () => {
       created_at: '2024-01-01T00:00:00Z',
     }
 
-    mockMutate.mockResolvedValue(mockSchema)
+    mockCreate.mockResolvedValue(mockSchema)
 
     render(<OutputSchemaFormDialog {...defaultProps} />)
 
@@ -263,7 +261,7 @@ describe('OutputSchemaFormDialog', () => {
     await user.click(createButton)
 
     await waitFor(() => {
-      expect(mockMutate).toHaveBeenCalledWith({
+      expect(mockCreate).toHaveBeenCalledWith({
         name: 'Test Schema',
         schema: {type: 'object', properties: {}},
       })
