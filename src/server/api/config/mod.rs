@@ -1,8 +1,9 @@
 //! Server configuration endpoints
 
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 
+use super::AppError;
 use crate::server::state::AppState;
 use crate::types::{AgentPoolConfig, AutonomyLevel, GitStrategy, SandboxMode, VerbosityLevel};
 
@@ -67,7 +68,7 @@ pub async fn get_config(State(state): State<AppState>) -> Json<ConfigResponse> {
 pub async fn update_config(
     State(state): State<AppState>,
     Json(request): Json<UpdateConfigRequest>,
-) -> Result<Json<ConfigResponse>, StatusCode> {
+) -> Result<Json<ConfigResponse>, AppError> {
     let mut config = state.config().write().await;
 
     // Verbosity
@@ -76,7 +77,7 @@ pub async fn update_config(
             "quiet" => config.verbosity = VerbosityLevel::Quiet,
             "normal" => config.verbosity = VerbosityLevel::Normal,
             "verbose" => config.verbosity = VerbosityLevel::Verbose,
-            _ => return Err(StatusCode::BAD_REQUEST),
+            _ => return Err(AppError::bad_request("Invalid verbosity level")),
         }
     }
 
@@ -93,7 +94,7 @@ pub async fn update_config(
             "full_auto" => config.autonomy = AutonomyLevel::FullAuto,
             "approval_gates" => config.autonomy = AutonomyLevel::ApprovalGates,
             "supervised" => config.autonomy = AutonomyLevel::Supervised,
-            _ => return Err(StatusCode::BAD_REQUEST),
+            _ => return Err(AppError::bad_request("Invalid autonomy level")),
         }
     }
 
@@ -102,7 +103,7 @@ pub async fn update_config(
         match g.to_lowercase().as_str() {
             "branch_per_slice" => config.git_strategy = GitStrategy::BranchPerSlice,
             "branch_per_ticket" => config.git_strategy = GitStrategy::BranchPerTicket,
-            _ => return Err(StatusCode::BAD_REQUEST),
+            _ => return Err(AppError::bad_request("Invalid git strategy")),
         }
     }
 
@@ -112,7 +113,7 @@ pub async fn update_config(
             "docker" => config.sandbox_mode = SandboxMode::Docker,
             "local_restricted" => config.sandbox_mode = SandboxMode::LocalRestricted,
             "none" => config.sandbox_mode = SandboxMode::None,
-            _ => return Err(StatusCode::BAD_REQUEST),
+            _ => return Err(AppError::bad_request("Invalid sandbox mode")),
         }
     }
 

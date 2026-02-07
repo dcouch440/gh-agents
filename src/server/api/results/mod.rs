@@ -9,6 +9,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::AppError;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
 
@@ -54,13 +55,13 @@ pub async fn list_results(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Query(q): Query<ResultQuery>,
-) -> Result<Json<Vec<ResultResponse>>, StatusCode> {
+) -> Result<Json<Vec<ResultResponse>>, AppError> {
     let repo = &state.repos().results;
     let rows = match q.output_schema_id {
         Some(schema_id) => repo.list_results_by_schema(auth.user_id.0, schema_id).await,
         None => repo.list_results(auth.user_id.0).await,
     }
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(Json(rows.into_iter().map(ResultResponse::from).collect()))
 }
 
@@ -79,15 +80,15 @@ pub async fn get_result(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<ResultResponse>, StatusCode> {
+) -> Result<Json<ResultResponse>, AppError> {
     let repo = &state.repos().results;
     let row = repo
         .get_result(id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Result"))?;
     if row.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Result"));
     }
     Ok(Json(ResultResponse::from(row)))
 }
@@ -107,19 +108,19 @@ pub async fn delete_result(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, AppError> {
     let repo = &state.repos().results;
     let row = repo
         .get_result(id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Result"))?;
     if row.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Result"));
     }
     repo.delete_result(id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(StatusCode::NO_CONTENT)
 }
 

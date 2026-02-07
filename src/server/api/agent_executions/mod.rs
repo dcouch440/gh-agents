@@ -15,6 +15,7 @@ use tokio::sync::broadcast;
 use tracing::error;
 use uuid::Uuid;
 
+use super::AppError;
 use crate::server::auth as auth_utils;
 use crate::server::hub;
 use crate::server::state::{AppState, StreamChunk};
@@ -124,12 +125,11 @@ pub async fn list_agent_executions(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Query(query): Query<ListExecutionsQuery>,
-) -> Result<Json<Vec<AgentExecutionResponse>>, StatusCode> {
+) -> Result<Json<Vec<AgentExecutionResponse>>, AppError> {
     let repo = &state.repos().agent_executions;
     let rows = repo
         .list_agent_executions(auth.user_id.0, query.status)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
     let items: Vec<AgentExecutionResponse> =
         rows.into_iter().map(AgentExecutionResponse::from).collect();
     Ok(Json(items))
@@ -150,13 +150,12 @@ pub async fn get_agent_execution(
     State(state): State<AppState>,
     _auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<AgentExecutionResponse>, StatusCode> {
+) -> Result<Json<AgentExecutionResponse>, AppError> {
     let repo = &state.repos().agent_executions;
     let row = repo
         .get_agent_execution(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Agent execution"))?;
     Ok(Json(AgentExecutionResponse::from(row)))
 }
 
@@ -175,17 +174,13 @@ pub async fn list_execution_messages(
     State(state): State<AppState>,
     _auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<Vec<ExecutionMessageResponse>>, StatusCode> {
+) -> Result<Json<Vec<ExecutionMessageResponse>>, AppError> {
     let repo = &state.repos().agent_executions;
     // Verify execution exists
     repo.get_agent_execution(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
-    let rows = repo
-        .list_execution_messages(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?
+        .ok_or(AppError::not_found("Agent execution"))?;
+    let rows = repo.list_execution_messages(id).await?;
     Ok(Json(
         rows.into_iter()
             .map(ExecutionMessageResponse::from)
@@ -215,26 +210,26 @@ pub async fn send_execution_message(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
     Json(req): Json<SendMessageRequest>,
-) -> Result<(StatusCode, Json<SendMessageResponse>), StatusCode> {
+) -> Result<(StatusCode, Json<SendMessageResponse>), AppError> {
     let repo = &state.repos().agent_executions;
     let ae = repo
         .get_agent_execution(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Agent execution"))?;
 
     if !ae.is_interactive {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request("Execution is not interactive"));
     }
     if ae.status != "awaiting_user" {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request(
+            "Execution is not awaiting user input",
+        ));
     }
 
     // Record the user message
     let msg = repo
         .create_execution_message(id, "user", &req.content, None, 0, 0)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     // Create a stream ID for the agent's response
     let stream_id = Uuid::new_v4();
@@ -404,23 +399,23 @@ pub async fn approve_execution(
     _auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
     Json(req): Json<ApproveExecutionRequest>,
-) -> Result<Json<AgentExecutionResponse>, StatusCode> {
+) -> Result<Json<AgentExecutionResponse>, AppError> {
     let repo = &state.repos().agent_executions;
     let ae = repo
         .get_agent_execution(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Agent execution"))?;
 
     if !ae.is_interactive || ae.status != "awaiting_user" {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request(
+            "Execution is not interactive or not awaiting user approval",
+        ));
     }
 
     // Update status to completed, optionally with revised structured_output
     let updated = repo
         .update_agent_execution_status(id, "completed", ae.output.clone(), req.structured_output)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     // Check if we should resume the paused DAG
     if let Some(step_id) = ae.workflow_step_id {
@@ -479,18 +474,14 @@ pub async fn set_exemplary(
     _auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
     Json(req): Json<SetExemplaryRequest>,
-) -> Result<Json<AgentExecutionResponse>, StatusCode> {
+) -> Result<Json<AgentExecutionResponse>, AppError> {
     let repo = &state.repos().agent_executions;
     // Verify execution exists
     repo.get_agent_execution(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Agent execution"))?;
 
-    let updated = repo
-        .set_execution_exemplary(id, req.is_exemplary)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let updated = repo.set_execution_exemplary(id, req.is_exemplary).await?;
 
     Ok(Json(AgentExecutionResponse::from(updated)))
 }

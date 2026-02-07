@@ -2,12 +2,12 @@
 
 use axum::{
     extract::{Query, State},
-    http::StatusCode,
     Json,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use super::AppError;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
 
@@ -36,16 +36,16 @@ pub async fn get_costs(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Query(q): Query<CostQuery>,
-) -> Result<Json<CostResponse>, StatusCode> {
+) -> Result<Json<CostResponse>, AppError> {
     let repo = &state.repos().token_ledger;
     let total_spend = repo
         .get_user_spend(auth.user_id.0, q.since)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
     let models = repo
         .get_model_breakdown(auth.user_id.0, q.since)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(Json(CostResponse {
         total_spend,
         models,

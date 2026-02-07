@@ -9,11 +9,10 @@ use chrono::Utc;
 use serde::Deserialize;
 use uuid::Uuid;
 
+use super::{AppError, MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH};
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
 use crate::types::{Priority, Task};
-
-use super::{MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH};
 
 /// Query parameters for listing tasks
 #[derive(Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
@@ -50,12 +49,11 @@ pub async fn list_tasks(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Query(query): Query<TasksQuery>,
-) -> Result<Json<Vec<Task>>, StatusCode> {
+) -> Result<Json<Vec<Task>>, AppError> {
     let tasks = state
         .repo()
         .list_tasks(auth.user_id, query.status, query.limit)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     Ok(Json(tasks))
 }
@@ -78,13 +76,12 @@ pub async fn get_task(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<Task>, StatusCode> {
+) -> Result<Json<Task>, AppError> {
     let task = state
         .repo()
         .get_task_by_uuid(auth.user_id, id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Task"))?;
 
     Ok(Json(task))
 }
@@ -108,13 +105,13 @@ pub async fn create_task(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Json(request): Json<CreateTaskRequest>,
-) -> Result<(StatusCode, Json<Task>), StatusCode> {
+) -> Result<(StatusCode, Json<Task>), AppError> {
     if request.title.trim().is_empty() || request.title.len() > MAX_TITLE_LENGTH {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request("Title is empty or exceeds maximum length"));
     }
     if let Some(ref desc) = request.description {
         if desc.len() > MAX_DESCRIPTION_LENGTH {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::bad_request("Description exceeds maximum length"));
         }
     }
 
@@ -141,8 +138,7 @@ pub async fn create_task(
     state
         .repo()
         .insert_task(auth.user_id, task.clone())
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     Ok((StatusCode::CREATED, Json(task)))
 }

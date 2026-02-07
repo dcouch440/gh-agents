@@ -2,12 +2,12 @@
 
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::AppError;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
 
@@ -41,12 +41,11 @@ pub async fn get_agent_context(
     State(state): State<AppState>,
     _auth: auth_utils::AuthUser,
     Path(agent_id): Path<Uuid>,
-) -> Result<Json<AgentContextResponse>, StatusCode> {
+) -> Result<Json<AgentContextResponse>, AppError> {
     let rows = state
         .repo()
         .get_agent_context(agent_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     let documents = rows
         .into_iter()
@@ -85,26 +84,24 @@ pub async fn set_agent_context(
     _auth: auth_utils::AuthUser,
     Path(agent_id): Path<Uuid>,
     Json(request): Json<SetAgentContextRequest>,
-) -> Result<Json<AgentContextResponse>, StatusCode> {
+) -> Result<Json<AgentContextResponse>, AppError> {
     let document_ids: Result<Vec<Uuid>, _> = request
         .document_ids
         .iter()
         .map(|s| Uuid::parse_str(s))
         .collect();
 
-    let document_ids = document_ids.map_err(|_| StatusCode::BAD_REQUEST)?;
+    let document_ids = document_ids.map_err(|_| AppError::bad_request("Invalid document ID format"))?;
 
     state
         .repo()
         .set_agent_context(agent_id, document_ids)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     let rows = state
         .repo()
         .get_agent_context(agent_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     let documents = rows
         .into_iter()

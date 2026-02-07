@@ -109,8 +109,8 @@ pub async fn auth_setup(
     }
 
     // Hash and store
-    let hash = auth::hash_password(&request.password)
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let hash =
+        auth::hash_password(&request.password).map_err(|e| AppError::Internal(e.to_string()))?;
 
     state.repo().set_password(hash).await?;
 
@@ -150,16 +150,12 @@ pub async fn auth_register(
         .ok_or(AppError::Internal("User service unavailable".into()))?;
 
     // Check if email already exists
-    if user_repo
-        .get_user_by_email(&request.email)
-        .await?
-        .is_some()
-    {
+    if user_repo.get_user_by_email(&request.email).await?.is_some() {
         return Err(AppError::Conflict("Email already registered".into()));
     }
 
-    let hash = auth::hash_password(&request.password)
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let hash =
+        auth::hash_password(&request.password).map_err(|e| AppError::Internal(e.to_string()))?;
 
     let user = user_repo.create_user(&request.email, &hash).await?;
 

@@ -9,6 +9,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::AppError;
 use crate::constants::MAX_TITLE_LENGTH;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
@@ -49,13 +50,13 @@ pub struct UpdateOutputSchemaRequest {
 pub async fn list_output_schemas(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
-) -> Result<Json<Vec<OutputSchemaResponse>>, StatusCode> {
+) -> Result<Json<Vec<OutputSchemaResponse>>, AppError> {
     let rows = state
         .repos()
         .output_schemas
         .list_output_schemas(auth.user_id.0)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
     let items = rows
         .into_iter()
         .map(|r| OutputSchemaResponse {
@@ -84,15 +85,15 @@ pub async fn create_output_schema(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Json(request): Json<CreateOutputSchemaRequest>,
-) -> Result<(StatusCode, Json<OutputSchemaResponse>), StatusCode> {
+) -> Result<(StatusCode, Json<OutputSchemaResponse>), AppError> {
     if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request("Schema name is empty or exceeds maximum length"));
     }
     let repo = &state.repos().output_schemas;
     let row = repo
         .create_output_schema(auth.user_id.0, request.name, request.schema)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
     Ok((
         StatusCode::CREATED,
         Json(OutputSchemaResponse {
@@ -120,15 +121,15 @@ pub async fn get_output_schema(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<OutputSchemaResponse>, StatusCode> {
+) -> Result<Json<OutputSchemaResponse>, AppError> {
     let repo = &state.repos().output_schemas;
     let row = repo
         .get_output_schema(id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Output schema"))?;
     if row.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Output schema"));
     }
     Ok(Json(OutputSchemaResponse {
         id: row.id,
@@ -156,25 +157,25 @@ pub async fn update_output_schema(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateOutputSchemaRequest>,
-) -> Result<Json<OutputSchemaResponse>, StatusCode> {
+) -> Result<Json<OutputSchemaResponse>, AppError> {
     let repo = &state.repos().output_schemas;
     let existing = repo
         .get_output_schema(id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Output schema"))?;
     if existing.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Output schema"));
     }
     if let Some(ref name) = request.name {
         if name.trim().is_empty() || name.len() > MAX_TITLE_LENGTH {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::bad_request("Schema name is empty or exceeds maximum length"));
         }
     }
     let row = repo
         .update_output_schema(id, request.name, request.schema)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(Json(OutputSchemaResponse {
         id: row.id,
         name: row.name,
@@ -199,19 +200,19 @@ pub async fn delete_output_schema(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, AppError> {
     let repo = &state.repos().output_schemas;
     let existing = repo
         .get_output_schema(id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Output schema"))?;
     if existing.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Output schema"));
     }
     repo.delete_output_schema(id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(StatusCode::NO_CONTENT)
 }
 

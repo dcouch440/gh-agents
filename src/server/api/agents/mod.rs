@@ -110,10 +110,7 @@ pub async fn list_agents(
     let config = state.config().read().await;
     let pool_config = &config.pool;
 
-    let rows = state
-        .repo()
-        .list_persisted_agents(auth.user_id)
-        .await?;
+    let rows = state.repo().list_persisted_agents(auth.user_id).await?;
 
     let agents: Vec<AgentResponse> = rows.into_iter().map(AgentResponse::from_row).collect();
 
@@ -154,7 +151,9 @@ pub async fn create_agent(
     }
     if let Some(ref prompt) = request.system_prompt {
         if prompt.len() > MAX_PROMPT_LENGTH {
-            return Err(AppError::bad_request("System prompt exceeds maximum length"));
+            return Err(AppError::bad_request(
+                "System prompt exceeds maximum length",
+            ));
         }
     }
 
@@ -182,10 +181,7 @@ pub async fn create_agent(
         version: 1,
     };
 
-    state
-        .repo()
-        .upsert_agent(auth.user_id, row.clone())
-        .await?;
+    state.repo().upsert_agent(auth.user_id, row.clone()).await?;
 
     Ok((StatusCode::CREATED, Json(AgentResponse::from_row(row))))
 }

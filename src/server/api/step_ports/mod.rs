@@ -8,6 +8,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::AppError;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
 
@@ -79,23 +80,21 @@ async fn verify_step_access(
     wid: Uuid,
     sid: Uuid,
     user_id: Uuid,
-) -> Result<(), StatusCode> {
+) -> Result<(), AppError> {
     let repo = &state.repos().workflows;
     let wf = repo
         .get_workflow(wid)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Workflow"))?;
     if wf.user_id != user_id {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Workflow"));
     }
     let step = repo
         .get_step(sid)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Step"))?;
     if step.workflow_id != wid {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Step"));
     }
     Ok(())
 }
@@ -123,13 +122,12 @@ pub async fn list_step_inputs(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path((wid, sid)): Path<(Uuid, Uuid)>,
-) -> Result<Json<Vec<StepInputResponse>>, StatusCode> {
+) -> Result<Json<Vec<StepInputResponse>>, AppError> {
     verify_step_access(&state, wid, sid, auth.user_id.0).await?;
     let repo = &state.repos().workflows;
     let rows = repo
         .get_step_inputs(sid)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
     Ok(Json(
         rows.into_iter()
             .map(|r| StepInputResponse {
@@ -167,9 +165,9 @@ pub async fn create_step_input(
     auth: auth_utils::AuthUser,
     Path((wid, sid)): Path<(Uuid, Uuid)>,
     Json(req): Json<CreateStepInputRequest>,
-) -> Result<(StatusCode, Json<StepInputResponse>), StatusCode> {
+) -> Result<(StatusCode, Json<StepInputResponse>), AppError> {
     if req.port_name.trim().is_empty() {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request("Port name must not be empty"));
     }
     verify_step_access(&state, wid, sid, auth.user_id.0).await?;
     let repo = &state.repos().workflows;
@@ -183,8 +181,7 @@ pub async fn create_step_input(
             req.description,
             req.json_schema,
         )
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
     Ok((
         StatusCode::CREATED,
         Json(StepInputResponse {
@@ -219,12 +216,10 @@ pub async fn delete_step_input(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(p): Path<StepPortPath>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, AppError> {
     verify_step_access(&state, p.wid, p.sid, auth.user_id.0).await?;
     let repo = &state.repos().workflows;
-    repo.delete_step_input(p.pid)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    repo.delete_step_input(p.pid).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -251,13 +246,12 @@ pub async fn list_step_outputs(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path((wid, sid)): Path<(Uuid, Uuid)>,
-) -> Result<Json<Vec<StepOutputResponse>>, StatusCode> {
+) -> Result<Json<Vec<StepOutputResponse>>, AppError> {
     verify_step_access(&state, wid, sid, auth.user_id.0).await?;
     let repo = &state.repos().workflows;
     let rows = repo
         .get_step_outputs(sid)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
     Ok(Json(
         rows.into_iter()
             .map(|r| StepOutputResponse {
@@ -294,9 +288,9 @@ pub async fn create_step_output(
     auth: auth_utils::AuthUser,
     Path((wid, sid)): Path<(Uuid, Uuid)>,
     Json(req): Json<CreateStepOutputRequest>,
-) -> Result<(StatusCode, Json<StepOutputResponse>), StatusCode> {
+) -> Result<(StatusCode, Json<StepOutputResponse>), AppError> {
     if req.port_name.trim().is_empty() || req.json_path.trim().is_empty() {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request("Port name and json_path must not be empty"));
     }
     verify_step_access(&state, wid, sid, auth.user_id.0).await?;
     let repo = &state.repos().workflows;
@@ -309,8 +303,7 @@ pub async fn create_step_output(
             req.description,
             req.json_schema,
         )
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
     Ok((
         StatusCode::CREATED,
         Json(StepOutputResponse {
@@ -344,12 +337,10 @@ pub async fn delete_step_output(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(p): Path<StepPortPath>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, AppError> {
     verify_step_access(&state, p.wid, p.sid, auth.user_id.0).await?;
     let repo = &state.repos().workflows;
-    repo.delete_step_output(p.pid)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    repo.delete_step_output(p.pid).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

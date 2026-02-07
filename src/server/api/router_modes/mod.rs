@@ -14,6 +14,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::AppError;
 use crate::constants::MAX_DESCRIPTION_LENGTH;
 use crate::server::api::tools::ToolResponse;
 use crate::server::auth as auth_utils;
@@ -147,25 +148,25 @@ pub async fn list_router_modes(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(router_id): Path<Uuid>,
-) -> Result<Json<Vec<RouterModeResponse>>, StatusCode> {
+) -> Result<Json<Vec<RouterModeResponse>>, AppError> {
     let repo = &state.repos().tool_routers;
 
     // Verify user owns the router
     let router = repo
         .get_tool_router(router_id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Router"))?;
 
     if router.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Router"));
     }
 
     // Fetch modes
     let modes = repo
         .list_router_modes(router_id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(
         modes
@@ -195,22 +196,22 @@ pub async fn create_router_mode(
     auth: auth_utils::AuthUser,
     Path(router_id): Path<Uuid>,
     Json(request): Json<CreateRouterModeRequest>,
-) -> Result<(StatusCode, Json<RouterModeResponse>), StatusCode> {
+) -> Result<(StatusCode, Json<RouterModeResponse>), AppError> {
     // Validate inputs
     if !validate_mode_key(&request.mode_key) {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request("Invalid mode_key: must be snake_case, 1-50 chars"));
     }
     if request.display_name.trim().is_empty() || request.display_name.len() > 200 {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request("Display name is empty or exceeds maximum length"));
     }
     if request.description.len() > MAX_DESCRIPTION_LENGTH {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request("Description exceeds maximum length"));
     }
     if !validate_temperature(request.temperature) {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request("Temperature must be between 0.0 and 2.0"));
     }
     if !validate_max_tokens(request.max_tokens) {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request("max_tokens must be between 1 and 200000"));
     }
 
     let repo = &state.repos().tool_routers;
@@ -219,21 +220,21 @@ pub async fn create_router_mode(
     let router = repo
         .get_tool_router(router_id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Router"))?;
 
     if router.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Router"));
     }
 
     // Check for duplicate mode_key
     if repo
         .get_router_mode_by_key(router_id, &request.mode_key)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|e| AppError::Internal(e.to_string()))?
         .is_some()
     {
-        return Err(StatusCode::CONFLICT);
+        return Err(AppError::Conflict("Mode key already exists".into()));
     }
 
     // Create mode
@@ -251,7 +252,7 @@ pub async fn create_router_mode(
             request.display_order,
         )
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok((
         StatusCode::CREATED,
@@ -275,24 +276,24 @@ pub async fn get_router_mode(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<RouterModeResponse>, StatusCode> {
+) -> Result<Json<RouterModeResponse>, AppError> {
     let repo = &state.repos().tool_routers;
 
     let mode = repo
         .get_router_mode(id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Router mode"))?;
 
     // Verify user owns the parent router
     let router = repo
         .get_tool_router(mode.router_id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Router"))?;
 
     if router.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Router mode"));
     }
 
     Ok(Json(RouterModeResponse::from_row(mode)))
@@ -318,63 +319,63 @@ pub async fn update_router_mode(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateRouterModeRequest>,
-) -> Result<Json<RouterModeResponse>, StatusCode> {
+) -> Result<Json<RouterModeResponse>, AppError> {
     let repo = &state.repos().tool_routers;
 
     // Get existing mode
     let existing = repo
         .get_router_mode(id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Router mode"))?;
 
     // Verify user owns the parent router
     let router = repo
         .get_tool_router(existing.router_id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Router"))?;
 
     if router.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Router mode"));
     }
 
     // Validate mode_key if provided
     if let Some(ref key) = request.mode_key {
         if !validate_mode_key(key) {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::bad_request("Invalid mode_key: must be snake_case, 1-50 chars"));
         }
         // Check for duplicate (if different from current)
         if key != &existing.mode_key
             && repo
                 .get_router_mode_by_key(existing.router_id, key)
                 .await
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+                .map_err(|e| AppError::Internal(e.to_string()))?
                 .is_some()
         {
-            return Err(StatusCode::CONFLICT);
+            return Err(AppError::Conflict("Mode key already exists".into()));
         }
     }
 
     // Validate other fields
     if let Some(ref name) = request.display_name {
         if name.trim().is_empty() || name.len() > 200 {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::bad_request("Display name is empty or exceeds maximum length"));
         }
     }
     if let Some(ref desc) = request.description {
         if desc.len() > MAX_DESCRIPTION_LENGTH {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::bad_request("Description exceeds maximum length"));
         }
     }
     if let Some(temp) = request.temperature {
         if !validate_temperature(temp) {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::bad_request("Temperature must be between 0.0 and 2.0"));
         }
     }
     if let Some(tokens) = request.max_tokens {
         if !validate_max_tokens(tokens) {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::bad_request("max_tokens must be between 1 and 200000"));
         }
     }
 
@@ -393,7 +394,7 @@ pub async fn update_router_mode(
             request.display_order,
         )
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(RouterModeResponse::from_row(updated)))
 }
@@ -414,29 +415,29 @@ pub async fn delete_router_mode(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, AppError> {
     let repo = &state.repos().tool_routers;
 
     let existing = repo
         .get_router_mode(id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Router mode"))?;
 
     // Verify user owns the parent router
     let router = repo
         .get_tool_router(existing.router_id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Router"))?;
 
     if router.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Router mode"));
     }
 
     repo.delete_router_mode(id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -457,30 +458,30 @@ pub async fn get_mode_tools(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
+) -> Result<Json<Vec<ToolResponse>>, AppError> {
     let repo = &state.repos().tool_routers;
 
     let mode = repo
         .get_router_mode(id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Router mode"))?;
 
     // Verify user owns the parent router
     let router = repo
         .get_tool_router(mode.router_id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Router"))?;
 
     if router.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Router mode"));
     }
 
     let tools = repo
         .get_mode_tools(id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(
         tools.into_iter().map(ToolResponse::from_row).collect(),
@@ -505,29 +506,29 @@ pub async fn set_mode_tools(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
     Json(request): Json<SetModeToolsRequest>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, AppError> {
     let repo = &state.repos().tool_routers;
 
     let mode = repo
         .get_router_mode(id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Router mode"))?;
 
     // Verify user owns the parent router
     let router = repo
         .get_tool_router(mode.router_id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Router"))?;
 
     if router.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Router mode"));
     }
 
     repo.set_mode_tools(id, &request.tool_ids)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(StatusCode::NO_CONTENT)
 }

@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use serde::Serialize;
 
+use super::AppError;
 use crate::constants::MAX_TITLE_LENGTH;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
@@ -79,9 +80,11 @@ pub async fn create_room(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Json(request): Json<CreateRoomRequest>,
-) -> Result<(StatusCode, Json<crate::db::RoomRow>), StatusCode> {
+) -> Result<(StatusCode, Json<crate::db::RoomRow>), AppError> {
     if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request(
+            "Room name is empty or exceeds maximum length",
+        ));
     }
     let repo = &state.repos().rooms;
     let row = repo
@@ -95,8 +98,7 @@ pub async fn create_room(
             request.max_turns,
             request.tools_enabled,
         )
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
     Ok((StatusCode::CREATED, Json(row)))
 }
 
@@ -105,15 +107,14 @@ pub async fn get_room(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<crate::db::RoomRow>, StatusCode> {
+) -> Result<Json<crate::db::RoomRow>, AppError> {
     let repo = &state.repos().rooms;
     let row = repo
         .get_room(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Room"))?;
     if row.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Room"));
     }
     Ok(Json(row))
 }
@@ -124,19 +125,20 @@ pub async fn update_room(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateRoomRequest>,
-) -> Result<Json<crate::db::RoomRow>, StatusCode> {
+) -> Result<Json<crate::db::RoomRow>, AppError> {
     let repo = &state.repos().rooms;
     let existing = repo
         .get_room(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Room"))?;
     if existing.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Room"));
     }
     if let Some(ref name) = request.name {
         if name.trim().is_empty() || name.len() > MAX_TITLE_LENGTH {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::bad_request(
+                "Room name is empty or exceeds maximum length",
+            ));
         }
     }
     let row = repo
@@ -149,8 +151,7 @@ pub async fn update_room(
             request.max_turns,
             request.tools_enabled,
         )
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
     Ok(Json(row))
 }
 
@@ -159,19 +160,16 @@ pub async fn delete_room(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, AppError> {
     let repo = &state.repos().rooms;
     let existing = repo
         .get_room(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Room"))?;
     if existing.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Room"));
     }
-    repo.delete_room(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    repo.delete_room(id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -180,12 +178,9 @@ pub async fn list_room_members(
     State(state): State<AppState>,
     _auth: auth_utils::AuthUser,
     Path(room_id): Path<Uuid>,
-) -> Result<Json<Vec<crate::db::RoomMemberRow>>, StatusCode> {
+) -> Result<Json<Vec<crate::db::RoomMemberRow>>, AppError> {
     let repo = &state.repos().rooms;
-    let rows = repo
-        .list_room_members(room_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = repo.list_room_members(room_id).await?;
     Ok(Json(rows))
 }
 
@@ -195,7 +190,7 @@ pub async fn add_room_member(
     _auth: auth_utils::AuthUser,
     Path(room_id): Path<Uuid>,
     Json(request): Json<AddRoomMemberRequest>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, AppError> {
     let repo = &state.repos().rooms;
     repo.add_room_member(
         room_id,
@@ -204,8 +199,7 @@ pub async fn add_room_member(
         request.role_description,
         request.display_order,
     )
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .await?;
     Ok(StatusCode::CREATED)
 }
 
@@ -214,11 +208,9 @@ pub async fn remove_room_member(
     State(state): State<AppState>,
     _auth: auth_utils::AuthUser,
     Path((room_id, agent_id)): Path<(Uuid, Uuid)>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, AppError> {
     let repo = &state.repos().rooms;
-    repo.remove_room_member(room_id, agent_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    repo.remove_room_member(room_id, agent_id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -228,7 +220,7 @@ pub async fn set_room_members(
     _auth: auth_utils::AuthUser,
     Path(room_id): Path<Uuid>,
     Json(request): Json<SetRoomMembersRequest>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, AppError> {
     let repo = &state.repos().rooms;
     let members: Vec<crate::db::traits::RoomMemberInput> = request
         .members
@@ -240,9 +232,7 @@ pub async fn set_room_members(
             display_order: m.display_order,
         })
         .collect();
-    repo.set_room_members(room_id, &members)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    repo.set_room_members(room_id, &members).await?;
     Ok(StatusCode::OK)
 }
 
@@ -251,12 +241,9 @@ pub async fn create_room_session(
     State(state): State<AppState>,
     _auth: auth_utils::AuthUser,
     Path(room_id): Path<Uuid>,
-) -> Result<(StatusCode, Json<crate::db::RoomSessionRow>), StatusCode> {
+) -> Result<(StatusCode, Json<crate::db::RoomSessionRow>), AppError> {
     let repo = &state.repos().rooms;
-    let row = repo
-        .create_room_session(room_id, None)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = repo.create_room_session(room_id, None).await?;
     Ok((StatusCode::CREATED, Json(row)))
 }
 
@@ -265,13 +252,12 @@ pub async fn get_room_session(
     State(state): State<AppState>,
     _auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<crate::db::RoomSessionRow>, StatusCode> {
+) -> Result<Json<crate::db::RoomSessionRow>, AppError> {
     let repo = &state.repos().rooms;
     let row = repo
         .get_room_session(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("RoomSession"))?;
     Ok(Json(row))
 }
 
@@ -285,9 +271,9 @@ pub async fn send_room_message(
     auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
     Json(request): Json<RoomMessageRequest>,
-) -> Result<Json<serde_json::Value>, StatusCode> {
+) -> Result<Json<serde_json::Value>, AppError> {
     if request.content.trim().is_empty() {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request("Message content cannot be empty"));
     }
 
     let room_repo = &state.repos().rooms;
@@ -295,35 +281,33 @@ pub async fn send_room_message(
     // Load session
     let session = room_repo
         .get_room_session(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("RoomSession"))?;
 
     if session.status != "active" {
-        return Err(StatusCode::CONFLICT);
+        return Err(AppError::Conflict("Room session is not active".to_string()));
     }
 
     // Load room
     let room = room_repo
         .get_room(session.room_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Room"))?;
 
     // Load members + agents
-    let member_rows = room_repo
-        .list_room_members(room.id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let member_rows = room_repo.list_room_members(room.id).await?;
 
     let mut members = Vec::new();
     for m in member_rows {
-        let agent = state
-            .repo()
-            .get_persisted_agent(m.agent_id)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        let agent =
+            state
+                .repo()
+                .get_persisted_agent(m.agent_id)
+                .await?
+                .ok_or(AppError::Internal(format!(
+                    "Agent {} not found for room member",
+                    m.agent_id
+                )))?;
         members.push(crate::server::executors::room::RoomMemberWithAgent { member: m, agent });
     }
 
@@ -331,7 +315,11 @@ pub async fn send_room_message(
     let provider: std::sync::Arc<dyn crate::llm::LLMProvider + Send + Sync> =
         match crate::llm::AnthropicClient::from_env() {
             Ok(p) => std::sync::Arc::new(p),
-            Err(_) => return Err(StatusCode::SERVICE_UNAVAILABLE),
+            Err(e) => {
+                return Err(AppError::ServiceUnavailable(format!(
+                    "LLM provider unavailable: {e}"
+                )))
+            }
         };
 
     // Spawn background task to execute the turn
@@ -368,12 +356,9 @@ pub async fn get_room_transcript(
     State(state): State<AppState>,
     _auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
-) -> Result<Json<Vec<crate::db::RoomTranscriptEntry>>, StatusCode> {
+) -> Result<Json<Vec<crate::db::RoomTranscriptEntry>>, AppError> {
     let repo = &state.repos().rooms;
-    let entries = repo
-        .get_room_transcript(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let entries = repo.get_room_transcript(session_id).await?;
     Ok(Json(entries))
 }
 
@@ -386,20 +371,20 @@ pub async fn close_room_session(
     State(state): State<AppState>,
     _auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, AppError> {
     let repo = &state.repos().rooms;
     let session = repo
         .get_room_session(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("RoomSession"))?;
 
     if session.status == "completed" {
-        return Err(StatusCode::CONFLICT);
+        return Err(AppError::Conflict(
+            "Room session is already completed".to_string(),
+        ));
     }
     repo.update_room_session_status(session_id, "completed")
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     state.broadcast_room(crate::server::ws::events::RoomEvent {
         room_session_id: session_id,
@@ -507,17 +492,13 @@ pub async fn list_room_outputs(
     State(state): State<AppState>,
     _auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
-) -> Result<Json<Vec<RoomOutputResponse>>, StatusCode> {
+) -> Result<Json<Vec<RoomOutputResponse>>, AppError> {
     let repo = &state.repos().rooms;
     // Verify session exists
     repo.get_room_session(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
-    let rows = repo
-        .get_room_execution_outputs(session_id, None)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?
+        .ok_or(AppError::not_found("RoomSession"))?;
+    let rows = repo.get_room_execution_outputs(session_id, None).await?;
     Ok(Json(
         rows.into_iter()
             .map(|r| RoomOutputResponse {

@@ -9,6 +9,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::AppError;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
 
@@ -58,12 +59,11 @@ pub async fn list_system_configs(
     State(state): State<AppState>,
     _auth: auth_utils::AuthUser,
     Query(query): Query<SystemConfigQuery>,
-) -> Result<Json<Vec<SystemConfigResponse>>, StatusCode> {
+) -> Result<Json<Vec<SystemConfigResponse>>, AppError> {
     let repo = &state.repos().system_config;
     let rows = repo
         .list_system_configs(query.config_type)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
     Ok(Json(
         rows.into_iter()
             .map(|r| SystemConfigResponse {
@@ -94,9 +94,9 @@ pub async fn upsert_system_config(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Json(req): Json<CreateSystemConfigRequest>,
-) -> Result<Json<SystemConfigResponse>, StatusCode> {
+) -> Result<Json<SystemConfigResponse>, AppError> {
     if req.config_key.trim().is_empty() || req.config_type.trim().is_empty() {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request("Config key and type must not be empty"));
     }
     let repo = &state.repos().system_config;
     let row = repo
@@ -107,8 +107,7 @@ pub async fn upsert_system_config(
             req.description,
             Some(auth.user_id.0),
         )
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
     Ok(Json(SystemConfigResponse {
         id: row.id,
         config_type: row.config_type,
@@ -134,11 +133,10 @@ pub async fn delete_system_config(
     State(state): State<AppState>,
     _auth: auth_utils::AuthUser,
     Path(key): Path<String>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, AppError> {
     let repo = &state.repos().system_config;
     repo.delete_system_config(&key)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

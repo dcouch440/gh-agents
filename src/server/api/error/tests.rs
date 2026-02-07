@@ -3,7 +3,7 @@ mod tests {
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
 
-    use super::AppError;
+    use super::super::AppError;
 
     #[test]
     fn bad_request_returns_400() {
