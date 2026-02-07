@@ -14,7 +14,7 @@ use crate::db::{
     CollectionRunRow, CollectionWorkflowEdgeRow, CollectionWorkflowRow, WorkflowExecutionRow,
 };
 use crate::server::hub::dag::execute_workflow_via_engine;
-use crate::server::hub::dag::{DagPaused, WorkflowExecutionContext};
+use crate::server::hub::dag::{ContainerExecutionConfig, DagPaused, WorkflowExecutionContext};
 use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::error::HubError;
 use crate::server::state::AppState;
@@ -401,7 +401,37 @@ where
             ExecutionEngine::new(provider)
         };
 
-        // 5. Create execution context
+        // 5. Build container config from workflow settings (if enabled)
+        let container_config = {
+            let wf_row = self
+                .workflow_repo
+                .get_workflow(workflow_id)
+                .await?
+                .ok_or_else(|| anyhow!("workflow {} not found", workflow_id))?;
+            if wf_row.container_enabled {
+                if let Some(repo_url) = &wf_row.target_repo_url {
+                    let github_token = std::env::var("GITHUB_TOKEN").unwrap_or_default();
+                    Some(ContainerExecutionConfig {
+                        clone_url: repo_url.clone(),
+                        branch: wf_row.target_branch.clone(),
+                        github_token,
+                        image: None,
+                        memory_limit: None,
+                        cpu_limit: None,
+                    })
+                } else {
+                    tracing::warn!(
+                        workflow_id = %workflow_id,
+                        "container_enabled is true but target_repo_url is missing"
+                    );
+                    None
+                }
+            } else {
+                None
+            }
+        };
+
+        // 6. Create execution context
         let ctx = WorkflowExecutionContext {
             stage_execution_id: workflow_exec.id,
             run_id: collection_run_id,
@@ -409,6 +439,7 @@ where
             initial_input: String::new(),
             prior_outputs: prior_workflow_outputs.clone(),
             execution_context: None,
+            container_config,
         };
 
         // 6. Execute workflow DAG via unified hub engine

@@ -116,6 +116,9 @@ pub struct WorkflowRow {
     pub execution_mode: String,
     pub created_at: DateTime<Utc>,
     pub version: i32,
+    pub container_enabled: bool,
+    pub target_repo_url: Option<String>,
+    pub target_branch: Option<String>,
 }
 
 /// Row type for a workflow step (DAG node).
@@ -138,6 +141,7 @@ pub struct WorkflowStepRow {
     pub routing_field: Option<String>,
     pub display_order: i32,
     pub version: i32,
+    pub reasoning_trace: bool,
 }
 
 /// Row type for a workflow step edge (DAG edge).

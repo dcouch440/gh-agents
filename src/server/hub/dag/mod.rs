@@ -17,6 +17,7 @@ use crate::db::traits::WorkflowCollectionRepo;
 use crate::db::{
     AgentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, WorkflowStepEdgeRow, WorkflowStepRow,
 };
+use crate::execution::{ContainerConfig, ContainerHandle, ContainerManager};
 use crate::server::state::AppState;
 use crate::server::ws::events::{WorkflowEvent, WorkflowEventKind};
 use crate::types::{
@@ -27,7 +28,7 @@ use crate::types::{
 use super::construct_agent_defaults;
 use super::engine::filters::{
     AgentGuidanceFilter, ExecutionFilter, FilterContext, PartialJsonRecoveryFilter,
-    SchemaEnhancementFilter, SchemaValidationRetryFilter,
+    ReasoningTraceFilter, SchemaEnhancementFilter, SchemaValidationRetryFilter,
 };
 use super::engine::ExecutionEngine;
 use super::error::HubError;
@@ -61,8 +62,8 @@ pub mod utils;
 pub use utils::{
     build_routing_instruction_block, compose_prompt, extract_for_each_label, find_entry_steps,
     get_child_steps, get_parent_steps, resolve_dot_path, resolve_for_each_array,
-    resolve_port_inputs, resolve_variables, topological_sort, DagPaused, PortResolutionError,
-    StepOutput, WorkflowExecutionContext, WorkflowExecutionResult,
+    resolve_port_inputs, resolve_variables, topological_sort, ContainerExecutionConfig, DagPaused,
+    PortResolutionError, StepOutput, WorkflowExecutionContext, WorkflowExecutionResult,
 };
 
 /// Determine the output key for a step: prefer the first output port name,
@@ -582,6 +583,33 @@ pub async fn execute_workflow_via_engine(
     })
 }
 
+/// Build a `ContainerConfig` from `ContainerExecutionConfig` and create a container.
+async fn create_step_container(
+    config: &utils::ContainerExecutionConfig,
+) -> Result<ContainerHandle, HubError> {
+    let container_config = ContainerConfig {
+        clone_url: config.clone_url.clone(),
+        branch: config.branch.clone(),
+        github_token: config.github_token.clone(),
+        image: config
+            .image
+            .clone()
+            .unwrap_or_else(|| crate::constants::CONTAINER_DEFAULT_IMAGE.to_string()),
+        memory_limit: config
+            .memory_limit
+            .clone()
+            .unwrap_or_else(|| crate::constants::CONTAINER_DEFAULT_MEMORY.to_string()),
+        cpu_limit: config
+            .cpu_limit
+            .clone()
+            .unwrap_or_else(|| crate::constants::CONTAINER_DEFAULT_CPUS.to_string()),
+        ..ContainerConfig::default()
+    };
+    ContainerManager::create_container(&container_config)
+        .await
+        .map_err(|e| HubError::Internal(anyhow!("Container creation failed: {}", e)))
+}
+
 /// Execute a single (non-for-each) step through the engine.
 async fn execute_single_step(
     engine: &ExecutionEngine,
@@ -662,7 +690,27 @@ async fn execute_single_step(
         prompt.push_str(&build_routing_instruction_block(routing_ctx));
     }
 
-    let (output, in_tok, out_tok, cost) = run_step_via_engine(
+    // Create container if configured
+    let container_handle = if let Some(ref cc) = ctx.container_config {
+        match create_step_container(cc).await {
+            Ok(handle) => {
+                info!(
+                    step_id = %step.id,
+                    container = %handle.container_name(),
+                    "Created container for step"
+                );
+                Some(handle)
+            }
+            Err(e) => {
+                error!(step_id = %step.id, error = %e, "Failed to create container for step");
+                return Err(e);
+            }
+        }
+    } else {
+        None
+    };
+
+    let result = run_step_via_engine(
         engine,
         state,
         ctx,
@@ -671,8 +719,17 @@ async fn execute_single_step(
         &prompt,
         &port_meta.step_outputs,
         cancel,
+        container_handle.as_ref(),
     )
-    .await?;
+    .await;
+
+    // Destroy container regardless of success/failure
+    if let Some(ref handle) = container_handle {
+        info!(container = %handle.container_name(), "Destroying step container");
+        ContainerManager::destroy_container_quiet(handle).await;
+    }
+
+    let (output, in_tok, out_tok, cost) = result?;
 
     *total_input_tokens += in_tok;
     *total_output_tokens += out_tok;
@@ -1293,7 +1350,20 @@ async fn execute_for_each_step(
         )
         .await;
 
-        match run_step_via_engine(
+        // Create container for this iteration if configured
+        let iter_container = if let Some(ref cc) = ctx.container_config {
+            match create_step_container(cc).await {
+                Ok(handle) => Some(handle),
+                Err(e) => {
+                    error!(step_id = %step.id, idx, error = %e, "Failed to create container for iteration");
+                    return Err(e);
+                }
+            }
+        } else {
+            None
+        };
+
+        let result = run_step_via_engine(
             engine,
             state,
             ctx,
@@ -1302,9 +1372,16 @@ async fn execute_for_each_step(
             &prompt,
             &port_meta.step_outputs,
             cancel,
+            iter_container.as_ref(),
         )
-        .await
-        {
+        .await;
+
+        // Destroy container regardless of result
+        if let Some(ref handle) = iter_container {
+            ContainerManager::destroy_container_quiet(handle).await;
+        }
+
+        match result {
             Ok((output, in_tok, out_tok, cost)) => {
                 *total_input_tokens += in_tok;
                 *total_output_tokens += out_tok;
@@ -1392,6 +1469,7 @@ async fn run_step_via_engine(
     prompt: &str,
     step_outputs: &HashMap<Uuid, Vec<StepOutputRow>>,
     cancel: Option<&CancellationToken>,
+    container_handle: Option<&ContainerHandle>,
 ) -> Result<(StepOutput, i64, i64, f32), HubError> {
     let ae_repo = state
         .agent_execution_repo()
@@ -1458,6 +1536,7 @@ async fn run_step_via_engine(
         tool_names: mode.tool_names,   // Use mode tool names
         temperature: mode.temperature, // Use mode temperature
         execution_context: ctx.execution_context.clone(),
+        container_handle: container_handle.cloned(),
         run_id: ctx.run_id,
         user_id: ctx.user_id,
         agent_execution_id: ae_row.id,
@@ -1486,6 +1565,10 @@ async fn run_step_via_engine(
         filters.push(Arc::new(SchemaEnhancementFilter::new()));
         filters.push(Arc::new(SchemaValidationRetryFilter::new()));
         filters.push(Arc::new(PartialJsonRecoveryFilter::new()));
+    }
+
+    if step.reasoning_trace && filter_ctx.has_output_schema {
+        filters.push(Arc::new(ReasoningTraceFilter::new()));
     }
 
     let filtered_engine = engine
@@ -1848,7 +1931,20 @@ async fn execute_pipeline_item(
             prompt
         };
 
-        match run_step_via_engine(
+        // Create container for this pipeline stage if configured
+        let stage_container = if let Some(ref cc) = ctx.container_config {
+            match create_step_container(cc).await {
+                Ok(handle) => Some(handle),
+                Err(e) => {
+                    error!(step_id = %step.id, item_index, stage_idx, error = %e, "Failed to create container for pipeline stage");
+                    return Err(e);
+                }
+            }
+        } else {
+            None
+        };
+
+        let result = run_step_via_engine(
             engine,
             state,
             ctx,
@@ -1857,9 +1953,16 @@ async fn execute_pipeline_item(
             &prompt,
             step_outputs,
             cancel,
+            stage_container.as_ref(),
         )
-        .await
-        {
+        .await;
+
+        // Destroy container regardless of result
+        if let Some(ref handle) = stage_container {
+            ContainerManager::destroy_container_quiet(handle).await;
+        }
+
+        match result {
             Ok((output, in_tok, out_tok, cost)) => {
                 total_input_tokens += in_tok;
                 total_output_tokens += out_tok;
@@ -2303,6 +2406,7 @@ pub async fn resume_dag_from_approval(
         initial_input: String::new(),
         prior_outputs: HashMap::new(),
         execution_context: None,
+        container_config: None,
     };
 
     // Create engine and resume
@@ -2926,6 +3030,7 @@ async fn run_cavernous_subtask(
         tool_names: mode.tool_names,
         temperature: mode.temperature,
         execution_context: ctx.execution_context.clone(),
+        container_handle: None, // Subtasks don't get their own container
         run_id: ctx.run_id,
         user_id: ctx.user_id,
         agent_execution_id: ae_row.id,

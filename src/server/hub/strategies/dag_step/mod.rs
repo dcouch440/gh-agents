@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::agents::execution_tools;
 use crate::db::{AgentRow, WorkflowStepRow};
-use crate::execution::ExecutionContext;
+use crate::execution::{ContainerHandle, ExecutionContext};
 use crate::llm::{Message, TokenUsage, Tool};
 use crate::server::state::AppState;
 
@@ -34,8 +34,10 @@ pub struct DagStepConfig {
     pub tool_names: Vec<String>,
     /// Temperature for sampling (from mode resolution or agent default).
     pub temperature: f32,
-    /// Execution context for file/git/test tool calls.
+    /// Execution context for file/git/test tool calls (local mode).
     pub execution_context: Option<ExecutionContext>,
+    /// Container handle for containerized execution (overrides local context).
+    pub container_handle: Option<ContainerHandle>,
     /// Pipeline run ID for broadcasting.
     pub run_id: Uuid,
     /// User ID for token ledger.
@@ -110,6 +112,24 @@ impl ExecutionStrategy for DagStepStrategy {
     }
 
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {
+        // Container mode: route through docker exec
+        if let Some(ref handle) = self.config.container_handle {
+            info!(
+                agent = %self.config.agent.name,
+                tool = %name,
+                container = %handle.container_name(),
+                "DAG step tool call (container)"
+            );
+            return execution_tools::execute_tool_in_container(
+                name,
+                input,
+                handle,
+                Some(&self.config.tool_names),
+            )
+            .await;
+        }
+
+        // Local mode: use host execution context
         match &self.config.execution_context {
             Some(exec_ctx) => {
                 info!(

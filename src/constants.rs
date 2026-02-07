@@ -367,3 +367,11 @@ pub const SANDBOX_COMPUTE_MEMORY: &str = "2g";
 pub const SANDBOX_COMPUTE_CPUS: &str = "2.0";
 pub const SANDBOX_READONLY_MEMORY: &str = "128m";
 pub const SANDBOX_READONLY_CPUS: &str = "0.5";
+
+// ── Container Defaults (persistent agent containers) ──────────────────────
+
+pub const CONTAINER_DEFAULT_IMAGE: &str = "nexor-agent:latest";
+pub const CONTAINER_DEFAULT_MEMORY: &str = "2g";
+pub const CONTAINER_DEFAULT_CPUS: &str = "2.0";
+pub const CONTAINER_COMMAND_TIMEOUT_SECS: u64 = 300;
+pub const CONTAINER_NAME_PREFIX: &str = "nexor-step";

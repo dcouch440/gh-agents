@@ -137,11 +137,22 @@ async fn test_variable_resolution() {
                 execution_mode: "parallel".to_string(),
                 created_at: Utc::now(),
                 version: 1,
+                container_enabled: false,
+                target_repo_url: None,
+                target_branch: None,
             }))
         }
 
         // Stub other methods (not used in test)
-        async fn create_workflow(&self, _: Uuid, _: String, _: String) -> Result<WorkflowRow> {
+        async fn create_workflow(
+            &self,
+            _: Uuid,
+            _: String,
+            _: String,
+            _: bool,
+            _: Option<String>,
+            _: Option<String>,
+        ) -> Result<WorkflowRow> {
             unimplemented!()
         }
         async fn list_workflows(&self, _: Uuid) -> Result<Vec<WorkflowRow>> {
@@ -152,6 +163,9 @@ async fn test_variable_resolution() {
             _: Uuid,
             _: Option<String>,
             _: Option<String>,
+            _: Option<bool>,
+            _: Option<Option<String>>,
+            _: Option<Option<String>>,
         ) -> Result<WorkflowRow> {
             unimplemented!()
         }

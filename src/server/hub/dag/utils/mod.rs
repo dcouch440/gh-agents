@@ -42,6 +42,25 @@ impl std::fmt::Display for DagPaused {
 
 impl std::error::Error for DagPaused {}
 
+/// Configuration for creating a persistent Docker container per workflow step.
+///
+/// Stored on the workflow and used at runtime to spin up containers.
+#[derive(Debug, Clone)]
+pub struct ContainerExecutionConfig {
+    /// GitHub repo clone URL (e.g., "https://github.com/owner/repo.git").
+    pub clone_url: String,
+    /// Branch to checkout after clone. None = default branch.
+    pub branch: Option<String>,
+    /// GitHub token for authenticated clone/push.
+    pub github_token: String,
+    /// Override Docker image (default: nexor-agent:latest).
+    pub image: Option<String>,
+    /// Override memory limit (default: 2g).
+    pub memory_limit: Option<String>,
+    /// Override CPU limit (default: 2.0).
+    pub cpu_limit: Option<String>,
+}
+
 /// Context passed into the DAG executor for one workflow run.
 #[derive(Clone)]
 pub struct WorkflowExecutionContext {
@@ -53,6 +72,8 @@ pub struct WorkflowExecutionContext {
     pub prior_outputs: HashMap<String, JsonValue>,
     /// Execution context for tool calls (file ops, git, etc.). None if tools are not available.
     pub execution_context: Option<crate::execution::ExecutionContext>,
+    /// Container config for running steps in isolated Docker containers. None = local execution.
+    pub container_config: Option<ContainerExecutionConfig>,
 }
 
 /// Result of executing one workflow.
