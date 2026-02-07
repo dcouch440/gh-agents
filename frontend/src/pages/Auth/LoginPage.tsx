@@ -5,7 +5,7 @@ import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import TextField from '@mui/material/TextField'
 import Alert from '@mui/material/Alert'
-import { useAuth } from '@/hooks/useAuth'
+import { useStore, authStore, selectUser } from '@/stores'
 import { ROUTES, APP_NAME } from '@/constants'
 import { Button } from '@/components/primitives'
 import { FadeIn } from '@/components/animation'
@@ -15,7 +15,7 @@ function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const { login, user } = useAuth()
+  const user = useStore(authStore.store, selectUser)
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -32,7 +32,7 @@ function LoginPage() {
 
     void (async () => {
       try {
-        await login(email, password)
+        await authStore.login(email, password)
         void navigate(from)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Login failed')
