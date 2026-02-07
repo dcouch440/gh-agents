@@ -8,6 +8,7 @@ mod provider;
 mod rate_limit;
 mod registry;
 mod retry;
+mod stream;
 mod types;
 
 pub use anthropic::*;
@@ -18,4 +19,5 @@ pub use provider::*;
 pub use rate_limit::*;
 pub use registry::*;
 pub use retry::*;
+pub use stream::*;
 pub use types::*;

@@ -308,8 +308,10 @@ impl AppState {
             Ok(p) => {
                 tracing::info!("Initialized LLM provider: {}", p.model_id().to_string());
                 let provider: Arc<dyn LLMProvider + Send + Sync> =
-                    Arc::new(crate::llm::RetryingProvider::with_defaults(
-                        crate::llm::RateLimitedProvider::with_defaults(p),
+                    Arc::new(crate::llm::SafeStreamProvider::new(
+                        crate::llm::RetryingProvider::with_defaults(
+                            crate::llm::RateLimitedProvider::with_defaults(p),
+                        ),
                     ));
 
                 registry.register("anthropic", provider.clone());
@@ -360,7 +362,9 @@ impl AppState {
                             )
                         );
                         let ollama_provider: Arc<dyn LLMProvider + Send + Sync> =
-                            Arc::new(crate::llm::RetryingProvider::with_defaults(client));
+                            Arc::new(crate::llm::SafeStreamProvider::new(
+                                crate::llm::RetryingProvider::with_defaults(client),
+                            ));
                         registry.register("ollama", ollama_provider);
                     }
                 }
