@@ -3,7 +3,7 @@ import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import { Tooltip } from '@/components/primitives/Tooltip';
 import Badge from '@mui/material/Badge';
-import { LAYOUT, ANIMATION } from '@/constants';
+import { LAYOUT, LAYOUT_COLORS, ANIMATION } from '@/constants';
 import type { NavBarItem } from './types';
 
 type RailItem = NavBarItem;
@@ -81,10 +81,8 @@ function IconRail({ side, topItems, bottomItems, footer }: IconRailProps) {
         borderRight: isLeft ? 1 : 0,
         borderLeft: isLeft ? 0 : 1,
         borderColor: 'divider',
-        backgroundColor: '#131720',
+        backgroundColor: LAYOUT_COLORS.CHROME_BG,
         overflow: 'hidden',
-        position: 'sticky',
-        top: 0,
       }}
     >
       {/* Top items */}

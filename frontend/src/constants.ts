@@ -10,8 +10,16 @@ export const WS_URL: string =
   `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws`;
 
 // WS Types (re-exported from types/ws.ts)
-export { WS_TOPIC, WS_STATUS, WS_MSG, WS_CONTROL, WORKFLOW_EVENT, ROOM_EVENT, SESSION_EVENT } from "@/types/ws";
-export type { WsTopic, WsStatus, WsWireMessage } from "@/types/ws";
+export {
+  WS_TOPIC,
+  WS_STATUS,
+  WS_MSG,
+  WS_CONTROL,
+  WORKFLOW_EVENT,
+  ROOM_EVENT,
+  SESSION_EVENT,
+} from "@/types/ws";
+export type {WsTopic, WsStatus, WsWireMessage} from "@/types/ws";
 
 // WS Reconnect
 export const WS_RECONNECT_BASE_MS = 1000;
@@ -189,7 +197,8 @@ export const API = {
   TOOL_ROUTER_TOOLS: (id: string) => `/tool-routers/${id}/tools`,
 
   // Router Modes
-  ROUTER_MODES_BY_ROUTER: (routerId: string) => `/tool-routers/${routerId}/modes`,
+  ROUTER_MODES_BY_ROUTER: (routerId: string) =>
+    `/tool-routers/${routerId}/modes`,
   ROUTER_MODE: (id: string) => `/router-modes/${id}`,
   MODE_TOOLS: (id: string) => `/router-modes/${id}/tools`,
 
@@ -200,7 +209,8 @@ export const API = {
   ROOMS: "/rooms",
   ROOM: (id: string) => `/rooms/${id}`,
   ROOM_MEMBERS: (id: string) => `/rooms/${id}/members`,
-  ROOM_MEMBER: (id: string, agentId: string) => `/rooms/${id}/members/${agentId}`,
+  ROOM_MEMBER: (id: string, agentId: string) =>
+    `/rooms/${id}/members/${agentId}`,
   ROOM_SESSIONS: (id: string) => `/rooms/${id}/sessions`,
 
   // Room Sessions
@@ -228,10 +238,10 @@ export const LS_RIGHT_PANEL_WIDTH = "nexor_right_panel_width";
 
 // Layout
 export const LAYOUT = {
-  TOPBAR_HEIGHT: 36,
-  RAIL_WIDTH: 34,
+  TOPBAR_HEIGHT: 34,
+  RAIL_WIDTH: 36,
   PANEL_WIDTH: 220,
-  PANEL_MIN_WIDTH: 160,
+  PANEL_MIN_WIDTH: 240,
   PANEL_MAX_WIDTH: 480,
 } as const;
 
@@ -239,6 +249,13 @@ export const LAYOUT = {
 export const SIDEBAR = {
   WIDTH_EXPANDED: 260,
   WIDTH_COLLAPSED: 64,
+} as const;
+
+// Layout Colors
+export const LAYOUT_COLORS = {
+  CHROME_BG: '#131720',
+  CAVITY_BG: '#060a10',
+  CAVITY_BG_LIGHT: '#eef0f4',
 } as const;
 
 // Animation
