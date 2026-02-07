@@ -1,135 +1,195 @@
 //! Prompt injection auto-generation utilities for protocols.
+//!
+//! These prompts are appended to `step.prompt_template` and end up inside
+//! `<task>` tags at runtime. The output schema is enforced separately via
+//! `<schema>` in the system prompt, so these provide semantic guidance rather
+//! than hard format constraints.
 
 use super::types::PortConfig;
 
-/// Generate the decomp prompt injection: tells the orchestrator about available
-/// agents/ports and the expected output format.
+/// Generate the decomp prompt injection: instructs the orchestrator to analyze
+/// the task, break it into subtasks, and assign each to a specialist agent.
 pub fn decomp_prompt(ports: &[PortConfig]) -> String {
     let mut lines = Vec::new();
-    lines.push("## Task Decomposition Protocol".to_string());
-    lines.push(String::new());
+
     lines.push(
-        "You must decompose the given task and assign subtasks to the available agents below."
-            .to_string(),
-    );
-    lines.push(
-        "You may assign MULTIPLE tasks to the same port — each will be executed independently."
-            .to_string(),
-    );
-    lines.push(
-        "Respond with a JSON array where each item has a \"port\" and \"content\" field."
+        "Analyze the task above and break it down into subtasks \
+         for the specialist agents below."
             .to_string(),
     );
     lines.push(String::new());
-    lines.push("### Available Agents".to_string());
+    lines.push("Guidelines:".to_string());
+    lines.push(
+        "- Decompose into the fewest subtasks needed. \
+         Each should be a self-contained unit of work."
+            .to_string(),
+    );
+    lines.push(
+        "- Provide each agent with enough context to execute independently \
+         — they cannot see each other's work."
+            .to_string(),
+    );
+    lines.push(
+        "- You may assign multiple subtasks to the same agent \
+         when the work covers distinct concerns within their expertise."
+            .to_string(),
+    );
+    lines.push(
+        "- If subtasks have ordering dependencies, \
+         note them in the content field."
+            .to_string(),
+    );
     lines.push(String::new());
+    lines.push("Available Agents:".to_string());
 
     for port in ports {
-        let mut agent_line = format!(
-            "- **Port: \"{}\"** ({}) — {}",
-            port.port_name, port.agent_name, port.description
-        );
+        lines.push(String::new());
+        lines.push(format!("Port \"{}\" — {}", port.port_name, port.agent_name));
+        lines.push(format!("  {}", port.description));
         if !port.agent_tools.is_empty() {
-            agent_line.push_str(&format!("\n  Tools: {}", port.agent_tools.join(", ")));
+            lines.push(format!("  Tools: {}", port.agent_tools.join(", ")));
         }
-        lines.push(agent_line);
     }
 
     lines.push(String::new());
-    lines.push("### Output Format".to_string());
-    lines.push(String::new());
-    lines.push("```json".to_string());
-    lines.push("[".to_string());
-    if let Some(first) = ports.first() {
-        lines.push(format!(
-            "  {{\"port\": \"{}\", \"content\": {{...task details...}}}}",
-            first.port_name
-        ));
-        if ports.len() > 1 {
-            lines.push(format!(
-                "  {{\"port\": \"{}\", \"content\": {{...task details...}}}}",
-                ports[1].port_name
-            ));
-        }
-    }
-    lines.push("]".to_string());
-    lines.push("```".to_string());
+    lines.push(
+        "Respond with a JSON array. Each element has a \"port\" field \
+         matching an agent identifier above, and a \"content\" field \
+         with the task details for that agent."
+            .to_string(),
+    );
 
     lines.join("\n")
 }
 
-/// Generate the route prompt injection: tells the orchestrator to pick
-/// exactly one agent to handle the task.
+/// Generate the route prompt injection: instructs the orchestrator to analyze
+/// the input and route it to exactly one specialist agent.
 pub fn route_prompt(ports: &[PortConfig]) -> String {
     let mut lines = Vec::new();
-    lines.push("## Routing Protocol".to_string());
-    lines.push(String::new());
+
     lines.push(
-        "Examine the input and route it to exactly ONE of the available agents below.".to_string(),
-    );
-    lines.push(
-        "Respond with a JSON object containing a \"port\" and \"content\" field.".to_string(),
+        "Analyze the input above to determine which specialist agent \
+         is the best fit, then route it to exactly one agent."
+            .to_string(),
     );
     lines.push(String::new());
-    lines.push("### Available Agents".to_string());
+    lines.push("Routing criteria:".to_string());
+    lines.push("- Identify the core intent and requirements of the input.".to_string());
+    lines.push(
+        "- Match those requirements against each agent's \
+         expertise and available tools."
+            .to_string(),
+    );
+    lines.push(
+        "- Select the single best match. If multiple agents could handle \
+         the input, choose the one whose expertise most directly \
+         addresses the primary need."
+            .to_string(),
+    );
     lines.push(String::new());
+    lines.push("Available Agents:".to_string());
 
     for port in ports {
-        lines.push(format!(
-            "- **Port: \"{}\"** ({}) — {}",
-            port.port_name, port.agent_name, port.description
-        ));
+        lines.push(String::new());
+        lines.push(format!("Port \"{}\" — {}", port.port_name, port.agent_name));
+        lines.push(format!("  {}", port.description));
+        if !port.agent_tools.is_empty() {
+            lines.push(format!("  Tools: {}", port.agent_tools.join(", ")));
+        }
     }
 
     lines.push(String::new());
-    lines.push("### Output Format".to_string());
-    lines.push(String::new());
-    lines.push("```json".to_string());
-    lines.push("{\"port\": \"<chosen_port>\", \"content\": {...task details...}}".to_string());
-    lines.push("```".to_string());
+    lines.push(
+        "Respond with a JSON object containing a \"port\" field \
+         matching an agent identifier above, and a \"content\" field \
+         with the task details for that agent."
+            .to_string(),
+    );
 
     lines.join("\n")
 }
 
-/// Generate the review prompt injection: tells the agent to review input
-/// and provide a decision.
+/// Generate the review prompt injection: instructs the agent to evaluate input
+/// against quality criteria and provide a structured decision with feedback.
 pub fn review_prompt(decisions: &[String]) -> String {
     let decision_list = decisions.join("\", \"");
     let mut lines = Vec::new();
-    lines.push("## Review Protocol".to_string());
+
+    lines.push("Evaluate the input above and provide your assessment.".to_string());
+    lines.push(String::new());
+    lines.push("Evaluation criteria:".to_string());
+    lines.push(
+        "- Correctness: Does the content accurately fulfill \
+         the original requirements?"
+            .to_string(),
+    );
+    lines.push(
+        "- Completeness: Are all expected elements present, \
+         or is anything missing?"
+            .to_string(),
+    );
+    lines.push(
+        "- Quality: Is the output well-structured, clear, \
+         and free of obvious errors?"
+            .to_string(),
+    );
     lines.push(String::new());
     lines.push(
-        "Review the provided input and make a decision. Provide detailed feedback.".to_string(),
+        "Form your own independent assessment. Do not assume the input \
+         is correct — verify claims and check for gaps."
+            .to_string(),
     );
+    lines.push(String::new());
     lines.push(format!(
         "Your decision must be one of: \"{}\"",
         decision_list
     ));
     lines.push(String::new());
-    lines.push("### Output Format".to_string());
-    lines.push(String::new());
-    lines.push("```json".to_string());
+    lines.push("Respond with a JSON object containing:".to_string());
+    lines.push("- \"decision\": one of the valid decisions listed above".to_string());
     lines.push(
-        "{\"decision\": \"<your_decision>\", \"feedback\": \"<detailed_feedback>\"}".to_string(),
+        "- \"feedback\": a specific explanation citing what works, \
+         what does not, and what to change. Reference concrete details \
+         rather than giving generic praise or criticism."
+            .to_string(),
     );
-    lines.push("```".to_string());
 
     lines.join("\n")
 }
 
-/// Generate the transform prompt injection: tells the agent to produce
-/// structured output matching the provided schema.
+/// Generate the transform prompt injection: instructs the agent to transform
+/// the input into a structured format matching the output schema.
 pub fn transform_prompt(schema_description: Option<&str>) -> String {
     let mut lines = Vec::new();
-    lines.push("## Transform Protocol".to_string());
+
+    lines.push(
+        "Transform the input above into the structured format \
+         defined by the output schema."
+            .to_string(),
+    );
+    lines.push(String::new());
+    lines.push("Steps:".to_string());
+    lines.push("1. Identify the relevant data from the input.".to_string());
+    lines.push(
+        "2. Map each piece of data to the corresponding field \
+         in the schema."
+            .to_string(),
+    );
+    lines.push(
+        "3. Ensure all required fields are populated \
+         and values match the expected types."
+            .to_string(),
+    );
     lines.push(String::new());
     lines.push(
-        "Process the input and produce structured output matching the required schema.".to_string(),
+        "Your response is parsed directly by a JSON parser \
+         — output only the JSON object."
+            .to_string(),
     );
 
     if let Some(desc) = schema_description {
         lines.push(String::new());
-        lines.push(format!("Schema description: {}", desc));
+        lines.push(format!("Schema context: {}", desc));
     }
 
     lines.join("\n")
@@ -164,23 +224,25 @@ mod tests {
         ]
     }
 
+    // --- decomp_prompt tests ---
+
     #[test]
     fn decomp_prompt_includes_all_ports() {
         let ports = make_ports();
         let prompt = decomp_prompt(&ports);
-        assert!(prompt.contains("Port: \"frontend\""));
-        assert!(prompt.contains("Port: \"backend\""));
+        assert!(prompt.contains("Port \"frontend\""));
+        assert!(prompt.contains("Port \"backend\""));
         assert!(prompt.contains("FE Agent"));
         assert!(prompt.contains("BE Agent"));
-        assert!(prompt.contains("Task Decomposition Protocol"));
+        assert!(prompt.contains("break it down"));
     }
 
     #[test]
     fn decomp_prompt_includes_multi_assignment_language() {
         let ports = make_ports();
         let prompt = decomp_prompt(&ports);
-        assert!(prompt.contains("MULTIPLE tasks to the same port"));
-        assert!(prompt.contains("each will be executed independently"));
+        assert!(prompt.contains("multiple subtasks to the same agent"));
+        assert!(prompt.contains("execute independently"));
     }
 
     #[test]
@@ -207,12 +269,39 @@ mod tests {
     }
 
     #[test]
+    fn decomp_prompt_includes_calibration_guidance() {
+        let ports = make_ports();
+        let prompt = decomp_prompt(&ports);
+        assert!(prompt.contains("fewest subtasks needed"));
+        assert!(prompt.contains("independently"));
+    }
+
+    #[test]
+    fn decomp_prompt_includes_dependency_guidance() {
+        let ports = make_ports();
+        let prompt = decomp_prompt(&ports);
+        assert!(prompt.contains("ordering dependencies"));
+    }
+
+    // --- route_prompt tests ---
+
+    #[test]
     fn route_prompt_includes_all_ports() {
         let ports = make_ports();
         let prompt = route_prompt(&ports);
-        assert!(prompt.contains("Port: \"frontend\""));
-        assert!(prompt.contains("exactly ONE"));
+        assert!(prompt.contains("Port \"frontend\""));
+        assert!(prompt.contains("exactly one agent"));
     }
+
+    #[test]
+    fn route_prompt_includes_routing_criteria() {
+        let ports = make_ports();
+        let prompt = route_prompt(&ports);
+        assert!(prompt.contains("core intent"));
+        assert!(prompt.contains("best fit"));
+    }
+
+    // --- review_prompt tests ---
 
     #[test]
     fn review_prompt_includes_decisions() {
@@ -220,5 +309,49 @@ mod tests {
         let prompt = review_prompt(&decisions);
         assert!(prompt.contains("approve"));
         assert!(prompt.contains("reject"));
+    }
+
+    #[test]
+    fn review_prompt_includes_evaluation_criteria() {
+        let decisions = vec!["approve".to_string()];
+        let prompt = review_prompt(&decisions);
+        assert!(prompt.contains("Correctness"));
+        assert!(prompt.contains("Completeness"));
+        assert!(prompt.contains("Quality"));
+    }
+
+    #[test]
+    fn review_prompt_includes_anti_rubber_stamping() {
+        let decisions = vec!["approve".to_string()];
+        let prompt = review_prompt(&decisions);
+        assert!(prompt.contains("own independent assessment"));
+        assert!(prompt.contains("Do not assume"));
+    }
+
+    // --- transform_prompt tests ---
+
+    #[test]
+    fn transform_prompt_includes_processing_steps() {
+        let prompt = transform_prompt(None);
+        assert!(prompt.contains("Identify the relevant data"));
+        assert!(prompt.contains("Map each piece"));
+    }
+
+    #[test]
+    fn transform_prompt_includes_positive_output_framing() {
+        let prompt = transform_prompt(None);
+        assert!(prompt.contains("parsed directly by a JSON parser"));
+    }
+
+    #[test]
+    fn transform_prompt_appends_schema_context() {
+        let prompt = transform_prompt(Some("A user profile object"));
+        assert!(prompt.contains("Schema context: A user profile object"));
+    }
+
+    #[test]
+    fn transform_prompt_omits_schema_context_when_none() {
+        let prompt = transform_prompt(None);
+        assert!(!prompt.contains("Schema context"));
     }
 }
