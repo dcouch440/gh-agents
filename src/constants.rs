@@ -331,6 +331,16 @@ pub mod routes {
     pub const SYSTEM_CONFIGS: &str = "/system-config";
     pub const SYSTEM_CONFIG: &str = "/system-config/:key";
 
+    // Protocols
+    pub const PROTOCOL_TYPES: &str = "/protocols/types";
+    pub const PROTOCOLS: &str = "/protocols";
+    pub const PROTOCOL: &str = "/protocols/:id";
+    pub const PROTOCOL_PORTS: &str = "/protocols/:id/ports";
+    pub const PROTOCOL_PORT: &str = "/protocols/:protocol_id/ports/:port_id";
+    pub const PROTOCOL_PREVIEW: &str = "/protocols/:id/preview";
+    pub const PROTOCOL_APPLY: &str = "/protocols/:id/apply/:step_id";
+    pub const PROTOCOL_UNAPPLY: &str = "/protocols/:protocol_id/unapply/:step_id";
+
     // WebSocket
     pub const WS: &str = "/ws";
 }

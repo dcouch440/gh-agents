@@ -87,7 +87,9 @@ pub async fn create_output_schema(
     Json(request): Json<CreateOutputSchemaRequest>,
 ) -> Result<(StatusCode, Json<OutputSchemaResponse>), AppError> {
     if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
-        return Err(AppError::bad_request("Schema name is empty or exceeds maximum length"));
+        return Err(AppError::bad_request(
+            "Schema name is empty or exceeds maximum length",
+        ));
     }
     let repo = &state.repos().output_schemas;
     let row = repo
@@ -169,7 +171,9 @@ pub async fn update_output_schema(
     }
     if let Some(ref name) = request.name {
         if name.trim().is_empty() || name.len() > MAX_TITLE_LENGTH {
-            return Err(AppError::bad_request("Schema name is empty or exceeds maximum length"));
+            return Err(AppError::bad_request(
+                "Schema name is empty or exceeds maximum length",
+            ));
         }
     }
     let row = repo

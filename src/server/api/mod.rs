@@ -179,4 +179,12 @@ pub use health::{health_check, HealthResponse};
 // Re-export cancellation handler
 pub use cancellation::cancel_agent_execution;
 
+// Re-export protocol handlers and types
+pub mod protocols;
+pub use protocols::{
+    apply_protocol, create_port, create_protocol, delete_port, delete_protocol, get_protocol,
+    list_protocol_types, list_protocols, preview_expansion, unapply_protocol, update_port,
+    update_protocol,
+};
+
 use crate::constants::{MAX_DESCRIPTION_LENGTH, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH};

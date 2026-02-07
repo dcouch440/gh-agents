@@ -422,6 +422,26 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             get(api::list_system_configs).post(api::upsert_system_config),
         )
         .route(routes::SYSTEM_CONFIG, delete(api::delete_system_config))
+        // Protocols
+        .route(routes::PROTOCOL_TYPES, get(api::list_protocol_types))
+        .route(
+            routes::PROTOCOLS,
+            get(api::list_protocols).post(api::create_protocol),
+        )
+        .route(
+            routes::PROTOCOL,
+            get(api::get_protocol)
+                .put(api::update_protocol)
+                .delete(api::delete_protocol),
+        )
+        .route(routes::PROTOCOL_PORTS, post(api::create_port))
+        .route(
+            routes::PROTOCOL_PORT,
+            put(api::update_port).delete(api::delete_port),
+        )
+        .route(routes::PROTOCOL_PREVIEW, post(api::preview_expansion))
+        .route(routes::PROTOCOL_APPLY, post(api::apply_protocol))
+        .route(routes::PROTOCOL_UNAPPLY, delete(api::unapply_protocol))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth))
 }
 

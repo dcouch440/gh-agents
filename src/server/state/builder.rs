@@ -188,6 +188,7 @@ impl AppStateBuilder {
             cancellation_tokens: DashMap::new(),
             shutdown_token: CancellationToken::new(),
             ollama_toggle_cache: Arc::new(tokio::sync::RwLock::new((false, Instant::now()))),
+            protocol_engine: Arc::new(crate::server::hub::protocols::ProtocolEngine::new()),
         });
 
         Ok((state, orchestrator_rx))

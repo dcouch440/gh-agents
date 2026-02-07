@@ -80,7 +80,9 @@ pub async fn create_tool_router(
     Json(request): Json<CreateToolRouterRequest>,
 ) -> Result<(StatusCode, Json<crate::db::ToolRouterRow>), AppError> {
     if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
-        return Err(AppError::bad_request("Router name is empty or exceeds maximum length"));
+        return Err(AppError::bad_request(
+            "Router name is empty or exceeds maximum length",
+        ));
     }
     let repo = &state.repos().tool_routers;
     let row = repo
@@ -155,7 +157,9 @@ pub async fn update_tool_router(
     }
     if let Some(ref name) = request.name {
         if name.trim().is_empty() || name.len() > MAX_TITLE_LENGTH {
-            return Err(AppError::bad_request("Router name is empty or exceeds maximum length"));
+            return Err(AppError::bad_request(
+                "Router name is empty or exceeds maximum length",
+            ));
         }
     }
     let row = repo

@@ -11,12 +11,13 @@ use uuid::Uuid;
 use crate::db::{
     AgentExecutionRow, AgentGuidanceRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow,
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
-    DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow, ResultRow,
-    RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry,
-    RouterRequestRow, SessionRow, StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow,
-    SystemConfigRow, TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow, ToolRow,
-    WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
-    WorkflowStepEdgeRow, WorkflowStepRow,
+    DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow, ProtocolPortRow,
+    ProtocolRow, ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow,
+    RoomTranscriptEntry, RouterRequestRow, SessionRow, StepDocumentRow, StepInputRow,
+    StepOutputRow, StepRoutingRuleRow, SystemConfigRow, TokenLedgerRow, ToolCapabilityRow,
+    ToolRouterModeRow, ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow,
+    WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepProtocolRow,
+    WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -1247,4 +1248,90 @@ pub trait SystemConfigRepo: Send + Sync {
 
     /// Check if unsafe operations are enabled
     async fn get_unsafe_operations_enabled(&self) -> Result<bool>;
+}
+
+// ============================================================================
+// Protocol Repository
+// ============================================================================
+
+/// Database operations for protocol management (reusable execution recipes).
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait ProtocolRepo: Send + Sync {
+    // --- Protocols ---
+
+    /// Create a new protocol.
+    async fn create_protocol(
+        &self,
+        user_id: Uuid,
+        name: String,
+        description: String,
+        protocol_type: String,
+        config: serde_json::Value,
+    ) -> Result<ProtocolRow>;
+
+    /// Get a protocol by ID.
+    async fn get_protocol(&self, id: Uuid) -> Result<Option<ProtocolRow>>;
+
+    /// List all protocols for a user.
+    async fn list_protocols(&self, user_id: Uuid) -> Result<Vec<ProtocolRow>>;
+
+    /// Update a protocol.
+    async fn update_protocol(
+        &self,
+        id: Uuid,
+        name: Option<String>,
+        description: Option<String>,
+        config: Option<serde_json::Value>,
+    ) -> Result<ProtocolRow>;
+
+    /// Delete a protocol by ID.
+    async fn delete_protocol(&self, id: Uuid) -> Result<()>;
+
+    // --- Protocol Ports ---
+
+    /// List all ports for a protocol, ordered by display_order.
+    async fn list_protocol_ports(&self, protocol_id: Uuid) -> Result<Vec<ProtocolPortRow>>;
+
+    /// Add a port to a protocol.
+    async fn create_protocol_port(
+        &self,
+        protocol_id: Uuid,
+        port_name: String,
+        description: String,
+        agent_id: Uuid,
+        display_order: i32,
+    ) -> Result<ProtocolPortRow>;
+
+    /// Update a protocol port.
+    async fn update_protocol_port(
+        &self,
+        id: Uuid,
+        port_name: Option<String>,
+        description: Option<String>,
+        agent_id: Option<Uuid>,
+        display_order: Option<i32>,
+    ) -> Result<ProtocolPortRow>;
+
+    /// Delete a protocol port.
+    async fn delete_protocol_port(&self, id: Uuid) -> Result<()>;
+
+    // --- Workflow Step Protocol Linkage ---
+
+    /// Get the protocol linkage for a workflow step.
+    async fn get_step_protocol(
+        &self,
+        workflow_step_id: Uuid,
+    ) -> Result<Option<WorkflowStepProtocolRow>>;
+
+    /// Link a protocol to a workflow step (stores expansion snapshot).
+    async fn create_step_protocol(
+        &self,
+        workflow_step_id: Uuid,
+        protocol_id: Uuid,
+        applied_expansion: serde_json::Value,
+    ) -> Result<WorkflowStepProtocolRow>;
+
+    /// Remove a protocol linkage from a workflow step.
+    async fn delete_step_protocol(&self, workflow_step_id: Uuid) -> Result<()>;
 }

@@ -87,10 +87,14 @@ pub async fn create_prompt_template(
     Json(request): Json<CreatePromptTemplateRequest>,
 ) -> Result<(StatusCode, Json<PromptTemplateResponse>), AppError> {
     if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
-        return Err(AppError::bad_request("Template name is empty or exceeds maximum length"));
+        return Err(AppError::bad_request(
+            "Template name is empty or exceeds maximum length",
+        ));
     }
     if request.content.len() > MAX_PROMPT_LENGTH {
-        return Err(AppError::bad_request("Template content exceeds maximum length"));
+        return Err(AppError::bad_request(
+            "Template content exceeds maximum length",
+        ));
     }
     let repo = &state.repos().prompt_templates;
     let row = repo
@@ -169,12 +173,16 @@ pub async fn update_prompt_template(
     }
     if let Some(ref name) = request.name {
         if name.trim().is_empty() || name.len() > MAX_TITLE_LENGTH {
-            return Err(AppError::bad_request("Template name is empty or exceeds maximum length"));
+            return Err(AppError::bad_request(
+                "Template name is empty or exceeds maximum length",
+            ));
         }
     }
     if let Some(ref content) = request.content {
         if content.len() > MAX_PROMPT_LENGTH {
-            return Err(AppError::bad_request("Template content exceeds maximum length"));
+            return Err(AppError::bad_request(
+                "Template content exceeds maximum length",
+            ));
         }
     }
     let row = repo

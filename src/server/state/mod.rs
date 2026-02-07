@@ -19,6 +19,7 @@ use crate::db::traits::ServerRepo;
 use crate::llm::{LLMProvider, ProviderRegistry};
 use crate::types::{AppConfig, UserId};
 
+use super::hub::protocols::ProtocolEngine;
 use super::hub::{ModeResolver, PromptRegistry};
 use super::ws::events::{RoomEvent, ServerEvent, SessionEvent, WorkflowEvent};
 
@@ -105,6 +106,8 @@ pub(crate) struct AppStateInner {
     pub(crate) shutdown_token: CancellationToken,
     /// Cached result for `is_ollama_enabled()` to avoid per-step DB round-trips.
     pub(crate) ollama_toggle_cache: Arc<tokio::sync::RwLock<(bool, Instant)>>,
+    /// Protocol engine for expanding protocol configurations into workflow primitives.
+    pub(crate) protocol_engine: Arc<ProtocolEngine>,
 }
 
 /// Application state shared across all HTTP handlers.
@@ -143,6 +146,7 @@ impl AppState {
             Arc::new(PgRepo::new(db.clone())), // rooms
             Arc::new(PgRepo::new(db.clone())), // tool_capabilities
             Arc::new(PgRepo::new(db.clone())), // system_config
+            Arc::new(PgRepo::new(db.clone())), // protocols
         );
 
         let (chat_tx, orchestrator_rx) = mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
@@ -179,6 +183,7 @@ impl AppState {
             cancellation_tokens: DashMap::new(),
             shutdown_token: CancellationToken::new(),
             ollama_toggle_cache: Arc::new(tokio::sync::RwLock::new((false, Instant::now()))),
+            protocol_engine: Arc::new(ProtocolEngine::new()),
         }));
 
         // Look up default agent from DB (for workflow system)
@@ -232,6 +237,7 @@ impl AppState {
                 cancellation_tokens: DashMap::new(),
                 shutdown_token: CancellationToken::new(),
                 ollama_toggle_cache: Arc::new(tokio::sync::RwLock::new((false, Instant::now()))),
+                protocol_engine: Arc::new(ProtocolEngine::new()),
             })),
             orchestrator_rx,
         )
@@ -485,6 +491,11 @@ impl AppState {
         &self.0.prompt_registry
     }
 
+    /// Access the protocol engine.
+    pub fn protocol_engine(&self) -> &Arc<ProtocolEngine> {
+        &self.0.protocol_engine
+    }
+
     /// Access the JWT secret.
     pub fn jwt_secret(&self) -> &[u8] {
         &self.0.jwt_secret
@@ -717,6 +728,7 @@ impl AppStateInner {
             cancellation_tokens: DashMap::new(), // Fresh map
             shutdown_token: CancellationToken::new(),
             ollama_toggle_cache: self.ollama_toggle_cache.clone(),
+            protocol_engine: self.protocol_engine.clone(),
         }
     }
 }
