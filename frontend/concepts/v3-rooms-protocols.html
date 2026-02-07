@@ -1863,11 +1863,352 @@ multiple tasks to the same agent</span>.
 
 
 <!-- ═══════════════════════════════════════════════════════════════════════
-     SECTION 5: Architecture Overview — How it all connects
+     SECTION 5: Adding Nodes — Drag from panel to canvas
+     ═══════════════════════════════════════════════════════════════════════ -->
+
+<style>
+  .add-category {
+    border-bottom: 1px solid var(--border-default);
+  }
+  .add-category-title {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.05em;
+    text-transform: uppercase; color: var(--text-muted);
+    padding: 12px 16px 8px;
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer;
+  }
+  .add-category-title .chevron {
+    font-size: 9px; color: var(--text-muted); transition: transform 0.15s;
+  }
+
+  .add-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 6px; padding: 0 10px 14px;
+  }
+
+  .add-tile {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center;
+    gap: 10px; padding: 20px 8px 16px;
+    border-radius: 12px; cursor: grab;
+    border: 1px solid var(--border-default);
+    background: rgba(255,255,255,0.015);
+    transition: all 0.12s;
+    aspect-ratio: 1 / 0.85;
+  }
+  .add-tile:hover {
+    background: rgba(255,255,255,0.04);
+    border-color: var(--border-hover);
+  }
+  .add-tile:active { cursor: grabbing; transform: scale(0.97); }
+  .add-tile.dragging { opacity: 0.4; }
+
+  .add-tile-icon {
+    width: 48px; height: 48px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    transition: all 0.12s;
+  }
+
+  .add-tile-text {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+  }
+  .add-tile-name {
+    font-size: 11px; font-weight: 600; color: var(--text-primary);
+    letter-spacing: -0.01em;
+  }
+  .add-tile-desc {
+    font-size: 9px; color: var(--text-muted); text-align: center;
+    line-height: 1.3;
+  }
+
+  /* Color accents per type — tinted icon backgrounds */
+  .add-tile-icon.type-step {
+    color: var(--text-primary);
+    background: rgba(240,246,252,0.06);
+  }
+  .add-tile-icon.type-protocol {
+    color: var(--port-json);
+    background: rgba(167,139,250,0.08);
+  }
+  .add-tile-icon.type-room {
+    color: var(--primary);
+    background: rgba(59,130,246,0.08);
+  }
+
+  /* Agent drag rows (for Agents tab) */
+  .agent-drag-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px 10px 0;
+    border-bottom: 1px solid rgba(240,246,252,0.03);
+    cursor: grab; transition: background 0.1s;
+  }
+  .agent-drag-row:hover { background: rgba(255,255,255,0.03); }
+  .agent-drag-row:active { cursor: grabbing; }
+  .agent-drag-row .agent-drag-accent {
+    width: 3px; align-self: stretch; border-radius: 0 2px 2px 0; flex-shrink: 0;
+  }
+  .agent-drag-row .agent-drag-info { flex: 1; min-width: 0; }
+  .agent-drag-row .agent-drag-name { font-size: 11px; font-weight: 500; color: var(--text-primary); }
+  .agent-drag-row .agent-drag-meta { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+  .agent-drag-row .agent-drag-handle {
+    font-size: 10px; color: var(--text-muted); letter-spacing: 2px;
+  }
+
+  /* Drag ghost on canvas */
+  .drop-ghost {
+    position: absolute; width: 200px; height: 60px;
+    border: 2px dashed var(--primary);
+    border-radius: 10px;
+    background: rgba(59,130,246,0.04);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: var(--primary); font-weight: 500;
+    animation: ghost-pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes ghost-pulse {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+  }
+
+  /* Cursor element being dragged */
+  .drag-cursor {
+    position: absolute;
+    padding: 6px 12px; border-radius: 6px;
+    background: var(--bg-node); border: 1px solid var(--primary);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    font-size: 11px; font-weight: 500; color: var(--text-primary);
+    display: flex; align-items: center; gap: 6px;
+    transform: rotate(-2deg);
+    pointer-events: none;
+    z-index: 10;
+  }
+  .drag-cursor .drag-cursor-icon {
+    width: 20px; height: 20px; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; background: rgba(167,139,250,0.15); color: var(--port-json);
+  }
+</style>
+
+<div>
+  <div class="section-label">Section 5 <span>Adding nodes — Drag from the Add panel onto the canvas</span></div>
+  <div class="app-frame">
+    <div class="topnav">
+      <div class="topnav-left">
+        <div class="topnav-item">&#9776;</div>
+        <div class="topnav-item">&#8962;</div>
+        <div class="topnav-item active">&#9878;</div>
+        <div class="topnav-item">&#9881;</div>
+      </div>
+      <div class="topnav-right">
+        <div class="topnav-item">&#9733;</div>
+        <div class="topnav-item">&#9788;</div>
+      </div>
+    </div>
+    <div class="app-body">
+
+      <!-- Canvas with existing nodes + drop ghost -->
+      <div class="canvas-area" style="flex: 1; position: relative;">
+
+        <!-- Existing node on canvas -->
+        <div class="workflow-node" style="left: 80px; top: 80px; position: absolute;">
+          <div class="node-header">
+            <div class="node-icon" style="background: rgba(167,139,250,0.15); color: var(--port-json);">&#9878;</div>
+            <div class="node-title">Task Decomposer</div>
+            <div class="node-status idle"></div>
+          </div>
+          <div class="node-subtitle">Claude Sonnet &middot; Decomp</div>
+        </div>
+
+        <!-- Drop ghost — where the dragged item will land -->
+        <div class="drop-ghost" style="left: 280px; top: 120px;">
+          Drop here
+        </div>
+
+        <!-- Cursor element mid-drag -->
+        <div class="drag-cursor" style="left: 370px; top: 100px;">
+          <div class="drag-cursor-icon">&#9878;</div>
+          Decomp Protocol
+        </div>
+
+      </div>
+
+      <!-- Right: Add panel inside detail panel + icon rail -->
+      <div class="right-section">
+        <div class="detail-panel">
+          <div class="panel-header">
+            <div class="panel-title">Add Node</div>
+            <div class="panel-close">&times;</div>
+          </div>
+          <div class="panel-content">
+            <!-- Search -->
+            <div style="padding: 0 12px 8px;">
+              <div style="padding: 7px 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-default); border-radius: 6px; font-size: 11px; color: var(--text-muted);">
+                &#128269; Search...
+              </div>
+            </div>
+
+            <!-- Category: Steps -->
+            <div class="add-category">
+              <div class="add-category-title">Steps <span class="chevron">&#9660;</span></div>
+              <div class="add-grid">
+                <div class="add-tile">
+                  <div class="add-tile-icon type-step">&#9632;</div>
+                  <div class="add-tile-text">
+                    <div class="add-tile-name">Agent</div>
+                    <div class="add-tile-desc">Single agent execution</div>
+                  </div>
+                </div>
+                <div class="add-tile">
+                  <div class="add-tile-icon type-step">&#8634;</div>
+                  <div class="add-tile-text">
+                    <div class="add-tile-name">For-Each</div>
+                    <div class="add-tile-desc">Iterate over an array</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Category: Protocols -->
+            <div class="add-category">
+              <div class="add-category-title">Protocols <span class="chevron">&#9660;</span></div>
+              <div class="add-grid">
+                <div class="add-tile dragging">
+                  <div class="add-tile-icon type-protocol">&#9878;</div>
+                  <div class="add-tile-text">
+                    <div class="add-tile-name">Decomp</div>
+                    <div class="add-tile-desc">Fan out to multiple agents</div>
+                  </div>
+                </div>
+                <div class="add-tile">
+                  <div class="add-tile-icon type-protocol">&#8644;</div>
+                  <div class="add-tile-text">
+                    <div class="add-tile-name">Route</div>
+                    <div class="add-tile-desc">Route to one agent by condition</div>
+                  </div>
+                </div>
+                <div class="add-tile">
+                  <div class="add-tile-icon type-protocol">&#10003;</div>
+                  <div class="add-tile-text">
+                    <div class="add-tile-name">Review</div>
+                    <div class="add-tile-desc">Quality gate with decisions</div>
+                  </div>
+                </div>
+                <div class="add-tile">
+                  <div class="add-tile-icon type-protocol">&#8651;</div>
+                  <div class="add-tile-text">
+                    <div class="add-tile-name">Transform</div>
+                    <div class="add-tile-desc">Process through one agent</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Category: Rooms -->
+            <div class="add-category">
+              <div class="add-category-title">Rooms <span class="chevron">&#9660;</span></div>
+              <div class="add-grid">
+                <div class="add-tile">
+                  <div class="add-tile-icon type-room">&#128172;</div>
+                  <div class="add-tile-text">
+                    <div class="add-tile-name">Agent Room</div>
+                    <div class="add-tile-desc">Multi-agent discussion</div>
+                  </div>
+                </div>
+                <div class="add-tile">
+                  <div class="add-tile-icon type-room">&#128100;</div>
+                  <div class="add-tile-text">
+                    <div class="add-tile-name">1:1 Review</div>
+                    <div class="add-tile-desc">Human-in-the-loop</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Agents shortcut hint -->
+            <div style="padding: 12px 16px; border-bottom: 1px solid var(--border-default);">
+              <div style="font-size: 10px; color: var(--text-muted); line-height: 1.5;">
+                <strong style="color: var(--text-secondary);">Tip:</strong> Drag agents directly from the
+                <span style="color: var(--primary); font-weight: 500;">&#9733; Agents</span> tab to create a pre-configured step.
+              </div>
+            </div>
+
+            <!-- Quick agent list preview -->
+            <div class="add-category">
+              <div class="add-category-title">Recent Agents <span class="chevron">&#9660;</span></div>
+              <div class="agent-drag-row">
+                <div class="agent-drag-accent" style="background: var(--route-frontend);"></div>
+                <div class="agent-drag-info">
+                  <div class="agent-drag-name">Frontend Dev</div>
+                  <div class="agent-drag-meta">Sonnet &middot; React, TS, MUI</div>
+                </div>
+                <div class="agent-drag-handle">&#8942;&#8942;</div>
+              </div>
+              <div class="agent-drag-row">
+                <div class="agent-drag-accent" style="background: var(--route-backend);"></div>
+                <div class="agent-drag-info">
+                  <div class="agent-drag-name">Backend Dev</div>
+                  <div class="agent-drag-meta">Sonnet &middot; Rust, Axum, SQL</div>
+                </div>
+                <div class="agent-drag-handle">&#8942;&#8942;</div>
+              </div>
+              <div class="agent-drag-row">
+                <div class="agent-drag-accent" style="background: var(--route-database);"></div>
+                <div class="agent-drag-info">
+                  <div class="agent-drag-name">Database Engineer</div>
+                  <div class="agent-drag-meta">Sonnet &middot; PostgreSQL, migrations</div>
+                </div>
+                <div class="agent-drag-handle">&#8942;&#8942;</div>
+              </div>
+              <div class="add-row-btn" style="padding: 10px 16px; color: var(--primary);">View all agents &#8594;</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-rail">
+          <div class="rail-btn active" title="Add" style="font-size: 16px; font-weight: 600;">+</div>
+          <div class="rail-btn" title="Properties">&#9881;</div>
+          <div class="rail-btn" title="Prompts">&#9998;</div>
+          <div class="rail-btn" title="Agents">&#9733;</div>
+          <div class="rail-btn" title="Schemas">&#123;&#125;</div>
+          <div class="rail-btn" title="Execution">&#9654;</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="footnotes">
+    <div class="footnotes-title">Notes</div>
+    <div class="footnote">
+      <div class="footnote-num">1</div>
+      <div><strong>Add is a tab on the right sidebar.</strong> The "+" icon sits at the top of the icon rail. Clicking it opens the Add panel in the same detail panel area used by Properties, Prompts, etc. Drag tiles onto the canvas to place nodes.</div>
+    </div>
+    <div class="footnote">
+      <div class="footnote-num">2</div>
+      <div><strong>Two categories of structural nodes.</strong> <em>Protocols</em> are orchestration patterns (decomp, route, review, transform) that auto-expand into steps + edges when configured. <em>Rooms</em> are collaboration spaces where multiple agents discuss. Each creates a workflow step with special configuration.</div>
+    </div>
+    <div class="footnote">
+      <div class="footnote-num">3</div>
+      <div><strong>Protocols expand after configuration.</strong> Drop a Decomp onto the canvas → it creates a single step node. Open Properties → configure which agents map to which ports → the system auto-generates downstream agent steps, edges, output schema, and prompt injection. The protocol node is the orchestrator.</div>
+    </div>
+    <div class="footnote">
+      <div class="footnote-num">4</div>
+      <div><strong>The Agents tab is a drag shortcut.</strong> Instead of placing a protocol/room and then assigning agents, you can drag an agent directly from the Agents tab (or the "Recent Agents" list in the Add panel) onto the canvas. This creates a pre-configured <code>single</code> execution mode step — useful for simple one-agent tasks that don't need orchestration.</div>
+    </div>
+    <div class="footnote">
+      <div class="footnote-num">5</div>
+      <div><strong>Every step gets prompt layers.</strong> After placing a node, the Prompts sidebar tab shows three stacked layers: (1) the agent's base system prompt <em>(read-only)</em>, (2) protocol-injected instructions <em>(auto-generated, if protocol attached)</em>, (3) step-level additions <em>(user-editable)</em>. This lets you customize any step's behavior without modifying the underlying agent.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SECTION 6: Architecture Overview — How it all connects
      ═══════════════════════════════════════════════════════════════════════ -->
 
 <div>
-  <div class="section-label">Section 5 <span>Architecture summary — Protocols, rooms, and the DAG executor</span></div>
+  <div class="section-label">Section 6 <span>Architecture summary — Protocols, rooms, and the DAG executor</span></div>
   <div class="footnotes" style="margin-top: 0;">
     <div class="footnotes-title">System Architecture</div>
 
