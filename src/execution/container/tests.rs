@@ -375,6 +375,101 @@ mod tests {
         assert!(msg.contains("not connected"));
     }
 
+    // ── ContainerError::CreateTimeout ────────────────────────────────────
+
+    #[test]
+    fn container_error_create_timeout_display() {
+        let err = ContainerError::CreateTimeout {
+            container: "nexor-step-abc".to_string(),
+            timeout_secs: 600,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("nexor-step-abc"));
+        assert!(msg.contains("600"));
+        assert!(msg.contains("timed out"));
+    }
+
+    // ── build_create_args ────────────────────────────────────────────────
+
+    #[test]
+    fn build_create_args_includes_security_flags() {
+        let config = ContainerConfig::default();
+        let args = build_create_args("test-container", &config);
+        assert!(
+            args.contains(&"--cap-drop=ALL".to_string()),
+            "Missing --cap-drop=ALL"
+        );
+        assert!(
+            args.contains(&"--security-opt=no-new-privileges".to_string()),
+            "Missing --security-opt=no-new-privileges"
+        );
+    }
+
+    #[test]
+    fn build_create_args_includes_resource_limits() {
+        let config = ContainerConfig {
+            memory_limit: "4g".to_string(),
+            cpu_limit: "3.0".to_string(),
+            ..ContainerConfig::default()
+        };
+        let args = build_create_args("test-container", &config);
+        assert!(args.contains(&"--memory=4g".to_string()));
+        assert!(args.contains(&"--cpus=3.0".to_string()));
+    }
+
+    #[test]
+    fn build_create_args_includes_network_mode() {
+        let config = ContainerConfig {
+            network_mode: Some("container:vpn-sidecar-123".to_string()),
+            ..ContainerConfig::default()
+        };
+        let args = build_create_args("test-container", &config);
+        assert!(args.contains(&"--network=container:vpn-sidecar-123".to_string()));
+    }
+
+    #[test]
+    fn build_create_args_no_network_without_config() {
+        let config = ContainerConfig::default();
+        let args = build_create_args("test-container", &config);
+        assert!(
+            !args.iter().any(|a| a.starts_with("--network=")),
+            "Should not have --network when network_mode is None"
+        );
+    }
+
+    #[test]
+    fn build_create_args_includes_env_vars() {
+        let config = ContainerConfig {
+            env_vars: vec![
+                ("FOO".to_string(), "bar".to_string()),
+                ("BAZ".to_string(), "qux".to_string()),
+            ],
+            ..ContainerConfig::default()
+        };
+        let args = build_create_args("test-container", &config);
+        assert!(args.contains(&"--env=FOO=bar".to_string()));
+        assert!(args.contains(&"--env=BAZ=qux".to_string()));
+    }
+
+    #[test]
+    fn build_create_args_ends_with_sleep_infinity() {
+        let config = ContainerConfig::default();
+        let args = build_create_args("test-container", &config);
+        let len = args.len();
+        assert!(len >= 2);
+        assert_eq!(args[len - 2], "sleep");
+        assert_eq!(args[len - 1], "infinity");
+    }
+
+    // ── semaphore ────────────────────────────────────────────────────────
+
+    #[test]
+    fn container_create_semaphore_is_accessible() {
+        // Verify the lazy static initializes without panic
+        let permits = CONTAINER_CREATE_SEMAPHORE.available_permits();
+        assert_eq!(permits, crate::constants::CONTAINER_MAX_CONCURRENT_CREATES);
+    }
+
     // ── spawn_reaper ──────────────────────────────────────────────────────
 
     #[tokio::test]
