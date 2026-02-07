@@ -21,8 +21,6 @@
     --bg-panel-item-active: rgba(59,130,246,0.08);
     --bg-room: #0f1520;
     --bg-room-header: #111a28;
-    --bg-chat-bubble: rgba(255,255,255,0.04);
-    --bg-chat-user: rgba(59,130,246,0.12);
     --bg-chat-input: rgba(255,255,255,0.03);
     --border-default: rgba(240, 246, 252, 0.06);
     --border-hover: rgba(240, 246, 252, 0.12);
@@ -194,7 +192,7 @@
   /* Base compact node */
   .node {
     position: absolute;
-    width: 240px;
+    width: 260px;
     background: var(--bg-node);
     border-radius: var(--radius-node);
     box-shadow: var(--shadow-node);
@@ -234,13 +232,58 @@
   .protocol-badge.review { background: rgba(248,81,73,0.15); color: var(--error); }
   .protocol-badge.transform { background: rgba(45,212,191,0.15); color: var(--secondary); }
 
-  /* Variable pills */
-  .var-pills { display: flex; flex-wrap: wrap; gap: 4px; }
-  .var-pill {
-    font-family: var(--font-mono); font-size: 10px;
-    color: var(--secondary); background: rgba(45, 212, 191, 0.08);
-    border: 1px solid rgba(45, 212, 191, 0.15);
-    padding: 1px 6px; border-radius: 3px; line-height: 1.4;
+  /* Node detail sections — mini dashboard */
+  .node-details {
+    padding: 6px 14px 10px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .node-detail-section {
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  .node-detail-label {
+    font-size: 8px; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--text-faint);
+    line-height: 1;
+  }
+  .node-detail-row {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 10px; line-height: 1.3;
+  }
+  .node-detail-icon {
+    font-size: 9px; width: 12px; text-align: center; flex-shrink: 0;
+    color: var(--text-muted);
+  }
+  .node-detail-text {
+    color: var(--text-secondary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .node-detail-text.highlight { color: var(--text-primary); font-weight: 500; }
+
+  /* Input connection pill — shows upstream step name */
+  .input-from {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; padding: 2px 7px; border-radius: 4px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    line-height: 1.3;
+  }
+  .input-from-dot {
+    width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0;
+  }
+
+  /* Tool tag */
+  .tool-tag {
+    font-size: 9px; font-family: var(--font-mono);
+    color: var(--text-muted); background: rgba(255,255,255,0.03);
+    padding: 1px 5px; border-radius: 3px; line-height: 1.3;
+    display: inline-block;
+  }
+
+  /* Divider inside node */
+  .node-divider {
+    height: 1px; background: var(--border-default);
+    margin: 2px 14px;
   }
 
   /* Port slots (right edge of node) */
@@ -436,51 +479,65 @@
   .chat-view { display: flex; flex-direction: column; height: 100%; }
 
   .chat-messages {
-    flex: 1; overflow-y: auto; padding: 12px 16px;
-    display: flex; flex-direction: column; gap: 10px;
+    flex: 1; overflow-y: auto; padding: 0;
+    display: flex; flex-direction: column;
   }
 
   .chat-msg {
-    display: flex; gap: 8px; align-items: flex-start;
+    display: flex; gap: 0; align-items: stretch;
+    padding: 14px 16px 14px 0;
+    border-bottom: 1px solid var(--border-default);
+    position: relative;
   }
-  .chat-msg.user-msg { flex-direction: row-reverse; }
+  .chat-msg:last-child { border-bottom: none; }
 
-  .chat-avatar {
-    width: 24px; height: 24px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 10px; font-weight: 600; flex-shrink: 0;
+  .chat-accent {
+    width: 3px; flex-shrink: 0; border-radius: 0 2px 2px 0;
+    margin-right: 14px;
+  }
+  .chat-accent.accent-blue { background: var(--primary); }
+  .chat-accent.accent-teal { background: var(--secondary); }
+  .chat-accent.accent-amber { background: var(--warning); }
+  .chat-accent.accent-user { background: rgba(255,255,255,0.15); }
+
+  .chat-msg-body {
+    flex: 1; min-width: 0;
   }
 
-  .chat-bubble {
-    max-width: 85%; padding: 8px 12px;
-    border-radius: 10px; font-size: 12px; line-height: 1.5;
-  }
-  .chat-bubble.agent {
-    background: var(--bg-chat-bubble);
-    border: 1px solid var(--border-default);
-    color: var(--text-primary);
-  }
-  .chat-bubble.user {
-    background: var(--bg-chat-user);
-    border: 1px solid rgba(59,130,246,0.15);
-    color: var(--text-primary);
+  .chat-msg-header {
+    display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px;
   }
 
   .chat-sender {
-    font-size: 10px; font-weight: 600; margin-bottom: 2px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.01em;
+  }
+  .chat-role {
+    font-size: 9px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 1px 5px; border-radius: 3px; background: rgba(255,255,255,0.04);
+    color: var(--text-secondary);
   }
   .chat-time {
-    font-size: 9px; color: var(--text-muted); margin-top: 2px;
+    font-size: 9px; color: var(--text-muted); margin-left: auto;
   }
 
-  .chat-streaming .chat-bubble {
-    border-color: var(--primary);
+  .chat-content {
+    font-size: 12px; line-height: 1.6; color: var(--text-primary);
   }
-  .chat-streaming .chat-bubble::after {
+  .chat-content code {
+    font-size: 10px; font-family: 'JetBrains Mono', monospace;
+    background: rgba(255,255,255,0.06); padding: 1px 5px;
+    border-radius: 3px; border: 1px solid var(--border-default);
+  }
+
+  .chat-msg.user-msg {
+    background: rgba(255,255,255,0.015);
+  }
+
+  .chat-msg.streaming .chat-content::after {
     content: ''; display: inline-block;
-    width: 4px; height: 12px; background: var(--primary);
-    margin-left: 2px; animation: blink 1s step-end infinite;
-    vertical-align: text-bottom;
+    width: 3px; height: 13px; background: var(--primary);
+    margin-left: 3px; animation: blink 1s step-end infinite;
+    vertical-align: text-bottom; border-radius: 1px;
   }
 
   @keyframes blink {
@@ -488,29 +545,96 @@
     50% { opacity: 0; }
   }
 
+  .chat-system-divider {
+    text-align: center; padding: 12px 16px;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .chat-system-divider span {
+    font-size: 10px; color: var(--text-muted); font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+
   .chat-input-area {
-    padding: 12px 16px;
-    border-top: 1px solid var(--border-default);
+    padding: 0; border-top: 1px solid var(--border-default);
   }
-  .chat-input-box {
-    display: flex; align-items: center; gap: 8px;
-    background: var(--bg-chat-input);
-    border: 1px solid var(--border-default);
-    border-radius: 8px; padding: 8px 12px;
-    transition: border-color 0.15s;
+
+  .chat-textarea {
+    width: 100%; min-height: 64px; max-height: 140px;
+    padding: 12px 16px; resize: none;
+    background: transparent; border: none; outline: none;
+    font-family: 'Inter', sans-serif; font-size: 12px; line-height: 1.6;
+    color: var(--text-primary);
   }
-  .chat-input-box:focus-within { border-color: var(--primary); }
-  .chat-input-text {
-    flex: 1; font-size: 12px; color: var(--text-secondary);
+  .chat-textarea::placeholder,
+  .chat-textarea-placeholder {
+    color: var(--text-muted);
   }
-  .chat-send-btn {
-    width: 24px; height: 24px; border-radius: 6px;
-    background: var(--primary); color: white;
+  /* Static mockup placeholder text */
+  .chat-textarea-placeholder {
+    padding: 12px 16px; min-height: 64px;
+    font-size: 12px; line-height: 1.6;
+    display: flex; align-items: flex-start;
+  }
+
+  .chat-toolbar {
+    display: flex; align-items: center; gap: 2px;
+    padding: 6px 12px 10px;
+    border-top: 1px solid rgba(240,246,252,0.03);
+  }
+
+  .chat-tool-btn {
+    width: 28px; height: 28px; border-radius: 6px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 11px; cursor: pointer;
+    font-size: 13px; color: var(--text-secondary);
+    cursor: pointer; transition: all 0.12s;
+    background: transparent; border: none;
   }
-  .chat-mention-hint {
-    font-size: 10px; color: var(--text-muted); padding: 4px 0 0;
+  .chat-tool-btn:hover {
+    background: rgba(255,255,255,0.06); color: var(--text-primary);
+  }
+  .chat-tool-btn svg { width: 15px; height: 15px; }
+
+  .chat-toolbar-divider {
+    width: 1px; height: 16px; background: var(--border-default);
+    margin: 0 6px;
+  }
+
+  .chat-toolbar-right {
+    margin-left: auto; display: flex; align-items: center; gap: 8px;
+  }
+
+  .chat-kb-hint {
+    font-size: 9px; color: var(--text-muted); letter-spacing: 0.02em;
+  }
+  .chat-kb-hint kbd {
+    font-family: 'Inter', sans-serif; font-size: 9px;
+    padding: 1px 4px; border-radius: 3px;
+    background: rgba(255,255,255,0.06); border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+  }
+
+  .chat-send-btn {
+    height: 28px; padding: 0 12px; border-radius: 6px;
+    background: var(--primary); color: white; border: none;
+    font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 500;
+    cursor: pointer; display: flex; align-items: center; gap: 5px;
+    transition: opacity 0.12s;
+  }
+  .chat-send-btn:hover { opacity: 0.9; }
+  .chat-send-btn svg { width: 12px; height: 12px; }
+
+  .chat-approve-bar {
+    display: flex; justify-content: flex-end; align-items: center; gap: 8px;
+    padding: 8px 12px; border-top: 1px solid rgba(240,246,252,0.03);
+  }
+  .chat-approve-btn {
+    font-size: 11px; font-weight: 500; color: var(--success); cursor: pointer;
+    padding: 5px 12px; border: 1px solid rgba(63,185,80,0.25); border-radius: 6px;
+    background: rgba(63,185,80,0.06); transition: all 0.15s;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .chat-approve-btn:hover {
+    background: rgba(63,185,80,0.12); border-color: rgba(63,185,80,0.4);
   }
 
   /* ═══════════════════════════════════════════════
@@ -700,37 +824,58 @@
         <!-- SVG edges -->
         <svg class="edges-svg" viewBox="0 0 1100 600">
           <!-- Decomposer → Frontend Agent -->
-          <path class="edge-line" d="M 300 170 C 380 170, 390 120, 470 120" stroke="var(--route-frontend)" />
+          <path class="edge-line" d="M 316 200 C 396 200, 406 130, 470 130" stroke="var(--route-frontend)" />
           <!-- Decomposer → Backend Agent -->
-          <path class="edge-line" d="M 300 190 C 380 190, 390 230, 470 230" stroke="var(--route-backend)" />
+          <path class="edge-line" d="M 316 220 C 396 220, 406 320, 470 320" stroke="var(--route-backend)" />
           <!-- Decomposer → DB Agent -->
-          <path class="edge-line" d="M 300 210 C 380 210, 390 340, 470 340" stroke="var(--route-database)" />
+          <path class="edge-line" d="M 316 240 C 396 240, 406 510, 470 510" stroke="var(--route-database)" />
           <!-- Frontend → Room -->
-          <path class="edge-line" d="M 700 120 C 760 120, 770 210, 800 210" stroke="var(--route-frontend)" />
+          <path class="edge-line" d="M 730 130 C 790 130, 800 260, 830 260" stroke="var(--route-frontend)" />
           <!-- Backend → Room -->
-          <path class="edge-line" d="M 700 230 C 760 230, 770 240, 800 240" stroke="var(--route-backend)" />
+          <path class="edge-line" d="M 730 320 C 790 320, 800 290, 830 290" stroke="var(--route-backend)" />
           <!-- DB → Room -->
-          <path class="edge-line" d="M 700 340 C 760 340, 770 270, 800 270" stroke="var(--route-database)" />
+          <path class="edge-line" d="M 730 510 C 790 510, 800 320, 830 320" stroke="var(--route-database)" />
         </svg>
 
         <!-- Decomposer Node (protocol: decomp) -->
-        <div class="node selected" style="left: 60px; top: 140px;">
+        <div class="node selected" style="left: 50px; top: 120px;">
           <div class="node-header">
             <div class="node-icon" style="background: rgba(167,139,250,0.15); color: var(--port-json);">&#9830;</div>
             <div class="node-title">Task Decomposer</div>
             <span class="protocol-badge decomp">decomp</span>
           </div>
-          <div class="node-subtitle">GPT-4o &middot; Breaks task into subtasks</div>
-          <div class="node-body">
-            <div class="var-pills">
-              <span class="var-pill">{task}</span>
-              <span class="var-pill">{context}</span>
-              <span class="var-pill">{repo}</span>
+          <div class="node-subtitle">GPT-4o &middot; Orchestrator</div>
+          <div class="node-divider"></div>
+          <div class="node-details">
+            <div class="node-detail-section">
+              <div class="node-detail-label">Inputs</div>
+              <div class="node-detail-row">
+                <span class="input-from"><span class="input-from-dot" style="background: var(--port-any);"></span>Trigger</span>
+              </div>
+            </div>
+            <div class="node-detail-section">
+              <div class="node-detail-label">Context</div>
+              <div class="node-detail-row">
+                <span class="node-detail-icon">&#128196;</span>
+                <span class="node-detail-text">project_overview.md</span>
+              </div>
+              <div class="node-detail-row">
+                <span class="node-detail-icon">&#128196;</span>
+                <span class="node-detail-text">repo_structure.json</span>
+              </div>
+            </div>
+            <div class="node-detail-section">
+              <div class="node-detail-label">Output</div>
+              <div class="node-detail-row">
+                <span class="node-detail-icon">&#10140;</span>
+                <span class="node-detail-text highlight">3 ports</span>
+                <span class="tool-tag">frontend</span>
+                <span class="tool-tag">backend</span>
+                <span class="tool-tag">database</span>
+              </div>
             </div>
           </div>
-          <!-- Input port -->
           <div class="input-port"></div>
-          <!-- Output port slots (one per protocol port) -->
           <div class="port-slots">
             <div class="port-slot" data-label="frontend" style="border-color: var(--route-frontend);"></div>
             <div class="port-slot" data-label="backend" style="border-color: var(--route-backend);"></div>
@@ -739,58 +884,121 @@
         </div>
 
         <!-- Frontend Agent Node -->
-        <div class="node" style="left: 470px; top: 70px;">
+        <div class="node" style="left: 470px; top: 40px;">
           <div class="node-header">
             <div class="node-icon" style="background: rgba(59,130,246,0.15); color: var(--route-frontend);">&#9632;</div>
             <div class="node-title">Frontend Dev</div>
             <div class="node-status running"></div>
           </div>
           <div class="node-subtitle">Claude Sonnet &middot; React specialist</div>
-          <div class="node-body">
-            <div class="var-pills">
-              <span class="var-pill">{task_input}</span>
-              <span class="var-pill">{codebase}</span>
+          <div class="node-divider"></div>
+          <div class="node-details">
+            <div class="node-detail-section">
+              <div class="node-detail-label">Inputs</div>
+              <div class="node-detail-row">
+                <span class="input-from"><span class="input-from-dot" style="background: var(--route-frontend);"></span>Task Decomposer</span>
+              </div>
+            </div>
+            <div class="node-detail-section">
+              <div class="node-detail-label">Context</div>
+              <div class="node-detail-row">
+                <span class="node-detail-icon">&#128196;</span>
+                <span class="node-detail-text">component_library.md</span>
+              </div>
+              <div class="node-detail-row">
+                <span class="node-detail-icon">&#128196;</span>
+                <span class="node-detail-text">design_tokens.json</span>
+              </div>
+            </div>
+            <div class="node-detail-section">
+              <div class="node-detail-label">Tools</div>
+              <div class="node-detail-row" style="flex-wrap: wrap; gap: 3px;">
+                <span class="tool-tag">file_read</span>
+                <span class="tool-tag">file_write</span>
+                <span class="tool-tag">npm</span>
+                <span class="tool-tag">git</span>
+              </div>
             </div>
           </div>
           <div class="input-port" style="border-color: var(--route-frontend);"></div>
         </div>
 
         <!-- Backend Agent Node -->
-        <div class="node" style="left: 470px; top: 185px;">
+        <div class="node" style="left: 470px; top: 230px;">
           <div class="node-header">
             <div class="node-icon" style="background: rgba(167,139,250,0.15); color: var(--route-backend);">&#9632;</div>
             <div class="node-title">Backend Dev</div>
             <div class="node-status running"></div>
           </div>
           <div class="node-subtitle">Claude Sonnet &middot; Rust/Axum specialist</div>
-          <div class="node-body">
-            <div class="var-pills">
-              <span class="var-pill">{task_input}</span>
-              <span class="var-pill">{api_docs}</span>
+          <div class="node-divider"></div>
+          <div class="node-details">
+            <div class="node-detail-section">
+              <div class="node-detail-label">Inputs</div>
+              <div class="node-detail-row">
+                <span class="input-from"><span class="input-from-dot" style="background: var(--route-backend);"></span>Task Decomposer</span>
+              </div>
+            </div>
+            <div class="node-detail-section">
+              <div class="node-detail-label">Context</div>
+              <div class="node-detail-row">
+                <span class="node-detail-icon">&#128196;</span>
+                <span class="node-detail-text">api_reference.md</span>
+              </div>
+            </div>
+            <div class="node-detail-section">
+              <div class="node-detail-label">Tools</div>
+              <div class="node-detail-row" style="flex-wrap: wrap; gap: 3px;">
+                <span class="tool-tag">file_read</span>
+                <span class="tool-tag">file_write</span>
+                <span class="tool-tag">cargo</span>
+                <span class="tool-tag">psql</span>
+              </div>
             </div>
           </div>
           <div class="input-port" style="border-color: var(--route-backend);"></div>
         </div>
 
         <!-- Database Agent Node -->
-        <div class="node" style="left: 470px; top: 300px;">
+        <div class="node" style="left: 470px; top: 420px;">
           <div class="node-header">
             <div class="node-icon" style="background: rgba(45,212,191,0.15); color: var(--route-database);">&#9632;</div>
             <div class="node-title">Database Engineer</div>
             <div class="node-status idle"></div>
           </div>
           <div class="node-subtitle">Claude Sonnet &middot; SQL/migrations</div>
-          <div class="node-body">
-            <div class="var-pills">
-              <span class="var-pill">{task_input}</span>
-              <span class="var-pill">{schema}</span>
+          <div class="node-divider"></div>
+          <div class="node-details">
+            <div class="node-detail-section">
+              <div class="node-detail-label">Inputs</div>
+              <div class="node-detail-row">
+                <span class="input-from"><span class="input-from-dot" style="background: var(--route-database);"></span>Task Decomposer</span>
+              </div>
+            </div>
+            <div class="node-detail-section">
+              <div class="node-detail-label">Context</div>
+              <div class="node-detail-row">
+                <span class="node-detail-icon">&#128196;</span>
+                <span class="node-detail-text">schema.sql</span>
+              </div>
+              <div class="node-detail-row">
+                <span class="node-detail-icon">&#128196;</span>
+                <span class="node-detail-text">migrations/</span>
+              </div>
+            </div>
+            <div class="node-detail-section">
+              <div class="node-detail-label">Tools</div>
+              <div class="node-detail-row" style="flex-wrap: wrap; gap: 3px;">
+                <span class="tool-tag">psql</span>
+                <span class="tool-tag">file_write</span>
+              </div>
             </div>
           </div>
           <div class="input-port" style="border-color: var(--route-database);"></div>
         </div>
 
         <!-- Code Review Room -->
-        <div class="room-node active" style="left: 800px; top: 130px;">
+        <div class="room-node active" style="left: 830px; top: 150px;">
           <div class="room-header">
             <div class="room-icon">&#128172;</div>
             <div class="room-title-group">
@@ -945,6 +1153,10 @@ multiple tasks to the same agent</span>.
       <div class="footnote-num">5</div>
       <div><strong>The generated prompt includes tools.</strong> Each agent listing in the auto-generated prompt shows the agent's available tools and capabilities, so the orchestrator can make informed routing decisions.</div>
     </div>
+    <div class="footnote">
+      <div class="footnote-num">6</div>
+      <div><strong>Cards are mini dashboards.</strong> Each node shows its connections at a glance: <strong>Inputs</strong> labeled by upstream step name (not raw variable names), <strong>Context</strong> showing attached files/documents, <strong>Tools</strong> showing available capabilities, and <strong>Output</strong> showing the schema or port configuration. No raw <code>{}</code> syntax — everything is human-readable.</div>
+    </div>
   </div>
 </div>
 
@@ -972,30 +1184,64 @@ multiple tasks to the same agent</span>.
       <div class="canvas-area">
         <!-- Simplified canvas — room node highlighted -->
         <svg class="edges-svg" viewBox="0 0 1100 600">
-          <path class="edge-line active" d="M 350 200 C 430 200, 440 260, 480 260" stroke="var(--route-frontend)" />
-          <path class="edge-line active" d="M 350 300 C 430 300, 440 290, 480 290" stroke="var(--route-backend)" />
+          <path class="edge-line active" d="M 360 230 C 430 230, 440 270, 480 270" stroke="var(--route-frontend)" />
+          <path class="edge-line active" d="M 360 395 C 430 395, 440 300, 480 300" stroke="var(--route-backend)" />
         </svg>
 
-        <!-- Upstream agents (dimmed) -->
-        <div class="node" style="left: 120px; top: 155px; opacity: 0.5;">
+        <!-- Upstream agents (dimmed, completed) -->
+        <div class="node" style="left: 100px; top: 140px; opacity: 0.5;">
           <div class="node-header">
             <div class="node-icon" style="background: rgba(59,130,246,0.15); color: var(--route-frontend);">&#9632;</div>
             <div class="node-title">Frontend Dev</div>
             <div class="node-status complete"></div>
           </div>
-          <div class="node-body">
-            <div class="var-pills"><span class="var-pill">{task_input}</span></div>
+          <div class="node-subtitle">Claude Sonnet</div>
+          <div class="node-divider"></div>
+          <div class="node-details">
+            <div class="node-detail-section">
+              <div class="node-detail-label">Inputs</div>
+              <div class="node-detail-row">
+                <span class="input-from"><span class="input-from-dot" style="background: var(--route-frontend);"></span>Task Decomposer</span>
+              </div>
+            </div>
+            <div class="node-detail-section">
+              <div class="node-detail-label">Context &middot; Tools</div>
+              <div class="node-detail-row">
+                <span class="node-detail-icon">&#128196;</span>
+                <span class="node-detail-text">2 files</span>
+                <span style="color: var(--text-faint); margin: 0 2px;">&middot;</span>
+                <span class="node-detail-icon">&#128295;</span>
+                <span class="node-detail-text">4 tools</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div class="node" style="left: 120px; top: 260px; opacity: 0.5;">
+        <div class="node" style="left: 100px; top: 300px; opacity: 0.5;">
           <div class="node-header">
             <div class="node-icon" style="background: rgba(167,139,250,0.15); color: var(--route-backend);">&#9632;</div>
             <div class="node-title">Backend Dev</div>
             <div class="node-status complete"></div>
           </div>
-          <div class="node-body">
-            <div class="var-pills"><span class="var-pill">{task_input}</span></div>
+          <div class="node-subtitle">Claude Sonnet</div>
+          <div class="node-divider"></div>
+          <div class="node-details">
+            <div class="node-detail-section">
+              <div class="node-detail-label">Inputs</div>
+              <div class="node-detail-row">
+                <span class="input-from"><span class="input-from-dot" style="background: var(--route-backend);"></span>Task Decomposer</span>
+              </div>
+            </div>
+            <div class="node-detail-section">
+              <div class="node-detail-label">Context &middot; Tools</div>
+              <div class="node-detail-row">
+                <span class="node-detail-icon">&#128196;</span>
+                <span class="node-detail-text">1 file</span>
+                <span style="color: var(--text-faint); margin: 0 2px;">&middot;</span>
+                <span class="node-detail-icon">&#128295;</span>
+                <span class="node-detail-text">4 tools</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1048,54 +1294,59 @@ multiple tasks to the same agent</span>.
             <div class="chat-view">
               <div class="chat-messages">
 
-                <!-- System message: room started -->
-                <div style="text-align: center; padding: 8px 0;">
-                  <span style="font-size: 10px; color: var(--text-muted); background: rgba(255,255,255,0.03); padding: 3px 10px; border-radius: 10px;">
-                    Session started &middot; 3 agents &middot; Turn 1
-                  </span>
+                <!-- System divider: room started -->
+                <div class="chat-system-divider">
+                  <span>Session started &middot; 3 agents &middot; Turn 1</span>
                 </div>
 
                 <!-- Turn 1: User message -->
                 <div class="chat-msg user-msg">
-                  <div class="chat-avatar" style="background: rgba(59,130,246,0.2); color: var(--primary);">You</div>
-                  <div class="chat-bubble user">
-                    <div style="font-size: 11px; line-height: 1.5;">Review the frontend and backend changes. Focus on API contract mismatches and security issues.</div>
-                    <div class="chat-time">2m ago</div>
+                  <div class="chat-accent accent-user"></div>
+                  <div class="chat-msg-body">
+                    <div class="chat-msg-header">
+                      <span class="chat-sender" style="color: var(--text-primary);">You</span>
+                      <span class="chat-time">2m ago</span>
+                    </div>
+                    <div class="chat-content">Review the frontend and backend changes. Focus on API contract mismatches and security issues.</div>
                   </div>
                 </div>
 
                 <!-- Turn 1: Senior Reviewer speaks -->
                 <div class="chat-msg">
-                  <div class="chat-avatar" style="background: rgba(59,130,246,0.2); color: var(--primary);">SR</div>
-                  <div>
-                    <div class="chat-sender" style="color: var(--primary);">Senior Reviewer</div>
-                    <div class="chat-bubble agent">
-                      <div style="font-size: 11px; line-height: 1.5;">I've reviewed both changesets. The frontend is calling <code style="font-size: 10px; background: rgba(255,255,255,0.08); padding: 1px 3px; border-radius: 2px;">PATCH /api/workflows/:id</code> but the backend handler expects <code style="font-size: 10px; background: rgba(255,255,255,0.08); padding: 1px 3px; border-radius: 2px;">PUT</code>. This needs alignment. @SecurityAuditor — can you check the auth middleware on this endpoint?</div>
-                      <div class="chat-time">1m ago</div>
+                  <div class="chat-accent accent-blue"></div>
+                  <div class="chat-msg-body">
+                    <div class="chat-msg-header">
+                      <span class="chat-sender" style="color: var(--primary);">Senior Reviewer</span>
+                      <span class="chat-role">Agent</span>
+                      <span class="chat-time">1m ago</span>
                     </div>
+                    <div class="chat-content">I've reviewed both changesets. The frontend is calling <code>PATCH /api/workflows/:id</code> but the backend handler expects <code>PUT</code>. This needs alignment. @SecurityAuditor — can you check the auth middleware on this endpoint?</div>
                   </div>
                 </div>
 
                 <!-- Turn 2: Security Auditor speaks -->
                 <div class="chat-msg">
-                  <div class="chat-avatar" style="background: rgba(45,212,191,0.2); color: var(--secondary);">SA</div>
-                  <div>
-                    <div class="chat-sender" style="color: var(--secondary);">Security Auditor</div>
-                    <div class="chat-bubble agent">
-                      <div style="font-size: 11px; line-height: 1.5;">Good catch. The auth middleware is applied at the router level, so the endpoint is protected. However, the ownership check only validates <code style="font-size: 10px; background: rgba(255,255,255,0.08); padding: 1px 3px; border-radius: 2px;">user_id</code> — no team/org scoping. If you add multi-tenancy later, this is an IDOR risk.</div>
-                      <div class="chat-time">45s ago</div>
+                  <div class="chat-accent accent-teal"></div>
+                  <div class="chat-msg-body">
+                    <div class="chat-msg-header">
+                      <span class="chat-sender" style="color: var(--secondary);">Security Auditor</span>
+                      <span class="chat-role">Agent</span>
+                      <span class="chat-time">45s ago</span>
                     </div>
+                    <div class="chat-content">Good catch. The auth middleware is applied at the router level, so the endpoint is protected. However, the ownership check only validates <code>user_id</code> — no team/org scoping. If you add multi-tenancy later, this is an IDOR risk.</div>
                   </div>
                 </div>
 
                 <!-- Turn 3: Streaming response -->
-                <div class="chat-msg chat-streaming">
-                  <div class="chat-avatar" style="background: rgba(59,130,246,0.2); color: var(--primary);">SR</div>
-                  <div>
-                    <div class="chat-sender" style="color: var(--primary);">Senior Reviewer</div>
-                    <div class="chat-bubble agent">
-                      <div style="font-size: 11px; line-height: 1.5;">Agreed on the IDOR concern. For the immediate fix I'd recommend: 1) align the HTTP method to PATCH, 2) add a TODO for org-scoping</div>
+                <div class="chat-msg streaming">
+                  <div class="chat-accent accent-blue"></div>
+                  <div class="chat-msg-body">
+                    <div class="chat-msg-header">
+                      <span class="chat-sender" style="color: var(--primary);">Senior Reviewer</span>
+                      <span class="chat-role">Agent</span>
+                      <span class="chat-time">now</span>
                     </div>
+                    <div class="chat-content">Agreed on the IDOR concern. For the immediate fix I'd recommend: 1) align the HTTP method to PATCH, 2) add a TODO for org-scoping</div>
                   </div>
                 </div>
 
@@ -1103,11 +1354,31 @@ multiple tasks to the same agent</span>.
 
               <!-- Chat input -->
               <div class="chat-input-area">
-                <div class="chat-input-box">
-                  <div class="chat-input-text">Message the room...</div>
-                  <div class="chat-send-btn">&#10148;</div>
+                <div class="chat-textarea-placeholder">Message the room...</div>
+                <div class="chat-toolbar">
+                  <!-- Left: action buttons -->
+                  <div class="chat-tool-btn" title="Attach file">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5l5.8-5.8a2 2 0 012.8 2.8l-5.8 5.9a.8.8 0 01-1.1-1.2l5-5"/></svg>
+                  </div>
+                  <div class="chat-tool-btn" title="@mention agent">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="3"/><path d="M11 8a3 3 0 01-5.2 2M14 8a6 6 0 10-3 5.2"/></svg>
+                  </div>
+                  <div class="chat-tool-btn" title="Insert code block">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5.5 4L2 8l3.5 4M10.5 4L14 8l-3.5 4"/></svg>
+                  </div>
+                  <div class="chat-toolbar-divider"></div>
+                  <div class="chat-tool-btn" title="Pause agents">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="3.5" height="10" rx="1"/><rect x="9.5" y="3" width="3.5" height="10" rx="1"/></svg>
+                  </div>
+                  <!-- Right: hint + send -->
+                  <div class="chat-toolbar-right">
+                    <span class="chat-kb-hint"><kbd>Enter</kbd> to send</span>
+                    <div class="chat-send-btn">
+                      Send
+                      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 1.3L14.7 8 1.5 14.7V9.2L9.8 8 1.5 6.8z"/></svg>
+                    </div>
+                  </div>
                 </div>
-                <div class="chat-mention-hint">Use @agent_name to direct your message</div>
               </div>
             </div>
           </div>
@@ -1367,29 +1638,47 @@ multiple tasks to the same agent</span>.
       <div class="canvas-area">
         <svg class="edges-svg" viewBox="0 0 1100 600">
           <!-- Transform → 1:1 Room -->
-          <path class="edge-line" d="M 310 270 C 390 270, 400 270, 440 270" stroke="var(--secondary)" />
+          <path class="edge-line" d="M 320 300 C 390 300, 400 290, 440 290" stroke="var(--secondary)" />
           <!-- 1:1 Room → Next Step -->
-          <path class="edge-line" d="M 680 270 C 740 270, 750 270, 790 270" stroke="var(--text-muted)" />
+          <path class="edge-line" d="M 680 290 C 740 290, 750 300, 790 300" stroke="var(--text-muted)" />
         </svg>
 
         <!-- Upstream: Transform step -->
-        <div class="node" style="left: 70px; top: 220px;">
+        <div class="node" style="left: 60px; top: 195px;">
           <div class="node-header">
             <div class="node-icon" style="background: rgba(45,212,191,0.15); color: var(--secondary);">&#9830;</div>
             <div class="node-title">Ticket Designer</div>
             <span class="protocol-badge transform">transform</span>
           </div>
-          <div class="node-subtitle">Creates detailed tickets</div>
-          <div class="node-body">
-            <div class="var-pills">
-              <span class="var-pill">{requirements}</span>
+          <div class="node-subtitle">Claude Sonnet &middot; Ticket creation</div>
+          <div class="node-divider"></div>
+          <div class="node-details">
+            <div class="node-detail-section">
+              <div class="node-detail-label">Inputs</div>
+              <div class="node-detail-row">
+                <span class="input-from"><span class="input-from-dot" style="background: var(--port-any);"></span>Requirements</span>
+              </div>
+            </div>
+            <div class="node-detail-section">
+              <div class="node-detail-label">Context</div>
+              <div class="node-detail-row">
+                <span class="node-detail-icon">&#128196;</span>
+                <span class="node-detail-text">ticket_template.md</span>
+              </div>
+            </div>
+            <div class="node-detail-section">
+              <div class="node-detail-label">Output</div>
+              <div class="node-detail-row">
+                <span class="node-detail-icon">&#128203;</span>
+                <span class="node-detail-text highlight">TicketSchema</span>
+              </div>
             </div>
           </div>
           <div class="input-port"></div>
         </div>
 
         <!-- 1:1 Room (compact) -->
-        <div class="room-node-compact selected" style="left: 440px; top: 220px; box-shadow: var(--shadow-room-active);">
+        <div class="room-node-compact selected" style="left: 440px; top: 200px; box-shadow: var(--shadow-room-active);">
           <div class="room-compact-header">
             <div class="room-icon" style="width: 24px; height: 24px; border-radius: 6px; font-size: 12px;">&#128172;</div>
             <div class="room-title" style="font-size: 12px;">Human Review</div>
@@ -1402,20 +1691,40 @@ multiple tasks to the same agent</span>.
               <div class="chat-preview">Waiting for review...</div>
             </div>
           </div>
+          <div style="padding: 0 14px 8px;">
+            <div class="node-detail-label" style="margin-bottom: 3px;">Input</div>
+            <div class="node-detail-row">
+              <span class="input-from"><span class="input-from-dot" style="background: var(--secondary);"></span>Ticket Designer</span>
+            </div>
+          </div>
           <div class="input-port" style="border-color: var(--secondary);"></div>
         </div>
 
         <!-- Downstream step -->
-        <div class="node" style="left: 790px; top: 220px; opacity: 0.4;">
+        <div class="node" style="left: 790px; top: 195px; opacity: 0.4;">
           <div class="node-header">
             <div class="node-icon" style="background: rgba(59,130,246,0.15); color: var(--primary);">&#9632;</div>
             <div class="node-title">Implementation</div>
             <div class="node-status idle"></div>
           </div>
-          <div class="node-subtitle">Executes the approved ticket</div>
-          <div class="node-body">
-            <div class="var-pills">
-              <span class="var-pill">{ticket}</span>
+          <div class="node-subtitle">Claude Sonnet &middot; Executor</div>
+          <div class="node-divider"></div>
+          <div class="node-details">
+            <div class="node-detail-section">
+              <div class="node-detail-label">Inputs</div>
+              <div class="node-detail-row">
+                <span class="input-from"><span class="input-from-dot" style="background: var(--primary);"></span>Human Review</span>
+              </div>
+            </div>
+            <div class="node-detail-section">
+              <div class="node-detail-label">Tools</div>
+              <div class="node-detail-row" style="flex-wrap: wrap; gap: 3px;">
+                <span class="tool-tag">file_read</span>
+                <span class="tool-tag">file_write</span>
+                <span class="tool-tag">git</span>
+                <span class="tool-tag">cargo</span>
+                <span class="tool-tag">npm</span>
+              </div>
             </div>
           </div>
           <div class="input-port"></div>
@@ -1433,30 +1742,41 @@ multiple tasks to the same agent</span>.
             <div class="chat-view">
               <div class="chat-messages">
 
-                <div style="text-align: center; padding: 8px 0;">
-                  <span style="font-size: 10px; color: var(--text-muted); background: rgba(255,255,255,0.03); padding: 3px 10px; border-radius: 10px;">
-                    1:1 session with Product Manager
-                  </span>
+                <div class="chat-system-divider">
+                  <span>1:1 session with Product Manager</span>
                 </div>
 
                 <!-- PM introduces the ticket -->
                 <div class="chat-msg">
-                  <div class="chat-avatar" style="background: rgba(59,130,246,0.2); color: var(--primary);">PM</div>
-                  <div>
-                    <div class="chat-sender" style="color: var(--primary);">Product Manager</div>
-                    <div class="chat-bubble agent">
-                      <div style="font-size: 11px; line-height: 1.5;">Here's the ticket I've drafted based on the requirements:<br><br><strong>Title:</strong> Add workflow step ordering<br><strong>Priority:</strong> P1<br><strong>Acceptance:</strong><br>- Steps can be reordered via drag<br>- Order persists to DB<br>- Undo support<br><br>Should I adjust anything?</div>
-                      <div class="chat-time">30s ago</div>
+                  <div class="chat-accent accent-blue"></div>
+                  <div class="chat-msg-body">
+                    <div class="chat-msg-header">
+                      <span class="chat-sender" style="color: var(--primary);">Product Manager</span>
+                      <span class="chat-role">Agent</span>
+                      <span class="chat-time">30s ago</span>
+                    </div>
+                    <div class="chat-content">
+                      Here's the ticket I've drafted based on the requirements:<br><br>
+                      <strong>Title:</strong> Add workflow step ordering<br>
+                      <strong>Priority:</strong> P1<br>
+                      <strong>Acceptance:</strong><br>
+                      &bull; Steps can be reordered via drag<br>
+                      &bull; Order persists to DB<br>
+                      &bull; Undo support<br><br>
+                      Should I adjust anything?
                     </div>
                   </div>
                 </div>
 
                 <!-- User response -->
                 <div class="chat-msg user-msg">
-                  <div class="chat-avatar" style="background: rgba(59,130,246,0.2); color: var(--primary);">You</div>
-                  <div class="chat-bubble user">
-                    <div style="font-size: 11px; line-height: 1.5;">Add keyboard shortcuts for reordering (Cmd+Up/Down). Otherwise looks good.</div>
-                    <div class="chat-time">Just now</div>
+                  <div class="chat-accent accent-user"></div>
+                  <div class="chat-msg-body">
+                    <div class="chat-msg-header">
+                      <span class="chat-sender" style="color: var(--text-primary);">You</span>
+                      <span class="chat-time">Just now</span>
+                    </div>
+                    <div class="chat-content">Add keyboard shortcuts for reordering (Cmd+Up/Down). Otherwise looks good.</div>
                   </div>
                 </div>
 
@@ -1464,13 +1784,26 @@ multiple tasks to the same agent</span>.
 
               <!-- Chat input + close button -->
               <div class="chat-input-area">
-                <div class="chat-input-box">
-                  <div class="chat-input-text">Reply to Product Manager...</div>
-                  <div class="chat-send-btn">&#10148;</div>
+                <div class="chat-textarea-placeholder">Reply to Product Manager...</div>
+                <div class="chat-toolbar">
+                  <div class="chat-tool-btn" title="Attach file">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5l5.8-5.8a2 2 0 012.8 2.8l-5.8 5.9a.8.8 0 01-1.1-1.2l5-5"/></svg>
+                  </div>
+                  <div class="chat-tool-btn" title="Insert code block">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5.5 4L2 8l3.5 4M10.5 4L14 8l-3.5 4"/></svg>
+                  </div>
+                  <div class="chat-toolbar-right">
+                    <span class="chat-kb-hint"><kbd>Enter</kbd> to send</span>
+                    <div class="chat-send-btn">
+                      Send
+                      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 1.3L14.7 8 1.5 14.7V9.2L9.8 8 1.5 6.8z"/></svg>
+                    </div>
+                  </div>
                 </div>
-                <div style="display: flex; justify-content: flex-end; padding-top: 8px;">
-                  <div style="font-size: 10px; color: var(--success); cursor: pointer; padding: 4px 10px; border: 1px solid rgba(63,185,80,0.3); border-radius: 6px; transition: all 0.15s;">
-                    &#10003; Approve &amp; Continue
+                <div class="chat-approve-bar">
+                  <div class="chat-approve-btn">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><polyline points="3 8.5 6.5 12 13 4"/></svg>
+                    Approve &amp; Continue
                   </div>
                 </div>
               </div>
