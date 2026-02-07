@@ -455,9 +455,33 @@ pub async fn execute_workflow_via_engine(
                 agent_id: step.agent_id,
             })?;
 
+        // Resolve provider: use registry if agent targets non-default provider
+        let step_engine = if agent.model_provider == "anthropic" || agent.model_provider.is_empty()
+        {
+            None // Use default engine
+        } else {
+            // Check runtime toggle for non-default providers
+            if agent.model_provider == "ollama" && !state.is_ollama_enabled().await {
+                return Err(HubError::ProviderUnavailable {
+                    provider: agent.model_provider.clone(),
+                    step_id: *step_id,
+                    agent_name: agent.name.clone(),
+                });
+            }
+            let provider = state.provider_for(&agent.model_provider).ok_or_else(|| {
+                HubError::ProviderUnavailable {
+                    provider: agent.model_provider.clone(),
+                    step_id: *step_id,
+                    agent_name: agent.name.clone(),
+                }
+            })?;
+            Some(ExecutionEngine::new(provider))
+        };
+        let effective_engine = step_engine.as_ref().unwrap_or(engine);
+
         let step_result = if step.execution_mode == "room" {
             execute_room_step(
-                engine,
+                effective_engine,
                 state,
                 ctx,
                 step,
@@ -475,7 +499,7 @@ pub async fn execute_workflow_via_engine(
             .await
         } else if step.execution_mode == "cavernous" {
             execute_cavernous_step(
-                engine,
+                effective_engine,
                 state,
                 ctx,
                 step,
@@ -494,7 +518,7 @@ pub async fn execute_workflow_via_engine(
             .await
         } else if step.execution_mode == "for_each" {
             execute_for_each_step(
-                engine,
+                effective_engine,
                 state,
                 ctx,
                 step,
@@ -513,7 +537,7 @@ pub async fn execute_workflow_via_engine(
             .await
         } else {
             execute_single_step(
-                engine,
+                effective_engine,
                 state,
                 ctx,
                 step,

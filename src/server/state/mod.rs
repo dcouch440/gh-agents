@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::ServerRepo;
-use crate::llm::LLMProvider;
+use crate::llm::{LLMProvider, ProviderRegistry};
 use crate::types::{AppConfig, UserId};
 
 use super::hub::{ModeResolver, PromptRegistry};
@@ -81,8 +81,10 @@ pub(crate) struct AppStateInner {
     pub(crate) events: EventBus,
     /// Application configuration (mutable at runtime via API)
     pub(crate) config: Arc<RwLock<AppConfig>>,
-    /// LLM provider for agent execution
+    /// LLM provider for agent execution (default / backward-compatible)
     pub(crate) provider: Option<Arc<dyn LLMProvider + Send + Sync>>,
+    /// Multi-provider registry for step-level routing
+    pub(crate) provider_registry: ProviderRegistry,
     /// Mode resolver for router-based mode selection
     pub(crate) mode_resolver: Option<Arc<ModeResolver>>,
     /// Prompt registry for core system/agent prompts
@@ -148,8 +150,8 @@ impl AppState {
         // Load prompt registry from prompts/ directory
         let prompt_registry = Self::load_prompt_registry();
 
-        // Initialize LLM provider and mode resolver
-        let (provider, mode_resolver) = Self::init_provider(
+        // Initialize LLM providers and mode resolver
+        let (provider, provider_registry, mode_resolver) = Self::init_providers(
             server_repo.clone(),
             repos.tool_routers.clone(),
             repos.tool_capabilities.clone(),
@@ -162,6 +164,7 @@ impl AppState {
             events,
             config: Arc::new(RwLock::new(config)),
             provider,
+            provider_registry,
             mode_resolver,
             prompt_registry,
             jwt_secret,
@@ -213,6 +216,7 @@ impl AppState {
                 events,
                 config: Arc::new(RwLock::new(config)),
                 provider: None,
+                provider_registry: ProviderRegistry::default(),
                 mode_resolver: None,
                 prompt_registry: Arc::new(PromptRegistry::empty()),
                 jwt_secret,
@@ -281,21 +285,27 @@ impl AppState {
         }
     }
 
-    fn init_provider(
+    fn init_providers(
         server_repo: Arc<dyn ServerRepo>,
         tool_router_repo: Arc<dyn crate::db::traits::ToolRouterRepo>,
         tool_capability_repo: Arc<dyn crate::db::traits::ToolCapabilityRepo>,
     ) -> (
         Option<Arc<dyn LLMProvider + Send + Sync>>,
+        ProviderRegistry,
         Option<Arc<ModeResolver>>,
     ) {
-        match crate::llm::AnthropicClient::from_env() {
+        let mut registry = ProviderRegistry::new("anthropic");
+
+        // Initialize Anthropic provider (default)
+        let (provider, mode_resolver) = match crate::llm::AnthropicClient::from_env() {
             Ok(p) => {
                 tracing::info!("Initialized LLM provider: {}", p.model_id().to_string());
                 let provider: Arc<dyn LLMProvider + Send + Sync> =
                     Arc::new(crate::llm::RetryingProvider::with_defaults(
                         crate::llm::RateLimitedProvider::with_defaults(p),
                     ));
+
+                registry.register("anthropic", provider.clone());
 
                 let mode_resolver = Arc::new(ModeResolver::new(
                     server_repo,
@@ -313,7 +323,43 @@ impl AppState {
                 );
                 (None, None)
             }
+        };
+
+        // Initialize Ollama provider if enabled
+        let ollama_enabled = std::env::var(crate::constants::ENV_OLLAMA_ENABLED)
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+
+        if ollama_enabled {
+            match crate::llm::OllamaClient::from_env() {
+                Ok(client) => {
+                    tracing::info!(
+                        "Initialized Ollama provider: {} ({})",
+                        client.model_id(),
+                        std::env::var(crate::constants::ENV_OLLAMA_BASE_URL).unwrap_or_else(|_| {
+                            crate::constants::OLLAMA_DEFAULT_BASE_URL.to_string()
+                        })
+                    );
+                    let ollama_provider: Arc<dyn LLMProvider + Send + Sync> =
+                        Arc::new(crate::llm::RetryingProvider::with_defaults(client));
+                    registry.register("ollama", ollama_provider);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Ollama enabled but failed to initialize: {}. Set {}.",
+                        e,
+                        crate::constants::ENV_OLLAMA_MODEL
+                    );
+                }
+            }
+        } else {
+            tracing::debug!(
+                "Ollama provider disabled (set {}=true to enable)",
+                crate::constants::ENV_OLLAMA_ENABLED
+            );
         }
+
+        (provider, registry, mode_resolver)
     }
 
     // =========================================================================
@@ -351,9 +397,40 @@ impl AppState {
         &self.0.config
     }
 
-    /// Access the LLM provider.
+    /// Access the default LLM provider (backward-compatible).
     pub fn provider(&self) -> Option<&Arc<dyn LLMProvider + Send + Sync>> {
         self.0.provider.as_ref()
+    }
+
+    /// Access the provider registry for multi-provider routing.
+    pub fn provider_registry(&self) -> &ProviderRegistry {
+        &self.0.provider_registry
+    }
+
+    /// Get a specific provider by name (e.g. "anthropic", "ollama").
+    pub fn provider_for(&self, provider_name: &str) -> Option<Arc<dyn LLMProvider + Send + Sync>> {
+        self.0.provider_registry.get(provider_name).cloned()
+    }
+
+    /// Check whether the Ollama provider is enabled at runtime.
+    ///
+    /// Checks the system_config DB table first (runtime toggle), then falls
+    /// back to the `NEXOR_OLLAMA_ENABLED` env var.
+    pub async fn is_ollama_enabled(&self) -> bool {
+        // Check DB first (runtime toggle overrides env var)
+        if let Ok(Some(config)) = self
+            .0
+            .repos
+            .system_config
+            .get_system_config("ollama_enabled")
+            .await
+        {
+            return config.config_value.as_bool().unwrap_or(false);
+        }
+        // Fall back to env var
+        std::env::var(crate::constants::ENV_OLLAMA_ENABLED)
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false)
     }
 
     /// Access the mode resolver.
@@ -588,6 +665,7 @@ impl AppStateInner {
             events: EventBus::new(), // Create new event bus (can't clone senders)
             config: self.config.clone(),
             provider: self.provider.clone(),
+            provider_registry: self.provider_registry.clone(),
             mode_resolver: self.mode_resolver.clone(),
             prompt_registry: self.prompt_registry.clone(),
             jwt_secret: self.jwt_secret.clone(),

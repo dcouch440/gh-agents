@@ -335,6 +335,19 @@ pub mod routes {
     pub const WS: &str = "/ws";
 }
 
+// ── Ollama / Local LLM ────────────────────────────────────────────────────
+
+/// Environment toggle for Ollama provider initialization.
+pub const ENV_OLLAMA_ENABLED: &str = "NEXOR_OLLAMA_ENABLED";
+/// Base URL for the Ollama API (default: localhost:11434).
+pub const ENV_OLLAMA_BASE_URL: &str = "OLLAMA_BASE_URL";
+/// Model to use with Ollama (required when enabled).
+pub const ENV_OLLAMA_MODEL: &str = "OLLAMA_MODEL";
+/// Default Ollama API base URL.
+pub const OLLAMA_DEFAULT_BASE_URL: &str = "http://localhost:11434";
+/// Default timeout for Ollama requests (local models are slower).
+pub const OLLAMA_DEFAULT_TIMEOUT_SECS: u64 = 300;
+
 // ── Grok / xAI ──────────────────────────────────────────────────────────────
 
 /// Base URL for the xAI API.
