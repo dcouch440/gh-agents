@@ -150,6 +150,7 @@ mod tests {
                 agent_name: "FE Agent".to_string(),
                 agent_tools: vec!["read_file".to_string(), "write_file".to_string()],
                 display_order: 0,
+                content_schema: None,
             },
             PortConfig {
                 port_name: "backend".to_string(),
@@ -158,6 +159,7 @@ mod tests {
                 agent_name: "BE Agent".to_string(),
                 agent_tools: vec!["run_tests".to_string()],
                 display_order: 1,
+                content_schema: None,
             },
         ]
     }
@@ -198,6 +200,7 @@ mod tests {
             agent_name: "Worker".to_string(),
             agent_tools: vec![],
             display_order: 0,
+            content_schema: None,
         }];
         let prompt = decomp_prompt(&ports);
         assert!(!prompt.contains("Tools:"));

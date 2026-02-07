@@ -64,10 +64,11 @@ fn broadcast_workflow_event(
 
 pub mod utils;
 pub use utils::{
-    build_routing_instruction_block, compose_prompt, extract_for_each_label, find_entry_steps,
-    get_child_steps, get_parent_steps, resolve_dot_path, resolve_for_each_array,
-    resolve_port_inputs, resolve_variables, topological_sort, ContainerExecutionConfig, DagPaused,
-    PortResolutionError, StepOutput, WorkflowExecutionContext, WorkflowExecutionResult,
+    build_routing_instruction_block, check_step_readiness, compose_prompt, evaluate_edge_condition,
+    extract_for_each_label, find_entry_steps, get_child_steps, get_parent_steps, resolve_dot_path,
+    resolve_for_each_array, resolve_port_inputs, resolve_variables, topological_sort,
+    ContainerExecutionConfig, DagPaused, PortResolutionError, StepOutput, StepReadiness,
+    WorkflowExecutionContext, WorkflowExecutionResult,
 };
 
 /// Determine the output key for a step: prefer the first output port name,
@@ -409,12 +410,18 @@ pub async fn execute_workflow_via_engine(
             return Err(HubError::Cancelled);
         }
 
-        // Check all parents are completed
-        let parents = get_parent_steps(*step_id, edges);
-        let all_parents_done = parents.iter().all(|pid| completed.contains_key(pid));
-        if !all_parents_done {
-            warn!("Step {} has uncompleted parents, skipping", step_id);
-            continue;
+        // Check step readiness (handles conditional edges)
+        match check_step_readiness(*step_id, edges, &completed, &completed_envelopes) {
+            StepReadiness::Waiting => {
+                warn!("Step {} has uncompleted parents, skipping", step_id);
+                continue;
+            }
+            StepReadiness::Skipped => {
+                info!("Step {} skipped — no matching conditional edges", step_id);
+                completed.insert(*step_id, StepOutput::skipped(*step_id));
+                continue;
+            }
+            StepReadiness::Ready => { /* proceed with execution */ }
         }
 
         // Phase 6B: If this is the head of a for-each chain, execute the whole chain
