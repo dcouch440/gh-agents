@@ -638,25 +638,27 @@
   }
 
   /* ═══════════════════════════════════════════════
-     SIDEBAR: ROOM PROPERTIES
+     SIDEBAR: PROPERTIES (edge-to-edge layout)
      ═══════════════════════════════════════════════ */
   .prop-section {
-    padding: 12px 16px;
     border-bottom: 1px solid var(--border-default);
   }
   .prop-section-title {
     font-size: 10px; font-weight: 600; letter-spacing: 0.05em;
-    text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px;
+    text-transform: uppercase; color: var(--text-muted);
+    padding: 12px 16px 8px;
   }
+
   .prop-row {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 5px 0;
+    padding: 6px 16px;
+    transition: background 0.1s;
   }
+  .prop-row:hover { background: rgba(255,255,255,0.02); }
+  .prop-row:last-child { padding-bottom: 12px; }
   .prop-label { font-size: 11px; color: var(--text-secondary); }
   .prop-value {
     font-size: 11px; color: var(--text-primary); font-family: var(--font-mono);
-    background: rgba(255,255,255,0.04); padding: 2px 8px; border-radius: 4px;
-    border: 1px solid var(--border-default);
   }
   .prop-toggle {
     width: 28px; height: 16px; border-radius: 8px;
@@ -672,19 +674,19 @@
   .prop-toggle::after { left: 2px; }
   .prop-toggle.on::after { left: 14px; }
 
+  /* Member rows — edge-to-edge, accent bar like chat */
   .member-config-item {
-    display: flex; align-items: center; gap: 8px;
-    padding: 8px 10px; border-radius: 8px;
-    background: var(--bg-panel-item);
-    border: 1px solid var(--border-default);
-    margin-bottom: 6px;
-    transition: border-color 0.15s;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px 10px 0;
+    border-bottom: 1px solid rgba(240,246,252,0.03);
+    transition: background 0.1s;
+    position: relative;
   }
-  .member-config-item:hover { border-color: var(--border-hover); }
-  .member-config-item.lead-config {
-    border-color: rgba(59,130,246,0.2);
-    background: var(--bg-panel-item-active);
+  .member-config-item:hover { background: rgba(255,255,255,0.02); }
+  .member-config-item .member-accent {
+    width: 3px; align-self: stretch; border-radius: 0 2px 2px 0; flex-shrink: 0;
   }
+  .member-config-item.lead-config { background: rgba(59,130,246,0.04); }
   .member-config-info { flex: 1; min-width: 0; }
   .member-config-name { font-size: 11px; font-weight: 500; color: var(--text-primary); }
   .member-config-role { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
@@ -692,73 +694,70 @@
     display: flex; gap: 4px;
   }
   .member-config-btn {
-    width: 20px; height: 20px; border-radius: 4px;
+    width: 24px; height: 24px; border-radius: 4px;
     display: flex; align-items: center; justify-content: center;
     font-size: 10px; color: var(--text-muted); cursor: pointer;
-    transition: all 0.15s;
+    transition: all 0.12s;
   }
   .member-config-btn:hover { color: var(--text-secondary); background: rgba(255,255,255,0.05); }
 
-  .add-member-btn {
-    display: flex; align-items: center; justify-content: center;
-    gap: 4px; padding: 6px 12px; border-radius: 6px;
-    border: 1px dashed var(--border-hover);
-    color: var(--text-muted); font-size: 11px;
-    cursor: pointer; transition: all 0.15s;
-    width: 100%;
+  .add-row-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 16px; color: var(--text-muted); font-size: 11px;
+    cursor: pointer; transition: all 0.12s;
   }
-  .add-member-btn:hover { border-color: var(--primary); color: var(--primary); }
+  .add-row-btn:hover { color: var(--primary); background: rgba(59,130,246,0.04); }
 
   /* ═══════════════════════════════════════════════
      SIDEBAR: PROTOCOL CONFIGURATION
      ═══════════════════════════════════════════════ */
   .protocol-type-selector {
-    display: flex; gap: 4px; margin-bottom: 12px;
+    display: flex; padding: 0;
   }
   .protocol-type-option {
-    flex: 1; padding: 6px 8px; border-radius: 6px;
-    border: 1px solid var(--border-default);
-    text-align: center; font-size: 10px; font-weight: 500;
-    color: var(--text-muted); cursor: pointer;
-    transition: all 0.15s;
+    flex: 1; padding: 8px 0; text-align: center;
+    font-size: 10px; font-weight: 500; color: var(--text-muted);
+    cursor: pointer; transition: all 0.12s;
+    border-bottom: 2px solid transparent;
   }
-  .protocol-type-option:hover { border-color: var(--border-hover); color: var(--text-secondary); }
+  .protocol-type-option:hover { color: var(--text-secondary); background: rgba(255,255,255,0.02); }
   .protocol-type-option.selected {
-    border-color: var(--primary); color: var(--primary);
-    background: rgba(59,130,246,0.08);
+    color: var(--primary); border-bottom-color: var(--primary);
+    background: rgba(59,130,246,0.04);
   }
 
+  /* Port rows — edge-to-edge with colored accent */
   .port-config-item {
-    display: flex; align-items: center; gap: 8px;
-    padding: 8px 10px; border-radius: 8px;
-    background: var(--bg-panel-item);
-    border: 1px solid var(--border-default);
-    margin-bottom: 6px;
-    position: relative;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px 10px 0;
+    border-bottom: 1px solid rgba(240,246,252,0.03);
+    transition: background 0.1s;
   }
-  .port-color-dot {
-    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  .port-config-item:hover { background: rgba(255,255,255,0.02); }
+  .port-accent {
+    width: 3px; align-self: stretch; border-radius: 0 2px 2px 0; flex-shrink: 0;
   }
   .port-config-info { flex: 1; min-width: 0; }
   .port-config-name { font-size: 11px; font-weight: 500; color: var(--text-primary); font-family: var(--font-mono); }
   .port-config-agent { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
 
+  /* Prompt preview — full-bleed editor pane */
+  .prompt-section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px 8px;
+  }
+  .prompt-section-header .prop-section-title { padding: 0; }
   .generated-label {
-    font-size: 9px; font-weight: 600; letter-spacing: 0.05em;
+    font-size: 9px; font-weight: 500; letter-spacing: 0.04em;
     text-transform: uppercase; color: var(--text-muted);
-    padding: 2px 6px; border-radius: 3px;
-    background: rgba(255,255,255,0.03);
-    margin-bottom: 6px; display: inline-block;
   }
 
   .prompt-preview {
     font-family: var(--font-mono); font-size: 10px;
-    color: var(--text-secondary); line-height: 1.6;
+    color: var(--text-secondary); line-height: 1.7;
     background: var(--bg-editor);
-    border: 1px solid var(--border-default);
-    border-radius: 6px; padding: 10px 12px;
-    max-height: 140px; overflow-y: auto;
-    white-space: pre-wrap;
+    padding: 12px 16px; white-space: pre-wrap;
+    border-top: 1px solid var(--border-default);
   }
   .prompt-preview .kw { color: var(--syn-keyword); font-weight: 500; }
   .prompt-preview .str { color: var(--syn-string); }
@@ -1052,9 +1051,8 @@
             <div class="panel-close">&times;</div>
           </div>
           <div class="panel-content">
-            <!-- Protocol Type -->
+            <!-- Protocol Type — tab selector, edge-to-edge -->
             <div class="prop-section">
-              <div class="prop-section-title">Protocol</div>
               <div class="protocol-type-selector">
                 <div class="protocol-type-option selected">Decomp</div>
                 <div class="protocol-type-option">Route</div>
@@ -1063,11 +1061,11 @@
               </div>
             </div>
 
-            <!-- Port Configuration -->
+            <!-- Port Configuration — flush rows -->
             <div class="prop-section">
               <div class="prop-section-title">Ports</div>
               <div class="port-config-item">
-                <div class="port-color-dot" style="background: var(--route-frontend);"></div>
+                <div class="port-accent" style="background: var(--route-frontend);"></div>
                 <div class="port-config-info">
                   <div class="port-config-name">frontend</div>
                   <div class="port-config-agent">&#8594; Frontend Dev</div>
@@ -1075,7 +1073,7 @@
                 <div class="member-config-btn">&#9998;</div>
               </div>
               <div class="port-config-item">
-                <div class="port-color-dot" style="background: var(--route-backend);"></div>
+                <div class="port-accent" style="background: var(--route-backend);"></div>
                 <div class="port-config-info">
                   <div class="port-config-name">backend</div>
                   <div class="port-config-agent">&#8594; Backend Dev</div>
@@ -1083,20 +1081,22 @@
                 <div class="member-config-btn">&#9998;</div>
               </div>
               <div class="port-config-item">
-                <div class="port-color-dot" style="background: var(--route-database);"></div>
+                <div class="port-accent" style="background: var(--route-database);"></div>
                 <div class="port-config-info">
                   <div class="port-config-name">database</div>
                   <div class="port-config-agent">&#8594; Database Engineer</div>
                 </div>
                 <div class="member-config-btn">&#9998;</div>
               </div>
-              <div class="add-member-btn">+ Add Port</div>
+              <div class="add-row-btn">+ Add Port</div>
             </div>
 
-            <!-- Generated Prompt Preview -->
+            <!-- Generated Prompt Preview — full-bleed -->
             <div class="prop-section">
-              <div class="prop-section-title">Auto-generated Prompt</div>
-              <div class="generated-label">&#9889; Generated by protocol</div>
+              <div class="prompt-section-header">
+                <div class="prop-section-title">Auto-generated Prompt</div>
+                <span class="generated-label">&#9889; Generated</span>
+              </div>
               <div class="prompt-preview"><span class="kw">## Task Decomposition Protocol</span>
 
 Decompose the task and assign subtasks to
@@ -1492,9 +1492,9 @@ multiple tasks to the same agent</span>.
             <div class="panel-close">&times;</div>
           </div>
           <div class="panel-content">
-            <!-- Room Settings -->
+            <!-- Room Settings — flush rows -->
             <div class="prop-section">
-              <div class="prop-section-title">Room Settings</div>
+              <div class="prop-section-title">Settings</div>
               <div class="prop-row">
                 <span class="prop-label">Name</span>
                 <span class="prop-value">Code Review</span>
@@ -1513,7 +1513,7 @@ multiple tasks to the same agent</span>.
               </div>
               <div class="prop-row">
                 <span class="prop-label">Gatekeeper Model</span>
-                <span class="prop-value" style="font-size: 10px;">haiku-4</span>
+                <span class="prop-value">haiku-4</span>
               </div>
               <div class="prop-row">
                 <span class="prop-label">Tools Enabled</span>
@@ -1521,12 +1521,12 @@ multiple tasks to the same agent</span>.
               </div>
             </div>
 
-            <!-- Members -->
+            <!-- Members — accent bar rows -->
             <div class="prop-section">
               <div class="prop-section-title">Members</div>
 
               <div class="member-config-item lead-config">
-                <div class="member-avatar" style="background: rgba(59,130,246,0.2); color: var(--primary);">SR</div>
+                <div class="member-accent" style="background: var(--primary);"></div>
                 <div class="member-config-info">
                   <div class="member-config-name">Senior Reviewer</div>
                   <div class="member-config-role">Lead reviewer, final decision authority</div>
@@ -1538,7 +1538,7 @@ multiple tasks to the same agent</span>.
               </div>
 
               <div class="member-config-item">
-                <div class="member-avatar" style="background: rgba(45,212,191,0.2); color: var(--secondary);">SA</div>
+                <div class="member-accent" style="background: var(--secondary);"></div>
                 <div class="member-config-info">
                   <div class="member-config-name">Security Auditor</div>
                   <div class="member-config-role">Vulnerability analysis, auth review</div>
@@ -1550,7 +1550,7 @@ multiple tasks to the same agent</span>.
               </div>
 
               <div class="member-config-item">
-                <div class="member-avatar" style="background: rgba(167,139,250,0.2); color: var(--port-json);">TA</div>
+                <div class="member-accent" style="background: var(--port-json);"></div>
                 <div class="member-config-info">
                   <div class="member-config-name">Test Architect</div>
                   <div class="member-config-role">Test coverage, quality gates</div>
@@ -1561,7 +1561,7 @@ multiple tasks to the same agent</span>.
                 </div>
               </div>
 
-              <div class="add-member-btn">+ Add Member</div>
+              <div class="add-row-btn">+ Add Member</div>
             </div>
 
             <!-- Output Configuration -->
@@ -1569,13 +1569,13 @@ multiple tasks to the same agent</span>.
               <div class="prop-section-title">Outputs</div>
               <div class="prop-row">
                 <span class="prop-label">Primary output</span>
-                <span class="prop-value" style="font-size: 10px;">Lead agent</span>
+                <span class="prop-value">Lead agent</span>
               </div>
               <div class="prop-row">
                 <span class="prop-label">Include all outputs</span>
                 <div class="prop-toggle on"></div>
               </div>
-              <div style="font-size: 10px; color: var(--text-muted); padding-top: 4px; line-height: 1.5;">
+              <div style="font-size: 10px; color: var(--text-muted); padding: 4px 16px 12px; line-height: 1.5;">
                 When the session closes, the lead agent's structured output becomes the step output. All agent outputs are available via <code style="font-size: 10px; background: rgba(255,255,255,0.05); padding: 1px 3px; border-radius: 2px; color: var(--secondary);">structured_outputs</code>.
               </div>
             </div>
