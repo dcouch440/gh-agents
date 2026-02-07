@@ -1,6 +1,5 @@
 import { createContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react'
-import { useWebSocket } from '@/hooks/useWebSocket'
-import { ACTION, WS_CHANNEL } from '@/constants'
+import { ACTION } from '@/constants'
 import { api } from '@/api'
 import type { Agent, AgentStatus } from '@/types/agent'
 
@@ -67,7 +66,6 @@ const AgentContext = createContext<AgentContextValue | null>(null)
 
 function AgentProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
-  const { subscribe } = useWebSocket()
   const mountedRef = useRef(true)
 
   const load = useCallback(async () => {
@@ -86,17 +84,6 @@ function AgentProvider({ children }: { children: ReactNode }) {
     void load()
     return () => { mountedRef.current = false }
   }, [load])
-
-  // WS subscription
-  useEffect(() => {
-    const unsub = subscribe(WS_CHANNEL.AGENTS, (data) => {
-      const update = data as AgentUpdate
-      if (update.id) {
-        dispatch({ type: ACTION.UPDATE, update })
-      }
-    })
-    return unsub
-  }, [subscribe])
 
   return (
     <AgentContext.Provider value={{ ...state, reload: () => { void load() } }}>

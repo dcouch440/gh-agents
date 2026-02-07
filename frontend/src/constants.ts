@@ -9,28 +9,9 @@ export const WS_URL: string =
   (import.meta.env.VITE_WS_URL as string | undefined) ??
   `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws`;
 
-// WS Channels (must match backend serde tag names in ws.rs ServerMessage)
-export const WS_CHANNEL = {
-  FEED: "feed",
-  TASKS: "task_update",
-  AGENTS: "agent_update",
-  SESSIONS: "session_update",
-  PIPELINES: "pipeline_update",
-  ROUTING: "routing_update",
-} as const;
-
-export type WsChannel = (typeof WS_CHANNEL)[keyof typeof WS_CHANNEL];
-
-// WS Events for run-scoped subscriptions (from dag_executor broadcasts)
-export const WS_EVENT = {
-  AGENT_EXECUTION_UPDATE: "agent_execution_update",
-  STAGE_EXECUTION_UPDATE: "stage_execution_update",
-  PIPELINE_RUN_UPDATE: "pipeline_run_update",
-  FOR_EACH_SPAWNED: "for_each_spawned",
-  EXECUTION_MESSAGE: "execution_message",
-} as const;
-
-export type WsEvent = (typeof WS_EVENT)[keyof typeof WS_EVENT];
+// WS Types (re-exported from types/ws.ts)
+export { WS_TOPIC, WS_STATUS, WS_MSG, WS_CONTROL, WORKFLOW_EVENT, ROOM_EVENT, SESSION_EVENT } from "@/types/ws";
+export type { WsTopic, WsStatus, WsWireMessage } from "@/types/ws";
 
 // WS Reconnect
 export const WS_RECONNECT_BASE_MS = 1000;

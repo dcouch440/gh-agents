@@ -1,6 +1,5 @@
 import { createContext, useReducer, useEffect, useCallback, useRef, type ReactNode } from 'react'
-import { useWebSocket } from '@/hooks/useWebSocket'
-import { ACTION, WS_CHANNEL } from '@/constants'
+import { ACTION } from '@/constants'
 import { api } from '@/api'
 import type { ChatMessage } from '@/types/session'
 
@@ -53,7 +52,6 @@ type ChatProviderProps = {
 
 function ChatProvider({ sessionId, children }: ChatProviderProps) {
   const [state, dispatch] = useReducer(reducer, initialState)
-  const { subscribe } = useWebSocket()
   const mountedRef = useRef(true)
 
   const load = useCallback(async () => {
@@ -73,17 +71,6 @@ function ChatProvider({ sessionId, children }: ChatProviderProps) {
     void load()
     return () => { mountedRef.current = false }
   }, [load])
-
-  // WS subscription — filter messages for this session
-  useEffect(() => {
-    const unsub = subscribe(WS_CHANNEL.SESSIONS, (data) => {
-      const msg = data as { session_id?: string; message?: ChatMessage }
-      if (msg.session_id === sessionId && msg.message) {
-        dispatch({ type: ACTION.APPEND, message: msg.message })
-      }
-    })
-    return unsub
-  }, [subscribe, sessionId])
 
   return (
     <ChatContext.Provider value={{ ...state, reload: () => { void load() } }}>

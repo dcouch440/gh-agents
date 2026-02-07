@@ -17,6 +17,7 @@ use crate::db::{
     AgentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, WorkflowStepEdgeRow, WorkflowStepRow,
 };
 use crate::server::state::AppState;
+use crate::server::ws::events::{WorkflowEvent, WorkflowEventKind};
 use crate::types::{
     DownstreamRoutingContext, ExecutionMetadata, ExecutionStatus, RouteDescription,
     StepExecutionEnvelope,
@@ -35,6 +36,21 @@ use crate::types::{DocumentSummary, RoutingConfigDocument, Subtask};
 use crate::server::executors::room::{
     build_dag_room_prompt, execute_room_turn, RoomMemberWithAgent,
 };
+
+/// Emit a workflow lifecycle event via WebSocket broadcast.
+fn broadcast_workflow_event(
+    state: &AppState,
+    ctx: &WorkflowExecutionContext,
+    workflow_id: Uuid,
+    kind: WorkflowEventKind,
+) {
+    state.broadcast_workflow(WorkflowEvent {
+        run_id: ctx.run_id,
+        workflow_id,
+        user_id: Some(ctx.user_id),
+        kind,
+    });
+}
 
 pub mod utils;
 pub use utils::{
@@ -330,6 +346,8 @@ pub async fn execute_workflow_via_engine(
 ) -> Result<WorkflowExecutionResult, HubError> {
     let sorted = topological_sort(steps, edges).map_err(|_| HubError::DagCycle)?;
     let step_map: HashMap<Uuid, &WorkflowStepRow> = steps.iter().map(|s| (s.id, s)).collect();
+    let workflow_id = steps.first().map(|s| s.workflow_id).unwrap_or(Uuid::nil());
+    let start_time = std::time::Instant::now();
 
     let mut completed: HashMap<Uuid, StepOutput> = HashMap::new();
     let mut completed_envelopes: HashMap<Uuid, StepExecutionEnvelope> = HashMap::new();
@@ -340,6 +358,11 @@ pub async fn execute_workflow_via_engine(
 
     // Pre-fetch port metadata for all steps
     let port_meta = prefetch_port_metadata(state, steps).await;
+
+    // Broadcast: workflow started
+    broadcast_workflow_event(state, ctx, workflow_id, WorkflowEventKind::Started {
+        total_steps: sorted.len(),
+    });
 
     // Phase 6B: Detect chained for-each pipelines
     let chains = detect_for_each_chains(steps, edges);
@@ -417,7 +440,7 @@ pub async fn execute_workflow_via_engine(
                 agent_id: step.agent_id,
             })?;
 
-        if step.execution_mode == "room" {
+        let step_result = if step.execution_mode == "room" {
             execute_room_step(
                 engine,
                 state,
@@ -434,7 +457,7 @@ pub async fn execute_workflow_via_engine(
                 &mut total_cost_usd,
                 cancel,
             )
-            .await?;
+            .await
         } else if step.execution_mode == "cavernous" {
             execute_cavernous_step(
                 engine,
@@ -453,7 +476,7 @@ pub async fn execute_workflow_via_engine(
                 &mut total_cost_usd,
                 cancel,
             )
-            .await?;
+            .await
         } else if step.execution_mode == "for_each" {
             execute_for_each_step(
                 engine,
@@ -472,7 +495,7 @@ pub async fn execute_workflow_via_engine(
                 &mut total_cost_usd,
                 cancel,
             )
-            .await?;
+            .await
         } else {
             execute_single_step(
                 engine,
@@ -491,9 +514,28 @@ pub async fn execute_workflow_via_engine(
                 &mut total_cost_usd,
                 cancel,
             )
-            .await?;
+            .await
+        };
+
+        if let Err(ref e) = step_result {
+            if !matches!(e, HubError::AwaitingUser { .. }) {
+                broadcast_workflow_event(state, ctx, workflow_id, WorkflowEventKind::StepFailed {
+                    step_id: step.id,
+                    step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
+                    error: format!("{}", e),
+                });
+                broadcast_workflow_event(state, ctx, workflow_id, WorkflowEventKind::Failed {
+                    error: format!("Step '{}' failed: {}", step.output_variable_name.as_deref().unwrap_or("unknown"), e),
+                });
+            }
         }
+        step_result?;
     }
+
+    // Broadcast: workflow completed
+    broadcast_workflow_event(state, ctx, workflow_id, WorkflowEventKind::Completed {
+        duration_ms: Some(start_time.elapsed().as_millis() as u64),
+    });
 
     let final_outputs: HashMap<String, StepOutput> = completed
         .into_iter()
@@ -526,6 +568,16 @@ async fn execute_single_step(
     total_cost_usd: &mut f32,
     cancel: Option<&CancellationToken>,
 ) -> Result<(), HubError> {
+    let step_start = std::time::Instant::now();
+
+    // Broadcast: step started
+    broadcast_workflow_event(state, ctx, step.workflow_id, WorkflowEventKind::StepStarted {
+        step_id: step.id,
+        step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
+        agent_id: Some(agent.id),
+        execution_id: None,
+    });
+
     // Resolve port inputs if this step has input ports defined
     let port_inputs = if let Some(inputs) = port_meta.step_inputs.get(&step.id) {
         match resolve_port_inputs(
@@ -598,6 +650,17 @@ async fn execute_single_step(
     completed_envelopes.insert(step.id, envelope);
 
     completed.insert(step.id, output);
+
+    // Broadcast: step completed
+    broadcast_workflow_event(state, ctx, step.workflow_id, WorkflowEventKind::StepCompleted {
+        step_id: step.id,
+        step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
+        agent_id: Some(agent.id),
+        output: None,
+        input_tokens: Some(in_tok as u64),
+        output_tokens: Some(out_tok as u64),
+        duration_ms: Some(step_start.elapsed().as_millis() as u64),
+    });
 
     Ok(())
 }
@@ -786,6 +849,14 @@ async fn execute_room_step(
         .await
         .map_err(|e| HubError::Internal(anyhow!("failed to create room session: {}", e)))?;
 
+    // Broadcast: step started (room step)
+    broadcast_workflow_event(state, ctx, step.workflow_id, WorkflowEventKind::StepStarted {
+        step_id: step.id,
+        step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
+        agent_id: None,
+        execution_id: Some(session.id),
+    });
+
     info!(
         step_id = %step.id,
         room_id = %room_id,
@@ -833,6 +904,12 @@ async fn execute_room_step(
             })),
         };
         completed.insert(step.id, partial);
+
+        // Broadcast: step paused (awaiting user interaction)
+        broadcast_workflow_event(state, ctx, step.workflow_id, WorkflowEventKind::StepPaused {
+            step_id: step.id,
+            step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
+        });
 
         info!(
             step_id = %step.id,
@@ -944,6 +1021,17 @@ async fn execute_room_step(
     completed_envelopes.insert(step.id, envelope);
     completed.insert(step.id, output);
 
+    // Broadcast: step completed (room step)
+    broadcast_workflow_event(state, ctx, step.workflow_id, WorkflowEventKind::StepCompleted {
+        step_id: step.id,
+        step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
+        agent_id: None,
+        output: None,
+        input_tokens: None,
+        output_tokens: None,
+        duration_ms: None,
+    });
+
     info!(
         step_id = %step.id,
         session_id = %session.id,
@@ -1046,6 +1134,14 @@ async fn execute_for_each_step(
     let routing_rules = port_meta.routing_rules.get(&step.id);
     let is_label_routing = step.routing_mode.as_deref() == Some("label") && routing_rules.is_some();
 
+    // Broadcast: step started (for-each)
+    broadcast_workflow_event(state, ctx, step.workflow_id, WorkflowEventKind::StepStarted {
+        step_id: step.id,
+        step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
+        agent_id: Some(agent.id),
+        execution_id: None,
+    });
+
     info!(
         step_id = %step.id,
         count = array.len(),
@@ -1053,6 +1149,7 @@ async fn execute_for_each_step(
         "for_each expansion"
     );
 
+    let total_iterations = array.len();
     let mut iteration_outputs = Vec::new();
     // Cache loaded agents to avoid redundant DB calls
     let mut agent_cache: HashMap<Uuid, AgentRow> = HashMap::new();
@@ -1133,6 +1230,14 @@ async fn execute_for_each_step(
                 *total_output_tokens += out_tok;
                 *total_cost_usd += cost;
                 iteration_outputs.push(output.structured_output.clone());
+
+                // Broadcast: for-each progress
+                broadcast_workflow_event(state, ctx, step.workflow_id, WorkflowEventKind::ForEachProgress {
+                    step_id: step.id,
+                    step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
+                    completed: idx + 1,
+                    total: total_iterations,
+                });
             }
             Err(e) => {
                 error!(
@@ -1163,6 +1268,17 @@ async fn execute_for_each_step(
     completed_envelopes.insert(step.id, envelope);
 
     completed.insert(step.id, output);
+
+    // Broadcast: step completed (for-each)
+    broadcast_workflow_event(state, ctx, step.workflow_id, WorkflowEventKind::StepCompleted {
+        step_id: step.id,
+        step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
+        agent_id: Some(agent.id),
+        output: None,
+        input_tokens: None,
+        output_tokens: None,
+        duration_ms: None,
+    });
 
     Ok(())
 }
@@ -2060,6 +2176,9 @@ pub async fn resume_dag_from_approval(
     }
     completed.insert(paused_step_id, approved_output);
 
+    // Broadcast: workflow resumed
+    let workflow_id = step.workflow_id;
+
     // Build execution context
     let ctx = WorkflowExecutionContext {
         stage_execution_id: workflow_execution_id.unwrap_or(Uuid::new_v4()),
@@ -2076,6 +2195,11 @@ pub async fn resume_dag_from_approval(
         .ok_or(HubError::ProviderNotConfigured)?
         .clone();
     let engine = ExecutionEngine::new(provider);
+
+    // Broadcast: resumed
+    broadcast_workflow_event(state, &ctx, workflow_id, WorkflowEventKind::Resumed {
+        step_id: paused_step_id,
+    });
 
     info!(
         paused_step_id = %paused_step_id,
@@ -2134,6 +2258,11 @@ pub async fn resume_dag_from_approval(
                     );
                 }
                 Err(e) => {
+                    // Broadcast: workflow failed
+                    broadcast_workflow_event(state, &ctx, workflow_id, WorkflowEventKind::Failed {
+                        error: format!("{}", e),
+                    });
+
                     let _ = coll_repo
                         .update_workflow_execution_status(
                             wf_exec_id,
@@ -2179,6 +2308,14 @@ async fn execute_cavernous_step(
     total_cost_usd: &mut f32,
     cancel: Option<&CancellationToken>,
 ) -> Result<(), HubError> {
+    // Broadcast: step started (cavernous)
+    broadcast_workflow_event(state, ctx, step.workflow_id, WorkflowEventKind::StepStarted {
+        step_id: step.id,
+        step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
+        agent_id: Some(agent.id),
+        execution_id: None,
+    });
+
     info!(step_id = %step.id, "Starting cavernous routing step");
 
     // ── Compose the base prompt (variable + port resolution) ──────────────
@@ -2499,6 +2636,17 @@ async fn execute_cavernous_step(
     let _ = ae_repo
         .update_agent_execution_status(parent_ae.id, "completed", None, None)
         .await;
+
+    // Broadcast: step completed (cavernous)
+    broadcast_workflow_event(state, ctx, step.workflow_id, WorkflowEventKind::StepCompleted {
+        step_id: step.id,
+        step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
+        agent_id: Some(agent.id),
+        output: None,
+        input_tokens: Some(*total_input_tokens as u64),
+        output_tokens: Some(*total_output_tokens as u64),
+        duration_ms: None,
+    });
 
     info!(
         step_id = %step.id,

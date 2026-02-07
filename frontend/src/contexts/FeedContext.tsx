@@ -1,6 +1,5 @@
-import { createContext, useReducer, useEffect, type ReactNode } from 'react'
-import { useWebSocket } from '@/hooks/useWebSocket'
-import { ACTION, WS_CHANNEL } from '@/constants'
+import { createContext, useReducer, type ReactNode } from 'react'
+import { ACTION } from '@/constants'
 import type { FeedItem } from '@/types/feed'
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -41,16 +40,7 @@ const FeedContext = createContext<FeedContextValue | null>(null)
 // ── Provider ─────────────────────────────────────────────────────────────────
 
 function FeedProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, initialState)
-  const { subscribe } = useWebSocket()
-
-  useEffect(() => {
-    const unsub = subscribe(WS_CHANNEL.FEED, (data) => {
-      const item = data as FeedItem
-      if (item.id) dispatch({ type: ACTION.APPEND, item })
-    })
-    return unsub
-  }, [subscribe])
+  const [state] = useReducer(reducer, initialState)
 
   return (
     <FeedContext.Provider value={state}>
