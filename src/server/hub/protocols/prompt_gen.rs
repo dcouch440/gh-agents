@@ -13,6 +13,10 @@ pub fn decomp_prompt(ports: &[PortConfig]) -> String {
             .to_string(),
     );
     lines.push(
+        "You may assign MULTIPLE tasks to the same port — each will be executed independently."
+            .to_string(),
+    );
+    lines.push(
         "Respond with a JSON array where each item has a \"port\" and \"content\" field."
             .to_string(),
     );
@@ -21,10 +25,14 @@ pub fn decomp_prompt(ports: &[PortConfig]) -> String {
     lines.push(String::new());
 
     for port in ports {
-        lines.push(format!(
+        let mut agent_line = format!(
             "- **Port: \"{}\"** ({}) — {}",
             port.port_name, port.agent_name, port.description
-        ));
+        );
+        if !port.agent_tools.is_empty() {
+            agent_line.push_str(&format!("\n  Tools: {}", port.agent_tools.join(", ")));
+        }
+        lines.push(agent_line);
     }
 
     lines.push(String::new());
@@ -37,6 +45,12 @@ pub fn decomp_prompt(ports: &[PortConfig]) -> String {
             "  {{\"port\": \"{}\", \"content\": {{...task details...}}}}",
             first.port_name
         ));
+        if ports.len() > 1 {
+            lines.push(format!(
+                "  {{\"port\": \"{}\", \"content\": {{...task details...}}}}",
+                ports[1].port_name
+            ));
+        }
     }
     lines.push("]".to_string());
     lines.push("```".to_string());
@@ -134,6 +148,7 @@ mod tests {
                 description: "Handles UI work".to_string(),
                 agent_id: Uuid::new_v4(),
                 agent_name: "FE Agent".to_string(),
+                agent_tools: vec!["read_file".to_string(), "write_file".to_string()],
                 display_order: 0,
             },
             PortConfig {
@@ -141,6 +156,7 @@ mod tests {
                 description: "Handles API work".to_string(),
                 agent_id: Uuid::new_v4(),
                 agent_name: "BE Agent".to_string(),
+                agent_tools: vec!["run_tests".to_string()],
                 display_order: 1,
             },
         ]
@@ -155,6 +171,36 @@ mod tests {
         assert!(prompt.contains("FE Agent"));
         assert!(prompt.contains("BE Agent"));
         assert!(prompt.contains("Task Decomposition Protocol"));
+    }
+
+    #[test]
+    fn decomp_prompt_includes_multi_assignment_language() {
+        let ports = make_ports();
+        let prompt = decomp_prompt(&ports);
+        assert!(prompt.contains("MULTIPLE tasks to the same port"));
+        assert!(prompt.contains("each will be executed independently"));
+    }
+
+    #[test]
+    fn decomp_prompt_includes_agent_tools() {
+        let ports = make_ports();
+        let prompt = decomp_prompt(&ports);
+        assert!(prompt.contains("Tools: read_file, write_file"));
+        assert!(prompt.contains("Tools: run_tests"));
+    }
+
+    #[test]
+    fn decomp_prompt_omits_tools_when_empty() {
+        let ports = vec![PortConfig {
+            port_name: "worker".to_string(),
+            description: "General worker".to_string(),
+            agent_id: Uuid::new_v4(),
+            agent_name: "Worker".to_string(),
+            agent_tools: vec![],
+            display_order: 0,
+        }];
+        let prompt = decomp_prompt(&ports);
+        assert!(!prompt.contains("Tools:"));
     }
 
     #[test]
