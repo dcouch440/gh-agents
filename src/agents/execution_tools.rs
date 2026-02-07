@@ -7,10 +7,146 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::db::ToolRow;
-use crate::execution::{ContainerHandle, ExecutionContext, FileOps, GitOps, Sandbox, TestRunner};
+use crate::execution::{
+    parse_porcelain_status, validate_container_path, ContainerHandle, ExecutionContext, FileOps,
+    GitOps, Sandbox, TestRunner,
+};
 use crate::llm::{
     GrokResearchClient, ResearchRequest, ResearchSource, Tool, WebSearchFilters, XSearchFilters,
 };
+
+// ── Shared File I/O Abstraction ───────────────────────────────────────────
+
+/// Abstraction over file read/write for local and container execution.
+///
+/// Allows `edit_file_core` to work identically for both local FileOps
+/// and container-based file operations.
+#[async_trait::async_trait]
+trait FileIO: Send + Sync {
+    async fn read(&self, path: &str) -> Result<String, String>;
+    async fn write(&self, path: &str, content: &str) -> Result<(), String>;
+}
+
+/// Local filesystem implementation of FileIO.
+struct LocalFileIO<'a> {
+    file_ops: FileOps,
+    ctx: &'a ExecutionContext,
+}
+
+#[async_trait::async_trait]
+impl FileIO for LocalFileIO<'_> {
+    async fn read(&self, path: &str) -> Result<String, String> {
+        let full_path = self.ctx.project_root.join(path);
+        self.file_ops
+            .read_file(&full_path)
+            .await
+            .map_err(|e| e.to_string())
+    }
+    async fn write(&self, path: &str, content: &str) -> Result<(), String> {
+        let full_path = self.ctx.project_root.join(path);
+        self.file_ops
+            .write_file(&full_path, content)
+            .await
+            .map_err(|e| e.to_string())
+    }
+}
+
+/// Container-based implementation of FileIO.
+struct ContainerFileIO<'a> {
+    handle: &'a ContainerHandle,
+}
+
+#[async_trait::async_trait]
+impl FileIO for ContainerFileIO<'_> {
+    async fn read(&self, path: &str) -> Result<String, String> {
+        self.handle.read_file(path).await.map_err(|e| e.to_string())
+    }
+    async fn write(&self, path: &str, content: &str) -> Result<(), String> {
+        self.handle
+            .write_file(path, content)
+            .await
+            .map_err(|e| e.to_string())
+    }
+}
+
+/// Core edit_file logic shared between local and container execution.
+///
+/// Reads the file, performs the replacement (or append), writes back,
+/// and returns a JSON result with preview context.
+async fn edit_file_core(path: &str, old_string: &str, new_string: &str, io: &dyn FileIO) -> Value {
+    // Handle append mode: empty old_string means append to end
+    if old_string.is_empty() {
+        let existing = io.read(path).await.unwrap_or_default();
+        let new_content = if existing.is_empty() {
+            new_string.to_string()
+        } else if existing.ends_with('\n') {
+            format!("{}{}", existing, new_string)
+        } else {
+            format!("{}\n{}", existing, new_string)
+        };
+        return match io.write(path, &new_content).await {
+            Ok(()) => json!({ "success": true, "path": path, "action": "appended" }),
+            Err(e) => json!({ "error": e }),
+        };
+    }
+
+    // Read the existing file
+    let content = match io.read(path).await {
+        Ok(c) => c,
+        Err(e) => return json!({ "error": e }),
+    };
+
+    // Count occurrences
+    let matches: Vec<_> = content.match_indices(old_string).collect();
+
+    if matches.is_empty() {
+        return json!({
+            "error": format!("old_string not found in {}", path),
+            "hint": "Check for exact whitespace and newline matches. Use read_file to see the current content."
+        });
+    }
+
+    if matches.len() > 1 {
+        return json!({
+            "error": format!("old_string matches {} locations in {}. Add surrounding context to make it unique.", matches.len(), path),
+            "match_count": matches.len()
+        });
+    }
+
+    // Exactly one match — perform the replacement
+    let byte_offset = matches[0].0;
+    let new_content = format!(
+        "{}{}{}",
+        &content[..byte_offset],
+        new_string,
+        &content[byte_offset + old_string.len()..]
+    );
+
+    match io.write(path, &new_content).await {
+        Ok(()) => {
+            let line_start = content[..byte_offset].matches('\n').count() + 1;
+            let line_end = line_start + new_string.matches('\n').count();
+
+            let new_lines: Vec<&str> = new_content.lines().collect();
+            let preview_start = line_start.saturating_sub(2);
+            let preview_end = (line_end + 2).min(new_lines.len());
+            let preview: Vec<String> = new_lines[preview_start..preview_end]
+                .iter()
+                .enumerate()
+                .map(|(i, line)| format!("{:>4} | {}", preview_start + i + 1, line))
+                .collect();
+
+            json!({
+                "success": true,
+                "path": path,
+                "line_start": line_start,
+                "line_end": line_end,
+                "preview": preview.join("\n")
+            })
+        }
+        Err(e) => json!({ "error": e }),
+    }
+}
 
 /// Namespace UUID for generating deterministic builtin tool IDs.
 const TOOLS_NS: Uuid = Uuid::from_bytes([
@@ -346,83 +482,11 @@ async fn exec_edit_file(input: &Value, ctx: &ExecutionContext) -> Value {
         None => return json!({ "error": "Missing required parameter: new_string" }),
     };
 
-    let file_ops = FileOps::new(ctx.clone());
-    let full_path = ctx.project_root.join(path);
-
-    // Handle append mode: empty old_string means append to end
-    if old_string.is_empty() {
-        let existing = file_ops.read_file(&full_path).await.unwrap_or_default();
-        let new_content = if existing.is_empty() {
-            new_string.to_string()
-        } else if existing.ends_with('\n') {
-            format!("{}{}", existing, new_string)
-        } else {
-            format!("{}\n{}", existing, new_string)
-        };
-        return match file_ops.write_file(&full_path, &new_content).await {
-            Ok(()) => json!({ "success": true, "path": path, "action": "appended" }),
-            Err(e) => json!({ "error": e.to_string() }),
-        };
-    }
-
-    // Read the existing file
-    let content = match file_ops.read_file(&full_path).await {
-        Ok(c) => c,
-        Err(e) => return json!({ "error": e.to_string() }),
+    let io = LocalFileIO {
+        file_ops: FileOps::new(ctx.clone()),
+        ctx,
     };
-
-    // Count occurrences
-    let matches: Vec<_> = content.match_indices(old_string).collect();
-
-    if matches.is_empty() {
-        return json!({
-            "error": format!("old_string not found in {}", path),
-            "hint": "Check for exact whitespace and newline matches. Use read_file to see the current content."
-        });
-    }
-
-    if matches.len() > 1 {
-        return json!({
-            "error": format!("old_string matches {} locations in {}. Add surrounding context to make it unique.", matches.len(), path),
-            "match_count": matches.len()
-        });
-    }
-
-    // Exactly one match — perform the replacement
-    let byte_offset = matches[0].0;
-    let new_content = format!(
-        "{}{}{}",
-        &content[..byte_offset],
-        new_string,
-        &content[byte_offset + old_string.len()..]
-    );
-
-    match file_ops.write_file(&full_path, &new_content).await {
-        Ok(()) => {
-            // Calculate line numbers for the edited region
-            let line_start = content[..byte_offset].matches('\n').count() + 1;
-            let line_end = line_start + new_string.matches('\n').count();
-
-            // Build a preview: show the replaced lines with a few lines of context
-            let new_lines: Vec<&str> = new_content.lines().collect();
-            let preview_start = line_start.saturating_sub(2); // 1 line before (0-indexed)
-            let preview_end = (line_end + 2).min(new_lines.len()); // 1 line after
-            let preview: Vec<String> = new_lines[preview_start..preview_end]
-                .iter()
-                .enumerate()
-                .map(|(i, line)| format!("{:>4} | {}", preview_start + i + 1, line))
-                .collect();
-
-            json!({
-                "success": true,
-                "path": path,
-                "line_start": line_start,
-                "line_end": line_end,
-                "preview": preview.join("\n")
-            })
-        }
-        Err(e) => json!({ "error": e.to_string() }),
-    }
+    edit_file_core(path, old_string, new_string, &io).await
 }
 
 async fn exec_list_files(input: &Value, ctx: &ExecutionContext) -> Value {
@@ -702,6 +766,9 @@ async fn container_read_file(input: &Value, handle: &ContainerHandle) -> Value {
         Some(p) => p,
         None => return json!({ "error": "Missing required parameter: path" }),
     };
+    if let Err(e) = validate_container_path(path) {
+        return json!({ "error": e.to_string() });
+    }
     match handle.read_file(path).await {
         Ok(content) => json!({ "content": content }),
         Err(e) => json!({ "error": e.to_string() }),
@@ -713,6 +780,9 @@ async fn container_write_file(input: &Value, handle: &ContainerHandle) -> Value 
         Some(p) => p,
         None => return json!({ "error": "Missing required parameter: path" }),
     };
+    if let Err(e) = validate_container_path(path) {
+        return json!({ "error": e.to_string() });
+    }
     let content = match input["content"].as_str() {
         Some(c) => c,
         None => return json!({ "error": "Missing required parameter: content" }),
@@ -728,6 +798,9 @@ async fn container_edit_file(input: &Value, handle: &ContainerHandle) -> Value {
         Some(p) => p,
         None => return json!({ "error": "Missing required parameter: path" }),
     };
+    if let Err(e) = validate_container_path(path) {
+        return json!({ "error": e.to_string() });
+    }
     let old_string = match input["old_string"].as_str() {
         Some(s) => s,
         None => return json!({ "error": "Missing required parameter: old_string" }),
@@ -737,81 +810,17 @@ async fn container_edit_file(input: &Value, handle: &ContainerHandle) -> Value {
         None => return json!({ "error": "Missing required parameter: new_string" }),
     };
 
-    // Read current content from container
-    let content = match handle.read_file(path).await {
-        Ok(c) => c,
-        Err(e) => return json!({ "error": e.to_string() }),
-    };
-
-    // Handle append mode: empty old_string means append to end
-    if old_string.is_empty() {
-        let new_content = if content.is_empty() {
-            new_string.to_string()
-        } else if content.ends_with('\n') {
-            format!("{}{}", content, new_string)
-        } else {
-            format!("{}\n{}", content, new_string)
-        };
-        return match handle.write_file(path, &new_content).await {
-            Ok(()) => json!({ "success": true, "path": path, "action": "appended" }),
-            Err(e) => json!({ "error": e.to_string() }),
-        };
-    }
-
-    // Count occurrences
-    let matches: Vec<_> = content.match_indices(old_string).collect();
-
-    if matches.is_empty() {
-        return json!({
-            "error": format!("old_string not found in {}", path),
-            "hint": "Check for exact whitespace and newline matches. Use read_file to see the current content."
-        });
-    }
-
-    if matches.len() > 1 {
-        return json!({
-            "error": format!("old_string matches {} locations in {}. Add surrounding context to make it unique.", matches.len(), path),
-            "match_count": matches.len()
-        });
-    }
-
-    // Exactly one match — perform the replacement
-    let byte_offset = matches[0].0;
-    let new_content = format!(
-        "{}{}{}",
-        &content[..byte_offset],
-        new_string,
-        &content[byte_offset + old_string.len()..]
-    );
-
-    match handle.write_file(path, &new_content).await {
-        Ok(()) => {
-            let line_start = content[..byte_offset].matches('\n').count() + 1;
-            let line_end = line_start + new_string.matches('\n').count();
-
-            let new_lines: Vec<&str> = new_content.lines().collect();
-            let preview_start = line_start.saturating_sub(2);
-            let preview_end = (line_end + 2).min(new_lines.len());
-            let preview: Vec<String> = new_lines[preview_start..preview_end]
-                .iter()
-                .enumerate()
-                .map(|(i, line)| format!("{:>4} | {}", preview_start + i + 1, line))
-                .collect();
-
-            json!({
-                "success": true,
-                "path": path,
-                "line_start": line_start,
-                "line_end": line_end,
-                "preview": preview.join("\n")
-            })
-        }
-        Err(e) => json!({ "error": e.to_string() }),
-    }
+    let io = ContainerFileIO { handle };
+    edit_file_core(path, old_string, new_string, &io).await
 }
 
 async fn container_list_files(input: &Value, handle: &ContainerHandle) -> Value {
     let path = input["path"].as_str().unwrap_or(".");
+    if path != "." {
+        if let Err(e) = validate_container_path(path) {
+            return json!({ "error": e.to_string() });
+        }
+    }
     match handle.list_files(path).await {
         Ok(files) => json!({ "files": files }),
         Err(e) => json!({ "error": e.to_string() }),
@@ -820,65 +829,35 @@ async fn container_list_files(input: &Value, handle: &ContainerHandle) -> Value 
 
 async fn container_git_status(handle: &ContainerHandle) -> Value {
     match handle.git(&["status", "--porcelain=v1", "-b"]).await {
-        Ok(output) => {
-            let mut branch = String::new();
-            let mut staged = Vec::new();
-            let mut unstaged = Vec::new();
-            let mut untracked = Vec::new();
-
-            for line in output.lines() {
-                if let Some(rest) = line.strip_prefix("## ") {
-                    // Branch header: "## main...origin/main"
-                    branch = rest.split("...").next().unwrap_or("").to_string();
-                    continue;
-                }
-                if line.len() < 3 {
-                    continue;
-                }
-                let index_status = line.as_bytes()[0];
-                let worktree_status = line.as_bytes()[1];
-                let file_path = &line[3..];
-
-                if index_status == b'?' {
-                    untracked.push(file_path.to_string());
-                } else {
-                    if index_status != b' ' && index_status != b'?' {
-                        staged.push(json!({
-                            "path": file_path,
-                            "change_type": porcelain_status_label(index_status)
-                        }));
-                    }
-                    if worktree_status != b' ' && worktree_status != b'?' {
-                        unstaged.push(json!({
-                            "path": file_path,
-                            "change_type": porcelain_status_label(worktree_status)
-                        }));
-                    }
-                }
-            }
-
-            json!({
-                "branch": branch,
-                "staged": staged,
-                "unstaged": unstaged,
-                "untracked": untracked,
-            })
-        }
+        Ok(output) => git_status_to_json(&parse_porcelain_status(&output)),
         Err(e) => json!({ "error": e.to_string() }),
     }
 }
 
-/// Map porcelain v1 status byte to a human label.
-fn porcelain_status_label(byte: u8) -> &'static str {
-    match byte {
-        b'M' => "Modified",
-        b'A' => "Added",
-        b'D' => "Deleted",
-        b'R' => "Renamed",
-        b'C' => "Copied",
-        b'U' => "Unmerged",
-        _ => "Unknown",
-    }
+/// Convert a parsed `GitStatus` to a JSON value for tool output.
+fn git_status_to_json(status: &crate::execution::GitStatus) -> Value {
+    let staged: Vec<Value> = status
+        .staged
+        .iter()
+        .map(|f| json!({ "path": f.path.display().to_string(), "change_type": format!("{:?}", f.change_type) }))
+        .collect();
+    let unstaged: Vec<Value> = status
+        .unstaged
+        .iter()
+        .map(|f| json!({ "path": f.path.display().to_string(), "change_type": format!("{:?}", f.change_type) }))
+        .collect();
+    let untracked: Vec<String> = status
+        .untracked
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect();
+
+    json!({
+        "branch": status.branch.as_deref().unwrap_or(""),
+        "staged": staged,
+        "unstaged": unstaged,
+        "untracked": untracked,
+    })
 }
 
 async fn container_git_diff(input: &Value, handle: &ContainerHandle) -> Value {

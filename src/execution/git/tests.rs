@@ -722,39 +722,30 @@ fn has_unpushed_commits_no_upstream() {
 
 #[test]
 fn parse_branch_line_with_tracking() {
-    let (_tmp, repo_path) = setup_test_repo();
-    let git = GitOps::new(ExecutionContext::new(repo_path));
-
-    let result = git.parse_branch_line("## main...origin/main");
-    assert_eq!(result, Some("main".to_string()));
+    let status = parse_porcelain_status("## main...origin/main\n");
+    assert_eq!(status.branch, Some("main".to_string()));
 }
 
 #[test]
 fn parse_branch_line_no_tracking() {
-    let (_tmp, repo_path) = setup_test_repo();
-    let git = GitOps::new(ExecutionContext::new(repo_path));
-
-    let result = git.parse_branch_line("## feature-branch");
-    assert_eq!(result, Some("feature-branch".to_string()));
+    let status = parse_porcelain_status("## feature-branch\n");
+    assert_eq!(status.branch, Some("feature-branch".to_string()));
 }
 
 #[test]
 fn parse_branch_line_detached_head() {
-    let (_tmp, repo_path) = setup_test_repo();
-    let git = GitOps::new(ExecutionContext::new(repo_path));
-
-    let result = git.parse_branch_line("## HEAD (no branch)");
-    assert_eq!(result, None);
+    let status = parse_porcelain_status("## HEAD (no branch)\n");
+    assert_eq!(status.branch, None);
 }
 
 #[test]
-fn parse_change_type_all_variants() {
-    assert_eq!(GitOps::parse_change_type('A'), ChangeType::Added);
-    assert_eq!(GitOps::parse_change_type('M'), ChangeType::Modified);
-    assert_eq!(GitOps::parse_change_type('D'), ChangeType::Deleted);
-    assert_eq!(GitOps::parse_change_type('R'), ChangeType::Renamed);
-    assert_eq!(GitOps::parse_change_type('C'), ChangeType::Copied);
-    assert_eq!(GitOps::parse_change_type('X'), ChangeType::Unknown);
+fn parse_change_type_all_variants_existing() {
+    assert_eq!(parse_change_type('A'), ChangeType::Added);
+    assert_eq!(parse_change_type('M'), ChangeType::Modified);
+    assert_eq!(parse_change_type('D'), ChangeType::Deleted);
+    assert_eq!(parse_change_type('R'), ChangeType::Renamed);
+    assert_eq!(parse_change_type('C'), ChangeType::Copied);
+    assert_eq!(parse_change_type('X'), ChangeType::Unknown);
 }
 
 #[test]
@@ -1542,4 +1533,94 @@ fn pull_from_no_remote_fails() {
     let git = GitOps::new(ExecutionContext::new(repo_path));
     let result = git.pull_from("origin", "main");
     assert!(result.is_err());
+}
+
+// ── parse_porcelain_status (standalone parser) ───────────────────────────
+
+#[test]
+fn parse_porcelain_status_empty() {
+    let status = parse_porcelain_status("");
+    assert!(status.staged.is_empty());
+    assert!(status.unstaged.is_empty());
+    assert!(status.untracked.is_empty());
+    assert!(!status.is_dirty);
+    assert!(status.branch.is_none());
+}
+
+#[test]
+fn parse_porcelain_status_branch_only() {
+    let output = "## main...origin/main\n";
+    let status = parse_porcelain_status(output);
+    assert_eq!(status.branch, Some("main".to_string()));
+    assert!(!status.is_dirty);
+}
+
+#[test]
+fn parse_porcelain_status_detached_head() {
+    let output = "## HEAD (no branch)\n";
+    let status = parse_porcelain_status(output);
+    assert_eq!(status.branch, None);
+}
+
+#[test]
+fn parse_porcelain_status_staged_modified() {
+    let output = "## main\nM  src/lib.rs\n";
+    let status = parse_porcelain_status(output);
+    assert_eq!(status.staged.len(), 1);
+    assert_eq!(
+        status.staged[0].path,
+        std::path::PathBuf::from("src/lib.rs")
+    );
+    assert_eq!(status.staged[0].change_type, ChangeType::Modified);
+    assert!(status.is_dirty);
+}
+
+#[test]
+fn parse_porcelain_status_unstaged_modified() {
+    let output = "## main\n M src/lib.rs\n";
+    let status = parse_porcelain_status(output);
+    assert!(status.staged.is_empty());
+    assert_eq!(status.unstaged.len(), 1);
+    assert_eq!(status.unstaged[0].change_type, ChangeType::Modified);
+}
+
+#[test]
+fn parse_porcelain_status_untracked() {
+    let output = "## main\n?? new_file.txt\n";
+    let status = parse_porcelain_status(output);
+    assert!(status.staged.is_empty());
+    assert!(status.unstaged.is_empty());
+    assert_eq!(status.untracked.len(), 1);
+    assert_eq!(
+        status.untracked[0],
+        std::path::PathBuf::from("new_file.txt")
+    );
+    assert!(status.is_dirty);
+}
+
+#[test]
+fn parse_porcelain_status_added_file() {
+    let output = "## main\nA  new_file.rs\n";
+    let status = parse_porcelain_status(output);
+    assert_eq!(status.staged.len(), 1);
+    assert_eq!(status.staged[0].change_type, ChangeType::Added);
+}
+
+#[test]
+fn parse_porcelain_status_deleted_file() {
+    let output = "## main\nD  old_file.rs\n";
+    let status = parse_porcelain_status(output);
+    assert_eq!(status.staged.len(), 1);
+    assert_eq!(status.staged[0].change_type, ChangeType::Deleted);
+}
+
+#[test]
+fn parse_porcelain_status_mixed() {
+    let output = "## feature-branch...origin/feature-branch\nM  src/lib.rs\n M src/main.rs\nA  new.rs\n?? untracked.txt\n";
+    let status = parse_porcelain_status(output);
+    assert_eq!(status.branch, Some("feature-branch".to_string()));
+    assert_eq!(status.staged.len(), 2); // M + A
+    assert_eq!(status.unstaged.len(), 1); // M in worktree
+    assert_eq!(status.untracked.len(), 1);
+    assert!(status.is_dirty);
 }

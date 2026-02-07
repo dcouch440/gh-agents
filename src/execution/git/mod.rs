@@ -183,6 +183,63 @@ pub enum ConflictResolution {
     Theirs,
 }
 
+// ── Shared Parsing ──────────────────────────────────────────────────────
+
+/// Parse `git status --porcelain=v1 -b` output into a `GitStatus`.
+///
+/// This is a standalone function so it can be used by both local `GitOps`
+/// and container-based git operations without duplicating parsing logic.
+pub fn parse_porcelain_status(output: &str) -> GitStatus {
+    let mut status = GitStatus::default();
+
+    for line in output.lines() {
+        if let Some(branch_part) = line.strip_prefix("## ") {
+            // Branch line: "## main...origin/main" or "## HEAD (no branch)"
+            if !branch_part.starts_with("HEAD") {
+                status.branch = branch_part.split("...").next().map(|s| s.to_string());
+            }
+        } else if line.len() >= 3 {
+            let index_status = line.chars().next().unwrap_or(' ');
+            let work_status = line.chars().nth(1).unwrap_or(' ');
+            let path = PathBuf::from(line[3..].trim());
+
+            if index_status == '?' && work_status == '?' {
+                status.untracked.push(path);
+            } else {
+                if index_status != ' ' && index_status != '?' {
+                    status.staged.push(FileChange {
+                        path: path.clone(),
+                        change_type: parse_change_type(index_status),
+                    });
+                }
+                if work_status != ' ' && work_status != '?' {
+                    status.unstaged.push(FileChange {
+                        path: path.clone(),
+                        change_type: parse_change_type(work_status),
+                    });
+                }
+            }
+        }
+    }
+
+    status.is_dirty =
+        !status.staged.is_empty() || !status.unstaged.is_empty() || !status.untracked.is_empty();
+
+    status
+}
+
+/// Map a porcelain v1 status character to a `ChangeType`.
+pub fn parse_change_type(c: char) -> ChangeType {
+    match c {
+        'A' => ChangeType::Added,
+        'M' => ChangeType::Modified,
+        'D' => ChangeType::Deleted,
+        'R' => ChangeType::Renamed,
+        'C' => ChangeType::Copied,
+        _ => ChangeType::Unknown,
+    }
+}
+
 pub struct GitOps {
     ctx: ExecutionContext,
 }
@@ -196,47 +253,8 @@ impl GitOps {
     pub fn status(&self) -> Result<GitStatus, GitError> {
         self.ensure_git_repo()?;
 
-        // Get porcelain status for parsing
         let output = self.run_git(&["status", "--porcelain=v1", "-b"])?;
-
-        let mut status = GitStatus::default();
-
-        for line in output.lines() {
-            if line.starts_with("## ") {
-                // Branch line: ## main...origin/main
-                status.branch = self.parse_branch_line(line);
-            } else if line.len() >= 3 {
-                // File status line: XY filename
-                let index_status = line.chars().next().unwrap_or(' ');
-                let work_status = line.chars().nth(1).unwrap_or(' ');
-                let path = PathBuf::from(line[3..].trim());
-
-                // Staged changes (index)
-                if index_status != ' ' && index_status != '?' {
-                    status.staged.push(FileChange {
-                        path: path.clone(),
-                        change_type: Self::parse_change_type(index_status),
-                    });
-                }
-
-                // Unstaged changes (working tree)
-                if work_status != ' ' && work_status != '?' {
-                    status.unstaged.push(FileChange {
-                        path: path.clone(),
-                        change_type: Self::parse_change_type(work_status),
-                    });
-                }
-
-                // Untracked
-                if index_status == '?' && work_status == '?' {
-                    status.untracked.push(path);
-                }
-            }
-        }
-
-        status.is_dirty = !status.staged.is_empty()
-            || !status.unstaged.is_empty()
-            || !status.untracked.is_empty();
+        let status = parse_porcelain_status(&output);
 
         tracing::debug!(
             branch = ?status.branch,
@@ -247,30 +265,6 @@ impl GitOps {
         );
 
         Ok(status)
-    }
-
-    fn parse_branch_line(&self, line: &str) -> Option<String> {
-        // ## main...origin/main or ## HEAD (no branch)
-        let branch_part = line.strip_prefix("## ")?;
-
-        if branch_part.starts_with("HEAD") {
-            return None; // Detached HEAD
-        }
-
-        // Split on ... to get local branch
-        let branch = branch_part.split("...").next()?;
-        Some(branch.to_string())
-    }
-
-    fn parse_change_type(c: char) -> ChangeType {
-        match c {
-            'A' => ChangeType::Added,
-            'M' => ChangeType::Modified,
-            'D' => ChangeType::Deleted,
-            'R' => ChangeType::Renamed,
-            'C' => ChangeType::Copied,
-            _ => ChangeType::Unknown,
-        }
     }
 
     /// Create a new branch from current HEAD
