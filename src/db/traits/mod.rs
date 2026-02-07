@@ -645,6 +645,22 @@ pub trait AgentExecutionRepo: Send + Sync {
         routing_analysis: &serde_json::Value,
         selected_routing_document_id: Option<Uuid>,
     ) -> Result<()>;
+
+    /// List completed executions marked as exemplary for few-shot injection.
+    /// Returns rows ordered by most recent, limited to `limit`.
+    async fn list_exemplary_executions(
+        &self,
+        agent_id: Uuid,
+        workflow_step_id: Option<Uuid>,
+        limit: u32,
+    ) -> Result<Vec<AgentExecutionRow>>;
+
+    /// Toggle the exemplary flag on an execution.
+    async fn set_execution_exemplary(
+        &self,
+        id: Uuid,
+        is_exemplary: bool,
+    ) -> Result<AgentExecutionRow>;
 }
 
 // ============================================================================

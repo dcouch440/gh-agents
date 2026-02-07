@@ -272,6 +272,7 @@ pub mod routes {
     pub const AGENT_EXECUTION_MESSAGE_STREAM: &str =
         "/agent-executions/:id/messages/:stream_id/stream";
     pub const AGENT_EXECUTION_APPROVE: &str = "/agent-executions/:id/approve";
+    pub const AGENT_EXECUTION_EXEMPLARY: &str = "/agent-executions/:id/exemplary";
 
     // Costs
     pub const COSTS: &str = "/costs";

@@ -17,12 +17,14 @@ use crate::llm::{LLMResponse, Message};
 use super::super::error::HubError;
 
 pub mod agent_guidance;
+pub mod few_shot;
 pub mod partial_json_recovery;
 pub mod reasoning_trace;
 pub mod schema_enhancement;
 pub mod schema_validation_retry;
 
 pub use agent_guidance::AgentGuidanceFilter;
+pub use few_shot::FewShotFilter;
 pub use partial_json_recovery::PartialJsonRecoveryFilter;
 pub use reasoning_trace::ReasoningTraceFilter;
 pub use schema_enhancement::SchemaEnhancementFilter;

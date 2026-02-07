@@ -34,6 +34,7 @@ pub struct AgentExecutionResponse {
     pub status: String,
     pub started_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
+    pub is_exemplary: bool,
 }
 
 impl From<crate::db::AgentExecutionRow> for AgentExecutionResponse {
@@ -52,6 +53,7 @@ impl From<crate::db::AgentExecutionRow> for AgentExecutionResponse {
             status: r.status,
             started_at: r.started_at,
             completed_at: r.completed_at,
+            is_exemplary: r.is_exemplary,
         }
     }
 }
@@ -447,6 +449,48 @@ pub async fn approve_execution(
             });
         }
     }
+
+    Ok(Json(AgentExecutionResponse::from(updated)))
+}
+
+#[derive(Deserialize, utoipa::ToSchema)]
+pub struct SetExemplaryRequest {
+    pub is_exemplary: bool,
+}
+
+/// PUT /api/agent-executions/:id/exemplary — mark an execution as exemplary (or remove the mark).
+///
+/// Exemplary executions are used as few-shot examples in future runs of the
+/// same agent and workflow step.
+#[utoipa::path(
+    put,
+    path = "/api/agent-executions/{id}/exemplary",
+    tag = "Agent Executions",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Agent execution ID")),
+    request_body = SetExemplaryRequest,
+    responses(
+        (status = 200, description = "Exemplary flag updated", body = AgentExecutionResponse),
+        (status = 404, description = "Not found")
+    )
+)]
+pub async fn set_exemplary(
+    State(state): State<AppState>,
+    _auth: auth_utils::AuthUser,
+    Path(id): Path<Uuid>,
+    Json(req): Json<SetExemplaryRequest>,
+) -> Result<Json<AgentExecutionResponse>, StatusCode> {
+    let repo = &state.repos().agent_executions;
+    // Verify execution exists
+    repo.get_agent_execution(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let updated = repo
+        .set_execution_exemplary(id, req.is_exemplary)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(AgentExecutionResponse::from(updated)))
 }

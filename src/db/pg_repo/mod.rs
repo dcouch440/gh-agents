@@ -1793,6 +1793,44 @@ impl AgentExecutionRepo for PgRepo {
         .await?;
         Ok(())
     }
+
+    async fn list_exemplary_executions(
+        &self,
+        agent_id: Uuid,
+        workflow_step_id: Option<Uuid>,
+        limit: u32,
+    ) -> Result<Vec<AgentExecutionRow>> {
+        let rows = sqlx::query_as::<_, AgentExecutionRow>(
+            "SELECT * FROM agent_executions \
+             WHERE agent_id = $1 \
+               AND ($2::uuid IS NULL OR workflow_step_id = $2) \
+               AND is_exemplary = true \
+               AND status = 'completed' \
+             ORDER BY completed_at DESC \
+             LIMIT $3",
+        )
+        .bind(agent_id)
+        .bind(workflow_step_id)
+        .bind(limit as i64)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn set_execution_exemplary(
+        &self,
+        id: Uuid,
+        is_exemplary: bool,
+    ) -> Result<AgentExecutionRow> {
+        let row = sqlx::query_as::<_, AgentExecutionRow>(
+            "UPDATE agent_executions SET is_exemplary = $2 WHERE id = $1 RETURNING *",
+        )
+        .bind(id)
+        .bind(is_exemplary)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
 }
 
 #[async_trait]
