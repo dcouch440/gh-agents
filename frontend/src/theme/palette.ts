@@ -59,7 +59,7 @@ const darkPalette: PaletteOptions = {
     dark: '#14b8a6',
   },
   background: {
-    default: '#0c1018',
+    default: '#080c12',
     paper: '#111318',
   },
   text: {
