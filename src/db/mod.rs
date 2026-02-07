@@ -32,6 +32,20 @@ pub struct AgentRow {
     pub version: i32,
 }
 
+/// Row type for agent guidance (distilled feedback / learned instructions).
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct AgentGuidanceRow {
+    pub id: Uuid,
+    pub agent_id: Uuid,
+    pub workflow_step_id: Option<Uuid>,
+    pub suggestions: serde_json::Value,
+    pub source: String,
+    pub version: i32,
+    pub is_active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 /// Row type for persisted tool definitions.
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct ToolRow {

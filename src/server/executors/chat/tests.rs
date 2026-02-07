@@ -217,6 +217,13 @@ impl ServerRepo for TestRepo {
     async fn delete_agent_mode(&self, _mode_id: Uuid) -> anyhow::Result<()> {
         Ok(())
     }
+    async fn get_agent_guidances(
+        &self,
+        _agent_id: Uuid,
+        _step_id: Option<Uuid>,
+    ) -> anyhow::Result<Vec<crate::db::AgentGuidanceRow>> {
+        Ok(vec![])
+    }
 }
 
 #[tokio::test]

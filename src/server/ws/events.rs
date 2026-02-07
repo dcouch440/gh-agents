@@ -369,10 +369,7 @@ impl SessionEvent {
         let event_name = self.event_name().to_string();
         let mut data = extract_variant_data(&self.kind);
         if let serde_json::Value::Object(ref mut map) = data {
-            map.insert(
-                "session_id".into(),
-                serde_json::json!(self.session_id),
-            );
+            map.insert("session_id".into(), serde_json::json!(self.session_id));
         }
         WireMessage {
             topic: Topic::Session,

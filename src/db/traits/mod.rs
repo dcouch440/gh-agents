@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::db::{
-    AgentExecutionRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow,
+    AgentExecutionRow, AgentGuidanceRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow,
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
     DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow, ResultRow,
     RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry,
@@ -274,6 +274,16 @@ pub trait ServerRepo: Send + Sync {
 
     /// Delete an agent mode by ID.
     async fn delete_agent_mode(&self, mode_id: Uuid) -> Result<()>;
+
+    // --- Agent guidance ---
+
+    /// Load active guidances for an agent, optionally filtered by step.
+    /// Returns global (step_id=NULL) + step-specific guidances, stacked.
+    async fn get_agent_guidances(
+        &self,
+        agent_id: Uuid,
+        step_id: Option<Uuid>,
+    ) -> Result<Vec<AgentGuidanceRow>>;
 }
 
 // ============================================================================

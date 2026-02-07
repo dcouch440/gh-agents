@@ -456,9 +456,13 @@ pub async fn execute_room_turn(
 
     // Broadcast turn_complete or session_complete
     let kind = if session_completed {
-        RoomEventKind::SessionComplete { turn_number: new_turn }
+        RoomEventKind::SessionComplete {
+            turn_number: new_turn,
+        }
     } else {
-        RoomEventKind::TurnComplete { turn_number: new_turn }
+        RoomEventKind::TurnComplete {
+            turn_number: new_turn,
+        }
     };
     state.broadcast_room(RoomEvent {
         room_session_id: session.id,

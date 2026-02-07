@@ -9,9 +9,15 @@ use super::*;
 
 #[test]
 fn topic_serialize_snake_case() {
-    assert_eq!(serde_json::to_string(&Topic::Workflow).unwrap(), r#""workflow""#);
+    assert_eq!(
+        serde_json::to_string(&Topic::Workflow).unwrap(),
+        r#""workflow""#
+    );
     assert_eq!(serde_json::to_string(&Topic::Room).unwrap(), r#""room""#);
-    assert_eq!(serde_json::to_string(&Topic::Session).unwrap(), r#""session""#);
+    assert_eq!(
+        serde_json::to_string(&Topic::Session).unwrap(),
+        r#""session""#
+    );
 }
 
 #[test]

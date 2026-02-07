@@ -18,9 +18,7 @@ use crate::llm::LLMProvider;
 use crate::types::{AppConfig, UserId};
 
 use super::hub::{ModeResolver, PromptRegistry};
-use super::ws::events::{
-    RoomEvent, ServerEvent, SessionEvent, WorkflowEvent,
-};
+use super::ws::events::{RoomEvent, ServerEvent, SessionEvent, WorkflowEvent};
 
 mod builder;
 mod events;

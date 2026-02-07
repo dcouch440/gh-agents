@@ -20,6 +20,10 @@ use super::recorder::ExecutionRecorder;
 use super::strategy::ExecutionStrategy;
 use super::streaming::StreamSink;
 
+pub mod filters;
+
+use filters::{ExecutionFilter, FilterContext, ResponseAction};
+
 /// Result of a completed execution.
 #[derive(Debug, Clone)]
 pub struct ExecutionResult {
@@ -40,11 +44,29 @@ pub struct ExecutionResult {
 /// The unified execution engine.
 pub struct ExecutionEngine {
     provider: Arc<dyn LLMProvider>,
+    filters: Vec<Arc<dyn ExecutionFilter>>,
+    filter_ctx: Option<FilterContext>,
 }
 
 impl ExecutionEngine {
     pub fn new(provider: Arc<dyn LLMProvider>) -> Self {
-        Self { provider }
+        Self {
+            provider,
+            filters: Vec::new(),
+            filter_ctx: None,
+        }
+    }
+
+    /// Attach execution filters to the engine.
+    pub fn with_filters(mut self, filters: Vec<Arc<dyn ExecutionFilter>>) -> Self {
+        self.filters = filters;
+        self
+    }
+
+    /// Set the filter context for this execution.
+    pub fn with_filter_context(mut self, ctx: FilterContext) -> Self {
+        self.filter_ctx = Some(ctx);
+        self
     }
 
     /// Create a new `ExecutionEngine` sharing the same LLM provider.
@@ -52,6 +74,8 @@ impl ExecutionEngine {
     pub fn clone_with_provider(&self) -> Self {
         Self {
             provider: Arc::clone(&self.provider),
+            filters: self.filters.clone(),
+            filter_ctx: self.filter_ctx.clone(),
         }
     }
 
@@ -82,6 +106,22 @@ impl ExecutionEngine {
         let mut total_input: u64 = 0;
         let mut total_output: u64 = 0;
 
+        // ── on_start filters ──
+        let system_prompt = if let Some(ref filter_ctx) = self.filter_ctx {
+            let mut sys = strategy.system_prompt().to_string();
+            let mut msgs = messages;
+            for f in &self.filters {
+                (sys, msgs) = f.on_start(filter_ctx, sys, msgs).await?;
+            }
+            messages = msgs;
+            sys
+        } else {
+            strategy.system_prompt().to_string()
+        };
+
+        // Track filter retries (max 1 retry per filter per execution)
+        let mut filter_retried = vec![false; self.filters.len()];
+
         for round in 0..max_rounds {
             // Check cancellation
             if cancel.is_some_and(|t| t.is_cancelled()) {
@@ -99,7 +139,7 @@ impl ExecutionEngine {
 
             // Build LLM request
             let mut request = LLMRequest::new(strategy.model_id(), messages.clone())
-                .with_system(strategy.system_prompt())
+                .with_system(&system_prompt)
                 .with_max_tokens(crate::constants::DEFAULT_MAX_TOKENS_WORKER);
             request.temperature = strategy.temperature();
             let tools = strategy.tools();
@@ -230,6 +270,42 @@ impl ExecutionEngine {
                     messages.push(Message::tool_results(result_blocks));
                 }
                 StopReason::EndTurn | StopReason::MaxTokens | StopReason::StopSequence => {
+                    // ── on_response filters ──
+                    if let Some(ref filter_ctx) = self.filter_ctx {
+                        let mut should_retry = false;
+                        for (i, f) in self.filters.iter().enumerate() {
+                            if filter_retried[i] {
+                                continue;
+                            }
+                            let mut ctx = filter_ctx.clone();
+                            ctx.round = round;
+                            match f.on_response(&ctx, &response).await? {
+                                ResponseAction::Retry { feedback } => {
+                                    debug!(filter = f.name(), round, "filter requested retry");
+                                    messages.push(Message::assistant(&response.content));
+                                    messages.push(Message::user(&feedback));
+                                    filter_retried[i] = true;
+                                    should_retry = true;
+                                    break;
+                                }
+                                ResponseAction::Accept => {}
+                            }
+                        }
+                        if should_retry {
+                            continue;
+                        }
+                    }
+
+                    // ── on_output filters ──
+                    let mut final_content = response.content.clone();
+                    if let Some(ref filter_ctx) = self.filter_ctx {
+                        let mut ctx = filter_ctx.clone();
+                        ctx.round = round;
+                        for f in &self.filters {
+                            final_content = f.on_output(&ctx, final_content).await?;
+                        }
+                    }
+
                     // Execution complete
                     let usage = TokenUsage {
                         input_tokens: total_input as u32,
@@ -237,7 +313,7 @@ impl ExecutionEngine {
                     };
 
                     // Let strategy do post-processing
-                    strategy.on_complete(&response.content, &usage).await?;
+                    strategy.on_complete(&final_content, &usage).await?;
 
                     sink.done().await;
 
@@ -246,7 +322,7 @@ impl ExecutionEngine {
                     let _ = recorder;
 
                     return Ok(ExecutionResult {
-                        content: response.content,
+                        content: final_content,
                         content_blocks: response.content_blocks,
                         input_tokens: total_input,
                         output_tokens: total_output,
