@@ -59,6 +59,8 @@ pub struct ContainerExecutionConfig {
     pub memory_limit: Option<String>,
     /// Override CPU limit (default: 2.0).
     pub cpu_limit: Option<String>,
+    /// When true, each container is paired with a WireGuard VPN sidecar.
+    pub vpn_enabled: bool,
 }
 
 /// Context passed into the DAG executor for one workflow run.
@@ -74,6 +76,8 @@ pub struct WorkflowExecutionContext {
     pub execution_context: Option<crate::execution::ExecutionContext>,
     /// Container config for running steps in isolated Docker containers. None = local execution.
     pub container_config: Option<ContainerExecutionConfig>,
+    /// wg-easy API client for VPN peer management. None if VPN is not configured.
+    pub wg_client: Option<std::sync::Arc<crate::execution::WgEasyClient>>,
 }
 
 /// Result of executing one workflow.

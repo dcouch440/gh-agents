@@ -57,6 +57,20 @@ import type {
   CreateToolRouterRequest,
   UpdateToolRouterRequest,
   SetRouterToolsRequest,
+  Room,
+  RoomMember,
+  RoomSession,
+  RoomTranscriptEntry,
+  RoomOutput,
+  CreateRoomRequest,
+  UpdateRoomRequest,
+  AddRoomMemberRequest,
+  SetRoomMembersRequest,
+  RoomMessageRequest,
+  Collection,
+  CollectionRun,
+  CreateCollectionRequest,
+  UpdateCollectionRequest,
 } from '@/types'
 
 // ============================================================================
@@ -80,6 +94,7 @@ type PromptTemplatesResponse = ListResponse<PromptTemplate>
 type CostsResponse = CostResponse
 type ResultsResponse = ListResponse<Result>
 type WorkflowsResponse = ListResponse<Workflow>
+type CollectionsResponse = ListResponse<Collection>
 
 // ============================================================================
 // Typed Endpoints
@@ -317,6 +332,9 @@ const workflows = {
   createEdge: (workflowId: string, body: EdgeRequest, config?: RequestConfig) =>
     baseApi.post<WorkflowStepEdge>(API.WORKFLOW_EDGES(workflowId), body, config),
 
+  deleteEdge: (workflowId: string, edgeId: string, config?: RequestConfig) =>
+    baseApi.del<void>(API.WORKFLOW_EDGE(workflowId, edgeId), config),
+
   listStepDocuments: (workflowId: string, stepId: string, config?: RequestConfig) =>
     baseApi.get<Document[]>(API.STEP_DOCUMENTS(workflowId, stepId), config),
 
@@ -412,6 +430,75 @@ const routerModes = {
     baseApi.put<void>(API.MODE_TOOLS(id), body, config),
 }
 
+const rooms = {
+  get: (id: string, config?: RequestConfig) =>
+    baseApi.get<Room>(API.ROOM(id), config),
+
+  create: (body: CreateRoomRequest, config?: RequestConfig) =>
+    baseApi.post<Room>(API.ROOMS, body, config),
+
+  update: (id: string, body: UpdateRoomRequest, config?: RequestConfig) =>
+    baseApi.put<Room>(API.ROOM(id), body, config),
+
+  delete: (id: string, config?: RequestConfig) =>
+    baseApi.del<void>(API.ROOM(id), config),
+
+  listMembers: (id: string, config?: RequestConfig) =>
+    baseApi.get<RoomMember[]>(API.ROOM_MEMBERS(id), config),
+
+  addMember: (id: string, body: AddRoomMemberRequest, config?: RequestConfig) =>
+    baseApi.post<void>(API.ROOM_MEMBERS(id), body, config),
+
+  setMembers: (id: string, body: SetRoomMembersRequest, config?: RequestConfig) =>
+    baseApi.put<void>(API.ROOM_MEMBERS(id), body, config),
+
+  removeMember: (id: string, agentId: string, config?: RequestConfig) =>
+    baseApi.del<void>(API.ROOM_MEMBER(id, agentId), config),
+
+  createSession: (id: string, config?: RequestConfig) =>
+    baseApi.post<RoomSession>(API.ROOM_SESSIONS(id), undefined, config),
+}
+
+const roomSessions = {
+  get: (id: string, config?: RequestConfig) =>
+    baseApi.get<RoomSession>(API.ROOM_SESSION(id), config),
+
+  sendMessage: (id: string, body: RoomMessageRequest, config?: RequestConfig) =>
+    baseApi.post<void>(API.ROOM_SESSION_MESSAGES(id), body, config),
+
+  getTranscript: (id: string, config?: RequestConfig) =>
+    baseApi.get<RoomTranscriptEntry[]>(API.ROOM_SESSION_TRANSCRIPT(id), config),
+
+  close: (id: string, config?: RequestConfig) =>
+    baseApi.post<RoomSession>(API.ROOM_SESSION_CLOSE(id), undefined, config),
+
+  listOutputs: (id: string, config?: RequestConfig) =>
+    baseApi.get<RoomOutput[]>(API.ROOM_SESSION_OUTPUTS(id), config),
+}
+
+const collections = {
+  list: (config?: RequestConfig) =>
+    baseApi.get<CollectionsResponse>(API.COLLECTIONS, config),
+
+  get: (id: string, config?: RequestConfig) =>
+    baseApi.get<Collection>(API.COLLECTION(id), config),
+
+  create: (body: CreateCollectionRequest, config?: RequestConfig) =>
+    baseApi.post<Collection>(API.COLLECTIONS, body, config),
+
+  update: (id: string, body: UpdateCollectionRequest, config?: RequestConfig) =>
+    baseApi.put<Collection>(API.COLLECTION(id), body, config),
+
+  delete: (id: string, config?: RequestConfig) =>
+    baseApi.del<void>(API.COLLECTION(id), config),
+
+  run: (id: string, config?: RequestConfig) =>
+    baseApi.post<CollectionRun>(API.COLLECTION_RUN(id), undefined, config),
+
+  getRunStatus: (runId: string, config?: RequestConfig) =>
+    baseApi.get<CollectionRun>(API.COLLECTION_RUN_STATUS(runId), config),
+}
+
 // ============================================================================
 // Merge base API methods with typed endpoints into single `api` export
 // ============================================================================
@@ -444,4 +531,7 @@ export const api = {
   modes,
   toolRouters,
   routerModes,
+  rooms,
+  roomSessions,
+  collections,
 }

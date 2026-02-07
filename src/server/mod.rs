@@ -57,14 +57,35 @@ pub async fn start_server(db: PgPool, config: AppConfig, addr: SocketAddr) -> Re
     // Spawn the chat consumer to process chat messages via LLM
     let _chat_consumer_handle = executors::chat::spawn_chat_consumer(state.clone(), chat_rx);
 
-    let app = create_router(state);
+    // Spawn periodic container reaper
+    let _reaper_handle = crate::execution::ContainerManager::spawn_reaper(
+        std::time::Duration::from_secs(crate::constants::CONTAINER_REAPER_MAX_AGE_SECS),
+        std::time::Duration::from_secs(crate::constants::CONTAINER_REAPER_INTERVAL_SECS),
+        state.shutdown_token().clone(),
+    );
+
+    let shutdown_state = state.clone();
+    let app = create_router(state.clone());
 
     info!("Server listening on http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(shutdown_signal(shutdown_state))
         .await?;
+
+    // Drain: wait for active executions to complete (with timeout)
+    let drain_timeout =
+        std::time::Duration::from_secs(crate::constants::SHUTDOWN_DRAIN_TIMEOUT_SECS);
+    drain_active_executions(&state, drain_timeout).await;
+
+    // Final reap: force-cleanup any remaining orphaned containers
+    let reaped =
+        crate::execution::ContainerManager::reap_orphaned_containers(std::time::Duration::ZERO)
+            .await;
+    if reaped > 0 {
+        warn!("Force-reaped {} container(s) during shutdown", reaped);
+    }
 
     info!("Server shutdown complete");
     Ok(())
@@ -556,10 +577,10 @@ fn is_html_response(response: &Response) -> bool {
         .unwrap_or(false)
 }
 
-/// Wait for shutdown signal
+/// Wait for shutdown signal, then cancel all running executions.
 ///
 /// Handles both Ctrl+C (SIGINT) and SIGTERM for graceful shutdown.
-async fn shutdown_signal() {
+async fn shutdown_signal(state: AppState) {
     let ctrl_c = async {
         tokio::signal::ctrl_c()
             .await
@@ -580,6 +601,39 @@ async fn shutdown_signal() {
     tokio::select! {
         _ = ctrl_c => info!("Received Ctrl+C, starting graceful shutdown..."),
         _ = terminate => info!("Received SIGTERM, starting graceful shutdown..."),
+    }
+
+    // Signal all running executions to cancel
+    let cancelled = state.cancel_all_executions();
+    if cancelled > 0 {
+        info!(
+            "Cancelled {} running execution(s), waiting for drain...",
+            cancelled
+        );
+    }
+
+    // Cancel the master shutdown token (stops background tasks like the reaper)
+    state.shutdown_token().cancel();
+}
+
+/// Wait for all active executions to drain, polling every second until
+/// the cancellation_tokens map is empty or the timeout expires.
+async fn drain_active_executions(state: &AppState, timeout: std::time::Duration) {
+    let start = std::time::Instant::now();
+    loop {
+        let remaining = state.active_execution_count();
+        if remaining == 0 {
+            info!("All executions drained cleanly");
+            break;
+        }
+        if start.elapsed() >= timeout {
+            warn!(
+                "Drain timeout ({:?}) expired with {} execution(s) still active",
+                timeout, remaining
+            );
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 }
 

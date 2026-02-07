@@ -420,6 +420,7 @@ where
                         image: None,
                         memory_limit: None,
                         cpu_limit: None,
+                        vpn_enabled: wf_row.vpn_enabled,
                     })
                 } else {
                     tracing::warn!(
@@ -433,7 +434,25 @@ where
             }
         };
 
-        // 6. Create execution context
+        // 6. Initialize wg-easy client if VPN is enabled
+        let wg_client = if container_config.as_ref().is_some_and(|c| c.vpn_enabled) {
+            match crate::execution::WgEasyConfig::from_env() {
+                Some(cfg) => Some(std::sync::Arc::new(crate::execution::WgEasyClient::new(
+                    cfg,
+                ))),
+                None => {
+                    tracing::warn!(
+                        workflow_id = %workflow_id,
+                        "vpn_enabled is true but WGEASY_API_URL is not set"
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        // 7. Create execution context
         let ctx = WorkflowExecutionContext {
             stage_execution_id: workflow_exec.id,
             run_id: collection_run_id,
@@ -442,6 +461,7 @@ where
             prior_outputs: prior_workflow_outputs.clone(),
             execution_context: None,
             container_config,
+            wg_client,
         };
 
         // 6. Execute workflow DAG via unified hub engine

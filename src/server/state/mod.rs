@@ -97,6 +97,8 @@ pub(crate) struct AppStateInner {
     pub(crate) response_streams: DashMap<Uuid, BufferedStream>,
     /// Cancellation tokens for running pipelines and agent executions
     pub(crate) cancellation_tokens: DashMap<Uuid, CancellationToken>,
+    /// Master shutdown token — cancelled on SIGTERM/SIGINT to signal all background tasks.
+    pub(crate) shutdown_token: CancellationToken,
 }
 
 /// Application state shared across all HTTP handlers.
@@ -167,6 +169,7 @@ impl AppState {
             chat_tx,
             response_streams: DashMap::new(),
             cancellation_tokens: DashMap::new(),
+            shutdown_token: CancellationToken::new(),
         }));
 
         // Look up default agent from DB (for workflow system)
@@ -217,6 +220,7 @@ impl AppState {
                 chat_tx,
                 response_streams: DashMap::new(),
                 cancellation_tokens: DashMap::new(),
+                shutdown_token: CancellationToken::new(),
             })),
             orchestrator_rx,
         )
@@ -551,6 +555,27 @@ impl AppState {
     pub fn remove_cancellation(&self, id: Uuid) {
         self.0.cancellation_tokens.remove(&id);
     }
+
+    /// Access the master shutdown cancellation token.
+    pub fn shutdown_token(&self) -> &CancellationToken {
+        &self.0.shutdown_token
+    }
+
+    /// Cancel all running executions and return the count cancelled.
+    /// Called during graceful shutdown to drain active workflows.
+    pub fn cancel_all_executions(&self) -> usize {
+        let mut cancelled = 0;
+        for entry in self.0.cancellation_tokens.iter() {
+            entry.cancel();
+            cancelled += 1;
+        }
+        cancelled
+    }
+
+    /// Return the number of active execution tokens.
+    pub fn active_execution_count(&self) -> usize {
+        self.0.cancellation_tokens.len()
+    }
 }
 
 // Helper for cloning inner state (needed for default_agent_id update)
@@ -570,6 +595,7 @@ impl AppStateInner {
             chat_tx: self.chat_tx.clone(),
             response_streams: DashMap::new(), // Fresh map (streams don't survive clone)
             cancellation_tokens: DashMap::new(), // Fresh map
+            shutdown_token: CancellationToken::new(),
         }
     }
 }

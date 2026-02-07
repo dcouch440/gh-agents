@@ -40,6 +40,24 @@ pub async fn run_serve(args: Args) -> Result<()> {
         info!("Reaped {} orphaned container(s)", reaped);
     }
 
+    // Reap orphaned VPN sidecar containers
+    let vpn_reaped = crate::execution::VpnSidecarManager::reap_orphaned_sidecars(
+        std::time::Duration::from_secs(crate::constants::VPN_REAPER_MAX_AGE_SECS),
+    )
+    .await;
+    if vpn_reaped > 0 {
+        info!("Reaped {} orphaned VPN sidecar(s)", vpn_reaped);
+    }
+
+    // Reap orphaned wg-easy peers (only if wg-easy is configured)
+    if let Some(wg_config) = crate::execution::WgEasyConfig::from_env() {
+        let wg_client = crate::execution::WgEasyClient::new(wg_config);
+        let peers_reaped = wg_client.reap_orphaned_peers().await;
+        if peers_reaped > 0 {
+            info!("Reaped {} orphaned VPN peer(s)", peers_reaped);
+        }
+    }
+
     // Server address from CLI
     let addr: SocketAddr = format!("0.0.0.0:{}", args.port()).parse()?;
 
