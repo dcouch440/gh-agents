@@ -10,7 +10,7 @@ import { ThemeToggle } from './ThemeToggle';
 import { useStore, authStore, selectUser, selectAuthStatus, layoutStore, reviewQueueStore } from '@/stores';
 import { useNavigation } from '@/hooks/useNavigation';
 import { LoadingSpinner } from '@/components/primitives';
-import { ROUTES } from '@/constants';
+import { ROUTES, LAYOUT_COLORS } from '@/constants';
 import type { NavBarItem } from './types';
 import type { RailItem } from './IconRail';
 
@@ -89,6 +89,7 @@ function AppLayout() {
             px: 2.5,
             py: 2,
             minWidth: 0,
+            backgroundColor: LAYOUT_COLORS.CAVITY_BG,
           }}
         >
           <Outlet />

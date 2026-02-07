@@ -3,7 +3,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import CloseRounded from '@mui/icons-material/CloseRounded';
-import { LAYOUT, LAYOUT_COLORS, ANIMATION } from '@/constants';
+import { LAYOUT, ANIMATION } from '@/constants';
 
 type DetailPanelProps = {
   side: 'left' | 'right';
@@ -85,10 +85,7 @@ function DetailPanel({
         borderRight: isLeft ? 1 : 0,
         borderLeft: isLeft ? 0 : 1,
         borderColor: isOpen ? 'divider' : 'transparent',
-        backgroundColor: LAYOUT_COLORS.CAVITY_BG,
-        boxShadow: isOpen
-          ? 'inset 0 1px 3px rgba(0, 0, 0, 0.3)'
-          : 'none',
+        backgroundColor: 'background.default',
         display: 'flex',
         flexDirection: 'column',
         position: 'relative',
