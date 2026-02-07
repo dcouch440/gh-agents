@@ -167,17 +167,23 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
     },
     MuiTooltip: {
       defaultProps: {
-        arrow: true,
+        arrow: false,
+        enterDelay: 200,
+        enterNextDelay: 100,
       },
       styleOverrides: {
         tooltip: {
           fontSize: '0.6875rem',
-          borderRadius: 6,
-          padding: '4px 8px',
+          fontWeight: 500,
+          letterSpacing: '0.01em',
+          borderRadius: 8,
+          padding: '6px 12px',
           backgroundColor: isDark ? '#1a1d25' : '#0f172a',
-        },
-        arrow: {
-          color: isDark ? '#1a1d25' : '#0f172a',
+          border: `1px solid ${isDark ? 'rgba(240, 246, 252, 0.08)' : 'rgba(15, 23, 42, 0.1)'}`,
+          backdropFilter: 'blur(8px)',
+          boxShadow: isDark
+            ? '0 4px 12px rgba(0, 0, 0, 0.4)'
+            : '0 4px 12px rgba(0, 0, 0, 0.08)',
         },
       },
     },
