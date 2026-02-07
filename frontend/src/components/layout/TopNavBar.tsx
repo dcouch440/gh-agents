@@ -3,7 +3,7 @@ import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import { Tooltip } from '@/components/primitives/Tooltip';
 import Badge from '@mui/material/Badge';
-import { LAYOUT, ANIMATION } from '@/constants';
+import { LAYOUT, LAYOUT_COLORS, ANIMATION } from '@/constants';
 import type { NavBarItem } from './types';
 
 type TopNavBarProps = {
@@ -72,7 +72,10 @@ function TopNavBar({ navItems, utilityItems, trailing }: TopNavBarProps) {
         px: 1,
         borderBottom: 1,
         borderColor: 'divider',
-        backgroundColor: '#131720',
+        backgroundColor: LAYOUT_COLORS.CHROME_BG,
+        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.2)',
+        zIndex: 10,
+        position: 'relative',
         gap: 0.25,
       }}
     >

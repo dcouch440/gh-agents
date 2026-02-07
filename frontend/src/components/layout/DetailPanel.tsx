@@ -2,8 +2,8 @@ import { type ReactNode, useCallback, useEffect, useRef } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
-import CloseOutlined from '@mui/icons-material/CloseOutlined';
-import { LAYOUT, ANIMATION } from '@/constants';
+import CloseRounded from '@mui/icons-material/CloseRounded';
+import { LAYOUT, LAYOUT_COLORS, ANIMATION } from '@/constants';
 
 type DetailPanelProps = {
   side: 'left' | 'right';
@@ -85,7 +85,10 @@ function DetailPanel({
         borderRight: isLeft ? 1 : 0,
         borderLeft: isLeft ? 0 : 1,
         borderColor: isOpen ? 'divider' : 'transparent',
-        backgroundColor: '#131720',
+        backgroundColor: LAYOUT_COLORS.CAVITY_BG,
+        boxShadow: isOpen
+          ? 'inset 0 1px 3px rgba(0, 0, 0, 0.3)'
+          : 'none',
         display: 'flex',
         flexDirection: 'column',
         position: 'relative',
@@ -136,19 +139,24 @@ function DetailPanel({
           onClick={onClose}
           size="small"
           sx={{
-            width: 28,
-            height: 28,
-            borderRadius: '6px',
-            color: 'text.secondary',
+            width: 24,
+            height: 24,
+            borderRadius: '50%',
+            color: 'text.disabled',
             backgroundColor: 'transparent',
-            transition: `color ${ANIMATION.FAST}ms ease`,
+            transition: `all ${ANIMATION.FAST}ms ease`,
             '&:hover': {
-              color: 'text.primary',
-              backgroundColor: 'transparent',
+              color: 'text.secondary',
+              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              transform: 'scale(1.05)',
+            },
+            '&:active': {
+              transform: 'scale(0.95)',
+              backgroundColor: 'rgba(255, 255, 255, 0.12)',
             },
           }}
         >
-          <CloseOutlined sx={{ fontSize: 16 }} />
+          <CloseRounded sx={{ fontSize: 14 }} />
         </IconButton>
       </Box>
 

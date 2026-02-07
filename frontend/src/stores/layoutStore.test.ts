@@ -170,7 +170,7 @@ describe('layoutStore', () => {
     it('clamps width to minimum', () => {
       layoutStore.setRightPanelWidth(50)
 
-      expect(getState().rightPanelWidth).toBe(160)
+      expect(getState().rightPanelWidth).toBe(240)
     })
 
     it('clamps width to maximum', () => {
