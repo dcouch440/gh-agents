@@ -1,24 +1,14 @@
-import { useCallback, useState } from 'react';
-import { LS_SIDEBAR_COLLAPSED } from '@/constants';
-
-const getInitialCollapsed = (): boolean => {
-  const stored = localStorage.getItem(LS_SIDEBAR_COLLAPSED);
-  return stored === 'true';
-};
+import { useStore } from '@/stores/lib';
+import { uiStore } from '@/stores/uiStore';
 
 const useSidebar = () => {
-  const [collapsed, setCollapsedState] = useState(getInitialCollapsed);
+  const collapsed = useStore(uiStore.store, uiStore.selectSidebarCollapsed);
 
-  const setCollapsed = useCallback((value: boolean) => {
-    setCollapsedState(value);
-    localStorage.setItem(LS_SIDEBAR_COLLAPSED, String(value));
-  }, []);
-
-  const toggle = useCallback(() => {
-    setCollapsed(!collapsed);
-  }, [collapsed, setCollapsed]);
-
-  return { collapsed, toggle, setCollapsed };
+  return {
+    collapsed,
+    toggle: uiStore.toggleSidebar,
+    setCollapsed: uiStore.setSidebarCollapsed,
+  };
 };
 
 export { useSidebar };
