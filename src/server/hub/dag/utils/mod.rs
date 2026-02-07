@@ -52,7 +52,7 @@ pub struct ContainerExecutionConfig {
     /// Branch to checkout after clone. None = default branch.
     pub branch: Option<String>,
     /// GitHub token for authenticated clone/push.
-    pub github_token: String,
+    pub github_token: crate::execution::RedactedString,
     /// Override Docker image (default: nexor-agent:latest).
     pub image: Option<String>,
     /// Override memory limit (default: 2g).

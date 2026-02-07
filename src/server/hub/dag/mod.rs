@@ -583,31 +583,55 @@ pub async fn execute_workflow_via_engine(
     })
 }
 
-/// Build a `ContainerConfig` from `ContainerExecutionConfig` and create a container.
-async fn create_step_container(
-    config: &utils::ContainerExecutionConfig,
-) -> Result<ContainerHandle, HubError> {
+/// Create a container if config is present, with consistent logging.
+///
+/// Returns `Ok(None)` if config is `None` (local execution).
+/// Returns `Ok(Some(handle))` on success, `Err` on failure.
+async fn create_optional_container(
+    config: Option<&utils::ContainerExecutionConfig>,
+    label: &str,
+) -> Result<Option<ContainerHandle>, HubError> {
+    let Some(cc) = config else {
+        return Ok(None);
+    };
     let container_config = ContainerConfig {
-        clone_url: config.clone_url.clone(),
-        branch: config.branch.clone(),
-        github_token: config.github_token.clone(),
-        image: config
+        clone_url: cc.clone_url.clone(),
+        branch: cc.branch.clone(),
+        github_token: cc.github_token.clone(),
+        image: cc
             .image
             .clone()
             .unwrap_or_else(|| crate::constants::CONTAINER_DEFAULT_IMAGE.to_string()),
-        memory_limit: config
+        memory_limit: cc
             .memory_limit
             .clone()
             .unwrap_or_else(|| crate::constants::CONTAINER_DEFAULT_MEMORY.to_string()),
-        cpu_limit: config
+        cpu_limit: cc
             .cpu_limit
             .clone()
             .unwrap_or_else(|| crate::constants::CONTAINER_DEFAULT_CPUS.to_string()),
         ..ContainerConfig::default()
     };
-    ContainerManager::create_container(&container_config)
-        .await
-        .map_err(|e| HubError::Internal(anyhow!("Container creation failed: {}", e)))
+    match ContainerManager::create_container(&container_config).await {
+        Ok(handle) => {
+            info!(container = %handle.container_name(), label, "Created container");
+            Ok(Some(handle))
+        }
+        Err(e) => {
+            error!(label, error = %e, "Failed to create container");
+            Err(HubError::Internal(anyhow!(
+                "Container creation failed: {}",
+                e
+            )))
+        }
+    }
+}
+
+/// Destroy a container if present, ignoring errors. For cleanup after step execution.
+async fn destroy_optional_container(handle: &Option<ContainerHandle>) {
+    if let Some(ref h) = handle {
+        ContainerManager::destroy_container_quiet(h).await;
+    }
 }
 
 /// Execute a single (non-for-each) step through the engine.
@@ -691,24 +715,7 @@ async fn execute_single_step(
     }
 
     // Create container if configured
-    let container_handle = if let Some(ref cc) = ctx.container_config {
-        match create_step_container(cc).await {
-            Ok(handle) => {
-                info!(
-                    step_id = %step.id,
-                    container = %handle.container_name(),
-                    "Created container for step"
-                );
-                Some(handle)
-            }
-            Err(e) => {
-                error!(step_id = %step.id, error = %e, "Failed to create container for step");
-                return Err(e);
-            }
-        }
-    } else {
-        None
-    };
+    let container_handle = create_optional_container(ctx.container_config.as_ref(), "step").await?;
 
     let result = run_step_via_engine(
         engine,
@@ -723,11 +730,7 @@ async fn execute_single_step(
     )
     .await;
 
-    // Destroy container regardless of success/failure
-    if let Some(ref handle) = container_handle {
-        info!(container = %handle.container_name(), "Destroying step container");
-        ContainerManager::destroy_container_quiet(handle).await;
-    }
+    destroy_optional_container(&container_handle).await;
 
     let (output, in_tok, out_tok, cost) = result?;
 
@@ -1351,17 +1354,8 @@ async fn execute_for_each_step(
         .await;
 
         // Create container for this iteration if configured
-        let iter_container = if let Some(ref cc) = ctx.container_config {
-            match create_step_container(cc).await {
-                Ok(handle) => Some(handle),
-                Err(e) => {
-                    error!(step_id = %step.id, idx, error = %e, "Failed to create container for iteration");
-                    return Err(e);
-                }
-            }
-        } else {
-            None
-        };
+        let iter_container =
+            create_optional_container(ctx.container_config.as_ref(), "for-each-iter").await?;
 
         let result = run_step_via_engine(
             engine,
@@ -1376,10 +1370,7 @@ async fn execute_for_each_step(
         )
         .await;
 
-        // Destroy container regardless of result
-        if let Some(ref handle) = iter_container {
-            ContainerManager::destroy_container_quiet(handle).await;
-        }
+        destroy_optional_container(&iter_container).await;
 
         match result {
             Ok((output, in_tok, out_tok, cost)) => {
@@ -1936,17 +1927,8 @@ async fn execute_pipeline_item(
         };
 
         // Create container for this pipeline stage if configured
-        let stage_container = if let Some(ref cc) = ctx.container_config {
-            match create_step_container(cc).await {
-                Ok(handle) => Some(handle),
-                Err(e) => {
-                    error!(step_id = %step.id, item_index, stage_idx, error = %e, "Failed to create container for pipeline stage");
-                    return Err(e);
-                }
-            }
-        } else {
-            None
-        };
+        let stage_container =
+            create_optional_container(ctx.container_config.as_ref(), "pipeline-stage").await?;
 
         let result = run_step_via_engine(
             engine,
@@ -1961,10 +1943,7 @@ async fn execute_pipeline_item(
         )
         .await;
 
-        // Destroy container regardless of result
-        if let Some(ref handle) = stage_container {
-            ContainerManager::destroy_container_quiet(handle).await;
-        }
+        destroy_optional_container(&stage_container).await;
 
         match result {
             Ok((output, in_tok, out_tok, cost)) => {

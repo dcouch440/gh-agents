@@ -13,13 +13,14 @@ pub use approval::{
     AutoApprovalGate, AutonomyLevel, DangerLevel, DangerousOperation, InteractiveApprovalGate,
 };
 pub use container::{
-    ContainerConfig, ContainerError, ContainerExecResult, ContainerHandle, ContainerManager,
+    sanitize_git_output, shell_escape_path, validate_container_path, ContainerConfig,
+    ContainerError, ContainerExecResult, ContainerHandle, ContainerManager, RedactedString,
 };
 pub use files::{FileError, FileOps};
 pub use git::{
-    BranchInfo, ChangeType, CommitInfo, ConflictInfo, ConflictRegion, ConflictResolution,
-    DiffOptions, FetchResult, FileChange, GitError, GitOps, GitStatus, MergeResult, PushOptions,
-    PushResult,
+    parse_porcelain_status, BranchInfo, ChangeType, CommitInfo, ConflictInfo, ConflictRegion,
+    ConflictResolution, DiffOptions, FetchResult, FileChange, GitError, GitOps, GitStatus,
+    MergeResult, PushOptions, PushResult,
 };
 pub use sandbox::{
     MountSpec, Sandbox, SandboxConfig, SandboxConfigBuilder, SandboxError, SandboxResult,

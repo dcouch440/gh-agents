@@ -4,6 +4,7 @@
 //! cloned GitHub repo. The container stays alive across all tool calls within
 //! the step, then is destroyed when the step completes.
 
+use std::fmt;
 use std::process::Stdio;
 use thiserror::Error;
 use tokio::process::Command;
@@ -11,6 +12,48 @@ use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 mod tests;
+
+// ── RedactedString ────────────────────────────────────────────────────────
+
+/// A string that hides its value in Debug/Display output.
+///
+/// Use `.expose()` to access the inner value when you need it
+/// (e.g., for constructing authenticated URLs or env vars).
+#[derive(Clone)]
+pub struct RedactedString(String);
+
+impl RedactedString {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    /// Access the inner secret value. Only use where the actual value is needed.
+    pub fn expose(&self) -> &str {
+        &self.0
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl fmt::Debug for RedactedString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[REDACTED]")
+    }
+}
+
+impl fmt::Display for RedactedString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[REDACTED]")
+    }
+}
+
+impl Default for RedactedString {
+    fn default() -> Self {
+        Self(String::new())
+    }
+}
 
 // ── Errors ─────────────────────────────────────────────────────────────────
 
@@ -41,6 +84,16 @@ pub enum ContainerError {
     #[error("container not running: {container}")]
     NotRunning { container: String },
 
+    #[error("path not allowed: {path} — {reason}")]
+    PathNotAllowed { path: String, reason: String },
+
+    #[error("docker {operation} failed: {source}")]
+    DockerSpawnFailed {
+        operation: &'static str,
+        #[source]
+        source: std::io::Error,
+    },
+
     #[error("io error: {0}")]
     IoError(#[from] std::io::Error),
 }
@@ -57,7 +110,7 @@ pub struct ContainerConfig {
     /// Branch to checkout after clone. None = default branch.
     pub branch: Option<String>,
     /// GitHub token for authenticated clone/push.
-    pub github_token: String,
+    pub github_token: RedactedString,
     /// Memory limit (e.g., "2g").
     pub memory_limit: String,
     /// CPU limit (e.g., "2.0").
@@ -68,6 +121,8 @@ pub struct ContainerConfig {
     pub env_vars: Vec<(String, String)>,
     /// Working directory inside container.
     pub workdir: String,
+    /// Optional Docker network mode (e.g., "container:<vpn_sidecar_id>").
+    pub network_mode: Option<String>,
 }
 
 impl Default for ContainerConfig {
@@ -76,14 +131,57 @@ impl Default for ContainerConfig {
             image: crate::constants::CONTAINER_DEFAULT_IMAGE.to_string(),
             clone_url: String::new(),
             branch: None,
-            github_token: String::new(),
+            github_token: RedactedString::default(),
             memory_limit: crate::constants::CONTAINER_DEFAULT_MEMORY.to_string(),
             cpu_limit: crate::constants::CONTAINER_DEFAULT_CPUS.to_string(),
             command_timeout_secs: crate::constants::CONTAINER_COMMAND_TIMEOUT_SECS,
             env_vars: Vec::new(),
             workdir: "/workspace".to_string(),
+            network_mode: None,
         }
     }
+}
+
+// ── Security Utilities ────────────────────────────────────────────────────
+
+/// Strip a token from git stderr output to prevent credential leaks in logs/errors.
+pub fn sanitize_git_output(output: &str, token: &RedactedString) -> String {
+    let secret = token.expose();
+    if secret.is_empty() {
+        return output.to_string();
+    }
+    output.replace(secret, "[REDACTED]")
+}
+
+/// Escape a path for safe use inside single-quoted shell arguments.
+///
+/// Handles the `'` character by ending the quote, inserting an escaped quote,
+/// and reopening the quote: `can't` → `'can'\''t'`
+pub fn shell_escape_path(path: &str) -> String {
+    if !path.contains('\'') {
+        return format!("'{}'", path);
+    }
+    let escaped = path.replace('\'', "'\\''");
+    format!("'{}'", escaped)
+}
+
+/// Validate that a container path is safe (no absolute paths, no `..` traversal).
+pub fn validate_container_path(path: &str) -> Result<(), ContainerError> {
+    if path.starts_with('/') {
+        return Err(ContainerError::PathNotAllowed {
+            path: path.to_string(),
+            reason: "absolute paths are not allowed".to_string(),
+        });
+    }
+    for component in path.split('/') {
+        if component == ".." {
+            return Err(ContainerError::PathNotAllowed {
+                path: path.to_string(),
+                reason: "path traversal (..) is not allowed".to_string(),
+            });
+        }
+    }
+    Ok(())
 }
 
 // ── Exec Result ────────────────────────────────────────────────────────────
@@ -151,7 +249,10 @@ impl ContainerHandle {
                 );
                 Ok(result)
             }
-            Ok(Err(e)) => Err(ContainerError::IoError(e)),
+            Ok(Err(e)) => Err(ContainerError::DockerSpawnFailed {
+                operation: "exec",
+                source: e,
+            }),
             Err(_) => {
                 warn!(
                     container = %self.container_name,
@@ -189,7 +290,10 @@ impl ContainerHandle {
         // Ensure parent directory exists
         if let Some(parent) = std::path::Path::new(path).parent() {
             if parent != std::path::Path::new("") && parent != std::path::Path::new("/") {
-                let mkdir_cmd = format!("mkdir -p '{}'", parent.display());
+                let mkdir_cmd = format!(
+                    "mkdir -p {}",
+                    shell_escape_path(&parent.display().to_string())
+                );
                 self.exec_shell(&mkdir_cmd).await?;
             }
         }
@@ -204,13 +308,16 @@ impl ContainerHandle {
                 &self.container_id,
                 "sh",
                 "-c",
-                &format!("cat > '{}'", path),
+                &format!("cat > {}", shell_escape_path(path)),
             ])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(ContainerError::IoError)?;
+            .map_err(|e| ContainerError::DockerSpawnFailed {
+                operation: "exec (write_file)",
+                source: e,
+            })?;
 
         if let Some(mut stdin) = child.stdin.take() {
             use tokio::io::AsyncWriteExt;
@@ -312,10 +419,13 @@ impl ContainerManager {
             format!("--cpus={}", config.cpu_limit),
             "-w".to_string(),
             config.workdir.clone(),
-            format!("--env=GITHUB_TOKEN={}", config.github_token),
+            format!("--env=GITHUB_TOKEN={}", config.github_token.expose()),
         ];
         for (k, v) in &config.env_vars {
             create_args.push(format!("--env={}={}", k, v));
+        }
+        if let Some(ref network) = config.network_mode {
+            create_args.push(format!("--network={}", network));
         }
         create_args.push(config.image.clone());
         create_args.push("sleep".to_string());
@@ -348,7 +458,10 @@ impl ContainerManager {
             .stderr(Stdio::piped())
             .output()
             .await
-            .map_err(ContainerError::IoError)?;
+            .map_err(|e| ContainerError::DockerSpawnFailed {
+                operation: "start",
+                source: e,
+            })?;
 
         if !start_output.status.success() {
             let _ = Command::new("docker")
@@ -370,7 +483,7 @@ impl ContainerManager {
         // 3. Clone repository
         let clone_url = format!(
             "https://x-access-token:{}@{}",
-            config.github_token,
+            config.github_token.expose(),
             config.clone_url.trim_start_matches("https://")
         );
         let clone_result = handle
@@ -379,7 +492,9 @@ impl ContainerManager {
         match clone_result {
             Ok(r) if !r.success => {
                 Self::destroy_container_quiet(&handle).await;
-                return Err(ContainerError::CloneFailed { stderr: r.stderr });
+                return Err(ContainerError::CloneFailed {
+                    stderr: sanitize_git_output(&r.stderr, &config.github_token),
+                });
             }
             Err(e) => {
                 Self::destroy_container_quiet(&handle).await;
@@ -442,7 +557,10 @@ impl ContainerManager {
             .stderr(Stdio::piped())
             .output()
             .await
-            .map_err(ContainerError::IoError)?;
+            .map_err(|e| ContainerError::DockerSpawnFailed {
+                operation: "rm",
+                source: e,
+            })?;
 
         if !rm_output.status.success() {
             warn!(

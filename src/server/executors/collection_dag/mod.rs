@@ -410,7 +410,9 @@ where
                 .ok_or_else(|| anyhow!("workflow {} not found", workflow_id))?;
             if wf_row.container_enabled {
                 if let Some(repo_url) = &wf_row.target_repo_url {
-                    let github_token = std::env::var("GITHUB_TOKEN").unwrap_or_default();
+                    let github_token = crate::execution::RedactedString::new(
+                        std::env::var("GITHUB_TOKEN").unwrap_or_default(),
+                    );
                     Some(ContainerExecutionConfig {
                         clone_url: repo_url.clone(),
                         branch: wf_row.target_branch.clone(),
