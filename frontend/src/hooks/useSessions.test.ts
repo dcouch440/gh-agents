@@ -45,7 +45,7 @@ describe('useSessions', () => {
 
   describe('useChatHistory', () => {
     it('fetches messages for a session', async () => {
-      mockGetHistory.mockResolvedValue({ messages: [mockChatMessage] })
+      mockGetHistory.mockResolvedValue([mockChatMessage])
       const { result } = renderHook(() => useChatHistory('session-001'))
 
       await waitFor(() => {

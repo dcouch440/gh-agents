@@ -4,16 +4,22 @@ import { useInteractiveChat } from './useInteractiveChat'
 import { mockExecutionMessage } from '@/test/fixtures'
 
 const mockGet = vi.hoisted(() => vi.fn())
-const mockPost = vi.hoisted(() => vi.fn())
+const mockSendMessage = vi.hoisted(() => vi.fn())
+const mockApprove = vi.hoisted(() => vi.fn())
+const mockCreateSSEStream = vi.hoisted(() => vi.fn())
 
 vi.mock('@/api', () => ({
   api: {
     get: mockGet,
-    post: mockPost,
-    patch: vi.fn(),
-    put: vi.fn(),
-    del: vi.fn(),
+    agentExecutions: {
+      sendMessage: mockSendMessage,
+      approve: mockApprove,
+    },
   },
+}))
+
+vi.mock('@/api/sse', () => ({
+  createSSEStream: mockCreateSSEStream,
 }))
 
 describe('useInteractiveChat', () => {
@@ -45,22 +51,43 @@ describe('useInteractiveChat', () => {
       expect(result.current.loading).toBe(false)
     })
 
+    const userMessage = {
+      ...mockExecutionMessage,
+      id: 'msg-response',
+      role: 'user' as const,
+      content: 'Hello',
+    }
+
+    mockSendMessage.mockResolvedValueOnce({
+      message: userMessage,
+      stream_id: 'stream-001',
+    })
+
+    // Mock SSE stream: immediately invoke onDone so refetch triggers
     const updatedMessages = [
       mockExecutionMessage,
       { ...mockExecutionMessage, id: 'msg-002', role: 'assistant' as const, content: 'OK' },
     ]
-    mockPost.mockResolvedValueOnce(undefined)
+    mockCreateSSEStream.mockImplementation((_path: string, callbacks: { onDone: () => void }) => {
+      // Simulate stream completing immediately
+      setTimeout(() => { callbacks.onDone() }, 0)
+      return () => {}
+    })
     mockGet.mockResolvedValueOnce(updatedMessages)
 
     await act(async () => {
       await result.current.sendMessage('Hello')
     })
 
-    expect(mockPost).toHaveBeenCalledWith(
-      '/agent-executions/agent-exec-001/messages',
-      { content: 'Hello', role: 'user' },
+    expect(mockSendMessage).toHaveBeenCalledWith(
+      'agent-exec-001',
+      { content: 'Hello' },
     )
-    expect(result.current.messages).toEqual(updatedMessages)
+
+    // Wait for SSE onDone to trigger refetch
+    await waitFor(() => {
+      expect(result.current.messages).toEqual(updatedMessages)
+    })
   })
 
   it('approve posts and refetches', async () => {
@@ -72,15 +99,15 @@ describe('useInteractiveChat', () => {
       expect(result.current.loading).toBe(false)
     })
 
-    mockPost.mockResolvedValueOnce(undefined)
+    mockApprove.mockResolvedValueOnce(undefined)
     mockGet.mockResolvedValueOnce([mockExecutionMessage])
 
     await act(async () => {
       await result.current.approve({ status: 'approved' })
     })
 
-    expect(mockPost).toHaveBeenCalledWith(
-      '/agent-executions/agent-exec-001/approve',
+    expect(mockApprove).toHaveBeenCalledWith(
+      'agent-exec-001',
       { structured_output: { status: 'approved' } },
     )
   })

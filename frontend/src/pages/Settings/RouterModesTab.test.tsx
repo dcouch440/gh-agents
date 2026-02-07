@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RouterModesTab } from './RouterModesTab'
-import { mockRouterMode, mockTool } from '@/test/fixtures'
+import { mockRouterMode, mockTool, mockToolRouter } from '@/test/fixtures'
 
 const {
   mockListByRouter,
@@ -9,12 +9,24 @@ const {
   mockLoadModeTools,
   mockSaveModeTools,
   mockListTools,
+  mockToolRoutersList,
+  mockCreateRouter,
 } = vi.hoisted(() => ({
   mockListByRouter: vi.fn(),
   mockDeleteMode: vi.fn(),
   mockLoadModeTools: vi.fn(),
   mockSaveModeTools: vi.fn(),
   mockListTools: vi.fn(),
+  mockToolRoutersList: vi.fn(),
+  mockCreateRouter: vi.fn(),
+}))
+
+vi.mock('@/api', () => ({
+  api: {
+    toolRouters: {
+      list: mockToolRoutersList,
+    },
+  },
 }))
 
 vi.mock('@/hooks/useRouterModes', () => ({
@@ -35,6 +47,22 @@ vi.mock('@/hooks/useRouterModeMutations', () => ({
     loadModeTools: mockLoadModeTools,
     saveModeTools: mockSaveModeTools,
     loadingTools: false,
+    savingTools: false,
+    toolsError: null,
+  }),
+}))
+
+vi.mock('@/hooks/useToolRouterMutations', () => ({
+  useToolRouterMutations: () => ({
+    createRouter: mockCreateRouter,
+    creating: false,
+    updateRouter: vi.fn(),
+    updating: false,
+    deleteRouter: vi.fn(),
+    deleting: false,
+    loadRouterTools: vi.fn(),
+    loadingTools: false,
+    saveRouterTools: vi.fn(),
     savingTools: false,
     toolsError: null,
   }),
@@ -72,6 +100,7 @@ vi.mock('./ModeToolSelector', () => ({
 describe('RouterModesTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockToolRoutersList.mockResolvedValue([mockToolRouter])
     mockListByRouter.mockReturnValue([mockRouterMode])
     mockListTools.mockReturnValue([mockTool])
     vi.spyOn(window, 'confirm').mockReturnValue(true)
@@ -94,19 +123,19 @@ describe('RouterModesTab', () => {
       // Skip this test or refactor to use proper mocking
     })
 
-    it('shows empty state when modes is empty', () => {
+    it('shows empty state when modes is empty', async () => {
       mockListByRouter.mockReturnValue([])
       render(<RouterModesTab />)
 
       expect(
-        screen.getByText(/no router modes configured/i)
+        await screen.findByText(/no router modes configured/i)
       ).toBeInTheDocument()
     })
 
-    it('shows DataTable when modes has items', () => {
+    it('shows DataTable when modes has items', async () => {
       render(<RouterModesTab />)
 
-      expect(screen.getByText(mockRouterMode.mode_key)).toBeInTheDocument()
+      expect(await screen.findByText(mockRouterMode.mode_key)).toBeInTheDocument()
       expect(screen.getByText(mockRouterMode.display_name)).toBeInTheDocument()
     })
   })
@@ -116,7 +145,7 @@ describe('RouterModesTab', () => {
       const user = userEvent.setup()
       render(<RouterModesTab />)
 
-      const createButton = screen.getByRole('button', { name: /create mode/i })
+      const createButton = await screen.findByRole('button', { name: /create mode/i })
       await user.click(createButton)
 
       await waitFor(() => {
@@ -132,7 +161,7 @@ describe('RouterModesTab', () => {
       const user = userEvent.setup()
       render(<RouterModesTab />)
 
-      const editButton = screen.getByLabelText(/edit mode/i)
+      const editButton = await screen.findByLabelText(/edit mode/i)
       await user.click(editButton)
 
       await waitFor(() => {
@@ -149,7 +178,7 @@ describe('RouterModesTab', () => {
       mockDeleteMode.mockResolvedValue(undefined)
       render(<RouterModesTab />)
 
-      const deleteButton = screen.getByLabelText(/delete mode/i)
+      const deleteButton = await screen.findByLabelText(/delete mode/i)
       await user.click(deleteButton)
 
       await waitFor(() => {
@@ -163,7 +192,7 @@ describe('RouterModesTab', () => {
       vi.spyOn(window, 'confirm').mockReturnValue(false)
       render(<RouterModesTab />)
 
-      const deleteButton = screen.getByLabelText(/delete mode/i)
+      const deleteButton = await screen.findByLabelText(/delete mode/i)
       await user.click(deleteButton)
 
       expect(window.confirm).toHaveBeenCalled()
@@ -175,7 +204,7 @@ describe('RouterModesTab', () => {
       mockDeleteMode.mockRejectedValue(new Error('Delete failed'))
       render(<RouterModesTab />)
 
-      const deleteButton = screen.getByLabelText(/delete mode/i)
+      const deleteButton = await screen.findByLabelText(/delete mode/i)
       await user.click(deleteButton)
 
       await waitFor(() => {
@@ -189,7 +218,7 @@ describe('RouterModesTab', () => {
       const user = userEvent.setup()
       render(<RouterModesTab />)
 
-      const toolsButton = screen.getByLabelText(/manage tools/i)
+      const toolsButton = await screen.findByLabelText(/manage tools/i)
       await user.click(toolsButton)
 
       await waitFor(() => {
@@ -201,33 +230,33 @@ describe('RouterModesTab', () => {
   })
 
   describe('DataTable columns', () => {
-    it('renders mode_key as code', () => {
+    it('renders mode_key as code', async () => {
       render(<RouterModesTab />)
 
-      const modeKeyElement = screen.getByText(mockRouterMode.mode_key)
+      const modeKeyElement = await screen.findByText(mockRouterMode.mode_key)
       expect(modeKeyElement).toHaveStyle({ fontFamily: 'monospace' })
     })
 
-    it('renders display_name with bold font', () => {
+    it('renders display_name with bold font', async () => {
       render(<RouterModesTab />)
 
-      const displayNameElement = screen.getByText(mockRouterMode.display_name)
+      const displayNameElement = await screen.findByText(mockRouterMode.display_name)
       expect(displayNameElement).toHaveStyle({ fontWeight: 500 })
     })
 
-    it('renders settings chips', () => {
+    it('renders settings chips', async () => {
       render(<RouterModesTab />)
 
       if (mockRouterMode.append_to_agent_tools) {
-        expect(screen.getByText('Append Tools')).toBeInTheDocument()
+        expect(await screen.findByText('Append Tools')).toBeInTheDocument()
       }
-      expect(screen.getByText(`T: ${mockRouterMode.temperature}`)).toBeInTheDocument()
+      expect(await screen.findByText(`T: ${mockRouterMode.temperature}`)).toBeInTheDocument()
     })
 
-    it('renders action buttons', () => {
+    it('renders action buttons', async () => {
       render(<RouterModesTab />)
 
-      expect(screen.getByLabelText(/edit mode/i)).toBeInTheDocument()
+      expect(await screen.findByLabelText(/edit mode/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/manage tools/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/delete mode/i)).toBeInTheDocument()
     })

@@ -9,10 +9,15 @@ describe('KeyValue', () => {
     expect(screen.getByText('Active')).toBeInTheDocument()
   })
 
-  it('applies kv classes', () => {
-    const { container } = render(<KeyValue label="Tier">Worker</KeyValue>)
-    expect(container.querySelector('.kv')).toBeInTheDocument()
-    expect(container.querySelector('.kv__label')).toBeInTheDocument()
-    expect(container.querySelector('.kv__value')).toBeInTheDocument()
+  it('renders label as caption and value as body2', () => {
+    render(<KeyValue label="Tier">Worker</KeyValue>)
+    const label = screen.getByText('Tier')
+    const value = screen.getByText('Worker')
+    expect(label).toBeInTheDocument()
+    expect(value).toBeInTheDocument()
+    // Label uses caption variant (rendered as div)
+    expect(label.tagName).toBe('DIV')
+    // Value uses body2 variant (rendered as div)
+    expect(value.tagName).toBe('DIV')
   })
 })

@@ -5,22 +5,34 @@ import { LoadingSpinner } from './LoadingSpinner'
 describe('LoadingSpinner', () => {
   it('renders with default md size', () => {
     const { container } = render(<LoadingSpinner />)
-    expect(container.querySelector('.spinner--md')).toBeInTheDocument()
+    const spinner = container.querySelector('.MuiCircularProgress-root')
+    expect(spinner).toBeInTheDocument()
+    // Default size is md = 40px
+    expect(spinner).toHaveStyle({ width: '40px', height: '40px' })
   })
 
   it('renders with specified size', () => {
     const { container } = render(<LoadingSpinner size="lg" />)
-    expect(container.querySelector('.spinner--lg')).toBeInTheDocument()
+    const spinner = container.querySelector('.MuiCircularProgress-root')
+    expect(spinner).toBeInTheDocument()
+    // lg size = 60px
+    expect(spinner).toHaveStyle({ width: '60px', height: '60px' })
   })
 
-  it('does not wrap in container by default', () => {
+  it('does not wrap in centering container by default', () => {
     const { container } = render(<LoadingSpinner />)
-    expect(container.querySelector('.spinner-container')).not.toBeInTheDocument()
+    // The root should be an inline-flex box (the spinner wrapper), not a centering flex container
+    const root = container.firstElementChild
+    expect(root).toHaveStyle({ display: 'inline-flex' })
   })
 
-  it('wraps in spinner-container when centered', () => {
+  it('wraps in centering container when centered', () => {
     const { container } = render(<LoadingSpinner centered />)
-    expect(container.querySelector('.spinner-container')).toBeInTheDocument()
-    expect(container.querySelector('.spinner-container .spinner--md')).toBeInTheDocument()
+    // The outermost element should be the centering container
+    const root = container.firstElementChild
+    expect(root).toHaveStyle({ display: 'flex', justifyContent: 'center', alignItems: 'center' })
+    // The spinner should be nested inside
+    const spinner = container.querySelector('.MuiCircularProgress-root')
+    expect(spinner).toBeInTheDocument()
   })
 })

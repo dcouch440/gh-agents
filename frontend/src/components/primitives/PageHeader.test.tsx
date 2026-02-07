@@ -9,8 +9,9 @@ describe('PageHeader', () => {
   })
 
   it('does not render actions wrapper when no children', () => {
-    const { container } = render(<PageHeader title="Agents" />)
-    expect(container.querySelector('.page-header__actions')).not.toBeInTheDocument()
+    render(<PageHeader title="Agents" />)
+    // Only the title heading should be rendered, no extra button containers
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
   it('renders children in actions slot', () => {
@@ -20,6 +21,7 @@ describe('PageHeader', () => {
       </PageHeader>,
     )
     expect(screen.getByText('Create')).toBeInTheDocument()
-    expect(screen.getByText('Create').closest('.page-header__actions')).toBeInTheDocument()
+    // The button should be rendered and accessible
+    expect(screen.getByRole('button', { name: 'Create' })).toBeInTheDocument()
   })
 })

@@ -65,7 +65,7 @@ export function resolveVariables(
     /\{([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)*)\}/g,
     (match, path: string) => {
       const resolved = resolvePath(path, mockData);
-      return resolved !== null ? resolved : match; // Keep {variable} if unresolved
+      return resolved ?? match; // Keep {variable} if unresolved
     }
   );
 }
@@ -91,17 +91,20 @@ function resolvePath(
 ): string | null {
   const parts = path.split('.');
   const rootVar = parts[0];
+  if (!rootVar) {
+    return null; // Empty path
+  }
 
   // Get root JSON string
   const jsonText = mockData[rootVar];
-  if (!jsonText || !jsonText.trim()) {
+  if (!jsonText?.trim()) {
     return null; // Unresolved
   }
 
   // Parse JSON
   let root: unknown;
   try {
-    root = JSON.parse(jsonText);
+    root = JSON.parse(jsonText) as unknown;
   } catch {
     return null; // Invalid JSON → unresolved
   }

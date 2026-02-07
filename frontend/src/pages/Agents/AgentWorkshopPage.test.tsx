@@ -9,15 +9,23 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate }
 })
 
-const { mockCreate, mockSessionCreate } = vi.hoisted(() => ({
-  mockCreate: vi.fn(),
+const { mockSessionCreate, mockSessionSaveAgent, mockSessionUpdateConfig } = vi.hoisted(() => ({
   mockSessionCreate: vi.fn(),
+  mockSessionSaveAgent: vi.fn(),
+  mockSessionUpdateConfig: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
   api: {
-    agents: { create: mockCreate },
-    sessions: { create: mockSessionCreate },
+    agents: { create: vi.fn(), update: vi.fn(), get: vi.fn(), getContext: vi.fn(), setContext: vi.fn() },
+    sessions: {
+      create: mockSessionCreate,
+      saveAgent: mockSessionSaveAgent,
+      updateConfig: mockSessionUpdateConfig,
+      get: vi.fn(),
+      getHistory: vi.fn(),
+      clearMessages: vi.fn(),
+    },
   },
 }))
 
@@ -33,6 +41,25 @@ vi.mock('@/hooks/useChatMutations', () => ({
   }),
 }))
 
+vi.mock('@/hooks/useOutputSchemaContext', () => ({
+  useOutputSchemaContext: () => ({
+    schemas: [],
+    loading: false,
+    error: null,
+    reload: vi.fn(),
+    addSchema: vi.fn(),
+    removeSchema: vi.fn(),
+  }),
+}))
+
+vi.mock('@/hooks/useOutputSchemaMutations', () => ({
+  useCreateOutputSchema: () => ({
+    mutate: vi.fn(),
+    loading: false,
+    error: null,
+  }),
+}))
+
 vi.mock('@/components/primitives/CodeEditor', () => ({
   CodeEditor: ({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) => (
     <textarea
@@ -42,6 +69,16 @@ vi.mock('@/components/primitives/CodeEditor', () => ({
       placeholder={placeholder}
     />
   ),
+}))
+
+vi.mock('@/components/primitives/MarkdownPreview', () => ({
+  MarkdownPreview: ({ content }: { content: string }) => (
+    <div data-testid="markdown-preview">{content}</div>
+  ),
+}))
+
+vi.mock('@/components/DocumentSelector', () => ({
+  DocumentSelector: () => null,
 }))
 
 const renderPage = () =>
@@ -60,62 +97,101 @@ describe('AgentWorkshopPage', () => {
   it('creates a session on mount', async () => {
     renderPage()
     await waitFor(() => {
-      expect(mockSessionCreate).toHaveBeenCalledWith({ title: 'Agent Workshop' })
+      expect(mockSessionCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mode_id: 'workshop',
+          title: 'Agent Workshop',
+        })
+      )
     })
   })
 
-  it('renders page header and split layout', () => {
+  it('renders page header and split layout', async () => {
     renderPage()
+
+    await waitFor(() => {
+      expect(mockSessionCreate).toHaveBeenCalled()
+    })
+
     expect(screen.getByText('Agent Workshop')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('Agent name...')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
   })
 
-  it('renders editor toggle group', () => {
+  it('renders editor toggle group', async () => {
     renderPage()
+
+    await waitFor(() => {
+      expect(mockSessionCreate).toHaveBeenCalled()
+    })
+
     expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Preview' })).toBeInTheDocument()
   })
 
-  it('renders model config fields', () => {
+  it('renders model config fields', async () => {
     renderPage()
+
+    await waitFor(() => {
+      expect(mockSessionCreate).toHaveBeenCalled()
+    })
+
     expect(screen.getByLabelText('Model')).toBeInTheDocument()
     expect(screen.getByLabelText('Max Tokens')).toBeInTheDocument()
     expect(screen.getByLabelText('Temperature')).toBeInTheDocument()
   })
 
-  it('disables save when name is empty', () => {
+  it('disables save when name is empty', async () => {
     renderPage()
+
+    await waitFor(() => {
+      expect(mockSessionCreate).toHaveBeenCalled()
+    })
+
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
   })
 
-  it('enables save when name is filled', () => {
+  it('enables save when name is filled', async () => {
     renderPage()
+
+    await waitFor(() => {
+      expect(mockSessionCreate).toHaveBeenCalled()
+    })
+
     fireEvent.change(screen.getByPlaceholderText('Agent name...'), { target: { value: 'MyAgent' } })
     expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled()
   })
 
-  it('calls api.agents.create on save and navigates', async () => {
-    mockCreate.mockResolvedValueOnce({ id: 'new-agent' })
+  it('calls api.sessions.saveAgent on save and navigates', async () => {
+    mockSessionSaveAgent.mockResolvedValueOnce({ agent_id: 'new-agent' })
     renderPage()
+
+    await waitFor(() => {
+      expect(mockSessionCreate).toHaveBeenCalled()
+    })
 
     fireEvent.change(screen.getByPlaceholderText('Agent name...'), { target: { value: 'MyAgent' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => {
-      expect(mockCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'MyAgent', model_id: 'sonnet' })
+      expect(mockSessionSaveAgent).toHaveBeenCalledWith(
+        'session-001',
+        expect.objectContaining({ name: 'MyAgent' })
       )
     })
 
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith('/agents')
+      expect(mockNavigate).toHaveBeenCalledWith('/agents/workshop/session-001', { replace: true })
     })
   })
 
   it('displays error on save failure', async () => {
-    mockCreate.mockRejectedValueOnce(new Error('Server error'))
+    mockSessionSaveAgent.mockRejectedValueOnce(new Error('Server error'))
     renderPage()
+
+    await waitFor(() => {
+      expect(mockSessionCreate).toHaveBeenCalled()
+    })
 
     fireEvent.change(screen.getByPlaceholderText('Agent name...'), { target: { value: 'MyAgent' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -134,13 +210,23 @@ describe('AgentWorkshopPage', () => {
     })
   })
 
-  it('shows chat empty state', () => {
+  it('shows chat empty state', async () => {
     renderPage()
+
+    await waitFor(() => {
+      expect(mockSessionCreate).toHaveBeenCalled()
+    })
+
     expect(screen.getByText('No messages yet')).toBeInTheDocument()
   })
 
-  it('toggles between edit and preview mode', () => {
+  it('toggles between edit and preview mode', async () => {
     renderPage()
+
+    await waitFor(() => {
+      expect(mockSessionCreate).toHaveBeenCalled()
+    })
+
     expect(screen.getByTestId('code-editor')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
@@ -156,8 +242,8 @@ describe('AgentWorkshopPage', () => {
       expect(mockSessionCreate).toHaveBeenCalled()
     })
 
-    // Type and send a message via the chat input (the textarea inside chat-input)
-    const chatTextarea = document.querySelector('.chat-input__textarea') as HTMLTextAreaElement
+    // Find the chat textarea (MUI TextField renders a textarea with the placeholder)
+    const chatTextarea = screen.getByPlaceholderText('Type a message...')
     fireEvent.change(chatTextarea, { target: { value: 'Hello agent' } })
     fireEvent.keyDown(chatTextarea, { key: 'Enter' })
 
