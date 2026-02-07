@@ -116,3 +116,9 @@ export const SESSION_EVENT = {
 export type SessionCreatedData = { session_id: string; title: string; mode_id: string }
 export type SessionUpdatedData = { session_id: string; title: string | null; mode_id: string | null }
 export type SessionDeletedData = { session_id: string }
+
+// ============================================================================
+// Handler Type
+// ============================================================================
+
+export type WsEventHandler = (message: WsWireMessage) => void
