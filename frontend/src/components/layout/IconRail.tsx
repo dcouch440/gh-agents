@@ -35,11 +35,12 @@ function IconRail({ side, topItems, bottomItems, footer }: IconRailProps) {
             height: 28,
             borderRadius: '6px',
             position: 'relative',
-            color: item.isActive ? 'text.primary' : 'text.secondary',
+            color: item.isActive ? '#3b82f6' : 'text.secondary',
             backgroundColor: 'transparent',
-            transition: `color ${ANIMATION.FAST}ms ease`,
+            transition: `color ${ANIMATION.FAST}ms ease, filter ${ANIMATION.FAST}ms ease`,
+            filter: item.isActive ? 'drop-shadow(0 0 4px rgba(59, 130, 246, 0.4))' : 'none',
             '&:hover': {
-              color: 'text.primary',
+              color: item.isActive ? '#60a5fa' : 'text.primary',
               backgroundColor: 'transparent',
             },
             '&::before': item.isActive
@@ -51,7 +52,7 @@ function IconRail({ side, topItems, bottomItems, footer }: IconRailProps) {
                   bottom: 4,
                   width: 2,
                   borderRadius: 1,
-                  backgroundColor: 'text.primary',
+                  background: 'linear-gradient(180deg, #3b82f6, #2dd4bf)',
                 }
               : undefined,
           }}
