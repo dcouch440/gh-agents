@@ -3,6 +3,7 @@ import { useWebSocket } from '@/hooks/useWebSocket'
 import { WS_TOPIC } from '@/types/ws'
 import { sessionStore } from '@/stores/sessionStore'
 import { roomStore } from '@/stores/roomStore'
+import { workflowExecutionStore } from '@/stores/workflowExecutionStore'
 
 function WsStoreRouter() {
   const { subscribe } = useWebSocket()
@@ -11,7 +12,7 @@ function WsStoreRouter() {
     const unsubs = [
       subscribe(WS_TOPIC.SESSION, sessionStore.handleWsEvent),
       subscribe(WS_TOPIC.ROOM, roomStore.handleWsEvent),
-      // WorkflowExecutionStore will be wired here in Phase 11
+      subscribe(WS_TOPIC.WORKFLOW, workflowExecutionStore.handleWsEvent),
     ]
     return () => { unsubs.forEach((fn) => fn()) }
   }, [subscribe])
