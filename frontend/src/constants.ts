@@ -290,6 +290,12 @@ export const DESIGN = {
   ACTIVE_GRADIENT: 'linear-gradient(90deg, #3b82f6, #2dd4bf)',
   ACTIVE_GRADIENT_VERTICAL: 'linear-gradient(180deg, #3b82f6, #2dd4bf)',
   ACTIVE_GLOW: 'drop-shadow(0 0 4px rgba(59, 130, 246, 0.4))',
+
+  // Panel detail tokens
+  HOVER_OVERLAY: 'rgba(255, 255, 255, 0.02)',
+  SEPARATOR_SUBTLE: 'rgba(240, 246, 252, 0.03)',
+  ACTIVE_TINT: 'rgba(59, 130, 246, 0.04)',
+  ACTIVE_TINT_STRONG: 'rgba(59, 130, 246, 0.06)',
 } as const;
 
 // Animation

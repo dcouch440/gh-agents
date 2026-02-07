@@ -157,13 +157,11 @@ function DetailPanel({
         </IconButton>
       </Box>
 
-      {/* Content */}
+      {/* Content — zero padding for edge-to-edge children */}
       <Box
         sx={{
           flexGrow: 1,
           overflow: 'auto',
-          px: 1.5,
-          py: 1,
           opacity: isOpen ? 1 : 0,
           transition: `opacity ${ANIMATION.FAST}ms ease`,
         }}

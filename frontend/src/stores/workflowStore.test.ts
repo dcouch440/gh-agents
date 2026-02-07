@@ -142,7 +142,7 @@ beforeEach(() => {
 describe('workflowStore', () => {
   describe('workflow CRUD', () => {
     it('fetchAll populates items', async () => {
-      mockList.mockResolvedValue({ items: [wf1, wf2] })
+      mockList.mockResolvedValue([wf1, wf2])
       await workflowStore.fetchAll()
 
       const s = workflowStore.store.getState()
@@ -183,7 +183,7 @@ describe('workflowStore', () => {
     })
 
     it('remove optimistically deletes and rolls back on failure', async () => {
-      mockList.mockResolvedValue({ items: [wf1] })
+      mockList.mockResolvedValue([wf1])
       await workflowStore.fetchAll()
       expect(nmSize(workflowStore.store.getState().items)).toBe(1)
 
@@ -351,7 +351,7 @@ describe('workflowStore', () => {
 
   describe('selectors', () => {
     it('selectAll returns array', async () => {
-      mockList.mockResolvedValue({ items: [wf1, wf2] })
+      mockList.mockResolvedValue([wf1, wf2])
       await workflowStore.fetchAll()
 
       expect(workflowStore.selectAll(workflowStore.store.getState())).toHaveLength(2)
@@ -380,7 +380,7 @@ describe('workflowStore', () => {
     })
 
     it('is not stale after fetchAll', async () => {
-      mockList.mockResolvedValue({ items: [wf1] })
+      mockList.mockResolvedValue([wf1])
       await workflowStore.fetchAll()
 
       expect(workflowStore.selectIsStale(workflowStore.store.getState())).toBe(false)
@@ -388,7 +388,7 @@ describe('workflowStore', () => {
     })
 
     it('fetchIfStale skips when fresh', async () => {
-      mockList.mockResolvedValue({ items: [wf1] })
+      mockList.mockResolvedValue([wf1])
       await workflowStore.fetchAll()
       expect(mockList).toHaveBeenCalledTimes(1)
 
