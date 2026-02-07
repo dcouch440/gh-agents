@@ -24,6 +24,7 @@ services:
       PASSWORD_HASH: "$$2y$$10$$hBCoykrB95WSzuV4fafBzOHWKu9sbyVa34GJim6Lzt8/G23OjBYga"
       PORT: "51821"
       WG_PORT: "51820"
+      WG_DEFAULT_DNS: "10.8.0.1"
     volumes:
       - wg-easy-data:/etc/wireguard
     ports:

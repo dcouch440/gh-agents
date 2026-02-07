@@ -756,6 +756,44 @@ async fn destroy_optional_container(
     }
 }
 
+/// Run an execution future with a VPN tunnel watchdog.
+///
+/// If the managed container has a VPN sidecar, races the execution against
+/// [`monitor_vpn_tunnel`]. If the tunnel drops, execution is cancelled and
+/// an error is returned. If no VPN sidecar is present, execution runs directly.
+async fn run_with_vpn_watchdog<F, T>(
+    managed: &Option<ManagedContainer>,
+    execution: F,
+) -> Result<T, HubError>
+where
+    F: std::future::Future<Output = Result<T, HubError>>,
+{
+    use crate::execution::vpn_sidecar::watchdog::monitor_vpn_tunnel;
+
+    let sidecar_id = managed
+        .as_ref()
+        .and_then(|mc| mc.vpn_sidecar.as_ref())
+        .map(|s| s.container_id.as_str());
+
+    match sidecar_id {
+        Some(id) => {
+            tokio::select! {
+                result = execution => result,
+                vpn_err = monitor_vpn_tunnel(
+                    id,
+                    crate::constants::VPN_WATCHDOG_INTERVAL_SECS,
+                    crate::constants::VPN_WATCHDOG_MAX_FAILURES,
+                ) => {
+                    Err(HubError::Internal(anyhow!(
+                        "VPN tunnel dropped during execution: {}", vpn_err
+                    )))
+                }
+            }
+        }
+        None => execution.await,
+    }
+}
+
 /// Execute a single (non-for-each) step through the engine.
 async fn execute_single_step(
     engine: &ExecutionEngine,
@@ -844,16 +882,19 @@ async fn execute_single_step(
     )
     .await?;
 
-    let result = run_step_via_engine(
-        engine,
-        state,
-        ctx,
-        step,
-        agent,
-        &prompt,
-        &port_meta.step_outputs,
-        cancel,
-        managed_container.as_ref().map(|mc| &mc.agent_handle),
+    let result = run_with_vpn_watchdog(
+        &managed_container,
+        run_step_via_engine(
+            engine,
+            state,
+            ctx,
+            step,
+            agent,
+            &prompt,
+            &port_meta.step_outputs,
+            cancel,
+            managed_container.as_ref().map(|mc| &mc.agent_handle),
+        ),
     )
     .await;
 
@@ -1488,16 +1529,19 @@ async fn execute_for_each_step(
         )
         .await?;
 
-        let result = run_step_via_engine(
-            engine,
-            state,
-            ctx,
-            step,
-            iteration_agent,
-            &prompt,
-            &port_meta.step_outputs,
-            cancel,
-            iter_container.as_ref().map(|mc| &mc.agent_handle),
+        let result = run_with_vpn_watchdog(
+            &iter_container,
+            run_step_via_engine(
+                engine,
+                state,
+                ctx,
+                step,
+                iteration_agent,
+                &prompt,
+                &port_meta.step_outputs,
+                cancel,
+                iter_container.as_ref().map(|mc| &mc.agent_handle),
+            ),
         )
         .await;
 
@@ -2091,16 +2135,19 @@ async fn execute_pipeline_item(
         )
         .await?;
 
-        let result = run_step_via_engine(
-            engine,
-            state,
-            ctx,
-            step,
-            iteration_agent,
-            &prompt,
-            step_outputs,
-            cancel,
-            stage_container.as_ref().map(|mc| &mc.agent_handle),
+        let result = run_with_vpn_watchdog(
+            &stage_container,
+            run_step_via_engine(
+                engine,
+                state,
+                ctx,
+                step,
+                iteration_agent,
+                &prompt,
+                step_outputs,
+                cancel,
+                stage_container.as_ref().map(|mc| &mc.agent_handle),
+            ),
         )
         .await;
 

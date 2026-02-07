@@ -39,6 +39,33 @@ mod tests {
     }
 
     #[test]
+    fn kill_switch_script_blocks_output_default() {
+        let script = crate::constants::VPN_KILL_SWITCH_SCRIPT;
+        assert!(script.contains("iptables -P OUTPUT DROP"));
+        assert!(script.contains("iptables -A OUTPUT -o wg0 -j ACCEPT"));
+        assert!(script.contains("iptables -A OUTPUT -o lo -j ACCEPT"));
+        assert!(script.contains("iptables -A OUTPUT -p udp --dport 51820 -j ACCEPT"));
+    }
+
+    #[test]
+    fn kill_switch_script_blocks_input_default() {
+        let script = crate::constants::VPN_KILL_SWITCH_SCRIPT;
+        assert!(script.contains("iptables -P INPUT DROP"));
+        assert!(script.contains("iptables -A INPUT -i wg0 -j ACCEPT"));
+        assert!(script.contains("iptables -A INPUT -i lo -j ACCEPT"));
+    }
+
+    #[test]
+    fn vpn_sidecar_log_driver_is_none() {
+        assert_eq!(crate::constants::VPN_SIDECAR_LOG_DRIVER, "none");
+    }
+
+    #[test]
+    fn vpn_ip_check_url_is_https() {
+        assert!(crate::constants::VPN_IP_CHECK_URL.starts_with("https://"));
+    }
+
+    #[test]
     fn reaper_uses_correct_name_prefix() {
         // The reaper filters by name prefix — verify the constant matches
         // what create_sidecar uses in container names.

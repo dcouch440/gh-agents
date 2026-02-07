@@ -41,6 +41,9 @@ pub enum VpnError {
     #[error("VPN health check failed after {timeout_secs}s")]
     HealthCheckTimeout { timeout_secs: u64 },
 
+    #[error("WireGuard config validation failed: {reason}")]
+    ConfigValidationFailed { reason: String },
+
     #[error("http request failed: {0}")]
     HttpError(#[from] reqwest::Error),
 
@@ -417,6 +420,43 @@ impl WgEasyClient {
     pub async fn health_check(&self) -> Result<(), VpnError> {
         self.authenticate().await
     }
+}
+
+/// Validate a WireGuard config before applying it to a sidecar.
+///
+/// Ensures:
+/// - Full tunnel: `AllowedIPs` contains `0.0.0.0/0` (routes all IPv4 traffic)
+/// - DNS configured: `DNS =` line present (prevents DNS leaks)
+///
+/// Rejects split-tunnel configs that would leak traffic outside the VPN.
+pub fn validate_wg_config(config: &str) -> Result<(), VpnError> {
+    if config.trim().is_empty() {
+        return Err(VpnError::ConfigValidationFailed {
+            reason: "empty WireGuard config".to_string(),
+        });
+    }
+
+    let has_full_tunnel = config.lines().any(|line| {
+        let trimmed = line.trim();
+        trimmed.starts_with("AllowedIPs") && trimmed.contains("0.0.0.0/0")
+    });
+    if !has_full_tunnel {
+        return Err(VpnError::ConfigValidationFailed {
+            reason: "AllowedIPs must contain 0.0.0.0/0 for full-tunnel routing".to_string(),
+        });
+    }
+
+    let has_dns = config.lines().any(|line| {
+        let trimmed = line.trim();
+        trimmed.starts_with("DNS") && trimmed.contains('=')
+    });
+    if !has_dns {
+        return Err(VpnError::ConfigValidationFailed {
+            reason: "DNS must be configured to prevent DNS leaks".to_string(),
+        });
+    }
+
+    Ok(())
 }
 
 /// Get names of currently running VPN sidecar containers.
