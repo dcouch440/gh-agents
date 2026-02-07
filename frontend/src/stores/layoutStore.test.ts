@@ -35,15 +35,18 @@ describe('layoutStore', () => {
       leftPanelSection: null,
       rightPanelOpen: false,
       rightPanelSection: null,
+      rightPanelWidth: 220,
+      rightPanelDragging: false,
     })
   })
 
   describe('initial state', () => {
-    it('defaults to panels closed', () => {
+    it('defaults to panels closed with default width', () => {
       expect(getState().leftPanelOpen).toBe(false)
       expect(getState().leftPanelSection).toBe(null)
       expect(getState().rightPanelOpen).toBe(false)
       expect(getState().rightPanelSection).toBe(null)
+      expect(getState().rightPanelWidth).toBe(220)
     })
   })
 
@@ -149,6 +152,52 @@ describe('layoutStore', () => {
 
       expect(getState().rightPanelOpen).toBe(true)
       expect(getState().rightPanelSection).toBe('layers')
+    })
+  })
+
+  describe('right panel width', () => {
+    it('selectRightPanelWidth returns current width', () => {
+      expect(layoutStore.selectRightPanelWidth(getState())).toBe(220)
+    })
+
+    it('setRightPanelWidth updates width and persists to localStorage', () => {
+      layoutStore.setRightPanelWidth(350)
+
+      expect(getState().rightPanelWidth).toBe(350)
+      expect(mockStorage.setItem).toHaveBeenCalledWith('nexor_right_panel_width', '350')
+    })
+
+    it('clamps width to minimum', () => {
+      layoutStore.setRightPanelWidth(50)
+
+      expect(getState().rightPanelWidth).toBe(160)
+    })
+
+    it('clamps width to maximum', () => {
+      layoutStore.setRightPanelWidth(999)
+
+      expect(getState().rightPanelWidth).toBe(480)
+    })
+  })
+
+  describe('right panel dragging', () => {
+    it('startRightPanelDrag sets dragging to true', () => {
+      layoutStore.startRightPanelDrag()
+
+      expect(getState().rightPanelDragging).toBe(true)
+    })
+
+    it('stopRightPanelDrag sets dragging to false', () => {
+      layoutStore.startRightPanelDrag()
+      layoutStore.stopRightPanelDrag()
+
+      expect(getState().rightPanelDragging).toBe(false)
+    })
+
+    it('selectRightPanelDragging returns current value', () => {
+      layoutStore.startRightPanelDrag()
+
+      expect(layoutStore.selectRightPanelDragging(getState())).toBe(true)
     })
   })
 })

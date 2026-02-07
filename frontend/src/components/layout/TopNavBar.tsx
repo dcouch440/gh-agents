@@ -6,22 +6,16 @@ import Badge from '@mui/material/Badge';
 import { LAYOUT, ANIMATION } from '@/constants';
 import type { NavBarItem } from './types';
 
-type RailItem = NavBarItem;
-
-type IconRailProps = {
-  side: 'left' | 'right';
-  topItems: RailItem[];
-  bottomItems?: RailItem[];
-  footer?: ReactNode;
+type TopNavBarProps = {
+  navItems: NavBarItem[];
+  utilityItems: NavBarItem[];
+  trailing?: ReactNode;
 };
 
-function IconRail({ side, topItems, bottomItems, footer }: IconRailProps) {
-  const isLeft = side === 'left';
-  const tooltipPlacement = isLeft ? 'right' : 'left';
-
-  const renderItem = (item: RailItem) => {
+function TopNavBar({ navItems, utilityItems, trailing }: TopNavBarProps) {
+  const renderItem = (item: NavBarItem) => {
     return (
-      <Tooltip key={item.key} title={item.label} placement={tooltipPlacement}>
+      <Tooltip key={item.key} title={item.label} placement="bottom">
         <IconButton
           onClick={item.onClick}
           sx={{
@@ -37,16 +31,16 @@ function IconRail({ side, topItems, bottomItems, footer }: IconRailProps) {
               color: item.isActive ? '#60a5fa' : 'text.primary',
               backgroundColor: 'transparent',
             },
-            '&::before': item.isActive
+            '&::after': item.isActive
               ? {
                   content: '""',
                   position: 'absolute',
-                  ...(isLeft ? { right: -8 } : { left: -8 }),
-                  top: 4,
-                  bottom: 4,
-                  width: 2,
+                  bottom: -4,
+                  left: 4,
+                  right: 4,
+                  height: 2,
                   borderRadius: 1,
-                  background: 'linear-gradient(180deg, #3b82f6, #2dd4bf)',
+                  background: 'linear-gradient(90deg, #3b82f6, #2dd4bf)',
                 }
               : undefined,
           }}
@@ -69,37 +63,35 @@ function IconRail({ side, topItems, bottomItems, footer }: IconRailProps) {
 
   return (
     <Box
+      component="nav"
       sx={{
-        width: LAYOUT.RAIL_WIDTH,
-        minWidth: LAYOUT.RAIL_WIDTH,
-        height: '100%',
+        height: LAYOUT.TOPBAR_HEIGHT,
+        minHeight: LAYOUT.TOPBAR_HEIGHT,
         display: 'flex',
-        flexDirection: 'column',
         alignItems: 'center',
-        pt: 1,
-        pb: 1,
-        borderRight: isLeft ? 1 : 0,
-        borderLeft: isLeft ? 0 : 1,
+        px: 1,
+        borderBottom: 1,
         borderColor: 'divider',
         backgroundColor: '#131720',
-        overflow: 'hidden',
-        position: 'sticky',
-        top: 0,
+        gap: 0.25,
       }}
     >
-      {/* Top items */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-        {topItems.map(renderItem)}
+      {/* Left: navigation items */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+        {navItems.map(renderItem)}
       </Box>
 
-      {/* Bottom items — pushed to bottom */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.25, mt: 'auto' }}>
-        {bottomItems?.map(renderItem)}
-        {footer}
+      {/* Spacer */}
+      <Box sx={{ flexGrow: 1 }} />
+
+      {/* Right: utility items + trailing (ThemeToggle) */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+        {utilityItems.map(renderItem)}
+        {trailing}
       </Box>
     </Box>
   );
 }
 
-export { IconRail };
-export type { RailItem, IconRailProps };
+export { TopNavBar };
+export type { TopNavBarProps };

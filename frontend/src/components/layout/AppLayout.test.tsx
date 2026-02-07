@@ -10,12 +10,18 @@ vi.mock('./ThemeToggle', () => ({
   },
 }))
 
+vi.mock('./TopNavBar', () => ({
+  TopNavBar: function TopNavBar() {
+    return <nav data-testid="top-nav-bar">nav</nav>
+  },
+}))
+
 beforeEach(() => {
   vi.clearAllMocks()
 })
 
 describe('AppLayout', () => {
-  it('renders icon rail and outlet when authenticated', () => {
+  it('renders top nav bar and outlet when authenticated', () => {
     authStore.store.setState({
       user: { id: 'u1', email: 'test@test.com', github_login: null },
       token: 'fake-token',
@@ -33,6 +39,7 @@ describe('AppLayout', () => {
       </MemoryRouter>,
     )
 
+    expect(screen.getByTestId('top-nav-bar')).toBeInTheDocument()
     expect(screen.getByText('Test Page Content')).toBeInTheDocument()
   })
 

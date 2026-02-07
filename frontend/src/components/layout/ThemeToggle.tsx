@@ -5,12 +5,16 @@ import DarkModeOutlined from '@mui/icons-material/DarkModeOutlined';
 import { useThemeMode } from '@/hooks/useThemeMode';
 import { ANIMATION } from '@/constants';
 
-function ThemeToggle() {
+type ThemeToggleProps = {
+  tooltipPlacement?: 'top' | 'bottom' | 'left' | 'right';
+};
+
+function ThemeToggle({ tooltipPlacement = 'bottom' }: ThemeToggleProps) {
   const { mode, toggleMode } = useThemeMode();
   const isDark = mode === 'dark';
 
   return (
-    <Tooltip title={isDark ? 'Switch to light mode' : 'Switch to dark mode'} placement="right">
+    <Tooltip title={isDark ? 'Switch to light mode' : 'Switch to dark mode'} placement={tooltipPlacement}>
       <IconButton
         onClick={toggleMode}
         size="small"
