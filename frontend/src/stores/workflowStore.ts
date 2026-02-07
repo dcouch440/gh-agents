@@ -28,9 +28,12 @@ type WorkflowState = {
   loading: boolean
   error: string | null
   dirty: boolean
+  lastFetched: number | null
 }
 
 // ── Store ────────────────────────────────────────────────────────────────────
+
+const STALE_THRESHOLD_MS = 60_000
 
 const store = createStore<WorkflowState>(() => ({
   items: createNormalizedMap<Workflow>(),
@@ -41,6 +44,7 @@ const store = createStore<WorkflowState>(() => ({
   loading: false,
   error: null,
   dirty: false,
+  lastFetched: null,
 }))
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -74,15 +78,24 @@ const selectError = (s: WorkflowState): string | null => s.error
 
 const selectDirty = (s: WorkflowState): boolean => s.dirty
 
+const selectIsStale = (s: WorkflowState): boolean =>
+  s.lastFetched === null || Date.now() - s.lastFetched > STALE_THRESHOLD_MS
+
 // ── Workflow CRUD ────────────────────────────────────────────────────────────
 
 const fetchAll = async (): Promise<void> => {
   store.setState({ loading: true, error: null })
   try {
     const data = await api.workflows.list()
-    store.setState({ items: nmFromArray(data.items), loading: false })
+    store.setState({ items: nmFromArray(data.items), loading: false, lastFetched: Date.now() })
   } catch (e) {
     store.setState({ loading: false, error: extractError(e) })
+  }
+}
+
+const fetchIfStale = async (): Promise<void> => {
+  if (selectIsStale(store.getState())) {
+    await fetchAll()
   }
 }
 
@@ -253,7 +266,9 @@ export const workflowStore = {
   selectLoading,
   selectError,
   selectDirty,
+  selectIsStale,
   fetchAll,
+  fetchIfStale,
   fetchOne,
   create,
   update,

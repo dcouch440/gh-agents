@@ -103,6 +103,7 @@ const selectCompletedStepCount = (s: WorkflowExecutionState): number =>
 // ── WS Event Handler ────────────────────────────────────────────────────────
 
 const handleWsEvent = (msg: WsWireMessage): void => {
+  try {
   switch (msg.event) {
     case WORKFLOW_EVENT.STARTED: {
       const d = msg.data as WorkflowStartedData
@@ -201,6 +202,9 @@ const handleWsEvent = (msg: WsWireMessage): void => {
       }))
       break
     }
+  }
+  } catch (err) {
+    console.error(`[workflowExecutionStore] WS handler error on "${msg.event}":`, err)
   }
 }
 

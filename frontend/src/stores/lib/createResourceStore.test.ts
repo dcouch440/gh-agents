@@ -168,6 +168,68 @@ describe('createResourceStore', () => {
     })
   })
 
+  describe('stale data', () => {
+    it('starts as stale (lastFetched is null)', () => {
+      const { store, selectIsStale } = makeStore()
+      expect(selectIsStale(store.getState())).toBe(true)
+      expect(store.getState().lastFetched).toBeNull()
+    })
+
+    it('is not stale after fetchAll', async () => {
+      const { store, selectIsStale, fetchAll } = makeStore()
+      await fetchAll()
+      expect(selectIsStale(store.getState())).toBe(false)
+      expect(store.getState().lastFetched).toBeTypeOf('number')
+    })
+
+    it('does not set lastFetched on fetchAll failure', async () => {
+      const { store, selectIsStale, fetchAll } = makeStore({
+        list: vi.fn().mockRejectedValue(new Error('fail')),
+      })
+      await fetchAll()
+      expect(store.getState().lastFetched).toBeNull()
+      expect(selectIsStale(store.getState())).toBe(true)
+    })
+
+    it('fetchIfStale calls API when stale', async () => {
+      const { store, fetchIfStale, api } = makeStore()
+      expect(store.getState().lastFetched).toBeNull()
+      await fetchIfStale()
+      expect(api.list).toHaveBeenCalledTimes(1)
+      expect(store.getState().lastFetched).toBeTypeOf('number')
+    })
+
+    it('fetchIfStale skips API when fresh', async () => {
+      const { fetchAll, fetchIfStale, api } = makeStore()
+      await fetchAll()
+      expect(api.list).toHaveBeenCalledTimes(1)
+      await fetchIfStale()
+      expect(api.list).toHaveBeenCalledTimes(1)
+    })
+
+    it('respects custom staleThresholdMs', async () => {
+      const now = vi.spyOn(Date, 'now')
+      now.mockReturnValue(1000)
+
+      const api = makeMockApi()
+      const s = createResourceStore<Widget, CreateWidget, UpdateWidget>({
+        name: 'widgets',
+        api,
+        unwrapList: (res) => (res as { items: Widget[] }).items,
+        staleThresholdMs: 500,
+      })
+      await s.fetchAll()
+      // 200ms later — still fresh
+      now.mockReturnValue(1200)
+      expect(s.selectIsStale(s.store.getState())).toBe(false)
+      // 600ms later — stale
+      now.mockReturnValue(1600)
+      expect(s.selectIsStale(s.store.getState())).toBe(true)
+
+      now.mockRestore()
+    })
+  })
+
   describe('selectors', () => {
     it('selectAll returns memoized array', async () => {
       const { store, selectAll, fetchAll } = makeStore()

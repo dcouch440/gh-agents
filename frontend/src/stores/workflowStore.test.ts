@@ -130,6 +130,7 @@ const resetStore = () => {
     loading: false,
     error: null,
     dirty: false,
+    lastFetched: null,
   })
 }
 
@@ -369,6 +370,30 @@ describe('workflowStore', () => {
 
     it('selectDirty returns false initially', () => {
       expect(workflowStore.selectDirty(workflowStore.store.getState())).toBe(false)
+    })
+  })
+
+  describe('stale data', () => {
+    it('starts as stale (lastFetched is null)', () => {
+      expect(workflowStore.selectIsStale(workflowStore.store.getState())).toBe(true)
+      expect(workflowStore.store.getState().lastFetched).toBeNull()
+    })
+
+    it('is not stale after fetchAll', async () => {
+      mockList.mockResolvedValue({ items: [wf1] })
+      await workflowStore.fetchAll()
+
+      expect(workflowStore.selectIsStale(workflowStore.store.getState())).toBe(false)
+      expect(workflowStore.store.getState().lastFetched).toBeTypeOf('number')
+    })
+
+    it('fetchIfStale skips when fresh', async () => {
+      mockList.mockResolvedValue({ items: [wf1] })
+      await workflowStore.fetchAll()
+      expect(mockList).toHaveBeenCalledTimes(1)
+
+      await workflowStore.fetchIfStale()
+      expect(mockList).toHaveBeenCalledTimes(1)
     })
   })
 

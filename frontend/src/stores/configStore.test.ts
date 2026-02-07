@@ -42,6 +42,7 @@ beforeEach(() => {
     stats: null,
     loading: false,
     error: null,
+    lastFetched: null,
   })
 })
 
@@ -106,6 +107,30 @@ describe('configStore', () => {
       await configStore.fetchStats()
 
       expect(configStore.store.getState().error).toBe('Stats unavailable')
+    })
+  })
+
+  describe('stale data', () => {
+    it('starts as stale (lastFetched is null)', () => {
+      expect(configStore.selectIsStale(configStore.store.getState())).toBe(true)
+      expect(configStore.store.getState().lastFetched).toBeNull()
+    })
+
+    it('is not stale after fetchConfig', async () => {
+      mockConfigGet.mockResolvedValue(mockConfig)
+      await configStore.fetchConfig()
+
+      expect(configStore.selectIsStale(configStore.store.getState())).toBe(false)
+      expect(configStore.store.getState().lastFetched).toBeTypeOf('number')
+    })
+
+    it('fetchConfigIfStale skips when fresh', async () => {
+      mockConfigGet.mockResolvedValue(mockConfig)
+      await configStore.fetchConfig()
+      expect(mockConfigGet).toHaveBeenCalledTimes(1)
+
+      await configStore.fetchConfigIfStale()
+      expect(mockConfigGet).toHaveBeenCalledTimes(1)
     })
   })
 

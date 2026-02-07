@@ -233,32 +233,36 @@ const appendTranscriptEntry = (entry: RoomTranscriptEntry): void => {
 // ── WebSocket Handler ────────────────────────────────────────────────────────
 
 const handleWsEvent = (msg: WsWireMessage): void => {
-  const data = msg.data
+  try {
+    const data = msg.data
 
-  switch (msg.event) {
-    case ROOM_EVENT.SPEAKER_END: {
-      appendTranscriptEntry({
-        agent_name: data.agent_name as string,
-        role_description: '',
-        content: data.content as string,
-        speaker_order: data.speaker_order as number,
-        created_at: msg.ts,
-      })
-      break
+    switch (msg.event) {
+      case ROOM_EVENT.SPEAKER_END: {
+        appendTranscriptEntry({
+          agent_name: data.agent_name as string,
+          role_description: '',
+          content: data.content as string,
+          speaker_order: data.speaker_order as number,
+          created_at: msg.ts,
+        })
+        break
+      }
+      case ROOM_EVENT.SESSION_COMPLETE: {
+        const sessionId = data.room_session_id as string
+        store.setState((s) => {
+          const updated: Record<string, RoomSession[]> = {}
+          for (const [roomId, sessions] of Object.entries(s.sessionsByRoom)) {
+            updated[roomId] = sessions.map((rs) =>
+              rs.id === sessionId ? { ...rs, status: 'completed' } : rs,
+            )
+          }
+          return { sessionsByRoom: updated }
+        })
+        break
+      }
     }
-    case ROOM_EVENT.SESSION_COMPLETE: {
-      const sessionId = data.room_session_id as string
-      store.setState((s) => {
-        const updated: Record<string, RoomSession[]> = {}
-        for (const [roomId, sessions] of Object.entries(s.sessionsByRoom)) {
-          updated[roomId] = sessions.map((rs) =>
-            rs.id === sessionId ? { ...rs, status: 'completed' } : rs,
-          )
-        }
-        return { sessionsByRoom: updated }
-      })
-      break
-    }
+  } catch (err) {
+    console.error(`[roomStore] WS handler error on "${msg.event}":`, err)
   }
 }
 
