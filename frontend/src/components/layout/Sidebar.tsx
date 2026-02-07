@@ -8,8 +8,8 @@ import Tooltip from '@mui/material/Tooltip';
 import ChevronLeftOutlined from '@mui/icons-material/ChevronLeftOutlined';
 import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined';
 import { useNavigation } from '@/hooks/useNavigation';
-import { useReviewQueue } from '@/hooks/useReviewQueue';
 import { useSidebar } from '@/hooks/useSidebar';
+import { useStore, reviewQueueStore } from '@/stores';
 import { SidebarNavItem } from './SidebarNavItem';
 import { ThemeToggle } from './ThemeToggle';
 import { APP_NAME, ROUTES, SIDEBAR, ANIMATION } from '@/constants';
@@ -17,7 +17,7 @@ import { APP_NAME, ROUTES, SIDEBAR, ANIMATION } from '@/constants';
 function Sidebar() {
   const { collapsed, toggle } = useSidebar();
   const { navItems } = useNavigation();
-  const { pendingCount } = useReviewQueue();
+  const pendingCount = useStore(reviewQueueStore.store, reviewQueueStore.selectPendingCount);
   const width = collapsed ? SIDEBAR.WIDTH_COLLAPSED : SIDEBAR.WIDTH_EXPANDED;
 
   return (

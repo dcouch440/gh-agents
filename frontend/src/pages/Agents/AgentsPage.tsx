@@ -14,9 +14,8 @@ import {
   type TableColumn,
   type MenuAction,
 } from '@/components/primitives'
-import {useSessions} from '@/hooks/useSessions'
 import {useConfirmModal} from '@/hooks/useConfirmModal'
-import {useStore, agentStore} from '@/stores'
+import {useStore, agentStore, sessionStore} from '@/stores'
 import {api} from '@/api'
 import type {Agent} from '@/types/agent'
 
@@ -25,10 +24,11 @@ function AgentsPage() {
   const agents = useStore(agentStore.store, agentStore.selectAll)
   const agentsLoading = useStore(agentStore.store, agentStore.selectLoading)
   const agentsError = useStore(agentStore.store, agentStore.selectError)
-  const {sessions, loading: sessionsLoading} = useSessions()
+  const sessions = useStore(sessionStore.store, sessionStore.selectAll)
+  const sessionsLoading = useStore(sessionStore.store, sessionStore.selectLoading)
   const confirm = useConfirmModal()
 
-  useEffect(() => { void agentStore.fetchAll() }, [])
+  useEffect(() => { void agentStore.fetchAll(); void sessionStore.fetchAll() }, [])
   const [creatingSession, setCreatingSession] = useState<string | null>(null)
 
   // Match agents with their workshop sessions

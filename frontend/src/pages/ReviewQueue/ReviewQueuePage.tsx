@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Box, Typography } from '@mui/material'
 import { FadeIn } from '@/components/animation'
 import { PageHeader } from '@/components/primitives/PageHeader'
@@ -8,12 +8,18 @@ import { EmptyState } from '@/components/primitives/EmptyState'
 import { ChatPanel } from '@/components/chat/ChatPanel'
 import { MarkdownPreview } from '@/components/primitives/MarkdownPreview'
 import { ReviewCard, ApproveButton, CollapsibleSection } from '@/components/review'
-import { useReviewQueue } from '@/hooks/useReviewQueue'
+import { useStore, reviewQueueStore } from '@/stores'
 import { useInteractiveChat } from '@/hooks/useInteractiveChat'
 import type { ChatMessageData } from '@/components/chat/ChatPanel'
 
 function ReviewQueuePage() {
-  const { executions, loading, error, reload } = useReviewQueue()
+  const executions = useStore(reviewQueueStore.store, reviewQueueStore.selectExecutions)
+  const loading = useStore(reviewQueueStore.store, reviewQueueStore.selectLoading)
+  const error = useStore(reviewQueueStore.store, reviewQueueStore.selectError)
+
+  useEffect(() => { void reviewQueueStore.fetchPending() }, [])
+
+  const reload = useCallback(() => { void reviewQueueStore.fetchPending() }, [])
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [inputOpen, setInputOpen] = useState(false)
