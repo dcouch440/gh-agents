@@ -119,6 +119,7 @@ pub struct WorkflowRow {
     pub container_enabled: bool,
     pub target_repo_url: Option<String>,
     pub target_branch: Option<String>,
+    pub vpn_enabled: bool,
 }
 
 /// Row type for a workflow step (DAG node).
@@ -142,6 +143,7 @@ pub struct WorkflowStepRow {
     pub display_order: i32,
     pub version: i32,
     pub reasoning_trace: bool,
+    pub verification_agent_ids: Option<serde_json::Value>,
 }
 
 /// Row type for a workflow step edge (DAG edge).

@@ -26,6 +26,7 @@ pub struct WorkflowResponse {
     pub container_enabled: bool,
     pub target_repo_url: Option<String>,
     pub target_branch: Option<String>,
+    pub vpn_enabled: bool,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -35,6 +36,7 @@ pub struct CreateWorkflowRequest {
     pub container_enabled: Option<bool>,
     pub target_repo_url: Option<String>,
     pub target_branch: Option<String>,
+    pub vpn_enabled: Option<bool>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -44,6 +46,7 @@ pub struct UpdateWorkflowRequest {
     pub container_enabled: Option<bool>,
     pub target_repo_url: Option<Option<String>>,
     pub target_branch: Option<Option<String>>,
+    pub vpn_enabled: Option<bool>,
 }
 
 // ============================================================================
@@ -66,6 +69,7 @@ pub struct WorkflowStepResponse {
     pub display_order: i32,
     pub version: i32,
     pub reasoning_trace: bool,
+    pub verification_agent_ids: Vec<Uuid>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -81,6 +85,7 @@ pub struct CreateStepRequest {
     pub for_each_label_field: Option<String>,
     pub display_order: Option<i32>,
     pub reasoning_trace: Option<bool>,
+    pub verification_agent_ids: Option<Vec<Uuid>>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -96,6 +101,7 @@ pub struct UpdateStepRequest {
     pub for_each_label_field: Option<String>,
     pub display_order: Option<i32>,
     pub reasoning_trace: Option<bool>,
+    pub verification_agent_ids: Option<Vec<Uuid>>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -155,6 +161,10 @@ fn step_response(r: crate::db::WorkflowStepRow) -> WorkflowStepResponse {
         display_order: r.display_order,
         version: r.version,
         reasoning_trace: r.reasoning_trace,
+        verification_agent_ids: r
+            .verification_agent_ids
+            .and_then(|v| serde_json::from_value(v).ok())
+            .unwrap_or_default(),
     }
 }
 
@@ -191,6 +201,7 @@ pub async fn list_workflows(
             container_enabled: r.container_enabled,
             target_repo_url: r.target_repo_url,
             target_branch: r.target_branch,
+            vpn_enabled: r.vpn_enabled,
         })
         .collect();
     Ok(Json(items))
@@ -225,6 +236,7 @@ pub async fn create_workflow(
             req.container_enabled.unwrap_or(false),
             req.target_repo_url,
             req.target_branch,
+            req.vpn_enabled.unwrap_or(false),
         )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -238,6 +250,7 @@ pub async fn create_workflow(
             container_enabled: row.container_enabled,
             target_repo_url: row.target_repo_url,
             target_branch: row.target_branch,
+            vpn_enabled: row.vpn_enabled,
         }),
     ))
 }
@@ -276,6 +289,7 @@ pub async fn get_workflow(
         container_enabled: row.container_enabled,
         target_repo_url: row.target_repo_url,
         target_branch: row.target_branch,
+        vpn_enabled: row.vpn_enabled,
     }))
 }
 
@@ -320,6 +334,7 @@ pub async fn update_workflow(
             req.container_enabled,
             req.target_repo_url,
             req.target_branch,
+            req.vpn_enabled,
         )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -331,6 +346,7 @@ pub async fn update_workflow(
         container_enabled: row.container_enabled,
         target_repo_url: row.target_repo_url,
         target_branch: row.target_branch,
+        vpn_enabled: row.vpn_enabled,
     }))
 }
 
@@ -417,6 +433,9 @@ pub async fn create_workflow_step(
         display_order: req.display_order.unwrap_or(0),
         version: 1,
         reasoning_trace: req.reasoning_trace.unwrap_or(false),
+        verification_agent_ids: req
+            .verification_agent_ids
+            .map(|ids| serde_json::to_value(ids).unwrap()),
     };
     let row = repo
         .create_step(step)
@@ -556,6 +575,10 @@ pub async fn update_workflow_step(
         display_order: req.display_order.unwrap_or(existing.display_order),
         version: existing.version,
         reasoning_trace: req.reasoning_trace.unwrap_or(existing.reasoning_trace),
+        verification_agent_ids: req
+            .verification_agent_ids
+            .map(|ids| serde_json::to_value(ids).unwrap())
+            .or(existing.verification_agent_ids),
     };
     let row = repo
         .update_step(step)
