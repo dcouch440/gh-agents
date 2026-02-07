@@ -5,6 +5,7 @@
 //! Execution functions use the hub's `ExecutionEngine` for step execution.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use serde_json::Value as JsonValue;
@@ -24,6 +25,10 @@ use crate::types::{
 };
 
 use super::construct_agent_defaults;
+use super::engine::filters::{
+    AgentGuidanceFilter, ExecutionFilter, FilterContext, PartialJsonRecoveryFilter,
+    SchemaEnhancementFilter, SchemaValidationRetryFilter,
+};
 use super::engine::ExecutionEngine;
 use super::error::HubError;
 use super::recorder::ExecutionRecorder;
@@ -360,9 +365,14 @@ pub async fn execute_workflow_via_engine(
     let port_meta = prefetch_port_metadata(state, steps).await;
 
     // Broadcast: workflow started
-    broadcast_workflow_event(state, ctx, workflow_id, WorkflowEventKind::Started {
-        total_steps: sorted.len(),
-    });
+    broadcast_workflow_event(
+        state,
+        ctx,
+        workflow_id,
+        WorkflowEventKind::Started {
+            total_steps: sorted.len(),
+        },
+    );
 
     // Phase 6B: Detect chained for-each pipelines
     let chains = detect_for_each_chains(steps, edges);
@@ -519,23 +529,45 @@ pub async fn execute_workflow_via_engine(
 
         if let Err(ref e) = step_result {
             if !matches!(e, HubError::AwaitingUser { .. }) {
-                broadcast_workflow_event(state, ctx, workflow_id, WorkflowEventKind::StepFailed {
-                    step_id: step.id,
-                    step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
-                    error: format!("{}", e),
-                });
-                broadcast_workflow_event(state, ctx, workflow_id, WorkflowEventKind::Failed {
-                    error: format!("Step '{}' failed: {}", step.output_variable_name.as_deref().unwrap_or("unknown"), e),
-                });
+                broadcast_workflow_event(
+                    state,
+                    ctx,
+                    workflow_id,
+                    WorkflowEventKind::StepFailed {
+                        step_id: step.id,
+                        step_name: step
+                            .output_variable_name
+                            .clone()
+                            .unwrap_or_else(|| step.id.to_string()),
+                        error: format!("{}", e),
+                    },
+                );
+                broadcast_workflow_event(
+                    state,
+                    ctx,
+                    workflow_id,
+                    WorkflowEventKind::Failed {
+                        error: format!(
+                            "Step '{}' failed: {}",
+                            step.output_variable_name.as_deref().unwrap_or("unknown"),
+                            e
+                        ),
+                    },
+                );
             }
         }
         step_result?;
     }
 
     // Broadcast: workflow completed
-    broadcast_workflow_event(state, ctx, workflow_id, WorkflowEventKind::Completed {
-        duration_ms: Some(start_time.elapsed().as_millis() as u64),
-    });
+    broadcast_workflow_event(
+        state,
+        ctx,
+        workflow_id,
+        WorkflowEventKind::Completed {
+            duration_ms: Some(start_time.elapsed().as_millis() as u64),
+        },
+    );
 
     let final_outputs: HashMap<String, StepOutput> = completed
         .into_iter()
@@ -571,12 +603,20 @@ async fn execute_single_step(
     let step_start = std::time::Instant::now();
 
     // Broadcast: step started
-    broadcast_workflow_event(state, ctx, step.workflow_id, WorkflowEventKind::StepStarted {
-        step_id: step.id,
-        step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
-        agent_id: Some(agent.id),
-        execution_id: None,
-    });
+    broadcast_workflow_event(
+        state,
+        ctx,
+        step.workflow_id,
+        WorkflowEventKind::StepStarted {
+            step_id: step.id,
+            step_name: step
+                .output_variable_name
+                .clone()
+                .unwrap_or_else(|| step.id.to_string()),
+            agent_id: Some(agent.id),
+            execution_id: None,
+        },
+    );
 
     // Resolve port inputs if this step has input ports defined
     let port_inputs = if let Some(inputs) = port_meta.step_inputs.get(&step.id) {
@@ -652,15 +692,23 @@ async fn execute_single_step(
     completed.insert(step.id, output);
 
     // Broadcast: step completed
-    broadcast_workflow_event(state, ctx, step.workflow_id, WorkflowEventKind::StepCompleted {
-        step_id: step.id,
-        step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
-        agent_id: Some(agent.id),
-        output: None,
-        input_tokens: Some(in_tok as u64),
-        output_tokens: Some(out_tok as u64),
-        duration_ms: Some(step_start.elapsed().as_millis() as u64),
-    });
+    broadcast_workflow_event(
+        state,
+        ctx,
+        step.workflow_id,
+        WorkflowEventKind::StepCompleted {
+            step_id: step.id,
+            step_name: step
+                .output_variable_name
+                .clone()
+                .unwrap_or_else(|| step.id.to_string()),
+            agent_id: Some(agent.id),
+            output: None,
+            input_tokens: Some(in_tok as u64),
+            output_tokens: Some(out_tok as u64),
+            duration_ms: Some(step_start.elapsed().as_millis() as u64),
+        },
+    );
 
     Ok(())
 }
@@ -850,12 +898,20 @@ async fn execute_room_step(
         .map_err(|e| HubError::Internal(anyhow!("failed to create room session: {}", e)))?;
 
     // Broadcast: step started (room step)
-    broadcast_workflow_event(state, ctx, step.workflow_id, WorkflowEventKind::StepStarted {
-        step_id: step.id,
-        step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
-        agent_id: None,
-        execution_id: Some(session.id),
-    });
+    broadcast_workflow_event(
+        state,
+        ctx,
+        step.workflow_id,
+        WorkflowEventKind::StepStarted {
+            step_id: step.id,
+            step_name: step
+                .output_variable_name
+                .clone()
+                .unwrap_or_else(|| step.id.to_string()),
+            agent_id: None,
+            execution_id: Some(session.id),
+        },
+    );
 
     info!(
         step_id = %step.id,
@@ -906,10 +962,18 @@ async fn execute_room_step(
         completed.insert(step.id, partial);
 
         // Broadcast: step paused (awaiting user interaction)
-        broadcast_workflow_event(state, ctx, step.workflow_id, WorkflowEventKind::StepPaused {
-            step_id: step.id,
-            step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
-        });
+        broadcast_workflow_event(
+            state,
+            ctx,
+            step.workflow_id,
+            WorkflowEventKind::StepPaused {
+                step_id: step.id,
+                step_name: step
+                    .output_variable_name
+                    .clone()
+                    .unwrap_or_else(|| step.id.to_string()),
+            },
+        );
 
         info!(
             step_id = %step.id,
@@ -1022,15 +1086,23 @@ async fn execute_room_step(
     completed.insert(step.id, output);
 
     // Broadcast: step completed (room step)
-    broadcast_workflow_event(state, ctx, step.workflow_id, WorkflowEventKind::StepCompleted {
-        step_id: step.id,
-        step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
-        agent_id: None,
-        output: None,
-        input_tokens: None,
-        output_tokens: None,
-        duration_ms: None,
-    });
+    broadcast_workflow_event(
+        state,
+        ctx,
+        step.workflow_id,
+        WorkflowEventKind::StepCompleted {
+            step_id: step.id,
+            step_name: step
+                .output_variable_name
+                .clone()
+                .unwrap_or_else(|| step.id.to_string()),
+            agent_id: None,
+            output: None,
+            input_tokens: None,
+            output_tokens: None,
+            duration_ms: None,
+        },
+    );
 
     info!(
         step_id = %step.id,
@@ -1135,12 +1207,20 @@ async fn execute_for_each_step(
     let is_label_routing = step.routing_mode.as_deref() == Some("label") && routing_rules.is_some();
 
     // Broadcast: step started (for-each)
-    broadcast_workflow_event(state, ctx, step.workflow_id, WorkflowEventKind::StepStarted {
-        step_id: step.id,
-        step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
-        agent_id: Some(agent.id),
-        execution_id: None,
-    });
+    broadcast_workflow_event(
+        state,
+        ctx,
+        step.workflow_id,
+        WorkflowEventKind::StepStarted {
+            step_id: step.id,
+            step_name: step
+                .output_variable_name
+                .clone()
+                .unwrap_or_else(|| step.id.to_string()),
+            agent_id: Some(agent.id),
+            execution_id: None,
+        },
+    );
 
     info!(
         step_id = %step.id,
@@ -1232,12 +1312,20 @@ async fn execute_for_each_step(
                 iteration_outputs.push(output.structured_output.clone());
 
                 // Broadcast: for-each progress
-                broadcast_workflow_event(state, ctx, step.workflow_id, WorkflowEventKind::ForEachProgress {
-                    step_id: step.id,
-                    step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
-                    completed: idx + 1,
-                    total: total_iterations,
-                });
+                broadcast_workflow_event(
+                    state,
+                    ctx,
+                    step.workflow_id,
+                    WorkflowEventKind::ForEachProgress {
+                        step_id: step.id,
+                        step_name: step
+                            .output_variable_name
+                            .clone()
+                            .unwrap_or_else(|| step.id.to_string()),
+                        completed: idx + 1,
+                        total: total_iterations,
+                    },
+                );
             }
             Err(e) => {
                 error!(
@@ -1270,15 +1358,23 @@ async fn execute_for_each_step(
     completed.insert(step.id, output);
 
     // Broadcast: step completed (for-each)
-    broadcast_workflow_event(state, ctx, step.workflow_id, WorkflowEventKind::StepCompleted {
-        step_id: step.id,
-        step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
-        agent_id: Some(agent.id),
-        output: None,
-        input_tokens: None,
-        output_tokens: None,
-        duration_ms: None,
-    });
+    broadcast_workflow_event(
+        state,
+        ctx,
+        step.workflow_id,
+        WorkflowEventKind::StepCompleted {
+            step_id: step.id,
+            step_name: step
+                .output_variable_name
+                .clone()
+                .unwrap_or_else(|| step.id.to_string()),
+            agent_id: Some(agent.id),
+            output: None,
+            input_tokens: None,
+            output_tokens: None,
+            duration_ms: None,
+        },
+    );
 
     Ok(())
 }
@@ -1316,6 +1412,7 @@ async fn run_step_via_engine(
 
     // Build system prompt: mode result + schema enforcement
     let mut system_prompt = mode.system_prompt; // agent + mode already merged
+    let mut output_schema_value: Option<JsonValue> = None;
     if let Some(schema_id) = step.output_schema_id {
         let os_repo = &state.repos().output_schemas;
         if let Ok(Some(schema)) = os_repo.get_output_schema(schema_id).await {
@@ -1323,6 +1420,7 @@ async fn run_step_via_engine(
                 "\n\nYou MUST respond with valid JSON matching this schema:\n```json\n{}\n```\nRespond ONLY with the JSON object, no other text.",
                 serde_json::to_string_pretty(&schema.schema).unwrap_or_default()
             ));
+            output_schema_value = Some(schema.schema.clone());
         }
     }
 
@@ -1377,8 +1475,26 @@ async fn run_step_via_engine(
 
     let sink = NullSink;
 
+    // Build filter pipeline
+    let mut filter_ctx = FilterContext::new(&agent.model_id, agent.id).with_step_id(step.id);
+
+    let mut filters: Vec<Arc<dyn ExecutionFilter>> =
+        vec![Arc::new(AgentGuidanceFilter::new(state.repo().clone()))];
+
+    if let Some(schema_val) = output_schema_value {
+        filter_ctx = filter_ctx.with_schema(schema_val);
+        filters.push(Arc::new(SchemaEnhancementFilter::new()));
+        filters.push(Arc::new(SchemaValidationRetryFilter::new()));
+        filters.push(Arc::new(PartialJsonRecoveryFilter::new()));
+    }
+
+    let filtered_engine = engine
+        .clone_with_provider()
+        .with_filters(filters)
+        .with_filter_context(filter_ctx);
+
     // Execute
-    let result = engine
+    let result = filtered_engine
         .execute(&strategy, prompt, &sink, &recorder, cancel)
         .await?;
 
@@ -2197,9 +2313,14 @@ pub async fn resume_dag_from_approval(
     let engine = ExecutionEngine::new(provider);
 
     // Broadcast: resumed
-    broadcast_workflow_event(state, &ctx, workflow_id, WorkflowEventKind::Resumed {
-        step_id: paused_step_id,
-    });
+    broadcast_workflow_event(
+        state,
+        &ctx,
+        workflow_id,
+        WorkflowEventKind::Resumed {
+            step_id: paused_step_id,
+        },
+    );
 
     info!(
         paused_step_id = %paused_step_id,
@@ -2259,9 +2380,14 @@ pub async fn resume_dag_from_approval(
                 }
                 Err(e) => {
                     // Broadcast: workflow failed
-                    broadcast_workflow_event(state, &ctx, workflow_id, WorkflowEventKind::Failed {
-                        error: format!("{}", e),
-                    });
+                    broadcast_workflow_event(
+                        state,
+                        &ctx,
+                        workflow_id,
+                        WorkflowEventKind::Failed {
+                            error: format!("{}", e),
+                        },
+                    );
 
                     let _ = coll_repo
                         .update_workflow_execution_status(
@@ -2309,12 +2435,20 @@ async fn execute_cavernous_step(
     cancel: Option<&CancellationToken>,
 ) -> Result<(), HubError> {
     // Broadcast: step started (cavernous)
-    broadcast_workflow_event(state, ctx, step.workflow_id, WorkflowEventKind::StepStarted {
-        step_id: step.id,
-        step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
-        agent_id: Some(agent.id),
-        execution_id: None,
-    });
+    broadcast_workflow_event(
+        state,
+        ctx,
+        step.workflow_id,
+        WorkflowEventKind::StepStarted {
+            step_id: step.id,
+            step_name: step
+                .output_variable_name
+                .clone()
+                .unwrap_or_else(|| step.id.to_string()),
+            agent_id: Some(agent.id),
+            execution_id: None,
+        },
+    );
 
     info!(step_id = %step.id, "Starting cavernous routing step");
 
@@ -2638,15 +2772,23 @@ async fn execute_cavernous_step(
         .await;
 
     // Broadcast: step completed (cavernous)
-    broadcast_workflow_event(state, ctx, step.workflow_id, WorkflowEventKind::StepCompleted {
-        step_id: step.id,
-        step_name: step.output_variable_name.clone().unwrap_or_else(|| step.id.to_string()),
-        agent_id: Some(agent.id),
-        output: None,
-        input_tokens: Some(*total_input_tokens as u64),
-        output_tokens: Some(*total_output_tokens as u64),
-        duration_ms: None,
-    });
+    broadcast_workflow_event(
+        state,
+        ctx,
+        step.workflow_id,
+        WorkflowEventKind::StepCompleted {
+            step_id: step.id,
+            step_name: step
+                .output_variable_name
+                .clone()
+                .unwrap_or_else(|| step.id.to_string()),
+            agent_id: Some(agent.id),
+            output: None,
+            input_tokens: Some(*total_input_tokens as u64),
+            output_tokens: Some(*total_output_tokens as u64),
+            duration_ms: None,
+        },
+    );
 
     info!(
         step_id = %step.id,

@@ -103,7 +103,10 @@ fn broadcast_and_receive() {
         kind: SessionEventKind::Deleted,
     });
     let event = rx.try_recv().unwrap();
-    assert!(matches!(event, crate::server::ws::events::ServerEvent::Session(_)));
+    assert!(matches!(
+        event,
+        crate::server::ws::events::ServerEvent::Session(_)
+    ));
 }
 
 #[test]

@@ -663,6 +663,26 @@ impl ServerRepo for PgRepo {
     async fn delete_agent_mode(&self, mode_id: Uuid) -> Result<()> {
         crate::db::delete_agent_mode(&self.pool, mode_id).await
     }
+
+    async fn get_agent_guidances(
+        &self,
+        agent_id: Uuid,
+        step_id: Option<Uuid>,
+    ) -> Result<Vec<crate::db::AgentGuidanceRow>> {
+        let rows = sqlx::query_as::<_, crate::db::AgentGuidanceRow>(
+            "SELECT id, agent_id, workflow_step_id, suggestions, source, version, \
+                    is_active, created_at, updated_at \
+             FROM agent_guidances \
+             WHERE agent_id = $1 AND is_active = true \
+               AND (workflow_step_id IS NULL OR workflow_step_id = $2) \
+             ORDER BY workflow_step_id NULLS FIRST, version DESC",
+        )
+        .bind(agent_id)
+        .bind(step_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
 }
 
 // ============================================================================
