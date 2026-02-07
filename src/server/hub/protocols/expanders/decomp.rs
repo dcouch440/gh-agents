@@ -160,6 +160,7 @@ mod tests {
                     agent_name: "FE".to_string(),
                     agent_tools: vec![],
                     display_order: 0,
+                    content_schema: None,
                 },
                 PortConfig {
                     port_name: "backend".to_string(),
@@ -168,6 +169,7 @@ mod tests {
                     agent_name: "BE".to_string(),
                     agent_tools: vec![],
                     display_order: 1,
+                    content_schema: None,
                 },
             ],
         }
@@ -200,6 +202,7 @@ mod tests {
                     agent_name: "A".to_string(),
                     agent_tools: vec![],
                     display_order: 0,
+                    content_schema: None,
                 },
                 PortConfig {
                     port_name: "same".to_string(),
@@ -208,6 +211,7 @@ mod tests {
                     agent_name: "B".to_string(),
                     agent_tools: vec![],
                     display_order: 1,
+                    content_schema: None,
                 },
             ],
         };
@@ -231,6 +235,7 @@ mod tests {
                 agent_name: "A".to_string(),
                 agent_tools: vec![],
                 display_order: 0,
+                content_schema: None,
             }],
         };
         assert!(matches!(
@@ -249,6 +254,7 @@ mod tests {
                 agent_name: "A".to_string(),
                 agent_tools: vec![],
                 display_order: 0,
+                content_schema: None,
             }],
         };
         assert!(matches!(
@@ -267,6 +273,7 @@ mod tests {
                 agent_name: "A".to_string(),
                 agent_tools: vec![],
                 display_order: 0,
+                content_schema: None,
             }],
         };
         assert!(matches!(
@@ -292,6 +299,7 @@ mod tests {
                 agent_name: "A".to_string(),
                 agent_tools: vec![],
                 display_order: 0,
+                content_schema: None,
             }],
         };
         assert!(DecompExpander.validate(&config).is_ok());

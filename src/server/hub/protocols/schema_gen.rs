@@ -6,57 +6,116 @@ use super::types::PortConfig;
 
 /// Generate a decomp output schema: array of `{port, content}` objects
 /// where `port` is constrained to the configured port names.
+///
+/// When any port has a `content_schema`, generates `oneOf` per-port variants
+/// with typed content fields. Otherwise falls back to a bare object content.
 pub fn decomp_schema(ports: &[PortConfig]) -> serde_json::Value {
-    let port_names: Vec<serde_json::Value> = ports
-        .iter()
-        .map(|p| serde_json::Value::String(p.port_name.clone()))
-        .collect();
+    let has_typed_content = ports.iter().any(|p| p.content_schema.is_some());
 
-    json!({
-        "type": "array",
-        "items": {
+    if has_typed_content {
+        let variants: Vec<serde_json::Value> = ports
+            .iter()
+            .map(|port| {
+                let content_schema = port
+                    .content_schema
+                    .clone()
+                    .unwrap_or_else(|| json!({"type": "object"}));
+                json!({
+                    "type": "object",
+                    "required": ["port", "content"],
+                    "properties": {
+                        "port": { "const": port.port_name },
+                        "content": content_schema
+                    },
+                    "additionalProperties": false
+                })
+            })
+            .collect();
+
+        json!({
+            "type": "array",
+            "items": { "oneOf": variants }
+        })
+    } else {
+        let port_names: Vec<serde_json::Value> = ports
+            .iter()
+            .map(|p| serde_json::Value::String(p.port_name.clone()))
+            .collect();
+
+        json!({
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["port", "content"],
+                "properties": {
+                    "port": {
+                        "type": "string",
+                        "enum": port_names,
+                        "description": "The target agent port for this task"
+                    },
+                    "content": {
+                        "type": "object",
+                        "description": "The task content to pass to the assigned agent"
+                    }
+                },
+                "additionalProperties": false
+            }
+        })
+    }
+}
+
+/// Generate a route output schema: single `{port, content}` object
+/// where `port` is constrained to the configured port names.
+///
+/// When any port has a `content_schema`, generates `oneOf` per-port variants
+/// with typed content fields. Otherwise falls back to a bare object content.
+pub fn route_schema(ports: &[PortConfig]) -> serde_json::Value {
+    let has_typed_content = ports.iter().any(|p| p.content_schema.is_some());
+
+    if has_typed_content {
+        let variants: Vec<serde_json::Value> = ports
+            .iter()
+            .map(|port| {
+                let content_schema = port
+                    .content_schema
+                    .clone()
+                    .unwrap_or_else(|| json!({"type": "object"}));
+                json!({
+                    "type": "object",
+                    "required": ["port", "content"],
+                    "properties": {
+                        "port": { "const": port.port_name },
+                        "content": content_schema
+                    },
+                    "additionalProperties": false
+                })
+            })
+            .collect();
+
+        json!({ "oneOf": variants })
+    } else {
+        let port_names: Vec<serde_json::Value> = ports
+            .iter()
+            .map(|p| serde_json::Value::String(p.port_name.clone()))
+            .collect();
+
+        json!({
             "type": "object",
             "required": ["port", "content"],
             "properties": {
                 "port": {
                     "type": "string",
                     "enum": port_names,
-                    "description": "The target agent port for this task"
+                    "description": "The single target agent port to route to"
                 },
                 "content": {
                     "type": "object",
-                    "description": "The task content to pass to the assigned agent"
+                    "description": "The content to pass to the selected agent"
                 }
             },
             "additionalProperties": false
-        }
-    })
-}
-
-/// Generate a route output schema: single `{port, content}` object
-/// where `port` is constrained to the configured port names.
-pub fn route_schema(ports: &[PortConfig]) -> serde_json::Value {
-    let port_names: Vec<serde_json::Value> = ports
-        .iter()
-        .map(|p| serde_json::Value::String(p.port_name.clone()))
-        .collect();
-
-    json!({
-        "type": "object",
-        "required": ["port", "content"],
-        "properties": {
-            "port": {
-                "type": "string",
-                "enum": port_names,
-                "description": "The single target agent port to route to"
-            },
-            "content": {
-                "type": "object",
-                "description": "The content to pass to the selected agent"
-            }
-        },
-        "additionalProperties": false
-    })
+        })
+    }
 }
 
 /// Generate a review output schema: `{decision, feedback}` object
@@ -112,6 +171,7 @@ mod tests {
                 agent_name: "Frontend Dev".to_string(),
                 agent_tools: vec![],
                 display_order: 0,
+                content_schema: None,
             },
             PortConfig {
                 port_name: "backend".to_string(),
@@ -120,6 +180,7 @@ mod tests {
                 agent_name: "Backend Dev".to_string(),
                 agent_tools: vec![],
                 display_order: 1,
+                content_schema: None,
             },
         ]
     }
@@ -170,5 +231,115 @@ mod tests {
     fn transform_schema_falls_back_to_default() {
         let schema = transform_schema(None);
         assert_eq!(schema["type"], "object");
+    }
+
+    // =========================================================================
+    // Content Schema Typing Tests
+    // =========================================================================
+
+    fn make_typed_ports() -> Vec<PortConfig> {
+        vec![
+            PortConfig {
+                port_name: "frontend".to_string(),
+                description: "Frontend agent".to_string(),
+                agent_id: Uuid::new_v4(),
+                agent_name: "Frontend Dev".to_string(),
+                agent_tools: vec![],
+                display_order: 0,
+                content_schema: Some(json!({
+                    "type": "object",
+                    "properties": {
+                        "component": {"type": "string"},
+                        "styles": {"type": "boolean"}
+                    }
+                })),
+            },
+            PortConfig {
+                port_name: "backend".to_string(),
+                description: "Backend agent".to_string(),
+                agent_id: Uuid::new_v4(),
+                agent_name: "Backend Dev".to_string(),
+                agent_tools: vec![],
+                display_order: 1,
+                content_schema: Some(json!({
+                    "type": "object",
+                    "properties": {
+                        "endpoint": {"type": "string"},
+                        "method": {"type": "string"}
+                    }
+                })),
+            },
+        ]
+    }
+
+    #[test]
+    fn decomp_schema_with_content_schemas_uses_one_of() {
+        let ports = make_typed_ports();
+        let schema = decomp_schema(&ports);
+
+        assert_eq!(schema["type"], "array");
+        let one_of = schema["items"]["oneOf"].as_array().unwrap();
+        assert_eq!(one_of.len(), 2);
+
+        // First variant: frontend with typed content
+        assert_eq!(one_of[0]["properties"]["port"]["const"], "frontend");
+        assert!(one_of[0]["properties"]["content"]["properties"]["component"].is_object());
+
+        // Second variant: backend with typed content
+        assert_eq!(one_of[1]["properties"]["port"]["const"], "backend");
+        assert!(one_of[1]["properties"]["content"]["properties"]["endpoint"].is_object());
+    }
+
+    #[test]
+    fn decomp_schema_mixed_typed_untyped() {
+        let mut ports = make_typed_ports();
+        ports[1].content_schema = None; // Backend has no schema
+
+        let schema = decomp_schema(&ports);
+
+        let one_of = schema["items"]["oneOf"].as_array().unwrap();
+        assert_eq!(one_of.len(), 2);
+
+        // Frontend: typed
+        assert!(one_of[0]["properties"]["content"]["properties"]["component"].is_object());
+
+        // Backend: falls back to bare object
+        assert_eq!(one_of[1]["properties"]["content"]["type"], "object");
+        assert!(one_of[1]["properties"]["content"]["properties"].is_null());
+    }
+
+    #[test]
+    fn decomp_schema_no_content_schemas_uses_enum() {
+        // Original format when no schemas present
+        let ports = make_ports();
+        let schema = decomp_schema(&ports);
+
+        // Should have the enum format, not oneOf
+        assert!(schema["items"]["oneOf"].is_null());
+        let port_enum = &schema["items"]["properties"]["port"]["enum"];
+        assert_eq!(port_enum[0], "frontend");
+    }
+
+    #[test]
+    fn route_schema_with_content_schemas_uses_one_of() {
+        let ports = make_typed_ports();
+        let schema = route_schema(&ports);
+
+        let one_of = schema["oneOf"].as_array().unwrap();
+        assert_eq!(one_of.len(), 2);
+
+        assert_eq!(one_of[0]["properties"]["port"]["const"], "frontend");
+        assert!(one_of[0]["properties"]["content"]["properties"]["component"].is_object());
+    }
+
+    #[test]
+    fn route_schema_no_content_schemas_uses_enum() {
+        let ports = make_ports();
+        let schema = route_schema(&ports);
+
+        assert!(schema["oneOf"].is_null());
+        assert_eq!(schema["type"], "object");
+        let port_enum = &schema["properties"]["port"]["enum"];
+        assert_eq!(port_enum[0], "frontend");
     }
 }

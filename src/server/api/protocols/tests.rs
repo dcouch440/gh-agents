@@ -159,4 +159,37 @@ mod tests {
         assert_eq!(json["port_name"], "backend");
         assert_eq!(json["display_order"], 2);
     }
+
+    // =========================================================================
+    // ApplyProtocolRequest Tests
+    // =========================================================================
+
+    #[test]
+    fn apply_request_empty_body_deserializes() {
+        let json = r#"{}"#;
+        let req: ApplyProtocolRequest = serde_json::from_str(json).unwrap();
+        assert!(req.decision_routing.is_none());
+    }
+
+    #[test]
+    fn apply_request_with_decision_routing() {
+        let json = r#"{
+            "decision_routing": {
+                "approve": "00000000-0000-0000-0000-000000000001",
+                "reject": "00000000-0000-0000-0000-000000000002"
+            }
+        }"#;
+        let req: ApplyProtocolRequest = serde_json::from_str(json).unwrap();
+        let routing = req.decision_routing.unwrap();
+        assert_eq!(routing.len(), 2);
+        assert!(routing.contains_key("approve"));
+        assert!(routing.contains_key("reject"));
+    }
+
+    #[test]
+    fn apply_request_null_decision_routing() {
+        let json = r#"{"decision_routing": null}"#;
+        let req: ApplyProtocolRequest = serde_json::from_str(json).unwrap();
+        assert!(req.decision_routing.is_none());
+    }
 }

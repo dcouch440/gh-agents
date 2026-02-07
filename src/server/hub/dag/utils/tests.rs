@@ -1003,4 +1003,607 @@ mod tests {
         let result = resolve_dot_path(&value, "");
         assert_eq!(result, Some(value));
     }
+
+    // =========================================================================
+    // Conditional Edge Helpers
+    // =========================================================================
+
+    use crate::server::hub::dag::utils::{
+        check_step_readiness, evaluate_edge_condition, StepOutput, StepReadiness,
+    };
+
+    fn make_conditional_edge(
+        from: Uuid,
+        to: Uuid,
+        condition_type: &str,
+        field: &str,
+        value: serde_json::Value,
+    ) -> WorkflowStepEdgeRow {
+        WorkflowStepEdgeRow {
+            id: Uuid::new_v4(),
+            from_step_id: from,
+            to_step_id: to,
+            from_output_port: None,
+            to_input_port: None,
+            transform_jsonpath: None,
+            condition_type: Some(condition_type.to_string()),
+            condition_value: Some(serde_json::json!({"field": field, "value": value})),
+            edge_label: None,
+            workflow_id: Uuid::new_v4(),
+        }
+    }
+
+    fn make_conditional_port_edge(
+        from: Uuid,
+        to: Uuid,
+        from_port: &str,
+        to_port: &str,
+        condition_type: &str,
+        field: &str,
+        value: serde_json::Value,
+    ) -> WorkflowStepEdgeRow {
+        WorkflowStepEdgeRow {
+            id: Uuid::new_v4(),
+            from_step_id: from,
+            to_step_id: to,
+            from_output_port: Some(from_port.to_string()),
+            to_input_port: Some(to_port.to_string()),
+            transform_jsonpath: None,
+            condition_type: Some(condition_type.to_string()),
+            condition_value: Some(serde_json::json!({"field": field, "value": value})),
+            edge_label: None,
+            workflow_id: Uuid::new_v4(),
+        }
+    }
+
+    // =========================================================================
+    // evaluate_edge_condition Tests
+    // =========================================================================
+
+    #[test]
+    fn evaluate_edge_condition_unconditional_returns_true() {
+        let edge = make_edge(Uuid::new_v4(), Uuid::new_v4());
+        let envelope = make_envelope(serde_json::json!({"anything": "value"}));
+        assert!(evaluate_edge_condition(&edge, &envelope));
+    }
+
+    #[test]
+    fn evaluate_edge_condition_port_match_match() {
+        let from = Uuid::new_v4();
+        let to = Uuid::new_v4();
+        let edge = make_conditional_edge(
+            from,
+            to,
+            "port_match",
+            "port",
+            serde_json::json!("frontend"),
+        );
+        let envelope = make_envelope(serde_json::json!({"port": "frontend", "content": "stuff"}));
+        assert!(evaluate_edge_condition(&edge, &envelope));
+    }
+
+    #[test]
+    fn evaluate_edge_condition_port_match_no_match() {
+        let from = Uuid::new_v4();
+        let to = Uuid::new_v4();
+        let edge = make_conditional_edge(
+            from,
+            to,
+            "port_match",
+            "port",
+            serde_json::json!("frontend"),
+        );
+        let envelope = make_envelope(serde_json::json!({"port": "backend", "content": "stuff"}));
+        assert!(!evaluate_edge_condition(&edge, &envelope));
+    }
+
+    #[test]
+    fn evaluate_edge_condition_equals_match() {
+        let from = Uuid::new_v4();
+        let to = Uuid::new_v4();
+        let edge =
+            make_conditional_edge(from, to, "equals", "decision", serde_json::json!("approve"));
+        let envelope = make_envelope(serde_json::json!({"decision": "approve"}));
+        assert!(evaluate_edge_condition(&edge, &envelope));
+    }
+
+    #[test]
+    fn evaluate_edge_condition_equals_no_match() {
+        let from = Uuid::new_v4();
+        let to = Uuid::new_v4();
+        let edge =
+            make_conditional_edge(from, to, "equals", "decision", serde_json::json!("approve"));
+        let envelope = make_envelope(serde_json::json!({"decision": "reject"}));
+        assert!(!evaluate_edge_condition(&edge, &envelope));
+    }
+
+    #[test]
+    fn evaluate_edge_condition_unknown_type_returns_false() {
+        let from = Uuid::new_v4();
+        let to = Uuid::new_v4();
+        let edge =
+            make_conditional_edge(from, to, "unknown_type", "field", serde_json::json!("val"));
+        let envelope = make_envelope(serde_json::json!({"field": "val"}));
+        assert!(!evaluate_edge_condition(&edge, &envelope));
+    }
+
+    #[test]
+    fn evaluate_edge_condition_missing_field_returns_false() {
+        let from = Uuid::new_v4();
+        let to = Uuid::new_v4();
+        let edge = make_conditional_edge(
+            from,
+            to,
+            "equals",
+            "missing_field",
+            serde_json::json!("val"),
+        );
+        let envelope = make_envelope(serde_json::json!({"other_field": "val"}));
+        assert!(!evaluate_edge_condition(&edge, &envelope));
+    }
+
+    #[test]
+    fn evaluate_edge_condition_null_data_returns_false() {
+        let from = Uuid::new_v4();
+        let to = Uuid::new_v4();
+        let edge = make_conditional_edge(from, to, "equals", "field", serde_json::json!("val"));
+        let envelope = StepExecutionEnvelope {
+            status: ExecutionStatus::Success,
+            data: None,
+            metadata: ExecutionMetadata {
+                execution_id: Uuid::new_v4(),
+                execution_time_ms: 0,
+                tokens_in: None,
+                tokens_out: None,
+                cost_usd: None,
+                model: None,
+                agent_id: None,
+                iteration_index: None,
+                iteration_label: None,
+                routing_label: None,
+                selected_routing_document_id: None,
+                upstream_agent_id: None,
+                upstream_routing_label: None,
+                room_session_id: None,
+                room_id: None,
+                total_rounds: None,
+            },
+            error: None,
+        };
+        assert!(!evaluate_edge_condition(&edge, &envelope));
+    }
+
+    #[test]
+    fn evaluate_edge_condition_no_condition_value_returns_false() {
+        let from = Uuid::new_v4();
+        let to = Uuid::new_v4();
+        let mut edge = make_conditional_edge(from, to, "equals", "field", serde_json::json!("val"));
+        edge.condition_value = None; // Has condition_type but no condition_value
+        let envelope = make_envelope(serde_json::json!({"field": "val"}));
+        assert!(!evaluate_edge_condition(&edge, &envelope));
+    }
+
+    #[test]
+    fn evaluate_edge_condition_numeric_match() {
+        let from = Uuid::new_v4();
+        let to = Uuid::new_v4();
+        let edge = make_conditional_edge(from, to, "equals", "score", serde_json::json!(42));
+        let envelope = make_envelope(serde_json::json!({"score": 42}));
+        assert!(evaluate_edge_condition(&edge, &envelope));
+    }
+
+    #[test]
+    fn evaluate_edge_condition_numeric_no_match() {
+        let from = Uuid::new_v4();
+        let to = Uuid::new_v4();
+        let edge = make_conditional_edge(from, to, "equals", "score", serde_json::json!(42));
+        let envelope = make_envelope(serde_json::json!({"score": 99}));
+        assert!(!evaluate_edge_condition(&edge, &envelope));
+    }
+
+    // =========================================================================
+    // check_step_readiness Tests
+    // =========================================================================
+
+    #[test]
+    fn readiness_entry_step_always_ready() {
+        let step = Uuid::new_v4();
+        let edges: Vec<WorkflowStepEdgeRow> = vec![];
+        let completed = HashMap::new();
+        let envelopes = HashMap::new();
+
+        assert_eq!(
+            check_step_readiness(step, &edges, &completed, &envelopes),
+            StepReadiness::Ready
+        );
+    }
+
+    #[test]
+    fn readiness_unconditional_parent_not_done_waiting() {
+        let parent = Uuid::new_v4();
+        let child = Uuid::new_v4();
+        let edges = vec![make_edge(parent, child)];
+        let completed = HashMap::new();
+        let envelopes = HashMap::new();
+
+        assert_eq!(
+            check_step_readiness(child, &edges, &completed, &envelopes),
+            StepReadiness::Waiting
+        );
+    }
+
+    #[test]
+    fn readiness_unconditional_parent_done_ready() {
+        let parent = Uuid::new_v4();
+        let child = Uuid::new_v4();
+        let edges = vec![make_edge(parent, child)];
+
+        let mut completed = HashMap::new();
+        completed.insert(
+            parent,
+            StepOutput {
+                variable_name: "output".to_string(),
+                structured_output: None,
+                raw_output: "done".to_string(),
+            },
+        );
+
+        let mut envelopes = HashMap::new();
+        envelopes.insert(parent, make_envelope(serde_json::json!({"result": "ok"})));
+
+        assert_eq!(
+            check_step_readiness(child, &edges, &completed, &envelopes),
+            StepReadiness::Ready
+        );
+    }
+
+    #[test]
+    fn readiness_conditional_match_ready() {
+        let parent = Uuid::new_v4();
+        let child = Uuid::new_v4();
+        let edges = vec![make_conditional_edge(
+            parent,
+            child,
+            "port_match",
+            "port",
+            serde_json::json!("frontend"),
+        )];
+
+        let mut completed = HashMap::new();
+        completed.insert(
+            parent,
+            StepOutput {
+                variable_name: "output".to_string(),
+                structured_output: None,
+                raw_output: "done".to_string(),
+            },
+        );
+
+        let mut envelopes = HashMap::new();
+        envelopes.insert(
+            parent,
+            make_envelope(serde_json::json!({"port": "frontend"})),
+        );
+
+        assert_eq!(
+            check_step_readiness(child, &edges, &completed, &envelopes),
+            StepReadiness::Ready
+        );
+    }
+
+    #[test]
+    fn readiness_conditional_no_match_skipped() {
+        let parent = Uuid::new_v4();
+        let child = Uuid::new_v4();
+        let edges = vec![make_conditional_edge(
+            parent,
+            child,
+            "port_match",
+            "port",
+            serde_json::json!("frontend"),
+        )];
+
+        let mut completed = HashMap::new();
+        completed.insert(
+            parent,
+            StepOutput {
+                variable_name: "output".to_string(),
+                structured_output: None,
+                raw_output: "done".to_string(),
+            },
+        );
+
+        let mut envelopes = HashMap::new();
+        envelopes.insert(
+            parent,
+            make_envelope(serde_json::json!({"port": "backend"})),
+        );
+
+        assert_eq!(
+            check_step_readiness(child, &edges, &completed, &envelopes),
+            StepReadiness::Skipped
+        );
+    }
+
+    #[test]
+    fn readiness_conditional_parent_pending_waiting() {
+        let parent = Uuid::new_v4();
+        let child = Uuid::new_v4();
+        let edges = vec![make_conditional_edge(
+            parent,
+            child,
+            "equals",
+            "decision",
+            serde_json::json!("approve"),
+        )];
+
+        // Parent not yet completed
+        let completed = HashMap::new();
+        let envelopes = HashMap::new();
+
+        assert_eq!(
+            check_step_readiness(child, &edges, &completed, &envelopes),
+            StepReadiness::Waiting
+        );
+    }
+
+    #[test]
+    fn readiness_mixed_unconditional_and_conditional() {
+        // Unconditional: parent_a -> child
+        // Conditional: parent_b -> child (port_match: "frontend")
+        let parent_a = Uuid::new_v4();
+        let parent_b = Uuid::new_v4();
+        let child = Uuid::new_v4();
+
+        let edges = vec![
+            make_edge(parent_a, child),
+            make_conditional_edge(
+                parent_b,
+                child,
+                "port_match",
+                "port",
+                serde_json::json!("frontend"),
+            ),
+        ];
+
+        let mut completed = HashMap::new();
+        completed.insert(
+            parent_a,
+            StepOutput {
+                variable_name: "out_a".to_string(),
+                structured_output: None,
+                raw_output: "done".to_string(),
+            },
+        );
+        completed.insert(
+            parent_b,
+            StepOutput {
+                variable_name: "out_b".to_string(),
+                structured_output: None,
+                raw_output: "done".to_string(),
+            },
+        );
+
+        let mut envelopes = HashMap::new();
+        envelopes.insert(
+            parent_b,
+            make_envelope(serde_json::json!({"port": "frontend"})),
+        );
+
+        // Both parents done, conditional matches => Ready
+        assert_eq!(
+            check_step_readiness(child, &edges, &completed, &envelopes),
+            StepReadiness::Ready
+        );
+    }
+
+    #[test]
+    fn readiness_mixed_unconditional_not_done() {
+        let parent_a = Uuid::new_v4();
+        let parent_b = Uuid::new_v4();
+        let child = Uuid::new_v4();
+
+        let edges = vec![
+            make_edge(parent_a, child),
+            make_conditional_edge(
+                parent_b,
+                child,
+                "port_match",
+                "port",
+                serde_json::json!("frontend"),
+            ),
+        ];
+
+        // parent_a NOT done, parent_b done and matches
+        let mut completed = HashMap::new();
+        completed.insert(
+            parent_b,
+            StepOutput {
+                variable_name: "out_b".to_string(),
+                structured_output: None,
+                raw_output: "done".to_string(),
+            },
+        );
+
+        let mut envelopes = HashMap::new();
+        envelopes.insert(
+            parent_b,
+            make_envelope(serde_json::json!({"port": "frontend"})),
+        );
+
+        // Unconditional parent not done => Waiting
+        assert_eq!(
+            check_step_readiness(child, &edges, &completed, &envelopes),
+            StepReadiness::Waiting
+        );
+    }
+
+    #[test]
+    fn readiness_multiple_conditional_one_matches() {
+        // Route scenario: parent -> child_a (port=frontend), parent -> child_b (port=backend)
+        let parent = Uuid::new_v4();
+        let child_a = Uuid::new_v4();
+        let child_b = Uuid::new_v4();
+
+        let edges = vec![
+            make_conditional_edge(
+                parent,
+                child_a,
+                "port_match",
+                "port",
+                serde_json::json!("frontend"),
+            ),
+            make_conditional_edge(
+                parent,
+                child_b,
+                "port_match",
+                "port",
+                serde_json::json!("backend"),
+            ),
+        ];
+
+        let mut completed = HashMap::new();
+        completed.insert(
+            parent,
+            StepOutput {
+                variable_name: "out".to_string(),
+                structured_output: None,
+                raw_output: "done".to_string(),
+            },
+        );
+
+        let mut envelopes = HashMap::new();
+        envelopes.insert(
+            parent,
+            make_envelope(serde_json::json!({"port": "frontend"})),
+        );
+
+        // child_a matches, child_b doesn't
+        assert_eq!(
+            check_step_readiness(child_a, &edges, &completed, &envelopes),
+            StepReadiness::Ready
+        );
+        assert_eq!(
+            check_step_readiness(child_b, &edges, &completed, &envelopes),
+            StepReadiness::Skipped
+        );
+    }
+
+    // =========================================================================
+    // StepOutput::skipped Tests
+    // =========================================================================
+
+    #[test]
+    fn step_output_skipped_has_sentinel_name() {
+        let step_id = Uuid::new_v4();
+        let output = StepOutput::skipped(step_id);
+        assert!(output.variable_name.starts_with("__skipped_"));
+        assert!(output.variable_name.contains(&step_id.to_string()));
+        assert!(output.structured_output.is_none());
+        assert!(output.raw_output.is_empty());
+    }
+
+    // =========================================================================
+    // resolve_port_inputs with Conditional Edges
+    // =========================================================================
+
+    #[test]
+    fn resolve_port_inputs_skips_non_matching_conditional_edge() {
+        let step_a = Uuid::new_v4();
+        let step_b = Uuid::new_v4();
+
+        // Conditional port edge: step_a:result -> step_b:input (port_match: port=frontend)
+        let edge = make_conditional_port_edge(
+            step_a,
+            step_b,
+            "result",
+            "input",
+            "port_match",
+            "port",
+            serde_json::json!("frontend"),
+        );
+        let edges = vec![edge];
+
+        let step_inputs = vec![{
+            let mut input = make_step_input(step_b, "input", false);
+            input.default_value = Some(serde_json::json!("fallback"));
+            input
+        }];
+
+        let mut source_outputs = HashMap::new();
+        source_outputs.insert(step_a, vec![make_step_output(step_a, "result", "value")]);
+
+        let mut completed = HashMap::new();
+        // Parent output has port=backend, NOT frontend
+        completed.insert(
+            step_a,
+            make_envelope(serde_json::json!({"port": "backend", "value": "data"})),
+        );
+
+        let result =
+            resolve_port_inputs(step_b, &edges, &step_inputs, &source_outputs, &completed).unwrap();
+
+        // The conditional edge didn't match, so it was filtered out.
+        // Input falls back to default value.
+        assert_eq!(result["input"], serde_json::json!("fallback"));
+    }
+
+    #[test]
+    fn resolve_port_inputs_passes_matching_conditional_edge() {
+        let step_a = Uuid::new_v4();
+        let step_b = Uuid::new_v4();
+
+        let edge = make_conditional_port_edge(
+            step_a,
+            step_b,
+            "result",
+            "input",
+            "port_match",
+            "port",
+            serde_json::json!("frontend"),
+        );
+        let edges = vec![edge];
+
+        let step_inputs = vec![make_step_input(step_b, "input", true)];
+
+        let mut source_outputs = HashMap::new();
+        source_outputs.insert(step_a, vec![make_step_output(step_a, "result", "value")]);
+
+        let mut completed = HashMap::new();
+        // Parent output has port=frontend => matches
+        completed.insert(
+            step_a,
+            make_envelope(serde_json::json!({"port": "frontend", "value": "matched_data"})),
+        );
+
+        let result =
+            resolve_port_inputs(step_b, &edges, &step_inputs, &source_outputs, &completed).unwrap();
+
+        assert_eq!(result["input"], serde_json::json!("matched_data"));
+    }
+
+    #[test]
+    fn resolve_port_inputs_unconditional_edge_unaffected() {
+        let step_a = Uuid::new_v4();
+        let step_b = Uuid::new_v4();
+
+        // Plain unconditional port edge
+        let edges = vec![make_port_edge(step_a, step_b, "result", "input")];
+        let step_inputs = vec![make_step_input(step_b, "input", true)];
+
+        let mut source_outputs = HashMap::new();
+        source_outputs.insert(step_a, vec![make_step_output(step_a, "result", "value")]);
+
+        let mut completed = HashMap::new();
+        completed.insert(
+            step_a,
+            make_envelope(serde_json::json!({"value": "normal_data"})),
+        );
+
+        let result =
+            resolve_port_inputs(step_b, &edges, &step_inputs, &source_outputs, &completed).unwrap();
+
+        // Unconditional edges always pass through
+        assert_eq!(result["input"], serde_json::json!("normal_data"));
+    }
 }

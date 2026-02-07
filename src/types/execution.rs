@@ -13,6 +13,7 @@ pub enum ExecutionStatus {
     Success,
     Error,
     Partial, // For for-each with some failures
+    Skipped, // Step skipped due to unmatched conditional edges
 }
 
 /// Execution metadata (timing, costs, routing info)

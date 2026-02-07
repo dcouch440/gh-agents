@@ -33,6 +33,10 @@ pub struct PortConfig {
     pub agent_tools: Vec<String>,
     /// Display ordering.
     pub display_order: i32,
+    /// Optional typed content schema from the agent's output_schema.
+    /// When present, used to generate `oneOf` variants in the output schema.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_schema: Option<serde_json::Value>,
 }
 
 // ============================================================================

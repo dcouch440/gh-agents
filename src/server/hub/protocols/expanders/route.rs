@@ -138,6 +138,7 @@ mod tests {
                     agent_name: "Urgent Agent".to_string(),
                     agent_tools: vec![],
                     display_order: 0,
+                    content_schema: None,
                 },
                 PortConfig {
                     port_name: "normal".to_string(),
@@ -146,6 +147,7 @@ mod tests {
                     agent_name: "Normal Agent".to_string(),
                     agent_tools: vec![],
                     display_order: 1,
+                    content_schema: None,
                 },
             ],
         }

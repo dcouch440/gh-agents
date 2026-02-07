@@ -67,6 +67,7 @@ impl ProtocolEngine {
         ports: &[ProtocolPortRow],
         agent_names: &HashMap<uuid::Uuid, String>,
         agent_tools: &HashMap<uuid::Uuid, Vec<String>>,
+        agent_schemas: &HashMap<uuid::Uuid, serde_json::Value>,
     ) -> ProtocolConfig {
         let port_configs: Vec<PortConfig> = ports
             .iter()
@@ -80,6 +81,7 @@ impl ProtocolEngine {
                     .unwrap_or_else(|| "Unknown Agent".to_string()),
                 agent_tools: agent_tools.get(&p.agent_id).cloned().unwrap_or_default(),
                 display_order: p.display_order,
+                content_schema: agent_schemas.get(&p.agent_id).cloned(),
             })
             .collect();
 
