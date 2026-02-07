@@ -36,6 +36,7 @@ mod tests {
             display_order,
             version: 1,
             reasoning_trace: false,
+            verification_agent_ids: None,
         }
     }
 

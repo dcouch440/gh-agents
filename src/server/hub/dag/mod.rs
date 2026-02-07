@@ -17,7 +17,10 @@ use crate::db::traits::WorkflowCollectionRepo;
 use crate::db::{
     AgentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, WorkflowStepEdgeRow, WorkflowStepRow,
 };
-use crate::execution::{ContainerConfig, ContainerHandle, ContainerManager};
+use crate::execution::{
+    ContainerConfig, ContainerHandle, ContainerManager, VpnSidecarHandle, VpnSidecarManager,
+    WgEasyClient,
+};
 use crate::server::state::AppState;
 use crate::server::ws::events::{WorkflowEvent, WorkflowEventKind};
 use crate::types::{
@@ -27,8 +30,9 @@ use crate::types::{
 
 use super::construct_agent_defaults;
 use super::engine::filters::{
-    AgentGuidanceFilter, ExecutionFilter, FewShotFilter, FilterContext, PartialJsonRecoveryFilter,
-    ReasoningTraceFilter, SchemaEnhancementFilter, SchemaValidationRetryFilter,
+    AgentGuidanceFilter, DebateVerificationFilter, ExecutionFilter, FewShotFilter, FilterContext,
+    PartialJsonRecoveryFilter, ReasoningTraceFilter, SchemaEnhancementFilter,
+    SchemaValidationRetryFilter,
 };
 use super::engine::ExecutionEngine;
 use super::error::HubError;
@@ -583,17 +587,69 @@ pub async fn execute_workflow_via_engine(
     })
 }
 
-/// Create a container if config is present, with consistent logging.
+/// A managed container that may include a VPN sidecar.
+struct ManagedContainer {
+    /// The agent container handle (for tool execution).
+    agent_handle: ContainerHandle,
+    /// Optional VPN sidecar (must be cleaned up separately).
+    vpn_sidecar: Option<VpnSidecarHandle>,
+}
+
+/// Create a container if config is present, with optional VPN sidecar.
 ///
 /// Returns `Ok(None)` if config is `None` (local execution).
-/// Returns `Ok(Some(handle))` on success, `Err` on failure.
+/// Returns `Ok(Some(managed))` on success, `Err` on failure.
 async fn create_optional_container(
     config: Option<&utils::ContainerExecutionConfig>,
+    wg_client: Option<&WgEasyClient>,
     label: &str,
-) -> Result<Option<ContainerHandle>, HubError> {
+) -> Result<Option<ManagedContainer>, HubError> {
     let Some(cc) = config else {
         return Ok(None);
     };
+
+    // If VPN is enabled, create a sidecar first
+    let vpn_sidecar = if cc.vpn_enabled {
+        let wg = wg_client.ok_or_else(|| {
+            HubError::Internal(anyhow!("VPN enabled but wg-easy client not configured"))
+        })?;
+
+        let peer_name = format!("{}-{}", label, Uuid::new_v4());
+        let peer = wg
+            .create_peer(&peer_name)
+            .await
+            .map_err(|e| HubError::Internal(anyhow!("VPN peer creation failed: {}", e)))?;
+
+        let peer_config = wg
+            .get_peer_config(&peer.id)
+            .await
+            .map_err(|e| HubError::Internal(anyhow!("VPN peer config failed: {}", e)))?;
+
+        let sidecar = VpnSidecarManager::create_sidecar(&peer_config, &peer.id)
+            .await
+            .map_err(|e| {
+                // Clean up the wg-easy peer if sidecar creation fails
+                let wg_clone = wg_client.is_some();
+                let peer_id = peer.id.clone();
+                if wg_clone {
+                    // Fire-and-forget cleanup
+                    warn!(peer_id = %peer_id, error = %e, "VPN sidecar failed, peer will be orphaned");
+                }
+                HubError::Internal(anyhow!("VPN sidecar creation failed: {}", e))
+            })?;
+
+        info!(
+            container = %sidecar.container_name,
+            peer_id = %peer.id,
+            label,
+            "VPN sidecar ready"
+        );
+        Some(sidecar)
+    } else {
+        None
+    };
+
+    // Build container config, optionally sharing VPN sidecar's network
     let container_config = ContainerConfig {
         clone_url: cc.clone_url.clone(),
         branch: cc.branch.clone(),
@@ -610,14 +666,25 @@ async fn create_optional_container(
             .cpu_limit
             .clone()
             .unwrap_or_else(|| crate::constants::CONTAINER_DEFAULT_CPUS.to_string()),
+        network_mode: vpn_sidecar
+            .as_ref()
+            .map(|s| format!("container:{}", s.container_id)),
         ..ContainerConfig::default()
     };
+
     match ContainerManager::create_container(&container_config).await {
         Ok(handle) => {
             info!(container = %handle.container_name(), label, "Created container");
-            Ok(Some(handle))
+            Ok(Some(ManagedContainer {
+                agent_handle: handle,
+                vpn_sidecar,
+            }))
         }
         Err(e) => {
+            // Clean up VPN sidecar if agent container creation fails
+            if let Some(ref sidecar) = vpn_sidecar {
+                VpnSidecarManager::destroy_sidecar_quiet(sidecar).await;
+            }
             error!(label, error = %e, "Failed to create container");
             Err(HubError::Internal(anyhow!(
                 "Container creation failed: {}",
@@ -627,10 +694,26 @@ async fn create_optional_container(
     }
 }
 
-/// Destroy a container if present, ignoring errors. For cleanup after step execution.
-async fn destroy_optional_container(handle: &Option<ContainerHandle>) {
-    if let Some(ref h) = handle {
-        ContainerManager::destroy_container_quiet(h).await;
+/// Destroy a managed container (agent + optional VPN sidecar + peer cleanup).
+async fn destroy_optional_container(
+    managed: &Option<ManagedContainer>,
+    wg_client: Option<&WgEasyClient>,
+) {
+    let Some(ref mc) = managed else { return };
+
+    // 1. Destroy agent container first
+    ContainerManager::destroy_container_quiet(&mc.agent_handle).await;
+
+    // 2. Destroy VPN sidecar if present
+    if let Some(ref sidecar) = mc.vpn_sidecar {
+        VpnSidecarManager::destroy_sidecar_quiet(sidecar).await;
+
+        // 3. Delete wg-easy peer
+        if let Some(wg) = wg_client {
+            if let Err(e) = wg.delete_peer(&sidecar.peer_id).await {
+                warn!(peer_id = %sidecar.peer_id, error = %e, "Failed to delete VPN peer");
+            }
+        }
     }
 }
 
@@ -714,8 +797,13 @@ async fn execute_single_step(
         prompt.push_str(&build_routing_instruction_block(routing_ctx));
     }
 
-    // Create container if configured
-    let container_handle = create_optional_container(ctx.container_config.as_ref(), "step").await?;
+    // Create container if configured (with optional VPN sidecar)
+    let managed_container = create_optional_container(
+        ctx.container_config.as_ref(),
+        ctx.wg_client.as_deref(),
+        "step",
+    )
+    .await?;
 
     let result = run_step_via_engine(
         engine,
@@ -726,11 +814,11 @@ async fn execute_single_step(
         &prompt,
         &port_meta.step_outputs,
         cancel,
-        container_handle.as_ref(),
+        managed_container.as_ref().map(|mc| &mc.agent_handle),
     )
     .await;
 
-    destroy_optional_container(&container_handle).await;
+    destroy_optional_container(&managed_container, ctx.wg_client.as_deref()).await;
 
     let (output, in_tok, out_tok, cost) = result?;
 
@@ -1353,9 +1441,13 @@ async fn execute_for_each_step(
         )
         .await;
 
-        // Create container for this iteration if configured
-        let iter_container =
-            create_optional_container(ctx.container_config.as_ref(), "for-each-iter").await?;
+        // Create container for this iteration if configured (with optional VPN sidecar)
+        let iter_container = create_optional_container(
+            ctx.container_config.as_ref(),
+            ctx.wg_client.as_deref(),
+            "for-each-iter",
+        )
+        .await?;
 
         let result = run_step_via_engine(
             engine,
@@ -1366,11 +1458,11 @@ async fn execute_for_each_step(
             &prompt,
             &port_meta.step_outputs,
             cancel,
-            iter_container.as_ref(),
+            iter_container.as_ref().map(|mc| &mc.agent_handle),
         )
         .await;
 
-        destroy_optional_container(&iter_container).await;
+        destroy_optional_container(&iter_container, ctx.wg_client.as_deref()).await;
 
         match result {
             Ok((output, in_tok, out_tok, cost)) => {
@@ -1564,6 +1656,23 @@ async fn run_step_via_engine(
 
     if step.reasoning_trace && filter_ctx.has_output_schema {
         filters.push(Arc::new(ReasoningTraceFilter::new()));
+    }
+
+    // Multi-agent debate/verification filter
+    let verification_ids: Vec<Uuid> = step
+        .verification_agent_ids
+        .as_ref()
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+
+    if !verification_ids.is_empty() {
+        if let Some(provider) = state.provider() {
+            filters.push(Arc::new(DebateVerificationFilter::new(
+                provider.clone(),
+                state.repo().clone(),
+                verification_ids,
+            )));
+        }
     }
 
     let filtered_engine = engine
@@ -1926,9 +2035,13 @@ async fn execute_pipeline_item(
             prompt
         };
 
-        // Create container for this pipeline stage if configured
-        let stage_container =
-            create_optional_container(ctx.container_config.as_ref(), "pipeline-stage").await?;
+        // Create container for this pipeline stage if configured (with optional VPN sidecar)
+        let stage_container = create_optional_container(
+            ctx.container_config.as_ref(),
+            ctx.wg_client.as_deref(),
+            "pipeline-stage",
+        )
+        .await?;
 
         let result = run_step_via_engine(
             engine,
@@ -1939,11 +2052,11 @@ async fn execute_pipeline_item(
             &prompt,
             step_outputs,
             cancel,
-            stage_container.as_ref(),
+            stage_container.as_ref().map(|mc| &mc.agent_handle),
         )
         .await;
 
-        destroy_optional_container(&stage_container).await;
+        destroy_optional_container(&stage_container, ctx.wg_client.as_deref()).await;
 
         match result {
             Ok((output, in_tok, out_tok, cost)) => {
@@ -2390,6 +2503,7 @@ pub async fn resume_dag_from_approval(
         prior_outputs: HashMap::new(),
         execution_context: None,
         container_config: None,
+        wg_client: None,
     };
 
     // Create engine and resume

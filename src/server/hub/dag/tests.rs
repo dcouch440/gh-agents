@@ -31,6 +31,7 @@ fn make_step(
         display_order,
         version: 1,
         reasoning_trace: false,
+        verification_agent_ids: None,
     }
 }
 
@@ -155,6 +156,7 @@ fn make_for_each_step(id: Uuid, var_name: Option<&str>, display_order: i32) -> W
         display_order,
         version: 1,
         reasoning_trace: false,
+        verification_agent_ids: None,
     }
 }
 
