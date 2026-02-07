@@ -9,6 +9,7 @@ import { createAppTheme } from './theme'
 import { CommandPalette } from './components/command-palette'
 import { ReviewQueueNotification } from './components/layout/ReviewQueueNotification'
 import { authStore, reviewQueueStore } from './stores'
+import { dismissSplash } from './utils/splash'
 
 function AppInner() {
   const { mode } = useThemeMode()
@@ -17,6 +18,7 @@ function AppInner() {
   useEffect(() => {
     void authStore.hydrate()
     void reviewQueueStore.fetchPending()
+    dismissSplash()
   }, [])
 
   return (
