@@ -27,7 +27,7 @@ use crate::types::{
 
 use super::construct_agent_defaults;
 use super::engine::filters::{
-    AgentGuidanceFilter, ExecutionFilter, FilterContext, PartialJsonRecoveryFilter,
+    AgentGuidanceFilter, ExecutionFilter, FewShotFilter, FilterContext, PartialJsonRecoveryFilter,
     ReasoningTraceFilter, SchemaEnhancementFilter, SchemaValidationRetryFilter,
 };
 use super::engine::ExecutionEngine;
@@ -1559,6 +1559,10 @@ async fn run_step_via_engine(
 
     let mut filters: Vec<Arc<dyn ExecutionFilter>> =
         vec![Arc::new(AgentGuidanceFilter::new(state.repo().clone()))];
+
+    if let Some(ae_repo) = state.agent_execution_repo() {
+        filters.push(Arc::new(FewShotFilter::new(ae_repo)));
+    }
 
     if let Some(schema_val) = output_schema_value {
         filter_ctx = filter_ctx.with_schema(schema_val);

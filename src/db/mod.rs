@@ -252,6 +252,8 @@ pub struct AgentExecutionRow {
     // Cavernous routing fields
     pub routing_analysis: Option<serde_json::Value>,
     pub selected_routing_document_id: Option<Uuid>,
+    // Few-shot exemplar flag
+    pub is_exemplary: bool,
 }
 
 /// Row type for execution message records.
