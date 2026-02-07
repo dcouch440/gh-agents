@@ -4,6 +4,7 @@
 //! for tests where you want fine-grained control over which components are set.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use dashmap::DashMap;
 use sqlx::PgPool;
@@ -186,6 +187,7 @@ impl AppStateBuilder {
             response_streams: DashMap::new(),
             cancellation_tokens: DashMap::new(),
             shutdown_token: CancellationToken::new(),
+            ollama_toggle_cache: Arc::new(tokio::sync::RwLock::new((false, Instant::now()))),
         });
 
         Ok((state, orchestrator_rx))

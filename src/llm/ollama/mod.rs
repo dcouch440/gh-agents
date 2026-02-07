@@ -103,6 +103,66 @@ impl OllamaClient {
         format!("{}/api/chat", self.config.base_url)
     }
 
+    /// Get the tags API URL (lists available models).
+    fn tags_url(&self) -> String {
+        format!("{}/api/tags", self.config.base_url)
+    }
+
+    /// Verify that Ollama is reachable by hitting the tags endpoint.
+    pub async fn health_check(&self) -> Result<(), LLMError> {
+        self.client
+            .get(self.tags_url())
+            .timeout(Duration::from_secs(5))
+            .send()
+            .await
+            .map_err(|e| {
+                LLMError::ApiError {
+                    status: 0,
+                    message: format!(
+                        "Ollama not reachable at {} — {}",
+                        self.config.base_url, e
+                    ),
+                }
+            })?;
+        Ok(())
+    }
+
+    /// Verify the configured model exists on the Ollama server.
+    pub async fn validate_model(&self) -> Result<(), LLMError> {
+        let response = self
+            .client
+            .get(self.tags_url())
+            .timeout(Duration::from_secs(5))
+            .send()
+            .await
+            .map_err(|e| LLMError::ApiError {
+                status: 0,
+                message: format!("Failed to list Ollama models: {}", e),
+            })?;
+
+        let body = response.text().await.map_err(LLMError::HttpError)?;
+        let tags: OllamaTagsResponse =
+            serde_json::from_str(&body).map_err(|e| LLMError::ParseError(e.to_string()))?;
+
+        let model_names: Vec<&str> = tags.models.iter().map(|m| m.name.as_str()).collect();
+
+        // Check exact match or match without tag (e.g. "llama3.1" matches "llama3.1:latest")
+        let target = &self.config.model;
+        let found = model_names.iter().any(|name| {
+            *name == target || name.split(':').next() == Some(target)
+        });
+
+        if found {
+            Ok(())
+        } else {
+            Err(LLMError::AuthError(format!(
+                "Model '{}' not found on Ollama. Available: [{}]",
+                target,
+                model_names.join(", ")
+            )))
+        }
+    }
+
     /// Convert an LLMRequest to Ollama's chat request format.
     fn build_request(&self, request: &LLMRequest, stream: bool) -> OllamaChatRequest {
         let model = if request.model.is_empty() {
@@ -350,6 +410,17 @@ struct OllamaResponseMessage {
     tool_calls: Option<Vec<OllamaToolCall>>,
 }
 
+/// Response from Ollama's `/api/tags` endpoint (lists available models).
+#[derive(Debug, Deserialize)]
+struct OllamaTagsResponse {
+    models: Vec<OllamaModelInfo>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OllamaModelInfo {
+    name: String,
+}
+
 /// Streaming chunk from Ollama (newline-delimited JSON).
 #[derive(Debug, Deserialize)]
 struct OllamaStreamChunk {
@@ -436,6 +507,7 @@ impl LLMProvider for OllamaClient {
 
             let mut stream = byte_stream;
             let mut final_input_tokens: Option<u32> = None;
+            let mut saw_done = false;
 
             while let Some(chunk_result) = stream.next().await {
                 match chunk_result {
@@ -453,6 +525,7 @@ impl LLMProvider for OllamaClient {
                             // Check for done=true to capture input tokens
                             if let Ok(chunk) = serde_json::from_str::<OllamaStreamChunk>(&line) {
                                 if chunk.done {
+                                    saw_done = true;
                                     final_input_tokens = chunk.prompt_eval_count;
                                 }
                             }
@@ -467,6 +540,13 @@ impl LLMProvider for OllamaClient {
                         break;
                     }
                 }
+            }
+
+            // Detect premature stream termination
+            if !saw_done {
+                yield Err(LLMError::StreamError(
+                    "Ollama stream ended without done marker — server may have crashed".to_string()
+                ));
             }
 
             yield Ok(StreamChunk::ContentBlockStop { index: 0 });
