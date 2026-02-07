@@ -8,7 +8,7 @@ const createAppTheme = (mode: 'light' | 'dark') => {
   const options: ThemeOptions = {
     palette: getPalette(mode),
     typography,
-    shape: { borderRadius: 8 },
+    shape: { borderRadius: 10 },
     shadows: getShadows(mode),
     components: getComponents(mode),
   };

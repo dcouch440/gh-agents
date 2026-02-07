@@ -3,68 +3,68 @@ import type { PaletteOptions } from '@mui/material/styles';
 const lightPalette: PaletteOptions = {
   mode: 'light',
   primary: {
-    main: '#0284c7',
-    light: '#0ea5e9',
-    dark: '#0369a1',
+    main: '#2563eb',
+    light: '#3b82f6',
+    dark: '#1d4ed8',
     contrastText: '#ffffff',
   },
   secondary: {
-    main: '#26a69a',
-    light: '#4db6ac',
-    dark: '#00897b',
+    main: '#0d9488',
+    light: '#14b8a6',
+    dark: '#0f766e',
   },
   background: {
-    default: '#f8fafc',
-    paper: '#f1f5f9',
+    default: '#f8f9fb',
+    paper: '#ffffff',
   },
   text: {
-    primary: '#1f2328',
-    secondary: '#636c76',
-    disabled: '#8b949e',
+    primary: '#0f172a',
+    secondary: '#64748b',
+    disabled: '#94a3b8',
   },
   success: {
-    main: '#1a7f37',
-    light: '#2da44e',
-    dark: '#116329',
+    main: '#16a34a',
+    light: '#22c55e',
+    dark: '#15803d',
   },
   warning: {
-    main: '#bf8700',
-    light: '#d4a72c',
-    dark: '#9a6700',
+    main: '#d97706',
+    light: '#f59e0b',
+    dark: '#b45309',
   },
   error: {
-    main: '#cf222e',
-    light: '#e5534b',
-    dark: '#a40e26',
+    main: '#dc2626',
+    light: '#ef4444',
+    dark: '#b91c1c',
   },
   info: {
-    main: '#0969da',
-    light: '#218bff',
-    dark: '#0550ae',
+    main: '#2563eb',
+    light: '#3b82f6',
+    dark: '#1d4ed8',
   },
-  divider: 'rgba(31, 35, 40, 0.15)',
+  divider: 'rgba(15, 23, 42, 0.08)',
 };
 
 const darkPalette: PaletteOptions = {
   mode: 'dark',
   primary: {
-    main: '#0ea5e9',
-    light: '#38bdf8',
-    dark: '#0284c7',
+    main: '#3b82f6',
+    light: '#60a5fa',
+    dark: '#2563eb',
     contrastText: '#ffffff',
   },
   secondary: {
-    main: '#4db6ac',
-    light: '#80cbc4',
-    dark: '#26a69a',
+    main: '#2dd4bf',
+    light: '#5eead4',
+    dark: '#14b8a6',
   },
   background: {
-    default: '#0c0e14',
-    paper: '#141820',
+    default: '#09090b',
+    paper: '#111318',
   },
   text: {
-    primary: '#e6edf3',
-    secondary: '#8b949e',
+    primary: '#f0f6fc',
+    secondary: '#7d8590',
     disabled: '#484f58',
   },
   success: {
@@ -83,11 +83,11 @@ const darkPalette: PaletteOptions = {
     dark: '#da3633',
   },
   info: {
-    main: '#58a6ff',
-    light: '#79c0ff',
-    dark: '#388bfd',
+    main: '#3b82f6',
+    light: '#60a5fa',
+    dark: '#2563eb',
   },
-  divider: 'rgba(240, 246, 252, 0.1)',
+  divider: 'rgba(240, 246, 252, 0.06)',
 };
 
 const getPalette = (mode: 'light' | 'dark'): PaletteOptions =>

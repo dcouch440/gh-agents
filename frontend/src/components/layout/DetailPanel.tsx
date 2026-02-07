@@ -28,7 +28,6 @@ function DetailPanel({ side, isOpen, onClose, title, children }: DetailPanelProp
         borderLeft: isLeft ? 0 : 1,
         borderColor: isOpen ? 'divider' : 'transparent',
         backgroundColor: 'background.paper',
-        backdropFilter: 'blur(12px)',
         display: 'flex',
         flexDirection: 'column',
         position: 'sticky',
@@ -41,9 +40,9 @@ function DetailPanel({ side, isOpen, onClose, title, children }: DetailPanelProp
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          px: 2,
-          py: 1.5,
-          minHeight: 48,
+          px: 1.5,
+          py: 1,
+          minHeight: 44,
           borderBottom: 1,
           borderColor: 'divider',
           opacity: isOpen ? 1 : 0,
@@ -51,7 +50,7 @@ function DetailPanel({ side, isOpen, onClose, title, children }: DetailPanelProp
         }}
       >
         <Typography
-          variant="subtitle2"
+          variant="body2"
           sx={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden' }}
         >
           {title}
@@ -60,11 +59,13 @@ function DetailPanel({ side, isOpen, onClose, title, children }: DetailPanelProp
           onClick={onClose}
           size="small"
           sx={{
+            width: 28,
+            height: 28,
             color: 'text.secondary',
             '&:hover': { color: 'text.primary' },
           }}
         >
-          <CloseOutlined sx={{ fontSize: 18 }} />
+          <CloseOutlined sx={{ fontSize: 16 }} />
         </IconButton>
       </Box>
 
@@ -73,8 +74,8 @@ function DetailPanel({ side, isOpen, onClose, title, children }: DetailPanelProp
         sx={{
           flexGrow: 1,
           overflow: 'auto',
-          px: 2,
-          py: 1.5,
+          px: 1.5,
+          py: 1,
           opacity: isOpen ? 1 : 0,
           transition: `opacity ${ANIMATION.FAST}ms ease`,
         }}

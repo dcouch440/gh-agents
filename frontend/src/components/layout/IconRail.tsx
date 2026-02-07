@@ -26,32 +26,28 @@ function IconRail({ side, topItems, bottomItems }: IconRailProps) {
   const tooltipPlacement = isLeft ? 'right' : 'left';
 
   const renderItem = (item: RailItem) => {
-    const borderSide = isLeft
-      ? { borderRight: '3px solid', borderRightColor: item.isActive ? 'primary.main' : 'transparent' }
-      : { borderLeft: '3px solid', borderLeftColor: item.isActive ? 'primary.main' : 'transparent' };
-
     return (
-      <Tooltip key={item.key} title={item.label} placement={tooltipPlacement} arrow>
+      <Tooltip key={item.key} title={item.label} placement={tooltipPlacement}>
         <Box
           sx={{
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
             py: 0.25,
-            ...borderSide,
           }}
         >
           <IconButton
             onClick={item.onClick}
             sx={{
-              width: 40,
-              height: 40,
-              borderRadius: 1,
+              width: 30,
+              height: 30,
+              borderRadius: '6px',
               color: item.isActive ? 'primary.main' : 'text.secondary',
+              backgroundColor: item.isActive ? 'rgba(59, 130, 246, 0.08)' : 'transparent',
               transition: `all ${ANIMATION.FAST}ms ease`,
               '&:hover': {
                 color: item.isActive ? 'primary.main' : 'text.primary',
-                backgroundColor: 'action.hover',
+                backgroundColor: item.isActive ? 'rgba(59, 130, 246, 0.12)' : 'action.hover',
               },
             }}
           >
@@ -59,7 +55,7 @@ function IconRail({ side, topItems, bottomItems }: IconRailProps) {
               <Badge
                 variant="dot"
                 color="warning"
-                sx={{ '& .MuiBadge-badge': { top: 2, right: 2 } }}
+                sx={{ '& .MuiBadge-badge': { top: 2, right: 2, width: 6, height: 6, minWidth: 6 } }}
               >
                 {item.icon}
               </Badge>
@@ -86,8 +82,7 @@ function IconRail({ side, topItems, bottomItems }: IconRailProps) {
         borderRight: isLeft ? 1 : 0,
         borderLeft: isLeft ? 0 : 1,
         borderColor: 'divider',
-        backgroundColor: 'background.paper',
-        backdropFilter: 'blur(12px)',
+        backgroundColor: 'background.default',
         overflow: 'hidden',
         position: 'sticky',
         top: 0,
@@ -101,7 +96,7 @@ function IconRail({ side, topItems, bottomItems }: IconRailProps) {
       {/* Bottom items */}
       {bottomItems && bottomItems.length > 0 && (
         <>
-          <Divider sx={{ width: '60%', my: 0.5 }} />
+          <Divider sx={{ width: '50%', my: 0.5 }} />
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
             {bottomItems.map(renderItem)}
           </Box>
