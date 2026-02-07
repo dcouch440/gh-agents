@@ -21,12 +21,14 @@ type ResourceStoreConfig<T extends Identifiable, TCreate, TUpdate> = {
     delete: (id: string) => Promise<void>
   }
   unwrapList: (response: unknown) => T[]
+  staleThresholdMs?: number
 }
 
 type ResourceState<T extends Identifiable> = {
   items: NormalizedMap<T>
   loading: boolean
   error: string | null
+  lastFetched: number | null
 }
 
 type ResourceStore<T extends Identifiable, TCreate, TUpdate> = {
@@ -37,9 +39,11 @@ type ResourceStore<T extends Identifiable, TCreate, TUpdate> = {
   selectById: (id: string) => (state: ResourceState<T>) => T | undefined
   selectLoading: (state: ResourceState<T>) => boolean
   selectError: (state: ResourceState<T>) => string | null
+  selectIsStale: (state: ResourceState<T>) => boolean
 
   // Async actions
   fetchAll: () => Promise<void>
+  fetchIfStale: () => Promise<void>
   fetchOne: (id: string) => Promise<T>
   create: (body: TCreate) => Promise<T>
   update: (id: string, body: TUpdate) => Promise<T>
@@ -57,11 +61,13 @@ const createResourceStore = <T extends Identifiable, TCreate = Partial<T>, TUpda
   config: ResourceStoreConfig<T, TCreate, TUpdate>,
 ): ResourceStore<T, TCreate, TUpdate> => {
   const { api, unwrapList, name } = config
+  const staleThresholdMs = config.staleThresholdMs ?? 60_000
 
   const store = createStore<ResourceState<T>>(() => ({
     items: createNormalizedMap<T>(),
     loading: false,
     error: null,
+    lastFetched: null,
   }))
 
   // ── Selectors ────────────────────────────────────────────────────────────
@@ -74,6 +80,9 @@ const createResourceStore = <T extends Identifiable, TCreate = Partial<T>, TUpda
   const selectLoading = (state: ResourceState<T>): boolean => state.loading
 
   const selectError = (state: ResourceState<T>): string | null => state.error
+
+  const selectIsStale = (state: ResourceState<T>): boolean =>
+    state.lastFetched === null || Date.now() - state.lastFetched > staleThresholdMs
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -89,9 +98,15 @@ const createResourceStore = <T extends Identifiable, TCreate = Partial<T>, TUpda
     try {
       const response = await api.list()
       const items = unwrapList(response)
-      store.setState({ items: nmFromArray(items), loading: false })
+      store.setState({ items: nmFromArray(items), loading: false, lastFetched: Date.now() })
     } catch (e) {
       store.setState({ loading: false, error: extractError(e) })
+    }
+  }
+
+  const fetchIfStale = async (): Promise<void> => {
+    if (selectIsStale(store.getState())) {
+      await fetchAll()
     }
   }
 
@@ -141,8 +156,8 @@ const createResourceStore = <T extends Identifiable, TCreate = Partial<T>, TUpda
 
   return {
     store,
-    selectAll, selectById, selectLoading, selectError,
-    fetchAll, fetchOne, create, update, remove,
+    selectAll, selectById, selectLoading, selectError, selectIsStale,
+    fetchAll, fetchIfStale, fetchOne, create, update, remove,
     upsert, removeById, setAll,
   }
 }

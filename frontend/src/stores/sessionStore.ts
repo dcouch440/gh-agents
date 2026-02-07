@@ -85,39 +85,43 @@ const remove = async (id: string): Promise<void> => {
 // ── WebSocket Handler ────────────────────────────────────────────────────────
 
 const handleWsEvent = (msg: WsWireMessage): void => {
-  const data = msg.data
+  try {
+    const data = msg.data
 
-  switch (msg.event) {
-    case SESSION_EVENT.CREATED: {
-      const session: Session = {
-        id: data.session_id as string,
-        mode_id: data.mode_id as string,
-        agent_id: null,
-        draft_config: null,
-        title: data.title as string,
-        created_at: msg.ts,
-        updated_at: msg.ts,
+    switch (msg.event) {
+      case SESSION_EVENT.CREATED: {
+        const session: Session = {
+          id: data.session_id as string,
+          mode_id: data.mode_id as string,
+          agent_id: null,
+          draft_config: null,
+          title: data.title as string,
+          created_at: msg.ts,
+          updated_at: msg.ts,
+        }
+        store.setState((s) => ({ items: nmSet(s.items, session.id, session) }))
+        break
       }
-      store.setState((s) => ({ items: nmSet(s.items, session.id, session) }))
-      break
+      case SESSION_EVENT.UPDATED: {
+        const sessionId = data.session_id as string
+        store.setState((s) => {
+          const existing = nmGet(s.items, sessionId)
+          if (!existing) return s
+          const patched = { ...existing, updated_at: msg.ts }
+          if (typeof data.title === 'string') patched.title = data.title
+          if (typeof data.mode_id === 'string') patched.mode_id = data.mode_id
+          return { items: nmSet(s.items, sessionId, patched) }
+        })
+        break
+      }
+      case SESSION_EVENT.DELETED: {
+        const sessionId = data.session_id as string
+        store.setState((s) => ({ items: nmDelete(s.items, sessionId) }))
+        break
+      }
     }
-    case SESSION_EVENT.UPDATED: {
-      const sessionId = data.session_id as string
-      store.setState((s) => {
-        const existing = nmGet(s.items, sessionId)
-        if (!existing) return s
-        const patched = { ...existing, updated_at: msg.ts }
-        if (typeof data.title === 'string') patched.title = data.title
-        if (typeof data.mode_id === 'string') patched.mode_id = data.mode_id
-        return { items: nmSet(s.items, sessionId, patched) }
-      })
-      break
-    }
-    case SESSION_EVENT.DELETED: {
-      const sessionId = data.session_id as string
-      store.setState((s) => ({ items: nmDelete(s.items, sessionId) }))
-      break
-    }
+  } catch (err) {
+    console.error(`[sessionStore] WS handler error on "${msg.event}":`, err)
   }
 }
 
