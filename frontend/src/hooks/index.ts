@@ -1,6 +1,3 @@
-// Auth
-export { useAuth } from './useAuth'
-
 // UI
 export { useThemeMode } from './useThemeMode'
 export { useSidebar } from './useSidebar'

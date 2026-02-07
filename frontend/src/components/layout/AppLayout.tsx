@@ -1,15 +1,16 @@
 import Box from "@mui/material/Box";
 import {Outlet, Navigate, useLocation} from "react-router-dom";
 import {Sidebar} from "./Sidebar";
-import {useAuth} from "@/hooks/useAuth";
+import {useStore, authStore, selectUser, selectAuthStatus} from "@/stores";
 import {LoadingSpinner} from "@/components/primitives";
 import {ANIMATION, ROUTES} from "@/constants";
 
 function AppLayout() {
-  const {user, loading} = useAuth();
+  const status = useStore(authStore.store, selectAuthStatus);
+  const user = useStore(authStore.store, selectUser);
   const location = useLocation();
 
-  if (loading) {
+  if (status === "idle" || status === "loading") {
     return (
       <Box
         sx={{
