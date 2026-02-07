@@ -9,58 +9,6 @@ type SendMessageResponse = {
   status: string
 }
 
-const useSendMessage = () => {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [streaming, setStreaming] = useState(false)
-  const abortRef = useRef<(() => void) | null>(null)
-
-  const send = useCallback(async (
-    body: SendMessageRequest,
-    onEvent?: (event: SSEEvent) => void,
-    onDone?: () => void,
-  ): Promise<string> => {
-    setLoading(true)
-    setError(null)
-    try {
-      const { message_id } = await api.post<SendMessageResponse>(API.CHAT, body)
-
-      if (onEvent) {
-        setStreaming(true)
-        abortRef.current = createSSEStream(API.CHAT_STREAM(message_id), {
-          onEvent,
-          onDone: () => {
-            setStreaming(false)
-            abortRef.current = null
-            onDone?.()
-          },
-          onError: (e) => {
-            setStreaming(false)
-            abortRef.current = null
-            setError(e.message)
-          },
-        })
-      }
-
-      return message_id
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to send message'
-      setError(msg)
-      throw e
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  const abort = useCallback(() => {
-    abortRef.current?.()
-    abortRef.current = null
-    setStreaming(false)
-  }, [])
-
-  return { send, abort, loading, streaming, error }
-}
-
 const useSendSessionMessage = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -114,25 +62,4 @@ const useSendSessionMessage = () => {
   return { send, abort, loading, streaming, error }
 }
 
-const useClearHistory = () => {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const mutate = useCallback(async (): Promise<void> => {
-    setLoading(true)
-    setError(null)
-    try {
-      await api.del(API.CHAT_HISTORY)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to clear history'
-      setError(msg)
-      throw e
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  return { mutate, loading, error }
-}
-
-export { useSendMessage, useSendSessionMessage, useClearHistory }
+export { useSendSessionMessage }

@@ -12,7 +12,6 @@ export { useInteractiveChat } from './useInteractiveChat'
 export { useCommandPalette } from './useCommandPalette'
 export { useCommandRegistry } from './useCommandRegistry'
 export { useConfirmModal } from './useConfirmModal'
-export { useContextResponse } from './useContextResponse'
 
 // Data
-export { useSendMessage, useSendSessionMessage, useClearHistory } from './useChatMutations'
+export { useSendSessionMessage } from './useChatMutations'
