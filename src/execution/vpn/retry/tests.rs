@@ -63,6 +63,14 @@ mod tests {
     }
 
     #[test]
+    fn not_retryable_config_validation_failed() {
+        let err = VpnError::ConfigValidationFailed {
+            reason: "missing DNS".into(),
+        };
+        assert!(!is_retryable(&err));
+    }
+
+    #[test]
     fn not_retryable_peer_creation_4xx() {
         let err = VpnError::PeerCreationFailed {
             reason: "HTTP 400: bad request".into(),

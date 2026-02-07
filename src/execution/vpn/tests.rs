@@ -98,6 +98,57 @@ mod tests {
         let _client = WgEasyClient::new(config);
     }
 
+    // ── Config validation ─────────────────────────────────────────────────
+
+    #[test]
+    fn validate_wg_config_full_tunnel_with_dns() {
+        let config = "[Interface]\nPrivateKey = abc123\nAddress = 10.8.0.2/32\nDNS = 10.8.0.1\n\n[Peer]\nPublicKey = xyz789\nAllowedIPs = 0.0.0.0/0\nEndpoint = vpn.example.com:51820\n";
+        assert!(super::super::validate_wg_config(config).is_ok());
+    }
+
+    #[test]
+    fn validate_wg_config_rejects_split_tunnel() {
+        let config = "[Interface]\nPrivateKey = abc123\nAddress = 10.8.0.2/32\nDNS = 10.8.0.1\n\n[Peer]\nPublicKey = xyz789\nAllowedIPs = 10.0.0.0/8\nEndpoint = vpn.example.com:51820\n";
+        let err = super::super::validate_wg_config(config).unwrap_err();
+        assert!(err.to_string().contains("AllowedIPs"));
+    }
+
+    #[test]
+    fn validate_wg_config_rejects_missing_dns() {
+        let config = "[Interface]\nPrivateKey = abc123\nAddress = 10.8.0.2/32\n\n[Peer]\nPublicKey = xyz789\nAllowedIPs = 0.0.0.0/0\nEndpoint = vpn.example.com:51820\n";
+        let err = super::super::validate_wg_config(config).unwrap_err();
+        assert!(err.to_string().contains("DNS"));
+    }
+
+    #[test]
+    fn validate_wg_config_accepts_dual_stack() {
+        let config = "[Interface]\nPrivateKey = abc123\nAddress = 10.8.0.2/32\nDNS = 10.8.0.1\n\n[Peer]\nPublicKey = xyz789\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = vpn.example.com:51820\n";
+        assert!(super::super::validate_wg_config(config).is_ok());
+    }
+
+    #[test]
+    fn validate_wg_config_rejects_empty() {
+        let err = super::super::validate_wg_config("").unwrap_err();
+        assert!(err.to_string().contains("empty"));
+    }
+
+    #[test]
+    fn validate_wg_config_whitespace_tolerance() {
+        let config = "[Interface]\nPrivateKey = abc123\nAddress = 10.8.0.2/32\nDNS = 10.8.0.1\n\n[Peer]\nPublicKey = xyz789\n  AllowedIPs = 0.0.0.0/0  \nEndpoint = vpn.example.com:51820\n";
+        assert!(super::super::validate_wg_config(config).is_ok());
+    }
+
+    #[test]
+    fn vpn_error_display_config_validation_failed() {
+        let err = VpnError::ConfigValidationFailed {
+            reason: "missing DNS".to_string(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "WireGuard config validation failed: missing DNS"
+        );
+    }
+
     #[test]
     fn wg_easy_client_starts_unauthenticated() {
         let config = WgEasyConfig {

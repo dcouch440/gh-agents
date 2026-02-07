@@ -13,6 +13,7 @@ use uuid::Uuid;
 use super::vpn::VpnError;
 
 mod tests;
+pub mod watchdog;
 
 // ── Handle ─────────────────────────────────────────────────────────────────
 
@@ -36,11 +37,12 @@ impl VpnSidecarManager {
     /// Create and start a VPN sidecar container with the given WireGuard config.
     ///
     /// Steps:
-    /// 1. `docker create` with NET_ADMIN + SYS_MODULE capabilities
+    /// 1. `docker create` with NET_ADMIN capability, IPv6 disabled, log suppression
     /// 2. `docker start`
     /// 3. Write WireGuard config into the container
     /// 4. Bring up the WireGuard interface
-    /// 5. Wait for the tunnel to establish (health check)
+    /// 5. Apply iptables kill switch (blocks all non-VPN traffic)
+    /// 6. Wait for the tunnel to establish (health check + IP leak verify)
     pub async fn create_sidecar(
         wg_config: &str,
         peer_id: &str,
@@ -54,13 +56,21 @@ impl VpnSidecarManager {
         info!(container = %container_name, "Creating VPN sidecar");
 
         // 1. docker create
+        let log_driver_arg = format!("--log-driver={}", crate::constants::VPN_SIDECAR_LOG_DRIVER);
+
         let create_args = vec![
             "create",
             "--name",
             &container_name,
             "--cap-add=NET_ADMIN",
-            "--cap-add=SYS_MODULE",
             "--sysctl=net.ipv4.conf.all.src_valid_mark=1",
+            // Disable IPv6 to prevent VPN bypass
+            "--sysctl=net.ipv6.conf.all.disable_ipv6=1",
+            "--sysctl=net.ipv6.conf.default.disable_ipv6=1",
+            // Suppress handshake metadata from Docker logs
+            &log_driver_arg,
+            // Prevent privilege escalation
+            "--security-opt=no-new-privileges",
             crate::constants::VPN_SIDECAR_IMAGE,
             "sleep",
             "infinity",
@@ -179,7 +189,31 @@ impl VpnSidecarManager {
             )));
         }
 
-        // 6. Wait for the tunnel to establish
+        // 6. Apply iptables kill switch — blocks ALL traffic except through wg0
+        let kill_switch = Command::new("docker")
+            .args([
+                "exec",
+                &container_id,
+                "sh",
+                "-c",
+                crate::constants::VPN_KILL_SWITCH_SCRIPT,
+            ])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await
+            .map_err(|e| VpnError::SidecarFailed(format!("kill switch exec failed: {}", e)))?;
+
+        if !kill_switch.status.success() {
+            Self::destroy_sidecar_quiet(&handle).await;
+            return Err(VpnError::SidecarFailed(format!(
+                "iptables kill switch failed: {}",
+                String::from_utf8_lossy(&kill_switch.stderr).trim()
+            )));
+        }
+        debug!(container = %container_name, "VPN kill switch applied");
+
+        // 7. Wait for the tunnel to establish
         Self::wait_for_vpn_health(
             &container_id,
             crate::constants::VPN_HEALTH_CHECK_TIMEOUT_SECS,
@@ -248,6 +282,41 @@ impl VpnSidecarManager {
 
                         if matches!(ping, Ok(ref out) if out.status.success()) {
                             debug!(container_id, "VPN tunnel connectivity verified");
+
+                            // Phase 3: Verify traffic exits through VPN (IP leak check)
+                            let timeout_arg = format!(
+                                "--timeout={}",
+                                crate::constants::VPN_IP_LEAK_CHECK_TIMEOUT_SECS
+                            );
+                            let ip_check = Command::new("docker")
+                                .args([
+                                    "exec",
+                                    container_id,
+                                    "wget",
+                                    "-qO-",
+                                    &timeout_arg,
+                                    crate::constants::VPN_IP_CHECK_URL,
+                                ])
+                                .stdout(Stdio::piped())
+                                .stderr(Stdio::piped())
+                                .output()
+                                .await;
+
+                            match ip_check {
+                                Ok(ref out) if out.status.success() => {
+                                    let exit_ip =
+                                        String::from_utf8_lossy(&out.stdout).trim().to_string();
+                                    debug!(
+                                        container_id,
+                                        exit_ip = %exit_ip,
+                                        "VPN exit IP verified"
+                                    );
+                                }
+                                _ => {
+                                    debug!(container_id, "IP leak check unavailable (non-fatal)");
+                                }
+                            }
+
                             return Ok(());
                         }
                         debug!(

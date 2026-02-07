@@ -27,6 +27,7 @@ pub fn is_retryable(error: &VpnError) -> bool {
         VpnError::ConfigRetrievalFailed { reason, .. } => is_server_error(reason),
 
         // Permanent failures — never retry
+        VpnError::ConfigValidationFailed { .. } => false,
         VpnError::AuthFailed => false,
         VpnError::SidecarFailed(_) => false,
         VpnError::HealthCheckTimeout { .. } => false,

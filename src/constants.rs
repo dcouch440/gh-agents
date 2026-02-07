@@ -456,3 +456,9 @@ pub const VPN_IP_LEAK_CHECK_TIMEOUT_SECS: u64 = 5;
 
 /// URL for public IP verification through VPN tunnel.
 pub const VPN_IP_CHECK_URL: &str = "https://api.ipify.org";
+
+/// Interval in seconds between VPN watchdog health checks during execution.
+pub const VPN_WATCHDOG_INTERVAL_SECS: u64 = 5;
+
+/// Consecutive health check failures before the watchdog considers the tunnel dead.
+pub const VPN_WATCHDOG_MAX_FAILURES: u32 = 3;
