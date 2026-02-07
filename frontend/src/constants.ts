@@ -253,7 +253,7 @@ export const SIDEBAR = {
 
 // Layout Colors
 export const LAYOUT_COLORS = {
-  CHROME_BG: '#131720',
+  CHROME_BG: '#12161f',
   CAVITY_BG: '#060a10',
   CAVITY_BG_LIGHT: '#eef0f4',
 } as const;
