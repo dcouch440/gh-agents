@@ -58,7 +58,7 @@ pub async fn start_server(db: PgPool, config: AppConfig, addr: SocketAddr) -> Re
     let _chat_consumer_handle = executors::chat::spawn_chat_consumer(state.clone(), chat_rx);
 
     // Spawn periodic container reaper
-    let _reaper_handle = crate::execution::ContainerManager::spawn_reaper(
+    let _reaper_handle = crate::execution::ContainerManager::real().spawn_reaper(
         std::time::Duration::from_secs(crate::constants::CONTAINER_REAPER_MAX_AGE_SECS),
         std::time::Duration::from_secs(crate::constants::CONTAINER_REAPER_INTERVAL_SECS),
         state.shutdown_token().clone(),
@@ -80,9 +80,9 @@ pub async fn start_server(db: PgPool, config: AppConfig, addr: SocketAddr) -> Re
     drain_active_executions(&state, drain_timeout).await;
 
     // Final reap: force-cleanup any remaining orphaned containers
-    let reaped =
-        crate::execution::ContainerManager::reap_orphaned_containers(std::time::Duration::ZERO)
-            .await;
+    let reaped = crate::execution::ContainerManager::real()
+        .reap_orphaned_containers(std::time::Duration::ZERO)
+        .await;
     if reaped > 0 {
         warn!("Force-reaped {} container(s) during shutdown", reaped);
     }
@@ -904,6 +904,12 @@ mod tests {
         ) -> anyhow::Result<Vec<crate::db::AgentModeRow>> {
             Ok(vec![])
         }
+        async fn get_agent_mode(
+            &self,
+            _mode_id: Uuid,
+        ) -> anyhow::Result<Option<crate::db::AgentModeRow>> {
+            Ok(None)
+        }
         async fn create_agent_mode(&self, _mode: &crate::db::AgentModeRow) -> anyhow::Result<()> {
             Ok(())
         }
@@ -930,7 +936,14 @@ mod tests {
 
     fn create_test_token(state: &AppState) -> String {
         use crate::types::UserId;
-        auth::create_token(&state.jwt_secret(), 24, UserId::new(), "test@test.com").unwrap()
+        auth::create_token(
+            &state.jwt_secret(),
+            24,
+            UserId::new(),
+            "test@test.com",
+            false,
+        )
+        .unwrap()
     }
 
     fn setup_test_app() -> (Router, AppState) {

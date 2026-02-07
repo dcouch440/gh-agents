@@ -19,6 +19,8 @@ use crate::types::UserId;
 pub struct Claims {
     pub sub: String,
     pub email: String,
+    #[serde(default)]
+    pub is_admin: bool,
     pub exp: usize,
     pub iat: usize,
 }
@@ -45,6 +47,7 @@ pub fn create_token(
     duration_hours: u64,
     user_id: UserId,
     email: &str,
+    is_admin: bool,
 ) -> Result<String, jsonwebtoken::errors::Error> {
     let now = chrono::Utc::now();
     let exp = (now + chrono::Duration::hours(duration_hours as i64)).timestamp() as usize;
@@ -52,6 +55,7 @@ pub fn create_token(
     let claims = Claims {
         sub: user_id.0.to_string(),
         email: email.to_string(),
+        is_admin,
         exp,
         iat: now.timestamp() as usize,
     };

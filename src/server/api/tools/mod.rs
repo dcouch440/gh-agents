@@ -8,6 +8,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::AppError;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
 
@@ -79,12 +80,8 @@ pub struct AgentToolsResponse {
 pub async fn list_tools(
     State(state): State<AppState>,
     _auth: auth_utils::AuthUser,
-) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
-    let rows = state
-        .repo()
-        .list_tools()
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+) -> Result<Json<Vec<ToolResponse>>, AppError> {
+    let rows = state.repo().list_tools().await?;
 
     let tools = rows.into_iter().map(ToolResponse::from_row).collect();
     Ok(Json(tools))
@@ -104,11 +101,13 @@ pub async fn list_tools(
 )]
 pub async fn create_tool(
     State(state): State<AppState>,
-    _auth: auth_utils::AuthUser,
+    auth: auth_utils::AuthUser,
     Json(request): Json<CreateToolRequest>,
-) -> Result<(StatusCode, Json<ToolResponse>), StatusCode> {
+) -> Result<(StatusCode, Json<ToolResponse>), AppError> {
+    super::ownership::require_admin(&auth)?;
+
     if request.name.trim().is_empty() {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request("Tool name cannot be empty"));
     }
 
     let name = request.name.trim().to_string();
@@ -124,11 +123,7 @@ pub async fn create_tool(
         version: 1,
     };
 
-    state
-        .repo()
-        .upsert_tool(row.clone())
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state.repo().upsert_tool(row.clone()).await?;
 
     Ok((StatusCode::CREATED, Json(ToolResponse::from_row(row))))
 }
@@ -149,13 +144,12 @@ pub async fn get_tool(
     State(state): State<AppState>,
     _auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<ToolResponse>, StatusCode> {
+) -> Result<Json<ToolResponse>, AppError> {
     let row = state
         .repo()
         .get_tool(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Tool"))?;
 
     Ok(Json(ToolResponse::from_row(row)))
 }
@@ -175,16 +169,17 @@ pub async fn get_tool(
 )]
 pub async fn update_tool(
     State(state): State<AppState>,
-    _auth: auth_utils::AuthUser,
+    auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateToolRequest>,
-) -> Result<Json<ToolResponse>, StatusCode> {
+) -> Result<Json<ToolResponse>, AppError> {
+    super::ownership::require_admin(&auth)?;
+
     let existing = state
         .repo()
         .get_tool(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Tool"))?;
 
     let updated = crate::db::ToolRow {
         id: existing.id,
@@ -196,11 +191,7 @@ pub async fn update_tool(
         version: existing.version,
     };
 
-    state
-        .repo()
-        .upsert_tool(updated.clone())
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state.repo().upsert_tool(updated.clone()).await?;
 
     Ok(Json(ToolResponse::from_row(updated)))
 }
@@ -219,14 +210,12 @@ pub async fn update_tool(
 )]
 pub async fn delete_tool(
     State(state): State<AppState>,
-    _auth: auth_utils::AuthUser,
+    auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
-    state
-        .repo()
-        .delete_tool(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+) -> Result<StatusCode, AppError> {
+    super::ownership::require_admin(&auth)?;
+
+    state.repo().delete_tool(id).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -244,14 +233,12 @@ pub async fn delete_tool(
 )]
 pub async fn get_agent_tools(
     State(state): State<AppState>,
-    _auth: auth_utils::AuthUser,
+    auth: auth_utils::AuthUser,
     Path(agent_id): Path<Uuid>,
-) -> Result<Json<AgentToolsResponse>, StatusCode> {
-    let rows = state
-        .repo()
-        .get_agent_tools(agent_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+) -> Result<Json<AgentToolsResponse>, AppError> {
+    super::ownership::verify_agent_ownership(state.repo().as_ref(), &auth, agent_id).await?;
+
+    let rows = state.repo().get_agent_tools(agent_id).await?;
 
     let tools = rows.into_iter().map(ToolResponse::from_row).collect();
 
@@ -276,29 +263,24 @@ pub async fn get_agent_tools(
 )]
 pub async fn set_agent_tools(
     State(state): State<AppState>,
-    _auth: auth_utils::AuthUser,
+    auth: auth_utils::AuthUser,
     Path(agent_id): Path<Uuid>,
     Json(request): Json<SetAgentToolsRequest>,
-) -> Result<Json<AgentToolsResponse>, StatusCode> {
+) -> Result<Json<AgentToolsResponse>, AppError> {
+    super::ownership::verify_agent_ownership(state.repo().as_ref(), &auth, agent_id).await?;
+
     let tool_ids: Result<Vec<Uuid>, _> = request
         .tool_ids
         .iter()
         .map(|s| Uuid::parse_str(s))
         .collect();
 
-    let tool_ids = tool_ids.map_err(|_| StatusCode::BAD_REQUEST)?;
+    let tool_ids =
+        tool_ids.map_err(|_| AppError::bad_request("Invalid tool ID format, expected UUID"))?;
 
-    state
-        .repo()
-        .set_agent_tools(agent_id, tool_ids)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state.repo().set_agent_tools(agent_id, tool_ids).await?;
 
-    let rows = state
-        .repo()
-        .get_agent_tools(agent_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = state.repo().get_agent_tools(agent_id).await?;
 
     let tools = rows.into_iter().map(ToolResponse::from_row).collect();
 

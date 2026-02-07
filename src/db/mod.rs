@@ -17,6 +17,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct AgentRow {
     pub id: Uuid,
+    pub user_id: Uuid,
     pub tier: Option<String>,
     pub name: String,
     pub system_prompt: String,

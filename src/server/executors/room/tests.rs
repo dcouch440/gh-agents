@@ -16,6 +16,7 @@ mod tests {
     fn make_agent(id: Uuid, name: &str) -> AgentRow {
         AgentRow {
             id,
+            user_id: Uuid::nil(),
             tier: None,
             name: name.to_string(),
             system_prompt: "You are a helpful assistant.".to_string(),
