@@ -51,3 +51,6 @@ export type { ConfirmModalProps } from './ConfirmModal'
 
 export { ActionMenu } from './ActionMenu'
 export type { ActionMenuProps, MenuAction } from './ActionMenu'
+
+export { Tooltip } from './Tooltip'
+export type { TooltipProps } from './Tooltip'

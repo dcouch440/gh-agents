@@ -10,8 +10,8 @@ import {
   InputLabel,
   Alert,
   IconButton,
-  Tooltip,
 } from "@mui/material";
+import {Tooltip} from "@/components/primitives/Tooltip";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import {PageHeader} from "@/components/primitives";
 import {SplitPane} from "@/components/primitives/SplitPane";

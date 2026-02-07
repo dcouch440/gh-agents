@@ -65,17 +65,13 @@ function AppLayout() {
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
       {/* Left: icon rail + detail panel */}
-      <IconRail side="left" topItems={topRailItems} bottomItems={bottomRailItems} />
+      <IconRail side="left" topItems={topRailItems} bottomItems={bottomRailItems} footer={<ThemeToggle />} />
       <DetailPanel
         side="left"
         isOpen={leftOpen}
         onClose={layoutStore.closeLeftPanel}
         title={panelTitle}
-      >
-        <Box sx={{ display: 'flex', justifyContent: 'center', pt: 2 }}>
-          <ThemeToggle />
-        </Box>
-      </DetailPanel>
+      />
 
       {/* Main content */}
       <Box
