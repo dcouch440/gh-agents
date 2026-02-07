@@ -1669,7 +1669,7 @@ async fn run_step_via_engine(
         let os_repo = &state.repos().output_schemas;
         if let Ok(Some(schema)) = os_repo.get_output_schema(schema_id).await {
             system_prompt.push_str(&format!(
-                "\n\nYou MUST respond with valid JSON matching this schema:\n```json\n{}\n```\nRespond ONLY with the JSON object, no other text.",
+                "\n\n<schema>\nYou MUST respond with valid JSON matching this schema:\n```json\n{}\n```\nRespond ONLY with the JSON object, no other text.\n</schema>",
                 serde_json::to_string_pretty(&schema.schema).unwrap_or_default()
             ));
             output_schema_value = Some(schema.schema.clone());
@@ -2125,7 +2125,7 @@ async fn execute_pipeline_item(
             let mut p = prompt;
             if let Some(ref ua_id) = upstream_agent_id {
                 p.push_str(&format!(
-                    "\n\n## Upstream Context\nThis item was processed by agent {} (routing label: {}).\n",
+                    "\n\n<upstream>\nThis item was processed by agent {} (routing label: {}).\n</upstream>",
                     ua_id,
                     upstream_routing_label.as_deref().unwrap_or("none")
                 ));
@@ -3194,7 +3194,7 @@ async fn run_cavernous_subtask(
         let os_repo = &state.repos().output_schemas;
         if let Ok(Some(schema)) = os_repo.get_output_schema(schema_id).await {
             system_prompt.push_str(&format!(
-                "\n\nYou MUST respond with valid JSON matching this schema:\n```json\n{}\n```\nRespond ONLY with the JSON object, no other text.",
+                "\n\n<schema>\nYou MUST respond with valid JSON matching this schema:\n```json\n{}\n```\nRespond ONLY with the JSON object, no other text.\n</schema>",
                 serde_json::to_string_pretty(&schema.schema).unwrap_or_default()
             ));
         }

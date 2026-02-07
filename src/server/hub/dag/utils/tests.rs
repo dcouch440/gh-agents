@@ -891,7 +891,8 @@ mod tests {
 
         let block = build_routing_instruction_block(&ctx);
 
-        assert!(block.contains("## Routing Instructions"));
+        assert!(block.contains("<routing>"));
+        assert!(block.contains("</routing>"));
         assert!(block.contains("\"category\""));
         assert!(block.contains("- frontend: UI components and styling"));
         assert!(block.contains("Routed to: Frontend Specialist (tools: file_write, file_read)"));
@@ -947,7 +948,8 @@ mod tests {
 
         let block = build_routing_instruction_block(&ctx);
 
-        assert!(block.contains("## Routing Instructions"));
+        assert!(block.contains("<routing>"));
+        assert!(block.contains("</routing>"));
         assert!(!block.contains("Routed to:"));
     }
 
@@ -1605,5 +1607,140 @@ mod tests {
 
         // Unconditional edges always pass through
         assert_eq!(result["input"], serde_json::json!("normal_data"));
+    }
+
+    // =========================================================================
+    // compose_prompt XML Structure Tests
+    // =========================================================================
+
+    use crate::db::traits::MockServerRepo;
+    use crate::server::hub::dag::utils::compose_prompt;
+    use std::sync::Arc;
+
+    fn mock_server_repo() -> Arc<MockServerRepo> {
+        let mut mock = MockServerRepo::new();
+        mock.expect_get_agent_context().returning(|_| Ok(vec![]));
+        Arc::new(mock)
+    }
+
+    #[tokio::test]
+    async fn compose_prompt_wraps_task_in_xml() {
+        let step = make_step(Uuid::new_v4(), 0);
+        let repo = mock_server_repo();
+        let outputs = HashMap::new();
+        let prior = HashMap::new();
+
+        let result = compose_prompt(
+            &step, None, None, None, &*repo, &outputs, &prior, None, None,
+        )
+        .await;
+
+        assert!(result.starts_with("<task>\n"));
+        assert!(result.contains("</task>"));
+        assert!(result.contains("Test prompt"));
+    }
+
+    #[tokio::test]
+    async fn compose_prompt_wraps_context_with_port_inputs() {
+        let step = make_step(Uuid::new_v4(), 0);
+        let repo = mock_server_repo();
+        let outputs = HashMap::new();
+        let prior = HashMap::new();
+        let mut ports = HashMap::new();
+        ports.insert("task_data".to_string(), serde_json::json!({"key": "value"}));
+
+        let result = compose_prompt(
+            &step,
+            None,
+            None,
+            None,
+            &*repo,
+            &outputs,
+            &prior,
+            None,
+            Some(&ports),
+        )
+        .await;
+
+        assert!(result.contains("<task>"));
+        assert!(result.contains("</task>"));
+        assert!(result.contains("<context>"));
+        assert!(result.contains("</context>"));
+        assert!(result.contains("<input name=\"task_data\">"));
+        assert!(result.contains("</input>"));
+        assert!(result.contains("\"key\": \"value\""));
+    }
+
+    #[tokio::test]
+    async fn compose_prompt_omits_context_when_empty() {
+        let step = make_step(Uuid::new_v4(), 0);
+        let repo = mock_server_repo();
+        let outputs = HashMap::new();
+        let prior = HashMap::new();
+
+        let result = compose_prompt(
+            &step, None, None, None, &*repo, &outputs, &prior, None, None,
+        )
+        .await;
+
+        assert!(!result.contains("<context>"));
+        assert!(!result.contains("</context>"));
+    }
+
+    #[tokio::test]
+    async fn compose_prompt_referenced_port_not_in_context() {
+        // If the prompt template references a port with {port_name}, it should NOT
+        // appear in the <context> block (it's already inlined in the task text).
+        let mut step = make_step(Uuid::new_v4(), 0);
+        step.prompt_template = "Process this: {task_data}".to_string();
+        let repo = mock_server_repo();
+        let outputs = HashMap::new();
+        let prior = HashMap::new();
+        let mut ports = HashMap::new();
+        ports.insert("task_data".to_string(), serde_json::json!("inline_value"));
+
+        let result = compose_prompt(
+            &step,
+            None,
+            None,
+            None,
+            &*repo,
+            &outputs,
+            &prior,
+            None,
+            Some(&ports),
+        )
+        .await;
+
+        // The port data is inlined in the task, not in a separate context block
+        assert!(!result.contains("<context>"));
+        assert!(!result.contains("<input name=\"task_data\">"));
+    }
+
+    #[tokio::test]
+    async fn compose_prompt_task_contains_protocol_injection() {
+        // Protocol injection is appended to prompt_template before compose_prompt runs.
+        // It should end up inside <task> tags.
+        let mut step = make_step(Uuid::new_v4(), 0);
+        step.prompt_template =
+            "Analyze this task\n\n## Task Decomposition Protocol\nDecompose into ports: frontend, backend".to_string();
+        let repo = mock_server_repo();
+        let outputs = HashMap::new();
+        let prior = HashMap::new();
+
+        let result = compose_prompt(
+            &step, None, None, None, &*repo, &outputs, &prior, None, None,
+        )
+        .await;
+
+        // Both the task and protocol injection are inside <task>
+        assert!(result.starts_with("<task>\n"));
+        assert!(result.contains("Analyze this task"));
+        assert!(result.contains("Task Decomposition Protocol"));
+        assert!(result.contains("Decompose into ports"));
+        // Everything before </task>
+        let task_end = result.find("</task>").unwrap();
+        let task_content = &result[..task_end];
+        assert!(task_content.contains("Decompose into ports"));
     }
 }

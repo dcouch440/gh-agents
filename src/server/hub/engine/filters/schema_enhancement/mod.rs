@@ -38,13 +38,14 @@ impl ExecutionFilter for SchemaEnhancementFilter {
 
         let mut augmented = system_prompt;
         augmented.push_str(concat!(
-            "\n\n## Output Format Rules\n",
+            "\n\n<output_rules>\n",
             "- Output ONLY the raw JSON object. No markdown code fences (```), no commentary.\n",
             "- Do NOT wrap your response in ```json ... ```. The consumer parses raw JSON directly.\n",
             "- Do NOT include any text before or after the JSON object.\n",
             "- Do NOT include explanatory sentences like \"Here is the JSON:\".\n",
             "- If a field is optional and you have no value, use null rather than omitting it.\n",
-            "- Every string value must be properly escaped JSON.",
+            "- Every string value must be properly escaped JSON.\n",
+            "</output_rules>",
         ));
 
         Ok((augmented, messages))

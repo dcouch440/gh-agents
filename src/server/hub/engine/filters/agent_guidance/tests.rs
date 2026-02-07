@@ -57,7 +57,8 @@ mod tests {
             .on_start(&ctx, "Base prompt.".into(), vec![])
             .await
             .unwrap();
-        assert!(sys.contains("Agent Guidance"));
+        assert!(sys.contains("<guidance>"));
+        assert!(sys.contains("</guidance>"));
         assert!(sys.contains("Always include sources"));
         assert!(sys.contains("Be concise"));
     }
