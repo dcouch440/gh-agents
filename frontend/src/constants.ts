@@ -195,6 +195,26 @@ export const API = {
 
   // Context Response
   CONTEXT_RESPONSE: "/context-response",
+
+  // Rooms
+  ROOMS: "/rooms",
+  ROOM: (id: string) => `/rooms/${id}`,
+  ROOM_MEMBERS: (id: string) => `/rooms/${id}/members`,
+  ROOM_MEMBER: (id: string, agentId: string) => `/rooms/${id}/members/${agentId}`,
+  ROOM_SESSIONS: (id: string) => `/rooms/${id}/sessions`,
+
+  // Room Sessions
+  ROOM_SESSION: (id: string) => `/room-sessions/${id}`,
+  ROOM_SESSION_MESSAGES: (id: string) => `/room-sessions/${id}/messages`,
+  ROOM_SESSION_TRANSCRIPT: (id: string) => `/room-sessions/${id}/transcript`,
+  ROOM_SESSION_CLOSE: (id: string) => `/room-sessions/${id}/close`,
+  ROOM_SESSION_OUTPUTS: (id: string) => `/room-sessions/${id}/outputs`,
+
+  // Collections
+  COLLECTIONS: "/collections",
+  COLLECTION: (id: string) => `/collections/${id}`,
+  COLLECTION_RUN: (id: string) => `/collections/${id}/run`,
+  COLLECTION_RUN_STATUS: (runId: string) => `/collections/runs/${runId}/status`,
 } as const;
 
 // Local Storage

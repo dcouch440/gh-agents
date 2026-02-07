@@ -6,6 +6,8 @@ mod files;
 mod git;
 mod sandbox;
 mod test_runner;
+pub mod vpn;
+pub mod vpn_sidecar;
 
 pub use approval::{
     approval_channel, ApprovalContext, ApprovalError, ApprovalGate, ApprovalGatesConfig,
@@ -28,6 +30,8 @@ pub use sandbox::{
 pub use test_runner::{
     TestError, TestFailure, TestFramework, TestOutputEvent, TestResult, TestRunner,
 };
+pub use vpn::{VpnError, WgEasyClient, WgEasyConfig};
+pub use vpn_sidecar::{VpnSidecarHandle, VpnSidecarManager};
 
 use std::path::PathBuf;
 use thiserror::Error;

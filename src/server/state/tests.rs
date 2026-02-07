@@ -171,3 +171,46 @@ fn remove_response_stream() {
     let result = state.send_stream_chunk(msg_id, StreamChunk::Done);
     assert!(!result);
 }
+
+// ── Shutdown / cancellation tests ──────────────────────────────────────
+
+#[test]
+fn shutdown_token_accessible() {
+    let state = make_state();
+    assert!(!state.shutdown_token().is_cancelled());
+    state.shutdown_token().cancel();
+    assert!(state.shutdown_token().is_cancelled());
+}
+
+#[test]
+fn cancel_all_executions_cancels_every_token() {
+    let state = make_state();
+    let id1 = Uuid::new_v4();
+    let id2 = Uuid::new_v4();
+    let token1 = state.register_cancellation(id1);
+    let token2 = state.register_cancellation(id2);
+    assert!(!token1.is_cancelled());
+    assert!(!token2.is_cancelled());
+
+    let count = state.cancel_all_executions();
+    assert_eq!(count, 2);
+    assert!(token1.is_cancelled());
+    assert!(token2.is_cancelled());
+}
+
+#[test]
+fn cancel_all_executions_returns_zero_when_empty() {
+    let state = make_state();
+    assert_eq!(state.cancel_all_executions(), 0);
+}
+
+#[test]
+fn active_execution_count_tracks_registrations() {
+    let state = make_state();
+    assert_eq!(state.active_execution_count(), 0);
+    let id = Uuid::new_v4();
+    let _ = state.register_cancellation(id);
+    assert_eq!(state.active_execution_count(), 1);
+    state.remove_cancellation(id);
+    assert_eq!(state.active_execution_count(), 0);
+}

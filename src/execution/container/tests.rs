@@ -346,4 +346,53 @@ mod tests {
         assert!(parse_docker_timestamp("").is_none());
         assert!(parse_docker_timestamp("2024-01-15").is_none());
     }
+
+    // ── network isolation ─────────────────────────────────────────────────
+
+    #[test]
+    fn container_config_network_isolated_default_true() {
+        let config = ContainerConfig::default();
+        assert!(config.network_isolated);
+    }
+
+    #[test]
+    fn container_config_network_isolated_can_be_disabled() {
+        let config = ContainerConfig {
+            network_isolated: false,
+            ..ContainerConfig::default()
+        };
+        assert!(!config.network_isolated);
+    }
+
+    #[test]
+    fn network_disconnect_error_display() {
+        let err = ContainerError::NetworkDisconnectFailed {
+            container: "nexor-step-abc".to_string(),
+            stderr: "not connected".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("nexor-step-abc"));
+        assert!(msg.contains("not connected"));
+    }
+
+    // ── spawn_reaper ──────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn spawn_reaper_shuts_down_on_token_cancel() {
+        let token = tokio_util::sync::CancellationToken::new();
+        let handle = ContainerManager::spawn_reaper(
+            std::time::Duration::from_secs(3600),
+            std::time::Duration::from_millis(50),
+            token.clone(),
+        );
+
+        // Let it tick once
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        assert!(!handle.is_finished());
+
+        // Cancel and verify it stops
+        token.cancel();
+        let result = tokio::time::timeout(std::time::Duration::from_secs(2), handle).await;
+        assert!(result.is_ok(), "Reaper should shut down within 2 seconds");
+    }
 }

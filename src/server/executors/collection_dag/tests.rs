@@ -140,6 +140,7 @@ async fn test_variable_resolution() {
                 container_enabled: false,
                 target_repo_url: None,
                 target_branch: None,
+                vpn_enabled: false,
             }))
         }
 
@@ -152,6 +153,7 @@ async fn test_variable_resolution() {
             _: bool,
             _: Option<String>,
             _: Option<String>,
+            _: bool,
         ) -> Result<WorkflowRow> {
             unimplemented!()
         }
@@ -166,6 +168,7 @@ async fn test_variable_resolution() {
             _: Option<bool>,
             _: Option<Option<String>>,
             _: Option<Option<String>>,
+            _: Option<bool>,
         ) -> Result<WorkflowRow> {
             unimplemented!()
         }

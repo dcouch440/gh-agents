@@ -9,6 +9,7 @@ use dashmap::DashMap;
 use sqlx::PgPool;
 use thiserror::Error;
 use tokio::sync::{mpsc, RwLock};
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::db::traits::ServerRepo;
@@ -171,6 +172,7 @@ impl AppStateBuilder {
             chat_tx,
             response_streams: DashMap::new(),
             cancellation_tokens: DashMap::new(),
+            shutdown_token: CancellationToken::new(),
         });
 
         Ok((state, orchestrator_rx))

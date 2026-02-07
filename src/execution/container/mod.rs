@@ -94,6 +94,9 @@ pub enum ContainerError {
         source: std::io::Error,
     },
 
+    #[error("network disconnect failed for container {container}: {stderr}")]
+    NetworkDisconnectFailed { container: String, stderr: String },
+
     #[error("io error: {0}")]
     IoError(#[from] std::io::Error),
 }
@@ -123,6 +126,9 @@ pub struct ContainerConfig {
     pub workdir: String,
     /// Optional Docker network mode (e.g., "container:<vpn_sidecar_id>").
     pub network_mode: Option<String>,
+    /// Whether to disconnect the container from all networks after the initial
+    /// git clone. Defaults to `true`. Ignored when `network_mode` is `Some`.
+    pub network_isolated: bool,
 }
 
 impl Default for ContainerConfig {
@@ -138,6 +144,7 @@ impl Default for ContainerConfig {
             env_vars: Vec::new(),
             workdir: "/workspace".to_string(),
             network_mode: None,
+            network_isolated: true,
         }
     }
 }
@@ -181,6 +188,49 @@ pub fn validate_container_path(path: &str) -> Result<(), ContainerError> {
             });
         }
     }
+    Ok(())
+}
+
+/// Disconnect a container from the Docker bridge network.
+///
+/// Removes all network access, preventing data exfiltration after the
+/// initial git clone. Idempotent: returns Ok if the container is already
+/// disconnected or the network doesn't exist.
+async fn disconnect_bridge_network(
+    container_id: &str,
+    container_name: &str,
+) -> Result<(), ContainerError> {
+    let output = Command::new("docker")
+        .args(["network", "disconnect", "-f", "bridge", container_id])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await
+        .map_err(|e| ContainerError::DockerSpawnFailed {
+            operation: "network disconnect",
+            source: e,
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        // Docker returns an error if the container is not connected — that's fine.
+        if stderr.contains("is not connected to") {
+            debug!(
+                container = container_name,
+                "Container already disconnected from bridge"
+            );
+            return Ok(());
+        }
+        return Err(ContainerError::NetworkDisconnectFailed {
+            container: container_name.to_string(),
+            stderr,
+        });
+    }
+
+    info!(
+        container = container_name,
+        "Disconnected container from bridge network (network isolated)"
+    );
     Ok(())
 }
 
@@ -561,6 +611,17 @@ impl ContainerManager {
             .exec(&["git", "config", "user.name", "Nexor Agent"])
             .await;
 
+        // 6. Network isolation: disconnect from bridge after clone completes
+        if config.network_isolated && config.network_mode.is_none() {
+            if let Err(e) = disconnect_bridge_network(&container_id, &container_name).await {
+                warn!(
+                    container = %container_name,
+                    error = %e,
+                    "Failed to isolate container network — continuing with network access"
+                );
+            }
+        }
+
         info!(
             container = %container_name,
             repo = %config.clone_url,
@@ -689,6 +750,37 @@ impl ContainerManager {
         }
 
         reaped
+    }
+
+    /// Spawn a background task that periodically reaps orphaned containers.
+    ///
+    /// The task runs every `interval` and calls `reap_orphaned_containers(max_age)`.
+    /// It stops cleanly when `shutdown` is cancelled.
+    pub fn spawn_reaper(
+        max_age: std::time::Duration,
+        interval: std::time::Duration,
+        shutdown: tokio_util::sync::CancellationToken,
+    ) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(interval);
+            // Skip the first immediate tick (startup reap already ran)
+            ticker.tick().await;
+
+            loop {
+                tokio::select! {
+                    _ = ticker.tick() => {
+                        let reaped = Self::reap_orphaned_containers(max_age).await;
+                        if reaped > 0 {
+                            info!("Periodic reaper cleaned up {} orphaned container(s)", reaped);
+                        }
+                    }
+                    _ = shutdown.cancelled() => {
+                        info!("Container reaper shutting down");
+                        break;
+                    }
+                }
+            }
+        })
     }
 }
 

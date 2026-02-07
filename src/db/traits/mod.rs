@@ -468,6 +468,7 @@ pub trait WorkflowRepo: Send + Sync {
         container_enabled: bool,
         target_repo_url: Option<String>,
         target_branch: Option<String>,
+        vpn_enabled: bool,
     ) -> Result<WorkflowRow>;
     async fn get_workflow(&self, id: Uuid) -> Result<Option<WorkflowRow>>;
     async fn list_workflows(&self, user_id: Uuid) -> Result<Vec<WorkflowRow>>;
@@ -479,6 +480,7 @@ pub trait WorkflowRepo: Send + Sync {
         container_enabled: Option<bool>,
         target_repo_url: Option<Option<String>>,
         target_branch: Option<Option<String>>,
+        vpn_enabled: Option<bool>,
     ) -> Result<WorkflowRow>;
     async fn delete_workflow(&self, id: Uuid) -> Result<()>;
 
