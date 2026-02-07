@@ -614,29 +614,37 @@ async fn create_optional_container(
             HubError::Internal(anyhow!("VPN enabled but wg-easy client not configured"))
         })?;
 
+        use crate::execution::vpn::retry::vpn_with_retry;
+
         let peer_name = format!("{}-{}", label, Uuid::new_v4());
-        let peer = wg
-            .create_peer(&peer_name)
+        let peer = vpn_with_retry(|| wg.create_peer(&peer_name))
             .await
             .map_err(|e| HubError::Internal(anyhow!("VPN peer creation failed: {}", e)))?;
 
-        let peer_config = wg
-            .get_peer_config(&peer.id)
+        let peer_id_for_config = peer.id.clone();
+        let peer_config = vpn_with_retry(|| wg.get_peer_config(&peer_id_for_config))
             .await
             .map_err(|e| HubError::Internal(anyhow!("VPN peer config failed: {}", e)))?;
 
-        let sidecar = VpnSidecarManager::create_sidecar(&peer_config, &peer.id)
-            .await
-            .map_err(|e| {
-                // Clean up the wg-easy peer if sidecar creation fails
-                let wg_clone = wg_client.is_some();
-                let peer_id = peer.id.clone();
-                if wg_clone {
-                    // Fire-and-forget cleanup
-                    warn!(peer_id = %peer_id, error = %e, "VPN sidecar failed, peer will be orphaned");
+        let sidecar = match VpnSidecarManager::create_sidecar(&peer_config, &peer.id).await {
+            Ok(s) => s,
+            Err(e) => {
+                warn!(peer_id = %peer.id, error = %e, "VPN sidecar failed, cleaning up peer");
+                if let Some(wg) = wg_client {
+                    if let Err(del_err) = wg.delete_peer(&peer.id).await {
+                        warn!(
+                            peer_id = %peer.id,
+                            error = %del_err,
+                            "Failed to clean up orphaned VPN peer"
+                        );
+                    }
                 }
-                HubError::Internal(anyhow!("VPN sidecar creation failed: {}", e))
-            })?;
+                return Err(HubError::Internal(anyhow!(
+                    "VPN sidecar creation failed: {}",
+                    e
+                )));
+            }
+        };
 
         info!(
             container = %sidecar.container_name,
@@ -708,9 +716,11 @@ async fn destroy_optional_container(
     if let Some(ref sidecar) = mc.vpn_sidecar {
         VpnSidecarManager::destroy_sidecar_quiet(sidecar).await;
 
-        // 3. Delete wg-easy peer
+        // 3. Delete wg-easy peer (with retry)
         if let Some(wg) = wg_client {
-            if let Err(e) = wg.delete_peer(&sidecar.peer_id).await {
+            use crate::execution::vpn::retry::vpn_with_retry;
+            let peer_id = sidecar.peer_id.clone();
+            if let Err(e) = vpn_with_retry(|| wg.delete_peer(&peer_id)).await {
                 warn!(peer_id = %sidecar.peer_id, error = %e, "Failed to delete VPN peer");
             }
         }
@@ -1639,6 +1649,13 @@ async fn run_step_via_engine(
 
     // Build filter pipeline
     let mut filter_ctx = FilterContext::new(&agent.model_id, agent.id).with_step_id(step.id);
+    filter_ctx.metadata.insert(
+        "agent_execution_id".into(),
+        serde_json::to_value(ae_row.id).unwrap(),
+    );
+    filter_ctx
+        .metadata
+        .insert("user_id".into(), serde_json::to_value(ctx.user_id).unwrap());
 
     let mut filters: Vec<Arc<dyn ExecutionFilter>> =
         vec![Arc::new(AgentGuidanceFilter::new(state.repo().clone()))];
@@ -1671,6 +1688,8 @@ async fn run_step_via_engine(
                 provider.clone(),
                 state.repo().clone(),
                 verification_ids,
+                state.agent_execution_repo(),
+                state.token_ledger_repo(),
             )));
         }
     }

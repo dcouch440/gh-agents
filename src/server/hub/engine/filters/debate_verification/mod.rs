@@ -14,18 +14,22 @@
 //! No effect when `verification_agent_ids` is empty.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use serde::Deserialize;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
-use crate::db::traits::ServerRepo;
+use crate::constants::VERIFICATION_AGENT_TIMEOUT_SECS;
+use crate::db::traits::{AgentExecutionRepo, ServerRepo, TokenLedgerRepo};
 use crate::llm::{LLMProvider, LLMRequest, LLMResponse, Message, Role};
+use crate::server::hub::strategies::compute_cost;
 
 use super::{ExecutionFilter, FilterContext, HubError, ResponseAction};
 
 /// Captures the original prompt context from `on_start` for use in `on_response`.
+#[derive(Clone)]
 pub(crate) struct PromptCapture {
     pub(crate) system_prompt: String,
     pub(crate) user_prompt: String,
@@ -38,13 +42,17 @@ pub struct DebateVerificationFilter {
     verification_agent_ids: Vec<Uuid>,
     /// Captured from on_start for use in on_response.
     pub(crate) prompt_context: tokio::sync::Mutex<Option<PromptCapture>>,
+    /// For recording verification agent executions (audit trail).
+    ae_repo: Option<Arc<dyn AgentExecutionRepo>>,
+    /// For recording token/cost usage of verification calls.
+    tl_repo: Option<Arc<dyn TokenLedgerRepo>>,
 }
 
 /// Maximum tokens for a verification critique response.
 const MAX_CRITIQUE_TOKENS: u32 = 1024;
 
 /// Structured critique from a verification agent.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 struct CritiqueResponse {
     approved: bool,
     #[serde(default)]
@@ -52,7 +60,7 @@ struct CritiqueResponse {
 }
 
 /// A single issue raised by a verification agent.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 struct CritiqueIssue {
     severity: String,
     description: String,
@@ -71,12 +79,16 @@ impl DebateVerificationFilter {
         provider: Arc<dyn LLMProvider>,
         repo: Arc<dyn ServerRepo>,
         verification_agent_ids: Vec<Uuid>,
+        ae_repo: Option<Arc<dyn AgentExecutionRepo>>,
+        tl_repo: Option<Arc<dyn TokenLedgerRepo>>,
     ) -> Self {
         Self {
             provider,
             repo,
             verification_agent_ids,
             prompt_context: tokio::sync::Mutex::new(None),
+            ae_repo,
+            tl_repo,
         }
     }
 
@@ -191,15 +203,18 @@ impl ExecutionFilter for DebateVerificationFilter {
             return Ok(ResponseAction::Accept);
         }
 
-        let capture = self.prompt_context.lock().await;
-        let capture = match capture.as_ref() {
-            Some(c) => c,
-            None => {
-                warn!(
-                    filter = "debate_verification",
-                    "no prompt context captured, skipping"
-                );
-                return Ok(ResponseAction::Accept);
+        // Clone captured data and drop the guard immediately.
+        let capture = {
+            let guard = self.prompt_context.lock().await;
+            match guard.as_ref() {
+                Some(c) => c.clone(),
+                None => {
+                    warn!(
+                        filter = "debate_verification",
+                        "no prompt context captured, skipping"
+                    );
+                    return Ok(ResponseAction::Accept);
+                }
             }
         };
 
@@ -211,12 +226,25 @@ impl ExecutionFilter for DebateVerificationFilter {
             "running verification panel"
         );
 
+        // Extract cross-cutting metadata from FilterContext.
+        let parent_execution_id: Option<Uuid> = ctx
+            .metadata
+            .get("agent_execution_id")
+            .and_then(|v| serde_json::from_value(v.clone()).ok());
+        let user_id: Option<Uuid> = ctx
+            .metadata
+            .get("user_id")
+            .and_then(|v| serde_json::from_value(v.clone()).ok());
+        let step_id = ctx.step_id;
+
         // Launch parallel critique tasks.
         let mut join_set = tokio::task::JoinSet::new();
 
         for &verifier_id in &self.verification_agent_ids {
             let provider = Arc::clone(&self.provider);
             let repo = Arc::clone(&self.repo);
+            let ae_repo = self.ae_repo.clone();
+            let tl_repo = self.tl_repo.clone();
             let system_prompt_summary = capture.system_prompt.clone();
             let user_prompt = capture.user_prompt.clone();
             let primary_response = response.content.clone();
@@ -248,12 +276,38 @@ impl ExecutionFilter for DebateVerificationFilter {
                 };
 
                 let verifier_system =
-                    Self::build_verifier_system_prompt(&agent.name, &agent.system_prompt);
-                let verifier_user = Self::build_verifier_user_message(
+                    DebateVerificationFilter::build_verifier_system_prompt(&agent.name, &agent.system_prompt);
+                let verifier_user = DebateVerificationFilter::build_verifier_user_message(
                     &system_prompt_summary,
                     &user_prompt,
                     &primary_response,
                 );
+
+                // Record verification execution (best-effort audit trail).
+                let verification_ae_id = if let Some(ref ae_repo) = ae_repo {
+                    match ae_repo
+                        .create_agent_execution(
+                            verifier_id,
+                            step_id,
+                            false,
+                            parent_execution_id,
+                            &verifier_system,
+                            &verifier_user,
+                            None,
+                            None,
+                            None,
+                        )
+                        .await
+                    {
+                        Ok(row) => Some(row.id),
+                        Err(e) => {
+                            warn!(verifier_id = %verifier_id, error = %e, "failed to record verification execution");
+                            None
+                        }
+                    }
+                } else {
+                    None
+                };
 
                 let request = LLMRequest {
                     model: agent.model_id.clone(),
@@ -265,37 +319,87 @@ impl ExecutionFilter for DebateVerificationFilter {
                     stream: false,
                 };
 
-                let critique = match provider.send_message(request).await {
-                    Ok(llm_response) => {
-                        // Try to parse structured JSON from the response.
-                        serde_json::from_str::<CritiqueResponse>(&llm_response.content)
-                            .or_else(|_| {
-                                // Try extracting JSON from markdown code blocks.
-                                extract_json_from_response(&llm_response.content)
-                            })
-                            .unwrap_or_else(|_| {
-                                warn!(
-                                    verifier = agent.name,
-                                    "unparseable critique, treating as approved"
-                                );
-                                CritiqueResponse {
-                                    approved: true,
-                                    issues: vec![],
-                                }
-                            })
+                // Execute with timeout.
+                let llm_result = tokio::time::timeout(
+                    Duration::from_secs(VERIFICATION_AGENT_TIMEOUT_SECS),
+                    provider.send_message(request),
+                )
+                .await;
+
+                let (critique, status) = match llm_result {
+                    Ok(Ok(llm_response)) => {
+                        // Record token usage (best-effort).
+                        if let (Some(ref tl_repo), Some(uid)) = (&tl_repo, user_id) {
+                            let cost = compute_cost(
+                                &agent.model_id,
+                                llm_response.usage.input_tokens as i64,
+                                llm_response.usage.output_tokens as i64,
+                            );
+                            let _ = tl_repo
+                                .insert_ledger_entry(
+                                    uid,
+                                    verification_ae_id,
+                                    &agent.model_id,
+                                    llm_response.usage.input_tokens as i64,
+                                    llm_response.usage.output_tokens as i64,
+                                    cost,
+                                )
+                                .await;
+                        }
+
+                        let critique = serde_json::from_str::<CritiqueResponse>(
+                            &llm_response.content,
+                        )
+                        .or_else(|_| extract_json_from_response(&llm_response.content))
+                        .unwrap_or_else(|_| {
+                            warn!(
+                                verifier = agent.name,
+                                "unparseable critique, treating as approved"
+                            );
+                            CritiqueResponse {
+                                approved: true,
+                                issues: vec![],
+                            }
+                        });
+                        (critique, "completed")
                     }
-                    Err(e) => {
+                    Ok(Err(e)) => {
                         warn!(
                             verifier = agent.name,
                             error = %e,
                             "verification agent LLM call failed, treating as approved"
                         );
-                        CritiqueResponse {
-                            approved: true,
-                            issues: vec![],
-                        }
+                        (
+                            CritiqueResponse {
+                                approved: true,
+                                issues: vec![],
+                            },
+                            "failed",
+                        )
+                    }
+                    Err(_elapsed) => {
+                        warn!(
+                            verifier = agent.name,
+                            timeout_secs = VERIFICATION_AGENT_TIMEOUT_SECS,
+                            "verification agent timed out, treating as approved"
+                        );
+                        (
+                            CritiqueResponse {
+                                approved: true,
+                                issues: vec![],
+                            },
+                            "timeout",
+                        )
                     }
                 };
+
+                // Update execution record with result (best-effort).
+                if let (Some(ref ae_repo), Some(ae_id)) = (&ae_repo, verification_ae_id) {
+                    let output_json = serde_json::to_string(&critique).ok();
+                    let _ = ae_repo
+                        .update_agent_execution_status(ae_id, status, output_json, None)
+                        .await;
+                }
 
                 VerificationResult {
                     agent_name: agent.name,

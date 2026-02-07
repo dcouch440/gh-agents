@@ -75,6 +75,9 @@ pub const PIPELINE_MAX_STAGE_RETRIES: u32 = 1;
 /// Default timeout for task execution, tool calls, and approvals (5 min).
 pub const DEFAULT_TIMEOUT_SECS: u64 = 300;
 
+/// Per-verification-agent LLM call timeout (60s). On timeout, treat as approved.
+pub const VERIFICATION_AGENT_TIMEOUT_SECS: u64 = 60;
+
 // ── Retry / Backoff ─────────────────────────────────────────────────────────
 
 /// Initial retry backoff delay.
@@ -380,6 +383,10 @@ pub const CONTAINER_NAME_PREFIX: &str = "nexor-step";
 pub const CONTAINER_MAX_OUTPUT_BYTES: usize = 10 * 1024 * 1024;
 /// Max age in seconds before orphaned containers are reaped at startup (1 hour).
 pub const CONTAINER_REAPER_MAX_AGE_SECS: u64 = 3600;
+/// Interval in seconds between periodic container reaper runs (5 minutes).
+pub const CONTAINER_REAPER_INTERVAL_SECS: u64 = 300;
+/// Maximum seconds to wait for running executions to drain during shutdown.
+pub const SHUTDOWN_DRAIN_TIMEOUT_SECS: u64 = 30;
 
 // ── VPN / WireGuard Defaults ──────────────────────────────────────────────
 
@@ -393,3 +400,13 @@ pub const VPN_HEALTH_CHECK_INTERVAL_SECS: u64 = 2;
 pub const VPN_SIDECAR_NAME_PREFIX: &str = "nexor-vpn";
 /// HTTP request timeout for wg-easy API calls (seconds).
 pub const WGEASY_API_TIMEOUT_SECS: u64 = 10;
+/// Initial retry backoff delay for VPN API calls (ms).
+pub const VPN_RETRY_INITIAL_BACKOFF_MS: u64 = 200;
+/// Maximum retry backoff delay for VPN API calls (seconds).
+pub const VPN_RETRY_MAX_BACKOFF_SECS: u64 = 5;
+/// Maximum number of retries for VPN API calls.
+pub const VPN_RETRY_MAX_ATTEMPTS: u32 = 3;
+/// Max age in seconds before orphaned VPN sidecars/peers are reaped at startup (1 hour).
+pub const VPN_REAPER_MAX_AGE_SECS: u64 = 3600;
+/// Default WireGuard gateway IP for connectivity health check.
+pub const VPN_HEALTH_CHECK_GATEWAY: &str = "10.8.0.1";
