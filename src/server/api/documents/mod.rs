@@ -9,6 +9,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::AppError;
 use crate::constants::{MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH};
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
@@ -77,12 +78,9 @@ pub struct DocumentSearchQuery {
 pub async fn list_documents(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
-) -> Result<Json<Vec<DocumentListItem>>, StatusCode> {
+) -> Result<Json<Vec<DocumentListItem>>, AppError> {
     let doc_repo = &state.repos().documents;
-    let docs = doc_repo
-        .list_documents(auth.user_id.0)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let docs = doc_repo.list_documents(auth.user_id.0).await?;
 
     let items: Vec<DocumentListItem> = docs
         .into_iter()
@@ -115,12 +113,9 @@ pub async fn search_documents(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Query(query): Query<DocumentSearchQuery>,
-) -> Result<Json<Vec<crate::db::DocumentSearchResult>>, StatusCode> {
+) -> Result<Json<Vec<crate::db::DocumentSearchResult>>, AppError> {
     let doc_repo = &state.repos().documents;
-    let results = doc_repo
-        .search_documents(auth.user_id.0, &query.q)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let results = doc_repo.search_documents(auth.user_id.0, &query.q).await?;
 
     Ok(Json(results))
 }
@@ -141,17 +136,16 @@ pub async fn get_document(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(doc_id): Path<Uuid>,
-) -> Result<Json<DocumentResponse>, StatusCode> {
+) -> Result<Json<DocumentResponse>, AppError> {
     let doc_repo = &state.repos().documents;
     let doc = doc_repo
         .get_document(doc_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Document"))?;
 
     // Verify ownership
     if doc.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Document"));
     }
 
     Ok(Json(DocumentResponse {
@@ -184,12 +178,14 @@ pub async fn create_document(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Json(request): Json<CreateDocumentRequest>,
-) -> Result<(StatusCode, Json<DocumentResponse>), StatusCode> {
+) -> Result<(StatusCode, Json<DocumentResponse>), AppError> {
     if request.title.trim().is_empty() || request.title.len() > MAX_TITLE_LENGTH {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request(
+            "Title must be non-empty and within length limit",
+        ));
     }
     if request.content.len() > MAX_DESCRIPTION_LENGTH {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request("Content exceeds maximum length"));
     }
 
     let doc_repo = &state.repos().documents;
@@ -205,8 +201,7 @@ pub async fn create_document(
             String::new(),
             request.tags.unwrap_or_default(),
         )
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     Ok((
         StatusCode::CREATED,
@@ -243,24 +238,22 @@ pub async fn update_document(
     auth: auth_utils::AuthUser,
     Path(doc_id): Path<Uuid>,
     Json(request): Json<UpdateDocumentRequest>,
-) -> Result<Json<DocumentResponse>, StatusCode> {
+) -> Result<Json<DocumentResponse>, AppError> {
     let doc_repo = &state.repos().documents;
 
     // Verify ownership
     let existing = doc_repo
         .get_document(doc_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Document"))?;
 
     if existing.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Document"));
     }
 
     let doc = doc_repo
         .update_document(doc_id, request.content, request.title, request.tags)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     Ok(Json(DocumentResponse {
         id: doc.id,
@@ -292,24 +285,20 @@ pub async fn delete_document(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(doc_id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, AppError> {
     let doc_repo = &state.repos().documents;
 
     // Verify ownership
     let existing = doc_repo
         .get_document(doc_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Document"))?;
 
     if existing.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Document"));
     }
 
-    doc_repo
-        .delete_document(doc_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    doc_repo.delete_document(doc_id).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

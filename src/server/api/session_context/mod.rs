@@ -2,11 +2,11 @@
 
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
     Json,
 };
 use uuid::Uuid;
 
+use super::AppError;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
 
@@ -25,13 +25,12 @@ pub async fn get_session_context(
     State(state): State<AppState>,
     _auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
-) -> Result<Json<Vec<crate::db::ContextStoreRow>>, StatusCode> {
+) -> Result<Json<Vec<crate::db::ContextStoreRow>>, AppError> {
     let rows = state
         .repos()
         .context_store
         .get_active_context(session_id, 100)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
     Ok(Json(rows))
 }
 
@@ -50,13 +49,12 @@ pub async fn list_session_requests(
     State(state): State<AppState>,
     _auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
-) -> Result<Json<Vec<crate::db::RouterRequestRow>>, StatusCode> {
+) -> Result<Json<Vec<crate::db::RouterRequestRow>>, AppError> {
     let rows = state
         .repos()
         .router_requests
         .list_session_requests(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
     Ok(Json(rows))
 }
 

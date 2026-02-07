@@ -38,10 +38,7 @@ pub async fn list_modes(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<ModeInfo>>, AppError> {
-    let agents = state
-        .repo()
-        .list_persisted_agents(auth.user_id)
-        .await?;
+    let agents = state.repo().list_persisted_agents(auth.user_id).await?;
     let modes: Vec<ModeInfo> = agents
         .into_iter()
         .map(|a| ModeInfo {
@@ -122,10 +119,7 @@ pub async fn list_agent_modes(
 ) -> Result<Json<Vec<AgentModeResponse>>, AppError> {
     super::ownership::verify_agent_ownership(state.repo().as_ref(), &auth, agent_id).await?;
 
-    let modes = state
-        .repo()
-        .get_agent_modes(agent_id)
-        .await?;
+    let modes = state.repo().get_agent_modes(agent_id).await?;
     Ok(Json(
         modes.into_iter().map(AgentModeResponse::from).collect(),
     ))
@@ -164,10 +158,7 @@ pub async fn create_agent_mode(
         version: 1,
     };
 
-    state
-        .repo()
-        .create_agent_mode(&mode)
-        .await?;
+    state.repo().create_agent_mode(&mode).await?;
 
     Ok((StatusCode::CREATED, Json(AgentModeResponse::from(mode))))
 }
@@ -196,10 +187,7 @@ pub async fn delete_agent_mode(
 
     super::ownership::verify_agent_ownership(state.repo().as_ref(), &auth, mode.agent_id).await?;
 
-    state
-        .repo()
-        .delete_agent_mode(mode_id)
-        .await?;
+    state.repo().delete_agent_mode(mode_id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -277,12 +265,7 @@ pub async fn create_session(
 ) -> Result<(StatusCode, Json<SessionResponse>), AppError> {
     // Validate agent exists if provided
     if let Some(aid) = request.agent_id {
-        if state
-            .repo()
-            .get_persisted_agent(aid)
-            .await?
-            .is_none()
-        {
+        if state.repo().get_persisted_agent(aid).await?.is_none() {
             return Err(AppError::bad_request("Agent not found"));
         }
     }
@@ -315,7 +298,9 @@ pub async fn create_session(
         .repo()
         .get_session(session_id)
         .await?
-        .ok_or(AppError::Internal("Session not found after creation".into()))?;
+        .ok_or(AppError::Internal(
+            "Session not found after creation".into(),
+        ))?;
 
     state.broadcast_session(SessionEvent {
         session_id: session.id,
@@ -354,10 +339,7 @@ pub async fn list_sessions(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<SessionResponse>>, AppError> {
-    let sessions = state
-        .repo()
-        .list_sessions(auth.user_id)
-        .await?;
+    let sessions = state.repo().list_sessions(auth.user_id).await?;
 
     let response: Vec<SessionResponse> = sessions
         .into_iter()
@@ -442,10 +424,7 @@ pub async fn delete_session(
         return Err(AppError::not_found("Session"));
     }
 
-    state
-        .repo()
-        .delete_session(session_id)
-        .await?;
+    state.repo().delete_session(session_id).await?;
 
     state.broadcast_session(SessionEvent {
         session_id,
@@ -535,21 +514,20 @@ pub async fn send_session_chat(
     auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
     Json(request): Json<ChatRequest>,
-) -> Result<(StatusCode, Json<ChatResponse>), StatusCode> {
+) -> Result<(StatusCode, Json<ChatResponse>), AppError> {
     if request.message.trim().is_empty() {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request("Message cannot be empty"));
     }
 
     // Verify session exists and belongs to user
     let session = state
         .repo()
         .get_session(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Session"))?;
 
     if session.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Session"));
     }
 
     let message_id = Uuid::new_v4();
@@ -566,8 +544,7 @@ pub async fn send_session_chat(
             "user".to_string(),
             request.message.clone(),
         )
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     // Queue to chat consumer with session context
     state
@@ -581,7 +558,7 @@ pub async fn send_session_chat(
             timestamp: Utc::now(),
         })
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::Internal(format!("Failed to queue message: {e}")))?;
 
     Ok((
         StatusCode::ACCEPTED,
@@ -612,25 +589,20 @@ pub async fn get_session_history(
     auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
     Query(query): Query<HistoryQuery>,
-) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
+) -> Result<Json<Vec<ChatMessage>>, AppError> {
     // Verify session ownership
     let session = state
         .repo()
         .get_session(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Session"))?;
 
     if session.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Session"));
     }
 
     let limit = query.limit.unwrap_or(50);
-    let rows = state
-        .repo()
-        .get_session_history(session_id, limit)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = state.repo().get_session_history(session_id, limit).await?;
 
     let messages: Vec<ChatMessage> = rows
         .into_iter()
@@ -663,31 +635,28 @@ pub async fn update_session_config(
     auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
     Json(request): Json<UpdateDraftConfigRequest>,
-) -> Result<Json<SessionResponse>, StatusCode> {
+) -> Result<Json<SessionResponse>, AppError> {
     // Verify session ownership
     let session = state
         .repo()
         .get_session(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Session"))?;
 
     if session.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Session"));
     }
 
     state
         .repo()
         .update_session_draft_config(session_id, Some(request.draft_config))
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     let updated = state
         .repo()
         .get_session(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?
+        .ok_or(AppError::Internal("Session not found after update".into()))?;
 
     Ok(Json(SessionResponse {
         id: updated.id,
@@ -716,24 +685,19 @@ pub async fn clear_session_messages(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, AppError> {
     // Verify session ownership
     let session = state
         .repo()
         .get_session(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Session"))?;
 
     if session.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Session"));
     }
 
-    state
-        .repo()
-        .clear_session_messages(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state.repo().clear_session_messages(session_id).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -757,25 +721,26 @@ pub async fn save_session_agent(
     auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
     Json(request): Json<SaveAgentRequest>,
-) -> Result<(StatusCode, Json<SaveAgentResponse>), StatusCode> {
+) -> Result<(StatusCode, Json<SaveAgentResponse>), AppError> {
     // Verify session ownership
     let session = state
         .repo()
         .get_session(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Session"))?;
 
     if session.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Session"));
     }
 
     // Parse draft_config
     let draft_config: crate::server::hub::DraftConfig = session
         .draft_config
-        .ok_or(StatusCode::BAD_REQUEST)?
+        .ok_or(AppError::bad_request("Session has no draft config"))?
         .try_into()
-        .map_err(|_| StatusCode::BAD_REQUEST)?;
+        .map_err(|e: serde_json::Error| {
+            AppError::bad_request(format!("Invalid draft config: {e}"))
+        })?;
 
     // Create agent from draft config
     let agent_id = Uuid::new_v4();
@@ -797,27 +762,21 @@ pub async fn save_session_agent(
         version: 1,
     };
 
-    state
-        .repo()
-        .upsert_agent(auth.user_id, agent)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state.repo().upsert_agent(auth.user_id, agent).await?;
 
     // Set context documents if provided
     if !request.context_document_ids.is_empty() {
         state
             .repo()
             .set_agent_context(agent_id, request.context_document_ids)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            .await?;
     }
 
     // Link agent to session (clears draft_config)
     state
         .repo()
         .link_session_agent(session_id, agent_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     Ok((StatusCode::CREATED, Json(SaveAgentResponse { agent_id })))
 }

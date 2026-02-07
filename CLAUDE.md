@@ -41,7 +41,7 @@ npx vite build                              # Production build
 - Commit format: `type(scope): description` (feat, fix, docs, refactor, test, chore)
 - Always write tests when completing a ticket
 - Verify with `cargo check` and `cargo test` before committing
-- Axum handlers return `Result<Json<T>, StatusCode>` — never unwrap or panic in handlers
+- Axum handlers return `Result<Json<T>, AppError>` — never unwrap or panic in handlers
 - In frontend/ always prefer reusable components
 - Think enterprise quality always.
 - No co authored on commits.

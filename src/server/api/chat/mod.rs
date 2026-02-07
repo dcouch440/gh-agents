@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
+use super::AppError;
 use crate::constants::MAX_CHAT_MESSAGE_LENGTH;
 use crate::server::auth as auth_utils;
 use crate::server::state::{AppState, ConsumerMessage, StreamChunk};
@@ -66,9 +67,11 @@ pub async fn send_chat(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Json(request): Json<ChatRequest>,
-) -> Result<(StatusCode, Json<ChatResponse>), StatusCode> {
+) -> Result<(StatusCode, Json<ChatResponse>), AppError> {
     if request.message.trim().is_empty() || request.message.len() > MAX_CHAT_MESSAGE_LENGTH {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request(
+            "Message must be non-empty and within the maximum length",
+        ));
     }
 
     let message_id = Uuid::new_v4();
@@ -86,8 +89,7 @@ pub async fn send_chat(
             "user".to_string(),
             request.message.clone(),
         )
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     // Queue message to chat consumer
     state
@@ -101,7 +103,7 @@ pub async fn send_chat(
             timestamp: Utc::now(),
         })
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::Internal(format!("Failed to queue chat message: {e}")))?;
 
     Ok((
         StatusCode::ACCEPTED,
@@ -129,15 +131,14 @@ pub async fn get_chat_history(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Query(query): Query<HistoryQuery>,
-) -> Result<Json<Vec<ChatMessage>>, StatusCode> {
+) -> Result<Json<Vec<ChatMessage>>, AppError> {
     let limit = query.limit.unwrap_or(50);
     let offset = query.offset.unwrap_or(0);
 
     let rows = state
         .repo()
         .get_chat_history(auth.user_id, limit, offset)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     let messages: Vec<ChatMessage> = rows
         .into_iter()
@@ -294,11 +295,9 @@ fn chat_stream_inner(
 pub async fn clear_chat_history(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
-) -> StatusCode {
-    match state.repo().clear_chat_history(auth.user_id).await {
-        Ok(_) => StatusCode::NO_CONTENT,
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
-    }
+) -> Result<StatusCode, AppError> {
+    state.repo().clear_chat_history(auth.user_id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 #[cfg(test)]
 mod tests;

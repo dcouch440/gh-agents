@@ -8,6 +8,7 @@ use axum::{
 use serde::Deserialize;
 use uuid::Uuid;
 
+use super::AppError;
 use crate::constants::MAX_TITLE_LENGTH;
 use crate::server::api::tools::ToolResponse;
 use crate::server::auth as auth_utils;
@@ -51,13 +52,13 @@ pub struct SetRouterToolsRequest {
 pub async fn list_tool_routers(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
-) -> Result<Json<Vec<crate::db::ToolRouterRow>>, StatusCode> {
+) -> Result<Json<Vec<crate::db::ToolRouterRow>>, AppError> {
     let rows = state
         .repos()
         .tool_routers
         .list_tool_routers(auth.user_id.0)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(Json(rows))
 }
 
@@ -77,9 +78,9 @@ pub async fn create_tool_router(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Json(request): Json<CreateToolRouterRequest>,
-) -> Result<(StatusCode, Json<crate::db::ToolRouterRow>), StatusCode> {
+) -> Result<(StatusCode, Json<crate::db::ToolRouterRow>), AppError> {
     if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request("Router name is empty or exceeds maximum length"));
     }
     let repo = &state.repos().tool_routers;
     let row = repo
@@ -91,7 +92,7 @@ pub async fn create_tool_router(
             &request.model_id,
         )
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
     Ok((StatusCode::CREATED, Json(row)))
 }
 
@@ -111,15 +112,15 @@ pub async fn get_tool_router(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<crate::db::ToolRouterRow>, StatusCode> {
+) -> Result<Json<crate::db::ToolRouterRow>, AppError> {
     let repo = &state.repos().tool_routers;
     let row = repo
         .get_tool_router(id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Tool router"))?;
     if row.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Tool router"));
     }
     Ok(Json(row))
 }
@@ -142,19 +143,19 @@ pub async fn update_tool_router(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateToolRouterRequest>,
-) -> Result<Json<crate::db::ToolRouterRow>, StatusCode> {
+) -> Result<Json<crate::db::ToolRouterRow>, AppError> {
     let repo = &state.repos().tool_routers;
     let existing = repo
         .get_tool_router(id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Tool router"))?;
     if existing.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Tool router"));
     }
     if let Some(ref name) = request.name {
         if name.trim().is_empty() || name.len() > MAX_TITLE_LENGTH {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::bad_request("Router name is empty or exceeds maximum length"));
         }
     }
     let row = repo
@@ -167,7 +168,7 @@ pub async fn update_tool_router(
             request.is_active,
         )
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(Json(row))
 }
 
@@ -187,19 +188,19 @@ pub async fn delete_tool_router(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, AppError> {
     let repo = &state.repos().tool_routers;
     let existing = repo
         .get_tool_router(id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Tool router"))?;
     if existing.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Tool router"));
     }
     repo.delete_tool_router(id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -219,20 +220,20 @@ pub async fn get_router_tools(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<Vec<ToolResponse>>, StatusCode> {
+) -> Result<Json<Vec<ToolResponse>>, AppError> {
     let repo = &state.repos().tool_routers;
     let existing = repo
         .get_tool_router(id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Tool router"))?;
     if existing.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Tool router"));
     }
     let tools = repo
         .get_router_tools(id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
     let tools = tools.into_iter().map(ToolResponse::from_row).collect();
     Ok(Json(tools))
 }
@@ -255,19 +256,19 @@ pub async fn set_router_tools(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
     Json(request): Json<SetRouterToolsRequest>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, AppError> {
     let repo = &state.repos().tool_routers;
     let existing = repo
         .get_tool_router(id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Tool router"))?;
     if existing.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Tool router"));
     }
     repo.set_router_tools(id, &request.tool_ids)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(StatusCode::NO_CONTENT)
 }
 

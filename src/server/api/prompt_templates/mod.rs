@@ -13,6 +13,8 @@ use crate::constants::{MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH};
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
 
+use super::AppError;
+
 /// Response for a single prompt template.
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct PromptTemplateResponse {
@@ -49,13 +51,12 @@ pub struct UpdatePromptTemplateRequest {
 pub async fn list_prompt_templates(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
-) -> Result<Json<Vec<PromptTemplateResponse>>, StatusCode> {
+) -> Result<Json<Vec<PromptTemplateResponse>>, AppError> {
     let rows = state
         .repos()
         .prompt_templates
         .list_prompt_templates(auth.user_id.0)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
     let items = rows
         .into_iter()
         .map(|r| PromptTemplateResponse {
@@ -84,18 +85,17 @@ pub async fn create_prompt_template(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Json(request): Json<CreatePromptTemplateRequest>,
-) -> Result<(StatusCode, Json<PromptTemplateResponse>), StatusCode> {
+) -> Result<(StatusCode, Json<PromptTemplateResponse>), AppError> {
     if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request("Template name is empty or exceeds maximum length"));
     }
     if request.content.len() > MAX_PROMPT_LENGTH {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request("Template content exceeds maximum length"));
     }
     let repo = &state.repos().prompt_templates;
     let row = repo
         .create_prompt_template(auth.user_id.0, request.name, request.content)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
     Ok((
         StatusCode::CREATED,
         Json(PromptTemplateResponse {
@@ -123,15 +123,14 @@ pub async fn get_prompt_template(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<PromptTemplateResponse>, StatusCode> {
+) -> Result<Json<PromptTemplateResponse>, AppError> {
     let repo = &state.repos().prompt_templates;
     let row = repo
         .get_prompt_template(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Prompt template"))?;
     if row.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Prompt template"));
     }
     Ok(Json(PromptTemplateResponse {
         id: row.id,
@@ -159,30 +158,28 @@ pub async fn update_prompt_template(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
     Json(request): Json<UpdatePromptTemplateRequest>,
-) -> Result<Json<PromptTemplateResponse>, StatusCode> {
+) -> Result<Json<PromptTemplateResponse>, AppError> {
     let repo = &state.repos().prompt_templates;
     let existing = repo
         .get_prompt_template(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Prompt template"))?;
     if existing.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Prompt template"));
     }
     if let Some(ref name) = request.name {
         if name.trim().is_empty() || name.len() > MAX_TITLE_LENGTH {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::bad_request("Template name is empty or exceeds maximum length"));
         }
     }
     if let Some(ref content) = request.content {
         if content.len() > MAX_PROMPT_LENGTH {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::bad_request("Template content exceeds maximum length"));
         }
     }
     let row = repo
         .update_prompt_template(id, request.name, request.content)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
     Ok(Json(PromptTemplateResponse {
         id: row.id,
         name: row.name,
@@ -207,19 +204,16 @@ pub async fn delete_prompt_template(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, AppError> {
     let repo = &state.repos().prompt_templates;
     let existing = repo
         .get_prompt_template(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Prompt template"))?;
     if existing.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Prompt template"));
     }
-    repo.delete_prompt_template(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    repo.delete_prompt_template(id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

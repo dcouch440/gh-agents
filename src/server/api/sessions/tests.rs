@@ -56,7 +56,10 @@ mod tests {
 
         let auth = make_auth(attacker_id);
         let result = verify_agent_ownership(&repo, &auth, agent_id).await;
-        assert_eq!(result.unwrap_err(), axum::http::StatusCode::NOT_FOUND);
+        assert!(matches!(
+            result.unwrap_err(),
+            crate::server::api::AppError::NotFound(_)
+        ));
     }
 
     #[tokio::test]

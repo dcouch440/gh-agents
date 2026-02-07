@@ -2,11 +2,11 @@
 
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
     Json,
 };
 use uuid::Uuid;
 
+use super::AppError;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
 
@@ -24,12 +24,13 @@ pub async fn cancel_agent_execution(
     State(state): State<AppState>,
     _user: auth_utils::AuthUser,
     Path(execution_id): Path<String>,
-) -> Result<Json<serde_json::Value>, StatusCode> {
-    let exec_uuid = Uuid::parse_str(&execution_id).map_err(|_| StatusCode::BAD_REQUEST)?;
+) -> Result<Json<serde_json::Value>, AppError> {
+    let exec_uuid =
+        Uuid::parse_str(&execution_id).map_err(|e| AppError::BadRequest(e.to_string()))?;
 
     let cancelled = state.cancel_execution(exec_uuid);
     if !cancelled {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Execution"));
     }
 
     // Update execution status in DB

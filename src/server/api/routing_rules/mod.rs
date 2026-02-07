@@ -8,6 +8,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::AppError;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
 
@@ -56,23 +57,21 @@ async fn verify_step_access(
     wid: Uuid,
     sid: Uuid,
     user_id: Uuid,
-) -> Result<(), StatusCode> {
+) -> Result<(), AppError> {
     let repo = &state.repos().workflows;
     let wf = repo
         .get_workflow(wid)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Routing rule"))?;
     if wf.user_id != user_id {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Routing rule"));
     }
     let step = repo
         .get_step(sid)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Routing rule"))?;
     if step.workflow_id != wid {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Routing rule"));
     }
     Ok(())
 }
@@ -100,13 +99,13 @@ pub async fn list_routing_rules(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path((wid, sid)): Path<(Uuid, Uuid)>,
-) -> Result<Json<Vec<RoutingRuleResponse>>, StatusCode> {
+) -> Result<Json<Vec<RoutingRuleResponse>>, AppError> {
     verify_step_access(&state, wid, sid, auth.user_id.0).await?;
     let repo = &state.repos().workflows;
     let rows = repo
         .get_step_routing_rules(sid)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        ?;
     Ok(Json(
         rows.into_iter()
             .map(|r| RoutingRuleResponse {
@@ -142,9 +141,9 @@ pub async fn create_routing_rule(
     auth: auth_utils::AuthUser,
     Path((wid, sid)): Path<(Uuid, Uuid)>,
     Json(req): Json<CreateRoutingRuleRequest>,
-) -> Result<(StatusCode, Json<RoutingRuleResponse>), StatusCode> {
+) -> Result<(StatusCode, Json<RoutingRuleResponse>), AppError> {
     if req.label_value.trim().is_empty() {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request("Label value is required"));
     }
     verify_step_access(&state, wid, sid, auth.user_id.0).await?;
     let repo = &state.repos().workflows;
@@ -157,7 +156,7 @@ pub async fn create_routing_rule(
             req.display_order,
         )
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        ?;
     Ok((
         StatusCode::CREATED,
         Json(RoutingRuleResponse {
@@ -192,13 +191,13 @@ pub async fn update_routing_rule(
     auth: auth_utils::AuthUser,
     Path(p): Path<StepRulePath>,
     Json(req): Json<UpdateRoutingRuleRequest>,
-) -> Result<Json<RoutingRuleResponse>, StatusCode> {
+) -> Result<Json<RoutingRuleResponse>, AppError> {
     verify_step_access(&state, p.wid, p.sid, auth.user_id.0).await?;
     let repo = &state.repos().workflows;
     let row = repo
         .update_routing_rule(p.rid, req.agent_id, req.description, req.display_order)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        ?;
     Ok(Json(RoutingRuleResponse {
         id: row.id,
         label_value: row.label_value,
@@ -228,12 +227,12 @@ pub async fn delete_routing_rule(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(p): Path<StepRulePath>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, AppError> {
     verify_step_access(&state, p.wid, p.sid, auth.user_id.0).await?;
     let repo = &state.repos().workflows;
     repo.delete_routing_rule(p.rid)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        ?;
     Ok(StatusCode::NO_CONTENT)
 }
 
