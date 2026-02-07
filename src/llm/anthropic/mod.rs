@@ -521,37 +521,26 @@ impl LLMProvider for AnthropicClient {
             return Err(Self::handle_error_response(status, &body, retry_after));
         }
 
-        // Create a stream from the response bytes
-        let byte_stream = response.bytes_stream();
+        // Convert byte stream to safe, UTF-8-correct line stream, then parse SSE
+        let mut lines = super::stream::safe_line_stream_default(response.bytes_stream());
 
-        // Convert to line stream and parse SSE events
         let stream = async_stream::stream! {
-            let mut buffer = String::new();
+            while let Some(line_result) = lines.next().await {
+                match line_result {
+                    Ok(line) => {
+                        let line = line.trim().to_string();
 
-            let mut stream = byte_stream;
-            while let Some(chunk_result) = stream.next().await {
-                match chunk_result {
-                    Ok(bytes) => {
-                        // Append to buffer
-                        buffer.push_str(&String::from_utf8_lossy(&bytes));
+                        // Skip empty lines and event type lines
+                        if line.is_empty() || line.starts_with("event:") {
+                            continue;
+                        }
 
-                        // Process complete lines
-                        while let Some(newline_pos) = buffer.find('\n') {
-                            let line = buffer[..newline_pos].trim().to_string();
-                            buffer = buffer[newline_pos + 1..].to_string();
-
-                            // Skip empty lines and event type lines
-                            if line.is_empty() || line.starts_with("event:") {
-                                continue;
-                            }
-
-                            if let Some(result) = Self::parse_sse_line(&line) {
-                                yield result;
-                            }
+                        if let Some(result) = Self::parse_sse_line(&line) {
+                            yield result;
                         }
                     }
                     Err(e) => {
-                        yield Err(LLMError::StreamError(e.to_string()));
+                        yield Err(e);
                         break;
                     }
                 }

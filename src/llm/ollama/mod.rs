@@ -487,15 +487,10 @@ impl LLMProvider for OllamaClient {
             });
         }
 
-        // Ollama streams newline-delimited JSON (not SSE)
-        let byte_stream = response.bytes_stream();
+        // Convert byte stream to safe, UTF-8-correct line stream (NDJSON)
+        let mut lines = super::stream::safe_line_stream_default(response.bytes_stream());
 
         let stream = async_stream::stream! {
-            // Use a byte buffer to avoid corrupting multi-byte UTF-8 sequences
-            // that get split across TCP chunk boundaries.
-            let mut byte_buf: Vec<u8> = Vec::new();
-            const MAX_STREAM_BUFFER: usize = 10 * 1024 * 1024; // 10 MB
-
             // Emit a synthetic MessageStart for accumulator compatibility
             yield Ok(StreamChunk::MessageStart {
                 model: String::new(),
@@ -503,54 +498,31 @@ impl LLMProvider for OllamaClient {
             });
             yield Ok(StreamChunk::ContentBlockStart { index: 0 });
 
-            let mut stream = byte_stream;
             let mut final_input_tokens: Option<u32> = None;
             let mut saw_done = false;
             let mut had_error = false;
 
-            while let Some(chunk_result) = stream.next().await {
-                match chunk_result {
-                    Ok(bytes) => {
-                        byte_buf.extend_from_slice(&bytes);
-
-                        // Guard against unbounded buffer growth
-                        if byte_buf.len() > MAX_STREAM_BUFFER {
-                            yield Err(LLMError::StreamError(
-                                format!(
-                                    "Ollama stream buffer exceeded {} bytes — aborting",
-                                    MAX_STREAM_BUFFER
-                                )
-                            ));
-                            had_error = true;
-                            break;
+            while let Some(line_result) = lines.next().await {
+                match line_result {
+                    Ok(line) => {
+                        if line.trim().is_empty() {
+                            continue;
                         }
 
-                        // Split on newline bytes — safe because NDJSON is ASCII-framed
-                        while let Some(pos) = byte_buf.iter().position(|&b| b == b'\n') {
-                            let line_bytes: Vec<u8> = byte_buf.drain(..=pos).collect();
-                            let line = String::from_utf8_lossy(
-                                &line_bytes[..line_bytes.len() - 1],
-                            );
-
-                            if line.trim().is_empty() {
-                                continue;
+                        // Check for done=true to capture input tokens
+                        if let Ok(chunk) = serde_json::from_str::<OllamaStreamChunk>(&line) {
+                            if chunk.done {
+                                saw_done = true;
+                                final_input_tokens = chunk.prompt_eval_count;
                             }
+                        }
 
-                            // Check for done=true to capture input tokens
-                            if let Ok(chunk) = serde_json::from_str::<OllamaStreamChunk>(&line) {
-                                if chunk.done {
-                                    saw_done = true;
-                                    final_input_tokens = chunk.prompt_eval_count;
-                                }
-                            }
-
-                            if let Some(result) = Self::parse_stream_chunk(&line) {
-                                yield result;
-                            }
+                        if let Some(result) = Self::parse_stream_chunk(&line) {
+                            yield result;
                         }
                     }
                     Err(e) => {
-                        yield Err(LLMError::StreamError(e.to_string()));
+                        yield Err(e);
                         had_error = true;
                         break;
                     }
