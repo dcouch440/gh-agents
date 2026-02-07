@@ -15,8 +15,9 @@ pub use approval::{
     AutoApprovalGate, AutonomyLevel, DangerLevel, DangerousOperation, InteractiveApprovalGate,
 };
 pub use container::{
-    sanitize_git_output, shell_escape_path, validate_container_path, ContainerConfig,
-    ContainerError, ContainerExecResult, ContainerHandle, ContainerManager, RedactedString,
+    sanitize_git_output, shell_escape_path, validate_container_path, CommandOutput,
+    ContainerConfig, ContainerError, ContainerExecResult, ContainerHandle, ContainerManager,
+    DockerCli, RealDockerCli, RedactedString,
 };
 pub use files::{FileError, FileOps};
 pub use git::{

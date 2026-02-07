@@ -10,8 +10,10 @@ pub mod collections;
 pub mod config;
 pub mod costs;
 pub mod documents;
+pub mod error;
 pub mod health;
 pub mod output_schemas;
+pub mod ownership;
 pub mod prompt_templates;
 pub mod results;
 pub mod rooms;
@@ -22,6 +24,8 @@ pub mod tasks;
 pub mod tool_routers;
 pub mod tools;
 pub mod workflows;
+
+pub use error::AppError;
 
 // Re-export auth handlers and types
 pub use auth::{

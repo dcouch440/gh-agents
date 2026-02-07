@@ -9,6 +9,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::AppError;
 use crate::server::auth as auth_utils;
 use crate::server::state::{AppState, ConsumerMessage};
 use crate::server::ws::events::{SessionEvent, SessionEventKind};
@@ -36,12 +37,11 @@ pub struct ModeInfo {
 pub async fn list_modes(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
-) -> Result<Json<Vec<ModeInfo>>, StatusCode> {
+) -> Result<Json<Vec<ModeInfo>>, AppError> {
     let agents = state
         .repo()
         .list_persisted_agents(auth.user_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
     let modes: Vec<ModeInfo> = agents
         .into_iter()
         .map(|a| ModeInfo {
@@ -117,14 +117,15 @@ pub struct CreateAgentModeRequest {
 )]
 pub async fn list_agent_modes(
     State(state): State<AppState>,
-    _auth: auth_utils::AuthUser,
+    auth: auth_utils::AuthUser,
     Path(agent_id): Path<Uuid>,
-) -> Result<Json<Vec<AgentModeResponse>>, StatusCode> {
+) -> Result<Json<Vec<AgentModeResponse>>, AppError> {
+    super::ownership::verify_agent_ownership(state.repo().as_ref(), &auth, agent_id).await?;
+
     let modes = state
         .repo()
         .get_agent_modes(agent_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
     Ok(Json(
         modes.into_iter().map(AgentModeResponse::from).collect(),
     ))
@@ -144,10 +145,12 @@ pub async fn list_agent_modes(
 )]
 pub async fn create_agent_mode(
     State(state): State<AppState>,
-    _auth: auth_utils::AuthUser,
+    auth: auth_utils::AuthUser,
     Path(agent_id): Path<Uuid>,
     Json(req): Json<CreateAgentModeRequest>,
-) -> Result<(StatusCode, Json<AgentModeResponse>), StatusCode> {
+) -> Result<(StatusCode, Json<AgentModeResponse>), AppError> {
+    super::ownership::verify_agent_ownership(state.repo().as_ref(), &auth, agent_id).await?;
+
     let mode = crate::db::AgentModeRow {
         id: Uuid::new_v4(),
         agent_id,
@@ -164,8 +167,7 @@ pub async fn create_agent_mode(
     state
         .repo()
         .create_agent_mode(&mode)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     Ok((StatusCode::CREATED, Json(AgentModeResponse::from(mode))))
 }
@@ -183,14 +185,21 @@ pub async fn create_agent_mode(
 )]
 pub async fn delete_agent_mode(
     State(state): State<AppState>,
-    _auth: auth_utils::AuthUser,
+    auth: auth_utils::AuthUser,
     Path(mode_id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, AppError> {
+    let mode = state
+        .repo()
+        .get_agent_mode(mode_id)
+        .await?
+        .ok_or(AppError::not_found("Agent mode"))?;
+
+    super::ownership::verify_agent_ownership(state.repo().as_ref(), &auth, mode.agent_id).await?;
+
     state
         .repo()
         .delete_agent_mode(mode_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -265,17 +274,16 @@ pub async fn create_session(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Json(request): Json<CreateSessionRequest>,
-) -> Result<(StatusCode, Json<SessionResponse>), StatusCode> {
+) -> Result<(StatusCode, Json<SessionResponse>), AppError> {
     // Validate agent exists if provided
     if let Some(aid) = request.agent_id {
         if state
             .repo()
             .get_persisted_agent(aid)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .await?
             .is_none()
         {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::bad_request("Agent not found"));
         }
     }
 
@@ -301,15 +309,13 @@ pub async fn create_session(
             request.agent_id,
             request.draft_config,
         )
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     let session = state
         .repo()
         .get_session(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?
+        .ok_or(AppError::Internal("Session not found after creation".into()))?;
 
     state.broadcast_session(SessionEvent {
         session_id: session.id,
@@ -347,12 +353,11 @@ pub async fn create_session(
 pub async fn list_sessions(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
-) -> Result<Json<Vec<SessionResponse>>, StatusCode> {
+) -> Result<Json<Vec<SessionResponse>>, AppError> {
     let sessions = state
         .repo()
         .list_sessions(auth.user_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     let response: Vec<SessionResponse> = sessions
         .into_iter()
@@ -386,17 +391,16 @@ pub async fn get_session(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
-) -> Result<Json<SessionResponse>, StatusCode> {
+) -> Result<Json<SessionResponse>, AppError> {
     let session = state
         .repo()
         .get_session(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Session"))?;
 
     // Verify ownership
     if session.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Session"));
     }
 
     Ok(Json(SessionResponse {
@@ -426,24 +430,22 @@ pub async fn delete_session(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, AppError> {
     // Verify ownership
     let session = state
         .repo()
         .get_session(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Session"))?;
 
     if session.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Session"));
     }
 
     state
         .repo()
         .delete_session(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     state.broadcast_session(SessionEvent {
         session_id,
@@ -472,30 +474,27 @@ pub async fn update_session(
     auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
     Json(request): Json<UpdateSessionRequest>,
-) -> Result<Json<SessionResponse>, StatusCode> {
+) -> Result<Json<SessionResponse>, AppError> {
     let session = state
         .repo()
         .get_session(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .await?
+        .ok_or(AppError::not_found("Session"))?;
 
     if session.user_id != auth.user_id.0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::not_found("Session"));
     }
 
     state
         .repo()
         .update_session_title(session_id, &request.title)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     let updated = state
         .repo()
         .get_session(session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?
+        .ok_or(AppError::Internal("Session not found after update".into()))?;
 
     state.broadcast_session(SessionEvent {
         session_id: updated.id,
@@ -782,6 +781,7 @@ pub async fn save_session_agent(
     let agent_id = Uuid::new_v4();
     let agent = crate::db::AgentRow {
         id: agent_id,
+        user_id: auth.user_id.0,
         tier: None,
         name: request.name,
         system_prompt: draft_config.system_prompt,

@@ -43,6 +43,7 @@ fn me_response_serializes() {
         id: "user-123".to_string(),
         email: "admin@example.com".to_string(),
         github_login: None,
+        is_admin: false,
         authenticated: true,
         token_expires: 99999,
     };

@@ -353,7 +353,7 @@ impl ServerRepo for PgRepo {
 
     async fn list_persisted_agents(&self, user_id: UserId) -> Result<Vec<AgentRow>> {
         let rows = sqlx::query_as::<_, PgAgentRow>(
-            "SELECT id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, router_id, output_schema_id, version FROM agents WHERE user_id = $1",
+            "SELECT id, user_id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, router_id, output_schema_id, version FROM agents WHERE user_id = $1",
         )
         .bind(user_id.0)
         .fetch_all(&self.pool)
@@ -364,7 +364,7 @@ impl ServerRepo for PgRepo {
 
     async fn get_persisted_agent(&self, agent_id: Uuid) -> Result<Option<AgentRow>> {
         let row = sqlx::query_as::<_, PgAgentRow>(
-            "SELECT id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, router_id, output_schema_id, version FROM agents WHERE id = $1",
+            "SELECT id, user_id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, router_id, output_schema_id, version FROM agents WHERE id = $1",
         )
         .bind(agent_id)
         .fetch_optional(&self.pool)
@@ -656,6 +656,18 @@ impl ServerRepo for PgRepo {
         crate::db::list_agent_modes(&self.pool, agent_id).await
     }
 
+    async fn get_agent_mode(&self, mode_id: Uuid) -> Result<Option<AgentModeRow>> {
+        let row = sqlx::query_as::<_, AgentModeRow>(
+            "SELECT id, agent_id, name, system_prompt_suffix, temperature_override, \
+             model_override, tool_overrides, classifier_hint, created_at, version \
+             FROM agent_modes WHERE id = $1",
+        )
+        .bind(mode_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
     async fn create_agent_mode(&self, mode: &AgentModeRow) -> Result<()> {
         crate::db::create_agent_mode(&self.pool, mode).await
     }
@@ -692,6 +704,7 @@ impl ServerRepo for PgRepo {
 #[derive(sqlx::FromRow)]
 struct PgAgentRow {
     id: Uuid,
+    user_id: Uuid,
     name: String,
     system_prompt: String,
     persona_style: Option<String>,
@@ -709,6 +722,7 @@ struct PgAgentRow {
 fn agent_row_from_pg(r: PgAgentRow) -> AgentRow {
     AgentRow {
         id: r.id,
+        user_id: r.user_id,
         tier: None,
         name: r.name,
         system_prompt: r.system_prompt,
@@ -756,6 +770,7 @@ struct UserRow {
     github_id: Option<i64>,
     github_login: Option<String>,
     github_token_encrypted: Option<String>,
+    is_admin: bool,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
 }
@@ -769,6 +784,7 @@ impl From<UserRow> for User {
             github_id: row.github_id,
             github_login: row.github_login,
             github_token_encrypted: row.github_token_encrypted,
+            is_admin: row.is_admin,
             created_at: row.created_at,
             updated_at: row.updated_at,
         }
@@ -794,7 +810,7 @@ impl UserRepo for PgRepo {
     }
 
     async fn get_user_by_email(&self, email: &str) -> Result<Option<User>> {
-        let row: Option<UserRow> = sqlx::query_as("SELECT id, email, password_hash, github_id, github_login, github_token_encrypted, created_at, updated_at FROM users WHERE email = $1")
+        let row: Option<UserRow> = sqlx::query_as("SELECT id, email, password_hash, github_id, github_login, github_token_encrypted, is_admin, created_at, updated_at FROM users WHERE email = $1")
             .bind(email)
             .fetch_optional(&self.pool)
             .await?;
@@ -803,7 +819,7 @@ impl UserRepo for PgRepo {
     }
 
     async fn get_user_by_id(&self, id: UserId) -> Result<Option<User>> {
-        let row: Option<UserRow> = sqlx::query_as("SELECT id, email, password_hash, github_id, github_login, github_token_encrypted, created_at, updated_at FROM users WHERE id = $1")
+        let row: Option<UserRow> = sqlx::query_as("SELECT id, email, password_hash, github_id, github_login, github_token_encrypted, is_admin, created_at, updated_at FROM users WHERE id = $1")
             .bind(id.0)
             .fetch_optional(&self.pool)
             .await?;
@@ -812,7 +828,7 @@ impl UserRepo for PgRepo {
     }
 
     async fn get_user_by_github_id(&self, github_id: i64) -> Result<Option<User>> {
-        let row: Option<UserRow> = sqlx::query_as("SELECT id, email, password_hash, github_id, github_login, github_token_encrypted, created_at, updated_at FROM users WHERE github_id = $1")
+        let row: Option<UserRow> = sqlx::query_as("SELECT id, email, password_hash, github_id, github_login, github_token_encrypted, is_admin, created_at, updated_at FROM users WHERE github_id = $1")
             .bind(github_id)
             .fetch_optional(&self.pool)
             .await?;

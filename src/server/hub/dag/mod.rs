@@ -709,7 +709,8 @@ async fn create_optional_container(
 
     use crate::execution::container::retry::container_with_retry;
 
-    match container_with_retry(|| ContainerManager::create_container(&container_config)).await {
+    let container_mgr = ContainerManager::real();
+    match container_with_retry(|| container_mgr.create_container(&container_config)).await {
         Ok(handle) => {
             info!(container = %handle.container_name(), label, "Created container");
             Ok(Some(ManagedContainer {

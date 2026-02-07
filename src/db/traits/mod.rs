@@ -272,6 +272,9 @@ pub trait ServerRepo: Send + Sync {
     /// Create an agent mode.
     async fn create_agent_mode(&self, mode: &AgentModeRow) -> Result<()>;
 
+    /// Get a single agent mode by ID.
+    async fn get_agent_mode(&self, mode_id: Uuid) -> Result<Option<AgentModeRow>>;
+
     /// Delete an agent mode by ID.
     async fn delete_agent_mode(&self, mode_id: Uuid) -> Result<()>;
 

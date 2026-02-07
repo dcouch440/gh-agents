@@ -37,6 +37,8 @@ pub struct User {
     pub github_login: Option<String>,
     #[serde(skip_serializing)]
     pub github_token_encrypted: Option<String>,
+    #[serde(default)]
+    pub is_admin: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -93,6 +95,7 @@ mod tests {
             github_id: Some(12345),
             github_login: Some("testuser".to_string()),
             github_token_encrypted: Some("encrypted_secret".to_string()),
+            is_admin: false,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
@@ -136,6 +139,7 @@ mod tests {
             github_id: None,
             github_login: None,
             github_token_encrypted: None,
+            is_admin: false,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
@@ -154,6 +158,7 @@ mod tests {
             github_id: Some(123),
             github_login: Some("debuguser".to_string()),
             github_token_encrypted: Some("token".to_string()),
+            is_admin: false,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
@@ -188,6 +193,7 @@ mod tests {
             github_id: Some(54321),
             github_login: Some("octocat".to_string()),
             github_token_encrypted: Some("encrypted".to_string()),
+            is_admin: false,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
@@ -206,6 +212,7 @@ mod tests {
             github_id: None,
             github_login: None,
             github_token_encrypted: None,
+            is_admin: false,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };

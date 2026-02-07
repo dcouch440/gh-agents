@@ -38,6 +38,7 @@ fn make_search_results() -> Vec<DocumentSearchResult> {
 fn make_agent() -> AgentRow {
     AgentRow {
         id: Uuid::new_v4(),
+        user_id: Uuid::nil(),
         tier: None,
         name: "test-agent".into(),
         system_prompt: "You are a test agent".into(),

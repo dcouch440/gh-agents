@@ -8,10 +8,9 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::{AppError, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH};
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
-
-use super::{MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH};
 
 /// Response for a single agent
 #[derive(Serialize, utoipa::ToSchema)]
@@ -107,15 +106,14 @@ pub struct UpdateAgentRequest {
 pub async fn list_agents(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
-) -> Result<Json<AgentsListResponse>, StatusCode> {
+) -> Result<Json<AgentsListResponse>, AppError> {
     let config = state.config().read().await;
     let pool_config = &config.pool;
 
     let rows = state
         .repo()
         .list_persisted_agents(auth.user_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     let agents: Vec<AgentResponse> = rows.into_iter().map(AgentResponse::from_row).collect();
 
@@ -147,21 +145,22 @@ pub async fn create_agent(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Json(request): Json<CreateAgentRequest>,
-) -> Result<(StatusCode, Json<AgentResponse>), StatusCode> {
+) -> Result<(StatusCode, Json<AgentResponse>), AppError> {
     if request.model_id.trim().is_empty() {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request("model_id is required"));
     }
     if request.name.len() > MAX_TITLE_LENGTH {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::bad_request("Name exceeds maximum length"));
     }
     if let Some(ref prompt) = request.system_prompt {
         if prompt.len() > MAX_PROMPT_LENGTH {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::bad_request("System prompt exceeds maximum length"));
         }
     }
 
     let row = crate::db::AgentRow {
         id: Uuid::new_v4(),
+        user_id: auth.user_id.0,
         tier: None,
         name: request.name.trim().to_string(),
         system_prompt: request.system_prompt.unwrap_or_default(),
@@ -186,8 +185,7 @@ pub async fn create_agent(
     state
         .repo()
         .upsert_agent(auth.user_id, row.clone())
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     Ok((StatusCode::CREATED, Json(AgentResponse::from_row(row))))
 }
@@ -206,15 +204,10 @@ pub async fn create_agent(
 )]
 pub async fn get_agent(
     State(state): State<AppState>,
-    _auth: auth_utils::AuthUser,
+    auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<AgentResponse>, StatusCode> {
-    let row = state
-        .repo()
-        .get_persisted_agent(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+) -> Result<Json<AgentResponse>, AppError> {
+    let row = super::ownership::verify_agent_ownership(state.repo().as_ref(), &auth, id).await?;
 
     Ok(Json(AgentResponse::from_row(row)))
 }
@@ -237,16 +230,13 @@ pub async fn update_agent(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateAgentRequest>,
-) -> Result<Json<AgentResponse>, StatusCode> {
-    let existing = state
-        .repo()
-        .get_persisted_agent(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+) -> Result<Json<AgentResponse>, AppError> {
+    let existing =
+        super::ownership::verify_agent_ownership(state.repo().as_ref(), &auth, id).await?;
 
     let updated = crate::db::AgentRow {
         id: existing.id,
+        user_id: auth.user_id.0,
         tier: None,
         name: request.name.unwrap_or(existing.name),
         system_prompt: request.system_prompt.unwrap_or(existing.system_prompt),
@@ -272,8 +262,7 @@ pub async fn update_agent(
     state
         .repo()
         .upsert_agent(auth.user_id, updated.clone())
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await?;
 
     Ok(Json(AgentResponse::from_row(updated)))
 }
@@ -292,14 +281,12 @@ pub async fn update_agent(
 )]
 pub async fn delete_agent(
     State(state): State<AppState>,
-    _auth: auth_utils::AuthUser,
+    auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
-    state
-        .repo()
-        .delete_persisted_agent(id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+) -> Result<StatusCode, AppError> {
+    super::ownership::verify_agent_ownership(state.repo().as_ref(), &auth, id).await?;
+
+    state.repo().delete_persisted_agent(id).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

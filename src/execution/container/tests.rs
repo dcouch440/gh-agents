@@ -475,7 +475,7 @@ mod tests {
     #[tokio::test]
     async fn spawn_reaper_shuts_down_on_token_cancel() {
         let token = tokio_util::sync::CancellationToken::new();
-        let handle = ContainerManager::spawn_reaper(
+        let handle = ContainerManager::real().spawn_reaper(
             std::time::Duration::from_secs(3600),
             std::time::Duration::from_millis(50),
             token.clone(),
@@ -489,5 +489,581 @@ mod tests {
         token.cancel();
         let result = tokio::time::timeout(std::time::Duration::from_secs(2), handle).await;
         assert!(result.is_ok(), "Reaper should shut down within 2 seconds");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Mock-based tests for Docker-touching functions
+    // ═══════════════════════════════════════════════════════════════════════
+
+    use std::sync::Arc;
+
+    fn success_output(stdout: &str) -> CommandOutput {
+        CommandOutput {
+            exit_code: 0,
+            stdout: stdout.as_bytes().to_vec(),
+            stderr: Vec::new(),
+        }
+    }
+
+    fn failure_output(exit_code: i32, stderr: &str) -> CommandOutput {
+        CommandOutput {
+            exit_code,
+            stdout: Vec::new(),
+            stderr: stderr.as_bytes().to_vec(),
+        }
+    }
+
+    fn make_handle(cli: Arc<dyn DockerCli>) -> ContainerHandle {
+        ContainerHandle {
+            container_id: "abc123".to_string(),
+            container_name: "nexor-step-test".to_string(),
+            workdir: "/workspace".to_string(),
+            command_timeout_secs: 300,
+            cli,
+        }
+    }
+
+    // ── exec ────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn exec_success() {
+        let mut mock = MockDockerCli::new();
+        mock.expect_run()
+            .returning(|_| Ok(success_output("hello world\n")));
+
+        let handle = make_handle(Arc::new(mock));
+        let result = handle.exec(&["echo", "hello world"]).await.unwrap();
+        assert!(result.success);
+        assert_eq!(result.exit_code, 0);
+        assert!(result.stdout.contains("hello world"));
+        assert!(!result.truncated);
+    }
+
+    #[tokio::test]
+    async fn exec_non_zero_exit() {
+        let mut mock = MockDockerCli::new();
+        mock.expect_run()
+            .returning(|_| Ok(failure_output(1, "command not found")));
+
+        let handle = make_handle(Arc::new(mock));
+        let result = handle.exec(&["bad-cmd"]).await.unwrap();
+        assert!(!result.success);
+        assert_eq!(result.exit_code, 1);
+        assert!(result.stderr.contains("command not found"));
+    }
+
+    #[tokio::test]
+    async fn exec_output_truncated() {
+        let mut mock = MockDockerCli::new();
+        let big_output = vec![b'x'; crate::constants::CONTAINER_MAX_OUTPUT_BYTES + 1000];
+        mock.expect_run().returning(move |_| {
+            Ok(CommandOutput {
+                exit_code: 0,
+                stdout: big_output.clone(),
+                stderr: Vec::new(),
+            })
+        });
+
+        let handle = make_handle(Arc::new(mock));
+        let result = handle.exec(&["cat", "bigfile"]).await.unwrap();
+        assert!(result.truncated);
+        assert!(result.stdout.contains("[truncated,"));
+    }
+
+    #[tokio::test]
+    async fn exec_docker_spawn_failed() {
+        let mut mock = MockDockerCli::new();
+        mock.expect_run().returning(|_| {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "docker not found",
+            ))
+        });
+
+        let handle = make_handle(Arc::new(mock));
+        let result = handle.exec(&["ls"]).await;
+        assert!(matches!(
+            result.unwrap_err(),
+            ContainerError::DockerSpawnFailed {
+                operation: "exec",
+                ..
+            }
+        ));
+    }
+
+    // ── write_file ──────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn write_file_simple_path() {
+        let mut mock = MockDockerCli::new();
+        // write_file for a root-level file only calls run_with_stdin (no mkdir needed)
+        mock.expect_run_with_stdin()
+            .returning(|_, _| Ok(success_output("")));
+        // exec_shell for mkdir (parent is empty for root file, so no mkdir call)
+        // Actually, "file.txt" has parent "" which is filtered out, so only run_with_stdin is called
+
+        let handle = make_handle(Arc::new(mock));
+        let result = handle.write_file("file.txt", "content").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn write_file_nested_path() {
+        let mut mock = MockDockerCli::new();
+        // First call: exec for mkdir -p (via exec_shell → exec → cli.run)
+        // Second call: run_with_stdin for the actual write
+        mock.expect_run()
+            .times(1)
+            .returning(|_| Ok(success_output("")));
+        mock.expect_run_with_stdin()
+            .times(1)
+            .returning(|_, _| Ok(success_output("")));
+
+        let handle = make_handle(Arc::new(mock));
+        let result = handle.write_file("src/lib.rs", "fn main() {}").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn write_file_cat_fails() {
+        let mut mock = MockDockerCli::new();
+        mock.expect_run_with_stdin()
+            .returning(|_, _| Ok(failure_output(1, "permission denied")));
+
+        let handle = make_handle(Arc::new(mock));
+        let result = handle.write_file("file.txt", "content").await;
+        assert!(matches!(
+            result.unwrap_err(),
+            ContainerError::CommandFailed { exit_code: 1, .. }
+        ));
+    }
+
+    // ── is_alive ────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn is_alive_true() {
+        let mut mock = MockDockerCli::new();
+        mock.expect_run()
+            .returning(|_| Ok(success_output("true\n")));
+
+        let handle = make_handle(Arc::new(mock));
+        assert!(handle.is_alive().await);
+    }
+
+    #[tokio::test]
+    async fn is_alive_false() {
+        let mut mock = MockDockerCli::new();
+        mock.expect_run()
+            .returning(|_| Ok(success_output("false\n")));
+
+        let handle = make_handle(Arc::new(mock));
+        assert!(!handle.is_alive().await);
+    }
+
+    // ── read_file ───────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn read_file_success() {
+        let mut mock = MockDockerCli::new();
+        mock.expect_run()
+            .returning(|_| Ok(success_output("file contents here")));
+
+        let handle = make_handle(Arc::new(mock));
+        let content = handle.read_file("src/main.rs").await.unwrap();
+        assert_eq!(content, "file contents here");
+    }
+
+    // ── list_files ──────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn list_files_filters_dots() {
+        let mut mock = MockDockerCli::new();
+        mock.expect_run()
+            .returning(|_| Ok(success_output(".\n..\nfoo\nbar\n")));
+
+        let handle = make_handle(Arc::new(mock));
+        let files = handle.list_files(".").await.unwrap();
+        assert_eq!(files, vec!["foo", "bar"]);
+    }
+
+    // ── git ─────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn git_success() {
+        let mut mock = MockDockerCli::new();
+        mock.expect_run()
+            .returning(|_| Ok(success_output("abc1234 Initial commit\n")));
+
+        let handle = make_handle(Arc::new(mock));
+        let output = handle.git(&["log", "--oneline", "-1"]).await.unwrap();
+        assert!(output.contains("abc1234"));
+    }
+
+    // ── destroy_container ───────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn destroy_stop_and_rm_succeed() {
+        let mut mock = MockDockerCli::new();
+        // stop
+        mock.expect_run().times(1).returning(|args| {
+            assert!(args.iter().any(|a| a == "stop"));
+            Ok(success_output(""))
+        });
+        // rm
+        mock.expect_run().times(1).returning(|args| {
+            assert!(args.iter().any(|a| a == "rm"));
+            Ok(success_output(""))
+        });
+
+        let handle = make_handle(Arc::new(mock));
+        let result = ContainerManager::destroy_container(&handle).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn destroy_stop_fails_rm_succeeds() {
+        let mut mock = MockDockerCli::new();
+        // stop fails (io error) — but destroy_container ignores it via `let _ =`
+        mock.expect_run().times(1).returning(|_| {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "stop failed",
+            ))
+        });
+        // rm succeeds
+        mock.expect_run()
+            .times(1)
+            .returning(|_| Ok(success_output("")));
+
+        let handle = make_handle(Arc::new(mock));
+        let result = ContainerManager::destroy_container(&handle).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn destroy_rm_spawn_fails() {
+        let mut mock = MockDockerCli::new();
+        // stop succeeds
+        mock.expect_run()
+            .times(1)
+            .returning(|_| Ok(success_output("")));
+        // rm fails with io error
+        mock.expect_run().times(1).returning(|_| {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "docker not found",
+            ))
+        });
+
+        let handle = make_handle(Arc::new(mock));
+        let result = ContainerManager::destroy_container(&handle).await;
+        assert!(matches!(
+            result.unwrap_err(),
+            ContainerError::DockerSpawnFailed {
+                operation: "rm",
+                ..
+            }
+        ));
+    }
+
+    // ── disconnect_bridge_network ───────────────────────────────────────
+
+    #[tokio::test]
+    async fn disconnect_succeeds() {
+        let mut mock = MockDockerCli::new();
+        mock.expect_run().returning(|_| Ok(success_output("")));
+
+        let result = disconnect_bridge_network(&mock, "abc123", "nexor-step-test").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn disconnect_already_disconnected() {
+        let mut mock = MockDockerCli::new();
+        mock.expect_run().returning(|_| {
+            Ok(failure_output(
+                1,
+                "Error response from daemon: container abc123 is not connected to the network bridge",
+            ))
+        });
+
+        let result = disconnect_bridge_network(&mock, "abc123", "nexor-step-test").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn disconnect_other_error() {
+        let mut mock = MockDockerCli::new();
+        mock.expect_run()
+            .returning(|_| Ok(failure_output(1, "some other error")));
+
+        let result = disconnect_bridge_network(&mock, "abc123", "nexor-step-test").await;
+        assert!(matches!(
+            result.unwrap_err(),
+            ContainerError::NetworkDisconnectFailed { .. }
+        ));
+    }
+
+    // ── reap_orphaned_containers ────────────────────────────────────────
+
+    #[tokio::test]
+    async fn reap_no_containers() {
+        let mut mock = MockDockerCli::new();
+        mock.expect_run().returning(|_| Ok(success_output("")));
+
+        let mgr = ContainerManager::new(Arc::new(mock));
+        let reaped = mgr
+            .reap_orphaned_containers(std::time::Duration::from_secs(3600))
+            .await;
+        assert_eq!(reaped, 0);
+    }
+
+    #[tokio::test]
+    async fn reap_all_old() {
+        let mut mock = MockDockerCli::new();
+        // ps returns two old containers
+        mock.expect_run().times(1).returning(|args| {
+            if args.iter().any(|a| a == "ps") {
+                Ok(success_output(
+                    "id1\t2020-01-01 00:00:00 +0000 UTC\tnexor-step-old1\n\
+                         id2\t2020-01-01 00:00:00 +0000 UTC\tnexor-step-old2\n",
+                ))
+            } else {
+                Ok(success_output(""))
+            }
+        });
+        // Two rm calls
+        mock.expect_run().times(2).returning(|args| {
+            assert!(args.iter().any(|a| a == "rm"));
+            Ok(success_output(""))
+        });
+
+        let mgr = ContainerManager::new(Arc::new(mock));
+        let reaped = mgr
+            .reap_orphaned_containers(std::time::Duration::from_secs(3600))
+            .await;
+        assert_eq!(reaped, 2);
+    }
+
+    #[tokio::test]
+    async fn reap_docker_ps_fails() {
+        let mut mock = MockDockerCli::new();
+        mock.expect_run().returning(|_| {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "docker not available",
+            ))
+        });
+
+        let mgr = ContainerManager::new(Arc::new(mock));
+        let reaped = mgr
+            .reap_orphaned_containers(std::time::Duration::from_secs(3600))
+            .await;
+        assert_eq!(reaped, 0);
+    }
+
+    #[tokio::test]
+    async fn reap_malformed_lines() {
+        let mut mock = MockDockerCli::new();
+        mock.expect_run()
+            .returning(|_| Ok(success_output("malformed line without tabs\nanother bad\n")));
+
+        let mgr = ContainerManager::new(Arc::new(mock));
+        let reaped = mgr
+            .reap_orphaned_containers(std::time::Duration::from_secs(3600))
+            .await;
+        assert_eq!(reaped, 0);
+    }
+
+    // ── create_container ────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn create_happy_path() {
+        let mut mock = MockDockerCli::new();
+        let call_count = std::sync::atomic::AtomicU32::new(0);
+        // The sequence of calls:
+        // 1. docker create → returns container id
+        // 2. docker start → success
+        // 3. docker exec (git clone) → success
+        // 4. docker exec (git config user.email) → success
+        // 5. docker exec (git config user.name) → success
+        // 6. docker network disconnect → success
+        mock.expect_run().returning(move |args| {
+            let n = call_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            match n {
+                0 => {
+                    // create
+                    assert!(args.iter().any(|a| a == "create"));
+                    Ok(success_output("container-id-123\n"))
+                }
+                1 => {
+                    // start
+                    assert!(args.iter().any(|a| a == "start"));
+                    Ok(success_output(""))
+                }
+                2 => {
+                    // git clone (via exec)
+                    Ok(success_output("Cloning into '.'..."))
+                }
+                3 | 4 => {
+                    // git config
+                    Ok(success_output(""))
+                }
+                5 => {
+                    // network disconnect
+                    Ok(success_output(""))
+                }
+                _ => Ok(success_output("")),
+            }
+        });
+
+        let config = ContainerConfig {
+            clone_url: "https://github.com/owner/repo.git".to_string(),
+            github_token: RedactedString::new("ghp_test"),
+            ..ContainerConfig::default()
+        };
+        let mgr = ContainerManager::new(Arc::new(mock));
+        let handle = mgr.create_container(&config).await.unwrap();
+        assert!(handle.container_name().starts_with("nexor-step-"));
+    }
+
+    #[tokio::test]
+    async fn create_docker_create_fails() {
+        let mut mock = MockDockerCli::new();
+        mock.expect_run()
+            .returning(|_| Ok(failure_output(1, "no such image")));
+
+        let config = ContainerConfig::default();
+        let mgr = ContainerManager::new(Arc::new(mock));
+        let result = mgr.create_container(&config).await;
+        assert!(matches!(
+            result.unwrap_err(),
+            ContainerError::CreationFailed(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn create_docker_start_fails() {
+        let mut mock = MockDockerCli::new();
+        let call_count = std::sync::atomic::AtomicU32::new(0);
+        mock.expect_run().returning(move |_| {
+            let n = call_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            match n {
+                0 => Ok(success_output("container-id-123\n")), // create
+                1 => Ok(failure_output(1, "start failed")),    // start fails
+                2 => Ok(success_output("")),                   // rm cleanup
+                _ => Ok(success_output("")),
+            }
+        });
+
+        let config = ContainerConfig::default();
+        let mgr = ContainerManager::new(Arc::new(mock));
+        let result = mgr.create_container(&config).await;
+        assert!(matches!(
+            result.unwrap_err(),
+            ContainerError::CreationFailed(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn create_clone_exit_nonzero() {
+        let mut mock = MockDockerCli::new();
+        let call_count = std::sync::atomic::AtomicU32::new(0);
+        mock.expect_run().returning(move |_| {
+            let n = call_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            match n {
+                0 => Ok(success_output("container-id-123\n")), // create
+                1 => Ok(success_output("")),                    // start
+                2 => Ok(failure_output(128, "Authentication failed for 'https://x-access-token:ghp_secret@github.com/repo.git'")), // clone fails
+                3 | 4 => Ok(success_output("")),                // destroy (stop + rm)
+                _ => Ok(success_output("")),
+            }
+        });
+
+        let config = ContainerConfig {
+            clone_url: "https://github.com/owner/repo.git".to_string(),
+            github_token: RedactedString::new("ghp_secret"),
+            ..ContainerConfig::default()
+        };
+        let mgr = ContainerManager::new(Arc::new(mock));
+        let result = mgr.create_container(&config).await;
+        match result.unwrap_err() {
+            ContainerError::CloneFailed { stderr } => {
+                // Token should be sanitized
+                assert!(!stderr.contains("ghp_secret"));
+                assert!(stderr.contains("[REDACTED]"));
+            }
+            other => panic!("Expected CloneFailed, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn create_no_branch_skips_checkout() {
+        let mut mock = MockDockerCli::new();
+        let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let calls_clone = calls.clone();
+        mock.expect_run().returning(move |args| {
+            calls_clone.lock().unwrap().push(args.clone());
+            let is_create = args.iter().any(|a| a == "create");
+            if is_create {
+                Ok(success_output("container-id\n"))
+            } else {
+                Ok(success_output(""))
+            }
+        });
+
+        let config = ContainerConfig {
+            clone_url: "https://github.com/owner/repo.git".to_string(),
+            github_token: RedactedString::new("token"),
+            branch: None, // No branch
+            ..ContainerConfig::default()
+        };
+        let mgr = ContainerManager::new(Arc::new(mock));
+        let _ = mgr.create_container(&config).await;
+
+        // Verify no checkout command was issued
+        let calls = calls.lock().unwrap();
+        let has_checkout = calls
+            .iter()
+            .any(|args| args.iter().any(|a| a.contains("checkout")));
+        assert!(
+            !has_checkout,
+            "Should not have issued a git checkout when branch is None"
+        );
+    }
+
+    #[tokio::test]
+    async fn create_network_mode_skips_disconnect() {
+        let mut mock = MockDockerCli::new();
+        let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let calls_clone = calls.clone();
+        mock.expect_run().returning(move |args| {
+            calls_clone.lock().unwrap().push(args.clone());
+            let is_create = args.iter().any(|a| a == "create");
+            if is_create {
+                Ok(success_output("container-id\n"))
+            } else {
+                Ok(success_output(""))
+            }
+        });
+
+        let config = ContainerConfig {
+            clone_url: "https://github.com/owner/repo.git".to_string(),
+            github_token: RedactedString::new("token"),
+            network_mode: Some("container:vpn-sidecar".to_string()),
+            ..ContainerConfig::default()
+        };
+        let mgr = ContainerManager::new(Arc::new(mock));
+        let _ = mgr.create_container(&config).await;
+
+        // Should not call network disconnect when network_mode is Some
+        let calls = calls.lock().unwrap();
+        let has_disconnect = calls
+            .iter()
+            .any(|args| args.iter().any(|a| a == "disconnect"));
+        assert!(
+            !has_disconnect,
+            "Should not disconnect network when network_mode is set"
+        );
     }
 }
