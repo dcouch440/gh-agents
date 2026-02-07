@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::db::traits::{
     MockAgentExecutionRepo, MockContextStoreRepo, MockDocumentRepo, MockOutputSchemaRepo,
-    MockPromptTemplateRepo, MockResultRepo, MockRoomRepo, MockRouterRequestRepo,
+    MockPromptTemplateRepo, MockProtocolRepo, MockResultRepo, MockRoomRepo, MockRouterRequestRepo,
     MockSystemConfigRepo, MockTokenLedgerRepo, MockToolCapabilityRepo, MockToolRouterRepo,
     MockUserRepo, MockWorkflowRepo,
 };
@@ -33,6 +33,7 @@ pub fn default_mock_repos() -> Repos {
         Arc::new(MockRoomRepo::new()),
         Arc::new(MockToolCapabilityRepo::new()),
         Arc::new(MockSystemConfigRepo::new()),
+        Arc::new(MockProtocolRepo::new()),
     )
 }
 

@@ -107,7 +107,9 @@ pub async fn create_task(
     Json(request): Json<CreateTaskRequest>,
 ) -> Result<(StatusCode, Json<Task>), AppError> {
     if request.title.trim().is_empty() || request.title.len() > MAX_TITLE_LENGTH {
-        return Err(AppError::bad_request("Title is empty or exceeds maximum length"));
+        return Err(AppError::bad_request(
+            "Title is empty or exceeds maximum length",
+        ));
     }
     if let Some(ref desc) = request.description {
         if desc.len() > MAX_DESCRIPTION_LENGTH {
@@ -135,10 +137,7 @@ pub async fn create_task(
     task.updated_at = Utc::now();
 
     // Insert into database
-    state
-        .repo()
-        .insert_task(auth.user_id, task.clone())
-        .await?;
+    state.repo().insert_task(auth.user_id, task.clone()).await?;
 
     Ok((StatusCode::CREATED, Json(task)))
 }

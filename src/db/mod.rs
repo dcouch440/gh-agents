@@ -525,6 +525,45 @@ pub struct SystemConfigRow {
     pub updated_at: DateTime<Utc>,
 }
 
+// ============================================================================
+// Protocol Layer Row Types
+// ============================================================================
+
+/// Row type for protocol definitions (reusable execution recipes).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct ProtocolRow {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub name: String,
+    pub description: String,
+    pub protocol_type: String, // "decomp", "transform", "review", "route"
+    pub config: serde_json::Value,
+    pub version: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Row type for protocol port slots (agent assignments within a protocol).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct ProtocolPortRow {
+    pub id: Uuid,
+    pub protocol_id: Uuid,
+    pub port_name: String,
+    pub description: String,
+    pub agent_id: Uuid,
+    pub display_order: i32,
+}
+
+/// Row type for workflow step ↔ protocol linkage.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct WorkflowStepProtocolRow {
+    pub id: Uuid,
+    pub workflow_step_id: Uuid,
+    pub protocol_id: Uuid,
+    pub applied_expansion: serde_json::Value,
+    pub created_at: DateTime<Utc>,
+}
+
 /// Type alias for the database pool
 pub type DbPool = PgPool;
 

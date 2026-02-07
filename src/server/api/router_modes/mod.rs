@@ -199,19 +199,27 @@ pub async fn create_router_mode(
 ) -> Result<(StatusCode, Json<RouterModeResponse>), AppError> {
     // Validate inputs
     if !validate_mode_key(&request.mode_key) {
-        return Err(AppError::bad_request("Invalid mode_key: must be snake_case, 1-50 chars"));
+        return Err(AppError::bad_request(
+            "Invalid mode_key: must be snake_case, 1-50 chars",
+        ));
     }
     if request.display_name.trim().is_empty() || request.display_name.len() > 200 {
-        return Err(AppError::bad_request("Display name is empty or exceeds maximum length"));
+        return Err(AppError::bad_request(
+            "Display name is empty or exceeds maximum length",
+        ));
     }
     if request.description.len() > MAX_DESCRIPTION_LENGTH {
         return Err(AppError::bad_request("Description exceeds maximum length"));
     }
     if !validate_temperature(request.temperature) {
-        return Err(AppError::bad_request("Temperature must be between 0.0 and 2.0"));
+        return Err(AppError::bad_request(
+            "Temperature must be between 0.0 and 2.0",
+        ));
     }
     if !validate_max_tokens(request.max_tokens) {
-        return Err(AppError::bad_request("max_tokens must be between 1 and 200000"));
+        return Err(AppError::bad_request(
+            "max_tokens must be between 1 and 200000",
+        ));
     }
 
     let repo = &state.repos().tool_routers;
@@ -343,7 +351,9 @@ pub async fn update_router_mode(
     // Validate mode_key if provided
     if let Some(ref key) = request.mode_key {
         if !validate_mode_key(key) {
-            return Err(AppError::bad_request("Invalid mode_key: must be snake_case, 1-50 chars"));
+            return Err(AppError::bad_request(
+                "Invalid mode_key: must be snake_case, 1-50 chars",
+            ));
         }
         // Check for duplicate (if different from current)
         if key != &existing.mode_key
@@ -360,7 +370,9 @@ pub async fn update_router_mode(
     // Validate other fields
     if let Some(ref name) = request.display_name {
         if name.trim().is_empty() || name.len() > 200 {
-            return Err(AppError::bad_request("Display name is empty or exceeds maximum length"));
+            return Err(AppError::bad_request(
+                "Display name is empty or exceeds maximum length",
+            ));
         }
     }
     if let Some(ref desc) = request.description {
@@ -370,12 +382,16 @@ pub async fn update_router_mode(
     }
     if let Some(temp) = request.temperature {
         if !validate_temperature(temp) {
-            return Err(AppError::bad_request("Temperature must be between 0.0 and 2.0"));
+            return Err(AppError::bad_request(
+                "Temperature must be between 0.0 and 2.0",
+            ));
         }
     }
     if let Some(tokens) = request.max_tokens {
         if !validate_max_tokens(tokens) {
-            return Err(AppError::bad_request("max_tokens must be between 1 and 200000"));
+            return Err(AppError::bad_request(
+                "max_tokens must be between 1 and 200000",
+            ));
         }
     }
 

@@ -102,10 +102,7 @@ pub async fn list_routing_rules(
 ) -> Result<Json<Vec<RoutingRuleResponse>>, AppError> {
     verify_step_access(&state, wid, sid, auth.user_id.0).await?;
     let repo = &state.repos().workflows;
-    let rows = repo
-        .get_step_routing_rules(sid)
-        .await
-        ?;
+    let rows = repo.get_step_routing_rules(sid).await?;
     Ok(Json(
         rows.into_iter()
             .map(|r| RoutingRuleResponse {
@@ -155,8 +152,7 @@ pub async fn create_routing_rule(
             req.description,
             req.display_order,
         )
-        .await
-        ?;
+        .await?;
     Ok((
         StatusCode::CREATED,
         Json(RoutingRuleResponse {
@@ -196,8 +192,7 @@ pub async fn update_routing_rule(
     let repo = &state.repos().workflows;
     let row = repo
         .update_routing_rule(p.rid, req.agent_id, req.description, req.display_order)
-        .await
-        ?;
+        .await?;
     Ok(Json(RoutingRuleResponse {
         id: row.id,
         label_value: row.label_value,
@@ -230,9 +225,7 @@ pub async fn delete_routing_rule(
 ) -> Result<StatusCode, AppError> {
     verify_step_access(&state, p.wid, p.sid, auth.user_id.0).await?;
     let repo = &state.repos().workflows;
-    repo.delete_routing_rule(p.rid)
-        .await
-        ?;
+    repo.delete_routing_rule(p.rid).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

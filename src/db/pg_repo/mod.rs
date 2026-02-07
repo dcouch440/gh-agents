@@ -8,19 +8,20 @@ use uuid::Uuid;
 
 use crate::db::traits::{
     AgentExecutionRepo, ContextStoreRepo, DocumentRepo, MergeQueueRepo, ModelSpendRow,
-    OutputSchemaRepo, PromptTemplateRepo, ResultRepo, RoomMemberInput, RoomRepo, RouterRequestRepo,
-    ServerRepo, SystemConfigRepo, TokenLedgerRepo, ToolCapabilityRepo, ToolRouterRepo, UserRepo,
-    WorkflowCollectionRepo, WorkflowRepo, WorkflowStepAgentRepo,
+    OutputSchemaRepo, PromptTemplateRepo, ProtocolRepo, ResultRepo, RoomMemberInput, RoomRepo,
+    RouterRequestRepo, ServerRepo, SystemConfigRepo, TokenLedgerRepo, ToolCapabilityRepo,
+    ToolRouterRepo, UserRepo, WorkflowCollectionRepo, WorkflowRepo, WorkflowStepAgentRepo,
 };
 use crate::db::{
     AgentExecutionRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow,
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
-    DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow, ResultRow,
-    RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry,
-    RouterRequestRow, SessionRow, StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow,
-    SystemConfigRow, TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow, ToolRow,
-    WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
-    WorkflowStepEdgeRow, WorkflowStepRow,
+    DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow, ProtocolPortRow,
+    ProtocolRow, ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow,
+    RoomTranscriptEntry, RouterRequestRow, SessionRow, StepDocumentRow, StepInputRow,
+    StepOutputRow, StepRoutingRuleRow, SystemConfigRow, TokenLedgerRow, ToolCapabilityRow,
+    ToolRouterModeRow, ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow,
+    WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepProtocolRow,
+    WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -3457,6 +3458,206 @@ impl SystemConfigRepo for PgRepo {
         .await?;
 
         Ok(row.and_then(|r| r.config_value.as_bool()).unwrap_or(false))
+    }
+}
+
+// ============================================================================
+// Protocol Repository
+// ============================================================================
+
+#[async_trait]
+impl ProtocolRepo for PgRepo {
+    async fn create_protocol(
+        &self,
+        user_id: Uuid,
+        name: String,
+        description: String,
+        protocol_type: String,
+        config: serde_json::Value,
+    ) -> Result<ProtocolRow> {
+        let row = sqlx::query_as::<_, ProtocolRow>(
+            "INSERT INTO protocols (user_id, name, description, protocol_type, config)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING id, user_id, name, description, protocol_type, config, version, created_at, updated_at",
+        )
+        .bind(user_id)
+        .bind(&name)
+        .bind(&description)
+        .bind(&protocol_type)
+        .bind(&config)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn get_protocol(&self, id: Uuid) -> Result<Option<ProtocolRow>> {
+        let row = sqlx::query_as::<_, ProtocolRow>(
+            "SELECT id, user_id, name, description, protocol_type, config, version, created_at, updated_at
+             FROM protocols WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn list_protocols(&self, user_id: Uuid) -> Result<Vec<ProtocolRow>> {
+        let rows = sqlx::query_as::<_, ProtocolRow>(
+            "SELECT id, user_id, name, description, protocol_type, config, version, created_at, updated_at
+             FROM protocols WHERE user_id = $1 ORDER BY created_at DESC",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn update_protocol(
+        &self,
+        id: Uuid,
+        name: Option<String>,
+        description: Option<String>,
+        config: Option<serde_json::Value>,
+    ) -> Result<ProtocolRow> {
+        let row = sqlx::query_as::<_, ProtocolRow>(
+            "UPDATE protocols SET
+                name = COALESCE($2, name),
+                description = COALESCE($3, description),
+                config = COALESCE($4, config),
+                version = version + 1,
+                updated_at = now()
+             WHERE id = $1
+             RETURNING id, user_id, name, description, protocol_type, config, version, created_at, updated_at",
+        )
+        .bind(id)
+        .bind(name)
+        .bind(description)
+        .bind(config)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn delete_protocol(&self, id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM protocols WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    // --- Protocol Ports ---
+
+    async fn list_protocol_ports(&self, protocol_id: Uuid) -> Result<Vec<ProtocolPortRow>> {
+        let rows = sqlx::query_as::<_, ProtocolPortRow>(
+            "SELECT id, protocol_id, port_name, description, agent_id, display_order
+             FROM protocol_ports WHERE protocol_id = $1 ORDER BY display_order",
+        )
+        .bind(protocol_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn create_protocol_port(
+        &self,
+        protocol_id: Uuid,
+        port_name: String,
+        description: String,
+        agent_id: Uuid,
+        display_order: i32,
+    ) -> Result<ProtocolPortRow> {
+        let row = sqlx::query_as::<_, ProtocolPortRow>(
+            "INSERT INTO protocol_ports (protocol_id, port_name, description, agent_id, display_order)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING id, protocol_id, port_name, description, agent_id, display_order",
+        )
+        .bind(protocol_id)
+        .bind(&port_name)
+        .bind(&description)
+        .bind(agent_id)
+        .bind(display_order)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn update_protocol_port(
+        &self,
+        id: Uuid,
+        port_name: Option<String>,
+        description: Option<String>,
+        agent_id: Option<Uuid>,
+        display_order: Option<i32>,
+    ) -> Result<ProtocolPortRow> {
+        let row = sqlx::query_as::<_, ProtocolPortRow>(
+            "UPDATE protocol_ports SET
+                port_name = COALESCE($2, port_name),
+                description = COALESCE($3, description),
+                agent_id = COALESCE($4, agent_id),
+                display_order = COALESCE($5, display_order)
+             WHERE id = $1
+             RETURNING id, protocol_id, port_name, description, agent_id, display_order",
+        )
+        .bind(id)
+        .bind(port_name)
+        .bind(description)
+        .bind(agent_id)
+        .bind(display_order)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn delete_protocol_port(&self, id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM protocol_ports WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    // --- Workflow Step Protocol Linkage ---
+
+    async fn get_step_protocol(
+        &self,
+        workflow_step_id: Uuid,
+    ) -> Result<Option<WorkflowStepProtocolRow>> {
+        let row = sqlx::query_as::<_, WorkflowStepProtocolRow>(
+            "SELECT id, workflow_step_id, protocol_id, applied_expansion, created_at
+             FROM workflow_step_protocols WHERE workflow_step_id = $1",
+        )
+        .bind(workflow_step_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn create_step_protocol(
+        &self,
+        workflow_step_id: Uuid,
+        protocol_id: Uuid,
+        applied_expansion: serde_json::Value,
+    ) -> Result<WorkflowStepProtocolRow> {
+        let row = sqlx::query_as::<_, WorkflowStepProtocolRow>(
+            "INSERT INTO workflow_step_protocols (workflow_step_id, protocol_id, applied_expansion)
+             VALUES ($1, $2, $3)
+             RETURNING id, workflow_step_id, protocol_id, applied_expansion, created_at",
+        )
+        .bind(workflow_step_id)
+        .bind(protocol_id)
+        .bind(&applied_expansion)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn delete_step_protocol(&self, workflow_step_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM workflow_step_protocols WHERE workflow_step_id = $1")
+            .bind(workflow_step_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 }
 

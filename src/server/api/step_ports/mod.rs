@@ -125,9 +125,7 @@ pub async fn list_step_inputs(
 ) -> Result<Json<Vec<StepInputResponse>>, AppError> {
     verify_step_access(&state, wid, sid, auth.user_id.0).await?;
     let repo = &state.repos().workflows;
-    let rows = repo
-        .get_step_inputs(sid)
-        .await?;
+    let rows = repo.get_step_inputs(sid).await?;
     Ok(Json(
         rows.into_iter()
             .map(|r| StepInputResponse {
@@ -249,9 +247,7 @@ pub async fn list_step_outputs(
 ) -> Result<Json<Vec<StepOutputResponse>>, AppError> {
     verify_step_access(&state, wid, sid, auth.user_id.0).await?;
     let repo = &state.repos().workflows;
-    let rows = repo
-        .get_step_outputs(sid)
-        .await?;
+    let rows = repo.get_step_outputs(sid).await?;
     Ok(Json(
         rows.into_iter()
             .map(|r| StepOutputResponse {
@@ -290,7 +286,9 @@ pub async fn create_step_output(
     Json(req): Json<CreateStepOutputRequest>,
 ) -> Result<(StatusCode, Json<StepOutputResponse>), AppError> {
     if req.port_name.trim().is_empty() || req.json_path.trim().is_empty() {
-        return Err(AppError::bad_request("Port name and json_path must not be empty"));
+        return Err(AppError::bad_request(
+            "Port name and json_path must not be empty",
+        ));
     }
     verify_step_access(&state, wid, sid, auth.user_id.0).await?;
     let repo = &state.repos().workflows;

@@ -42,10 +42,7 @@ pub async fn get_agent_context(
     _auth: auth_utils::AuthUser,
     Path(agent_id): Path<Uuid>,
 ) -> Result<Json<AgentContextResponse>, AppError> {
-    let rows = state
-        .repo()
-        .get_agent_context(agent_id)
-        .await?;
+    let rows = state.repo().get_agent_context(agent_id).await?;
 
     let documents = rows
         .into_iter()
@@ -91,17 +88,15 @@ pub async fn set_agent_context(
         .map(|s| Uuid::parse_str(s))
         .collect();
 
-    let document_ids = document_ids.map_err(|_| AppError::bad_request("Invalid document ID format"))?;
+    let document_ids =
+        document_ids.map_err(|_| AppError::bad_request("Invalid document ID format"))?;
 
     state
         .repo()
         .set_agent_context(agent_id, document_ids)
         .await?;
 
-    let rows = state
-        .repo()
-        .get_agent_context(agent_id)
-        .await?;
+    let rows = state.repo().get_agent_context(agent_id).await?;
 
     let documents = rows
         .into_iter()

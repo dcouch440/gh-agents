@@ -61,9 +61,7 @@ pub async fn list_system_configs(
     Query(query): Query<SystemConfigQuery>,
 ) -> Result<Json<Vec<SystemConfigResponse>>, AppError> {
     let repo = &state.repos().system_config;
-    let rows = repo
-        .list_system_configs(query.config_type)
-        .await?;
+    let rows = repo.list_system_configs(query.config_type).await?;
     Ok(Json(
         rows.into_iter()
             .map(|r| SystemConfigResponse {
@@ -96,7 +94,9 @@ pub async fn upsert_system_config(
     Json(req): Json<CreateSystemConfigRequest>,
 ) -> Result<Json<SystemConfigResponse>, AppError> {
     if req.config_key.trim().is_empty() || req.config_type.trim().is_empty() {
-        return Err(AppError::bad_request("Config key and type must not be empty"));
+        return Err(AppError::bad_request(
+            "Config key and type must not be empty",
+        ));
     }
     let repo = &state.repos().system_config;
     let row = repo
@@ -135,8 +135,7 @@ pub async fn delete_system_config(
     Path(key): Path<String>,
 ) -> Result<StatusCode, AppError> {
     let repo = &state.repos().system_config;
-    repo.delete_system_config(&key)
-        .await?;
+    repo.delete_system_config(&key).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

@@ -10,6 +10,7 @@ pub mod engine;
 pub mod error;
 pub mod mode_resolver;
 pub mod prompt_registry;
+pub mod protocols;
 pub mod recorder;
 pub mod strategies;
 pub mod strategy;
