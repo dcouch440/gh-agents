@@ -26,7 +26,6 @@ describe('ThemeModeContext', () => {
     vi.clearAllMocks()
     uiStore.store.setState({
       theme: 'light',
-      sidebarCollapsed: false,
       toasts: [],
       commandPaletteOpen: false,
     })

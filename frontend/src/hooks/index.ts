@@ -1,6 +1,5 @@
 // UI
 export { useThemeMode } from './useThemeMode'
-export { useSidebar } from './useSidebar'
 export { useNavigation } from './useNavigation'
 export { useSplitPane } from './useSplitPane'
 export { useReducedMotion } from './useReducedMotion'

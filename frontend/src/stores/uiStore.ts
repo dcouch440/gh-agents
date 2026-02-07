@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { createStore } from './lib'
-import { LS_THEME, LS_SIDEBAR_COLLAPSED } from '@/constants'
+import { LS_THEME } from '@/constants'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,7 +27,6 @@ type AddToastOptions = {
 
 type UIState = {
   theme: ThemeMode
-  sidebarCollapsed: boolean
   toasts: Toast[]
   commandPaletteOpen: boolean
 }
@@ -58,14 +57,10 @@ const getInitialTheme = (): ThemeMode => {
   return getSystemPreference()
 }
 
-const getInitialSidebarCollapsed = (): boolean =>
-  lsGet(LS_SIDEBAR_COLLAPSED) === 'true'
-
 // ── Store ────────────────────────────────────────────────────────────────────
 
 const store = createStore<UIState>(() => ({
   theme: getInitialTheme(),
-  sidebarCollapsed: getInitialSidebarCollapsed(),
   toasts: [],
   commandPaletteOpen: false,
 }))
@@ -78,8 +73,6 @@ const nextToastId = (): string => `toast-${++toastCounter}`
 // ── Selectors ────────────────────────────────────────────────────────────────
 
 const selectTheme = (s: UIState): ThemeMode => s.theme
-
-const selectSidebarCollapsed = (s: UIState): boolean => s.sidebarCollapsed
 
 const selectToasts = (s: UIState): Toast[] => s.toasts
 
@@ -95,17 +88,6 @@ const setTheme = (mode: ThemeMode): void => {
 const toggleTheme = (): void => {
   const current = store.getState().theme
   setTheme(current === 'light' ? 'dark' : 'light')
-}
-
-// ── Sidebar ──────────────────────────────────────────────────────────────────
-
-const setSidebarCollapsed = (value: boolean): void => {
-  store.setState({ sidebarCollapsed: value })
-  lsSet(LS_SIDEBAR_COLLAPSED, String(value))
-}
-
-const toggleSidebar = (): void => {
-  setSidebarCollapsed(!store.getState().sidebarCollapsed)
 }
 
 // ── Toasts ───────────────────────────────────────────────────────────────────
@@ -172,13 +154,10 @@ const initSystemThemeListener = (): (() => void) => {
 export const uiStore = {
   store,
   selectTheme,
-  selectSidebarCollapsed,
   selectToasts,
   selectCommandPaletteOpen,
   setTheme,
   toggleTheme,
-  setSidebarCollapsed,
-  toggleSidebar,
   addToast,
   dismissToast,
   openCommandPalette,

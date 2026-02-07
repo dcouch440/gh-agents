@@ -3,9 +3,9 @@ import type { PaletteOptions } from '@mui/material/styles';
 const lightPalette: PaletteOptions = {
   mode: 'light',
   primary: {
-    main: '#ef6c00',
-    light: '#ff9800',
-    dark: '#e65100',
+    main: '#0284c7',
+    light: '#0ea5e9',
+    dark: '#0369a1',
     contrastText: '#ffffff',
   },
   secondary: {
@@ -14,8 +14,8 @@ const lightPalette: PaletteOptions = {
     dark: '#00897b',
   },
   background: {
-    default: '#ffffff',
-    paper: '#f6f8fa',
+    default: '#f8fafc',
+    paper: '#f1f5f9',
   },
   text: {
     primary: '#1f2328',
@@ -48,9 +48,9 @@ const lightPalette: PaletteOptions = {
 const darkPalette: PaletteOptions = {
   mode: 'dark',
   primary: {
-    main: '#f57c00',
-    light: '#ffb74d',
-    dark: '#e65100',
+    main: '#0ea5e9',
+    light: '#38bdf8',
+    dark: '#0284c7',
     contrastText: '#ffffff',
   },
   secondary: {
@@ -59,8 +59,8 @@ const darkPalette: PaletteOptions = {
     dark: '#26a69a',
   },
   background: {
-    default: '#0d1117',
-    paper: '#161b22',
+    default: '#0c0e14',
+    paper: '#141820',
   },
   text: {
     primary: '#e6edf3',

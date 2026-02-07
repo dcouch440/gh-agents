@@ -11,6 +11,8 @@ import { SettingsPage } from "./pages/Settings/SettingsPage";
 import { LoginPage } from "./pages/Auth/LoginPage";
 import { ChatPage } from "./pages/Chat/ChatPage";
 import { ReviewQueuePage } from "./pages/ReviewQueue";
+import { WorkflowsPage } from "./pages/Workflows/WorkflowsPage";
+import { WorkflowEditorPage } from "./pages/Workflows/WorkflowEditorPage";
 
 export const router = createBrowserRouter([
   {
@@ -26,6 +28,8 @@ export const router = createBrowserRouter([
       { path: ROUTES.AGENT_WORKSHOP, element: <AgentWorkshopPage /> },
       { path: ROUTES.AGENT_DETAIL, element: <AgentDetailPage /> },
       { path: ROUTES.TASKS, element: <TasksPage /> },
+      { path: ROUTES.WORKFLOWS, element: <WorkflowsPage /> },
+      { path: ROUTES.WORKFLOW_EDITOR, element: <WorkflowEditorPage /> },
       { path: ROUTES.REVIEW_QUEUE, element: <ReviewQueuePage /> },
       { path: ROUTES.DOCUMENTS, element: <DocumentsPage /> },
       { path: ROUTES.SETTINGS, element: <SettingsPage /> },
