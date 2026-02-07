@@ -400,6 +400,16 @@ pub const CONTAINER_REAPER_MAX_AGE_SECS: u64 = 3600;
 pub const CONTAINER_REAPER_INTERVAL_SECS: u64 = 300;
 /// Maximum seconds to wait for running executions to drain during shutdown.
 pub const SHUTDOWN_DRAIN_TIMEOUT_SECS: u64 = 30;
+/// Maximum seconds for the entire container creation flow (create + clone + config).
+pub const CONTAINER_CREATE_TIMEOUT_SECS: u64 = 600;
+/// Maximum concurrent container creation operations (semaphore permits).
+pub const CONTAINER_MAX_CONCURRENT_CREATES: usize = 10;
+/// Maximum retry attempts for transient container creation failures.
+pub const CONTAINER_RETRY_MAX_ATTEMPTS: u32 = 2;
+/// Initial retry backoff delay for container creation (ms).
+pub const CONTAINER_RETRY_INITIAL_BACKOFF_MS: u64 = 1000;
+/// Maximum retry backoff delay for container creation (seconds).
+pub const CONTAINER_RETRY_MAX_BACKOFF_SECS: u64 = 10;
 
 // ── VPN / WireGuard Defaults ──────────────────────────────────────────────
 
@@ -423,3 +433,26 @@ pub const VPN_RETRY_MAX_ATTEMPTS: u32 = 3;
 pub const VPN_REAPER_MAX_AGE_SECS: u64 = 3600;
 /// Default WireGuard gateway IP for connectivity health check.
 pub const VPN_HEALTH_CHECK_GATEWAY: &str = "10.8.0.1";
+
+/// iptables kill switch: blocks ALL traffic except through wg0, loopback,
+/// and the WireGuard UDP handshake. Prevents traffic leak if tunnel drops.
+pub const VPN_KILL_SWITCH_SCRIPT: &str = r#"
+iptables -P OUTPUT DROP
+iptables -A OUTPUT -o wg0 -j ACCEPT
+iptables -A OUTPUT -o lo -j ACCEPT
+iptables -A OUTPUT -p udp --dport 51820 -j ACCEPT
+iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+iptables -P INPUT DROP
+iptables -A INPUT -i wg0 -j ACCEPT
+iptables -A INPUT -i lo -j ACCEPT
+iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+"#;
+
+/// Docker log driver for VPN sidecar. "none" prevents handshake metadata in logs.
+pub const VPN_SIDECAR_LOG_DRIVER: &str = "none";
+
+/// Timeout for external IP leak check (seconds).
+pub const VPN_IP_LEAK_CHECK_TIMEOUT_SECS: u64 = 5;
+
+/// URL for public IP verification through VPN tunnel.
+pub const VPN_IP_CHECK_URL: &str = "https://api.ipify.org";

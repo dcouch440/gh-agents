@@ -6,11 +6,16 @@
 
 use std::fmt;
 use std::process::Stdio;
+use std::sync::Arc;
+
+use once_cell::sync::Lazy;
 use thiserror::Error;
 use tokio::process::Command;
+use tokio::sync::Semaphore;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
+pub mod retry;
 mod tests;
 
 // ── RedactedString ────────────────────────────────────────────────────────
@@ -92,6 +97,12 @@ pub enum ContainerError {
         operation: &'static str,
         #[source]
         source: std::io::Error,
+    },
+
+    #[error("container creation timed out after {timeout_secs}s for {container}")]
+    CreateTimeout {
+        container: String,
+        timeout_secs: u64,
     },
 
     #[error("network disconnect failed for container {container}: {stderr}")]
@@ -474,42 +485,112 @@ impl ContainerHandle {
 
 // ── Manager ────────────────────────────────────────────────────────────────
 
+/// Global semaphore limiting concurrent container creation operations.
+///
+/// Prevents Docker daemon resource exhaustion when for-each pipelines
+/// attempt to create many containers simultaneously.
+static CONTAINER_CREATE_SEMAPHORE: Lazy<Arc<Semaphore>> = Lazy::new(|| {
+    Arc::new(Semaphore::new(
+        crate::constants::CONTAINER_MAX_CONCURRENT_CREATES,
+    ))
+});
+
+/// Build the `docker create` arguments for a container.
+///
+/// Separated for testability — security and resource flags are validated by unit tests.
+fn build_create_args(container_name: &str, config: &ContainerConfig) -> Vec<String> {
+    let mut args = vec![
+        "create".to_string(),
+        "--name".to_string(),
+        container_name.to_string(),
+        format!("--memory={}", config.memory_limit),
+        format!("--cpus={}", config.cpu_limit),
+        "--cap-drop=ALL".to_string(),
+        "--security-opt=no-new-privileges".to_string(),
+        "-w".to_string(),
+        config.workdir.clone(),
+        format!("--env=GITHUB_TOKEN={}", config.github_token.expose()),
+    ];
+    for (k, v) in &config.env_vars {
+        args.push(format!("--env={}={}", k, v));
+    }
+    if let Some(ref network) = config.network_mode {
+        args.push(format!("--network={}", network));
+    }
+    args.push(config.image.clone());
+    args.push("sleep".to_string());
+    args.push("infinity".to_string());
+    args
+}
+
 /// Creates and destroys persistent Docker containers for agent steps.
 pub struct ContainerManager;
 
 impl ContainerManager {
     /// Create and start a persistent container, then clone the repo into it.
+    ///
+    /// Acquires a creation semaphore permit (queues if at capacity), then wraps
+    /// the entire creation flow in a timeout. On timeout, attempts cleanup of
+    /// the partially-created container.
     pub async fn create_container(
         config: &ContainerConfig,
     ) -> Result<ContainerHandle, ContainerError> {
+        // Acquire creation semaphore (queue if at capacity)
+        let _permit = CONTAINER_CREATE_SEMAPHORE
+            .acquire()
+            .await
+            .expect("container creation semaphore closed");
+
+        let timeout_secs = crate::constants::CONTAINER_CREATE_TIMEOUT_SECS;
+        let timeout_duration = std::time::Duration::from_secs(timeout_secs);
+
+        // Generate name before timeout so we can reference it in cleanup
         let container_name = format!(
             "{}-{}",
             crate::constants::CONTAINER_NAME_PREFIX,
             Uuid::new_v4()
         );
+        let name_for_cleanup = container_name.clone();
+
+        let result = tokio::time::timeout(
+            timeout_duration,
+            Self::create_container_inner(config, container_name),
+        )
+        .await;
+
+        match result {
+            Ok(inner_result) => inner_result,
+            Err(_elapsed) => {
+                warn!(
+                    container = %name_for_cleanup,
+                    timeout_secs,
+                    "Container creation timed out, attempting cleanup"
+                );
+                let _ = Command::new("docker")
+                    .args(["rm", "-f", &name_for_cleanup])
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .output()
+                    .await;
+                Err(ContainerError::CreateTimeout {
+                    container: name_for_cleanup,
+                    timeout_secs,
+                })
+            }
+        }
+    }
+
+    /// Inner implementation of container creation (called within a timeout).
+    async fn create_container_inner(
+        config: &ContainerConfig,
+        container_name: String,
+    ) -> Result<ContainerHandle, ContainerError> {
+        let create_start = std::time::Instant::now();
 
         info!(container = %container_name, image = %config.image, "Creating persistent container");
 
         // 1. docker create
-        let mut create_args = vec![
-            "create".to_string(),
-            "--name".to_string(),
-            container_name.clone(),
-            format!("--memory={}", config.memory_limit),
-            format!("--cpus={}", config.cpu_limit),
-            "-w".to_string(),
-            config.workdir.clone(),
-            format!("--env=GITHUB_TOKEN={}", config.github_token.expose()),
-        ];
-        for (k, v) in &config.env_vars {
-            create_args.push(format!("--env={}={}", k, v));
-        }
-        if let Some(ref network) = config.network_mode {
-            create_args.push(format!("--network={}", network));
-        }
-        create_args.push(config.image.clone());
-        create_args.push("sleep".to_string());
-        create_args.push("infinity".to_string());
+        let create_args = build_create_args(&container_name, config);
 
         let create_output = Command::new("docker")
             .args(&create_args)
@@ -622,9 +703,11 @@ impl ContainerManager {
             }
         }
 
+        let create_duration_ms = create_start.elapsed().as_millis() as u64;
         info!(
             container = %container_name,
             repo = %config.clone_url,
+            duration_ms = create_duration_ms,
             "Container ready with cloned repo"
         );
 
@@ -633,7 +716,7 @@ impl ContainerManager {
 
     /// Stop and remove a container.
     pub async fn destroy_container(handle: &ContainerHandle) -> Result<(), ContainerError> {
-        info!(container = %handle.container_name, "Destroying container");
+        let destroy_start = std::time::Instant::now();
 
         let _ = Command::new("docker")
             .args(["stop", "--time=10", &handle.container_id])
@@ -661,6 +744,13 @@ impl ContainerManager {
             );
         }
 
+        let destroy_duration_ms = destroy_start.elapsed().as_millis() as u64;
+        info!(
+            container = %handle.container_name,
+            duration_ms = destroy_duration_ms,
+            "Container destroyed"
+        );
+
         Ok(())
     }
 
@@ -680,6 +770,8 @@ impl ContainerManager {
     /// Called at server startup to clean up containers left behind by crashes.
     /// Returns the number of containers reaped.
     pub async fn reap_orphaned_containers(max_age: std::time::Duration) -> usize {
+        let reap_start = std::time::Instant::now();
+
         let output = Command::new("docker")
             .args([
                 "ps",
@@ -747,6 +839,15 @@ impl ContainerManager {
                     .await;
                 reaped += 1;
             }
+        }
+
+        let reap_duration_ms = reap_start.elapsed().as_millis() as u64;
+        if reaped > 0 {
+            info!(
+                reaped,
+                duration_ms = reap_duration_ms,
+                "Reaper cycle complete"
+            );
         }
 
         reaped

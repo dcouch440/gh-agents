@@ -650,6 +650,9 @@ async fn create_optional_container(
             .await
             .map_err(|e| HubError::Internal(anyhow!("VPN peer config failed: {}", e)))?;
 
+        crate::execution::vpn::validate_wg_config(&peer_config)
+            .map_err(|e| HubError::Internal(anyhow!("VPN config validation failed: {}", e)))?;
+
         let sidecar = match VpnSidecarManager::create_sidecar(&peer_config, &peer.id).await {
             Ok(s) => s,
             Err(e) => {
@@ -704,7 +707,9 @@ async fn create_optional_container(
         ..ContainerConfig::default()
     };
 
-    match ContainerManager::create_container(&container_config).await {
+    use crate::execution::container::retry::container_with_retry;
+
+    match container_with_retry(|| ContainerManager::create_container(&container_config)).await {
         Ok(handle) => {
             info!(container = %handle.container_name(), label, "Created container");
             Ok(Some(ManagedContainer {

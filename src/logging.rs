@@ -181,6 +181,11 @@ pub fn db_span(operation: &str) -> Span {
     span!(Level::DEBUG, "db", op = %operation)
 }
 
+/// Create a span for container lifecycle operations (create, exec, destroy, reap)
+pub fn container_span(container_name: &str, operation: &str) -> Span {
+    span!(Level::INFO, "container", name = %container_name, op = %operation)
+}
+
 /// Log an agent report (for the feed)
 #[macro_export]
 macro_rules! log_agent_report {
@@ -351,6 +356,12 @@ mod tests {
     #[test]
     fn db_span_has_correct_fields() {
         let span = db_span("upsert");
+        let _ = format!("{:?}", span);
+    }
+
+    #[test]
+    fn container_span_has_correct_fields() {
+        let span = container_span("nexor-step-abc", "create");
         let _ = format!("{:?}", span);
     }
 }
