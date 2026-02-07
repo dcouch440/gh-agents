@@ -34,9 +34,11 @@ mod tests {
             stdout: "ok".to_string(),
             stderr: String::new(),
             duration_ms: 100,
+            truncated: false,
         };
         assert!(result.success);
         assert_eq!(result.exit_code, 0);
+        assert!(!result.truncated);
     }
 
     #[test]
@@ -47,6 +49,7 @@ mod tests {
             stdout: String::new(),
             stderr: "error".to_string(),
             duration_ms: 50,
+            truncated: false,
         };
         assert!(!result.success);
         assert_eq!(result.exit_code, 1);
@@ -271,5 +274,76 @@ mod tests {
         let debug = format!("{:?}", config);
         assert!(!debug.contains("ghp_secret123"));
         assert!(debug.contains("[REDACTED]"));
+    }
+
+    // ── truncate_output ───────────────────────────────────────────────────
+
+    #[test]
+    fn truncate_output_no_op_when_under_limit() {
+        let input = b"hello world";
+        let (result, truncated) = truncate_output(input, 1024);
+        assert_eq!(result, "hello world");
+        assert!(!truncated);
+    }
+
+    #[test]
+    fn truncate_output_exact_limit() {
+        let input = b"12345";
+        let (result, truncated) = truncate_output(input, 5);
+        assert_eq!(result, "12345");
+        assert!(!truncated);
+    }
+
+    #[test]
+    fn truncate_output_truncates_large_input() {
+        let input = b"hello world, this is a long string";
+        let (result, truncated) = truncate_output(input, 5);
+        assert!(truncated);
+        assert!(result.starts_with("hello"));
+        assert!(result.contains("[truncated,"));
+        assert!(result.contains("bytes total"));
+        assert!(result.contains(&input.len().to_string()));
+    }
+
+    #[test]
+    fn truncate_output_preserves_size_info() {
+        let input = vec![b'x'; 10_000];
+        let (result, truncated) = truncate_output(&input, 100);
+        assert!(truncated);
+        assert!(result.contains("10000 bytes total"));
+    }
+
+    // ── parse_docker_timestamp ────────────────────────────────────────────
+
+    #[test]
+    fn parse_docker_timestamp_standard_format() {
+        let ts = "2024-01-15 10:30:00 -0700 MST";
+        let parsed = parse_docker_timestamp(ts);
+        assert!(parsed.is_some());
+        let dt = parsed.unwrap();
+        assert_eq!(dt.date_naive().to_string(), "2024-01-15");
+    }
+
+    #[test]
+    fn parse_docker_timestamp_utc() {
+        let ts = "2024-06-01 00:00:00 +0000 UTC";
+        let parsed = parse_docker_timestamp(ts);
+        assert!(parsed.is_some());
+        let dt = parsed.unwrap();
+        assert_eq!(dt.date_naive().to_string(), "2024-06-01");
+    }
+
+    #[test]
+    fn parse_docker_timestamp_positive_offset() {
+        let ts = "2024-03-20 15:45:30 +0530 IST";
+        let parsed = parse_docker_timestamp(ts);
+        assert!(parsed.is_some());
+    }
+
+    #[test]
+    fn parse_docker_timestamp_invalid() {
+        assert!(parse_docker_timestamp("not a timestamp").is_none());
+        assert!(parse_docker_timestamp("").is_none());
+        assert!(parse_docker_timestamp("2024-01-15").is_none());
     }
 }

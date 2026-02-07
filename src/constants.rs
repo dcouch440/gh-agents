@@ -376,3 +376,20 @@ pub const CONTAINER_DEFAULT_MEMORY: &str = "2g";
 pub const CONTAINER_DEFAULT_CPUS: &str = "2.0";
 pub const CONTAINER_COMMAND_TIMEOUT_SECS: u64 = 300;
 pub const CONTAINER_NAME_PREFIX: &str = "nexor-step";
+/// Maximum bytes for stdout/stderr from a single container command (10 MB).
+pub const CONTAINER_MAX_OUTPUT_BYTES: usize = 10 * 1024 * 1024;
+/// Max age in seconds before orphaned containers are reaped at startup (1 hour).
+pub const CONTAINER_REAPER_MAX_AGE_SECS: u64 = 3600;
+
+// ── VPN / WireGuard Defaults ──────────────────────────────────────────────
+
+/// Docker image for the WireGuard VPN sidecar container.
+pub const VPN_SIDECAR_IMAGE: &str = "lscr.io/linuxserver/wireguard:latest";
+/// Timeout in seconds for the VPN tunnel health check.
+pub const VPN_HEALTH_CHECK_TIMEOUT_SECS: u64 = 30;
+/// Interval in seconds between VPN health check polls.
+pub const VPN_HEALTH_CHECK_INTERVAL_SECS: u64 = 2;
+/// Name prefix for VPN sidecar containers.
+pub const VPN_SIDECAR_NAME_PREFIX: &str = "nexor-vpn";
+/// HTTP request timeout for wg-easy API calls (seconds).
+pub const WGEASY_API_TIMEOUT_SECS: u64 = 10;

@@ -194,6 +194,20 @@ pub struct ContainerExecResult {
     pub stdout: String,
     pub stderr: String,
     pub duration_ms: u64,
+    /// Whether stdout or stderr was truncated due to exceeding the output size limit.
+    pub truncated: bool,
+}
+
+/// Truncate raw command output to `max_bytes`, returning the string and whether truncation occurred.
+fn truncate_output(raw: &[u8], max_bytes: usize) -> (String, bool) {
+    if raw.len() <= max_bytes {
+        return (String::from_utf8_lossy(raw).to_string(), false);
+    }
+    let truncated = String::from_utf8_lossy(&raw[..max_bytes]).to_string();
+    (
+        format!("{}\n... [truncated, {} bytes total]", truncated, raw.len()),
+        true,
+    )
 }
 
 // ── Handle ─────────────────────────────────────────────────────────────────
@@ -234,12 +248,28 @@ impl ContainerHandle {
 
         match output {
             Ok(Ok(output)) => {
+                let max = crate::constants::CONTAINER_MAX_OUTPUT_BYTES;
+                let (stdout, stdout_truncated) = truncate_output(&output.stdout, max);
+                let (stderr, stderr_truncated) = truncate_output(&output.stderr, max);
+                let truncated = stdout_truncated || stderr_truncated;
+
+                if truncated {
+                    warn!(
+                        container = %self.container_name,
+                        stdout_bytes = output.stdout.len(),
+                        stderr_bytes = output.stderr.len(),
+                        max_bytes = max,
+                        "Container output truncated"
+                    );
+                }
+
                 let result = ContainerExecResult {
                     success: output.status.success(),
                     exit_code: output.status.code().unwrap_or(-1),
-                    stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-                    stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+                    stdout,
+                    stderr,
                     duration_ms,
+                    truncated,
                 };
                 debug!(
                     container = %self.container_name,
@@ -583,4 +613,98 @@ impl ContainerManager {
             );
         }
     }
+
+    /// Find and kill orphaned `nexor-step-*` containers older than `max_age`.
+    ///
+    /// Called at server startup to clean up containers left behind by crashes.
+    /// Returns the number of containers reaped.
+    pub async fn reap_orphaned_containers(max_age: std::time::Duration) -> usize {
+        let output = Command::new("docker")
+            .args([
+                "ps",
+                "-a",
+                "--filter",
+                &format!("name={}", crate::constants::CONTAINER_NAME_PREFIX),
+                "--format",
+                "{{.ID}}\t{{.CreatedAt}}\t{{.Names}}",
+            ])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await;
+
+        let output = match output {
+            Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
+            Ok(o) => {
+                debug!(
+                    stderr = %String::from_utf8_lossy(&o.stderr),
+                    "docker ps failed during reaper check"
+                );
+                return 0;
+            }
+            Err(e) => {
+                debug!(error = %e, "docker not available for reaper");
+                return 0;
+            }
+        };
+
+        let now = chrono::Utc::now();
+        let mut reaped = 0;
+
+        for line in output.lines() {
+            let parts: Vec<&str> = line.splitn(3, '\t').collect();
+            if parts.len() < 3 {
+                continue;
+            }
+            let container_id = parts[0];
+            let created_at = parts[1];
+            let container_name = parts[2];
+
+            let age = match parse_docker_timestamp(created_at) {
+                Some(created) => now.signed_duration_since(created),
+                None => {
+                    debug!(
+                        container = container_name,
+                        timestamp = created_at,
+                        "Failed to parse container timestamp"
+                    );
+                    continue;
+                }
+            };
+
+            if age.num_seconds() > max_age.as_secs() as i64 {
+                warn!(
+                    container = container_name,
+                    age_secs = age.num_seconds(),
+                    "Reaping orphaned container"
+                );
+                let _ = Command::new("docker")
+                    .args(["rm", "-f", container_id])
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .output()
+                    .await;
+                reaped += 1;
+            }
+        }
+
+        reaped
+    }
+}
+
+/// Parse a Docker `CreatedAt` timestamp (e.g., "2024-01-15 10:30:00 -0700 MST").
+///
+/// Docker uses a non-standard format with both numeric offset and timezone abbreviation.
+/// We parse the numeric offset portion and ignore the abbreviation.
+pub fn parse_docker_timestamp(s: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    // Docker format: "2024-01-15 10:30:00 -0700 MST"
+    // We need: "2024-01-15 10:30:00 -0700" (drop the TZ abbreviation)
+    let parts: Vec<&str> = s.splitn(4, ' ').collect();
+    if parts.len() < 3 {
+        return None;
+    }
+    let without_tz_name = format!("{} {} {}", parts[0], parts[1], parts[2]);
+    chrono::DateTime::parse_from_str(&without_tz_name, "%Y-%m-%d %H:%M:%S %z")
+        .ok()
+        .map(|dt| dt.with_timezone(&chrono::Utc))
 }
