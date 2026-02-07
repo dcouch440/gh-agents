@@ -289,6 +289,81 @@ fn ollama_message_from_assistant_message() {
     assert_eq!(ollama_msg.content.as_deref(), Some("World"));
 }
 
+// ── URL building ─────────────────────────────────────────────────────
+
+#[test]
+fn chat_url_uses_base_url() {
+    let client = make_client();
+    assert_eq!(client.chat_url(), "http://localhost:11434/api/chat");
+}
+
+#[test]
+fn tags_url_uses_base_url() {
+    let client = make_client();
+    assert_eq!(client.tags_url(), "http://localhost:11434/api/tags");
+}
+
+#[test]
+fn tags_url_with_custom_base() {
+    let client = OllamaClient::new(OllamaConfig {
+        base_url: "http://192.168.1.50:11434".to_string(),
+        model: "llama3.1".to_string(),
+        timeout_secs: 300,
+    })
+    .unwrap();
+    assert_eq!(client.tags_url(), "http://192.168.1.50:11434/api/tags");
+}
+
+// ── Tags response parsing ────────────────────────────────────────────
+
+#[test]
+fn tags_response_deserializes_model_list() {
+    let json = r#"{"models":[{"name":"llama3.1:latest"},{"name":"mistral:7b"}]}"#;
+    let tags: OllamaTagsResponse = serde_json::from_str(json).unwrap();
+    assert_eq!(tags.models.len(), 2);
+    assert_eq!(tags.models[0].name, "llama3.1:latest");
+    assert_eq!(tags.models[1].name, "mistral:7b");
+}
+
+#[test]
+fn tags_response_deserializes_empty_list() {
+    let json = r#"{"models":[]}"#;
+    let tags: OllamaTagsResponse = serde_json::from_str(json).unwrap();
+    assert!(tags.models.is_empty());
+}
+
+#[test]
+fn model_matching_exact_name() {
+    // Simulates the logic in validate_model — exact match
+    let model_names = vec!["llama3.1:latest", "mistral:7b"];
+    let target = "mistral:7b";
+    let found = model_names
+        .iter()
+        .any(|name| *name == target || name.split(':').next() == Some(target));
+    assert!(found);
+}
+
+#[test]
+fn model_matching_without_tag() {
+    // "llama3.1" should match "llama3.1:latest"
+    let model_names = vec!["llama3.1:latest", "mistral:7b"];
+    let target = "llama3.1";
+    let found = model_names
+        .iter()
+        .any(|name| *name == target || name.split(':').next() == Some(target));
+    assert!(found);
+}
+
+#[test]
+fn model_matching_no_match() {
+    let model_names = vec!["llama3.1:latest", "mistral:7b"];
+    let target = "codellama:13b";
+    let found = model_names
+        .iter()
+        .any(|name| *name == target || name.split(':').next() == Some(target));
+    assert!(!found);
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────
 
 fn make_client() -> OllamaClient {

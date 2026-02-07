@@ -5,6 +5,8 @@
 
 use std::sync::Arc;
 
+use std::time::{Duration, Instant};
+
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use sqlx::PgPool;
@@ -101,6 +103,8 @@ pub(crate) struct AppStateInner {
     pub(crate) cancellation_tokens: DashMap<Uuid, CancellationToken>,
     /// Master shutdown token — cancelled on SIGTERM/SIGINT to signal all background tasks.
     pub(crate) shutdown_token: CancellationToken,
+    /// Cached result for `is_ollama_enabled()` to avoid per-step DB round-trips.
+    pub(crate) ollama_toggle_cache: Arc<tokio::sync::RwLock<(bool, Instant)>>,
 }
 
 /// Application state shared across all HTTP handlers.
@@ -155,7 +159,8 @@ impl AppState {
             server_repo.clone(),
             repos.tool_routers.clone(),
             repos.tool_capabilities.clone(),
-        );
+        )
+        .await;
 
         let mut state = Self(Arc::new(AppStateInner {
             db: Some(db),
@@ -173,6 +178,7 @@ impl AppState {
             response_streams: DashMap::new(),
             cancellation_tokens: DashMap::new(),
             shutdown_token: CancellationToken::new(),
+            ollama_toggle_cache: Arc::new(tokio::sync::RwLock::new((false, Instant::now()))),
         }));
 
         // Look up default agent from DB (for workflow system)
@@ -225,6 +231,7 @@ impl AppState {
                 response_streams: DashMap::new(),
                 cancellation_tokens: DashMap::new(),
                 shutdown_token: CancellationToken::new(),
+                ollama_toggle_cache: Arc::new(tokio::sync::RwLock::new((false, Instant::now()))),
             })),
             orchestrator_rx,
         )
@@ -285,7 +292,7 @@ impl AppState {
         }
     }
 
-    fn init_providers(
+    async fn init_providers(
         server_repo: Arc<dyn ServerRepo>,
         tool_router_repo: Arc<dyn crate::db::traits::ToolRouterRepo>,
         tool_capability_repo: Arc<dyn crate::db::traits::ToolCapabilityRepo>,
@@ -333,16 +340,29 @@ impl AppState {
         if ollama_enabled {
             match crate::llm::OllamaClient::from_env() {
                 Ok(client) => {
-                    tracing::info!(
-                        "Initialized Ollama provider: {} ({})",
-                        client.model_id(),
-                        std::env::var(crate::constants::ENV_OLLAMA_BASE_URL).unwrap_or_else(|_| {
-                            crate::constants::OLLAMA_DEFAULT_BASE_URL.to_string()
-                        })
-                    );
-                    let ollama_provider: Arc<dyn LLMProvider + Send + Sync> =
-                        Arc::new(crate::llm::RetryingProvider::with_defaults(client));
-                    registry.register("ollama", ollama_provider);
+                    // Verify Ollama is reachable before registering
+                    if let Err(e) = client.health_check().await {
+                        tracing::warn!(
+                            "Ollama enabled but not reachable — skipping registration: {}",
+                            e
+                        );
+                    } else if let Err(e) = client.validate_model().await {
+                        tracing::warn!(
+                            "Ollama reachable but model validation failed — skipping registration: {}",
+                            e
+                        );
+                    } else {
+                        tracing::info!(
+                            "Initialized Ollama provider: {} ({})",
+                            client.model_id(),
+                            std::env::var(crate::constants::ENV_OLLAMA_BASE_URL).unwrap_or_else(
+                                |_| { crate::constants::OLLAMA_DEFAULT_BASE_URL.to_string() }
+                            )
+                        );
+                        let ollama_provider: Arc<dyn LLMProvider + Send + Sync> =
+                            Arc::new(crate::llm::RetryingProvider::with_defaults(client));
+                        registry.register("ollama", ollama_provider);
+                    }
                 }
                 Err(e) => {
                     tracing::warn!(
@@ -414,23 +434,41 @@ impl AppState {
 
     /// Check whether the Ollama provider is enabled at runtime.
     ///
-    /// Checks the system_config DB table first (runtime toggle), then falls
-    /// back to the `NEXOR_OLLAMA_ENABLED` env var.
+    /// Uses a 60-second cache to avoid per-step DB round-trips. Checks the
+    /// system_config DB table first (runtime toggle), then falls back to the
+    /// `NEXOR_OLLAMA_ENABLED` env var.
     pub async fn is_ollama_enabled(&self) -> bool {
-        // Check DB first (runtime toggle overrides env var)
-        if let Ok(Some(config)) = self
+        const CACHE_TTL: Duration = Duration::from_secs(60);
+
+        // Check cache first
+        {
+            let cache = self.0.ollama_toggle_cache.read().await;
+            if cache.1.elapsed() < CACHE_TTL {
+                return cache.0;
+            }
+        }
+
+        // Cache miss — query DB
+        let enabled = match self
             .0
             .repos
             .system_config
             .get_system_config("ollama_enabled")
             .await
         {
-            return config.config_value.as_bool().unwrap_or(false);
+            Ok(Some(config)) => config.config_value.as_bool().unwrap_or(false),
+            _ => std::env::var(crate::constants::ENV_OLLAMA_ENABLED)
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or(false),
+        };
+
+        // Update cache
+        {
+            let mut cache = self.0.ollama_toggle_cache.write().await;
+            *cache = (enabled, Instant::now());
         }
-        // Fall back to env var
-        std::env::var(crate::constants::ENV_OLLAMA_ENABLED)
-            .map(|v| v == "true" || v == "1")
-            .unwrap_or(false)
+
+        enabled
     }
 
     /// Access the mode resolver.
@@ -674,6 +712,7 @@ impl AppStateInner {
             response_streams: DashMap::new(), // Fresh map (streams don't survive clone)
             cancellation_tokens: DashMap::new(), // Fresh map
             shutdown_token: CancellationToken::new(),
+            ollama_toggle_cache: self.ollama_toggle_cache.clone(),
         }
     }
 }
