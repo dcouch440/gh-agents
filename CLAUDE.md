@@ -43,6 +43,8 @@ npx vite build                              # Production build
 - Verify with `cargo check` and `cargo test` before committing
 - Axum handlers return `Result<Json<T>, StatusCode>` — never unwrap or panic in handlers
 - In frontend/ always prefer reusable components
+- Think enterprise quality always.
+- No co authored on commits.
 
 ## Module Organization
 
