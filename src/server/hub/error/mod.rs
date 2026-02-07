@@ -50,6 +50,13 @@ pub enum HubError {
     #[error("port resolution failed for step {step_id}: {reason}")]
     PortResolutionFailed { step_id: Uuid, reason: String },
 
+    #[error("provider '{provider}' not available for step {step_id} (agent: {agent_name})")]
+    ProviderUnavailable {
+        provider: String,
+        step_id: Uuid,
+        agent_name: String,
+    },
+
     #[error("execution cancelled")]
     Cancelled,
 

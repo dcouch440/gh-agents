@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::db::traits::ServerRepo;
-use crate::llm::LLMProvider;
+use crate::llm::{LLMProvider, ProviderRegistry};
 use crate::types::AppConfig;
 
 use crate::server::hub::{ModeResolver, PromptRegistry};
@@ -54,6 +54,7 @@ pub struct AppStateBuilder {
     events: Option<EventBus>,
     config: Option<AppConfig>,
     provider: Option<Arc<dyn LLMProvider + Send + Sync>>,
+    provider_registry: Option<ProviderRegistry>,
     mode_resolver: Option<Arc<ModeResolver>>,
     prompt_registry: Option<Arc<PromptRegistry>>,
     jwt_secret: Option<Vec<u8>>,
@@ -70,6 +71,7 @@ impl AppStateBuilder {
             events: None,
             config: None,
             provider: None,
+            provider_registry: None,
             mode_resolver: None,
             prompt_registry: None,
             jwt_secret: None,
@@ -110,6 +112,12 @@ impl AppStateBuilder {
     /// Set the LLM provider.
     pub fn with_provider(mut self, provider: Arc<dyn LLMProvider + Send + Sync>) -> Self {
         self.provider = Some(provider);
+        self
+    }
+
+    /// Set the provider registry for multi-provider routing.
+    pub fn with_provider_registry(mut self, registry: ProviderRegistry) -> Self {
+        self.provider_registry = Some(registry);
         self
     }
 
@@ -158,6 +166,10 @@ impl AppStateBuilder {
             .prompt_registry
             .unwrap_or_else(|| Arc::new(PromptRegistry::empty()));
 
+        let provider_registry = self
+            .provider_registry
+            .unwrap_or_else(ProviderRegistry::default);
+
         let state = AppState::from_inner(AppStateInner {
             db: self.db,
             server_repo,
@@ -165,6 +177,7 @@ impl AppStateBuilder {
             events,
             config: Arc::new(RwLock::new(config)),
             provider: self.provider,
+            provider_registry,
             mode_resolver: self.mode_resolver,
             prompt_registry,
             jwt_secret,

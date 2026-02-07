@@ -15,7 +15,22 @@ pub use room_speaker::{RoomSpeakerConfig, RoomSpeakerStrategy};
 pub use router::RouterStrategy;
 
 /// Approximate cost computation per model ($/1M tokens).
+/// Local models (Ollama) are free — returns $0.00.
 pub fn compute_cost(model_id: &str, input_tokens: i64, output_tokens: i64) -> f32 {
+    // Known local model patterns — no API cost
+    let is_local = model_id.contains("llama")
+        || model_id.contains("mistral")
+        || model_id.contains("codellama")
+        || model_id.contains("gemma")
+        || model_id.contains("phi")
+        || model_id.contains("qwen")
+        || model_id.contains("deepseek")
+        || model_id.contains("vicuna");
+
+    if is_local {
+        return 0.0;
+    }
+
     let (input_rate, output_rate) = if model_id.contains("opus") {
         (15.0_f32, 75.0_f32)
     } else if model_id.contains("sonnet") {
