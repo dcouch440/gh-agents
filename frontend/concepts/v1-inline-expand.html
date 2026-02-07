@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexor — Agent Step Node v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg-canvas: #060a10;
+    --bg-node: #111318;
+    --bg-node-hover: #151920;
+    --bg-header: #0d1017;
+    --bg-editor: #0a0e14;
+    --bg-gutter: #080c12;
+    --border-default: rgba(240, 246, 252, 0.06);
+    --border-hover: rgba(240, 246, 252, 0.12);
+    --border-selected: #3b82f6;
+    --border-focus: rgba(59, 130, 246, 0.5);
+    --text-primary: #f0f6fc;
+    --text-secondary: #7d8590;
+    --text-muted: #484f58;
+    --text-faint: #2d333b;
+    --primary: #3b82f6;
+    --secondary: #2dd4bf;
+    --success: #3fb950;
+    --warning: #d29922;
+    --error: #f85149;
+    --port-string: #3b82f6;
+    --port-json: #a78bfa;
+    --port-array: #2dd4bf;
+    --port-number: #f59e0b;
+    --port-any: #7d8590;
+    /* Syntax */
+    --syn-keyword: #ff7b72;
+    --syn-string: #a5d6ff;
+    --syn-variable: #2dd4bf;
+    --syn-comment: #484f58;
+    --syn-function: #d2a8ff;
+    --syn-number: #79c0ff;
+    --syn-tag: #7ee787;
+    --syn-operator: #7d8590;
+    /* Layout */
+    --radius-node: 12px;
+    --radius-port: 6px;
+    --radius-badge: 4px;
+    --shadow-node: 0 4px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--border-default);
+    --shadow-node-hover: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--border-hover);
+    --shadow-node-selected: 0 8px 32px rgba(59, 130, 246, 0.15), 0 0 0 2px var(--border-selected);
+    --shadow-expanded: 0 24px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--border-hover);
+    --shadow-expanded-selected: 0 24px 80px rgba(0, 0, 0, 0.6), 0 0 0 2px var(--border-selected);
+    --shadow-node-running: 0 8px 32px rgba(59, 130, 246, 0.2), 0 0 0 2px var(--primary);
+    --font-sans: 'Inter', -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+
+  body {
+    background: var(--bg-canvas);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    padding: 40px;
+    min-height: 100vh;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 24px 24px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .layout {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 100px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 32px;
+  }
+  .section-label span {
+    color: var(--text-secondary);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: normal;
+    margin-left: 8px;
+  }
+
+  .row {
+    display: flex;
+    gap: 48px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  /* ═══════════════════════════════════════════════
+     NODE BASE
+     ═══════════════════════════════════════════════ */
+  .node {
+    background: var(--bg-node);
+    border-radius: var(--radius-node);
+    box-shadow: var(--shadow-node);
+    position: relative;
+    transition: box-shadow 0.25s ease, width 0.35s ease, transform 0.25s ease;
+    overflow: visible;
+  }
+  .node:hover { box-shadow: var(--shadow-node-hover); }
+  .node.selected { box-shadow: var(--shadow-node-selected); }
+
+  .node.running {
+    box-shadow: var(--shadow-node-running);
+    animation: runPulse 2s ease-in-out infinite;
+  }
+  @keyframes runPulse {
+    0%, 100% { box-shadow: 0 8px 32px rgba(59, 130, 246, 0.15), 0 0 0 2px var(--primary); }
+    50% { box-shadow: 0 8px 40px rgba(59, 130, 246, 0.3), 0 0 0 2px var(--primary), 0 0 24px rgba(59, 130, 246, 0.08); }
+  }
+
+  /* ─── HEADER ─── */
+  .node-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-default);
+    background: var(--bg-header);
+    border-radius: var(--radius-node) var(--radius-node) 0 0;
+  }
+  .node-icon {
+    width: 24px; height: 24px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; flex-shrink: 0;
+  }
+  .node-icon.agent { background: rgba(59, 130, 246, 0.15); color: var(--primary); }
+  .node-icon.foreach { background: rgba(45, 212, 191, 0.15); color: var(--secondary); }
+  .node-icon.room { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+
+  .node-title {
+    font-size: 13px; font-weight: 600; color: var(--text-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    flex: 1; letter-spacing: -0.01em;
+  }
+  .node-menu {
+    width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted); cursor: pointer; border-radius: 4px; font-size: 14px;
+    flex-shrink: 0; transition: color 0.15s, background 0.15s;
+  }
+  .node-menu:hover { color: var(--text-secondary); background: rgba(255,255,255,0.05); }
+
+  /* ─── SUBTITLE ─── */
+  .node-subtitle {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 14px; border-bottom: 1px solid var(--border-default);
+  }
+  .badge {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+    text-transform: uppercase; padding: 2px 6px; border-radius: var(--radius-badge); line-height: 1;
+  }
+  .badge.single { background: rgba(59, 130, 246, 0.12); color: var(--primary); }
+  .badge.foreach { background: rgba(45, 212, 191, 0.12); color: var(--secondary); }
+  .badge.room { background: rgba(168, 85, 247, 0.12); color: #a855f7; }
+  .model-label { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+  .separator-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--text-muted); }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .status-dot.idle { background: var(--text-muted); }
+  .status-dot.running { background: var(--primary); animation: statusPulse 1.5s ease-in-out infinite; }
+  .status-dot.success { background: var(--success); }
+  .status-dot.error { background: var(--error); }
+  @keyframes statusPulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(59,130,246,0.4); }
+    50% { opacity: 0.7; box-shadow: 0 0 0 4px rgba(59,130,246,0); }
+  }
+
+  /* ─── PORTS ─── */
+  .port-area { padding: 8px 0; }
+  .port-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 3px 14px; min-height: 24px;
+  }
+  .port-slot { display: flex; align-items: center; gap: 6px; position: relative; }
+  .port-slot.input { flex-direction: row; }
+  .port-slot.output { flex-direction: row-reverse; }
+  .port-handle {
+    width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--bg-node);
+    position: absolute; top: 50%; transform: translateY(-50%); z-index: 2;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .port-handle:hover { transform: translateY(-50%) scale(1.3); box-shadow: 0 0 0 3px rgba(59,130,246,0.3); }
+  .port-slot.input .port-handle { left: -19px; }
+  .port-slot.output .port-handle { right: -19px; }
+  .port-handle.string { background: var(--port-string); }
+  .port-handle.json { background: var(--port-json); }
+  .port-handle.array { background: var(--port-array); }
+  .port-handle.number { background: var(--port-number); }
+  .port-handle.any { background: var(--port-any); }
+  .port-label { font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono); letter-spacing: -0.01em; }
+  .port-type { font-size: 9px; color: var(--text-muted); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.02em; }
+  .port-required { color: var(--error); font-size: 9px; margin-left: -2px; }
+
+  /* ─── COMPACT PROMPT PREVIEW ─── */
+  .prompt-preview {
+    padding: 8px 14px; border-top: 1px solid var(--border-default);
+    background: var(--bg-editor); border-radius: 0 0 var(--radius-node) var(--radius-node);
+    cursor: pointer; transition: background 0.15s;
+  }
+  .prompt-preview:hover { background: rgba(10, 14, 20, 0.9); }
+  .prompt-preview-label {
+    font-size: 10px; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 0.06em; font-weight: 500; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .expand-hint {
+    font-size: 9px; text-transform: none; letter-spacing: normal;
+    color: var(--text-muted); opacity: 0; transition: opacity 0.15s;
+  }
+  .prompt-preview:hover .expand-hint { opacity: 1; }
+  .prompt-code {
+    font-family: var(--font-mono); font-size: 11px; line-height: 1.5;
+    color: var(--text-secondary); white-space: pre; overflow: hidden; max-height: 48px;
+  }
+  .prompt-code .var { color: var(--syn-variable); }
+  .prompt-code .kw { color: var(--syn-keyword); }
+  .prompt-code .cm { color: var(--syn-comment); font-style: italic; }
+  .prompt-code .str { color: var(--syn-string); }
+  .prompt-code .fn { color: var(--syn-function); }
+  .prompt-code .tag { color: var(--syn-tag); }
+
+  /* ═══════════════════════════════════════════════
+     EXPANDED MODE — THE WORKSPACE
+     ═══════════════════════════════════════════════ */
+  .node.expanded-mode {
+    width: 580px;
+    box-shadow: var(--shadow-expanded-selected);
+    z-index: 10;
+  }
+
+  /* ─── EXPANDED HEADER (richer) ─── */
+  .node.expanded-mode .node-header {
+    padding: 12px 16px;
+  }
+  .node.expanded-mode .node-title {
+    font-size: 14px;
+  }
+
+  /* ─── TABS BAR ─── */
+  .tabs-bar {
+    display: flex; align-items: center;
+    border-bottom: 1px solid var(--border-default);
+    padding: 0 16px;
+    background: var(--bg-header);
+  }
+  .tab {
+    font-size: 11px; font-weight: 500; color: var(--text-muted);
+    padding: 8px 12px; cursor: pointer; position: relative;
+    transition: color 0.15s; letter-spacing: -0.01em;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .tab:hover { color: var(--text-secondary); }
+  .tab.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--primary);
+  }
+  .tab-count {
+    font-size: 9px; color: var(--text-muted); font-family: var(--font-mono);
+    margin-left: 4px;
+  }
+  .tabs-spacer { flex: 1; }
+  .tab-action {
+    font-size: 11px; color: var(--text-muted); cursor: pointer;
+    padding: 4px 8px; border-radius: 4px; border: none; background: none;
+    font-family: var(--font-sans); transition: color 0.15s, background 0.15s;
+  }
+  .tab-action:hover { color: var(--text-secondary); background: rgba(255,255,255,0.05); }
+
+  /* ─── FULL EDITOR ─── */
+  .full-editor {
+    background: var(--bg-editor);
+    min-height: 280px;
+    max-height: 420px;
+    overflow-y: auto;
+    position: relative;
+  }
+
+  .editor-line {
+    display: flex;
+    min-height: 22px;
+    line-height: 22px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+  }
+  .editor-line:hover {
+    background: rgba(255, 255, 255, 0.02);
+  }
+  .editor-line.active-line {
+    background: rgba(59, 130, 246, 0.06);
+  }
+
+  .line-gutter {
+    width: 48px;
+    text-align: right;
+    padding-right: 16px;
+    color: var(--text-faint);
+    user-select: none;
+    flex-shrink: 0;
+    font-size: 12px;
+    background: var(--bg-gutter);
+    border-right: 1px solid var(--border-default);
+  }
+  .editor-line.active-line .line-gutter {
+    color: var(--text-muted);
+  }
+
+  .line-content {
+    padding-left: 16px;
+    padding-right: 16px;
+    white-space: pre;
+    flex: 1;
+    color: var(--text-secondary);
+  }
+
+  /* Cursor blink */
+  .cursor {
+    display: inline-block;
+    width: 2px;
+    height: 16px;
+    background: var(--text-primary);
+    vertical-align: text-bottom;
+    animation: cursorBlink 1s step-end infinite;
+    margin-left: -1px;
+  }
+  @keyframes cursorBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  /* ─── EDITOR STATUS BAR ─── */
+  .editor-statusbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 16px;
+    background: var(--bg-header);
+    border-top: 1px solid var(--border-default);
+    font-size: 10px; color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+  .statusbar-left, .statusbar-right {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .statusbar-item { display: flex; align-items: center; gap: 4px; }
+  .statusbar-divider { width: 1px; height: 10px; background: var(--border-default); }
+
+  /* ─── PORT DETAILS (Expanded) ─── */
+  .port-detail-area {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border-default);
+  }
+  .port-detail-header {
+    font-size: 10px; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 0.06em; font-weight: 500; margin-bottom: 8px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .port-detail-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 0; border-bottom: 1px solid var(--border-default);
+  }
+  .port-detail-row:last-child { border-bottom: none; }
+  .port-detail-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .port-detail-name {
+    font-size: 12px; font-family: var(--font-mono); color: var(--text-primary);
+    flex: 1;
+  }
+  .port-detail-type {
+    font-size: 10px; font-family: var(--font-mono); color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.02em;
+    padding: 1px 6px; border-radius: 3px; background: rgba(255,255,255,0.04);
+  }
+  .port-detail-required {
+    font-size: 9px; color: var(--error); font-weight: 600;
+  }
+  .port-detail-desc {
+    font-size: 11px; color: var(--text-muted); margin-left: 16px;
+    padding: 2px 0 4px;
+  }
+  .port-add-btn {
+    font-size: 11px; color: var(--text-muted); cursor: pointer;
+    border: 1px dashed var(--border-hover); border-radius: 4px;
+    padding: 4px 8px; background: none; font-family: var(--font-sans);
+    margin-top: 8px; transition: color 0.15s, border-color 0.15s;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .port-add-btn:hover { color: var(--primary); border-color: var(--primary); }
+
+  /* ─── CONFIG SECTION (Expanded) ─── */
+  .config-section {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border-default);
+  }
+  .config-header {
+    font-size: 10px; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 0.06em; font-weight: 500; margin-bottom: 8px;
+  }
+  .config-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 0;
+  }
+  .config-label { font-size: 11px; color: var(--text-secondary); }
+  .config-value {
+    font-size: 11px; font-family: var(--font-mono); color: var(--text-muted);
+    padding: 2px 8px; border-radius: 4px; background: rgba(255,255,255,0.04);
+    cursor: pointer; transition: background 0.15s;
+  }
+  .config-value:hover { background: rgba(255,255,255,0.07); color: var(--text-secondary); }
+  .config-toggle {
+    width: 28px; height: 16px; border-radius: 8px;
+    background: rgba(255,255,255,0.1); position: relative; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .config-toggle.on { background: rgba(59, 130, 246, 0.4); }
+  .config-toggle::after {
+    content: ''; position: absolute; width: 12px; height: 12px;
+    border-radius: 50%; background: var(--text-secondary);
+    top: 2px; left: 2px; transition: left 0.15s, background 0.15s;
+  }
+  .config-toggle.on::after { left: 14px; background: var(--primary); }
+
+  /* ─── METRICS ─── */
+  .metrics-bar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 14px; border-top: 1px solid var(--border-default);
+    background: rgba(59, 130, 246, 0.03);
+  }
+  .metric { display: flex; align-items: center; gap: 4px; }
+  .metric-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .metric-value { font-size: 11px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+  .metric-value.counting { color: var(--primary); animation: countFlash 0.5s ease-in-out infinite alternate; }
+  @keyframes countFlash { from { opacity: 1; } to { opacity: 0.6; } }
+
+  /* ─── STREAMING ─── */
+  .streaming-area {
+    padding: 8px 14px; border-top: 1px solid var(--border-default);
+    background: rgba(59, 130, 246, 0.02);
+    border-radius: 0 0 var(--radius-node) var(--radius-node);
+    max-height: 60px; overflow: hidden; position: relative;
+  }
+  .streaming-area::after {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 24px;
+    background: linear-gradient(transparent, rgba(17, 19, 24, 0.9));
+  }
+  .streaming-label {
+    font-size: 10px; color: var(--primary); text-transform: uppercase;
+    letter-spacing: 0.06em; font-weight: 500; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .streaming-dot {
+    width: 4px; height: 4px; border-radius: 50%; background: var(--primary);
+    animation: streamDot 1s ease-in-out infinite;
+  }
+  .streaming-dot:nth-child(2) { animation-delay: 0.2s; }
+  .streaming-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes streamDot { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+  .streaming-text {
+    font-family: var(--font-mono); font-size: 11px; line-height: 1.5; color: var(--text-muted);
+  }
+
+  /* ─── COMPLETED/ERROR ─── */
+  .node.completed { box-shadow: 0 4px 24px rgba(0,0,0,0.3), 0 0 0 1px rgba(63,185,80,0.3); }
+  .completed-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 14px; border-top: 1px solid var(--border-default);
+    background: rgba(63, 185, 80, 0.04);
+    border-radius: 0 0 var(--radius-node) var(--radius-node);
+  }
+  .completed-check { color: var(--success); font-size: 12px; }
+  .completed-time { font-size: 11px; font-family: var(--font-mono); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .completed-cost { font-size: 11px; font-family: var(--font-mono); color: var(--text-muted); margin-left: auto; }
+
+  .node.error { box-shadow: 0 4px 24px rgba(0,0,0,0.3), 0 0 0 1px rgba(248,81,73,0.4); }
+  .error-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px; border-top: 1px solid rgba(248,81,73,0.15);
+    background: rgba(248,81,73,0.04);
+    border-radius: 0 0 var(--radius-node) var(--radius-node);
+  }
+  .error-icon { color: var(--error); font-size: 12px; flex-shrink: 0; }
+  .error-message { font-size: 11px; color: var(--error); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ─── FOR-EACH PROGRESS ─── */
+  .foreach-progress {
+    padding: 8px 14px; border-top: 1px solid var(--border-default);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .progress-bar { flex: 1; height: 3px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--secondary); border-radius: 2px; transition: width 0.3s ease; }
+  .progress-label { font-size: 11px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+
+  /* ─── EDGE PARTICLES ─── */
+  .edge-particle-container {
+    position: absolute; height: 2px; background: rgba(59, 130, 246, 0.15);
+    top: 50%; transform: translateY(-50%);
+  }
+  .edge-particle-container.left { right: 100%; width: 60px; }
+  .edge-particle-container.right { left: 100%; width: 60px; }
+  .edge-particle {
+    position: absolute; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--primary); box-shadow: 0 0 8px var(--primary);
+    top: 50%; transform: translateY(-50%);
+  }
+  .edge-particle-container.left .edge-particle { animation: particleMoveLeft 1.5s linear infinite; }
+  .edge-particle-container.right .edge-particle { animation: particleMoveRight 1.5s linear infinite; }
+  @keyframes particleMoveLeft {
+    from { left: 0; opacity: 0; } 20% { opacity: 1; } 80% { opacity: 1; } to { left: calc(100% - 6px); opacity: 0; }
+  }
+  @keyframes particleMoveRight {
+    from { left: 0; opacity: 0; } 20% { opacity: 1; } 80% { opacity: 1; } to { left: calc(100% - 6px); opacity: 0; }
+  }
+  .edge-particle:nth-child(2) { animation-delay: 0.5s; }
+  .edge-particle:nth-child(3) { animation-delay: 1s; }
+
+  /* ─── DIM OVERLAY (for context) ─── */
+  .dim-context {
+    position: relative;
+  }
+  .dim-context::before {
+    content: 'Other nodes dim when editing';
+    position: absolute;
+    top: -28px; left: 0;
+    font-size: 10px; color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+  .dimmed-node {
+    opacity: 0.25;
+    filter: blur(1px);
+    pointer-events: none;
+    transition: opacity 0.3s, filter 0.3s;
+  }
+
+  /* ─── WIDTHS ─── */
+  .compact { width: 240px; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- ════════════════════════════════════════════
+       SECTION 1: COMPACT MODE
+       ════════════════════════════════════════════ -->
+  <div>
+    <div class="section-label">1 — Compact Mode <span>240px. The default on-canvas view. Identity + ports + prompt snippet.</span></div>
+    <div class="row">
+
+      <div class="node compact">
+        <div class="node-header">
+          <div class="node-icon agent">⚡</div>
+          <div class="node-title">Code Reviewer</div>
+          <div class="node-menu">···</div>
+        </div>
+        <div class="node-subtitle">
+          <div class="status-dot idle"></div>
+          <span class="badge single">single</span>
+          <span class="separator-dot"></span>
+          <span class="model-label">claude-opus-4</span>
+        </div>
+        <div class="port-area">
+          <div class="port-row">
+            <div class="port-slot input">
+              <div class="port-handle string"></div>
+              <span class="port-label">code_content</span>
+              <span class="port-required">*</span>
+            </div>
+            <div class="port-slot output">
+              <div class="port-handle json"></div>
+              <span class="port-label">review</span>
+            </div>
+          </div>
+          <div class="port-row">
+            <div class="port-slot input">
+              <div class="port-handle json"></div>
+              <span class="port-label">context</span>
+            </div>
+            <div class="port-slot output">
+              <div class="port-handle string"></div>
+              <span class="port-label">summary</span>
+            </div>
+          </div>
+        </div>
+        <div class="prompt-preview">
+          <div class="prompt-preview-label">prompt <span class="expand-hint">double-click to edit</span></div>
+          <div class="prompt-code">Review the following code:
+<span class="var">{code_content}</span>
+Focus on: security, perf...</div>
+        </div>
+      </div>
+
+      <div class="node compact">
+        <div class="node-header">
+          <div class="node-icon foreach">↻</div>
+          <div class="node-title">Feature Analyzer</div>
+          <div class="node-menu">···</div>
+        </div>
+        <div class="node-subtitle">
+          <div class="status-dot idle"></div>
+          <span class="badge foreach">for-each</span>
+          <span class="separator-dot"></span>
+          <span class="model-label">claude-sonnet-4</span>
+        </div>
+        <div class="port-area">
+          <div class="port-row">
+            <div class="port-slot input">
+              <div class="port-handle array"></div>
+              <span class="port-label">features</span>
+              <span class="port-required">*</span>
+            </div>
+            <div class="port-slot output">
+              <div class="port-handle json"></div>
+              <span class="port-label">analysis</span>
+            </div>
+          </div>
+        </div>
+        <div class="prompt-preview">
+          <div class="prompt-preview-label">prompt</div>
+          <div class="prompt-code">Analyze this feature:
+<span class="var">{features.name}</span>
+<span class="cm">// iterates features[]</span></div>
+        </div>
+      </div>
+
+      <div class="node compact">
+        <div class="node-header">
+          <div class="node-icon room">💬</div>
+          <div class="node-title">Design Review Room</div>
+          <div class="node-menu">···</div>
+        </div>
+        <div class="node-subtitle">
+          <div class="status-dot idle"></div>
+          <span class="badge room">room</span>
+          <span class="separator-dot"></span>
+          <span class="model-label">multi-agent</span>
+        </div>
+        <div class="port-area">
+          <div class="port-row">
+            <div class="port-slot input">
+              <div class="port-handle json"></div>
+              <span class="port-label">proposal</span>
+              <span class="port-required">*</span>
+            </div>
+            <div class="port-slot output">
+              <div class="port-handle json"></div>
+              <span class="port-label">consensus</span>
+            </div>
+          </div>
+        </div>
+        <div class="prompt-preview">
+          <div class="prompt-preview-label">prompt</div>
+          <div class="prompt-code"><span class="kw">Review</span> the architecture
+proposal and reach consensus
+on implementation approach.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════
+       SECTION 2: EXPANDED — THE WORKSPACE
+       ════════════════════════════════════════════ -->
+  <div>
+    <div class="section-label">2 — Expanded Workspace <span>580px. Full IDE-level editor. Double-click to enter. Other nodes dim. This is where prompt engineering happens.</span></div>
+    <div class="row" style="gap: 40px; align-items: center;">
+
+      <!-- Dimmed background nodes for context -->
+      <div class="dim-context" style="display: flex; flex-direction: column; gap: 16px;">
+        <div class="node compact dimmed-node">
+          <div class="node-header">
+            <div class="node-icon agent">⚡</div>
+            <div class="node-title">Data Fetcher</div>
+            <div class="node-menu">···</div>
+          </div>
+          <div class="node-subtitle">
+            <div class="status-dot success"></div>
+            <span class="badge single">single</span>
+          </div>
+          <div class="port-area">
+            <div class="port-row">
+              <div class="port-slot input"><div class="port-handle string"></div><span class="port-label">url</span></div>
+              <div class="port-slot output"><div class="port-handle json"></div><span class="port-label">data</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="node compact dimmed-node">
+          <div class="node-header">
+            <div class="node-icon foreach">↻</div>
+            <div class="node-title">Parser</div>
+            <div class="node-menu">···</div>
+          </div>
+          <div class="node-subtitle">
+            <div class="status-dot idle"></div>
+            <span class="badge foreach">for-each</span>
+          </div>
+          <div class="port-area">
+            <div class="port-row">
+              <div class="port-slot input"><div class="port-handle array"></div><span class="port-label">items</span></div>
+              <div class="port-slot output"><div class="port-handle json"></div><span class="port-label">parsed</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- THE EXPANDED NODE -->
+      <div class="node expanded-mode selected" style="width: 580px;">
+        <div class="node-header">
+          <div class="node-icon agent">⚡</div>
+          <div class="node-title">Code Reviewer</div>
+          <div style="flex:1;"></div>
+          <div class="node-menu" style="margin-right: 4px;">⤢</div>
+          <div class="node-menu">···</div>
+        </div>
+        <div class="node-subtitle">
+          <div class="status-dot idle"></div>
+          <span class="badge single">single</span>
+          <span class="separator-dot"></span>
+          <span class="model-label">claude-opus-4</span>
+          <span class="separator-dot"></span>
+          <span style="font-size: 10px; color: var(--text-muted);">reasoning: on</span>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs-bar">
+          <div class="tab active">Prompt</div>
+          <div class="tab">Ports <span class="tab-count">4</span></div>
+          <div class="tab">Config</div>
+          <div class="tab">Output Schema</div>
+          <div class="tabs-spacer"></div>
+          <button class="tab-action">Collapse ↑</button>
+        </div>
+
+        <!-- Full Editor -->
+        <div class="full-editor">
+          <div class="editor-line">
+            <div class="line-gutter">1</div>
+            <div class="line-content"><span class="cm">## System Prompt — Code Review Agent</span></div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">2</div>
+            <div class="line-content"></div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">3</div>
+            <div class="line-content">You are a senior software engineer performing a</div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">4</div>
+            <div class="line-content">thorough code review. Your goal is to identify:</div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">5</div>
+            <div class="line-content"></div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">6</div>
+            <div class="line-content"><span class="kw">1.</span> Security vulnerabilities (OWASP Top 10)</div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">7</div>
+            <div class="line-content"><span class="kw">2.</span> Performance bottlenecks and memory leaks</div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">8</div>
+            <div class="line-content"><span class="kw">3.</span> Adherence to project conventions</div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">9</div>
+            <div class="line-content"><span class="kw">4.</span> Test coverage gaps</div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">10</div>
+            <div class="line-content"></div>
+          </div>
+          <div class="editor-line active-line">
+            <div class="line-gutter">11</div>
+            <div class="line-content"><span class="cm">## Code Under Review</span></div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">12</div>
+            <div class="line-content"></div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">13</div>
+            <div class="line-content"><span class="tag">&lt;code&gt;</span></div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">14</div>
+            <div class="line-content"><span class="var">{code_content}</span></div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">15</div>
+            <div class="line-content"><span class="tag">&lt;/code&gt;</span></div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">16</div>
+            <div class="line-content"></div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">17</div>
+            <div class="line-content"><span class="cm">## Additional Context</span></div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">18</div>
+            <div class="line-content"></div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">19</div>
+            <div class="line-content"><span class="var">{context}</span></div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">20</div>
+            <div class="line-content"></div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">21</div>
+            <div class="line-content"><span class="cm">## Output Requirements</span></div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">22</div>
+            <div class="line-content"></div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">23</div>
+            <div class="line-content">Return your review as structured JSON matching</div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">24</div>
+            <div class="line-content">the output schema. Each finding should include:<span class="cursor"></span></div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">25</div>
+            <div class="line-content"></div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">26</div>
+            <div class="line-content">- <span class="fn">severity</span>: <span class="str">"critical"</span> | <span class="str">"warning"</span> | <span class="str">"info"</span></div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">27</div>
+            <div class="line-content">- <span class="fn">file_path</span>: path to affected file</div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">28</div>
+            <div class="line-content">- <span class="fn">line_range</span>: [start, end]</div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">29</div>
+            <div class="line-content">- <span class="fn">description</span>: clear explanation</div>
+          </div>
+          <div class="editor-line">
+            <div class="line-gutter">30</div>
+            <div class="line-content">- <span class="fn">suggestion</span>: concrete fix</div>
+          </div>
+        </div>
+
+        <!-- Status Bar -->
+        <div class="editor-statusbar">
+          <div class="statusbar-left">
+            <span class="statusbar-item">Ln 24, Col 48</span>
+            <div class="statusbar-divider"></div>
+            <span class="statusbar-item">Markdown</span>
+            <div class="statusbar-divider"></div>
+            <span class="statusbar-item">UTF-8</span>
+          </div>
+          <div class="statusbar-right">
+            <span class="statusbar-item" style="color: var(--syn-variable);">2 variables</span>
+            <div class="statusbar-divider"></div>
+            <span class="statusbar-item">30 lines · 847 chars</span>
+          </div>
+        </div>
+
+        <!-- Port Details (within Ports tab — shown for reference) -->
+        <div class="port-detail-area">
+          <div class="port-detail-header">
+            <span>Inputs</span>
+          </div>
+          <div class="port-detail-row">
+            <div class="port-detail-dot" style="background: var(--port-string);"></div>
+            <span class="port-detail-name">code_content</span>
+            <span class="port-detail-type">string</span>
+            <span class="port-detail-required">required</span>
+          </div>
+          <div class="port-detail-desc">Raw source code to review. Supports any language.</div>
+          <div class="port-detail-row">
+            <div class="port-detail-dot" style="background: var(--port-json);"></div>
+            <span class="port-detail-name">context</span>
+            <span class="port-detail-type">json</span>
+          </div>
+          <div class="port-detail-desc">Project context: conventions, tech stack, related files.</div>
+
+          <div class="port-detail-header" style="margin-top: 12px;">
+            <span>Outputs</span>
+          </div>
+          <div class="port-detail-row">
+            <div class="port-detail-dot" style="background: var(--port-json);"></div>
+            <span class="port-detail-name">review</span>
+            <span class="port-detail-type">json</span>
+          </div>
+          <div class="port-detail-desc">Structured review with findings array. $.data.review</div>
+          <div class="port-detail-row">
+            <div class="port-detail-dot" style="background: var(--port-string);"></div>
+            <span class="port-detail-name">summary</span>
+            <span class="port-detail-type">string</span>
+          </div>
+          <div class="port-detail-desc">One-paragraph executive summary. $.data.summary</div>
+
+          <button class="port-add-btn">+ Add port</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════
+       SECTION 3: RUNNING STATE
+       ════════════════════════════════════════════ -->
+  <div>
+    <div class="section-label">3 — Running State <span>Pulsing glow + live metrics + streaming output + edge particles.</span></div>
+    <div class="row">
+
+      <div class="node compact running" style="margin-left: 70px; margin-right: 70px;">
+        <div class="edge-particle-container left" style="top: 82px;">
+          <div class="edge-particle"></div>
+          <div class="edge-particle"></div>
+          <div class="edge-particle"></div>
+        </div>
+        <div class="edge-particle-container right" style="top: 82px;">
+          <div class="edge-particle"></div>
+          <div class="edge-particle"></div>
+        </div>
+        <div class="node-header">
+          <div class="node-icon agent">⚡</div>
+          <div class="node-title">Code Reviewer</div>
+          <div class="node-menu">···</div>
+        </div>
+        <div class="node-subtitle">
+          <div class="status-dot running"></div>
+          <span class="badge single">single</span>
+          <span class="separator-dot"></span>
+          <span class="model-label">claude-opus-4</span>
+        </div>
+        <div class="port-area">
+          <div class="port-row">
+            <div class="port-slot input"><div class="port-handle string"></div><span class="port-label">code_content</span></div>
+            <div class="port-slot output"><div class="port-handle json"></div><span class="port-label">review</span></div>
+          </div>
+        </div>
+        <div class="metrics-bar">
+          <div class="metric"><span class="metric-label">tokens</span><span class="metric-value counting">1,247</span></div>
+          <div class="metric"><span class="metric-label">time</span><span class="metric-value counting">3.2s</span></div>
+          <div class="metric"><span class="metric-label">cost</span><span class="metric-value">$0.024</span></div>
+        </div>
+        <div class="streaming-area">
+          <div class="streaming-label">streaming <span class="streaming-dot"></span><span class="streaming-dot"></span><span class="streaming-dot"></span></div>
+          <div class="streaming-text">The code has several security concerns.
+First, the SQL query on line 42 uses
+string concatenation instead of...</div>
+        </div>
+      </div>
+
+      <div class="node compact running" style="margin-left: 70px; margin-right: 70px;">
+        <div class="edge-particle-container left" style="top: 82px;">
+          <div class="edge-particle" style="background: var(--secondary); box-shadow: 0 0 8px var(--secondary);"></div>
+          <div class="edge-particle" style="background: var(--secondary); box-shadow: 0 0 8px var(--secondary);"></div>
+        </div>
+        <div class="node-header">
+          <div class="node-icon foreach">↻</div>
+          <div class="node-title">Feature Analyzer</div>
+          <div class="node-menu">···</div>
+        </div>
+        <div class="node-subtitle">
+          <div class="status-dot running"></div>
+          <span class="badge foreach">for-each</span>
+          <span class="separator-dot"></span>
+          <span class="model-label">claude-sonnet-4</span>
+        </div>
+        <div class="port-area">
+          <div class="port-row">
+            <div class="port-slot input"><div class="port-handle array"></div><span class="port-label">features</span></div>
+            <div class="port-slot output"><div class="port-handle json"></div><span class="port-label">analysis</span></div>
+          </div>
+        </div>
+        <div class="foreach-progress">
+          <div class="progress-bar"><div class="progress-fill" style="width: 60%;"></div></div>
+          <span class="progress-label">3/5</span>
+        </div>
+        <div class="metrics-bar">
+          <div class="metric"><span class="metric-label">tokens</span><span class="metric-value counting">4,891</span></div>
+          <div class="metric"><span class="metric-label">cost</span><span class="metric-value">$0.089</span></div>
+        </div>
+        <div class="streaming-area">
+          <div class="streaming-label">iteration 3 — <span style="color: var(--secondary);">auth_module</span> <span class="streaming-dot"></span><span class="streaming-dot"></span><span class="streaming-dot"></span></div>
+          <div class="streaming-text">The authentication module implements
+OAuth 2.0 with PKCE flow correctly...</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════
+       SECTION 4: COMPLETED / ERROR
+       ════════════════════════════════════════════ -->
+  <div>
+    <div class="section-label">4 — Terminal States</div>
+    <div class="row">
+
+      <div class="node compact completed">
+        <div class="node-header">
+          <div class="node-icon agent">⚡</div>
+          <div class="node-title">Code Reviewer</div>
+          <div class="node-menu">···</div>
+        </div>
+        <div class="node-subtitle">
+          <div class="status-dot success"></div>
+          <span class="badge single">single</span>
+          <span class="separator-dot"></span>
+          <span class="model-label">claude-opus-4</span>
+        </div>
+        <div class="port-area">
+          <div class="port-row">
+            <div class="port-slot input"><div class="port-handle string"></div><span class="port-label">code_content</span></div>
+            <div class="port-slot output"><div class="port-handle json"></div><span class="port-label">review</span></div>
+          </div>
+        </div>
+        <div class="completed-bar">
+          <span class="completed-check">✓</span>
+          <span class="completed-time">2.8s</span>
+          <span style="color: var(--text-muted); font-size: 10px;">·</span>
+          <span class="completed-time" style="color: var(--text-muted);">2,341 tok</span>
+          <span class="completed-cost">$0.042</span>
+        </div>
+      </div>
+
+      <div class="node compact error">
+        <div class="node-header">
+          <div class="node-icon agent">⚡</div>
+          <div class="node-title">Code Reviewer</div>
+          <div class="node-menu">···</div>
+        </div>
+        <div class="node-subtitle">
+          <div class="status-dot error"></div>
+          <span class="badge single">single</span>
+          <span class="separator-dot"></span>
+          <span class="model-label">claude-opus-4</span>
+        </div>
+        <div class="port-area">
+          <div class="port-row">
+            <div class="port-slot input"><div class="port-handle string"></div><span class="port-label">code_content</span></div>
+            <div class="port-slot output"><div class="port-handle json"></div><span class="port-label">review</span></div>
+          </div>
+        </div>
+        <div class="error-bar">
+          <span class="error-icon">✕</span>
+          <span class="error-message">Rate limit exceeded (429). Retry in 12s.</span>
+        </div>
+      </div>
+
+      <div class="node compact completed">
+        <div class="node-header">
+          <div class="node-icon foreach">↻</div>
+          <div class="node-title">Feature Analyzer</div>
+          <div class="node-menu">···</div>
+        </div>
+        <div class="node-subtitle">
+          <div class="status-dot success"></div>
+          <span class="badge foreach">for-each</span>
+          <span class="separator-dot"></span>
+          <span class="model-label">claude-sonnet-4</span>
+        </div>
+        <div class="port-area">
+          <div class="port-row">
+            <div class="port-slot input"><div class="port-handle array"></div><span class="port-label">features</span></div>
+            <div class="port-slot output"><div class="port-handle json"></div><span class="port-label">analysis</span></div>
+          </div>
+        </div>
+        <div class="foreach-progress">
+          <div class="progress-bar"><div class="progress-fill" style="width: 100%; background: var(--success);"></div></div>
+          <span class="progress-label" style="color: var(--success);">5/5</span>
+        </div>
+        <div class="completed-bar" style="border-radius: 0 0 var(--radius-node) var(--radius-node);">
+          <span class="completed-check">✓</span>
+          <span class="completed-time">8.4s</span>
+          <span style="color: var(--text-muted); font-size: 10px;">·</span>
+          <span class="completed-time" style="color: var(--text-muted);">12,341 tok</span>
+          <span class="completed-cost">$0.186</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════
+       SECTION 5: PORT LEGEND
+       ════════════════════════════════════════════ -->
+  <div>
+    <div class="section-label">5 — Port Type System</div>
+    <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="width: 10px; height: 10px; border-radius: 50%; background: var(--port-string);"></div>
+        <span style="font-size: 11px; font-family: var(--font-mono); color: var(--text-secondary);">string</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="width: 10px; height: 10px; border-radius: 50%; background: var(--port-json);"></div>
+        <span style="font-size: 11px; font-family: var(--font-mono); color: var(--text-secondary);">json</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="width: 10px; height: 10px; border-radius: 50%; background: var(--port-array);"></div>
+        <span style="font-size: 11px; font-family: var(--font-mono); color: var(--text-secondary);">array</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="width: 10px; height: 10px; border-radius: 50%; background: var(--port-number);"></div>
+        <span style="font-size: 11px; font-family: var(--font-mono); color: var(--text-secondary);">number</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="width: 10px; height: 10px; border-radius: 2px; background: var(--port-any);"></div>
+        <span style="font-size: 11px; font-family: var(--font-mono); color: var(--text-secondary);">any</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
@@ -11,29 +11,106 @@ type DetailPanelProps = {
   onClose: () => void;
   title: string;
   children: ReactNode;
+  width?: number;
+  isDragging?: boolean;
+  onResize?: (width: number) => void;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
 };
 
-function DetailPanel({ side, isOpen, onClose, title, children }: DetailPanelProps) {
+function DetailPanel({
+  side, isOpen, onClose, title, children,
+  width, isDragging = false, onResize, onDragStart, onDragEnd,
+}: DetailPanelProps) {
   const isLeft = side === 'left';
+  const panelWidth = width ?? LAYOUT.PANEL_WIDTH;
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(0);
+  const listenersRef = useRef<{ move: (e: MouseEvent) => void; up: () => void } | null>(null);
+
+  const cleanup = useCallback(() => {
+    if (listenersRef.current) {
+      document.removeEventListener('mousemove', listenersRef.current.move);
+      document.removeEventListener('mouseup', listenersRef.current.up);
+      listenersRef.current = null;
+    }
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+    onDragEnd?.();
+  }, [onDragEnd]);
+
+  const startDrag = useCallback(
+    (e: React.MouseEvent) => {
+      if (!onResize) return;
+      e.preventDefault();
+      cleanup();
+      onDragStart?.();
+      startXRef.current = e.clientX;
+      startWidthRef.current = panelWidth;
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'col-resize';
+
+      const move = (ev: MouseEvent) => {
+        const delta = isLeft
+          ? ev.clientX - startXRef.current
+          : startXRef.current - ev.clientX;
+        const next = Math.max(
+          LAYOUT.PANEL_MIN_WIDTH,
+          Math.min(LAYOUT.PANEL_MAX_WIDTH, startWidthRef.current + delta),
+        );
+        onResize(next);
+      };
+
+      const up = () => { cleanup(); };
+
+      listenersRef.current = { move, up };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    },
+    [isLeft, onResize, panelWidth, cleanup, onDragStart],
+  );
+
+  useEffect(() => {
+    return () => { cleanup(); };
+  }, [cleanup]);
 
   return (
     <Box
       sx={{
-        width: isOpen ? LAYOUT.PANEL_WIDTH : 0,
-        minWidth: isOpen ? LAYOUT.PANEL_WIDTH : 0,
-        height: '100vh',
+        width: isOpen ? panelWidth : 0,
+        minWidth: isOpen ? panelWidth : 0,
+        height: '100%',
         overflow: 'hidden',
-        transition: `all ${ANIMATION.NORMAL}ms ease`,
+        transition: isDragging ? 'none' : `all ${ANIMATION.NORMAL}ms ease`,
         borderRight: isLeft ? 1 : 0,
         borderLeft: isLeft ? 0 : 1,
         borderColor: isOpen ? 'divider' : 'transparent',
-        backgroundColor: 'background.paper',
+        backgroundColor: '#131720',
         display: 'flex',
         flexDirection: 'column',
-        position: 'sticky',
-        top: 0,
+        position: 'relative',
       }}
     >
+      {/* Resize handle */}
+      {isOpen && onResize && (
+        <Box
+          onMouseDown={startDrag}
+          sx={{
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            ...(isLeft ? { right: -2 } : { left: -2 }),
+            width: 4,
+            cursor: 'col-resize',
+            zIndex: 10,
+            '&:hover': {
+              backgroundColor: 'primary.main',
+              opacity: 0.4,
+            },
+          }}
+        />
+      )}
+
       {/* Header */}
       <Box
         sx={{
@@ -61,8 +138,14 @@ function DetailPanel({ side, isOpen, onClose, title, children }: DetailPanelProp
           sx={{
             width: 28,
             height: 28,
+            borderRadius: '6px',
             color: 'text.secondary',
-            '&:hover': { color: 'text.primary' },
+            backgroundColor: 'transparent',
+            transition: `color ${ANIMATION.FAST}ms ease`,
+            '&:hover': {
+              color: 'text.primary',
+              backgroundColor: 'transparent',
+            },
           }}
         >
           <CloseOutlined sx={{ fontSize: 16 }} />

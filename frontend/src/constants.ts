@@ -224,11 +224,15 @@ export const LS_SIDEBAR_COLLAPSED = "nexor_sidebar_collapsed";
 export const LS_RECENT_COMMANDS = "nexor_recent_commands";
 export const LS_LEFT_PANEL_OPEN = "nexor_left_panel_open";
 export const LS_LEFT_PANEL_SECTION = "nexor_left_panel_section";
+export const LS_RIGHT_PANEL_WIDTH = "nexor_right_panel_width";
 
 // Layout
 export const LAYOUT = {
-  RAIL_WIDTH: 38,
-  PANEL_WIDTH: 240,
+  TOPBAR_HEIGHT: 36,
+  RAIL_WIDTH: 34,
+  PANEL_WIDTH: 220,
+  PANEL_MIN_WIDTH: 160,
+  PANEL_MAX_WIDTH: 480,
 } as const;
 
 /** @deprecated Use LAYOUT instead */
