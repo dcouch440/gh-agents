@@ -83,7 +83,8 @@ function AppLayout() {
         sx={{
           flexGrow: 1,
           overflow: 'auto',
-          p: 3,
+          px: 2.5,
+          py: 2,
           minWidth: 0,
         }}
       >

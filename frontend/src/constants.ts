@@ -227,8 +227,8 @@ export const LS_LEFT_PANEL_SECTION = "nexor_left_panel_section";
 
 // Layout
 export const LAYOUT = {
-  RAIL_WIDTH: 52,
-  PANEL_WIDTH: 260,
+  RAIL_WIDTH: 48,
+  PANEL_WIDTH: 240,
 } as const;
 
 /** @deprecated Use LAYOUT instead */

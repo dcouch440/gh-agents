@@ -3,8 +3,8 @@
 
 /* Custom scrollbar styling */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -12,10 +12,15 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(128, 128, 128, 0.3);
-  border-radius: 4px;
+  background: rgba(128, 128, 128, 0.2);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(128, 128, 128, 0.5);
+  background: rgba(128, 128, 128, 0.35);
+}
+
+/* Smooth transitions on color-scheme changes */
+*, *::before, *::after {
+  transition: background-color 200ms ease, border-color 200ms ease;
 }

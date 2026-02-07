@@ -3,23 +3,24 @@ import type { Components, Theme } from '@mui/material/styles';
 const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
   const isDark = mode === 'dark';
 
-  const glassBg = isDark ? 'rgba(20, 24, 32, 0.85)' : 'rgba(241, 245, 249, 0.85)';
+  const surfaceBg = isDark ? '#15181e' : '#ffffff';
+  const elevatedBg = isDark ? '#1a1d25' : '#ffffff';
 
   return {
     MuiCssBaseline: {
       styleOverrides: {
         body: {
-          scrollbarColor: isDark ? '#484f58 #141820' : '#c1c8cd #f1f5f9',
+          scrollbarColor: isDark ? '#3a3f4b #111318' : '#c1c8cd #f8f9fb',
           '&::-webkit-scrollbar, & *::-webkit-scrollbar': {
-            width: 8,
-            height: 8,
+            width: 6,
+            height: 6,
           },
           '&::-webkit-scrollbar-thumb, & *::-webkit-scrollbar-thumb': {
-            borderRadius: 8,
-            backgroundColor: isDark ? '#484f58' : '#c1c8cd',
+            borderRadius: 6,
+            backgroundColor: isDark ? '#3a3f4b' : '#c1c8cd',
           },
           '&::-webkit-scrollbar-track, & *::-webkit-scrollbar-track': {
-            backgroundColor: isDark ? '#141820' : '#f1f5f9',
+            backgroundColor: 'transparent',
           },
         },
       },
@@ -31,19 +32,19 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
       },
       styleOverrides: {
         root: {
-          borderRadius: 6,
-          padding: '8px 16px',
-          fontSize: '0.875rem',
+          borderRadius: 8,
+          padding: '6px 14px',
+          fontSize: '0.8125rem',
           fontWeight: 500,
           transition: 'all 150ms ease',
         },
         sizeSmall: {
-          padding: '6px 12px',
-          fontSize: '0.8125rem',
+          padding: '4px 10px',
+          fontSize: '0.75rem',
         },
         sizeLarge: {
-          padding: '10px 20px',
-          fontSize: '0.9375rem',
+          padding: '8px 18px',
+          fontSize: '0.875rem',
         },
         contained: {
           boxShadow: 'none',
@@ -60,10 +61,9 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
       styleOverrides: {
         root: ({ theme }) => ({
           backgroundImage: 'none',
-          backgroundColor: glassBg,
-          backdropFilter: 'blur(8px)',
+          backgroundColor: surfaceBg,
           border: `1px solid ${theme.palette.divider}`,
-          borderRadius: 4,
+          borderRadius: 12,
         }),
       },
     },
@@ -74,10 +74,9 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
       styleOverrides: {
         root: ({ theme }) => ({
           backgroundImage: 'none',
-          backgroundColor: glassBg,
-          backdropFilter: 'blur(8px)',
+          backgroundColor: surfaceBg,
           border: `1px solid ${theme.palette.divider}`,
-          borderRadius: 4,
+          borderRadius: 12,
         }),
       },
     },
@@ -85,41 +84,54 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
       styleOverrides: {
         root: ({ theme }) => ({
           borderBottom: `1px solid ${theme.palette.divider}`,
+          padding: '10px 16px',
+          fontSize: '0.8125rem',
         }),
-        head: ({ theme }) => ({
+        head: {
           fontWeight: 600,
-          backgroundColor: isDark
-            ? 'rgba(255, 255, 255, 0.04)'
-            : theme.palette.background.paper,
-        }),
+          fontSize: '0.75rem',
+          textTransform: 'uppercase' as const,
+          letterSpacing: '0.04em',
+          color: isDark ? '#7d8590' : '#64748b',
+          backgroundColor: isDark ? 'rgba(255, 255, 255, 0.02)' : '#f8f9fb',
+        },
       },
     },
     MuiTextField: {
       defaultProps: {
         variant: 'outlined',
+        size: 'small',
       },
     },
     MuiOutlinedInput: {
       styleOverrides: {
         root: ({ theme }) => ({
+          borderRadius: 8,
           '& .MuiOutlinedInput-notchedOutline': {
             borderColor: theme.palette.divider,
           },
           '&:hover .MuiOutlinedInput-notchedOutline': {
             borderColor: isDark
-              ? 'rgba(240, 246, 252, 0.3)'
-              : 'rgba(31, 35, 40, 0.3)',
+              ? 'rgba(240, 246, 252, 0.15)'
+              : 'rgba(15, 23, 42, 0.15)',
           },
           '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
             borderColor: theme.palette.primary.main,
+            borderWidth: 1,
           },
         }),
+        input: {
+          padding: '8px 12px',
+          fontSize: '0.8125rem',
+        },
       },
     },
     MuiChip: {
       styleOverrides: {
         root: {
           borderRadius: 6,
+          height: 24,
+          fontSize: '0.75rem',
         },
       },
     },
@@ -127,10 +139,9 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
       styleOverrides: {
         paper: ({ theme }) => ({
           backgroundImage: 'none',
-          backgroundColor: glassBg,
-          backdropFilter: 'blur(12px)',
+          backgroundColor: isDark ? '#111318' : '#ffffff',
           border: `1px solid ${theme.palette.divider}`,
-          borderRadius: 8,
+          borderRadius: 16,
         }),
       },
     },
@@ -140,7 +151,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
       },
       styleOverrides: {
         root: ({ theme }) => ({
-          backgroundColor: glassBg,
+          backgroundColor: isDark ? '#09090b' : '#f8f9fb',
           backdropFilter: 'blur(12px)',
           borderBottom: `1px solid ${theme.palette.divider}`,
         }),
@@ -149,17 +160,62 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
     MuiDrawer: {
       styleOverrides: {
         paper: ({ theme }) => ({
-          backgroundColor: glassBg,
-          backdropFilter: 'blur(12px)',
+          backgroundColor: isDark ? '#0d0f14' : '#ffffff',
           borderRight: `1px solid ${theme.palette.divider}`,
         }),
       },
     },
     MuiTooltip: {
+      defaultProps: {
+        arrow: true,
+      },
       styleOverrides: {
         tooltip: {
-          fontSize: '0.75rem',
-          borderRadius: 4,
+          fontSize: '0.6875rem',
+          borderRadius: 6,
+          padding: '4px 8px',
+          backgroundColor: isDark ? '#1a1d25' : '#0f172a',
+        },
+        arrow: {
+          color: isDark ? '#1a1d25' : '#0f172a',
+        },
+      },
+    },
+    MuiMenu: {
+      styleOverrides: {
+        paper: ({ theme }) => ({
+          backgroundColor: elevatedBg,
+          border: `1px solid ${theme.palette.divider}`,
+          borderRadius: 10,
+          boxShadow: isDark
+            ? '0 8px 24px rgba(0, 0, 0, 0.4)'
+            : '0 8px 24px rgba(0, 0, 0, 0.08)',
+        }),
+      },
+    },
+    MuiMenuItem: {
+      styleOverrides: {
+        root: {
+          borderRadius: 6,
+          margin: '2px 4px',
+          padding: '6px 12px',
+          fontSize: '0.8125rem',
+        },
+      },
+    },
+    MuiDivider: {
+      styleOverrides: {
+        root: {
+          borderColor: isDark
+            ? 'rgba(240, 246, 252, 0.06)'
+            : 'rgba(15, 23, 42, 0.08)',
+        },
+      },
+    },
+    MuiIconButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
         },
       },
     },
