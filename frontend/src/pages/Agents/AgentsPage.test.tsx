@@ -61,10 +61,20 @@ vi.mock('@/stores/agentStore', () => ({
   },
 }))
 
-let mockUseSessions: () => ReturnType<typeof vi.fn> = vi.fn()
+let mockStoreSessions: unknown[] = []
+let mockSessionsLoading = false
 
-vi.mock('@/hooks/useSessions', () => ({
-  useSessions: () => mockUseSessions() as unknown,
+vi.mock('@/stores/sessionStore', () => ({
+  sessionStore: {
+    store: {
+      getState: () => ({}),
+      subscribe: () => () => {},
+    },
+    selectAll: () => mockStoreSessions,
+    selectLoading: () => mockSessionsLoading,
+    selectError: () => null,
+    fetchAll: vi.fn().mockResolvedValue(undefined),
+  },
 }))
 
 vi.mock('@/api', () => ({
@@ -79,11 +89,8 @@ describe('AgentsPage', () => {
     mockStoreAgents = mockAgents
     mockStoreLoading = false
     mockStoreError = null
-    mockUseSessions = vi.fn(() => ({
-      sessions: [],
-      loading: false,
-      error: null,
-    }))
+    mockStoreSessions = []
+    mockSessionsLoading = false
   })
 
   it('renders page header', () => {
@@ -239,18 +246,14 @@ describe('AgentsPage', () => {
   it('shows Open Workshop when session exists', async () => {
     const user = userEvent.setup()
 
-    mockUseSessions = vi.fn(() => ({
-      sessions: [
-        {
-          id: 'session-1',
-          agent_id: '1',
-          mode_id: 'workshop',
-          title: 'Workshop',
-        },
-      ],
-      loading: false,
-      error: null,
-    }))
+    mockStoreSessions = [
+      {
+        id: 'session-1',
+        agent_id: '1',
+        mode_id: 'workshop',
+        title: 'Workshop',
+      },
+    ]
 
     render(
       <MemoryRouter>

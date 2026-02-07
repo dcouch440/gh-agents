@@ -2,28 +2,31 @@ import { useEffect, useMemo } from 'react'
 import { RouterProvider } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
-import { ReviewQueueProvider, ThemeModeProvider, CommandPaletteProvider } from './contexts'
+import { ThemeModeProvider, CommandPaletteProvider } from './contexts'
 import { useThemeMode } from './hooks/useThemeMode'
 import { router } from './router'
 import { createAppTheme } from './theme'
 import { CommandPalette } from './components/command-palette'
-import { authStore } from './stores'
+import { ReviewQueueNotification } from './components/layout/ReviewQueueNotification'
+import { authStore, reviewQueueStore } from './stores'
 
 function AppInner() {
   const { mode } = useThemeMode()
   const theme = useMemo(() => createAppTheme(mode), [mode])
 
-  useEffect(() => { void authStore.hydrate() }, [])
+  useEffect(() => {
+    void authStore.hydrate()
+    void reviewQueueStore.fetchPending()
+  }, [])
 
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <ReviewQueueProvider>
-        <CommandPaletteProvider>
-          <CommandPalette />
-          <RouterProvider router={router} />
-        </CommandPaletteProvider>
-      </ReviewQueueProvider>
+      <CommandPaletteProvider>
+        <CommandPalette />
+        <RouterProvider router={router} />
+      </CommandPaletteProvider>
+      <ReviewQueueNotification />
     </ThemeProvider>
   )
 }
