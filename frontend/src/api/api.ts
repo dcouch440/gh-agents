@@ -93,7 +93,7 @@ type OutputSchemasResponse = ListResponse<OutputSchema>
 type PromptTemplatesResponse = ListResponse<PromptTemplate>
 type CostsResponse = CostResponse
 type ResultsResponse = ListResponse<Result>
-type WorkflowsResponse = ListResponse<Workflow>
+type WorkflowsResponse = Workflow[]
 type CollectionsResponse = ListResponse<Collection>
 
 // ============================================================================

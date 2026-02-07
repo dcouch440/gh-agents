@@ -3,6 +3,10 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { Outlet, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import TuneOutlined from '@mui/icons-material/TuneOutlined';
+import EditNoteOutlined from '@mui/icons-material/EditNoteOutlined';
+import SmartToyOutlined from '@mui/icons-material/SmartToyOutlined';
+import DataObjectOutlined from '@mui/icons-material/DataObjectOutlined';
+import PlayArrowOutlined from '@mui/icons-material/PlayArrowOutlined';
 import { TopNavBar } from './TopNavBar';
 import { IconRail } from './IconRail';
 import { DetailPanel } from './DetailPanel';
@@ -60,6 +64,7 @@ function AppLayout() {
   const utilNavItems = utilityItems.map(toNavItem);
 
   const showRightRail = location.pathname.startsWith(ROUTES.WORKFLOWS);
+  const isCanvasPage = showRightRail && location.pathname !== ROUTES.WORKFLOWS;
 
   const rightRailItems: RailItem[] = [
     {
@@ -68,6 +73,34 @@ function AppLayout() {
       label: 'Properties',
       isActive: rightOpen && rightSection === 'properties',
       onClick: () => { layoutStore.toggleRightPanel('properties'); },
+    },
+    {
+      key: 'prompts',
+      icon: createElement(EditNoteOutlined, { fontSize: 'small' }),
+      label: 'Prompts',
+      isActive: rightOpen && rightSection === 'prompts',
+      onClick: () => { layoutStore.toggleRightPanel('prompts'); },
+    },
+    {
+      key: 'agents',
+      icon: createElement(SmartToyOutlined, { fontSize: 'small' }),
+      label: 'Agents',
+      isActive: rightOpen && rightSection === 'agents',
+      onClick: () => { layoutStore.toggleRightPanel('agents'); },
+    },
+    {
+      key: 'schemas',
+      icon: createElement(DataObjectOutlined, { fontSize: 'small' }),
+      label: 'Schemas',
+      isActive: rightOpen && rightSection === 'schemas',
+      onClick: () => { layoutStore.toggleRightPanel('schemas'); },
+    },
+    {
+      key: 'execution',
+      icon: createElement(PlayArrowOutlined, { fontSize: 'small' }),
+      label: 'Execution',
+      isActive: rightOpen && rightSection === 'execution',
+      onClick: () => { layoutStore.toggleRightPanel('execution'); },
     },
   ];
 
@@ -85,9 +118,9 @@ function AppLayout() {
           component="main"
           sx={{
             flexGrow: 1,
-            overflow: 'auto',
-            px: 2.5,
-            py: 2,
+            overflow: isCanvasPage ? 'hidden' : 'auto',
+            px: isCanvasPage ? 0 : 2.5,
+            py: isCanvasPage ? 0 : 2,
             minWidth: 0,
             backgroundColor: LAYOUT_COLORS.CAVITY_BG,
           }}
