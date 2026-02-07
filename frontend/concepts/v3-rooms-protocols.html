@@ -1,0 +1,1567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexor — v3: Rooms + Protocols Canvas</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg-canvas: #060a10;
+    --bg-chrome: #12161f;
+    --bg-node: #111318;
+    --bg-node-hover: #151920;
+    --bg-header: #0d1017;
+    --bg-editor: #0a0e14;
+    --bg-panel: #0e1219;
+    --bg-panel-item: rgba(255,255,255,0.02);
+    --bg-panel-item-hover: rgba(255,255,255,0.05);
+    --bg-panel-item-active: rgba(59,130,246,0.08);
+    --bg-room: #0f1520;
+    --bg-room-header: #111a28;
+    --bg-chat-bubble: rgba(255,255,255,0.04);
+    --bg-chat-user: rgba(59,130,246,0.12);
+    --bg-chat-input: rgba(255,255,255,0.03);
+    --border-default: rgba(240, 246, 252, 0.06);
+    --border-hover: rgba(240, 246, 252, 0.12);
+    --border-selected: #3b82f6;
+    --border-room: rgba(59, 130, 246, 0.2);
+    --text-primary: #f0f6fc;
+    --text-secondary: #7d8590;
+    --text-muted: #484f58;
+    --text-faint: #2d333b;
+    --primary: #3b82f6;
+    --secondary: #2dd4bf;
+    --success: #3fb950;
+    --warning: #d29922;
+    --error: #f85149;
+    --room-glow: rgba(59, 130, 246, 0.15);
+    --port-string: #3b82f6;
+    --port-json: #a78bfa;
+    --port-array: #2dd4bf;
+    --port-number: #f59e0b;
+    --port-any: #7d8590;
+    --route-frontend: #3b82f6;
+    --route-backend: #a78bfa;
+    --route-database: #2dd4bf;
+    --route-testing: #f59e0b;
+    --radius-node: 12px;
+    --radius-port: 6px;
+    --radius-badge: 4px;
+    --shadow-node: 0 4px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--border-default);
+    --shadow-node-selected: 0 8px 32px rgba(59, 130, 246, 0.15), 0 0 0 2px var(--border-selected);
+    --shadow-room: 0 8px 40px rgba(59, 130, 246, 0.1), 0 0 0 1px var(--border-room);
+    --shadow-room-active: 0 8px 48px rgba(59, 130, 246, 0.2), 0 0 0 2px var(--primary);
+    --shadow-panel: -4px 0 24px rgba(0, 0, 0, 0.3);
+    --font-sans: 'Inter', -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+
+  body {
+    background: var(--bg-canvas);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    min-height: 100vh;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 24px 24px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .layout {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 120px;
+    padding: 40px;
+    max-width: 1500px;
+    margin: 0 auto;
+  }
+
+  .section-label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-muted); margin-bottom: 32px;
+  }
+  .section-label span {
+    color: var(--text-secondary); font-weight: 400; text-transform: none;
+    letter-spacing: normal; margin-left: 8px;
+  }
+
+  /* ═══════════════════════════════════════════════
+     APP FRAME
+     ═══════════════════════════════════════════════ */
+  .app-frame {
+    background: var(--bg-canvas);
+    border: 1px solid var(--border-hover);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.5);
+  }
+
+  .topnav {
+    height: 34px; background: var(--bg-chrome);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 12px; border-bottom: 1px solid var(--border-default);
+  }
+  .topnav-left, .topnav-right {
+    display: flex; align-items: center; gap: 4px;
+  }
+  .topnav-item {
+    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted); font-size: 14px; border-radius: 4px;
+    cursor: pointer; transition: color 0.15s;
+  }
+  .topnav-item:hover { color: var(--text-secondary); }
+  .topnav-item.active {
+    color: var(--primary);
+    filter: drop-shadow(0 0 4px rgba(59,130,246,0.4));
+    position: relative;
+  }
+  .topnav-item.active::after {
+    content: ''; position: absolute; bottom: -3px; left: 25%; right: 25%;
+    height: 2px; background: linear-gradient(90deg, var(--primary), var(--secondary));
+    border-radius: 1px;
+  }
+
+  .app-body { display: flex; height: 600px; }
+
+  .canvas-area {
+    flex: 1; position: relative; overflow: hidden;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .right-section {
+    display: flex; border-left: 1px solid var(--border-default);
+  }
+
+  .detail-panel {
+    width: 380px; background: var(--bg-panel);
+    display: flex; flex-direction: column;
+    box-shadow: var(--shadow-panel);
+  }
+  .panel-header {
+    min-height: 44px; padding: 8px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .panel-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .panel-close {
+    width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted); font-size: 14px; cursor: pointer; border-radius: 4px;
+    transition: all 0.15s;
+  }
+  .panel-close:hover { color: var(--text-secondary); background: rgba(255,255,255,0.05); }
+  .panel-content { flex: 1; overflow-y: auto; }
+
+  .icon-rail {
+    width: 36px; background: var(--bg-chrome);
+    display: flex; flex-direction: column; align-items: center;
+    padding: 8px 0; gap: 2px;
+    border-left: 1px solid var(--border-default);
+  }
+  .rail-btn {
+    width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted); font-size: 13px; border-radius: 4px;
+    cursor: pointer; transition: color 0.15s; position: relative;
+  }
+  .rail-btn:hover { color: var(--text-secondary); }
+  .rail-btn.active {
+    color: var(--primary);
+    filter: drop-shadow(0 0 4px rgba(59,130,246,0.4));
+  }
+  .rail-btn.active::before {
+    content: ''; position: absolute; left: -1px; top: 4px; bottom: 4px; width: 2px;
+    background: linear-gradient(180deg, var(--primary), var(--secondary));
+    border-radius: 1px;
+  }
+  .rail-spacer { flex: 1; }
+
+  /* ═══════════════════════════════════════════════
+     NODE TYPES
+     ═══════════════════════════════════════════════ */
+
+  /* Base compact node */
+  .node {
+    position: absolute;
+    width: 240px;
+    background: var(--bg-node);
+    border-radius: var(--radius-node);
+    box-shadow: var(--shadow-node);
+    overflow: visible;
+    cursor: grab;
+    transition: box-shadow 0.2s;
+  }
+  .node:hover { box-shadow: var(--shadow-node-selected); }
+  .node.selected { box-shadow: var(--shadow-node-selected); }
+
+  .node-header {
+    padding: 10px 14px 0;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .node-icon {
+    width: 24px; height: 24px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; flex-shrink: 0;
+  }
+  .node-title {
+    font-size: 12px; font-weight: 600; color: var(--text-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .node-subtitle {
+    font-size: 10px; color: var(--text-muted); padding: 2px 14px 0 46px;
+  }
+  .node-body { padding: 8px 14px 10px; }
+
+  /* Protocol badge */
+  .protocol-badge {
+    font-size: 9px; font-weight: 600; letter-spacing: 0.05em;
+    text-transform: uppercase; padding: 2px 6px; border-radius: 3px;
+    line-height: 1;
+  }
+  .protocol-badge.decomp { background: rgba(59,130,246,0.15); color: var(--primary); }
+  .protocol-badge.route { background: rgba(167,139,250,0.15); color: var(--port-json); }
+  .protocol-badge.review { background: rgba(248,81,73,0.15); color: var(--error); }
+  .protocol-badge.transform { background: rgba(45,212,191,0.15); color: var(--secondary); }
+
+  /* Variable pills */
+  .var-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+  .var-pill {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--secondary); background: rgba(45, 212, 191, 0.08);
+    border: 1px solid rgba(45, 212, 191, 0.15);
+    padding: 1px 6px; border-radius: 3px; line-height: 1.4;
+  }
+
+  /* Port slots (right edge of node) */
+  .port-slots {
+    position: absolute; right: -6px; top: 50%;
+    transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .port-slot {
+    width: 12px; height: 12px; border-radius: 50%;
+    border: 2px solid; background: var(--bg-node);
+    position: relative; cursor: pointer;
+  }
+  .port-slot::after {
+    content: attr(data-label);
+    position: absolute; right: 18px; top: 50%; transform: translateY(-50%);
+    font-size: 9px; color: var(--text-muted); white-space: nowrap;
+    font-family: var(--font-mono); opacity: 0; transition: opacity 0.15s;
+    background: var(--bg-node); padding: 1px 4px; border-radius: 2px;
+  }
+  .port-slot:hover::after { opacity: 1; }
+
+  /* Input port (left edge) */
+  .input-port {
+    position: absolute; left: -6px; top: 50%; transform: translateY(-50%);
+    width: 12px; height: 12px; border-radius: 50%;
+    border: 2px solid var(--port-any); background: var(--bg-node);
+  }
+
+  /* Status indicator */
+  .node-status {
+    width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+  }
+  .node-status.idle { background: var(--text-muted); }
+  .node-status.running { background: var(--primary); animation: pulse 2s infinite; }
+  .node-status.complete { background: var(--success); }
+  .node-status.error { background: var(--error); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ═══════════════════════════════════════════════
+     ROOM NODE — Special node type
+     ═══════════════════════════════════════════════ */
+  .room-node {
+    position: absolute;
+    width: 280px;
+    background: var(--bg-room);
+    border-radius: 16px;
+    box-shadow: var(--shadow-room);
+    overflow: visible;
+    cursor: grab;
+    transition: box-shadow 0.2s;
+  }
+  .room-node:hover { box-shadow: var(--shadow-room-active); }
+  .room-node.selected { box-shadow: var(--shadow-room-active); }
+  .room-node.active {
+    box-shadow: var(--shadow-room-active);
+    animation: room-glow 3s ease-in-out infinite;
+  }
+
+  @keyframes room-glow {
+    0%, 100% { box-shadow: 0 8px 48px rgba(59, 130, 246, 0.15), 0 0 0 2px var(--primary); }
+    50% { box-shadow: 0 8px 56px rgba(59, 130, 246, 0.25), 0 0 0 2px rgba(59,130,246,0.8); }
+  }
+
+  .room-header {
+    padding: 12px 16px 8px;
+    display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .room-icon {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: linear-gradient(135deg, rgba(59,130,246,0.2), rgba(45,212,191,0.2));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0;
+  }
+  .room-title-group { flex: 1; min-width: 0; }
+  .room-title {
+    font-size: 12px; font-weight: 600; color: var(--text-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .room-meta {
+    font-size: 10px; color: var(--text-muted); display: flex; gap: 8px; align-items: center;
+  }
+
+  .room-members {
+    padding: 10px 16px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .room-member {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: var(--bg-panel-item);
+  }
+  .room-member.lead {
+    background: var(--bg-panel-item-active);
+    border: 1px solid rgba(59,130,246,0.15);
+  }
+  .member-avatar {
+    width: 20px; height: 20px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 600; flex-shrink: 0;
+  }
+  .member-name {
+    font-size: 11px; color: var(--text-primary); font-weight: 500;
+    flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .member-role {
+    font-size: 9px; color: var(--text-muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 100px;
+  }
+  .lead-badge {
+    font-size: 8px; font-weight: 600; letter-spacing: 0.05em;
+    text-transform: uppercase; color: var(--primary);
+    background: rgba(59,130,246,0.1); padding: 1px 4px; border-radius: 2px;
+  }
+
+  .room-footer {
+    padding: 8px 16px 12px;
+    border-top: 1px solid var(--border-default);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .room-status {
+    font-size: 10px; display: flex; align-items: center; gap: 4px;
+  }
+  .room-turn-count {
+    font-size: 10px; color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+
+  /* Room input ports (left side, multiple) */
+  .room-input-ports {
+    position: absolute; left: -6px; top: 50%;
+    transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+
+  /* ═══════════════════════════════════════════════
+     1:1 ROOM NODE — Compact chat step
+     ═══════════════════════════════════════════════ */
+  .room-node-compact {
+    position: absolute;
+    width: 240px;
+    background: var(--bg-room);
+    border-radius: var(--radius-node);
+    box-shadow: var(--shadow-room);
+    overflow: visible;
+    cursor: grab;
+  }
+  .room-compact-header {
+    padding: 10px 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .room-compact-body {
+    padding: 0 14px 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .chat-preview {
+    font-size: 10px; color: var(--text-muted); font-style: italic;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* ═══════════════════════════════════════════════
+     EDGES (SVG lines between nodes)
+     ═══════════════════════════════════════════════ */
+  .edges-svg {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    overflow: visible;
+  }
+  .edge-line {
+    fill: none; stroke-width: 2;
+    opacity: 0.4;
+  }
+  .edge-line.active {
+    opacity: 0.8;
+    stroke-dasharray: 6 4;
+    animation: dash 1s linear infinite;
+  }
+
+  @keyframes dash {
+    to { stroke-dashoffset: -10; }
+  }
+
+  /* ═══════════════════════════════════════════════
+     SIDEBAR: CHAT VIEW (Execution tab for rooms)
+     ═══════════════════════════════════════════════ */
+  .chat-view { display: flex; flex-direction: column; height: 100%; }
+
+  .chat-messages {
+    flex: 1; overflow-y: auto; padding: 12px 16px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+
+  .chat-msg {
+    display: flex; gap: 8px; align-items: flex-start;
+  }
+  .chat-msg.user-msg { flex-direction: row-reverse; }
+
+  .chat-avatar {
+    width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 600; flex-shrink: 0;
+  }
+
+  .chat-bubble {
+    max-width: 85%; padding: 8px 12px;
+    border-radius: 10px; font-size: 12px; line-height: 1.5;
+  }
+  .chat-bubble.agent {
+    background: var(--bg-chat-bubble);
+    border: 1px solid var(--border-default);
+    color: var(--text-primary);
+  }
+  .chat-bubble.user {
+    background: var(--bg-chat-user);
+    border: 1px solid rgba(59,130,246,0.15);
+    color: var(--text-primary);
+  }
+
+  .chat-sender {
+    font-size: 10px; font-weight: 600; margin-bottom: 2px;
+  }
+  .chat-time {
+    font-size: 9px; color: var(--text-muted); margin-top: 2px;
+  }
+
+  .chat-streaming .chat-bubble {
+    border-color: var(--primary);
+  }
+  .chat-streaming .chat-bubble::after {
+    content: ''; display: inline-block;
+    width: 4px; height: 12px; background: var(--primary);
+    margin-left: 2px; animation: blink 1s step-end infinite;
+    vertical-align: text-bottom;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  .chat-input-area {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border-default);
+  }
+  .chat-input-box {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg-chat-input);
+    border: 1px solid var(--border-default);
+    border-radius: 8px; padding: 8px 12px;
+    transition: border-color 0.15s;
+  }
+  .chat-input-box:focus-within { border-color: var(--primary); }
+  .chat-input-text {
+    flex: 1; font-size: 12px; color: var(--text-secondary);
+  }
+  .chat-send-btn {
+    width: 24px; height: 24px; border-radius: 6px;
+    background: var(--primary); color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; cursor: pointer;
+  }
+  .chat-mention-hint {
+    font-size: 10px; color: var(--text-muted); padding: 4px 0 0;
+  }
+
+  /* ═══════════════════════════════════════════════
+     SIDEBAR: ROOM PROPERTIES
+     ═══════════════════════════════════════════════ */
+  .prop-section {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .prop-section-title {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.05em;
+    text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px;
+  }
+  .prop-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 0;
+  }
+  .prop-label { font-size: 11px; color: var(--text-secondary); }
+  .prop-value {
+    font-size: 11px; color: var(--text-primary); font-family: var(--font-mono);
+    background: rgba(255,255,255,0.04); padding: 2px 8px; border-radius: 4px;
+    border: 1px solid var(--border-default);
+  }
+  .prop-toggle {
+    width: 28px; height: 16px; border-radius: 8px;
+    background: var(--text-muted); position: relative; cursor: pointer;
+    transition: background 0.2s;
+  }
+  .prop-toggle.on { background: var(--primary); }
+  .prop-toggle::after {
+    content: ''; position: absolute; top: 2px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: white; transition: left 0.2s;
+  }
+  .prop-toggle::after { left: 2px; }
+  .prop-toggle.on::after { left: 14px; }
+
+  .member-config-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; border-radius: 8px;
+    background: var(--bg-panel-item);
+    border: 1px solid var(--border-default);
+    margin-bottom: 6px;
+    transition: border-color 0.15s;
+  }
+  .member-config-item:hover { border-color: var(--border-hover); }
+  .member-config-item.lead-config {
+    border-color: rgba(59,130,246,0.2);
+    background: var(--bg-panel-item-active);
+  }
+  .member-config-info { flex: 1; min-width: 0; }
+  .member-config-name { font-size: 11px; font-weight: 500; color: var(--text-primary); }
+  .member-config-role { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+  .member-config-actions {
+    display: flex; gap: 4px;
+  }
+  .member-config-btn {
+    width: 20px; height: 20px; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: var(--text-muted); cursor: pointer;
+    transition: all 0.15s;
+  }
+  .member-config-btn:hover { color: var(--text-secondary); background: rgba(255,255,255,0.05); }
+
+  .add-member-btn {
+    display: flex; align-items: center; justify-content: center;
+    gap: 4px; padding: 6px 12px; border-radius: 6px;
+    border: 1px dashed var(--border-hover);
+    color: var(--text-muted); font-size: 11px;
+    cursor: pointer; transition: all 0.15s;
+    width: 100%;
+  }
+  .add-member-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+  /* ═══════════════════════════════════════════════
+     SIDEBAR: PROTOCOL CONFIGURATION
+     ═══════════════════════════════════════════════ */
+  .protocol-type-selector {
+    display: flex; gap: 4px; margin-bottom: 12px;
+  }
+  .protocol-type-option {
+    flex: 1; padding: 6px 8px; border-radius: 6px;
+    border: 1px solid var(--border-default);
+    text-align: center; font-size: 10px; font-weight: 500;
+    color: var(--text-muted); cursor: pointer;
+    transition: all 0.15s;
+  }
+  .protocol-type-option:hover { border-color: var(--border-hover); color: var(--text-secondary); }
+  .protocol-type-option.selected {
+    border-color: var(--primary); color: var(--primary);
+    background: rgba(59,130,246,0.08);
+  }
+
+  .port-config-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; border-radius: 8px;
+    background: var(--bg-panel-item);
+    border: 1px solid var(--border-default);
+    margin-bottom: 6px;
+    position: relative;
+  }
+  .port-color-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .port-config-info { flex: 1; min-width: 0; }
+  .port-config-name { font-size: 11px; font-weight: 500; color: var(--text-primary); font-family: var(--font-mono); }
+  .port-config-agent { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+
+  .generated-label {
+    font-size: 9px; font-weight: 600; letter-spacing: 0.05em;
+    text-transform: uppercase; color: var(--text-muted);
+    padding: 2px 6px; border-radius: 3px;
+    background: rgba(255,255,255,0.03);
+    margin-bottom: 6px; display: inline-block;
+  }
+
+  .prompt-preview {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--text-secondary); line-height: 1.6;
+    background: var(--bg-editor);
+    border: 1px solid var(--border-default);
+    border-radius: 6px; padding: 10px 12px;
+    max-height: 140px; overflow-y: auto;
+    white-space: pre-wrap;
+  }
+  .prompt-preview .kw { color: var(--syn-keyword); font-weight: 500; }
+  .prompt-preview .str { color: var(--syn-string); }
+  .prompt-preview .var { color: var(--syn-variable); }
+  .prompt-preview .cmt { color: var(--syn-comment); }
+
+  /* ═══════════════════════════════════════════════
+     FOOTNOTES
+     ═══════════════════════════════════════════════ */
+  .footnotes {
+    margin-top: 16px;
+    padding: 20px 24px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+  }
+  .footnotes-title {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.05em;
+    text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px;
+  }
+  .footnote {
+    display: flex; gap: 8px; margin-bottom: 8px;
+    font-size: 11px; line-height: 1.6; color: var(--text-secondary);
+  }
+  .footnote-num {
+    font-size: 9px; font-weight: 700; color: var(--primary);
+    background: rgba(59,130,246,0.1); min-width: 18px; height: 18px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 4px; flex-shrink: 0; margin-top: 1px;
+  }
+  .footnote strong { color: var(--text-primary); font-weight: 600; }
+  .footnote code {
+    font-family: var(--font-mono); font-size: 10px;
+    background: rgba(255,255,255,0.05); padding: 1px 4px;
+    border-radius: 2px; color: var(--secondary);
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SECTION 1: Full Canvas — Decomp → Agents → Room
+     ═══════════════════════════════════════════════════════════════════════ -->
+
+<div>
+  <div class="section-label">Section 1 <span>Full workflow: Decomp protocol → Specialist agents → Review room</span></div>
+  <div class="app-frame">
+    <div class="topnav">
+      <div class="topnav-left">
+        <div class="topnav-item">&#9776;</div>
+        <div class="topnav-item">&#8962;</div>
+        <div class="topnav-item active">&#9878;</div>
+        <div class="topnav-item">&#9881;</div>
+      </div>
+      <div class="topnav-right">
+        <div class="topnav-item">&#9733;</div>
+        <div class="topnav-item">&#9788;</div>
+      </div>
+    </div>
+    <div class="app-body">
+      <div class="canvas-area">
+        <!-- SVG edges -->
+        <svg class="edges-svg" viewBox="0 0 1100 600">
+          <!-- Decomposer → Frontend Agent -->
+          <path class="edge-line" d="M 300 170 C 380 170, 390 120, 470 120" stroke="var(--route-frontend)" />
+          <!-- Decomposer → Backend Agent -->
+          <path class="edge-line" d="M 300 190 C 380 190, 390 230, 470 230" stroke="var(--route-backend)" />
+          <!-- Decomposer → DB Agent -->
+          <path class="edge-line" d="M 300 210 C 380 210, 390 340, 470 340" stroke="var(--route-database)" />
+          <!-- Frontend → Room -->
+          <path class="edge-line" d="M 700 120 C 760 120, 770 210, 800 210" stroke="var(--route-frontend)" />
+          <!-- Backend → Room -->
+          <path class="edge-line" d="M 700 230 C 760 230, 770 240, 800 240" stroke="var(--route-backend)" />
+          <!-- DB → Room -->
+          <path class="edge-line" d="M 700 340 C 760 340, 770 270, 800 270" stroke="var(--route-database)" />
+        </svg>
+
+        <!-- Decomposer Node (protocol: decomp) -->
+        <div class="node selected" style="left: 60px; top: 140px;">
+          <div class="node-header">
+            <div class="node-icon" style="background: rgba(167,139,250,0.15); color: var(--port-json);">&#9830;</div>
+            <div class="node-title">Task Decomposer</div>
+            <span class="protocol-badge decomp">decomp</span>
+          </div>
+          <div class="node-subtitle">GPT-4o &middot; Breaks task into subtasks</div>
+          <div class="node-body">
+            <div class="var-pills">
+              <span class="var-pill">{task}</span>
+              <span class="var-pill">{context}</span>
+              <span class="var-pill">{repo}</span>
+            </div>
+          </div>
+          <!-- Input port -->
+          <div class="input-port"></div>
+          <!-- Output port slots (one per protocol port) -->
+          <div class="port-slots">
+            <div class="port-slot" data-label="frontend" style="border-color: var(--route-frontend);"></div>
+            <div class="port-slot" data-label="backend" style="border-color: var(--route-backend);"></div>
+            <div class="port-slot" data-label="database" style="border-color: var(--route-database);"></div>
+          </div>
+        </div>
+
+        <!-- Frontend Agent Node -->
+        <div class="node" style="left: 470px; top: 70px;">
+          <div class="node-header">
+            <div class="node-icon" style="background: rgba(59,130,246,0.15); color: var(--route-frontend);">&#9632;</div>
+            <div class="node-title">Frontend Dev</div>
+            <div class="node-status running"></div>
+          </div>
+          <div class="node-subtitle">Claude Sonnet &middot; React specialist</div>
+          <div class="node-body">
+            <div class="var-pills">
+              <span class="var-pill">{task_input}</span>
+              <span class="var-pill">{codebase}</span>
+            </div>
+          </div>
+          <div class="input-port" style="border-color: var(--route-frontend);"></div>
+        </div>
+
+        <!-- Backend Agent Node -->
+        <div class="node" style="left: 470px; top: 185px;">
+          <div class="node-header">
+            <div class="node-icon" style="background: rgba(167,139,250,0.15); color: var(--route-backend);">&#9632;</div>
+            <div class="node-title">Backend Dev</div>
+            <div class="node-status running"></div>
+          </div>
+          <div class="node-subtitle">Claude Sonnet &middot; Rust/Axum specialist</div>
+          <div class="node-body">
+            <div class="var-pills">
+              <span class="var-pill">{task_input}</span>
+              <span class="var-pill">{api_docs}</span>
+            </div>
+          </div>
+          <div class="input-port" style="border-color: var(--route-backend);"></div>
+        </div>
+
+        <!-- Database Agent Node -->
+        <div class="node" style="left: 470px; top: 300px;">
+          <div class="node-header">
+            <div class="node-icon" style="background: rgba(45,212,191,0.15); color: var(--route-database);">&#9632;</div>
+            <div class="node-title">Database Engineer</div>
+            <div class="node-status idle"></div>
+          </div>
+          <div class="node-subtitle">Claude Sonnet &middot; SQL/migrations</div>
+          <div class="node-body">
+            <div class="var-pills">
+              <span class="var-pill">{task_input}</span>
+              <span class="var-pill">{schema}</span>
+            </div>
+          </div>
+          <div class="input-port" style="border-color: var(--route-database);"></div>
+        </div>
+
+        <!-- Code Review Room -->
+        <div class="room-node active" style="left: 800px; top: 130px;">
+          <div class="room-header">
+            <div class="room-icon">&#128172;</div>
+            <div class="room-title-group">
+              <div class="room-title">Code Review</div>
+              <div class="room-meta">
+                <span>3 members</span>
+                <span>&middot;</span>
+                <span style="color: var(--success);">&#9679; active</span>
+              </div>
+            </div>
+          </div>
+          <div class="room-members">
+            <div class="room-member lead">
+              <div class="member-avatar" style="background: rgba(59,130,246,0.2); color: var(--primary);">SR</div>
+              <div class="member-name">Senior Reviewer</div>
+              <span class="lead-badge">lead</span>
+            </div>
+            <div class="room-member">
+              <div class="member-avatar" style="background: rgba(45,212,191,0.2); color: var(--secondary);">SA</div>
+              <div class="member-name">Security Auditor</div>
+              <span class="member-role">Vuln analysis</span>
+            </div>
+            <div class="room-member">
+              <div class="member-avatar" style="background: rgba(167,139,250,0.2); color: var(--port-json);">TA</div>
+              <div class="member-name">Test Architect</div>
+              <span class="member-role">Coverage review</span>
+            </div>
+          </div>
+          <div class="room-footer">
+            <div class="room-status">
+              <div class="node-status running"></div>
+              <span style="color: var(--primary);">Turn 3 of 10</span>
+            </div>
+            <div class="room-turn-count">&#128488; 12 messages</div>
+          </div>
+          <!-- Multiple input ports -->
+          <div class="room-input-ports">
+            <div class="port-slot" data-label="frontend" style="border-color: var(--route-frontend);"></div>
+            <div class="port-slot" data-label="backend" style="border-color: var(--route-backend);"></div>
+            <div class="port-slot" data-label="database" style="border-color: var(--route-database);"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right: Properties panel (decomp node selected) -->
+      <div class="right-section">
+        <div class="detail-panel">
+          <div class="panel-header">
+            <div class="panel-title">Properties</div>
+            <div class="panel-close">&times;</div>
+          </div>
+          <div class="panel-content">
+            <!-- Protocol Type -->
+            <div class="prop-section">
+              <div class="prop-section-title">Protocol</div>
+              <div class="protocol-type-selector">
+                <div class="protocol-type-option selected">Decomp</div>
+                <div class="protocol-type-option">Route</div>
+                <div class="protocol-type-option">Review</div>
+                <div class="protocol-type-option">Transform</div>
+              </div>
+            </div>
+
+            <!-- Port Configuration -->
+            <div class="prop-section">
+              <div class="prop-section-title">Ports</div>
+              <div class="port-config-item">
+                <div class="port-color-dot" style="background: var(--route-frontend);"></div>
+                <div class="port-config-info">
+                  <div class="port-config-name">frontend</div>
+                  <div class="port-config-agent">&#8594; Frontend Dev</div>
+                </div>
+                <div class="member-config-btn">&#9998;</div>
+              </div>
+              <div class="port-config-item">
+                <div class="port-color-dot" style="background: var(--route-backend);"></div>
+                <div class="port-config-info">
+                  <div class="port-config-name">backend</div>
+                  <div class="port-config-agent">&#8594; Backend Dev</div>
+                </div>
+                <div class="member-config-btn">&#9998;</div>
+              </div>
+              <div class="port-config-item">
+                <div class="port-color-dot" style="background: var(--route-database);"></div>
+                <div class="port-config-info">
+                  <div class="port-config-name">database</div>
+                  <div class="port-config-agent">&#8594; Database Engineer</div>
+                </div>
+                <div class="member-config-btn">&#9998;</div>
+              </div>
+              <div class="add-member-btn">+ Add Port</div>
+            </div>
+
+            <!-- Generated Prompt Preview -->
+            <div class="prop-section">
+              <div class="prop-section-title">Auto-generated Prompt</div>
+              <div class="generated-label">&#9889; Generated by protocol</div>
+              <div class="prompt-preview"><span class="kw">## Task Decomposition Protocol</span>
+
+Decompose the task and assign subtasks to
+the available agents. You <span class="str">may assign
+multiple tasks to the same agent</span>.
+
+<span class="kw">### Available Agents</span>
+
+<span class="var">- Port: "frontend"</span> (Frontend Dev)
+  React, TypeScript, MUI specialist
+  <span class="cmt">Tools: file_read, file_write, git</span>
+
+<span class="var">- Port: "backend"</span> (Backend Dev)
+  Rust, Axum, PostgreSQL specialist
+  <span class="cmt">Tools: file_read, file_write, cargo</span>
+
+<span class="var">- Port: "database"</span> (Database Engineer)
+  SQL, migrations, schema design
+  <span class="cmt">Tools: psql, file_write</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-rail">
+          <div class="rail-btn active" title="Properties">&#9881;</div>
+          <div class="rail-btn" title="Prompts">&#9998;</div>
+          <div class="rail-btn" title="Agents">&#9733;</div>
+          <div class="rail-btn" title="Schemas">&#123;&#125;</div>
+          <div class="rail-btn" title="Execution">&#9654;</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footnotes">
+    <div class="footnotes-title">Notes</div>
+    <div class="footnote">
+      <div class="footnote-num">1</div>
+      <div><strong>Decomp protocol generates everything.</strong> The user picks "Decomp", configures ports (agent slots), and the system auto-generates: the output schema (array of <code>{port, content}</code>), the prompt injection (telling the LLM about available agents + their tools), downstream steps, edges, and port wiring. No manual edge-drawing needed.</div>
+    </div>
+    <div class="footnote">
+      <div class="footnote-num">2</div>
+      <div><strong>Multi-assignment is supported.</strong> The LLM can assign multiple tasks to the same port (e.g. two tasks to "frontend"). Each downstream step executes as <code>for_each</code> over its assigned items. The prompt explicitly tells the LLM this is allowed.</div>
+    </div>
+    <div class="footnote">
+      <div class="footnote-num">3</div>
+      <div><strong>Port slots show routing.</strong> Colored dots on the right edge of the decomposer node represent output ports. Each maps to a downstream agent. Edges inherit the port color for visual traceability.</div>
+    </div>
+    <div class="footnote">
+      <div class="footnote-num">4</div>
+      <div><strong>Room node is the fan-in point.</strong> All specialist agents' outputs feed into the Code Review room. The room has multiple input ports (left side) matching the upstream agent colors. The room processes these inputs through multi-agent conversation.</div>
+    </div>
+    <div class="footnote">
+      <div class="footnote-num">5</div>
+      <div><strong>The generated prompt includes tools.</strong> Each agent listing in the auto-generated prompt shows the agent's available tools and capabilities, so the orchestrator can make informed routing decisions.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SECTION 2: Room Selected — Live Chat in Execution Sidebar
+     ═══════════════════════════════════════════════════════════════════════ -->
+
+<div>
+  <div class="section-label">Section 2 <span>Room node selected — Execution sidebar shows live chat with streaming</span></div>
+  <div class="app-frame">
+    <div class="topnav">
+      <div class="topnav-left">
+        <div class="topnav-item">&#9776;</div>
+        <div class="topnav-item">&#8962;</div>
+        <div class="topnav-item active">&#9878;</div>
+        <div class="topnav-item">&#9881;</div>
+      </div>
+      <div class="topnav-right">
+        <div class="topnav-item">&#9733;</div>
+        <div class="topnav-item">&#9788;</div>
+      </div>
+    </div>
+    <div class="app-body">
+      <div class="canvas-area">
+        <!-- Simplified canvas — room node highlighted -->
+        <svg class="edges-svg" viewBox="0 0 1100 600">
+          <path class="edge-line active" d="M 350 200 C 430 200, 440 260, 480 260" stroke="var(--route-frontend)" />
+          <path class="edge-line active" d="M 350 300 C 430 300, 440 290, 480 290" stroke="var(--route-backend)" />
+        </svg>
+
+        <!-- Upstream agents (dimmed) -->
+        <div class="node" style="left: 120px; top: 155px; opacity: 0.5;">
+          <div class="node-header">
+            <div class="node-icon" style="background: rgba(59,130,246,0.15); color: var(--route-frontend);">&#9632;</div>
+            <div class="node-title">Frontend Dev</div>
+            <div class="node-status complete"></div>
+          </div>
+          <div class="node-body">
+            <div class="var-pills"><span class="var-pill">{task_input}</span></div>
+          </div>
+        </div>
+
+        <div class="node" style="left: 120px; top: 260px; opacity: 0.5;">
+          <div class="node-header">
+            <div class="node-icon" style="background: rgba(167,139,250,0.15); color: var(--route-backend);">&#9632;</div>
+            <div class="node-title">Backend Dev</div>
+            <div class="node-status complete"></div>
+          </div>
+          <div class="node-body">
+            <div class="var-pills"><span class="var-pill">{task_input}</span></div>
+          </div>
+        </div>
+
+        <!-- Room node (selected, active) -->
+        <div class="room-node active selected" style="left: 480px; top: 150px;">
+          <div class="room-header">
+            <div class="room-icon">&#128172;</div>
+            <div class="room-title-group">
+              <div class="room-title">Code Review</div>
+              <div class="room-meta">
+                <span>3 members</span>
+                <span>&middot;</span>
+                <span style="color: var(--success);">&#9679; Turn 3</span>
+              </div>
+            </div>
+          </div>
+          <div class="room-members">
+            <div class="room-member lead">
+              <div class="member-avatar" style="background: rgba(59,130,246,0.2); color: var(--primary);">SR</div>
+              <div class="member-name">Senior Reviewer</div>
+              <span class="lead-badge">lead</span>
+            </div>
+            <div class="room-member">
+              <div class="member-avatar" style="background: rgba(45,212,191,0.2); color: var(--secondary);">SA</div>
+              <div class="member-name">Security Auditor</div>
+            </div>
+          </div>
+          <div class="room-footer">
+            <div class="room-status">
+              <div class="node-status running"></div>
+              <span style="color: var(--primary);">Streaming...</span>
+            </div>
+            <div class="room-turn-count">&#128488; 8 msgs</div>
+          </div>
+          <div class="room-input-ports">
+            <div class="port-slot" style="border-color: var(--route-frontend);"></div>
+            <div class="port-slot" style="border-color: var(--route-backend);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Execution panel (chat view) -->
+      <div class="right-section">
+        <div class="detail-panel">
+          <div class="panel-header">
+            <div class="panel-title">Execution &mdash; Code Review</div>
+            <div class="panel-close">&times;</div>
+          </div>
+          <div class="panel-content">
+            <div class="chat-view">
+              <div class="chat-messages">
+
+                <!-- System message: room started -->
+                <div style="text-align: center; padding: 8px 0;">
+                  <span style="font-size: 10px; color: var(--text-muted); background: rgba(255,255,255,0.03); padding: 3px 10px; border-radius: 10px;">
+                    Session started &middot; 3 agents &middot; Turn 1
+                  </span>
+                </div>
+
+                <!-- Turn 1: User message -->
+                <div class="chat-msg user-msg">
+                  <div class="chat-avatar" style="background: rgba(59,130,246,0.2); color: var(--primary);">You</div>
+                  <div class="chat-bubble user">
+                    <div style="font-size: 11px; line-height: 1.5;">Review the frontend and backend changes. Focus on API contract mismatches and security issues.</div>
+                    <div class="chat-time">2m ago</div>
+                  </div>
+                </div>
+
+                <!-- Turn 1: Senior Reviewer speaks -->
+                <div class="chat-msg">
+                  <div class="chat-avatar" style="background: rgba(59,130,246,0.2); color: var(--primary);">SR</div>
+                  <div>
+                    <div class="chat-sender" style="color: var(--primary);">Senior Reviewer</div>
+                    <div class="chat-bubble agent">
+                      <div style="font-size: 11px; line-height: 1.5;">I've reviewed both changesets. The frontend is calling <code style="font-size: 10px; background: rgba(255,255,255,0.08); padding: 1px 3px; border-radius: 2px;">PATCH /api/workflows/:id</code> but the backend handler expects <code style="font-size: 10px; background: rgba(255,255,255,0.08); padding: 1px 3px; border-radius: 2px;">PUT</code>. This needs alignment. @SecurityAuditor — can you check the auth middleware on this endpoint?</div>
+                      <div class="chat-time">1m ago</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Turn 2: Security Auditor speaks -->
+                <div class="chat-msg">
+                  <div class="chat-avatar" style="background: rgba(45,212,191,0.2); color: var(--secondary);">SA</div>
+                  <div>
+                    <div class="chat-sender" style="color: var(--secondary);">Security Auditor</div>
+                    <div class="chat-bubble agent">
+                      <div style="font-size: 11px; line-height: 1.5;">Good catch. The auth middleware is applied at the router level, so the endpoint is protected. However, the ownership check only validates <code style="font-size: 10px; background: rgba(255,255,255,0.08); padding: 1px 3px; border-radius: 2px;">user_id</code> — no team/org scoping. If you add multi-tenancy later, this is an IDOR risk.</div>
+                      <div class="chat-time">45s ago</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Turn 3: Streaming response -->
+                <div class="chat-msg chat-streaming">
+                  <div class="chat-avatar" style="background: rgba(59,130,246,0.2); color: var(--primary);">SR</div>
+                  <div>
+                    <div class="chat-sender" style="color: var(--primary);">Senior Reviewer</div>
+                    <div class="chat-bubble agent">
+                      <div style="font-size: 11px; line-height: 1.5;">Agreed on the IDOR concern. For the immediate fix I'd recommend: 1) align the HTTP method to PATCH, 2) add a TODO for org-scoping</div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- Chat input -->
+              <div class="chat-input-area">
+                <div class="chat-input-box">
+                  <div class="chat-input-text">Message the room...</div>
+                  <div class="chat-send-btn">&#10148;</div>
+                </div>
+                <div class="chat-mention-hint">Use @agent_name to direct your message</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-rail">
+          <div class="rail-btn" title="Properties">&#9881;</div>
+          <div class="rail-btn" title="Prompts">&#9998;</div>
+          <div class="rail-btn" title="Agents">&#9733;</div>
+          <div class="rail-btn" title="Schemas">&#123;&#125;</div>
+          <div class="rail-btn active" title="Execution">&#9654;</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footnotes">
+    <div class="footnotes-title">Notes</div>
+    <div class="footnote">
+      <div class="footnote-num">1</div>
+      <div><strong>Selecting a room node opens the Execution sidebar.</strong> The sidebar automatically switches to the Execution tab and shows the live chat interface. Messages stream in real-time via WebSocket events (<code>speaker_start</code>, <code>speaker_token</code>, <code>speaker_end</code>).</div>
+    </div>
+    <div class="footnote">
+      <div class="footnote-num">2</div>
+      <div><strong>You can chat with agents mid-execution.</strong> The input box at the bottom lets you send messages into the room while the workflow is running. Use <code>@agent_name</code> to direct messages to specific agents. The gatekeeper (if enabled) decides which agents respond.</div>
+    </div>
+    <div class="footnote">
+      <div class="footnote-num">3</div>
+      <div><strong>The room node pulses when active.</strong> A subtle glow animation on the room node indicates an active session. The turn counter and message count update in real-time. Upstream agent nodes are dimmed (completed) to show the workflow has progressed past them.</div>
+    </div>
+    <div class="footnote">
+      <div class="footnote-num">4</div>
+      <div><strong>Room outputs flow downstream.</strong> When the room session closes (manually or at max turns), each agent's last response + structured outputs become the room step's output. This data flows to the next step in the workflow via normal edge/port resolution.</div>
+    </div>
+    <div class="footnote">
+      <div class="footnote-num">5</div>
+      <div><strong>The lead agent is the "responsible" agent.</strong> Marked with a blue "lead" badge. The lead agent's output is used as the primary structured output for the room step. Other agents contribute advisory outputs. The gatekeeper ensures the lead always speaks.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SECTION 3: Room Properties — Configuration sidebar
+     ═══════════════════════════════════════════════════════════════════════ -->
+
+<div>
+  <div class="section-label">Section 3 <span>Room node selected — Properties sidebar shows room configuration</span></div>
+  <div class="app-frame">
+    <div class="topnav">
+      <div class="topnav-left">
+        <div class="topnav-item">&#9776;</div>
+        <div class="topnav-item">&#8962;</div>
+        <div class="topnav-item active">&#9878;</div>
+        <div class="topnav-item">&#9881;</div>
+      </div>
+      <div class="topnav-right">
+        <div class="topnav-item">&#9733;</div>
+        <div class="topnav-item">&#9788;</div>
+      </div>
+    </div>
+    <div class="app-body">
+      <div class="canvas-area">
+        <!-- Room node centered -->
+        <div class="room-node selected" style="left: 200px; top: 150px;">
+          <div class="room-header">
+            <div class="room-icon">&#128172;</div>
+            <div class="room-title-group">
+              <div class="room-title">Code Review</div>
+              <div class="room-meta">
+                <span>3 members</span>
+                <span>&middot;</span>
+                <span style="color: var(--text-muted);">&#9679; idle</span>
+              </div>
+            </div>
+          </div>
+          <div class="room-members">
+            <div class="room-member lead">
+              <div class="member-avatar" style="background: rgba(59,130,246,0.2); color: var(--primary);">SR</div>
+              <div class="member-name">Senior Reviewer</div>
+              <span class="lead-badge">lead</span>
+            </div>
+            <div class="room-member">
+              <div class="member-avatar" style="background: rgba(45,212,191,0.2); color: var(--secondary);">SA</div>
+              <div class="member-name">Security Auditor</div>
+            </div>
+            <div class="room-member">
+              <div class="member-avatar" style="background: rgba(167,139,250,0.2); color: var(--port-json);">TA</div>
+              <div class="member-name">Test Architect</div>
+            </div>
+          </div>
+          <div class="room-footer">
+            <div class="room-status">
+              <div class="node-status idle"></div>
+              <span style="color: var(--text-muted);">Ready</span>
+            </div>
+          </div>
+          <div class="room-input-ports">
+            <div class="port-slot" style="border-color: var(--route-frontend);"></div>
+            <div class="port-slot" style="border-color: var(--route-backend);"></div>
+            <div class="port-slot" style="border-color: var(--route-database);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Properties panel (room config) -->
+      <div class="right-section">
+        <div class="detail-panel">
+          <div class="panel-header">
+            <div class="panel-title">Properties &mdash; Code Review</div>
+            <div class="panel-close">&times;</div>
+          </div>
+          <div class="panel-content">
+            <!-- Room Settings -->
+            <div class="prop-section">
+              <div class="prop-section-title">Room Settings</div>
+              <div class="prop-row">
+                <span class="prop-label">Name</span>
+                <span class="prop-value">Code Review</span>
+              </div>
+              <div class="prop-row">
+                <span class="prop-label">Max Turns</span>
+                <span class="prop-value">10</span>
+              </div>
+              <div class="prop-row">
+                <span class="prop-label">Speakers / Turn</span>
+                <span class="prop-value">4</span>
+              </div>
+              <div class="prop-row">
+                <span class="prop-label">Gatekeeper</span>
+                <div class="prop-toggle on"></div>
+              </div>
+              <div class="prop-row">
+                <span class="prop-label">Gatekeeper Model</span>
+                <span class="prop-value" style="font-size: 10px;">haiku-4</span>
+              </div>
+              <div class="prop-row">
+                <span class="prop-label">Tools Enabled</span>
+                <div class="prop-toggle on"></div>
+              </div>
+            </div>
+
+            <!-- Members -->
+            <div class="prop-section">
+              <div class="prop-section-title">Members</div>
+
+              <div class="member-config-item lead-config">
+                <div class="member-avatar" style="background: rgba(59,130,246,0.2); color: var(--primary);">SR</div>
+                <div class="member-config-info">
+                  <div class="member-config-name">Senior Reviewer</div>
+                  <div class="member-config-role">Lead reviewer, final decision authority</div>
+                </div>
+                <div class="member-config-actions">
+                  <div class="member-config-btn" title="Set as lead" style="color: var(--primary);">&#9733;</div>
+                  <div class="member-config-btn" title="Edit">&#9998;</div>
+                </div>
+              </div>
+
+              <div class="member-config-item">
+                <div class="member-avatar" style="background: rgba(45,212,191,0.2); color: var(--secondary);">SA</div>
+                <div class="member-config-info">
+                  <div class="member-config-name">Security Auditor</div>
+                  <div class="member-config-role">Vulnerability analysis, auth review</div>
+                </div>
+                <div class="member-config-actions">
+                  <div class="member-config-btn" title="Set as lead">&#9734;</div>
+                  <div class="member-config-btn" title="Edit">&#9998;</div>
+                </div>
+              </div>
+
+              <div class="member-config-item">
+                <div class="member-avatar" style="background: rgba(167,139,250,0.2); color: var(--port-json);">TA</div>
+                <div class="member-config-info">
+                  <div class="member-config-name">Test Architect</div>
+                  <div class="member-config-role">Test coverage, quality gates</div>
+                </div>
+                <div class="member-config-actions">
+                  <div class="member-config-btn" title="Set as lead">&#9734;</div>
+                  <div class="member-config-btn" title="Edit">&#9998;</div>
+                </div>
+              </div>
+
+              <div class="add-member-btn">+ Add Member</div>
+            </div>
+
+            <!-- Output Configuration -->
+            <div class="prop-section">
+              <div class="prop-section-title">Outputs</div>
+              <div class="prop-row">
+                <span class="prop-label">Primary output</span>
+                <span class="prop-value" style="font-size: 10px;">Lead agent</span>
+              </div>
+              <div class="prop-row">
+                <span class="prop-label">Include all outputs</span>
+                <div class="prop-toggle on"></div>
+              </div>
+              <div style="font-size: 10px; color: var(--text-muted); padding-top: 4px; line-height: 1.5;">
+                When the session closes, the lead agent's structured output becomes the step output. All agent outputs are available via <code style="font-size: 10px; background: rgba(255,255,255,0.05); padding: 1px 3px; border-radius: 2px; color: var(--secondary);">structured_outputs</code>.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-rail">
+          <div class="rail-btn active" title="Properties">&#9881;</div>
+          <div class="rail-btn" title="Prompts">&#9998;</div>
+          <div class="rail-btn" title="Agents">&#9733;</div>
+          <div class="rail-btn" title="Schemas">&#123;&#125;</div>
+          <div class="rail-btn" title="Execution">&#9654;</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footnotes">
+    <div class="footnotes-title">Notes</div>
+    <div class="footnote">
+      <div class="footnote-num">1</div>
+      <div><strong>Room configuration maps directly to the backend.</strong> Every field shown here corresponds to an existing API field: <code>max_turns</code>, <code>max_speakers_per_turn</code>, <code>gatekeeper_enabled</code>, <code>gatekeeper_model_id</code>, <code>tools_enabled</code>. No new backend work needed for this view.</div>
+    </div>
+    <div class="footnote">
+      <div class="footnote-num">2</div>
+      <div><strong>Members have role descriptions.</strong> Each member's <code>role_description</code> is injected into the room context so other agents understand each participant's expertise. This is how the gatekeeper decides who should speak for a given topic.</div>
+    </div>
+    <div class="footnote">
+      <div class="footnote-num">3</div>
+      <div><strong>Lead agent designation.</strong> The star icon marks the lead. The lead agent's structured output becomes the primary step output when the room session closes and the workflow continues. This is stored in <code>room_sessions.final_decision</code>.</div>
+    </div>
+    <div class="footnote">
+      <div class="footnote-num">4</div>
+      <div><strong>Output schemas per member.</strong> Each room member can optionally have an <code>output_schema_id</code> and <code>output_name</code>. This means each agent produces typed, validated structured output that downstream steps can consume via port resolution.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SECTION 4: 1:1 Agent Room — Compact chat step
+     ═══════════════════════════════════════════════════════════════════════ -->
+
+<div>
+  <div class="section-label">Section 4 <span>1:1 agent room — Simple chat step for direct agent interaction</span></div>
+  <div class="app-frame">
+    <div class="topnav">
+      <div class="topnav-left">
+        <div class="topnav-item">&#9776;</div>
+        <div class="topnav-item">&#8962;</div>
+        <div class="topnav-item active">&#9878;</div>
+        <div class="topnav-item">&#9881;</div>
+      </div>
+      <div class="topnav-right">
+        <div class="topnav-item">&#9733;</div>
+        <div class="topnav-item">&#9788;</div>
+      </div>
+    </div>
+    <div class="app-body">
+      <div class="canvas-area">
+        <svg class="edges-svg" viewBox="0 0 1100 600">
+          <!-- Transform → 1:1 Room -->
+          <path class="edge-line" d="M 310 270 C 390 270, 400 270, 440 270" stroke="var(--secondary)" />
+          <!-- 1:1 Room → Next Step -->
+          <path class="edge-line" d="M 680 270 C 740 270, 750 270, 790 270" stroke="var(--text-muted)" />
+        </svg>
+
+        <!-- Upstream: Transform step -->
+        <div class="node" style="left: 70px; top: 220px;">
+          <div class="node-header">
+            <div class="node-icon" style="background: rgba(45,212,191,0.15); color: var(--secondary);">&#9830;</div>
+            <div class="node-title">Ticket Designer</div>
+            <span class="protocol-badge transform">transform</span>
+          </div>
+          <div class="node-subtitle">Creates detailed tickets</div>
+          <div class="node-body">
+            <div class="var-pills">
+              <span class="var-pill">{requirements}</span>
+            </div>
+          </div>
+          <div class="input-port"></div>
+        </div>
+
+        <!-- 1:1 Room (compact) -->
+        <div class="room-node-compact selected" style="left: 440px; top: 220px; box-shadow: var(--shadow-room-active);">
+          <div class="room-compact-header">
+            <div class="room-icon" style="width: 24px; height: 24px; border-radius: 6px; font-size: 12px;">&#128172;</div>
+            <div class="room-title" style="font-size: 12px;">Human Review</div>
+            <div class="node-status idle"></div>
+          </div>
+          <div class="room-compact-body">
+            <div class="member-avatar" style="width: 18px; height: 18px; font-size: 8px; background: rgba(59,130,246,0.2); color: var(--primary);">PM</div>
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-size: 10px; color: var(--text-primary); font-weight: 500;">Product Manager</div>
+              <div class="chat-preview">Waiting for review...</div>
+            </div>
+          </div>
+          <div class="input-port" style="border-color: var(--secondary);"></div>
+        </div>
+
+        <!-- Downstream step -->
+        <div class="node" style="left: 790px; top: 220px; opacity: 0.4;">
+          <div class="node-header">
+            <div class="node-icon" style="background: rgba(59,130,246,0.15); color: var(--primary);">&#9632;</div>
+            <div class="node-title">Implementation</div>
+            <div class="node-status idle"></div>
+          </div>
+          <div class="node-subtitle">Executes the approved ticket</div>
+          <div class="node-body">
+            <div class="var-pills">
+              <span class="var-pill">{ticket}</span>
+            </div>
+          </div>
+          <div class="input-port"></div>
+        </div>
+      </div>
+
+      <!-- Right: Execution panel (1:1 chat) -->
+      <div class="right-section">
+        <div class="detail-panel">
+          <div class="panel-header">
+            <div class="panel-title">Execution &mdash; Human Review</div>
+            <div class="panel-close">&times;</div>
+          </div>
+          <div class="panel-content">
+            <div class="chat-view">
+              <div class="chat-messages">
+
+                <div style="text-align: center; padding: 8px 0;">
+                  <span style="font-size: 10px; color: var(--text-muted); background: rgba(255,255,255,0.03); padding: 3px 10px; border-radius: 10px;">
+                    1:1 session with Product Manager
+                  </span>
+                </div>
+
+                <!-- PM introduces the ticket -->
+                <div class="chat-msg">
+                  <div class="chat-avatar" style="background: rgba(59,130,246,0.2); color: var(--primary);">PM</div>
+                  <div>
+                    <div class="chat-sender" style="color: var(--primary);">Product Manager</div>
+                    <div class="chat-bubble agent">
+                      <div style="font-size: 11px; line-height: 1.5;">Here's the ticket I've drafted based on the requirements:<br><br><strong>Title:</strong> Add workflow step ordering<br><strong>Priority:</strong> P1<br><strong>Acceptance:</strong><br>- Steps can be reordered via drag<br>- Order persists to DB<br>- Undo support<br><br>Should I adjust anything?</div>
+                      <div class="chat-time">30s ago</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- User response -->
+                <div class="chat-msg user-msg">
+                  <div class="chat-avatar" style="background: rgba(59,130,246,0.2); color: var(--primary);">You</div>
+                  <div class="chat-bubble user">
+                    <div style="font-size: 11px; line-height: 1.5;">Add keyboard shortcuts for reordering (Cmd+Up/Down). Otherwise looks good.</div>
+                    <div class="chat-time">Just now</div>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- Chat input + close button -->
+              <div class="chat-input-area">
+                <div class="chat-input-box">
+                  <div class="chat-input-text">Reply to Product Manager...</div>
+                  <div class="chat-send-btn">&#10148;</div>
+                </div>
+                <div style="display: flex; justify-content: flex-end; padding-top: 8px;">
+                  <div style="font-size: 10px; color: var(--success); cursor: pointer; padding: 4px 10px; border: 1px solid rgba(63,185,80,0.3); border-radius: 6px; transition: all 0.15s;">
+                    &#10003; Approve &amp; Continue
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-rail">
+          <div class="rail-btn" title="Properties">&#9881;</div>
+          <div class="rail-btn" title="Prompts">&#9998;</div>
+          <div class="rail-btn" title="Agents">&#9733;</div>
+          <div class="rail-btn" title="Schemas">&#123;&#125;</div>
+          <div class="rail-btn active" title="Execution">&#9654;</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footnotes">
+    <div class="footnotes-title">Notes</div>
+    <div class="footnote">
+      <div class="footnote-num">1</div>
+      <div><strong>1:1 rooms are compact nodes.</strong> A room with a single agent uses a smaller node design — just the agent avatar, name, and a chat preview. No member list needed. Same room backend, simpler visual treatment.</div>
+    </div>
+    <div class="footnote">
+      <div class="footnote-num">2</div>
+      <div><strong>Human-in-the-loop pattern.</strong> The "Approve & Continue" button closes the room session, which triggers DAG resume. The agent's last response + any structured output becomes the step output that flows to the next step. This is how you gate workflow progression on human approval.</div>
+    </div>
+    <div class="footnote">
+      <div class="footnote-num">3</div>
+      <div><strong>1:1 rooms can also be fully autonomous.</strong> If the room's <code>max_turns</code> is set to 1 and no user interaction is needed, the agent speaks once and the session auto-closes. This makes it a simple "agent processes input and you can optionally intervene" step.</div>
+    </div>
+    <div class="footnote">
+      <div class="footnote-num">4</div>
+      <div><strong>Transform → Room → Implementation.</strong> This shows a common pattern: an AI designs something (transform protocol), a human reviews it (1:1 room), then another AI implements it. The room is the quality gate between design and execution — no review protocol needed.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SECTION 5: Architecture Overview — How it all connects
+     ═══════════════════════════════════════════════════════════════════════ -->
+
+<div>
+  <div class="section-label">Section 5 <span>Architecture summary — Protocols, rooms, and the DAG executor</span></div>
+  <div class="footnotes" style="margin-top: 0;">
+    <div class="footnotes-title">System Architecture</div>
+
+    <div class="footnote">
+      <div class="footnote-num">A</div>
+      <div><strong>Three node types on the canvas.</strong> Every workflow is composed of: (1) <strong>Protocol nodes</strong> — steps with an attached protocol that auto-generates wiring (decomp, route, review, transform). (2) <strong>Room nodes</strong> — multi-agent or 1:1 collaboration points with live chat. (3) <strong>Agent step nodes</strong> — simple single-agent execution steps. Protocol nodes auto-generate agent step nodes as downstream children.</div>
+    </div>
+
+    <div class="footnote">
+      <div class="footnote-num">B</div>
+      <div><strong>Protocols are compile-time, rooms are runtime.</strong> Protocols expand into workflow primitives (steps, edges, ports, schemas) at design time — they're a UI convenience that generates the DAG structure. Rooms execute at runtime — they're a step type where agents collaborate in real-time. The DAG executor treats both as regular steps.</div>
+    </div>
+
+    <div class="footnote">
+      <div class="footnote-num">C</div>
+      <div><strong>Data flow: Protocol → Agents → Room → Next.</strong> A decomp protocol fans out to N agent steps. Each agent step produces output. Those outputs feed into a room's input ports. The room's agents discuss the combined inputs. When the session closes, the room's outputs flow to the next step. The DAG executor handles all of this through normal step/edge/port resolution.</div>
+    </div>
+
+    <div class="footnote">
+      <div class="footnote-num">D</div>
+      <div><strong>Rooms pause the DAG.</strong> When the DAG executor reaches a room step, it creates a room session (linked via <code>run_id</code>) and pauses. The session runs independently — agents take turns, users can chat in. When the session closes (<code>POST /room-sessions/:id/close</code>), it triggers DAG resume with the room's outputs. This is the built-in human-in-the-loop mechanism.</div>
+    </div>
+
+    <div class="footnote">
+      <div class="footnote-num">E</div>
+      <div><strong>The sidebar is context-sensitive.</strong> The 5 sidebar tabs (Properties, Prompts, Agents, Schemas, Execution) show different content based on what's selected: protocol config for protocol nodes, room settings for room nodes, agent details for agent steps. The Execution tab becomes a live chat when a room node is selected.</div>
+    </div>
+
+    <div class="footnote">
+      <div class="footnote-num">F</div>
+      <div><strong>No manual edge drawing for protocols.</strong> When the user attaches a protocol to a step and configures its ports, the system auto-generates all downstream steps and edges. The canvas shows the expanded result. The user can still manually add edges for non-protocol connections (e.g. agent step → room node).</div>
+    </div>
+
+    <div class="footnote">
+      <div class="footnote-num">G</div>
+      <div><strong>Multi-assignment decomp → for_each.</strong> When the orchestrator LLM assigns multiple tasks to the same port (e.g. two tasks to "frontend"), the downstream agent step automatically executes as <code>for_each</code>. This uses the existing label-based routing system: <code>routing_mode="label"</code>, <code>routing_field="port"</code>, with <code>StepRoutingRuleRow</code> entries mapping port names to agent IDs.</div>
+    </div>
+
+    <div class="footnote">
+      <div class="footnote-num">H</div>
+      <div><strong>Room structured outputs are typed.</strong> Each room member can have an <code>output_schema_id</code>. Their responses are validated against this schema and stored in <code>room_execution_outputs</code>. Downstream steps can consume specific agent outputs via port resolution using <code>output_name</code> as the key.</div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /layout -->
+</body>
+</html>
