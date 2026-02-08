@@ -44,9 +44,9 @@ impl ExecutionFilter for SchemaValidationRetryFilter {
                 } else {
                     Ok(ResponseAction::Retry {
                         feedback: format!(
-                            "Your response parsed as JSON but is a primitive value ({}).\n\
-                             You MUST respond with a JSON object or array matching the schema.\n\
-                             Output ONLY the raw JSON, no other text.",
+                            "Your response parsed as JSON but is a primitive value ({}). \
+                             The downstream system expects a JSON object or array matching the schema. \
+                             Respond with the JSON object only.",
                             json_type_name(&value),
                         ),
                     })
@@ -58,8 +58,9 @@ impl ExecutionFilter for SchemaValidationRetryFilter {
                     if serde_json::from_str::<serde_json::Value>(&json_str).is_ok() {
                         return Ok(ResponseAction::Retry {
                             feedback: "Your JSON content is valid but you wrapped it in markdown \
-                                       code fences (```json ... ```). Output ONLY the raw JSON \
-                                       object with no surrounding text or markdown."
+                                       code fences. The parser reads your entire response as raw JSON, \
+                                       so the fence markers cause a parse error. Respond with the \
+                                       JSON object only."
                                 .to_string(),
                         });
                     }
@@ -67,9 +68,10 @@ impl ExecutionFilter for SchemaValidationRetryFilter {
 
                 Ok(ResponseAction::Retry {
                     feedback: format!(
-                        "Your response is not valid JSON. Parse error: {}\n\n\
-                         You MUST respond with ONLY a valid JSON object matching the schema.\n\
-                         No markdown, no explanation, no code fences. Just the raw JSON.",
+                        "The downstream parser failed to parse your response. Error: {}\n\n\
+                         Respond with a valid JSON object matching the schema. \
+                         The parser reads your entire response as raw JSON, \
+                         so it must contain only the JSON object.",
                         parse_err,
                     ),
                 })

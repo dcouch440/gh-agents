@@ -1669,7 +1669,7 @@ async fn run_step_via_engine(
         let os_repo = &state.repos().output_schemas;
         if let Ok(Some(schema)) = os_repo.get_output_schema(schema_id).await {
             system_prompt.push_str(&format!(
-                "\n\n<schema>\nYou MUST respond with valid JSON matching this schema:\n```json\n{}\n```\nRespond ONLY with the JSON object, no other text.\n</schema>",
+                "\n\n<schema>\nYour response is parsed directly by a JSON parser. Respond with a valid JSON object matching this schema:\n```json\n{}\n```\n</schema>",
                 serde_json::to_string_pretty(&schema.schema).unwrap_or_default()
             ));
             output_schema_value = Some(schema.schema.clone());
@@ -3194,7 +3194,7 @@ async fn run_cavernous_subtask(
         let os_repo = &state.repos().output_schemas;
         if let Ok(Some(schema)) = os_repo.get_output_schema(schema_id).await {
             system_prompt.push_str(&format!(
-                "\n\n<schema>\nYou MUST respond with valid JSON matching this schema:\n```json\n{}\n```\nRespond ONLY with the JSON object, no other text.\n</schema>",
+                "\n\n<schema>\nYour response is parsed directly by a JSON parser. Respond with a valid JSON object matching this schema:\n```json\n{}\n```\n</schema>",
                 serde_json::to_string_pretty(&schema.schema).unwrap_or_default()
             ));
         }
