@@ -85,7 +85,7 @@ vi.mock('@/components/primitives', async () => {
 const renderStep = (props: Partial<Parameters<typeof StepProperties>[0]> = {}) =>
   render(
     <ThemeProvider theme={theme}>
-      <StepProperties step={mockWorkflowStep} {...props} />
+      <StepProperties step={mockWorkflowStep} edges={[]} steps={[]} {...props} />
     </ThemeProvider>,
   )
 
@@ -112,7 +112,7 @@ describe('StepProperties', () => {
     })
   })
 
-  describe('general section', () => {
+  describe('header', () => {
     it('renders step name in an editable input', () => {
       renderStep()
       const input = screen.getByDisplayValue('First Step')
@@ -236,6 +236,36 @@ describe('StepProperties', () => {
       const step = { ...mockWorkflowStep, position_x: 100, position_y: 200 }
       renderStep({ step })
       expect(screen.queryByText('Position')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('incoming connections', () => {
+    it('renders upstream steps in Incoming section when edges point to this step', () => {
+      const step2 = { ...mockWorkflowStep, id: 'step-002', name: 'Upstream' }
+      const edge = { id: 'e1', from_step_id: 'step-002', to_step_id: 'step-001' }
+      renderStep({ steps: [mockWorkflowStep, step2], edges: [edge] })
+      expect(screen.getByText('Incoming')).toBeInTheDocument()
+      expect(screen.getByText('Upstream')).toBeInTheDocument()
+    })
+
+    it('hides Incoming section when no upstream edges', () => {
+      renderStep()
+      expect(screen.queryByText('Incoming')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('outgoing connections', () => {
+    it('renders downstream steps in Outgoing section when edges leave this step', () => {
+      const step2 = { ...mockWorkflowStep, id: 'step-002', name: 'Downstream' }
+      const edge = { id: 'e1', from_step_id: 'step-001', to_step_id: 'step-002' }
+      renderStep({ steps: [mockWorkflowStep, step2], edges: [edge] })
+      expect(screen.getByText('Outgoing')).toBeInTheDocument()
+      expect(screen.getByText('Downstream')).toBeInTheDocument()
+    })
+
+    it('hides Outgoing section when no downstream edges', () => {
+      renderStep()
+      expect(screen.queryByText('Outgoing')).not.toBeInTheDocument()
     })
   })
 
