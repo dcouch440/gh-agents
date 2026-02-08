@@ -47,9 +47,21 @@ function WorkflowCanvasInner() {
     canvasStore.store,
     canvasStore.selectMinimapVisible,
   );
+  // Subscribe to tools state to trigger re-renders when tools are loaded
+  const toolsByAgent = useStore(
+    agentStore.store,
+    (s) => s.toolsByAgent,
+  );
   const {onNodeDragStop} = usePositionPersist();
   const [contextMenu, setContextMenu] = useState<MenuPosition>(null);
   const initialFitDone = useRef(false);
+
+  // Fetch tools for all agents when they load
+  useEffect(() => {
+    agents.forEach((agent) => {
+      void agentStore.fetchTools(agent.id);
+    });
+  }, [agents]);
 
   // Build lookup maps for node data enrichment (split to avoid rebuilding stable maps on step changes)
   const agentLookup = useMemo(
@@ -68,16 +80,14 @@ function WorkflowCanvasInner() {
   const toolsByAgentLookup = useMemo(() => {
     const map = new Map<string, string[]>();
     agents.forEach((agent) => {
-      const tools = agentStore.selectTools(agent.id)(
-        agentStore.store.getState(),
-      );
+      const tools = toolsByAgent[agent.id] ?? [];
       map.set(
         agent.id,
         tools.map((t) => t.name),
       );
     });
     return map;
-  }, [agents]);
+  }, [agents, toolsByAgent]);
   const lookups = useMemo(
     (): StepNodeLookups => ({
       agents: agentLookup,
