@@ -1,0 +1,2 @@
+# Ideas
+- Create a protocol called documenter. Attach the document to protocol agent, have the agent save the document, then we can reference it anywhere on the board with a wire. THis would be handy for multi document saving. An example might be /
