@@ -37,7 +37,8 @@ const {
 
 vi.mock('@/stores', () => ({
   useStore: vi.fn((_store: unknown, selector: unknown) => {
-    if (typeof selector === 'function') return (selector as (s: unknown) => unknown)(null)
+    const mockState = { toolsByAgent: {} }
+    if (typeof selector === 'function') return (selector as (s: unknown) => unknown)(mockState)
     return undefined
   }),
   workflowStore: {
@@ -66,6 +67,7 @@ vi.mock('@/stores', () => ({
   agentStore: {
     store: 'agent',
     selectAll: () => [],
+    fetchTools: vi.fn(),
   },
   outputSchemaStore: {
     store: 'outputSchema',
