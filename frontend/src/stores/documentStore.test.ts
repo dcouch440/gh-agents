@@ -31,7 +31,7 @@ beforeEach(() => {
 
 describe('documentStore', () => {
   it('fetchAll populates store', async () => {
-    mockList.mockResolvedValue({ items: [doc1, doc2] })
+    mockList.mockResolvedValue([doc1, doc2])
 
     await documentStore.fetchAll()
 
@@ -50,7 +50,7 @@ describe('documentStore', () => {
   })
 
   it('remove deletes item from store', async () => {
-    mockList.mockResolvedValue({ items: [doc1, doc2] })
+    mockList.mockResolvedValue([doc1, doc2])
     mockDelete.mockResolvedValue(undefined)
 
     await documentStore.fetchAll()
@@ -61,10 +61,10 @@ describe('documentStore', () => {
   })
 
   it('search replaces store items with results', async () => {
-    mockList.mockResolvedValue({ items: [doc1, doc2] })
+    mockList.mockResolvedValue([doc1, doc2])
     await documentStore.fetchAll()
 
-    mockSearch.mockResolvedValue({ items: [doc2] })
+    mockSearch.mockResolvedValue([doc2])
     await documentStore.search('notes')
 
     const state = documentStore.store.getState()

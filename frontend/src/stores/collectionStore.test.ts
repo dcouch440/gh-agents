@@ -77,7 +77,7 @@ beforeEach(() => {
 describe('collectionStore', () => {
   describe('CRUD', () => {
     it('fetchAll populates collections', async () => {
-      mockList.mockResolvedValue({ items: [collection1, collection2] })
+      mockList.mockResolvedValue([collection1, collection2])
 
       await collectionStore.fetchAll()
 
@@ -116,7 +116,7 @@ describe('collectionStore', () => {
     })
 
     it('update replaces collection in store', async () => {
-      mockList.mockResolvedValue({ items: [collection1] })
+      mockList.mockResolvedValue([collection1])
       await collectionStore.fetchAll()
 
       const updated = { ...collection1, name: 'Updated' }
@@ -129,7 +129,7 @@ describe('collectionStore', () => {
     })
 
     it('remove optimistically deletes then calls API', async () => {
-      mockList.mockResolvedValue({ items: [collection1, collection2] })
+      mockList.mockResolvedValue([collection1, collection2])
       mockDelete.mockResolvedValue(undefined)
       await collectionStore.fetchAll()
 
@@ -140,7 +140,7 @@ describe('collectionStore', () => {
     })
 
     it('remove rolls back on API failure', async () => {
-      mockList.mockResolvedValue({ items: [collection1] })
+      mockList.mockResolvedValue([collection1])
       await collectionStore.fetchAll()
 
       mockDelete.mockRejectedValue(new Error('Server error'))

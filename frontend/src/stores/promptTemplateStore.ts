@@ -15,7 +15,6 @@ const promptTemplateStore = createResourceStore<PromptTemplate, CreatePromptTemp
     update: (id, body) => api.promptTemplates.update(id, body),
     delete: (id) => api.promptTemplates.delete(id),
   },
-  unwrapList: (res) => (res as { items: PromptTemplate[] }).items,
 })
 
 export { promptTemplateStore }

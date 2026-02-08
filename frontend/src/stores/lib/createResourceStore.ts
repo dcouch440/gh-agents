@@ -20,7 +20,7 @@ type ResourceStoreConfig<T extends Identifiable, TCreate, TUpdate> = {
     update: (id: string, body: TUpdate) => Promise<T>
     delete: (id: string) => Promise<void>
   }
-  unwrapList: (response: unknown) => T[]
+  unwrapList?: (response: unknown) => T[]
   staleThresholdMs?: number
 }
 
@@ -60,7 +60,8 @@ type ResourceStore<T extends Identifiable, TCreate, TUpdate> = {
 const createResourceStore = <T extends Identifiable, TCreate = Partial<T>, TUpdate = Partial<T>>(
   config: ResourceStoreConfig<T, TCreate, TUpdate>,
 ): ResourceStore<T, TCreate, TUpdate> => {
-  const { api, unwrapList, name } = config
+  const { api, name } = config
+  const unwrapList = config.unwrapList ?? ((res: unknown) => res as T[])
   const staleThresholdMs = config.staleThresholdMs ?? 60_000
 
   const store = createStore<ResourceState<T>>(() => ({

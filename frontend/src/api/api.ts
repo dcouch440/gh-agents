@@ -77,24 +77,19 @@ import type {
 // Response Types (for endpoints that return lists)
 // ============================================================================
 
-type ListResponse<T> = {
-  items: T[]
-  total?: number
-}
-
-type TasksResponse = ListResponse<Task>
-type ToolsResponse = ListResponse<Tool>
-type DocumentsResponse = ListResponse<DocumentListItem>
-type SessionsResponse = ListResponse<Session>
+type TasksResponse = Task[]
+type ToolsResponse = Tool[]
+type DocumentsResponse = DocumentListItem[]
+type SessionsResponse = Session[]
 type ChatResponse = { message_id: string; response: string }
 type SessionHistoryResponse = ChatMessage[]
 type ExecutionMessagesResponse = { messages: ExecutionMessage[] }
-type OutputSchemasResponse = ListResponse<OutputSchema>
-type PromptTemplatesResponse = ListResponse<PromptTemplate>
+type OutputSchemasResponse = OutputSchema[]
+type PromptTemplatesResponse = PromptTemplate[]
 type CostsResponse = CostResponse
-type ResultsResponse = ListResponse<Result>
+type ResultsResponse = Result[]
 type WorkflowsResponse = Workflow[]
-type CollectionsResponse = ListResponse<Collection>
+type CollectionsResponse = Collection[]
 
 // ============================================================================
 // Typed Endpoints

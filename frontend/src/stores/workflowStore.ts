@@ -47,6 +47,32 @@ const store = createStore<WorkflowState>(() => ({
   lastFetched: null,
 }))
 
+// ── Adjacency map (module-scoped cache) ─────────────────────────────────────
+
+type AdjacencyEntry = { readonly from: readonly string[]; readonly to: readonly string[] }
+type AdjacencyMap = Readonly<Record<string, AdjacencyEntry>>
+
+const EMPTY_ENTRY: AdjacencyEntry = { from: [], to: [] }
+
+let _prevEdges: NormalizedMap<WorkflowStepEdge> | null = null
+let _cachedAdj: AdjacencyMap = {}
+
+const buildAdjacencyMap = (edges: NormalizedMap<WorkflowStepEdge>): AdjacencyMap => {
+  if (edges === _prevEdges) return _cachedAdj
+
+  const acc: Record<string, { from: string[]; to: string[] }> = {}
+  const ensure = (id: string) => (acc[id] ??= { from: [], to: [] })
+
+  for (const edge of edges.byId.values()) {
+    ensure(edge.from_step_id).to.push(edge.to_step_id)
+    ensure(edge.to_step_id).from.push(edge.from_step_id)
+  }
+
+  _prevEdges = edges
+  _cachedAdj = acc
+  return acc
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const extractError = (e: unknown): string =>
@@ -86,6 +112,15 @@ const selectDirty = (s: WorkflowState): boolean => s.dirty
 
 const selectIsStale = (s: WorkflowState): boolean =>
   s.lastFetched === null || Date.now() - s.lastFetched > STALE_THRESHOLD_MS
+
+const selectAdjacency = (s: WorkflowState): AdjacencyMap =>
+  buildAdjacencyMap(s.edges)
+
+const selectUpstream = (stepId: string) => (s: WorkflowState): readonly string[] =>
+  buildAdjacencyMap(s.edges)[stepId]?.from ?? EMPTY_ENTRY.from
+
+const selectDownstream = (stepId: string) => (s: WorkflowState): readonly string[] =>
+  buildAdjacencyMap(s.edges)[stepId]?.to ?? EMPTY_ENTRY.to
 
 // ── Workflow CRUD ────────────────────────────────────────────────────────────
 
@@ -279,6 +314,9 @@ export const workflowStore = {
   selectError,
   selectDirty,
   selectIsStale,
+  selectAdjacency,
+  selectUpstream,
+  selectDownstream,
   fetchAll,
   fetchIfStale,
   fetchOne,
@@ -299,4 +337,4 @@ export const workflowStore = {
   upsert,
 }
 
-export type { WorkflowState }
+export type { WorkflowState, AdjacencyMap, AdjacencyEntry }

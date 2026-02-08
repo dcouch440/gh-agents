@@ -29,7 +29,7 @@ beforeEach(() => {
 
 describe('outputSchemaStore', () => {
   it('fetchAll populates store', async () => {
-    mockList.mockResolvedValue({ items: [schema1, schema2] })
+    mockList.mockResolvedValue([schema1, schema2])
 
     await outputSchemaStore.fetchAll()
 
@@ -48,7 +48,7 @@ describe('outputSchemaStore', () => {
   })
 
   it('remove deletes item from store', async () => {
-    mockList.mockResolvedValue({ items: [schema1, schema2] })
+    mockList.mockResolvedValue([schema1, schema2])
     mockDelete.mockResolvedValue(undefined)
 
     await outputSchemaStore.fetchAll()

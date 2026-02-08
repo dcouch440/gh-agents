@@ -15,7 +15,6 @@ const toolStore = createResourceStore<Tool, CreateToolRequest, UpdateToolRequest
     update: (id, body) => api.tools.update(id, body),
     delete: (id) => api.tools.delete(id),
   },
-  unwrapList: (res) => (res as { items: Tool[] }).items,
 })
 
 export { toolStore }

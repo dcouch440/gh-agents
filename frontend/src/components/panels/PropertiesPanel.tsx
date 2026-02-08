@@ -9,7 +9,6 @@ function PropertiesPanel() {
   const selectedStepIds = useStore(canvasStore.store, canvasStore.selectSelectedStepIds)
   const selectedEdgeIds = useStore(canvasStore.store, canvasStore.selectSelectedEdgeIds)
   const steps = useStore(workflowStore.store, workflowStore.selectSteps)
-  const edges = useStore(workflowStore.store, workflowStore.selectEdges)
 
   const firstStepId = useMemo(
     () => selectedStepIds.values().next().value ?? null,
@@ -24,7 +23,7 @@ function PropertiesPanel() {
   const selectedEdge = useStore(workflowStore.store, workflowStore.selectEdgeById(firstEdgeId))
 
   if (selectedStep) {
-    return <StepProperties step={selectedStep} edges={edges} steps={steps} />
+    return <StepProperties step={selectedStep} steps={steps} />
   }
 
   if (selectedEdge) {

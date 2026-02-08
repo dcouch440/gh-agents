@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildVariableCompletions } from './variableContext'
-import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
+import type { WorkflowStep } from '@/types/workflow'
 import type { OutputSchema } from '@/types/schema'
 
 const baseStep: WorkflowStep = {
@@ -46,19 +46,12 @@ const schema: OutputSchema = {
   created_at: '2025-01-01T00:00:00Z',
 }
 
-const edge: WorkflowStepEdge = {
-  id: 'edge-001',
-  from_step_id: 'step-001',
-  to_step_id: 'step-002',
-}
-
 describe('buildVariableCompletions', () => {
   it('builds completions from upstream step with output schema', () => {
     const schemas = new Map([['schema-001', schema]])
     const completions = buildVariableCompletions(
-      'step-002',
+      ['step-001'],
       new Map([['step-001', baseStep], ['step-002', currentStep]]),
-      [edge],
       schemas,
     )
 
@@ -88,9 +81,8 @@ describe('buildVariableCompletions', () => {
     const stepNoVar: WorkflowStep = { ...baseStep, output_variable_name: null }
     const schemas = new Map([['schema-001', schema]])
     const completions = buildVariableCompletions(
-      'step-002',
+      ['step-001'],
       new Map([['step-001', stepNoVar], ['step-002', currentStep]]),
-      [edge],
       schemas,
     )
 
@@ -101,9 +93,8 @@ describe('buildVariableCompletions', () => {
     const stepNoSchema: WorkflowStep = { ...baseStep, output_schema_id: null }
     const schemas = new Map([['schema-001', schema]])
     const completions = buildVariableCompletions(
-      'step-002',
+      ['step-001'],
       new Map([['step-001', stepNoSchema], ['step-002', currentStep]]),
-      [edge],
       schemas,
     )
 
@@ -113,21 +104,19 @@ describe('buildVariableCompletions', () => {
   it('skips steps whose schema is not in the map', () => {
     const emptySchemas: ReadonlyMap<string, OutputSchema> = new Map()
     const completions = buildVariableCompletions(
-      'step-002',
+      ['step-001'],
       new Map([['step-001', baseStep], ['step-002', currentStep]]),
-      [edge],
       emptySchemas,
     )
 
     expect(completions).toEqual([])
   })
 
-  it('returns empty array when no upstream steps', () => {
+  it('returns empty array when no upstream IDs', () => {
     const schemas = new Map([['schema-001', schema]])
     const completions = buildVariableCompletions(
-      'step-002',
-      new Map([['step-001', baseStep], ['step-002', currentStep]]),
       [],
+      new Map([['step-001', baseStep], ['step-002', currentStep]]),
       schemas,
     )
 
@@ -153,16 +142,11 @@ describe('buildVariableCompletions', () => {
       },
       created_at: '2025-01-01T00:00:00Z',
     }
-    const edges: WorkflowStepEdge[] = [
-      edge,
-      { id: 'edge-002', from_step_id: 'step-003', to_step_id: 'step-002' },
-    ]
     const schemas = new Map([['schema-001', schema], ['schema-002', schema2]])
 
     const completions = buildVariableCompletions(
-      'step-002',
+      ['step-001', 'step-003'],
       new Map([['step-001', baseStep], ['step-002', currentStep], ['step-003', step3]]),
-      edges,
       schemas,
     )
 
@@ -174,9 +158,8 @@ describe('buildVariableCompletions', () => {
     const unnamedStep: WorkflowStep = { ...baseStep, name: null }
     const schemas = new Map([['schema-001', schema]])
     const completions = buildVariableCompletions(
-      'step-002',
+      ['step-001'],
       new Map([['step-001', unnamedStep], ['step-002', currentStep]]),
-      [edge],
       schemas,
     )
 

@@ -16,14 +16,13 @@ const resourceStore = createResourceStore<Document, CreateDocumentRequest, Updat
     update: (id, body) => api.documents.update(id, body),
     delete: (id) => api.documents.delete(id),
   },
-  unwrapList: (res) => (res as { items: Document[] }).items,
 })
 
 const search = async (query: string): Promise<void> => {
   resourceStore.store.setState({ loading: true, error: null })
   try {
     const response = await api.documents.search(query)
-    const items = (response as { items: Document[] }).items
+    const items = response as Document[]
     resourceStore.store.setState({ items: nmFromArray(items), loading: false })
   } catch (e) {
     resourceStore.store.setState({
