@@ -1129,7 +1129,7 @@ impl DocumentRepo for PgRepo {
 impl OutputSchemaRepo for PgRepo {
     async fn create_output_schema(
         &self,
-        user_id: Uuid,
+        user_id: Option<Uuid>,
         name: String,
         schema: serde_json::Value,
     ) -> Result<OutputSchemaRow> {
@@ -1157,7 +1157,7 @@ impl OutputSchemaRepo for PgRepo {
     }
 
     async fn list_output_schemas(&self, user_id: Uuid) -> Result<Vec<OutputSchemaRow>> {
-        let rows: Vec<OutputSchemaRow> = sqlx::query_as("SELECT id, user_id, name, schema, created_at, version FROM output_schemas WHERE user_id = $1 ORDER BY created_at DESC")
+        let rows: Vec<OutputSchemaRow> = sqlx::query_as("SELECT id, user_id, name, schema, created_at, version FROM output_schemas WHERE user_id = $1 OR user_id IS NULL ORDER BY created_at DESC")
             .bind(user_id)
             .fetch_all(&self.pool)
             .await?;
@@ -1201,7 +1201,7 @@ impl OutputSchemaRepo for PgRepo {
 impl PromptTemplateRepo for PgRepo {
     async fn create_prompt_template(
         &self,
-        user_id: Uuid,
+        user_id: Option<Uuid>,
         name: String,
         content: String,
     ) -> Result<PromptTemplateRow> {
@@ -1229,7 +1229,7 @@ impl PromptTemplateRepo for PgRepo {
     }
 
     async fn list_prompt_templates(&self, user_id: Uuid) -> Result<Vec<PromptTemplateRow>> {
-        let rows: Vec<PromptTemplateRow> = sqlx::query_as("SELECT id, user_id, name, content, created_at, version FROM prompt_templates WHERE user_id = $1 ORDER BY created_at DESC")
+        let rows: Vec<PromptTemplateRow> = sqlx::query_as("SELECT id, user_id, name, content, created_at, version FROM prompt_templates WHERE user_id = $1 OR user_id IS NULL ORDER BY created_at DESC")
             .bind(user_id)
             .fetch_all(&self.pool)
             .await?;

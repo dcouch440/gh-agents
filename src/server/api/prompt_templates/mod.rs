@@ -98,7 +98,7 @@ pub async fn create_prompt_template(
     }
     let repo = &state.repos().prompt_templates;
     let row = repo
-        .create_prompt_template(auth.user_id.0, request.name, request.content)
+        .create_prompt_template(Some(auth.user_id.0), request.name, request.content)
         .await?;
     Ok((
         StatusCode::CREATED,
@@ -133,8 +133,10 @@ pub async fn get_prompt_template(
         .get_prompt_template(id)
         .await?
         .ok_or(AppError::not_found("Prompt template"))?;
-    if row.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Prompt template"));
+    if let Some(owner) = row.user_id {
+        if owner != auth.user_id.0 {
+            return Err(AppError::not_found("Prompt template"));
+        }
     }
     Ok(Json(PromptTemplateResponse {
         id: row.id,
@@ -168,8 +170,14 @@ pub async fn update_prompt_template(
         .get_prompt_template(id)
         .await?
         .ok_or(AppError::not_found("Prompt template"))?;
-    if existing.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Prompt template"));
+    match existing.user_id {
+        Some(owner) if owner != auth.user_id.0 => {
+            return Err(AppError::not_found("Prompt template"));
+        }
+        None => {
+            return Err(AppError::not_found("Prompt template"));
+        }
+        _ => {}
     }
     if let Some(ref name) = request.name {
         if name.trim().is_empty() || name.len() > MAX_TITLE_LENGTH {
@@ -218,8 +226,14 @@ pub async fn delete_prompt_template(
         .get_prompt_template(id)
         .await?
         .ok_or(AppError::not_found("Prompt template"))?;
-    if existing.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Prompt template"));
+    match existing.user_id {
+        Some(owner) if owner != auth.user_id.0 => {
+            return Err(AppError::not_found("Prompt template"));
+        }
+        None => {
+            return Err(AppError::not_found("Prompt template"));
+        }
+        _ => {}
     }
     repo.delete_prompt_template(id).await?;
     Ok(StatusCode::NO_CONTENT)

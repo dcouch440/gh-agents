@@ -89,7 +89,7 @@ pub struct DocumentSearchResult {
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct OutputSchemaRow {
     pub id: Uuid,
-    pub user_id: Uuid,
+    pub user_id: Option<Uuid>,
     pub name: String,
     pub schema: serde_json::Value,
     pub created_at: DateTime<Utc>,
@@ -100,7 +100,7 @@ pub struct OutputSchemaRow {
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct PromptTemplateRow {
     pub id: Uuid,
-    pub user_id: Uuid,
+    pub user_id: Option<Uuid>,
     pub name: String,
     pub content: String,
     pub created_at: DateTime<Utc>,
