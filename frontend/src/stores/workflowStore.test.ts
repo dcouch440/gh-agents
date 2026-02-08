@@ -131,6 +131,7 @@ const resetStore = () => {
     steps: createNormalizedMap(),
     edges: createNormalizedMap(),
     documentsByStep: {},
+    dirtyStepIds: new Set<string>(),
     loading: false,
     error: null,
     dirty: false,
@@ -250,13 +251,13 @@ describe('workflowStore', () => {
       await workflowStore.loadWorkflow('wf1')
     })
 
-    it('createStep appends and sets dirty', async () => {
+    it('createStep appends without setting dirty (already persisted)', async () => {
       mockCreateStep.mockResolvedValue(step2)
       const result = await workflowStore.createStep({ name: 'Step 2', execution_mode: 'single' })
 
       expect(result).toEqual(step2)
       expect(nmSize(workflowStore.store.getState().steps)).toBe(2)
-      expect(workflowStore.store.getState().dirty).toBe(true)
+      expect(workflowStore.store.getState().dirty).toBe(false)
     })
 
     it('updateStep replaces in list', async () => {
@@ -281,12 +282,145 @@ describe('workflowStore', () => {
       expect(nmSize(s.steps)).toBe(1)
       expect(nmGet(s.steps, 's2')).toBeDefined()
       expect(nmSize(s.edges)).toBe(0) // edge connected to s1 removed
+      expect(s.dirty).toBe(false) // already persisted, no unsaved edits
+    })
+
+    it('deleteStep cleans up dirtyStepIds and clears dirty when set becomes empty', async () => {
+      mockDeleteStep.mockResolvedValue(undefined)
+
+      // Make a local edit to s1, then delete it
+      workflowStore.patchStepLocal('s1', { name: 'Unsaved' })
+      expect(workflowStore.store.getState().dirty).toBe(true)
+      expect(workflowStore.store.getState().dirtyStepIds.has('s1')).toBe(true)
+
+      await workflowStore.deleteStep('s1')
+
+      const s = workflowStore.store.getState()
+      expect(s.dirtyStepIds.has('s1')).toBe(false)
+      expect(s.dirty).toBe(false)
+    })
+
+    it('deleteStep preserves dirty when other steps are still dirty', async () => {
+      workflowStore.store.setState((s) => ({
+        steps: nmSet(s.steps, step2.id, step2),
+      }))
+      mockDeleteStep.mockResolvedValue(undefined)
+
+      // Make local edits to both steps, then delete s1
+      workflowStore.patchStepLocal('s1', { name: 'Unsaved 1' })
+      workflowStore.patchStepLocal('s2', { name: 'Unsaved 2' })
+
+      await workflowStore.deleteStep('s1')
+
+      const s = workflowStore.store.getState()
+      expect(s.dirtyStepIds.has('s1')).toBe(false)
+      expect(s.dirtyStepIds.has('s2')).toBe(true)
+      expect(s.dirty).toBe(true)
     })
 
     it('createStep returns null when no active workflow', async () => {
       workflowStore.clearActive()
       const result = await workflowStore.createStep({ name: 'X', execution_mode: 'single' })
       expect(result).toBeNull()
+    })
+
+    it('patchStepLocal merges partial into existing step', () => {
+      workflowStore.patchStepLocal('s1', { name: 'Patched' })
+      expect(nmGet(workflowStore.store.getState().steps, 's1')?.name).toBe('Patched')
+    })
+
+    it('patchStepLocal sets dirty flag and tracks dirtyStepIds', () => {
+      workflowStore.patchStepLocal('s1', { name: 'Patched' })
+      const s = workflowStore.store.getState()
+      expect(s.dirty).toBe(true)
+      expect(s.dirtyStepIds.has('s1')).toBe(true)
+    })
+
+    it('patchStepLocal is a no-op for nonexistent step', () => {
+      const before = workflowStore.store.getState().steps
+      workflowStore.patchStepLocal('nonexistent', { name: 'X' })
+      expect(workflowStore.store.getState().steps).toBe(before)
+    })
+
+    it('patchStepLocal preserves other fields', () => {
+      workflowStore.patchStepLocal('s1', { name: 'Patched' })
+      const patched = nmGet(workflowStore.store.getState().steps, 's1')
+      expect(patched?.agent_id).toBe('a1')
+      expect(patched?.execution_mode).toBe('single')
+      expect(patched?.position_x).toBe(0)
+    })
+
+    describe('saveAllDirtySteps', () => {
+      it('saves only dirty steps to the API', async () => {
+        const updated = { ...step1, name: 'Saved' }
+        mockUpdateStep.mockResolvedValue(updated)
+
+        workflowStore.patchStepLocal('s1', { name: 'Saved' })
+        await workflowStore.saveAllDirtySteps()
+
+        expect(mockUpdateStep).toHaveBeenCalledOnce()
+        expect(mockUpdateStep).toHaveBeenCalledWith('wf1', 's1', expect.objectContaining({ name: 'Saved' }))
+      })
+
+      it('clears dirtyStepIds and dirty flag after save', async () => {
+        mockUpdateStep.mockResolvedValue({ ...step1, name: 'Saved' })
+
+        workflowStore.patchStepLocal('s1', { name: 'Saved' })
+        await workflowStore.saveAllDirtySteps()
+
+        const s = workflowStore.store.getState()
+        expect(s.dirtyStepIds.size).toBe(0)
+        expect(s.dirty).toBe(false)
+      })
+
+      it('updates store with server response', async () => {
+        const serverStep = { ...step1, name: 'Server Version', version: 2 }
+        mockUpdateStep.mockResolvedValue(serverStep)
+
+        workflowStore.patchStepLocal('s1', { name: 'Local' })
+        await workflowStore.saveAllDirtySteps()
+
+        expect(nmGet(workflowStore.store.getState().steps, 's1')).toEqual(serverStep)
+      })
+
+      it('is a no-op when nothing is dirty', async () => {
+        await workflowStore.saveAllDirtySteps()
+        expect(mockUpdateStep).not.toHaveBeenCalled()
+      })
+
+      it('saves multiple dirty steps in parallel', async () => {
+        workflowStore.store.setState((s) => ({
+          steps: nmSet(s.steps, step2.id, step2),
+        }))
+        mockUpdateStep
+          .mockResolvedValueOnce({ ...step1, name: 'S1' })
+          .mockResolvedValueOnce({ ...step2, name: 'S2' })
+
+        workflowStore.patchStepLocal('s1', { name: 'S1' })
+        workflowStore.patchStepLocal('s2', { name: 'S2' })
+        await workflowStore.saveAllDirtySteps()
+
+        expect(mockUpdateStep).toHaveBeenCalledTimes(2)
+      })
+    })
+
+    describe('revertSteps', () => {
+      it('re-fetches the workflow, discarding local edits', async () => {
+        mockGet.mockResolvedValue(wf1)
+        mockListSteps.mockResolvedValue([step1])
+        mockListEdges.mockResolvedValue([])
+
+        // Make a local edit
+        workflowStore.patchStepLocal('s1', { name: 'Unsaved' })
+        expect(workflowStore.store.getState().dirty).toBe(true)
+
+        await workflowStore.revertSteps()
+
+        const s = workflowStore.store.getState()
+        expect(s.dirty).toBe(false)
+        expect(s.dirtyStepIds.size).toBe(0)
+        expect(nmGet(s.steps, 's1')?.name).toBe('Step 1')
+      })
     })
   })
 
@@ -298,13 +432,13 @@ describe('workflowStore', () => {
       await workflowStore.loadWorkflow('wf1')
     })
 
-    it('addEdge appends', async () => {
+    it('addEdge appends without setting dirty (already persisted)', async () => {
       mockCreateEdge.mockResolvedValue(edge1)
       const result = await workflowStore.addEdge({ from_step_id: 's1', to_step_id: 's2' })
 
       expect(result).toEqual(edge1)
       expect(nmSize(workflowStore.store.getState().edges)).toBe(1)
-      expect(workflowStore.store.getState().dirty).toBe(true)
+      expect(workflowStore.store.getState().dirty).toBe(false)
     })
 
     it('removeEdge filters', async () => {
@@ -374,60 +508,6 @@ describe('workflowStore', () => {
 
     it('selectDirty returns false initially', () => {
       expect(workflowStore.selectDirty(workflowStore.store.getState())).toBe(false)
-    })
-  })
-
-  describe('adjacency selectors', () => {
-    beforeEach(async () => {
-      mockGet.mockResolvedValue(wf1)
-      mockListSteps.mockResolvedValue([step1, step2])
-      mockListEdges.mockResolvedValue([edge1])
-      await workflowStore.loadWorkflow('wf1')
-    })
-
-    it('selectAdjacency builds map from edges', () => {
-      const adj = workflowStore.selectAdjacency(workflowStore.store.getState())
-      expect(adj['s1']).toEqual({ from: [], to: ['s2'] })
-      expect(adj['s2']).toEqual({ from: ['s1'], to: [] })
-    })
-
-    it('selectUpstream returns upstream IDs for a step', () => {
-      const upstream = workflowStore.selectUpstream('s2')(workflowStore.store.getState())
-      expect(upstream).toEqual(['s1'])
-    })
-
-    it('selectDownstream returns downstream IDs for a step', () => {
-      const downstream = workflowStore.selectDownstream('s1')(workflowStore.store.getState())
-      expect(downstream).toEqual(['s2'])
-    })
-
-    it('returns stable empty array for steps with no connections', () => {
-      const a = workflowStore.selectUpstream('s1')(workflowStore.store.getState())
-      const b = workflowStore.selectUpstream('nonexistent')(workflowStore.store.getState())
-      expect(a).toEqual([])
-      expect(b).toEqual([])
-      // Both should be the same EMPTY_ENTRY.from reference
-      expect(b).toBe(workflowStore.selectUpstream('another-missing')(workflowStore.store.getState()))
-    })
-
-    it('returns cached adjacency when edges have not changed', () => {
-      const state = workflowStore.store.getState()
-      const adj1 = workflowStore.selectAdjacency(state)
-      const adj2 = workflowStore.selectAdjacency(state)
-      expect(adj1).toBe(adj2) // Same reference
-    })
-
-    it('rebuilds adjacency after edge mutation', async () => {
-      const adj1 = workflowStore.selectAdjacency(workflowStore.store.getState())
-
-      const edge2: WorkflowStepEdge = { id: 'e2', from_step_id: 's2', to_step_id: 's1' }
-      mockCreateEdge.mockResolvedValue(edge2)
-      await workflowStore.addEdge({ from_step_id: 's2', to_step_id: 's1' })
-
-      const adj2 = workflowStore.selectAdjacency(workflowStore.store.getState())
-      expect(adj2).not.toBe(adj1) // New reference
-      expect(adj2['s1']?.from).toEqual(['s2'])
-      expect(adj2['s1']?.to).toEqual(['s2'])
     })
   })
 

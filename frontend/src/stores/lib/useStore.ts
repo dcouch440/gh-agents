@@ -2,7 +2,7 @@
 // useStore — React Hook with Selector-Based Subscriptions
 // ============================================================================
 
-import { useSyncExternalStore, useCallback, useRef, useEffect } from 'react'
+import { useSyncExternalStore, useCallback, useRef } from 'react'
 import type { StoreApi } from './types'
 
 const useStore = <T, S>(
@@ -10,23 +10,20 @@ const useStore = <T, S>(
   selector: (state: T) => S,
   equalityFn: (a: S, b: S) => boolean = Object.is,
 ): S => {
-  const selectorRef = useRef(selector)
-  const equalityRef = useRef(equalityFn)
   const selectedRef = useRef<S>(selector(store.getState()))
 
-  useEffect(() => {
-    selectorRef.current = selector
-    equalityRef.current = equalityFn
-  })
-
+  // getSnapshot captures selector directly in its closure, so it always uses
+  // the latest selector — fixing stale-selector bugs with dynamic selectors
+  // like selectStepById(id). For static selectors the deps are stable and
+  // getSnapshot identity doesn't change.
   const getSnapshot = useCallback(() => {
-    const next = selectorRef.current(store.getState())
-    if (equalityRef.current(selectedRef.current, next)) {
+    const next = selector(store.getState())
+    if (equalityFn(selectedRef.current, next)) {
       return selectedRef.current
     }
     selectedRef.current = next
     return next
-  }, [store])
+  }, [store, selector, equalityFn])
 
   return useSyncExternalStore(store.subscribe, getSnapshot)
 }

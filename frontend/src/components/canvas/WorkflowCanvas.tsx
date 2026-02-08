@@ -21,6 +21,7 @@ import type { StepNodeLookups } from './mappers'
 import { nodeTypes } from './nodeTypes'
 import { edgeTypes } from './edgeTypes'
 import { usePositionPersist } from './usePositionPersist'
+import { CanvasToolbar } from './CanvasToolbar'
 import { CanvasContextMenu } from './CanvasContextMenu'
 import type { MenuPosition } from './CanvasContextMenu'
 import { CANVAS } from './constants'
@@ -60,14 +61,33 @@ function WorkflowCanvasInner() {
   const rfNodes = useMemo(() => toRFNodes(steps, lookups), [steps, lookups])
   const rfEdges = useMemo(() => toRFEdges(edges), [edges])
 
-  // Push store updates into RF, preserving selection state
+  // Push store updates into RF — only touch data + position, never clobber selection
   useEffect(() => {
     setNodes((current) => {
-      const selMap = new Map(current.map((n) => [n.id, n.selected ?? false]))
-      return rfNodes.map((n) => ({
-        ...n,
-        selected: selMap.get(n.id) ?? false,
-      }))
+      const currentIds = new Set(current.map((n) => n.id))
+      const newIds = new Set(rfNodes.map((n) => n.id))
+
+      const hasStructuralChange =
+        rfNodes.some((n) => !currentIds.has(n.id)) ||
+        current.some((n) => !newIds.has(n.id))
+
+      if (hasStructuralChange) {
+        // Nodes added/removed — full replacement, preserve selection
+        const selMap = new Map(current.map((n) => [n.id, n.selected ?? false]))
+        return rfNodes.map((n) => ({
+          ...n,
+          selected: selMap.get(n.id) ?? false,
+        }))
+      }
+
+      // Data-only change — update data + position, never touch selection
+      const newDataMap = new Map(rfNodes.map((n) => [n.id, n]))
+      return current.map((n) => {
+        const updated = newDataMap.get(n.id)
+        if (!updated) return n
+        if (n.data === updated.data && n.position === updated.position) return n
+        return { ...n, data: updated.data, position: updated.position }
+      })
     })
   }, [rfNodes, setNodes])
 
@@ -218,6 +238,7 @@ function WorkflowCanvasInner() {
           />
         )}
       </ReactFlow>
+      <CanvasToolbar />
       <CanvasContextMenu
         position={contextMenu}
         onClose={() => {

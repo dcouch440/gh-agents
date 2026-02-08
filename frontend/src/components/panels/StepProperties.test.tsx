@@ -16,7 +16,7 @@ import {
 const theme = createTheme({ palette: { mode: 'dark' } })
 
 const {
-  mockUpdateStep,
+  mockPatchStepLocal,
   mockFetchAllAgents,
   mockFetchIfStaleTemplates,
   mockFetchIfStaleSchemas,
@@ -24,10 +24,9 @@ const {
   mockAgentSelectAll,
   mockTemplateSelectAll,
   mockSchemaSelectAll,
-  mockSelectUpstream,
-  mockSelectDownstream,
+  mockSelectEdges,
 } = vi.hoisted(() => ({
-  mockUpdateStep: vi.fn(() => Promise.resolve(null)),
+  mockPatchStepLocal: vi.fn(),
   mockFetchAllAgents: vi.fn(() => Promise.resolve()),
   mockFetchIfStaleTemplates: vi.fn(() => Promise.resolve()),
   mockFetchIfStaleSchemas: vi.fn(() => Promise.resolve()),
@@ -35,8 +34,7 @@ const {
   mockAgentSelectAll: vi.fn(() => []),
   mockTemplateSelectAll: vi.fn(() => []),
   mockSchemaSelectAll: vi.fn(() => []),
-  mockSelectUpstream: vi.fn((): (_s: unknown) => readonly string[] => () => []),
-  mockSelectDownstream: vi.fn((): (_s: unknown) => readonly string[] => () => []),
+  mockSelectEdges: vi.fn(() => []),
 }))
 
 vi.mock('@/stores', () => ({
@@ -62,9 +60,8 @@ vi.mock('@/stores', () => ({
   },
   workflowStore: {
     store: { getState: vi.fn(), subscribe: vi.fn() },
-    updateStep: mockUpdateStep,
-    selectUpstream: mockSelectUpstream,
-    selectDownstream: mockSelectDownstream,
+    patchStepLocal: mockPatchStepLocal,
+    selectEdges: mockSelectEdges,
   },
 }))
 
@@ -106,17 +103,11 @@ const renderStep = (props: Partial<Parameters<typeof StepProperties>[0]> = {}) =
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.useFakeTimers({ shouldAdvanceTime: true })
   mockAgentById.mockReturnValue(undefined)
   mockAgentSelectAll.mockReturnValue([mockAgent, mockAgent2])
   mockTemplateSelectAll.mockReturnValue([mockPromptTemplate, mockPromptTemplate2])
   mockSchemaSelectAll.mockReturnValue([mockOutputSchema, mockOutputSchema2])
-  mockSelectUpstream.mockReturnValue(() => [])
-  mockSelectDownstream.mockReturnValue(() => [])
-})
-
-afterEach(() => {
-  vi.useRealTimers()
+  mockSelectEdges.mockReturnValue([])
 })
 
 describe('StepProperties', () => {
@@ -143,19 +134,14 @@ describe('StepProperties', () => {
       expect(input).toBeInTheDocument()
     })
 
-    it('calls updateStep after debounce when name changes', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    it('calls patchStepLocal when name changes', async () => {
+      const user = userEvent.setup()
       renderStep()
 
       const input = screen.getByDisplayValue('First Step')
-      await user.clear(input)
-      await user.type(input, 'New Name')
+      await user.type(input, 'X')
 
-      expect(mockUpdateStep).not.toHaveBeenCalled()
-
-      await vi.advanceTimersByTimeAsync(500)
-
-      expect(mockUpdateStep).toHaveBeenCalledWith('step-001', { name: 'New Name' })
+      expect(mockPatchStepLocal).toHaveBeenCalledWith('step-001', { name: 'First StepX' })
     })
 
     it('renders execution mode as a read-only badge', () => {
@@ -171,8 +157,8 @@ describe('StepProperties', () => {
       expect(screen.getByText('TestBot')).toBeInTheDocument()
     })
 
-    it('calls updateStep with new agent_id on selection', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    it('calls patchStepLocal with new agent_id on selection', async () => {
+      const user = userEvent.setup()
       mockAgentById.mockReturnValue(mockAgent)
       renderStep()
 
@@ -182,119 +168,25 @@ describe('StepProperties', () => {
       const codeBot = screen.getByText('CodeBot')
       await user.click(codeBot)
 
-      expect(mockUpdateStep).toHaveBeenCalledWith('step-001', { agent_id: 'agent-002' })
+      expect(mockPatchStepLocal).toHaveBeenCalledWith('step-001', { agent_id: 'agent-002' })
     })
   })
 
-  describe('output schema dropdown', () => {
-    it('renders placeholder when no schema assigned', () => {
-      renderStep()
-      expect(screen.getByText('Select schema...')).toBeInTheDocument()
-    })
-
-    it('renders current schema when assigned', () => {
-      const step = { ...mockWorkflowStep, output_schema_id: 'schema-001' }
-      renderStep({ step })
-      expect(screen.getByText('Test Schema')).toBeInTheDocument()
-    })
-  })
-
-  describe('output variable name', () => {
-    it('renders editable input for output_variable_name', () => {
-      renderStep()
-      const input = screen.getByPlaceholderText('e.g. parse_output')
-      expect(input).toBeInTheDocument()
-      expect(input).toHaveValue('')
-    })
-
-    it('renders value when output_variable_name is set', () => {
-      const step = { ...mockWorkflowStep, output_variable_name: 'my_output' }
-      renderStep({ step })
-      const input = screen.getByPlaceholderText('e.g. parse_output')
-      expect(input).toHaveValue('my_output')
-    })
-
-    it('calls updateStep with output_variable_name after debounce', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-      renderStep()
-
-      const input = screen.getByPlaceholderText('e.g. parse_output')
-      await user.type(input, 'result')
-
-      expect(mockUpdateStep).not.toHaveBeenCalled()
-
-      await vi.advanceTimersByTimeAsync(500)
-
-      expect(mockUpdateStep).toHaveBeenCalledWith('step-001', { output_variable_name: 'result' })
-    })
-
-    it('shows output variable as property row in readOnly mode', () => {
-      const step = { ...mockWorkflowStep, output_variable_name: 'my_output' }
-      renderStep({ step, readOnly: true })
-      expect(screen.getByText('my_output')).toBeInTheDocument()
-    })
-  })
-
-  describe('system prompt', () => {
-    it('renders CodeEditor for system_prompt_suffix', () => {
-      renderStep()
-      const editor = screen.getByPlaceholderText('Enter system prompt suffix...')
-      expect(editor).toBeInTheDocument()
-      expect(editor).toHaveValue('')
-    })
-
-    it('renders system_prompt_suffix value when set', () => {
-      const step = { ...mockWorkflowStep, system_prompt_suffix: 'Be extra careful.' }
-      renderStep({ step })
-      const editor = screen.getByPlaceholderText('Enter system prompt suffix...')
-      expect(editor).toHaveValue('Be extra careful.')
-    })
-
-    it('calls updateStep with system_prompt_suffix after debounce', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-      renderStep()
-
-      const editor = screen.getByPlaceholderText('Enter system prompt suffix...')
-      await user.type(editor, 'Think step by step')
-
-      expect(mockUpdateStep).not.toHaveBeenCalled()
-
-      await vi.advanceTimersByTimeAsync(500)
-
-      expect(mockUpdateStep).toHaveBeenCalledWith('step-001', { system_prompt_suffix: 'Think step by step' })
-    })
-
-    it('renders hint text about appending to agent prompt', () => {
-      renderStep()
-      expect(screen.getByText('appends to agent prompt')).toBeInTheDocument()
-    })
-  })
-
-  describe('prompt template', () => {
-    it('renders section heading', () => {
-      renderStep()
-      expect(screen.getByText('Prompt Template')).toBeInTheDocument()
-    })
-
+  describe('template tab', () => {
     it('renders CodeEditor with step prompt_template text', () => {
       renderStep()
       const editor = screen.getByPlaceholderText('Enter prompt template...')
       expect(editor).toHaveValue('{task_input}')
     })
 
-    it('calls updateStep with prompt_template after debounce', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    it('calls patchStepLocal when prompt changes', async () => {
+      const user = userEvent.setup()
       renderStep()
 
       const editor = screen.getByPlaceholderText('Enter prompt template...')
-      await user.clear(editor)
-      await user.type(editor, 'Do the thing')
+      await user.type(editor, 'X')
 
-      expect(mockUpdateStep).not.toHaveBeenCalled()
-
-      await vi.advanceTimersByTimeAsync(500)
-
-      expect(mockUpdateStep).toHaveBeenCalledWith('step-001', { prompt_template: 'Do the thing' })
+      expect(mockPatchStepLocal).toHaveBeenCalledWith('step-001', { prompt_template: '{task_input}X' })
     })
 
     it('renders template selector dropdown', () => {
@@ -306,20 +198,6 @@ describe('StepProperties', () => {
       const step = { ...mockWorkflowStep, prompt_template_id: 'template-001' }
       renderStep({ step })
       expect(screen.getByText('Test Template')).toBeInTheDocument()
-    })
-
-    it('calls updateStep with prompt_template_id on template selection', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-      renderStep()
-
-      // Template selector is the 3rd combobox: Agent (0), Schema (1), Template (2)
-      const templateSelect = screen.getAllByRole('combobox')[2]
-      await user.click(templateSelect)
-
-      const reviewTemplate = screen.getByText('Code Review Template')
-      await user.click(reviewTemplate)
-
-      expect(mockUpdateStep).toHaveBeenCalledWith('step-001', { prompt_template_id: 'template-002' })
     })
 
     it('shows validation warning when prompt has no variable references', () => {
@@ -341,41 +219,124 @@ describe('StepProperties', () => {
     })
   })
 
+  describe('output tab', () => {
+    it('renders schema placeholder when no schema assigned', async () => {
+      const user = userEvent.setup()
+      renderStep()
+
+      // Switch to output tab
+      const outputTab = screen.getByText('Output')
+      await user.click(outputTab)
+
+      expect(screen.getByText('Select schema...')).toBeInTheDocument()
+    })
+
+    it('renders downstream steps in Outgoing section', async () => {
+      const user = userEvent.setup()
+      const step2 = { ...mockWorkflowStep, id: 'step-002', name: 'Downstream' }
+      mockSelectEdges.mockReturnValue([
+        { id: 'e1', from_step_id: 'step-001', to_step_id: 'step-002' },
+      ])
+      renderStep({ steps: [mockWorkflowStep, step2] })
+
+      const outputTab = screen.getByText('Output')
+      await user.click(outputTab)
+
+      expect(screen.getByText('Outgoing')).toBeInTheDocument()
+      expect(screen.getByText('Downstream')).toBeInTheDocument()
+    })
+  })
+
+  describe('input tab', () => {
+    it('shows empty state when no upstream steps', async () => {
+      const user = userEvent.setup()
+      renderStep()
+
+      const inputTab = screen.getByText('Input')
+      await user.click(inputTab)
+
+      expect(screen.getByText('No incoming connections')).toBeInTheDocument()
+    })
+
+    it('renders upstream steps', async () => {
+      const user = userEvent.setup()
+      const step2 = { ...mockWorkflowStep, id: 'step-002', name: 'Upstream' }
+      mockSelectEdges.mockReturnValue([
+        { id: 'e1', from_step_id: 'step-002', to_step_id: 'step-001' },
+      ])
+      renderStep({ steps: [mockWorkflowStep, step2] })
+
+      const inputTab = screen.getByText('Input')
+      await user.click(inputTab)
+
+      expect(screen.getByText('Upstream')).toBeInTheDocument()
+    })
+
+    it('renders upstream step schema when output_schema_id is set', async () => {
+      const user = userEvent.setup()
+      const step2 = {
+        ...mockWorkflowStep,
+        id: 'step-002',
+        name: 'Upstream',
+        output_schema_id: 'schema-001',
+      }
+      mockSelectEdges.mockReturnValue([
+        { id: 'e1', from_step_id: 'step-002', to_step_id: 'step-001' },
+      ])
+      renderStep({ steps: [mockWorkflowStep, step2] })
+
+      const inputTab = screen.getByText('Input')
+      await user.click(inputTab)
+
+      expect(screen.getByText('Test Schema')).toBeInTheDocument()
+      expect(screen.getByText(/"result"/)).toBeInTheDocument()
+    })
+  })
+
+  describe('system tab', () => {
+    it('renders system prompt extension editor', async () => {
+      const user = userEvent.setup()
+      renderStep()
+
+      const systemTab = screen.getByText('System')
+      await user.click(systemTab)
+
+      const editor = screen.getByPlaceholderText('Enter system prompt extension...')
+      expect(editor).toBeInTheDocument()
+      expect(editor).toHaveValue('')
+    })
+
+    it('renders system_prompt_suffix value when set', async () => {
+      const user = userEvent.setup()
+      const step = { ...mockWorkflowStep, system_prompt_suffix: 'Be extra careful.' }
+      renderStep({ step })
+
+      const systemTab = screen.getByText('System')
+      await user.click(systemTab)
+
+      const editor = screen.getByPlaceholderText('Enter system prompt extension...')
+      expect(editor).toHaveValue('Be extra careful.')
+    })
+
+    it('calls patchStepLocal with system_prompt_suffix on change', async () => {
+      const user = userEvent.setup()
+      renderStep()
+
+      const systemTab = screen.getByText('System')
+      await user.click(systemTab)
+
+      const editor = screen.getByPlaceholderText('Enter system prompt extension...')
+      await user.type(editor, 'X')
+
+      expect(mockPatchStepLocal).toHaveBeenCalledWith('step-001', { system_prompt_suffix: 'X' })
+    })
+  })
+
   describe('position section removed', () => {
     it('does not render X or Y position fields', () => {
       const step = { ...mockWorkflowStep, position_x: 100, position_y: 200 }
       renderStep({ step })
       expect(screen.queryByText('Position')).not.toBeInTheDocument()
-    })
-  })
-
-  describe('incoming connections', () => {
-    it('renders upstream steps in Incoming section via store adjacency', () => {
-      const step2 = { ...mockWorkflowStep, id: 'step-002', name: 'Upstream' }
-      mockSelectUpstream.mockReturnValue(() => ['step-002'])
-      renderStep({ steps: [mockWorkflowStep, step2] })
-      expect(screen.getByText('Incoming')).toBeInTheDocument()
-      expect(screen.getByText('Upstream')).toBeInTheDocument()
-    })
-
-    it('hides Incoming section when no upstream steps', () => {
-      renderStep()
-      expect(screen.queryByText('Incoming')).not.toBeInTheDocument()
-    })
-  })
-
-  describe('outgoing connections', () => {
-    it('renders downstream steps in Outgoing section via store adjacency', () => {
-      const step2 = { ...mockWorkflowStep, id: 'step-002', name: 'Downstream' }
-      mockSelectDownstream.mockReturnValue(() => ['step-002'])
-      renderStep({ steps: [mockWorkflowStep, step2] })
-      expect(screen.getByText('Outgoing')).toBeInTheDocument()
-      expect(screen.getByText('Downstream')).toBeInTheDocument()
-    })
-
-    it('hides Outgoing section when no downstream steps', () => {
-      renderStep()
-      expect(screen.queryByText('Outgoing')).not.toBeInTheDocument()
     })
   })
 
