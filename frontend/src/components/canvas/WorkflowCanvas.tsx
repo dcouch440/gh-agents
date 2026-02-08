@@ -36,13 +36,25 @@ function WorkflowCanvasInner() {
   const [contextMenu, setContextMenu] = useState<MenuPosition>(null)
   const initialFitDone = useRef(false)
 
-  // Build lookup maps for node data enrichment
+  // Build lookup maps for node data enrichment (split to avoid rebuilding stable maps on step changes)
+  const agentLookup = useMemo(
+    () => new Map(agents.map((a) => [a.id, { name: a.name, model_id: a.model_id }])),
+    [agents],
+  )
+  const schemaLookup = useMemo(
+    () => new Map(schemas.map((s) => [s.id, { name: s.name }])),
+    [schemas],
+  )
+  const stepNameLookup = useMemo(
+    () => new Map(steps.map((s) => [s.id, s.name ?? s.execution_mode])),
+    [steps],
+  )
   const lookups = useMemo((): StepNodeLookups => ({
-    agents: new Map(agents.map((a) => [a.id, { name: a.name, model_id: a.model_id }])),
-    outputSchemas: new Map(schemas.map((s) => [s.id, { name: s.name }])),
-    stepNames: new Map(steps.map((s) => [s.id, s.name ?? s.execution_mode])),
+    agents: agentLookup,
+    outputSchemas: schemaLookup,
+    stepNames: stepNameLookup,
     edges,
-  }), [agents, schemas, steps, edges])
+  }), [agentLookup, schemaLookup, stepNameLookup, edges])
 
   // Map store data to RF format
   const rfNodes = useMemo(() => toRFNodes(steps, lookups), [steps, lookups])

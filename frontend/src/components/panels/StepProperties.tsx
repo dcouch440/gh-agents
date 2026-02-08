@@ -105,24 +105,41 @@ function StepProperties({ step, edges, steps, readOnly = false }: StepProperties
     [schemas],
   )
 
+  // ── Lookup maps ────────────────────────────────────────────────────────────
+
+  const stepsById = useMemo(
+    () => new Map(steps.map((s) => [s.id, s])),
+    [steps],
+  )
+
+  const templatesMap = useMemo(
+    () => new Map(templates.map((t) => [t.id, t])),
+    [templates],
+  )
+
+  const schemasMap = useMemo(
+    () => new Map(schemas.map((s) => [s.id, s])),
+    [schemas],
+  )
+
   // ── Graph connections ──────────────────────────────────────────────────────
 
   const incomingSteps = useMemo(
     () =>
       edges
         .filter((e) => e.to_step_id === step.id)
-        .map((e) => steps.find((s) => s.id === e.from_step_id))
+        .map((e) => stepsById.get(e.from_step_id))
         .filter((s): s is WorkflowStep => s !== undefined),
-    [edges, steps, step.id],
+    [edges, stepsById, step.id],
   )
 
   const downstreamSteps = useMemo(
     () =>
       edges
         .filter((e) => e.from_step_id === step.id)
-        .map((e) => steps.find((s) => s.id === e.to_step_id))
+        .map((e) => stepsById.get(e.to_step_id))
         .filter((s): s is WorkflowStep => s !== undefined),
-    [edges, steps, step.id],
+    [edges, stepsById, step.id],
   )
 
   // ── Mode badge color ────────────────────────────────────────────────────────
@@ -228,8 +245,8 @@ function StepProperties({ step, edges, steps, readOnly = false }: StepProperties
         {readOnly ? (
           <Box sx={{ px: '16px', pt: '2px', pb: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <PropertyRow label="Agent" value={agent?.name ?? step.agent_id} />
-            <PropertyRow label="Template" value={templates.find((t) => t.id === step.prompt_template_id)?.name ?? 'None'} />
-            <PropertyRow label="Schema" value={schemas.find((s) => s.id === step.output_schema_id)?.name ?? 'None'} last />
+            <PropertyRow label="Template" value={templatesMap.get(step.prompt_template_id ?? '')?.name ?? 'None'} />
+            <PropertyRow label="Schema" value={schemasMap.get(step.output_schema_id ?? '')?.name ?? 'None'} last />
           </Box>
         ) : (
           <Box sx={{ pt: '2px', pb: '4px', display: 'flex', flexDirection: 'column', gap: 0 }}>
