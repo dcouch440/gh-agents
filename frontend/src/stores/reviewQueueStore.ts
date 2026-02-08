@@ -10,6 +10,7 @@ import type { AgentExecution } from '@/types/execution'
 
 type ReviewQueueState = {
   executions: AgentExecution[]
+  executionIds: ReadonlySet<string>
   notification: { id: string; message: string } | null
   loading: boolean
   error: string | null
@@ -19,6 +20,7 @@ type ReviewQueueState = {
 
 const store = createStore<ReviewQueueState>(() => ({
   executions: [],
+  executionIds: new Set<string>(),
   notification: null,
   loading: false,
   error: null,
@@ -48,7 +50,12 @@ const fetchPending = async (): Promise<void> => {
   store.setState({ loading: true, error: null })
   try {
     const executions = await api.agentExecutions.list({ status: 'awaiting_user' })
-    store.setState({ executions, loading: false, error: null })
+    store.setState({
+      executions,
+      executionIds: new Set(executions.map((e) => e.id)),
+      loading: false,
+      error: null,
+    })
   } catch (e) {
     store.setState({ loading: false, error: extractError(e) })
   }
@@ -56,10 +63,12 @@ const fetchPending = async (): Promise<void> => {
 
 const addExecution = (execution: AgentExecution): void => {
   store.setState((s) => {
-    const exists = s.executions.some((e) => e.id === execution.id)
-    if (exists) return s
+    if (s.executionIds.has(execution.id)) return s
+    const nextIds = new Set(s.executionIds)
+    nextIds.add(execution.id)
     return {
       executions: [execution, ...s.executions],
+      executionIds: nextIds,
       notification: {
         id: execution.id,
         message: 'New review awaiting your approval',
@@ -69,9 +78,14 @@ const addExecution = (execution: AgentExecution): void => {
 }
 
 const removeExecution = (id: string): void => {
-  store.setState((s) => ({
-    executions: s.executions.filter((e) => e.id !== id),
-  }))
+  store.setState((s) => {
+    const nextIds = new Set(s.executionIds)
+    nextIds.delete(id)
+    return {
+      executions: s.executions.filter((e) => e.id !== id),
+      executionIds: nextIds,
+    }
+  })
 }
 
 const dismissNotification = (): void => {

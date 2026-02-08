@@ -118,6 +118,9 @@ const sendMessage = async (executionId: string, content: string): Promise<void> 
       },
     }))
 
+    // Capture the index of the temp message for O(1) updates during streaming
+    const tempIndex = (store.getState().messagesByExecution[executionId] ?? []).length - 1
+
     // Open SSE stream
     const abort = createSSEStream(
       API.EXECUTION_MESSAGE_STREAM(executionId, response.stream_id),
@@ -127,14 +130,17 @@ const sendMessage = async (executionId: string, content: string): Promise<void> 
             const tokenText = JSON.parse(event.data) as string
             accumulated += tokenText
             const current = accumulated
-            store.setState((s) => ({
-              messagesByExecution: {
-                ...s.messagesByExecution,
-                [executionId]: (s.messagesByExecution[executionId] ?? []).map((m) =>
-                  m.id === tempId ? { ...m, content: current } : m,
-                ),
-              },
-            }))
+            store.setState((s) => {
+              const msgs = s.messagesByExecution[executionId] ?? []
+              const updated = msgs.slice()
+              updated[tempIndex] = { ...msgs[tempIndex], content: current }
+              return {
+                messagesByExecution: {
+                  ...s.messagesByExecution,
+                  [executionId]: updated,
+                },
+              }
+            })
           }
         },
         onDone: () => {
