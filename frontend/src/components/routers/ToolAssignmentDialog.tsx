@@ -38,12 +38,15 @@ function ToolAssignmentContent({
   saving: boolean
   loading: boolean
 }) {
-  const [selectedIds, setSelectedIds] = useState<string[]>([...assignedToolIds])
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(assignedToolIds))
 
   const handleToggle = (toolId: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(toolId) ? prev.filter((id) => id !== toolId) : [...prev, toolId],
-    )
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(toolId)) next.delete(toolId)
+      else next.add(toolId)
+      return next
+    })
   }
 
   return (
@@ -64,7 +67,7 @@ function ToolAssignmentContent({
                 key={tool.id}
                 control={
                   <Checkbox
-                    checked={selectedIds.includes(tool.id)}
+                    checked={selectedIds.has(tool.id)}
                     onChange={() => handleToggle(tool.id)}
                     size="small"
                   />
@@ -90,7 +93,7 @@ function ToolAssignmentContent({
         <Button variant="secondary" onClick={onClose} disabled={saving}>
           Cancel
         </Button>
-        <Button variant="primary" onClick={() => onSave(selectedIds)} disabled={saving || loading}>
+        <Button variant="primary" onClick={() => onSave([...selectedIds])} disabled={saving || loading}>
           {saving ? 'Saving...' : 'Save'}
         </Button>
       </DialogActions>

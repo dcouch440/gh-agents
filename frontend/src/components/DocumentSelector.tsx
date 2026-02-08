@@ -38,7 +38,7 @@ function DocumentSelector({
   const loading = useStore(documentStore.store, documentStore.selectLoading);
 
   useEffect(() => { void documentStore.fetchAll() }, []);
-  const [localSelectedIds, setLocalSelectedIds] = useState<string[]>(selectedIds);
+  const [localSelectedIds, setLocalSelectedIds] = useState<Set<string>>(() => new Set(selectedIds));
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loadedDocs, setLoadedDocs] = useState<Map<string, Document>>(new Map());
   const [loadingDocId, setLoadingDocId] = useState<string | null>(null);
@@ -46,20 +46,21 @@ function DocumentSelector({
   if (!open) return null;
 
   const handleToggle = (documentId: string) => {
-    setLocalSelectedIds((prev) =>
-      prev.includes(documentId)
-        ? prev.filter((id) => id !== documentId)
-        : [...prev, documentId]
-    );
+    setLocalSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(documentId)) next.delete(documentId);
+      else next.add(documentId);
+      return next;
+    });
   };
 
   const handleSave = () => {
-    onSelectionChange(localSelectedIds);
+    onSelectionChange([...localSelectedIds]);
     onClose();
   };
 
   const handleCancel = () => {
-    setLocalSelectedIds(selectedIds);
+    setLocalSelectedIds(new Set(selectedIds));
     onClose();
   };
 
@@ -98,7 +99,7 @@ function DocumentSelector({
   };
 
   const renderDocumentRow = (doc: DocumentListItem) => {
-    const isSelected = localSelectedIds.includes(doc.id);
+    const isSelected = localSelectedIds.has(doc.id);
     const isExpanded = expandedId === doc.id;
 
     return (
@@ -200,7 +201,7 @@ function DocumentSelector({
           Select Documents
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Choose documents to attach as agent context ({localSelectedIds.length}{" "}
+          Choose documents to attach as agent context ({localSelectedIds.size}{" "}
           selected)
         </Typography>
       </DialogTitle>
