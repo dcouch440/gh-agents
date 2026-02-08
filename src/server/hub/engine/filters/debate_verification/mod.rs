@@ -96,22 +96,30 @@ impl DebateVerificationFilter {
     fn build_verifier_system_prompt(agent_name: &str, agent_system_prompt: &str) -> String {
         format!(
             "{agent_system_prompt}\n\n\
-             ## Verification Role\n\n\
-             You are part of a verification panel reviewing another agent's work.\n\
-             Your expertise: {agent_name}.\n\n\
-             IMPORTANT:\n\
-             - Form your OWN independent assessment. Do not assume the response is correct.\n\
-             - Focus on your area of expertise.\n\
-             - Be specific and constructive — cite exact issues with line references or quotes.\n\
-             - If the response is genuinely good in your domain, approve it.\n\n\
-             Respond with JSON:\n\
+             <verification_role>\n\
+             You are a verification panelist reviewing another agent's output.\n\
+             Your domain of expertise: {agent_name}.\n\n\
+             Form your own independent assessment. Do not assume the response is correct.\n\n\
+             <severity_definitions>\n\
+             - high: Blocks correctness or introduces a significant defect. Must be fixed.\n\
+             - medium: Reduces quality or omits important detail. Should be fixed.\n\
+             - low: Style, convention, or minor improvement. Nice to fix.\n\
+             </severity_definitions>\n\n\
+             <evaluation_process>\n\
+             1. Identify what the response does well in your domain.\n\
+             2. Identify specific issues — cite exact quotes or references.\n\
+             3. For each issue, classify severity and provide a concrete fix.\n\
+             4. Set approved to true only if there are no high or medium severity issues.\n\
+             </evaluation_process>\n\
+             </verification_role>\n\n\
+             Respond with this JSON structure:\n\
              {{\n  \
-               \"approved\": true,\n  \
+               \"approved\": false,\n  \
                \"issues\": [\n    \
                  {{\n      \
                    \"severity\": \"high\",\n      \
-                   \"description\": \"Specific issue description\",\n      \
-                   \"suggestion\": \"How to fix it\"\n    \
+                   \"description\": \"Specific issue with a direct quote or reference\",\n      \
+                   \"suggestion\": \"Concrete fix\"\n    \
                  }}\n  \
                ]\n\
              }}"
@@ -125,40 +133,51 @@ impl DebateVerificationFilter {
         primary_response: &str,
     ) -> String {
         format!(
-            "## Original Task\n{system_prompt_summary}\n\n\
-             {user_prompt}\n\n\
-             ## Response Under Review\n{primary_response}\n\n\
-             Review this response from your area of expertise."
+            "<original_task>\n\
+             <context>\n{system_prompt_summary}\n</context>\n\
+             <request>\n{user_prompt}\n</request>\n\
+             </original_task>\n\n\
+             <response_under_review>\n{primary_response}\n</response_under_review>\n\n\
+             Evaluate this response for factual accuracy, logical consistency, \
+             and completeness within your area of expertise."
         )
     }
 
     /// Format the merged critique feedback for the primary agent's retry.
     fn format_feedback(results: &[VerificationResult]) -> String {
         let mut feedback = String::from(
-            "## Verification Panel Feedback\n\n\
+            "<verification_feedback>\n\
              Your response was reviewed by a panel of specialist agents. \
-             Please address their feedback and produce an improved response.\n",
+             Address HIGH severity issues first, then MEDIUM. \
+             Retain aspects of your original response that were approved.\n",
         );
 
         for result in results {
             if result.critique.approved {
                 feedback.push_str(&format!(
-                    "\n### {} — [APPROVED]\nNo issues found in their domain.\n",
+                    "\n<reviewer name=\"{}\" verdict=\"approved\">\n\
+                     No issues found in their domain.\n\
+                     </reviewer>\n",
                     result.agent_name
                 ));
             } else {
-                feedback.push_str(&format!("\n### {} — [NEEDS REVISION]\n", result.agent_name));
+                feedback.push_str(&format!(
+                    "\n<reviewer name=\"{}\" verdict=\"needs_revision\">\n",
+                    result.agent_name
+                ));
                 for issue in &result.critique.issues {
                     let severity = issue.severity.to_uppercase();
-                    feedback.push_str(&format!("- **[{}]** {}", severity, issue.description));
+                    feedback.push_str(&format!("- [{}] {}", severity, issue.description));
                     if let Some(suggestion) = &issue.suggestion {
-                        feedback.push_str(&format!(" Suggestion: {}", suggestion));
+                        feedback.push_str(&format!(" → {}", suggestion));
                     }
                     feedback.push('\n');
                 }
+                feedback.push_str("</reviewer>\n");
             }
         }
 
+        feedback.push_str("</verification_feedback>");
         feedback
     }
 }
