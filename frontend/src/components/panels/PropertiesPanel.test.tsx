@@ -1,0 +1,112 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import { PropertiesPanel } from './PropertiesPanel'
+import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
+
+const step1: WorkflowStep = {
+  id: 'step-001',
+  workflow_id: 'wf-001',
+  name: 'First Step',
+  description: 'The first step',
+  step_type: 'llm',
+  agent_id: 'agent-001',
+  prompt_template_id: null,
+  output_schema_id: null,
+  for_each_label_field: null,
+  config: null,
+  position_x: 0,
+  position_y: 0,
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
+}
+
+const step2: WorkflowStep = { ...step1, id: 'step-002', name: 'Second Step' }
+
+const edge1: WorkflowStepEdge = {
+  id: 'edge-001',
+  workflow_id: 'wf-001',
+  from_step_id: 'step-001',
+  to_step_id: 'step-002',
+  condition: null,
+  created_at: '2025-01-01T00:00:00Z',
+}
+
+const {
+  _selectedStepIds,
+  _selectedEdgeIds,
+  _steps,
+  _edges,
+} = vi.hoisted(() => ({
+  _selectedStepIds: { value: new Set<string>() },
+  _selectedEdgeIds: { value: new Set<string>() },
+  _steps: { value: [] as WorkflowStep[] },
+  _edges: { value: [] as WorkflowStepEdge[] },
+}))
+
+vi.mock('@/stores', () => ({
+  useStore: vi.fn((_store: unknown, selector: unknown) => {
+    if (typeof selector === 'function') return (selector as (s: unknown) => unknown)(null)
+    return undefined
+  }),
+  canvasStore: {
+    store: 'canvas',
+    selectSelectedStepIds: () => _selectedStepIds.value,
+    selectSelectedEdgeIds: () => _selectedEdgeIds.value,
+  },
+  workflowStore: {
+    store: 'workflow',
+    selectSteps: () => _steps.value,
+    selectEdges: () => _edges.value,
+  },
+  agentStore: {
+    store: 'agent',
+    selectById: () => () => undefined,
+  },
+  promptTemplateStore: {
+    store: 'prompt',
+    selectById: () => () => undefined,
+  },
+  outputSchemaStore: {
+    store: 'schema',
+    selectById: () => () => undefined,
+  },
+  layoutStore: {
+    openRightPanel: vi.fn(),
+  },
+}))
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  _selectedStepIds.value = new Set()
+  _selectedEdgeIds.value = new Set()
+  _steps.value = [step1, step2]
+  _edges.value = [edge1]
+})
+
+describe('PropertiesPanel', () => {
+  it('shows empty state when nothing selected', () => {
+    render(<PropertiesPanel />)
+    expect(screen.getByText('Select a node to view properties')).toBeInTheDocument()
+  })
+
+  it('renders step properties when step selected', () => {
+    _selectedStepIds.value = new Set(['step-001'])
+    render(<PropertiesPanel />)
+    expect(screen.getByText('First Step')).toBeInTheDocument()
+    expect(screen.getByText('General')).toBeInTheDocument()
+  })
+
+  it('renders edge properties when edge selected', () => {
+    _selectedEdgeIds.value = new Set(['edge-001'])
+    render(<PropertiesPanel />)
+    expect(screen.getByText('Connection')).toBeInTheDocument()
+  })
+
+  it('prioritizes step over edge when both selected', () => {
+    _selectedStepIds.value = new Set(['step-001'])
+    _selectedEdgeIds.value = new Set(['edge-001'])
+    render(<PropertiesPanel />)
+    expect(screen.getByText('First Step')).toBeInTheDocument()
+    expect(screen.queryByText('Connection')).not.toBeInTheDocument()
+  })
+})
