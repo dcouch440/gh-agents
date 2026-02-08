@@ -93,7 +93,7 @@ pub async fn create_output_schema(
     }
     let repo = &state.repos().output_schemas;
     let row = repo
-        .create_output_schema(auth.user_id.0, request.name, request.schema)
+        .create_output_schema(Some(auth.user_id.0), request.name, request.schema)
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
     Ok((
@@ -130,8 +130,10 @@ pub async fn get_output_schema(
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?
         .ok_or(AppError::not_found("Output schema"))?;
-    if row.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Output schema"));
+    if let Some(owner) = row.user_id {
+        if owner != auth.user_id.0 {
+            return Err(AppError::not_found("Output schema"));
+        }
     }
     Ok(Json(OutputSchemaResponse {
         id: row.id,
@@ -166,8 +168,14 @@ pub async fn update_output_schema(
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?
         .ok_or(AppError::not_found("Output schema"))?;
-    if existing.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Output schema"));
+    match existing.user_id {
+        Some(owner) if owner != auth.user_id.0 => {
+            return Err(AppError::not_found("Output schema"));
+        }
+        None => {
+            return Err(AppError::not_found("Output schema"));
+        }
+        _ => {}
     }
     if let Some(ref name) = request.name {
         if name.trim().is_empty() || name.len() > MAX_TITLE_LENGTH {
@@ -211,8 +219,14 @@ pub async fn delete_output_schema(
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?
         .ok_or(AppError::not_found("Output schema"))?;
-    if existing.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Output schema"));
+    match existing.user_id {
+        Some(owner) if owner != auth.user_id.0 => {
+            return Err(AppError::not_found("Output schema"));
+        }
+        None => {
+            return Err(AppError::not_found("Output schema"));
+        }
+        _ => {}
     }
     repo.delete_output_schema(id)
         .await

@@ -399,7 +399,7 @@ pub trait OutputSchemaRepo: Send + Sync {
     /// Create a new output schema.
     async fn create_output_schema(
         &self,
-        user_id: Uuid,
+        user_id: Option<Uuid>,
         name: String,
         schema: serde_json::Value,
     ) -> Result<OutputSchemaRow>;
@@ -433,7 +433,7 @@ pub trait PromptTemplateRepo: Send + Sync {
     /// Create a new prompt template.
     async fn create_prompt_template(
         &self,
-        user_id: Uuid,
+        user_id: Option<Uuid>,
         name: String,
         content: String,
     ) -> Result<PromptTemplateRow>;

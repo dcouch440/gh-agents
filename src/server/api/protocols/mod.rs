@@ -516,7 +516,7 @@ pub async fn apply_protocol(
     // 1. Create output schema
     let schema_name = format!("{} — auto-generated", protocol.name);
     let schema_row = os_repo
-        .create_output_schema(auth.user_id.0, schema_name, expansion.output_schema.clone())
+        .create_output_schema(Some(auth.user_id.0), schema_name, expansion.output_schema.clone())
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
