@@ -58,18 +58,31 @@ vi.mock('@/stores', () => ({
     store: 'workflow',
     selectSteps: () => _steps.value,
     selectEdges: () => _edges.value,
+    selectStepById: (id: string | null) => () =>
+      id ? _steps.value.find((s: WorkflowStep) => s.id === id) ?? null : null,
+    selectEdgeById: (id: string | null) => () =>
+      id ? _edges.value.find((e: WorkflowStepEdge) => e.id === id) ?? null : null,
   },
   agentStore: {
     store: 'agent',
+    selectAll: () => [],
+    selectLoading: () => false,
     selectById: () => () => undefined,
+    fetchAll: vi.fn(),
   },
   promptTemplateStore: {
     store: 'prompt',
+    selectAll: () => [],
+    selectLoading: () => false,
     selectById: () => () => undefined,
+    fetchIfStale: vi.fn(),
   },
   outputSchemaStore: {
     store: 'schema',
+    selectAll: () => [],
+    selectLoading: () => false,
     selectById: () => () => undefined,
+    fetchIfStale: vi.fn(),
   },
   layoutStore: {
     openRightPanel: vi.fn(),
@@ -93,8 +106,8 @@ describe('PropertiesPanel', () => {
   it('renders step properties when step selected', () => {
     _selectedStepIds.value = new Set(['step-001'])
     render(<PropertiesPanel />)
-    expect(screen.getByText('First Step')).toBeInTheDocument()
-    expect(screen.getByText('General')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('First Step')).toBeInTheDocument()
+    expect(screen.getByText('Configuration')).toBeInTheDocument()
   })
 
   it('renders edge properties when edge selected', () => {
@@ -107,7 +120,7 @@ describe('PropertiesPanel', () => {
     _selectedStepIds.value = new Set(['step-001'])
     _selectedEdgeIds.value = new Set(['edge-001'])
     render(<PropertiesPanel />)
-    expect(screen.getByText('First Step')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('First Step')).toBeInTheDocument()
     expect(screen.queryByText('Connection')).not.toBeInTheDocument()
   })
 })

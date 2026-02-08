@@ -22,8 +22,8 @@ import type { Document } from '@/types/document'
 type WorkflowState = {
   items: NormalizedMap<Workflow>
   activeWorkflowId: string | null
-  steps: WorkflowStep[]
-  edges: WorkflowStepEdge[]
+  steps: NormalizedMap<WorkflowStep>
+  edges: NormalizedMap<WorkflowStepEdge>
   documentsByStep: Record<string, Document[]>
   loading: boolean
   error: string | null
@@ -38,8 +38,8 @@ const STALE_THRESHOLD_MS = 60_000
 const store = createStore<WorkflowState>(() => ({
   items: createNormalizedMap<Workflow>(),
   activeWorkflowId: null,
-  steps: [],
-  edges: [],
+  steps: createNormalizedMap<WorkflowStep>(),
+  edges: createNormalizedMap<WorkflowStepEdge>(),
   documentsByStep: {},
   loading: false,
   error: null,
@@ -65,9 +65,15 @@ const selectById = (id: string) => (s: WorkflowState): Workflow | undefined =>
 
 const selectActiveWorkflowId = (s: WorkflowState): string | null => s.activeWorkflowId
 
-const selectSteps = (s: WorkflowState): WorkflowStep[] => s.steps
+const selectSteps = (s: WorkflowState): WorkflowStep[] => toArray(s.steps)
 
-const selectEdges = (s: WorkflowState): WorkflowStepEdge[] => s.edges
+const selectEdges = (s: WorkflowState): WorkflowStepEdge[] => toArray(s.edges)
+
+const selectStepById = (id: string | null) => (s: WorkflowState): WorkflowStep | null =>
+  id !== null ? nmGet(s.steps, id) ?? null : null
+
+const selectEdgeById = (id: string | null) => (s: WorkflowState): WorkflowStepEdge | null =>
+  id !== null ? nmGet(s.edges, id) ?? null : null
 
 const selectStepDocuments = (stepId: string) => (s: WorkflowState): Document[] =>
   s.documentsByStep[stepId] ?? EMPTY_DOCS
@@ -141,8 +147,8 @@ const loadWorkflow = async (id: string): Promise<void> => {
     store.setState((s) => ({
       items: nmSet(s.items, workflow.id, workflow),
       activeWorkflowId: id,
-      steps,
-      edges,
+      steps: nmFromArray(steps),
+      edges: nmFromArray(edges),
       documentsByStep: {},
       loading: false,
       dirty: false,
@@ -155,8 +161,8 @@ const loadWorkflow = async (id: string): Promise<void> => {
 const clearActive = (): void => {
   store.setState({
     activeWorkflowId: null,
-    steps: [],
-    edges: [],
+    steps: createNormalizedMap<WorkflowStep>(),
+    edges: createNormalizedMap<WorkflowStepEdge>(),
     documentsByStep: {},
     dirty: false,
   })
@@ -168,7 +174,7 @@ const createStep = async (body: CreateStepRequest): Promise<WorkflowStep | null>
   const wid = getActiveId()
   if (!wid) return null
   const step = await api.workflows.createStep(wid, body)
-  store.setState((s) => ({ steps: [...s.steps, step], dirty: true }))
+  store.setState((s) => ({ steps: nmSet(s.steps, step.id, step), dirty: true }))
   return step
 }
 
@@ -177,7 +183,7 @@ const updateStep = async (stepId: string, body: UpdateStepRequest): Promise<Work
   if (!wid) return null
   const step = await api.workflows.updateStep(wid, stepId, body)
   store.setState((s) => ({
-    steps: s.steps.map((st) => (st.id === stepId ? step : st)),
+    steps: nmSet(s.steps, stepId, step),
     dirty: true,
   }))
   return step
@@ -187,11 +193,15 @@ const deleteStep = async (stepId: string): Promise<void> => {
   const wid = getActiveId()
   if (!wid) return
   await api.workflows.deleteStep(wid, stepId)
-  store.setState((s) => ({
-    steps: s.steps.filter((st) => st.id !== stepId),
-    edges: s.edges.filter((e) => e.from_step_id !== stepId && e.to_step_id !== stepId),
-    dirty: true,
-  }))
+  store.setState((s) => {
+    let nextEdges = s.edges
+    for (const [edgeId, edge] of s.edges.byId) {
+      if (edge.from_step_id === stepId || edge.to_step_id === stepId) {
+        nextEdges = nmDelete(nextEdges, edgeId)
+      }
+    }
+    return { steps: nmDelete(s.steps, stepId), edges: nextEdges, dirty: true }
+  })
 }
 
 // ── Edges ────────────────────────────────────────────────────────────────────
@@ -200,7 +210,7 @@ const addEdge = async (body: EdgeRequest): Promise<WorkflowStepEdge | null> => {
   const wid = getActiveId()
   if (!wid) return null
   const edge = await api.workflows.createEdge(wid, body)
-  store.setState((s) => ({ edges: [...s.edges, edge], dirty: true }))
+  store.setState((s) => ({ edges: nmSet(s.edges, edge.id, edge), dirty: true }))
   return edge
 }
 
@@ -209,7 +219,7 @@ const removeEdge = async (edgeId: string): Promise<void> => {
   if (!wid) return
   await api.workflows.deleteEdge(wid, edgeId)
   store.setState((s) => ({
-    edges: s.edges.filter((e) => e.id !== edgeId),
+    edges: nmDelete(s.edges, edgeId),
     dirty: true,
   }))
 }
@@ -262,6 +272,8 @@ export const workflowStore = {
   selectActiveWorkflowId,
   selectSteps,
   selectEdges,
+  selectStepById,
+  selectEdgeById,
   selectStepDocuments,
   selectLoading,
   selectError,

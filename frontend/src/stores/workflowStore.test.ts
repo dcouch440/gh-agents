@@ -1,5 +1,5 @@
 import { workflowStore } from './workflowStore'
-import { nmSize, nmGet, createNormalizedMap } from './lib'
+import { nmSize, nmGet, nmSet, nmFromArray, createNormalizedMap, toArray } from './lib'
 import type { Workflow, WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 import type { Document } from '@/types/document'
 
@@ -127,8 +127,8 @@ const resetStore = () => {
   workflowStore.store.setState({
     items: createNormalizedMap(),
     activeWorkflowId: null,
-    steps: [],
-    edges: [],
+    steps: createNormalizedMap(),
+    edges: createNormalizedMap(),
     documentsByStep: {},
     loading: false,
     error: null,
@@ -207,8 +207,8 @@ describe('workflowStore', () => {
 
       const s = workflowStore.store.getState()
       expect(s.activeWorkflowId).toBe('wf1')
-      expect(s.steps).toEqual([step1, step2])
-      expect(s.edges).toEqual([edge1])
+      expect(toArray(s.steps)).toEqual([step1, step2])
+      expect(toArray(s.edges)).toEqual([edge1])
       expect(s.documentsByStep).toEqual({})
       expect(s.loading).toBe(false)
       expect(s.dirty).toBe(false)
@@ -236,8 +236,8 @@ describe('workflowStore', () => {
 
       const s = workflowStore.store.getState()
       expect(s.activeWorkflowId).toBeNull()
-      expect(s.steps).toEqual([])
-      expect(s.edges).toEqual([])
+      expect(toArray(s.steps)).toEqual([])
+      expect(toArray(s.edges)).toEqual([])
     })
   })
 
@@ -254,7 +254,7 @@ describe('workflowStore', () => {
       const result = await workflowStore.createStep({ name: 'Step 2', execution_mode: 'single' })
 
       expect(result).toEqual(step2)
-      expect(workflowStore.store.getState().steps).toHaveLength(2)
+      expect(nmSize(workflowStore.store.getState().steps)).toBe(2)
       expect(workflowStore.store.getState().dirty).toBe(true)
     })
 
@@ -263,23 +263,23 @@ describe('workflowStore', () => {
       mockUpdateStep.mockResolvedValue(updated)
       await workflowStore.updateStep('s1', { name: 'Updated Step' })
 
-      expect(workflowStore.store.getState().steps[0].name).toBe('Updated Step')
+      expect(nmGet(workflowStore.store.getState().steps, 's1')?.name).toBe('Updated Step')
     })
 
     it('deleteStep filters from steps and removes connected edges', async () => {
       // Add step2 and an edge first
       workflowStore.store.setState((s) => ({
-        steps: [...s.steps, step2],
-        edges: [edge1],
+        steps: nmSet(s.steps, step2.id, step2),
+        edges: nmFromArray([edge1]),
       }))
       mockDeleteStep.mockResolvedValue(undefined)
 
       await workflowStore.deleteStep('s1')
 
       const s = workflowStore.store.getState()
-      expect(s.steps).toHaveLength(1)
-      expect(s.steps[0].id).toBe('s2')
-      expect(s.edges).toHaveLength(0) // edge connected to s1 removed
+      expect(nmSize(s.steps)).toBe(1)
+      expect(nmGet(s.steps, 's2')).toBeDefined()
+      expect(nmSize(s.edges)).toBe(0) // edge connected to s1 removed
     })
 
     it('createStep returns null when no active workflow', async () => {
@@ -302,17 +302,17 @@ describe('workflowStore', () => {
       const result = await workflowStore.addEdge({ from_step_id: 's1', to_step_id: 's2' })
 
       expect(result).toEqual(edge1)
-      expect(workflowStore.store.getState().edges).toHaveLength(1)
+      expect(nmSize(workflowStore.store.getState().edges)).toBe(1)
       expect(workflowStore.store.getState().dirty).toBe(true)
     })
 
     it('removeEdge filters', async () => {
-      workflowStore.store.setState({ edges: [edge1] })
+      workflowStore.store.setState({ edges: nmFromArray([edge1]) })
       mockDeleteEdge.mockResolvedValue(undefined)
 
       await workflowStore.removeEdge('e1')
 
-      expect(workflowStore.store.getState().edges).toHaveLength(0)
+      expect(nmSize(workflowStore.store.getState().edges)).toBe(0)
     })
   })
 

@@ -11,18 +11,17 @@ function PropertiesPanel() {
   const steps = useStore(workflowStore.store, workflowStore.selectSteps)
   const edges = useStore(workflowStore.store, workflowStore.selectEdges)
 
-  const selectedStep = useMemo(() => {
-    const firstId = selectedStepIds.values().next().value
-    if (!firstId) return null
-    return steps.find((s) => s.id === firstId) ?? null
-  }, [selectedStepIds, steps])
+  const firstStepId = useMemo(
+    () => selectedStepIds.values().next().value ?? null,
+    [selectedStepIds],
+  )
+  const selectedStep = useStore(workflowStore.store, workflowStore.selectStepById(firstStepId))
 
-  const selectedEdge = useMemo(() => {
+  const firstEdgeId = useMemo(() => {
     if (selectedStep) return null
-    const firstId = selectedEdgeIds.values().next().value
-    if (!firstId) return null
-    return edges.find((e) => e.id === firstId) ?? null
-  }, [selectedEdgeIds, edges, selectedStep])
+    return selectedEdgeIds.values().next().value ?? null
+  }, [selectedEdgeIds, selectedStep])
+  const selectedEdge = useStore(workflowStore.store, workflowStore.selectEdgeById(firstEdgeId))
 
   if (selectedStep) {
     return <StepProperties step={selectedStep} edges={edges} steps={steps} />

@@ -10,17 +10,16 @@ function PromptsBrowserPanel() {
   const templates = useStore(promptTemplateStore.store, promptTemplateStore.selectAll)
   const loading = useStore(promptTemplateStore.store, promptTemplateStore.selectLoading)
   const selectedStepIds = useStore(canvasStore.store, canvasStore.selectSelectedStepIds)
-  const steps = useStore(workflowStore.store, workflowStore.selectSteps)
 
   useEffect(() => {
     void promptTemplateStore.fetchIfStale()
   }, [])
 
-  const selectedStep = useMemo(() => {
-    const firstId = selectedStepIds.values().next().value
-    if (!firstId) return null
-    return steps.find((s) => s.id === firstId) ?? null
-  }, [selectedStepIds, steps])
+  const firstStepId = useMemo(
+    () => selectedStepIds.values().next().value ?? null,
+    [selectedStepIds],
+  )
+  const selectedStep = useStore(workflowStore.store, workflowStore.selectStepById(firstStepId))
 
   const filtered = useMemo(
     () => templates.filter((t) => t.name.toLowerCase().includes(query.toLowerCase())),
