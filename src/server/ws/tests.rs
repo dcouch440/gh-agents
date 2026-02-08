@@ -1,6 +1,5 @@
 //! Tests for the unified WebSocket event system.
 
-use super::events::*;
 use super::*;
 
 // ============================================================================
@@ -521,4 +520,234 @@ async fn subscribe_idempotent() {
 #[test]
 fn ping_interval_is_30_seconds() {
     assert_eq!(PING_INTERVAL, Duration::from_secs(30));
+}
+
+// ============================================================================
+// Test helpers
+// ============================================================================
+
+fn make_workflow_event(user_id: Option<uuid::Uuid>, run_id: uuid::Uuid) -> ServerEvent {
+    ServerEvent::Workflow(WorkflowEvent {
+        run_id,
+        workflow_id: uuid::Uuid::new_v4(),
+        user_id,
+        kind: WorkflowEventKind::Started { total_steps: 1 },
+    })
+}
+
+fn make_session_event(user_id: Option<uuid::Uuid>) -> ServerEvent {
+    ServerEvent::Session(SessionEvent {
+        session_id: uuid::Uuid::new_v4(),
+        user_id,
+        kind: SessionEventKind::Deleted,
+    })
+}
+
+/// Pure function replicating the filtering logic from `handle_socket` (lines 147-169).
+/// This allows exhaustive testing without a real WebSocket connection.
+fn event_passes_filters(
+    evt: &ServerEvent,
+    subscribed_topics: &HashSet<Topic>,
+    user_id: Option<uuid::Uuid>,
+    run_subs: &HashSet<uuid::Uuid>,
+) -> bool {
+    // Topic filter
+    if !subscribed_topics.contains(&evt.topic()) {
+        return false;
+    }
+    // User filter: events with a user_id only go to that user
+    if let Some(event_uid) = evt.user_id() {
+        if !user_id.map(|u| u == event_uid).unwrap_or(false) {
+            return false;
+        }
+    }
+    // Run filter: if client has run subscriptions, only matching events pass
+    if let Some(rid) = evt.run_id() {
+        if !run_subs.is_empty() && !run_subs.contains(&rid) {
+            return false;
+        }
+    }
+    true
+}
+
+// ============================================================================
+// EventBus tests
+// ============================================================================
+
+use crate::server::state::EventBus;
+
+#[tokio::test]
+async fn eventbus_broadcast_received_by_subscriber() {
+    let bus = EventBus::new();
+    let mut rx = bus.subscribe();
+    let run_id = uuid::Uuid::new_v4();
+    bus.broadcast(make_workflow_event(None, run_id));
+
+    let received: ServerEvent = rx.recv().await.unwrap();
+    assert_eq!(received.run_id(), Some(run_id));
+}
+
+#[tokio::test]
+async fn eventbus_multiple_subscribers_receive_same_event() {
+    let bus = EventBus::new();
+    let mut rx1 = bus.subscribe();
+    let mut rx2 = bus.subscribe();
+    let run_id = uuid::Uuid::new_v4();
+    bus.broadcast(make_workflow_event(None, run_id));
+
+    let e1: ServerEvent = rx1.recv().await.unwrap();
+    let e2: ServerEvent = rx2.recv().await.unwrap();
+    assert_eq!(e1.run_id(), Some(run_id));
+    assert_eq!(e2.run_id(), Some(run_id));
+}
+
+#[tokio::test]
+async fn eventbus_no_subscribers_doesnt_panic() {
+    let bus = EventBus::new();
+    // No subscribers — broadcast should silently succeed (fire-and-forget)
+    bus.broadcast(make_workflow_event(None, uuid::Uuid::new_v4()));
+}
+
+#[tokio::test]
+async fn eventbus_lagged_receiver_gets_lagged_error() {
+    use tokio::sync::broadcast::error::RecvError;
+
+    let bus = EventBus::with_capacity(2);
+    let mut rx = bus.subscribe();
+
+    // Broadcast 3 events into a buffer of size 2 — first event is evicted
+    bus.broadcast(make_workflow_event(None, uuid::Uuid::new_v4()));
+    bus.broadcast(make_workflow_event(None, uuid::Uuid::new_v4()));
+    bus.broadcast(make_workflow_event(None, uuid::Uuid::new_v4()));
+
+    match rx.recv().await {
+        Err(RecvError::Lagged(n)) => assert_eq!(n, 1),
+        other => panic!("Expected Lagged(1), got {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn eventbus_subscriber_only_receives_after_subscribe() {
+    let bus = EventBus::new();
+
+    // Broadcast before subscribing
+    bus.broadcast(make_workflow_event(None, uuid::Uuid::new_v4()));
+
+    // Now subscribe
+    let mut rx = bus.subscribe();
+
+    // Broadcast after subscribing
+    let run_id = uuid::Uuid::new_v4();
+    bus.broadcast(make_workflow_event(None, run_id));
+
+    // Should only get the second event
+    let received: ServerEvent = rx.recv().await.unwrap();
+    assert_eq!(received.run_id(), Some(run_id));
+}
+
+#[tokio::test]
+async fn eventbus_closed_channel_returns_closed() {
+    use tokio::sync::broadcast::error::RecvError;
+
+    let bus = EventBus::new();
+    let mut rx = bus.subscribe();
+
+    // Drop the bus (and its sender) to close the channel
+    drop(bus);
+
+    match rx.recv().await {
+        Err(RecvError::Closed) => {} // expected
+        other => panic!("Expected Closed, got {:?}", other),
+    }
+}
+
+// ============================================================================
+// Event filtering tests
+// ============================================================================
+
+#[test]
+fn filter_passes_subscribed_topic() {
+    let topics = HashSet::from([Topic::Workflow]);
+    let evt = make_workflow_event(None, uuid::Uuid::new_v4());
+    assert!(event_passes_filters(&evt, &topics, None, &HashSet::new()));
+}
+
+#[test]
+fn filter_rejects_unsubscribed_topic() {
+    // Subscribed to Room only → a Workflow event is rejected
+    let topics = HashSet::from([Topic::Room]);
+    let evt = make_workflow_event(None, uuid::Uuid::new_v4());
+    assert!(!event_passes_filters(&evt, &topics, None, &HashSet::new()));
+
+    // Subscribed to Workflow only → a Session event is rejected
+    let topics = HashSet::from([Topic::Workflow]);
+    let evt = make_session_event(None);
+    assert!(!event_passes_filters(&evt, &topics, None, &HashSet::new()));
+}
+
+#[test]
+fn filter_user_scoped_event_passes_for_correct_user() {
+    let user_id = uuid::Uuid::new_v4();
+    let topics = HashSet::from([Topic::Workflow]);
+    let evt = make_workflow_event(Some(user_id), uuid::Uuid::new_v4());
+    assert!(event_passes_filters(
+        &evt,
+        &topics,
+        Some(user_id),
+        &HashSet::new()
+    ));
+}
+
+#[test]
+fn filter_user_scoped_event_rejected_for_wrong_user() {
+    let event_user = uuid::Uuid::new_v4();
+    let client_user = uuid::Uuid::new_v4();
+    let topics = HashSet::from([Topic::Workflow]);
+    let evt = make_workflow_event(Some(event_user), uuid::Uuid::new_v4());
+    assert!(!event_passes_filters(
+        &evt,
+        &topics,
+        Some(client_user),
+        &HashSet::new()
+    ));
+}
+
+#[test]
+fn filter_unscoped_event_passes_for_any_user() {
+    let topics = HashSet::from([Topic::Workflow]);
+    let evt = make_workflow_event(None, uuid::Uuid::new_v4());
+    // Client has a user_id, but event is unscoped (user_id=None) → passes
+    assert!(event_passes_filters(
+        &evt,
+        &topics,
+        Some(uuid::Uuid::new_v4()),
+        &HashSet::new()
+    ));
+}
+
+#[test]
+fn filter_run_scoped_passes_when_subscribed() {
+    let run_id = uuid::Uuid::new_v4();
+    let topics = HashSet::from([Topic::Workflow]);
+    let run_subs = HashSet::from([run_id]);
+    let evt = make_workflow_event(None, run_id);
+    assert!(event_passes_filters(&evt, &topics, None, &run_subs));
+}
+
+#[test]
+fn filter_run_scoped_rejected_when_not_subscribed() {
+    let run_id = uuid::Uuid::new_v4();
+    let other_run = uuid::Uuid::new_v4();
+    let topics = HashSet::from([Topic::Workflow]);
+    let run_subs = HashSet::from([other_run]);
+    let evt = make_workflow_event(None, run_id);
+    assert!(!event_passes_filters(&evt, &topics, None, &run_subs));
+}
+
+#[test]
+fn filter_run_passes_when_no_run_subscriptions() {
+    let topics = HashSet::from([Topic::Workflow]);
+    let evt = make_workflow_event(None, uuid::Uuid::new_v4());
+    // Empty run subscriptions → all run events pass
+    assert!(event_passes_filters(&evt, &topics, None, &HashSet::new()));
 }
