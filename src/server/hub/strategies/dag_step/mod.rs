@@ -146,7 +146,18 @@ impl ExecutionStrategy for DagStepStrategy {
                 .await
             }
             None => {
-                serde_json::json!({ "error": "No execution context available for tool calls" })
+                // No local execution context — try context-free tools (external APIs)
+                info!(
+                    agent = %self.config.agent.name,
+                    tool = %name,
+                    "DAG step tool call (context-free)"
+                );
+                execution_tools::execute_context_free_tool(
+                    name,
+                    input,
+                    Some(&self.config.tool_names),
+                )
+                .await
             }
         }
     }

@@ -249,6 +249,7 @@ export const LS_RECENT_COMMANDS = "nexor_recent_commands";
 export const LS_LEFT_PANEL_OPEN = "nexor_left_panel_open";
 export const LS_LEFT_PANEL_SECTION = "nexor_left_panel_section";
 export const LS_RIGHT_PANEL_WIDTH = "nexor_right_panel_width";
+export const LS_WORKFLOW_TEST_INPUT = "nexor_workflow_test_input_";
 
 // Layout
 export const LAYOUT = {

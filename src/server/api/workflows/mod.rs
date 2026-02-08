@@ -986,12 +986,20 @@ pub async fn run_workflow(
         .and_then(|b| b.0.initial_input)
         .unwrap_or_default();
 
+    let mut prior_outputs = HashMap::new();
+    if !initial_input.is_empty() {
+        prior_outputs.insert(
+            "input".to_string(),
+            serde_json::Value::String(initial_input.clone()),
+        );
+    }
+
     let ctx = WorkflowExecutionContext {
         stage_execution_id: execution_id,
         run_id: execution_id,
         user_id: auth.user_id.0,
         initial_input,
-        prior_outputs: HashMap::new(),
+        prior_outputs,
         execution_context: None,
         container_config: None,
         wg_client: None,

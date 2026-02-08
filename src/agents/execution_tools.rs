@@ -436,6 +436,25 @@ pub async fn execute_execution_tool(
     }
 }
 
+/// Execute a tool that does not require an `ExecutionContext` (e.g. external API calls).
+/// Returns an error for tools that need filesystem/git access.
+pub async fn execute_context_free_tool(
+    name: &str,
+    input: &Value,
+    allowed_tools: Option<&[String]>,
+) -> Value {
+    if let Some(allowed) = allowed_tools {
+        if !allowed.iter().any(|t| t == name) {
+            return json!({ "error": format!("Tool '{}' is not allowed for this agent", name) });
+        }
+    }
+
+    match name {
+        "web_research" => exec_web_research(input).await,
+        _ => json!({ "error": format!("Tool '{}' requires an execution context", name) }),
+    }
+}
+
 // --- File operations ---
 
 async fn exec_read_file(input: &Value, ctx: &ExecutionContext) -> Value {
