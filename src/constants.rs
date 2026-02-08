@@ -264,6 +264,7 @@ pub mod routes {
     pub const WORKFLOW_EDGES: &str = "/workflows/:id/edges";
     pub const WORKFLOW_EDGE: &str = "/workflows/:wid/edges/:eid";
     pub const WORKFLOW_STEP_DOCUMENTS: &str = "/workflows/:wid/steps/:sid/documents";
+    pub const WORKFLOW_RUN: &str = "/workflows/:id/run";
 
     // Workflow Collections
     pub const COLLECTIONS: &str = "/collections";

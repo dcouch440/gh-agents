@@ -71,6 +71,7 @@ import type {
   CollectionRun,
   CreateCollectionRequest,
   UpdateCollectionRequest,
+  WorkflowRunResponse,
 } from '@/types'
 
 // ============================================================================
@@ -338,6 +339,9 @@ const workflows = {
 
   removeStepDocument: (workflowId: string, stepId: string, docId: string, config?: RequestConfig) =>
     baseApi.del<void>(API.STEP_DOCUMENT(workflowId, stepId, docId), config),
+
+  run: (id: string, body?: { initial_input?: string }, config?: RequestConfig) =>
+    baseApi.post<WorkflowRunResponse>(API.WORKFLOW_RUN(id), body ?? {}, config),
 }
 
 const contextResponse = {

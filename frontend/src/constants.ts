@@ -157,6 +157,7 @@ export const API = {
     `/workflows/${wid}/steps/${sid}/documents`,
   STEP_DOCUMENT: (wid: string, sid: string, did: string) =>
     `/workflows/${wid}/steps/${sid}/documents/${did}`,
+  WORKFLOW_RUN: (id: string) => `/workflows/${id}/run`,
 
   // Pipeline Stage Members
   STAGE_MEMBERS: (pid: string, num: number) =>

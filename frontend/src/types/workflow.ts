@@ -84,6 +84,12 @@ type StepDocumentRequest = {
   usage: string
 }
 
+type WorkflowRunResponse = {
+  execution_id: string
+  workflow_id: string
+  status: string
+}
+
 export type {
   Workflow,
   WorkflowStep,
@@ -95,4 +101,5 @@ export type {
   UpdateStepRequest,
   EdgeRequest,
   StepDocumentRequest,
+  WorkflowRunResponse,
 }

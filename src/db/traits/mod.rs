@@ -1123,6 +1123,13 @@ pub trait WorkflowCollectionRepo: Send + Sync {
         outputs: Option<serde_json::Value>,
         error: Option<String>,
     ) -> Result<WorkflowExecutionRow>;
+
+    // --- Standalone Workflow Execution (no collection) ---
+    async fn create_standalone_workflow_execution(
+        &self,
+        workflow_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<WorkflowExecutionRow>;
 }
 
 // ============================================================================

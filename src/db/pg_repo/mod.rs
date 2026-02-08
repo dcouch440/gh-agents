@@ -3168,6 +3168,23 @@ impl WorkflowCollectionRepo for PgRepo {
         .await?;
         Ok(row)
     }
+
+    async fn create_standalone_workflow_execution(
+        &self,
+        workflow_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<WorkflowExecutionRow> {
+        let row = sqlx::query_as::<_, WorkflowExecutionRow>(
+            "INSERT INTO workflow_executions (workflow_id, user_id, status) \
+             VALUES ($1, $2, 'pending') \
+             RETURNING *",
+        )
+        .bind(workflow_id)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
 }
 
 // ============================================================================

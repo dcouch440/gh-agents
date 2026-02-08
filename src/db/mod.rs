@@ -211,7 +211,7 @@ pub struct CollectionRunRow {
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct WorkflowExecutionRow {
     pub id: Uuid,
-    pub collection_run_id: Uuid,
+    pub collection_run_id: Option<Uuid>,
     pub workflow_id: Uuid,
     pub user_id: Uuid,
     pub status: String,

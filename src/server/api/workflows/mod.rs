@@ -1,4 +1,4 @@
-//! Workflow, step, edge, and document attachment endpoints
+//! Workflow, step, edge, document attachment, and execution endpoints
 
 use axum::{
     extract::{Path, State},
@@ -7,11 +7,17 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use super::AppError;
 use crate::constants::MAX_TITLE_LENGTH;
+use crate::db::pg_repo::PgRepo;
+use crate::db::traits::WorkflowCollectionRepo;
 use crate::server::auth as auth_utils;
+use crate::server::hub::dag::{execute_workflow_via_engine, WorkflowExecutionContext};
+use crate::server::hub::ExecutionEngine;
 use crate::server::state::AppState;
 
 // ============================================================================
@@ -895,6 +901,151 @@ pub async fn list_step_documents(
                 document_id: r.document_id,
             })
             .collect(),
+    ))
+}
+
+// ============================================================================
+// Run Workflow Types
+// ============================================================================
+
+#[derive(Deserialize, utoipa::ToSchema)]
+pub struct RunWorkflowRequest {
+    pub initial_input: Option<String>,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct WorkflowRunResponse {
+    pub execution_id: Uuid,
+    pub workflow_id: Uuid,
+    pub status: String,
+}
+
+// ============================================================================
+// Run Workflow Handler
+// ============================================================================
+
+/// POST /api/workflows/:id/run - Execute a workflow directly (without a collection).
+#[utoipa::path(
+    post,
+    path = "/api/workflows/{id}/run",
+    tag = "Workflows",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Workflow ID")),
+    request_body(content = Option<RunWorkflowRequest>, content_type = "application/json"),
+    responses(
+        (status = 202, description = "Workflow execution started", body = WorkflowRunResponse),
+        (status = 404, description = "Workflow not found")
+    )
+)]
+pub async fn run_workflow(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(id): Path<Uuid>,
+    body: Option<Json<RunWorkflowRequest>>,
+) -> Result<(StatusCode, Json<WorkflowRunResponse>), AppError> {
+    let workflow_repo = &state.repos().workflows;
+
+    // Verify workflow exists and user owns it
+    let workflow = workflow_repo
+        .get_workflow(id)
+        .await?
+        .ok_or(AppError::not_found("Workflow"))?;
+    if workflow.user_id != auth.user_id.0 {
+        return Err(AppError::not_found("Workflow"));
+    }
+
+    // Create standalone workflow execution row
+    let db = state
+        .db()
+        .ok_or(AppError::Internal("Database not available".into()))?
+        .clone();
+    let collection_repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
+    let execution = collection_repo
+        .create_standalone_workflow_execution(id, auth.user_id.0)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let execution_id = execution.id;
+
+    // Load steps + edges
+    let steps = workflow_repo.list_steps(id).await?;
+    let edges = workflow_repo.list_edges(id).await?;
+
+    if steps.is_empty() {
+        return Err(AppError::bad_request("Workflow has no steps"));
+    }
+
+    // Build execution engine
+    let provider = state
+        .provider()
+        .ok_or(AppError::Internal("LLM provider not configured".into()))?
+        .clone();
+    let engine = ExecutionEngine::new(provider);
+
+    let initial_input = body
+        .and_then(|b| b.0.initial_input)
+        .unwrap_or_default();
+
+    let ctx = WorkflowExecutionContext {
+        stage_execution_id: execution_id,
+        run_id: execution_id,
+        user_id: auth.user_id.0,
+        initial_input,
+        prior_outputs: HashMap::new(),
+        execution_context: None,
+        container_config: None,
+        wg_client: None,
+    };
+
+    // Spawn execution in background (non-blocking, return 202)
+    let bg_state = state.clone();
+    let bg_collection_repo = collection_repo.clone();
+    tokio::spawn(async move {
+        // Mark as running
+        let _ = bg_collection_repo
+            .update_workflow_execution_status(execution_id, "running", None, None)
+            .await;
+
+        match execute_workflow_via_engine(&engine, &bg_state, &ctx, &steps, &edges, None).await {
+            Ok(result) => {
+                // Aggregate outputs
+                let mut aggregated = serde_json::Map::new();
+                for output in result.outputs.values() {
+                    if let Some(structured) = &output.structured_output {
+                        aggregated.insert(output.variable_name.clone(), structured.clone());
+                    }
+                }
+                let outputs_json = serde_json::Value::Object(aggregated);
+
+                let _ = bg_collection_repo
+                    .update_workflow_execution_status(
+                        execution_id,
+                        "completed",
+                        Some(outputs_json),
+                        None,
+                    )
+                    .await;
+            }
+            Err(e) => {
+                let _ = bg_collection_repo
+                    .update_workflow_execution_status(
+                        execution_id,
+                        "failed",
+                        None,
+                        Some(e.to_string()),
+                    )
+                    .await;
+            }
+        }
+    });
+
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(WorkflowRunResponse {
+            execution_id,
+            workflow_id: id,
+            status: "pending".to_string(),
+        }),
     ))
 }
 
