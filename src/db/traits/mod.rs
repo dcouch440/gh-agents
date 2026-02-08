@@ -962,10 +962,7 @@ pub trait RoomRepo: Send + Sync {
     // --- Room sessions (runtime) ---
 
     /// Start a new room session.
-    async fn create_room_session(
-        &self,
-        room_id: Uuid,
-    ) -> Result<RoomSessionRow>;
+    async fn create_room_session(&self, room_id: Uuid) -> Result<RoomSessionRow>;
 
     /// Get a room session by ID.
     async fn get_room_session(&self, id: Uuid) -> Result<Option<RoomSessionRow>>;

@@ -597,7 +597,10 @@ impl MergeQueueProcessor {
         pr_number: u32,
         user_id: Uuid,
     ) -> Result<PrQueueEntry, QueueError> {
-        let entry = self.queue.add_to_queue(owner, repo, pr_number, user_id).await?;
+        let entry = self
+            .queue
+            .add_to_queue(owner, repo, pr_number, user_id)
+            .await?;
 
         if self.notifications.on_queued {
             if let Err(e) = self
