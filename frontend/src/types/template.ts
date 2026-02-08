@@ -4,7 +4,7 @@ type PromptTemplate = {
   name: string
   description: string | null
   template: string
-  variables: string[]
+  variables: string[] | null
   created_at: string
   updated_at: string
 }
