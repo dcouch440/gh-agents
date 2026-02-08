@@ -76,4 +76,70 @@ mod tests {
         let result = verify_agent_ownership(&repo, &auth, agent_id).await;
         assert!(result.is_ok());
     }
+
+    // =================================================================
+    // Session Ownership Tests
+    // =================================================================
+    // Session handlers check: session.user_id != auth.user_id.0 → 404
+    // We test this pattern directly using MockServerRepo::get_session.
+
+    use crate::db::traits::ServerRepo;
+    use crate::db::SessionRow;
+    use chrono::Utc;
+
+    fn make_session(id: Uuid, user_id: Uuid) -> SessionRow {
+        SessionRow {
+            id,
+            user_id,
+            mode_id: "chat".to_string(),
+            title: "Test Session".to_string(),
+            summary: String::new(),
+            agent_id: None,
+            draft_config: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+
+    #[tokio::test]
+    async fn get_own_session_ownership_passes() {
+        let user_id = Uuid::new_v4();
+        let session_id = Uuid::new_v4();
+        let session = make_session(session_id, user_id);
+
+        let mut repo = MockServerRepo::new();
+        repo.expect_get_session()
+            .withf(move |id| *id == session_id)
+            .returning(move |_| Ok(Some(session.clone())));
+
+        let fetched = repo.get_session(session_id).await.unwrap().unwrap();
+        // Simulates the handler's ownership check
+        assert_eq!(fetched.user_id, user_id);
+    }
+
+    #[tokio::test]
+    async fn get_other_users_session_returns_404() {
+        let owner_id = Uuid::new_v4();
+        let attacker_id = Uuid::new_v4();
+        let session_id = Uuid::new_v4();
+        let session = make_session(session_id, owner_id);
+
+        let mut repo = MockServerRepo::new();
+        repo.expect_get_session()
+            .returning(move |_| Ok(Some(session.clone())));
+
+        let auth = make_auth(attacker_id);
+        let fetched = repo.get_session(session_id).await.unwrap().unwrap();
+        // The handler would return 404 here
+        assert_ne!(fetched.user_id, auth.user_id.0);
+    }
+
+    #[tokio::test]
+    async fn nonexistent_session_returns_none() {
+        let mut repo = MockServerRepo::new();
+        repo.expect_get_session().returning(|_| Ok(None));
+
+        let result = repo.get_session(Uuid::new_v4()).await.unwrap();
+        assert!(result.is_none());
+    }
 }

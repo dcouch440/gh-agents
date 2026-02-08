@@ -2655,10 +2655,7 @@ impl RoomRepo for PgRepo {
 
     // --- Room sessions ---
 
-    async fn create_room_session(
-        &self,
-        room_id: Uuid,
-    ) -> Result<RoomSessionRow> {
+    async fn create_room_session(&self, room_id: Uuid) -> Result<RoomSessionRow> {
         let row = sqlx::query_as::<_, RoomSessionRow>(
             "INSERT INTO room_sessions (room_id) VALUES ($1) RETURNING *",
         )

@@ -1283,4 +1283,240 @@ mod tests {
             status
         );
     }
+
+    // =================================================================
+    // Auth Extractor Edge Case Tests
+    // =================================================================
+
+    #[tokio::test]
+    async fn missing_auth_header_returns_401() {
+        let (app, _state) = setup_test_app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/agents")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn empty_bearer_token_returns_401() {
+        let (app, _state) = setup_test_app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/agents")
+                    .header("authorization", "Bearer ")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn expired_token_http_returns_401() {
+        let (app, state) = setup_test_app();
+        // Create an expired token by encoding Claims with exp in the past
+        use jsonwebtoken::{encode, EncodingKey, Header};
+        let expired_claims = auth::Claims {
+            sub: uuid::Uuid::new_v4().to_string(),
+            email: "test@test.com".to_string(),
+            is_admin: false,
+            exp: 1, // epoch + 1 second = long expired
+            iat: 0,
+        };
+        let token = encode(
+            &Header::default(),
+            &expired_claims,
+            &EncodingKey::from_secret(&state.jwt_secret()),
+        )
+        .unwrap();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/agents")
+                    .header("authorization", format!("Bearer {}", token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    // =================================================================
+    // Input Validation Tests
+    // =================================================================
+
+    #[tokio::test]
+    async fn invalid_uuid_path_returns_400() {
+        let (app, state) = setup_test_app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/agents/not-a-uuid")
+                    .header(
+                        "authorization",
+                        format!("Bearer {}", create_test_token(&state)),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn malformed_json_body_returns_error() {
+        let (app, state) = setup_test_app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/agents")
+                    .header("content-type", "application/json")
+                    .header(
+                        "authorization",
+                        format!("Bearer {}", create_test_token(&state)),
+                    )
+                    .body(Body::from("{broken json"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        // Axum returns 422 for JSON parse failures
+        let status = response.status();
+        assert!(
+            status == StatusCode::UNPROCESSABLE_ENTITY || status == StatusCode::BAD_REQUEST,
+            "Expected 422 or 400, got: {:?}",
+            status
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_required_fields_returns_error() {
+        let (app, state) = setup_test_app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/agents")
+                    .header("content-type", "application/json")
+                    .header(
+                        "authorization",
+                        format!("Bearer {}", create_test_token(&state)),
+                    )
+                    .body(Body::from("{}"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status = response.status();
+        assert!(
+            status == StatusCode::UNPROCESSABLE_ENTITY || status == StatusCode::BAD_REQUEST,
+            "Expected 422 or 400, got: {:?}",
+            status
+        );
+    }
+
+    // =================================================================
+    // Auth Endpoint Input Validation Tests
+    // =================================================================
+
+    #[tokio::test]
+    async fn register_empty_email_returns_400() {
+        let (app, _state) = setup_test_app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/register")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"email":"","password":"validpass1"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn register_email_no_at_sign_returns_400() {
+        let (app, _state) = setup_test_app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/register")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"email":"noatsign","password":"validpass1"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn register_password_too_short_returns_400() {
+        let (app, _state) = setup_test_app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/register")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"email":"test@test.com","password":"short"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn register_empty_password_returns_400() {
+        let (app, _state) = setup_test_app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/register")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"email":"test@test.com","password":""}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn setup_password_too_short_returns_400() {
+        let (app, _state) = setup_test_app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/setup")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"password":"short"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
 }

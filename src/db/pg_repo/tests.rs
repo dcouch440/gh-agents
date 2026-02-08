@@ -182,9 +182,17 @@ async fn merge_queue_get_next_position() {
     assert_eq!(pos1, 1);
 
     // Insert entry at position 1
-    repo.insert_queue_entry(Uuid::new_v4(), owner.clone(), repo_name.clone(), 1, 1, now, user_id)
-        .await
-        .unwrap();
+    repo.insert_queue_entry(
+        Uuid::new_v4(),
+        owner.clone(),
+        repo_name.clone(),
+        1,
+        1,
+        now,
+        user_id,
+    )
+    .await
+    .unwrap();
 
     // Get next position (should be 2)
     let pos2 = repo
@@ -299,9 +307,17 @@ async fn merge_queue_reset_interrupted() {
     let now = Utc::now();
 
     // Insert entries with in_progress status
-    repo.insert_queue_entry(Uuid::new_v4(), owner.clone(), repo_name.clone(), 1, 1, now, user_id)
-        .await
-        .unwrap();
+    repo.insert_queue_entry(
+        Uuid::new_v4(),
+        owner.clone(),
+        repo_name.clone(),
+        1,
+        1,
+        now,
+        user_id,
+    )
+    .await
+    .unwrap();
     repo.update_entry_status(
         owner.clone(),
         repo_name.clone(),

@@ -141,4 +141,35 @@ mod ownership_tests {
         let result = verify_agent_ownership(&repo, &auth, Uuid::new_v4()).await;
         assert!(matches!(result.unwrap_err(), AppError::NotFound(_)));
     }
+
+    #[tokio::test]
+    async fn system_agent_accessible_by_any_user() {
+        let agent_id = Uuid::new_v4();
+        let system_agent = AgentRow {
+            id: agent_id,
+            user_id: None, // System agent — no owner
+            tier: None,
+            name: "system".to_string(),
+            system_prompt: "".to_string(),
+            persona_style: None,
+            model_provider: "anthropic".to_string(),
+            model_id: "claude-sonnet-4-20250514".to_string(),
+            model_max_tokens: 4096,
+            model_temperature: 0.7,
+            status: Some("idle".to_string()),
+            router_mode: None,
+            router_id: None,
+            output_schema_id: None,
+            version: 1,
+        };
+
+        let mut repo = MockServerRepo::new();
+        repo.expect_get_persisted_agent()
+            .returning(move |_| Ok(Some(system_agent.clone())));
+
+        // Any random user should be able to access system agents
+        let auth = make_auth(Uuid::new_v4());
+        let result = verify_agent_ownership(&repo, &auth, agent_id).await;
+        assert!(result.is_ok());
+    }
 }
