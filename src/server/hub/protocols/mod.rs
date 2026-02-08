@@ -14,6 +14,7 @@ pub mod expander;
 pub mod expanders;
 pub mod prompt_gen;
 pub mod schema_gen;
+pub mod template_resolve;
 pub mod types;
 
 mod tests;

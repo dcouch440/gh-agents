@@ -1272,6 +1272,9 @@ pub trait ProtocolRepo: Send + Sync {
         description: String,
         protocol_type: String,
         config: serde_json::Value,
+        agent_id: Option<Uuid>,
+        output_schema_id: Option<Uuid>,
+        prompt_template_id: Option<Uuid>,
     ) -> Result<ProtocolRow>;
 
     /// Get a protocol by ID.
@@ -1280,7 +1283,8 @@ pub trait ProtocolRepo: Send + Sync {
     /// List all protocols.
     async fn list_protocols(&self) -> Result<Vec<ProtocolRow>>;
 
-    /// Seed the built-in system protocols. Idempotent via ON CONFLICT (name) DO NOTHING.
+    /// Seed the built-in system protocols and their associated agents,
+    /// output schemas, and prompt templates. Idempotent via ON CONFLICT DO UPDATE.
     async fn seed_builtin_protocols(&self) -> Result<()>;
 
     /// Update a protocol.
@@ -1290,6 +1294,9 @@ pub trait ProtocolRepo: Send + Sync {
         name: Option<String>,
         description: Option<String>,
         config: Option<serde_json::Value>,
+        agent_id: Option<Uuid>,
+        output_schema_id: Option<Uuid>,
+        prompt_template_id: Option<Uuid>,
     ) -> Result<ProtocolRow>;
 
     /// Delete a protocol by ID.

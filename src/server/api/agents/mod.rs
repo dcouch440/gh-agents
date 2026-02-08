@@ -255,10 +255,7 @@ pub async fn update_agent(
         version: existing.version,
     };
 
-    state
-        .repo()
-        .upsert_agent(updated.clone())
-        .await?;
+    state.repo().upsert_agent(updated.clone()).await?;
 
     Ok(Json(AgentResponse::from_row(updated)))
 }

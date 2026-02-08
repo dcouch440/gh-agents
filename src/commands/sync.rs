@@ -46,6 +46,10 @@ pub async fn run_sync(config_dir: &Path, dry_run: bool, verbose: bool) -> Result
             "   System Agents: {} created, {} updated",
             stats.system_agents_created, stats.system_agents_updated
         );
+        println!(
+            "   Protocols: {} created, {} updated",
+            stats.protocols_created, stats.protocols_updated
+        );
 
         if !stats.errors.is_empty() {
             println!("\n⚠️  {} warnings:", stats.errors.len());
