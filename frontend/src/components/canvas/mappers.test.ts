@@ -41,14 +41,13 @@ const edge1: WorkflowStepEdge = {
 
 describe('toRFNodes', () => {
   it('maps WorkflowStep array to React Flow nodes', () => {
-    const nodes = toRFNodes([step1, step2], new Set())
+    const nodes = toRFNodes([step1, step2])
 
     expect(nodes).toHaveLength(2)
     expect(nodes[0]).toEqual({
       id: 'step-001',
       type: 'stepNode',
       position: { x: 100, y: 200 },
-      selected: false,
       data: {
         label: 'First Step',
         stepType: 'single',
@@ -59,27 +58,20 @@ describe('toRFNodes', () => {
     })
   })
 
-  it('marks selected nodes', () => {
-    const nodes = toRFNodes([step1, step2], new Set(['step-002']))
-
-    expect(nodes[0]?.selected).toBe(false)
-    expect(nodes[1]?.selected).toBe(true)
-  })
-
   it('returns empty array for empty input', () => {
-    expect(toRFNodes([], new Set())).toEqual([])
+    expect(toRFNodes([])).toEqual([])
   })
 
   it('falls back to execution_mode when name is null', () => {
     const stepNoName: WorkflowStep = { ...step1, name: null }
-    const nodes = toRFNodes([stepNoName], new Set())
+    const nodes = toRFNodes([stepNoName])
     expect(nodes[0]?.data.label).toBe('single')
   })
 })
 
 describe('toRFEdges', () => {
   it('maps WorkflowStepEdge array to React Flow edges', () => {
-    const edges = toRFEdges([edge1], new Set())
+    const edges = toRFEdges([edge1])
 
     expect(edges).toHaveLength(1)
     expect(edges[0]).toEqual({
@@ -87,16 +79,10 @@ describe('toRFEdges', () => {
       type: 'stepEdge',
       source: 'step-001',
       target: 'step-002',
-      selected: false,
     })
   })
 
-  it('marks selected edges', () => {
-    const edges = toRFEdges([edge1], new Set(['edge-001']))
-    expect(edges[0]?.selected).toBe(true)
-  })
-
   it('returns empty array for empty input', () => {
-    expect(toRFEdges([], new Set())).toEqual([])
+    expect(toRFEdges([])).toEqual([])
   })
 })

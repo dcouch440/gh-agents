@@ -153,6 +153,21 @@ describe('layoutStore', () => {
       expect(getState().rightPanelOpen).toBe(true)
       expect(getState().rightPanelSection).toBe('layers')
     })
+
+    it('openRightPanelIfClosed opens panel when closed', () => {
+      layoutStore.openRightPanelIfClosed('properties')
+
+      expect(getState().rightPanelOpen).toBe(true)
+      expect(getState().rightPanelSection).toBe('properties')
+    })
+
+    it('openRightPanelIfClosed does nothing when already open', () => {
+      layoutStore.openRightPanel('agents')
+      layoutStore.openRightPanelIfClosed('properties')
+
+      expect(getState().rightPanelOpen).toBe(true)
+      expect(getState().rightPanelSection).toBe('agents')
+    })
   })
 
   describe('right panel width', () => {
