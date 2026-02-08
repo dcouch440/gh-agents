@@ -254,6 +254,23 @@ export const mockWorkflowStep: WorkflowStep = {
   updated_at: '2025-01-01T00:00:00Z',
 }
 
+export const mockWorkflowStep2: WorkflowStep = {
+  id: 'step-002',
+  workflow_id: 'workflow-001',
+  name: 'Second Step',
+  description: null,
+  step_type: 'for_each',
+  agent_id: null,
+  prompt_template_id: null,
+  output_schema_id: null,
+  for_each_label_field: 'label',
+  config: null,
+  position_x: 400,
+  position_y: 100,
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
+}
+
 export const mockWorkflowEdge: WorkflowStepEdge = {
   id: 'edge-001',
   workflow_id: 'workflow-001',

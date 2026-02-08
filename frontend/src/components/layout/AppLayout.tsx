@@ -1,6 +1,5 @@
 import { createElement } from 'react';
 import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
 import { Outlet, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import TuneOutlined from '@mui/icons-material/TuneOutlined';
 import EditNoteOutlined from '@mui/icons-material/EditNoteOutlined';
@@ -14,6 +13,7 @@ import { ThemeToggle } from './ThemeToggle';
 import { useStore, authStore, selectUser, selectAuthStatus, layoutStore, reviewQueueStore } from '@/stores';
 import { useNavigation } from '@/hooks/useNavigation';
 import { LoadingSpinner } from '@/components/primitives';
+import { RightPanelContent } from '@/components/panels';
 import { ROUTES, LAYOUT_COLORS } from '@/constants';
 import type { NavBarItem } from './types';
 import type { RailItem } from './IconRail';
@@ -142,9 +142,7 @@ function AppLayout() {
               onDragStart={layoutStore.startRightPanelDrag}
               onDragEnd={layoutStore.stopRightPanelDrag}
             >
-              <Typography variant="body2" color="text.secondary">
-                Panel content coming soon.
-              </Typography>
+              <RightPanelContent section={rightSection} />
             </DetailPanel>
             <IconRail side="right" topItems={rightRailItems} />
           </>
