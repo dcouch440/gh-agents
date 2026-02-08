@@ -2,7 +2,7 @@
 // workflowStore — Hand-written store for workflows + steps + edges + docs
 // ============================================================================
 
-import { createStore, createNormalizedMap, nmFromArray, nmSet, nmDelete, toArray, nmGet } from './lib'
+import { createStore, createNormalizedMap, nmFromArray, nmSet, nmDelete, toArray, nmGet, logger } from './lib'
 import type { NormalizedMap } from './lib'
 import { api } from '@/api'
 import type {
@@ -25,6 +25,7 @@ type WorkflowState = {
   steps: NormalizedMap<WorkflowStep>
   edges: NormalizedMap<WorkflowStepEdge>
   documentsByStep: Record<string, Document[]>
+  dirtyStepIds: Set<string>
   loading: boolean
   error: string | null
   dirty: boolean
@@ -35,43 +36,18 @@ type WorkflowState = {
 
 const STALE_THRESHOLD_MS = 60_000
 
-const store = createStore<WorkflowState>(() => ({
+const store = logger('workflowStore', createStore<WorkflowState>(() => ({
   items: createNormalizedMap<Workflow>(),
   activeWorkflowId: null,
   steps: createNormalizedMap<WorkflowStep>(),
   edges: createNormalizedMap<WorkflowStepEdge>(),
   documentsByStep: {},
+  dirtyStepIds: new Set<string>(),
   loading: false,
   error: null,
   dirty: false,
   lastFetched: null,
-}))
-
-// ── Adjacency map (module-scoped cache) ─────────────────────────────────────
-
-type AdjacencyEntry = { readonly from: readonly string[]; readonly to: readonly string[] }
-type AdjacencyMap = Readonly<Record<string, AdjacencyEntry>>
-
-const EMPTY_ENTRY: AdjacencyEntry = { from: [], to: [] }
-
-let _prevEdges: NormalizedMap<WorkflowStepEdge> | null = null
-let _cachedAdj: AdjacencyMap = {}
-
-const buildAdjacencyMap = (edges: NormalizedMap<WorkflowStepEdge>): AdjacencyMap => {
-  if (edges === _prevEdges) return _cachedAdj
-
-  const acc: Record<string, { from: string[]; to: string[] }> = {}
-  const ensure = (id: string) => (acc[id] ??= { from: [], to: [] })
-
-  for (const edge of edges.byId.values()) {
-    ensure(edge.from_step_id).to.push(edge.to_step_id)
-    ensure(edge.to_step_id).from.push(edge.from_step_id)
-  }
-
-  _prevEdges = edges
-  _cachedAdj = acc
-  return acc
-}
+})))
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -110,17 +86,10 @@ const selectError = (s: WorkflowState): string | null => s.error
 
 const selectDirty = (s: WorkflowState): boolean => s.dirty
 
+const selectDirtyStepIds = (s: WorkflowState): Set<string> => s.dirtyStepIds
+
 const selectIsStale = (s: WorkflowState): boolean =>
   s.lastFetched === null || Date.now() - s.lastFetched > STALE_THRESHOLD_MS
-
-const selectAdjacency = (s: WorkflowState): AdjacencyMap =>
-  buildAdjacencyMap(s.edges)
-
-const selectUpstream = (stepId: string) => (s: WorkflowState): readonly string[] =>
-  buildAdjacencyMap(s.edges)[stepId]?.from ?? EMPTY_ENTRY.from
-
-const selectDownstream = (stepId: string) => (s: WorkflowState): readonly string[] =>
-  buildAdjacencyMap(s.edges)[stepId]?.to ?? EMPTY_ENTRY.to
 
 // ── Workflow CRUD ────────────────────────────────────────────────────────────
 
@@ -185,6 +154,7 @@ const loadWorkflow = async (id: string): Promise<void> => {
       steps: nmFromArray(steps),
       edges: nmFromArray(edges),
       documentsByStep: {},
+      dirtyStepIds: new Set<string>(),
       loading: false,
       dirty: false,
     }))
@@ -199,6 +169,7 @@ const clearActive = (): void => {
     steps: createNormalizedMap<WorkflowStep>(),
     edges: createNormalizedMap<WorkflowStepEdge>(),
     documentsByStep: {},
+    dirtyStepIds: new Set<string>(),
     dirty: false,
   })
 }
@@ -209,8 +180,22 @@ const createStep = async (body: CreateStepRequest): Promise<WorkflowStep | null>
   const wid = getActiveId()
   if (!wid) return null
   const step = await api.workflows.createStep(wid, body)
-  store.setState((s) => ({ steps: nmSet(s.steps, step.id, step), dirty: true }))
+  store.setState((s) => ({ steps: nmSet(s.steps, step.id, step) }))
   return step
+}
+
+const patchStepLocal = (stepId: string, partial: Partial<WorkflowStep>): void => {
+  store.setState((s) => {
+    const existing = nmGet(s.steps, stepId)
+    if (!existing) return {}
+    const nextDirty = new Set(s.dirtyStepIds)
+    nextDirty.add(stepId)
+    return {
+      steps: nmSet(s.steps, stepId, { ...existing, ...partial }),
+      dirtyStepIds: nextDirty,
+      dirty: true,
+    }
+  })
 }
 
 const updateStep = async (stepId: string, body: UpdateStepRequest): Promise<WorkflowStep | null> => {
@@ -219,7 +204,6 @@ const updateStep = async (stepId: string, body: UpdateStepRequest): Promise<Work
   const step = await api.workflows.updateStep(wid, stepId, body)
   store.setState((s) => ({
     steps: nmSet(s.steps, stepId, step),
-    dirty: true,
   }))
   return step
 }
@@ -235,8 +219,61 @@ const deleteStep = async (stepId: string): Promise<void> => {
         nextEdges = nmDelete(nextEdges, edgeId)
       }
     }
-    return { steps: nmDelete(s.steps, stepId), edges: nextEdges, dirty: true }
+    const nextDirty = new Set(s.dirtyStepIds)
+    nextDirty.delete(stepId)
+    return {
+      steps: nmDelete(s.steps, stepId),
+      edges: nextEdges,
+      dirtyStepIds: nextDirty,
+      dirty: nextDirty.size > 0,
+    }
   })
+}
+
+// ── Save / Revert ───────────────────────────────────────────────────────────
+
+const saveAllDirtySteps = async (): Promise<void> => {
+  const wid = getActiveId()
+  if (!wid) return
+  const { dirtyStepIds, steps } = store.getState()
+  if (dirtyStepIds.size === 0) return
+
+  const ids = [...dirtyStepIds]
+  const promises = ids.map((stepId) => {
+    const step = nmGet(steps, stepId)
+    if (!step) return Promise.resolve(null)
+    const body: UpdateStepRequest = {
+      name: step.name ?? undefined,
+      agent_id: step.agent_id,
+      prompt_template: step.prompt_template,
+      prompt_template_id: step.prompt_template_id ?? undefined,
+      output_schema_id: step.output_schema_id ?? undefined,
+      system_prompt_suffix: step.system_prompt_suffix ?? undefined,
+    }
+    return api.workflows.updateStep(wid, stepId, body)
+  })
+
+  const results = await Promise.all(promises)
+
+  store.setState((s) => {
+    let nextSteps = s.steps
+    for (const updated of results) {
+      if (updated) {
+        nextSteps = nmSet(nextSteps, updated.id, updated)
+      }
+    }
+    return {
+      steps: nextSteps,
+      dirtyStepIds: new Set<string>(),
+      dirty: false,
+    }
+  })
+}
+
+const revertSteps = async (): Promise<void> => {
+  const wid = getActiveId()
+  if (!wid) return
+  await loadWorkflow(wid)
 }
 
 // ── Edges ────────────────────────────────────────────────────────────────────
@@ -245,7 +282,7 @@ const addEdge = async (body: EdgeRequest): Promise<WorkflowStepEdge | null> => {
   const wid = getActiveId()
   if (!wid) return null
   const edge = await api.workflows.createEdge(wid, body)
-  store.setState((s) => ({ edges: nmSet(s.edges, edge.id, edge), dirty: true }))
+  store.setState((s) => ({ edges: nmSet(s.edges, edge.id, edge) }))
   return edge
 }
 
@@ -255,7 +292,6 @@ const removeEdge = async (edgeId: string): Promise<void> => {
   await api.workflows.deleteEdge(wid, edgeId)
   store.setState((s) => ({
     edges: nmDelete(s.edges, edgeId),
-    dirty: true,
   }))
 }
 
@@ -313,10 +349,8 @@ export const workflowStore = {
   selectLoading,
   selectError,
   selectDirty,
+  selectDirtyStepIds,
   selectIsStale,
-  selectAdjacency,
-  selectUpstream,
-  selectDownstream,
   fetchAll,
   fetchIfStale,
   fetchOne,
@@ -326,7 +360,10 @@ export const workflowStore = {
   loadWorkflow,
   clearActive,
   createStep,
+  patchStepLocal,
   updateStep,
+  saveAllDirtySteps,
+  revertSteps,
   deleteStep,
   addEdge,
   removeEdge,
@@ -337,4 +374,4 @@ export const workflowStore = {
   upsert,
 }
 
-export type { WorkflowState, AdjacencyMap, AdjacencyEntry }
+export type { WorkflowState }

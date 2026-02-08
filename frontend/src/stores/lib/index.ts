@@ -7,7 +7,9 @@ export {
   createNormalizedMap, toArray, nmGet, nmHas, nmSize,
   nmSet, nmDelete, nmFromArray, nmMerge,
 } from './NormalizedMap'
+export { logger, configureLogger, enableLogger, disableLogger } from './devtools'
 
 export type { StoreApi, SetState, GetState, StateCreator, Listener } from './types'
 export type { NormalizedMap } from './NormalizedMap'
 export type { ResourceStoreConfig, ResourceState, ResourceStore, Identifiable } from './createResourceStore'
+export type { LoggerConfig } from './devtools'

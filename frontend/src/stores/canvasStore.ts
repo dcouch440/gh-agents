@@ -2,7 +2,7 @@
 // canvasStore — Workflow editor canvas interaction state
 // ============================================================================
 
-import { createStore } from './lib'
+import { createStore, logger } from './lib'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,7 +35,7 @@ const EMPTY_SET: ReadonlySet<string> = new Set()
 
 // ── Store ────────────────────────────────────────────────────────────────────
 
-const store = createStore<CanvasState>(() => ({
+const store = logger('canvasStore', createStore<CanvasState>(() => ({
   selectedStepIds: EMPTY_SET,
   selectedEdgeIds: EMPTY_SET,
   hoveredStepId: null,
@@ -45,7 +45,7 @@ const store = createStore<CanvasState>(() => ({
   interactionMode: 'select',
   dragItem: null,
   minimapVisible: false,
-}))
+})))
 
 // ── Selectors ────────────────────────────────────────────────────────────────
 
@@ -71,10 +71,14 @@ const selectHasSelection = (s: CanvasState): boolean =>
 // ── Selection ────────────────────────────────────────────────────────────────
 
 const selectSteps = (ids: string[]): void => {
+  const current = store.getState().selectedStepIds
+  if (ids.length === current.size && ids.every((id) => current.has(id))) return
   store.setState({ selectedStepIds: new Set(ids) })
 }
 
 const selectEdges = (ids: string[]): void => {
+  const current = store.getState().selectedEdgeIds
+  if (ids.length === current.size && ids.every((id) => current.has(id))) return
   store.setState({ selectedEdgeIds: new Set(ids) })
 }
 

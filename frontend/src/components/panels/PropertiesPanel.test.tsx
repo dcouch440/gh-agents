@@ -63,8 +63,6 @@ vi.mock('@/stores', () => ({
       id ? _steps.value.find((s: WorkflowStep) => s.id === id) ?? null : null,
     selectEdgeById: (id: string | null) => () =>
       id ? _edges.value.find((e: WorkflowStepEdge) => e.id === id) ?? null : null,
-    selectUpstream: () => () => [],
-    selectDownstream: () => () => [],
     updateStep: vi.fn(),
   },
   agentStore: {
@@ -111,7 +109,7 @@ describe('PropertiesPanel', () => {
     _selectedStepIds.value = new Set(['step-001'])
     render(<PropertiesPanel />)
     expect(screen.getByDisplayValue('First Step')).toBeInTheDocument()
-    expect(screen.getByText('Configuration')).toBeInTheDocument()
+    expect(screen.getByText('single')).toBeInTheDocument()
   })
 
   it('renders edge properties when edge selected', () => {

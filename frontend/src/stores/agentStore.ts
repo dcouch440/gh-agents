@@ -2,7 +2,7 @@
 // agentStore — Hand-written store for agents + sub-resources
 // ============================================================================
 
-import { createStore, createNormalizedMap, nmFromArray, nmSet, nmDelete, toArray, nmGet } from './lib'
+import { createStore, createNormalizedMap, nmFromArray, nmSet, nmDelete, toArray, nmGet, logger } from './lib'
 import type { NormalizedMap } from './lib'
 import { api } from '@/api'
 import type { Agent, AgentPoolStats, CreateAgentRequest, UpdateAgentRequest } from '@/types/agent'
@@ -22,14 +22,14 @@ type AgentState = {
 
 // ── Store ────────────────────────────────────────────────────────────────────
 
-const store = createStore<AgentState>(() => ({
+const store = logger('agentStore', createStore<AgentState>(() => ({
   items: createNormalizedMap<Agent>(),
   stats: null,
   toolsByAgent: {},
   contextByAgent: {},
   loading: false,
   error: null,
-}))
+})))
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
