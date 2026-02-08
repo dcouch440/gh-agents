@@ -77,7 +77,8 @@ vi.mock('@/stores', () => ({
   },
   workflowStore: {
     store: 'workflow',
-    selectSteps: () => _steps.value,
+    selectStepById: (id: string | null) => () =>
+      id ? _steps.value.find((s: WorkflowStep) => s.id === id) ?? null : null,
     updateStep: mockUpdateStep,
   },
 }))

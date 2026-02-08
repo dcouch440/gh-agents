@@ -10,17 +10,16 @@ function AgentsBrowserPanel() {
   const agents = useStore(agentStore.store, agentStore.selectAll)
   const loading = useStore(agentStore.store, agentStore.selectLoading)
   const selectedStepIds = useStore(canvasStore.store, canvasStore.selectSelectedStepIds)
-  const steps = useStore(workflowStore.store, workflowStore.selectSteps)
 
   useEffect(() => {
     void agentStore.fetchAll()
   }, [])
 
-  const selectedStep = useMemo(() => {
-    const firstId = selectedStepIds.values().next().value
-    if (!firstId) return null
-    return steps.find((s) => s.id === firstId) ?? null
-  }, [selectedStepIds, steps])
+  const firstStepId = useMemo(
+    () => selectedStepIds.values().next().value ?? null,
+    [selectedStepIds],
+  )
+  const selectedStep = useStore(workflowStore.store, workflowStore.selectStepById(firstStepId))
 
   const filtered = useMemo(
     () => agents.filter((a) => a.name.toLowerCase().includes(query.toLowerCase())),

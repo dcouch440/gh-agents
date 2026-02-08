@@ -10,17 +10,16 @@ function SchemasBrowserPanel() {
   const schemas = useStore(outputSchemaStore.store, outputSchemaStore.selectAll)
   const loading = useStore(outputSchemaStore.store, outputSchemaStore.selectLoading)
   const selectedStepIds = useStore(canvasStore.store, canvasStore.selectSelectedStepIds)
-  const steps = useStore(workflowStore.store, workflowStore.selectSteps)
 
   useEffect(() => {
     void outputSchemaStore.fetchIfStale()
   }, [])
 
-  const selectedStep = useMemo(() => {
-    const firstId = selectedStepIds.values().next().value
-    if (!firstId) return null
-    return steps.find((s) => s.id === firstId) ?? null
-  }, [selectedStepIds, steps])
+  const firstStepId = useMemo(
+    () => selectedStepIds.values().next().value ?? null,
+    [selectedStepIds],
+  )
+  const selectedStep = useStore(workflowStore.store, workflowStore.selectStepById(firstStepId))
 
   const filtered = useMemo(
     () => schemas.filter((s) => s.name.toLowerCase().includes(query.toLowerCase())),
