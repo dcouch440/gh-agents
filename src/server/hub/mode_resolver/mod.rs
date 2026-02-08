@@ -268,7 +268,7 @@ fn build_classification_prompt(
     modes: &[ToolRouterModeRow],
 ) -> String {
     let context_block = context_hint
-        .map(|c| format!("## Context:\n{}\n\n", c))
+        .map(|c| format!("<context>\n{}\n</context>\n\n", c))
         .unwrap_or_default();
 
     let mode_list = modes
@@ -278,8 +278,10 @@ fn build_classification_prompt(
         .join("\n");
 
     format!(
-        "{}## Current User Input:\n{}\n\n## Available Modes:\n{}\n\n\
-         Based on the context and current input, output ONLY the mode key.",
+        "{}<user_input>\n{}\n</user_input>\n\n\
+         <available_modes>\n{}\n</available_modes>\n\n\
+         Identify the primary intent of the input, then select the best-matching mode.\n\
+         Respond with JSON: {{\"mode\": \"selected_mode_key\"}}",
         context_block, user_input, mode_list
     )
 }
