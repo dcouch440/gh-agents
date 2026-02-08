@@ -35,6 +35,7 @@ fn make_step(
         position_x: None,
         position_y: None,
         name: None,
+        system_prompt_suffix: None,
     }
 }
 
@@ -163,6 +164,7 @@ fn make_for_each_step(id: Uuid, var_name: Option<&str>, display_order: i32) -> W
         position_x: None,
         position_y: None,
         name: None,
+        system_prompt_suffix: None,
     }
 }
 
@@ -731,6 +733,7 @@ fn make_integration_step(
         position_x: None,
         position_y: None,
         name: None,
+        system_prompt_suffix: None,
     }
 }
 
@@ -764,6 +767,7 @@ fn make_for_each_integration_step(
         position_x: None,
         position_y: None,
         name: None,
+        system_prompt_suffix: None,
     }
 }
 

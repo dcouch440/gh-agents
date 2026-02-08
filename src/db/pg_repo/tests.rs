@@ -81,6 +81,7 @@ async fn create_test_step(repo: &PgRepo, workflow_id: Uuid, agent_id: Uuid) -> W
         position_x: None,
         position_y: None,
         name: None,
+        system_prompt_suffix: None,
     };
     repo.create_step(step).await.unwrap()
 }

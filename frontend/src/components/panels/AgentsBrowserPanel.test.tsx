@@ -45,6 +45,7 @@ const testStep: WorkflowStep = {
   position_x: 0,
   position_y: 0,
   name: 'First Step',
+  system_prompt_suffix: null,
 }
 
 const {

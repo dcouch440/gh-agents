@@ -1372,8 +1372,8 @@ impl WorkflowRepo for PgRepo {
     async fn create_step(&self, step: WorkflowStepRow) -> Result<WorkflowStepRow> {
         let row: WorkflowStepRow = sqlx::query_as(
             r#"
-            INSERT INTO workflow_steps (id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, for_each_label_field, display_order, reasoning_trace, verification_agent_ids, position_x, position_y, name)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            INSERT INTO workflow_steps (id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, for_each_label_field, display_order, reasoning_trace, verification_agent_ids, position_x, position_y, name, system_prompt_suffix)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
             RETURNING *
             "#,
         )
@@ -1394,6 +1394,7 @@ impl WorkflowRepo for PgRepo {
         .bind(step.position_x)
         .bind(step.position_y)
         .bind(&step.name)
+        .bind(&step.system_prompt_suffix)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -1424,9 +1425,9 @@ impl WorkflowRepo for PgRepo {
             UPDATE workflow_steps
             SET agent_id = $1, execution_mode = $2, for_each_ref = $3, prompt_template_id = $4, prompt_template = $5,
                 output_schema_id = $6, output_variable_name = $7, interactive_agent_id = $8, for_each_label_field = $9, display_order = $10,
-                reasoning_trace = $11, verification_agent_ids = $12, position_x = $13, position_y = $14, name = $15,
+                reasoning_trace = $11, verification_agent_ids = $12, position_x = $13, position_y = $14, name = $15, system_prompt_suffix = $16,
                 version = version + 1
-            WHERE id = $16
+            WHERE id = $17
             RETURNING *
             "#,
         )
@@ -1445,6 +1446,7 @@ impl WorkflowRepo for PgRepo {
         .bind(step.position_x)
         .bind(step.position_y)
         .bind(&step.name)
+        .bind(&step.system_prompt_suffix)
         .bind(step.id)
         .fetch_one(&self.pool)
         .await?;

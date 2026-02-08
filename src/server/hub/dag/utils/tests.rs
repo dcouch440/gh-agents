@@ -40,6 +40,7 @@ mod tests {
             position_x: None,
             position_y: None,
             name: None,
+            system_prompt_suffix: None,
         }
     }
 

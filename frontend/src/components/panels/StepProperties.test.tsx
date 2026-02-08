@@ -61,6 +61,14 @@ vi.mock('@/stores', () => ({
   },
 }))
 
+vi.mock('@/utils/variableContext', () => ({
+  buildVariableCompletions: vi.fn(() => []),
+}))
+
+vi.mock('@/utils/variableAutocomplete', () => ({
+  createVariableAutocomplete: vi.fn(() => []),
+}))
+
 vi.mock('@/components/primitives', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('@/components/primitives')
   return {
@@ -169,32 +177,6 @@ describe('StepProperties', () => {
     })
   })
 
-  describe('prompt template dropdown', () => {
-    it('renders placeholder when no template assigned', () => {
-      renderStep()
-      expect(screen.getByText('Select template...')).toBeInTheDocument()
-    })
-
-    it('renders current template when assigned', () => {
-      const step = { ...mockWorkflowStep, prompt_template_id: 'template-001' }
-      renderStep({ step })
-      expect(screen.getByText('Test Template')).toBeInTheDocument()
-    })
-
-    it('calls updateStep with new prompt_template_id on selection', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-      renderStep()
-
-      const templateSelect = screen.getAllByRole('combobox')[1]
-      await user.click(templateSelect)
-
-      const reviewTemplate = screen.getByText('Code Review Template')
-      await user.click(reviewTemplate)
-
-      expect(mockUpdateStep).toHaveBeenCalledWith('step-001', { prompt_template_id: 'template-002' })
-    })
-  })
-
   describe('output schema dropdown', () => {
     it('renders placeholder when no schema assigned', () => {
       renderStep()
@@ -208,18 +190,94 @@ describe('StepProperties', () => {
     })
   })
 
-  describe('system prompt', () => {
-    it('renders CodeEditor with step prompt_template text', () => {
+  describe('output variable name', () => {
+    it('renders editable input for output_variable_name', () => {
       renderStep()
-      const editor = screen.getByTestId('code-editor')
-      expect(editor).toHaveValue('{task_input}')
+      const input = screen.getByPlaceholderText('e.g. parse_output')
+      expect(input).toBeInTheDocument()
+      expect(input).toHaveValue('')
     })
 
-    it('calls updateStep after debounce when prompt changes', async () => {
+    it('renders value when output_variable_name is set', () => {
+      const step = { ...mockWorkflowStep, output_variable_name: 'my_output' }
+      renderStep({ step })
+      const input = screen.getByPlaceholderText('e.g. parse_output')
+      expect(input).toHaveValue('my_output')
+    })
+
+    it('calls updateStep with output_variable_name after debounce', async () => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
       renderStep()
 
-      const editor = screen.getByTestId('code-editor')
+      const input = screen.getByPlaceholderText('e.g. parse_output')
+      await user.type(input, 'result')
+
+      expect(mockUpdateStep).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(500)
+
+      expect(mockUpdateStep).toHaveBeenCalledWith('step-001', { output_variable_name: 'result' })
+    })
+
+    it('shows output variable as property row in readOnly mode', () => {
+      const step = { ...mockWorkflowStep, output_variable_name: 'my_output' }
+      renderStep({ step, readOnly: true })
+      expect(screen.getByText('my_output')).toBeInTheDocument()
+    })
+  })
+
+  describe('system prompt', () => {
+    it('renders CodeEditor for system_prompt_suffix', () => {
+      renderStep()
+      const editor = screen.getByPlaceholderText('Enter system prompt suffix...')
+      expect(editor).toBeInTheDocument()
+      expect(editor).toHaveValue('')
+    })
+
+    it('renders system_prompt_suffix value when set', () => {
+      const step = { ...mockWorkflowStep, system_prompt_suffix: 'Be extra careful.' }
+      renderStep({ step })
+      const editor = screen.getByPlaceholderText('Enter system prompt suffix...')
+      expect(editor).toHaveValue('Be extra careful.')
+    })
+
+    it('calls updateStep with system_prompt_suffix after debounce', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      renderStep()
+
+      const editor = screen.getByPlaceholderText('Enter system prompt suffix...')
+      await user.type(editor, 'Think step by step')
+
+      expect(mockUpdateStep).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(500)
+
+      expect(mockUpdateStep).toHaveBeenCalledWith('step-001', { system_prompt_suffix: 'Think step by step' })
+    })
+
+    it('renders hint text about appending to agent prompt', () => {
+      renderStep()
+      expect(screen.getByText('appends to agent prompt')).toBeInTheDocument()
+    })
+  })
+
+  describe('prompt template', () => {
+    it('renders section heading', () => {
+      renderStep()
+      expect(screen.getByText('Prompt Template')).toBeInTheDocument()
+    })
+
+    it('renders CodeEditor with step prompt_template text', () => {
+      renderStep()
+      const editor = screen.getByPlaceholderText('Enter prompt template...')
+      expect(editor).toHaveValue('{task_input}')
+    })
+
+    it('calls updateStep with prompt_template after debounce', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      renderStep()
+
+      const editor = screen.getByPlaceholderText('Enter prompt template...')
       await user.clear(editor)
       await user.type(editor, 'Do the thing')
 
@@ -228,6 +286,49 @@ describe('StepProperties', () => {
       await vi.advanceTimersByTimeAsync(500)
 
       expect(mockUpdateStep).toHaveBeenCalledWith('step-001', { prompt_template: 'Do the thing' })
+    })
+
+    it('renders template selector dropdown', () => {
+      renderStep()
+      expect(screen.getByText('Select template...')).toBeInTheDocument()
+    })
+
+    it('renders current template when assigned', () => {
+      const step = { ...mockWorkflowStep, prompt_template_id: 'template-001' }
+      renderStep({ step })
+      expect(screen.getByText('Test Template')).toBeInTheDocument()
+    })
+
+    it('calls updateStep with prompt_template_id on template selection', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      renderStep()
+
+      // Template selector is the 3rd combobox: Agent (0), Schema (1), Template (2)
+      const templateSelect = screen.getAllByRole('combobox')[2]
+      await user.click(templateSelect)
+
+      const reviewTemplate = screen.getByText('Code Review Template')
+      await user.click(reviewTemplate)
+
+      expect(mockUpdateStep).toHaveBeenCalledWith('step-001', { prompt_template_id: 'template-002' })
+    })
+
+    it('shows validation warning when prompt has no variable references', () => {
+      const step = { ...mockWorkflowStep, prompt_template: 'No variables here' }
+      renderStep({ step })
+      expect(screen.getByText(/No variable references found/)).toBeInTheDocument()
+    })
+
+    it('hides validation warning when prompt contains variable references', () => {
+      renderStep()
+      // mockWorkflowStep has prompt_template: '{task_input}' which contains a variable
+      expect(screen.queryByText(/No variable references found/)).not.toBeInTheDocument()
+    })
+
+    it('hides validation warning when prompt is empty', () => {
+      const step = { ...mockWorkflowStep, prompt_template: '' }
+      renderStep({ step })
+      expect(screen.queryByText(/No variable references found/)).not.toBeInTheDocument()
     })
   })
 
@@ -273,13 +374,19 @@ describe('StepProperties', () => {
     it('renders name as plain text without editable input', () => {
       renderStep({ readOnly: true })
       expect(screen.getByText('First Step')).toBeInTheDocument()
-      // Name input should not be present — only the CodeEditor textarea remains
+      // Name input should not be present — only the CodeEditor textareas remain
       expect(screen.queryByDisplayValue('First Step')).not.toBeInTheDocument()
     })
 
     it('does not render dropdown selects', () => {
       renderStep({ readOnly: true })
       expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+    })
+
+    it('hides validation warning in readOnly mode', () => {
+      const step = { ...mockWorkflowStep, prompt_template: 'No variables here' }
+      renderStep({ step, readOnly: true })
+      expect(screen.queryByText(/No variable references found/)).not.toBeInTheDocument()
     })
   })
 })
