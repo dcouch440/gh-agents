@@ -149,14 +149,16 @@ const createSession = async (roomId: string): Promise<RoomSession> => {
 
 const fetchSession = async (sessionId: string): Promise<RoomSession> => {
   const session = await api.roomSessions.get(sessionId)
-  store.setState((s) => ({
-    sessionsByRoom: {
-      ...s.sessionsByRoom,
-      [session.room_id]: (s.sessionsByRoom[session.room_id] ?? []).map((rs) =>
-        rs.id === sessionId ? session : rs,
-      ),
-    },
-  }))
+  store.setState((s) => {
+    const sessions = s.sessionsByRoom[session.room_id] ?? []
+    const idx = sessions.findIndex((rs) => rs.id === sessionId)
+    if (idx === -1) {
+      return { sessionsByRoom: { ...s.sessionsByRoom, [session.room_id]: [...sessions, session] } }
+    }
+    const updated = sessions.slice()
+    updated[idx] = session
+    return { sessionsByRoom: { ...s.sessionsByRoom, [session.room_id]: updated } }
+  })
   return session
 }
 
@@ -166,14 +168,14 @@ const setActiveSession = (sessionId: string | null): void => {
 
 const closeSession = async (sessionId: string): Promise<RoomSession> => {
   const session = await api.roomSessions.close(sessionId)
-  store.setState((s) => ({
-    sessionsByRoom: {
-      ...s.sessionsByRoom,
-      [session.room_id]: (s.sessionsByRoom[session.room_id] ?? []).map((rs) =>
-        rs.id === sessionId ? session : rs,
-      ),
-    },
-  }))
+  store.setState((s) => {
+    const sessions = s.sessionsByRoom[session.room_id] ?? []
+    const idx = sessions.findIndex((rs) => rs.id === sessionId)
+    if (idx === -1) return s
+    const updated = sessions.slice()
+    updated[idx] = session
+    return { sessionsByRoom: { ...s.sessionsByRoom, [session.room_id]: updated } }
+  })
   return session
 }
 
