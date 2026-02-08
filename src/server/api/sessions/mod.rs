@@ -762,7 +762,7 @@ pub async fn save_session_agent(
         version: 1,
     };
 
-    state.repo().upsert_agent(auth.user_id, agent).await?;
+    state.repo().upsert_agent(agent).await?;
 
     // Set context documents if provided
     if !request.context_document_ids.is_empty() {

@@ -42,6 +42,10 @@ pub async fn run_sync(config_dir: &Path, dry_run: bool, verbose: bool) -> Result
             "   Tool Assignments: {} updated",
             stats.tool_assignments_updated
         );
+        println!(
+            "   System Agents: {} created, {} updated",
+            stats.system_agents_created, stats.system_agents_updated
+        );
 
         if !stats.errors.is_empty() {
             println!("\n⚠️  {} warnings:", stats.errors.len());

@@ -37,7 +37,7 @@ async fn create_test_agent(repo: &PgRepo, user_id: Uuid) -> AgentRow {
         output_schema_id: None,
         version: 1,
     };
-    repo.upsert_agent(UserId(user_id), agent.clone())
+    repo.upsert_agent(agent.clone())
         .await
         .unwrap();
     agent

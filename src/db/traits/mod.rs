@@ -166,7 +166,9 @@ pub trait ServerRepo: Send + Sync {
     async fn list_persisted_agents(&self, user_id: UserId) -> Result<Vec<AgentRow>>;
 
     /// Insert or update an agent definition.
-    async fn upsert_agent(&self, user_id: UserId, agent: AgentRow) -> Result<()>;
+    /// For user-owned agents, pass agent.user_id = Some(user_id).
+    /// For system agents, pass agent.user_id = None.
+    async fn upsert_agent(&self, agent: AgentRow) -> Result<()>;
 
     /// Get a single agent by ID.
     async fn get_persisted_agent(&self, agent_id: Uuid) -> Result<Option<AgentRow>>;

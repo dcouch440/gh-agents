@@ -26,6 +26,7 @@ pub async fn sync_config(
 
     let capabilities = load_capabilities(config_dir, verbose)?;
     let tool_assignments = load_tool_assignments(config_dir, verbose)?;
+    let system_agents = load_system_agents(config_dir, verbose)?;
 
     // 2. Validate everything before touching database
     if verbose {
@@ -39,9 +40,10 @@ pub async fn sync_config(
 
     if dry_run {
         println!(
-            "🔍 DRY RUN: Would sync {} capabilities and {} tool assignments",
+            "🔍 DRY RUN: Would sync {} capabilities, {} tool assignments, and {} system agents",
             capabilities.capabilities.len(),
-            tool_assignments.tool_assignments.len()
+            tool_assignments.tool_assignments.len(),
+            system_agents.system_agents.len()
         );
         return Ok(stats);
     }
@@ -59,6 +61,11 @@ pub async fn sync_config(
         println!("📝 Syncing tool assignments...");
     }
     sync_tool_assignments(&mut tx, &tool_assignments, &mut stats, verbose).await?;
+
+    if verbose {
+        println!("📝 Syncing system agents...");
+    }
+    sync_system_agents(&mut tx, &system_agents, &mut stats, verbose).await?;
 
     // 5. Commit transaction
     tx.commit().await?;
@@ -223,6 +230,69 @@ async fn sync_tool_assignments(
     Ok(())
 }
 
+/// Load system_agents.yaml
+fn load_system_agents(config_dir: &Path, verbose: bool) -> Result<SystemAgentsYaml> {
+    let path = config_dir.join("system_agents.yaml");
+    if verbose {
+        println!("  - Loading {}", path.display());
+    }
+    let content = std::fs::read_to_string(&path)
+        .with_context(|| format!("Failed to read {}", path.display()))?;
+
+    serde_yaml::from_str(&content).with_context(|| format!("Failed to parse {}", path.display()))
+}
+
+/// Sync system agents to agents table
+async fn sync_system_agents(
+    tx: &mut Transaction<'_, Postgres>,
+    agents: &SystemAgentsYaml,
+    stats: &mut SyncStats,
+    verbose: bool,
+) -> Result<()> {
+    use uuid::Uuid;
+
+    for agent in &agents.system_agents {
+        // Generate stable UUID from agent role (deterministic)
+        let agent_id = Uuid::new_v5(&Uuid::NAMESPACE_DNS, agent.role.as_bytes());
+
+        // UPSERT system agent (user_id = NULL for system agents)
+        let result = sqlx::query!(
+            r#"
+            INSERT INTO agents (
+                id, user_id, name, system_prompt, persona_style,
+                model_provider, model_id, model_max_tokens, model_temperature,
+                status, router_mode, output_schema_id, version
+            )
+            VALUES ($1, NULL, $2, $3, NULL, 'anthropic', 'claude-sonnet-4-20250514', 4096, 0.7, 'idle', false, NULL, 1)
+            ON CONFLICT (id) DO UPDATE
+            SET
+                name = EXCLUDED.name,
+                system_prompt = EXCLUDED.system_prompt,
+                version = agents.version + 1
+            RETURNING (xmax = 0) AS "created!"
+            "#,
+            agent_id,
+            agent.name,
+            agent.system_prompt,
+        )
+        .fetch_one(&mut **tx)
+        .await?;
+
+        if result.created {
+            stats.system_agents_created += 1;
+        } else {
+            stats.system_agents_updated += 1;
+        }
+
+        if verbose {
+            let action = if result.created { "Created" } else { "Updated" };
+            println!("  ✓ {}: {} ({})", action, agent.name, agent.role);
+        }
+    }
+
+    Ok(())
+}
+
 /// Print sync statistics
 fn print_stats(stats: &SyncStats) {
     println!("\n📊 Sync Statistics:");
@@ -233,6 +303,10 @@ fn print_stats(stats: &SyncStats) {
     println!(
         "  Tool Assignments: {} updated",
         stats.tool_assignments_updated
+    );
+    println!(
+        "  System Agents: {} created, {} updated",
+        stats.system_agents_created, stats.system_agents_updated
     );
 
     if !stats.errors.is_empty() {
