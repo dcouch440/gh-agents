@@ -1,9 +1,10 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { Box } from '@mui/material'
-import { EditorView, placeholder as cmPlaceholder, keymap, lineNumbers } from '@codemirror/view'
+import { EditorView, placeholder as cmPlaceholder, keymap, lineNumbers, tooltips } from '@codemirror/view'
 import { EditorState, type Extension } from '@codemirror/state'
 import { markdown } from '@codemirror/lang-markdown'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
+import { completionKeymap } from '@codemirror/autocomplete'
 import { syntaxHighlighting } from '@codemirror/language'
 import { oneDarkTheme, oneDarkHighlightStyle } from '@codemirror/theme-one-dark'
 
@@ -54,11 +55,12 @@ function CodeEditor({
     })
 
     const baseExtensions: Extension[] = [
-      keymap.of([...defaultKeymap, ...historyKeymap]),
+      keymap.of([...completionKeymap, ...defaultKeymap, ...historyKeymap]),
       history(),
       oneDarkTheme,
       syntaxHighlighting(oneDarkHighlightStyle),
       EditorView.lineWrapping,
+      tooltips({ parent: document.body }),
       updateListener,
       ...getLanguageExtension(),
       ...extraExtensions,

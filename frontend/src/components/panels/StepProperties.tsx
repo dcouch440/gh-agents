@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import InputBase from '@mui/material/InputBase'
@@ -8,6 +8,11 @@ import { useCollapsible, useDebounceCallback } from '@/hooks'
 import { useStore, agentStore, promptTemplateStore, outputSchemaStore, workflowStore } from '@/stores'
 import { DESIGN, ANIMATION } from '@/constants'
 import { STEP_TYPE_COLORS, DEFAULT_STEP_TYPE_COLOR } from '@/components/canvas/constants'
+import { buildVariableCompletions } from '@/utils/variableContext'
+import { createVariableAutocomplete } from '@/utils/variableAutocomplete'
+import { extractVariables } from '@/utils/variables'
+import type { Extension } from '@codemirror/state'
+import type { VariableCompletion } from '@/utils/variableContext'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 
 type StepPropertiesProps = {
@@ -17,11 +22,34 @@ type StepPropertiesProps = {
   readOnly?: boolean
 }
 
+const EDITOR_CONTAINER_SX = {
+  flex: 1,
+  borderTop: 1,
+  borderColor: 'divider',
+  minHeight: 0,
+  '& > div': { border: 'none', borderRadius: 0, height: '100%' },
+  '& .cm-editor': { height: '100%' },
+  '& .cm-scroller': { overflow: 'auto' },
+  '& .cm-gutters': {
+    backgroundColor: 'transparent',
+    border: 'none',
+  },
+  '& .cm-lineNumbers .cm-gutterElement': {
+    paddingLeft: '2px',
+    paddingRight: '2px',
+    minWidth: 'unset',
+    fontSize: 10,
+    opacity: 0.35,
+  },
+  '& .cm-content': { paddingLeft: '1px' },
+} as const
+
 function StepProperties({ step, edges, steps, readOnly = false }: StepPropertiesProps) {
   const incomingSection = useCollapsible(true)
   const outgoingSection = useCollapsible(true)
   const configSection = useCollapsible(true)
-  const promptSection = useCollapsible(true)
+  const systemPromptSection = useCollapsible(true)
+  const templateSection = useCollapsible(true)
 
   // ── Store data ──────────────────────────────────────────────────────────────
 
@@ -44,13 +72,19 @@ function StepProperties({ step, edges, steps, readOnly = false }: StepProperties
 
   const [localName, setLocalName] = useState(step.name ?? '')
   const [localPrompt, setLocalPrompt] = useState(step.prompt_template)
-  const [prevStepId, setPrevStepId] = useState(step.id)
+  const [localSystemPrompt, setLocalSystemPrompt] = useState(step.system_prompt_suffix ?? '')
+  const [localOutputVar, setLocalOutputVar] = useState(step.output_variable_name ?? '')
 
-  if (prevStepId !== step.id) {
-    setPrevStepId(step.id)
+  // Reset local state when the selected step changes. Intentionally keyed on
+  // step.id only — we do NOT want store updates from debounced saves to
+  // overwrite in-progress edits.
+  useEffect(() => {
     setLocalName(step.name ?? '')
     setLocalPrompt(step.prompt_template)
-  }
+    setLocalSystemPrompt(step.system_prompt_suffix ?? '')
+    setLocalOutputVar(step.output_variable_name ?? '')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step.id])
 
   // ── Save callbacks ──────────────────────────────────────────────────────────
 
@@ -64,6 +98,16 @@ function StepProperties({ step, edges, steps, readOnly = false }: StepProperties
     500,
   )
 
+  const debouncedSaveSystemPrompt = useDebounceCallback(
+    (value: string) => { void workflowStore.updateStep(step.id, { system_prompt_suffix: value || undefined }) },
+    500,
+  )
+
+  const debouncedSaveOutputVar = useDebounceCallback(
+    (value: string) => { void workflowStore.updateStep(step.id, { output_variable_name: value || undefined }) },
+    500,
+  )
+
   const handleNameChange = useCallback((value: string) => {
     setLocalName(value)
     debouncedSaveName(value)
@@ -73,6 +117,18 @@ function StepProperties({ step, edges, steps, readOnly = false }: StepProperties
     setLocalPrompt(value)
     debouncedSavePrompt(value)
   }, [debouncedSavePrompt])
+
+  const handleSystemPromptChange = useCallback((value: string) => {
+    setLocalSystemPrompt(value)
+    debouncedSaveSystemPrompt(value)
+  }, [debouncedSaveSystemPrompt])
+
+  const handleOutputVarChange = useCallback((value: string) => {
+    // Sanitize to valid variable name chars: lowercase, underscores, digits
+    const sanitized = value.replace(/[^a-z0-9_]/g, '')
+    setLocalOutputVar(sanitized)
+    debouncedSaveOutputVar(sanitized)
+  }, [debouncedSaveOutputVar])
 
   const handleAgentChange = useCallback((agentId: string | null) => {
     if (agentId !== null) {
@@ -120,6 +176,35 @@ function StepProperties({ step, edges, steps, readOnly = false }: StepProperties
   const schemasMap = useMemo(
     () => new Map(schemas.map((s) => [s.id, s])),
     [schemas],
+  )
+
+  // ── Variable autocomplete ────────────────────────────────────────────────
+  // CodeMirror extensions must be stable (created once), but need access to
+  // latest completions. We use a ref-based getter: the extension captures a
+  // function that reads completionsRef.current lazily when autocomplete
+  // triggers — never during render.
+
+  const completionsRef = useRef<VariableCompletion[]>([])
+
+  const variableCompletions = useMemo(
+    () => buildVariableCompletions(step.id, stepsById, edges, schemasMap),
+    [step.id, stepsById, edges, schemasMap],
+  )
+
+  useEffect(() => {
+    completionsRef.current = variableCompletions
+  }, [variableCompletions])
+
+  const autocompleteExtension = useMemo<Extension>(
+    () => createVariableAutocomplete(() => completionsRef.current),
+    [], // stable: getter reads from ref, no deps needed
+  )
+
+  // ── Prompt validation ────────────────────────────────────────────────────
+
+  const hasVariableRef = useMemo(
+    () => extractVariables(localPrompt).length > 0,
+    [localPrompt],
   )
 
   // ── Graph connections ──────────────────────────────────────────────────────
@@ -240,13 +325,13 @@ function StepProperties({ step, edges, steps, readOnly = false }: StepProperties
         </PropertySection>
       ) : null}
 
-      {/* ── Configuration (Agent + Template + Schema) ────────────────────── */}
+      {/* ── Configuration (Agent + Schema) ──────────────────────────────── */}
       <PropertySection title="Configuration" {...configSection}>
         {readOnly ? (
           <Box sx={{ px: '16px', pt: '2px', pb: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <PropertyRow label="Agent" value={agent?.name ?? step.agent_id} />
-            <PropertyRow label="Template" value={templatesMap.get(step.prompt_template_id ?? '')?.name ?? 'None'} />
-            <PropertyRow label="Schema" value={schemasMap.get(step.output_schema_id ?? '')?.name ?? 'None'} last />
+            <PropertyRow label="Schema" value={schemasMap.get(step.output_schema_id ?? '')?.name ?? 'None'} />
+            <PropertyRow label="Output Variable" value={step.output_variable_name ?? 'None'} last />
           </Box>
         ) : (
           <Box sx={{ pt: '2px', pb: '4px', display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -264,19 +349,6 @@ function StepProperties({ step, edges, steps, readOnly = false }: StepProperties
             </Box>
             <Box>
               <Typography sx={{ fontSize: 10, fontWeight: 500, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.04em', px: '16px', pt: '6px', pb: '2px' }}>
-                Template
-              </Typography>
-              <PropertySelect
-                value={step.prompt_template_id}
-                options={templateOptions}
-                onChange={handleTemplateChange}
-                placeholder="Select template..."
-                allowNone
-                accentColor={DESIGN.PORT_JSON}
-              />
-            </Box>
-            <Box>
-              <Typography sx={{ fontSize: 10, fontWeight: 500, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.04em', px: '16px', pt: '6px', pb: '2px' }}>
                 Schema
               </Typography>
               <PropertySelect
@@ -288,11 +360,110 @@ function StepProperties({ step, edges, steps, readOnly = false }: StepProperties
                 accentColor={DESIGN.PORT_ARRAY}
               />
             </Box>
+            <Box>
+              <Typography sx={{ fontSize: 10, fontWeight: 500, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.04em', px: '16px', pt: '6px', pb: '2px' }}>
+                Output Variable
+              </Typography>
+              <Box sx={{ px: '16px', pb: '4px' }}>
+                <InputBase
+                  value={localOutputVar}
+                  onChange={(e) => { handleOutputVarChange(e.target.value) }}
+                  placeholder="e.g. parse_output"
+                  fullWidth
+                  sx={{
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                    color: 'text.primary',
+                    px: '8px',
+                    py: '3px',
+                    borderRadius: '6px',
+                    border: 1,
+                    borderColor: 'divider',
+                    transition: 'all 150ms ease',
+                    '&:hover': { borderColor: 'text.disabled' },
+                    '&.Mui-focused': {
+                      borderColor: 'primary.main',
+                      backgroundColor: DESIGN.ACTIVE_TINT,
+                    },
+                  }}
+                />
+              </Box>
+            </Box>
           </Box>
         )}
       </PropertySection>
 
-      {/* ── System Prompt (fills remaining space) ────────────────────────── */}
+      {/* ── System Prompt ──────────────────────────────────────────────── */}
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 120,
+          borderBottom: 1,
+          borderColor: 'divider',
+        }}
+      >
+        <Box
+          onClick={systemPromptSection.onToggle}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            px: '16px',
+            pt: '12px',
+            pb: '8px',
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+            <Typography
+              sx={{
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: 'text.secondary',
+                lineHeight: 1,
+              }}
+            >
+              System Prompt
+            </Typography>
+            <Typography
+              sx={{
+                fontSize: 9,
+                color: 'text.disabled',
+                letterSpacing: '0.02em',
+              }}
+            >
+              appends to agent prompt
+            </Typography>
+          </Box>
+          <KeyboardArrowDownRounded
+            sx={{
+              fontSize: 16,
+              color: 'text.disabled',
+              transition: `transform ${ANIMATION.FAST}ms ease`,
+              transform: systemPromptSection.open ? 'rotate(0deg)' : 'rotate(-90deg)',
+            }}
+          />
+        </Box>
+        {systemPromptSection.open ? (
+          <Box sx={EDITOR_CONTAINER_SX}>
+            <CodeEditor
+              key={`sys-${step.id}`}
+              value={localSystemPrompt}
+              onChange={handleSystemPromptChange}
+              language="markdown"
+              placeholder="Enter system prompt suffix..."
+              height="100%"
+              readOnly={readOnly}
+            />
+          </Box>
+        ) : null}
+      </Box>
+
+      {/* ── Prompt Template (fills remaining space) ────────────────────── */}
       <Box
         sx={{
           flex: 1,
@@ -304,7 +475,7 @@ function StepProperties({ step, edges, steps, readOnly = false }: StepProperties
         }}
       >
         <Box
-          onClick={promptSection.onToggle}
+          onClick={templateSection.onToggle}
           sx={{
             display: 'flex',
             alignItems: 'center',
@@ -326,52 +497,66 @@ function StepProperties({ step, edges, steps, readOnly = false }: StepProperties
               lineHeight: 1,
             }}
           >
-            System Prompt
+            Prompt Template
           </Typography>
           <KeyboardArrowDownRounded
             sx={{
               fontSize: 16,
               color: 'text.disabled',
               transition: `transform ${ANIMATION.FAST}ms ease`,
-              transform: promptSection.open ? 'rotate(0deg)' : 'rotate(-90deg)',
+              transform: templateSection.open ? 'rotate(0deg)' : 'rotate(-90deg)',
             }}
           />
         </Box>
-        {promptSection.open ? (
-          <Box
-            sx={{
-              flex: 1,
-              borderTop: 1,
-              borderColor: 'divider',
-              minHeight: 0,
-              '& > div': { border: 'none', borderRadius: 0, height: '100%' },
-              '& .cm-editor': { height: '100%' },
-              '& .cm-scroller': { overflow: 'auto' },
-              '& .cm-gutters': {
-                backgroundColor: 'transparent',
-                border: 'none',
-              },
-              '& .cm-lineNumbers .cm-gutterElement': {
-                paddingLeft: '2px',
-                paddingRight: '2px',
-                minWidth: 'unset',
-                fontSize: 10,
-                opacity: 0.35,
-              },
-              '& .cm-content': { paddingLeft: '1px' },
-            }}
-          >
-            <CodeEditor
-              key={step.id}
-              value={localPrompt}
-              onChange={handlePromptChange}
-              language="markdown"
-              placeholder="Enter system prompt..."
-              height="100%"
-              readOnly={readOnly}
-              showLineNumbers
-            />
-          </Box>
+        {templateSection.open ? (
+          <>
+            {/* Template selector */}
+            {readOnly ? (
+              step.prompt_template_id ? (
+                <Box sx={{ px: '16px', pb: '8px' }}>
+                  <PropertyRow label="Template" value={templatesMap.get(step.prompt_template_id)?.name ?? 'Unknown'} />
+                </Box>
+              ) : null
+            ) : (
+              <Box sx={{ pb: '4px' }}>
+                <Typography sx={{ fontSize: 10, fontWeight: 500, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.04em', px: '16px', pb: '2px' }}>
+                  Template
+                </Typography>
+                <PropertySelect
+                  value={step.prompt_template_id}
+                  options={templateOptions}
+                  onChange={handleTemplateChange}
+                  placeholder="Select template..."
+                  allowNone
+                  accentColor={DESIGN.PORT_JSON}
+                />
+              </Box>
+            )}
+
+            {/* Validation warning */}
+            {!readOnly && localPrompt.trim().length > 0 && !hasVariableRef ? (
+              <Box sx={{ px: '16px', pb: '6px' }}>
+                <Typography sx={{ fontSize: 10, color: 'warning.main', fontWeight: 500 }}>
+                  {'No variable references found. Use { to insert upstream data.'}
+                </Typography>
+              </Box>
+            ) : null}
+
+            {/* Editor */}
+            <Box sx={EDITOR_CONTAINER_SX}>
+              <CodeEditor
+                key={`tpl-${step.id}`}
+                value={localPrompt}
+                onChange={handlePromptChange}
+                language="markdown"
+                placeholder="Enter prompt template..."
+                height="100%"
+                readOnly={readOnly}
+                showLineNumbers
+                extensions={[autocompleteExtension]}
+              />
+            </Box>
+          </>
         ) : null}
       </Box>
     </Box>

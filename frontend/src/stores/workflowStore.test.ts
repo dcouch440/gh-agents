@@ -96,6 +96,7 @@ const step1: WorkflowStep = {
   position_x: 0,
   position_y: 0,
   name: 'Step 1',
+  system_prompt_suffix: null,
 }
 
 const step2: WorkflowStep = {

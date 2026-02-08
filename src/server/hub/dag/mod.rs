@@ -1662,8 +1662,14 @@ async fn run_step_via_engine(
             .map_err(HubError::Internal)?
     };
 
-    // Build system prompt: mode result + schema enforcement
+    // Build system prompt: mode result + step suffix + schema enforcement
     let mut system_prompt = mode.system_prompt; // agent + mode already merged
+    if let Some(ref suffix) = step.system_prompt_suffix {
+        if !suffix.trim().is_empty() {
+            system_prompt.push_str("\n\n");
+            system_prompt.push_str(suffix);
+        }
+    }
     let mut output_schema_value: Option<JsonValue> = None;
     if let Some(schema_id) = step.output_schema_id {
         let os_repo = &state.repos().output_schemas;
@@ -3190,6 +3196,12 @@ async fn run_cavernous_subtask(
     };
 
     let mut system_prompt = mode.system_prompt;
+    if let Some(ref suffix) = parent_step.system_prompt_suffix {
+        if !suffix.trim().is_empty() {
+            system_prompt.push_str("\n\n");
+            system_prompt.push_str(suffix);
+        }
+    }
     if let Some(schema_id) = parent_step.output_schema_id {
         let os_repo = &state.repos().output_schemas;
         if let Ok(Some(schema)) = os_repo.get_output_schema(schema_id).await {

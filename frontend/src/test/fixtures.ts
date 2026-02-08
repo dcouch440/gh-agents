@@ -258,6 +258,7 @@ export const mockWorkflowStep: WorkflowStep = {
   verification_agent_ids: [],
   position_x: 0,
   position_y: 0,
+  system_prompt_suffix: null,
 }
 
 export const mockWorkflowStep2: WorkflowStep = {

@@ -74,6 +74,7 @@ pub struct WorkflowStepResponse {
     pub position_x: Option<f64>,
     pub position_y: Option<f64>,
     pub name: Option<String>,
+    pub system_prompt_suffix: Option<String>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -93,6 +94,7 @@ pub struct CreateStepRequest {
     pub position_x: Option<f64>,
     pub position_y: Option<f64>,
     pub name: Option<String>,
+    pub system_prompt_suffix: Option<String>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -112,6 +114,7 @@ pub struct UpdateStepRequest {
     pub position_x: Option<f64>,
     pub position_y: Option<f64>,
     pub name: Option<String>,
+    pub system_prompt_suffix: Option<String>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -179,6 +182,7 @@ fn step_response(r: crate::db::WorkflowStepRow) -> WorkflowStepResponse {
         position_x: r.position_x,
         position_y: r.position_y,
         name: r.name,
+        system_prompt_suffix: r.system_prompt_suffix,
     }
 }
 
@@ -446,6 +450,7 @@ pub async fn create_workflow_step(
         position_x: req.position_x,
         position_y: req.position_y,
         name: req.name,
+        system_prompt_suffix: req.system_prompt_suffix,
     };
     let row = repo.create_step(step).await?;
     Ok((StatusCode::CREATED, Json(step_response(row))))
@@ -581,6 +586,7 @@ pub async fn update_workflow_step(
         position_x: req.position_x.or(existing.position_x),
         position_y: req.position_y.or(existing.position_y),
         name: req.name.or(existing.name),
+        system_prompt_suffix: req.system_prompt_suffix.or(existing.system_prompt_suffix),
     };
     let row = repo.update_step(step).await?;
     Ok(Json(step_response(row)))

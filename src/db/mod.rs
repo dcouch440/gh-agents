@@ -148,6 +148,7 @@ pub struct WorkflowStepRow {
     pub position_x: Option<f64>,
     pub position_y: Option<f64>,
     pub name: Option<String>,
+    pub system_prompt_suffix: Option<String>,
 }
 
 /// Row type for a workflow step edge (DAG edge).

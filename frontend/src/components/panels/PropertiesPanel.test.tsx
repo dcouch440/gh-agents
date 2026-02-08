@@ -22,6 +22,7 @@ const step1: WorkflowStep = {
   verification_agent_ids: [],
   position_x: 0,
   position_y: 0,
+  system_prompt_suffix: null,
 }
 
 const step2: WorkflowStep = { ...step1, id: 'step-002', name: 'Second Step' }

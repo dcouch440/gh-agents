@@ -23,6 +23,7 @@ const makeStep = (overrides: Partial<WorkflowStep> = {}): WorkflowStep => ({
   position_x: 100,
   position_y: 200,
   name: 'Step One',
+  system_prompt_suffix: null,
   ...overrides,
 })
 
