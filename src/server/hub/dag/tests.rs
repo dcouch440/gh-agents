@@ -32,6 +32,9 @@ fn make_step(
         version: 1,
         reasoning_trace: false,
         verification_agent_ids: None,
+        position_x: None,
+        position_y: None,
+        name: None,
     }
 }
 
@@ -157,6 +160,9 @@ fn make_for_each_step(id: Uuid, var_name: Option<&str>, display_order: i32) -> W
         version: 1,
         reasoning_trace: false,
         verification_agent_ids: None,
+        position_x: None,
+        position_y: None,
+        name: None,
     }
 }
 

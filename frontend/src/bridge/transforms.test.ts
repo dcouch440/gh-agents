@@ -7,28 +7,29 @@ import type { StepExecutionState } from '@/stores/workflowExecutionStore'
 const makeStep = (overrides: Partial<WorkflowStep> = {}): WorkflowStep => ({
   id: 's1',
   workflow_id: 'w1',
-  name: 'Step One',
-  description: 'A test step',
-  step_type: 'single',
   agent_id: 'a1',
+  execution_mode: 'single',
+  for_each_ref: null,
   prompt_template_id: 'pt1',
+  prompt_template: '',
   output_schema_id: null,
+  output_variable_name: null,
+  interactive_agent_id: null,
   for_each_label_field: null,
-  config: null,
+  display_order: 0,
+  version: 1,
+  reasoning_trace: false,
+  verification_agent_ids: [],
   position_x: 100,
   position_y: 200,
-  created_at: '2025-01-01T00:00:00Z',
-  updated_at: '2025-01-01T00:00:00Z',
+  name: 'Step One',
   ...overrides,
 })
 
 const makeEdge = (overrides: Partial<WorkflowStepEdge> = {}): WorkflowStepEdge => ({
   id: 'e1',
-  workflow_id: 'w1',
   from_step_id: 's1',
   to_step_id: 's2',
-  condition: null,
-  created_at: '2025-01-01T00:00:00Z',
   ...overrides,
 })
 
@@ -56,7 +57,6 @@ describe('stepToNode', () => {
     expect(node.position).toEqual({ x: 100, y: 200 })
     expect(node.selected).toBe(false)
     expect(node.data.name).toBe('Step One')
-    expect(node.data.description).toBe('A test step')
     expect(node.data.stepType).toBe('single')
     expect(node.data.agentId).toBe('a1')
     expect(node.data.executionState).toBeNull()
@@ -65,7 +65,7 @@ describe('stepToNode', () => {
 
   it('transforms a for_each step to a forEachStep node', () => {
     const step = makeStep({
-      step_type: 'for_each',
+      execution_mode: 'for_each',
       for_each_label_field: 'category',
     })
     const node = stepToNode(step, null, false, false)
@@ -76,7 +76,7 @@ describe('stepToNode', () => {
   })
 
   it('transforms a room step to a roomStep node', () => {
-    const step = makeStep({ step_type: 'room' })
+    const step = makeStep({ execution_mode: 'room' })
     const node = stepToNode(step, null, false, false)
 
     expect(node.type).toBe('roomStep')
@@ -84,7 +84,7 @@ describe('stepToNode', () => {
   })
 
   it('falls back to singleStep for unknown step types', () => {
-    const step = makeStep({ step_type: 'unknown_type' })
+    const step = makeStep({ execution_mode: 'unknown_type' })
     const node = stepToNode(step, null, false, false)
 
     expect(node.type).toBe('singleStep')
@@ -123,22 +123,13 @@ describe('stepToNode', () => {
 // ── edgeToFlowEdge ──────────────────────────────────────────────────────────
 
 describe('edgeToFlowEdge', () => {
-  it('transforms unconditional edge to dataFlow type', () => {
+  it('transforms edge to dataFlow type', () => {
     const edge = edgeToFlowEdge(makeEdge(), false, false)
 
     expect(edge.id).toBe('e1')
     expect(edge.source).toBe('s1')
     expect(edge.target).toBe('s2')
     expect(edge.type).toBe('dataFlow')
-    expect(edge.data?.condition).toBeNull()
-  })
-
-  it('transforms conditional edge to conditional type', () => {
-    const e = makeEdge({ condition: 'result.approved === true' })
-    const edge = edgeToFlowEdge(e, false, false)
-
-    expect(edge.type).toBe('conditional')
-    expect(edge.data?.condition).toBe('result.approved === true')
   })
 
   it('sets selected on the edge object', () => {

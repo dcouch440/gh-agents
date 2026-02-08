@@ -19,17 +19,6 @@ describe('EdgeProperties', () => {
     expect(screen.getByText('Second Step')).toBeInTheDocument()
   })
 
-  it('shows "Always" when condition is null', () => {
-    render(<EdgeProperties edge={mockWorkflowEdge} steps={steps} />)
-    expect(screen.getByText('Always')).toBeInTheDocument()
-  })
-
-  it('shows condition when set', () => {
-    const edgeWithCondition = { ...mockWorkflowEdge, condition: 'status == "ok"' }
-    render(<EdgeProperties edge={edgeWithCondition} steps={steps} />)
-    expect(screen.getByText('status == "ok"')).toBeInTheDocument()
-  })
-
   it('shows "Unknown" for missing step references', () => {
     render(<EdgeProperties edge={mockWorkflowEdge} steps={[]} />)
     const unknowns = screen.getAllByText('Unknown')

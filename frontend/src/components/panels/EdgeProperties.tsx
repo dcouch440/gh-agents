@@ -23,9 +23,8 @@ function EdgeProperties({ edge, steps }: EdgePropertiesProps) {
 
   return (
     <PropertySection title="Connection" {...connection}>
-      <PropertyRow label="From" value={fromStep?.name ?? 'Unknown'} />
-      <PropertyRow label="To" value={toStep?.name ?? 'Unknown'} />
-      <PropertyRow label="Condition" value={edge.condition ?? 'Always'} mono last />
+      <PropertyRow label="From" value={fromStep?.name ?? fromStep?.execution_mode ?? 'Unknown'} />
+      <PropertyRow label="To" value={toStep?.name ?? toStep?.execution_mode ?? 'Unknown'} last />
     </PropertySection>
   )
 }

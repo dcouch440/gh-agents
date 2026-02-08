@@ -62,11 +62,13 @@ vi.mock('@/api', () => ({
 
 const wf1: Workflow = {
   id: 'wf1',
-  user_id: 'u1',
   name: 'Test Workflow',
   description: null,
   created_at: '2025-01-01T00:00:00Z',
-  updated_at: '2025-01-01T00:00:00Z',
+  container_enabled: false,
+  target_repo_url: null,
+  target_branch: null,
+  vpn_enabled: false,
 }
 
 const wf2: Workflow = {
@@ -78,18 +80,22 @@ const wf2: Workflow = {
 const step1: WorkflowStep = {
   id: 's1',
   workflow_id: 'wf1',
-  name: 'Step 1',
-  description: null,
-  step_type: 'single',
   agent_id: 'a1',
+  execution_mode: 'single',
+  for_each_ref: null,
   prompt_template_id: null,
+  prompt_template: '',
   output_schema_id: null,
+  output_variable_name: null,
+  interactive_agent_id: null,
   for_each_label_field: null,
-  config: null,
+  display_order: 0,
+  version: 1,
+  reasoning_trace: false,
+  verification_agent_ids: [],
   position_x: 0,
   position_y: 0,
-  created_at: '2025-01-01T00:00:00Z',
-  updated_at: '2025-01-01T00:00:00Z',
+  name: 'Step 1',
 }
 
 const step2: WorkflowStep = {
@@ -102,11 +108,8 @@ const step2: WorkflowStep = {
 
 const edge1: WorkflowStepEdge = {
   id: 'e1',
-  workflow_id: 'wf1',
   from_step_id: 's1',
   to_step_id: 's2',
-  condition: null,
-  created_at: '2025-01-01T00:00:00Z',
 }
 
 const doc1: Document = {
@@ -248,7 +251,7 @@ describe('workflowStore', () => {
 
     it('createStep appends and sets dirty', async () => {
       mockCreateStep.mockResolvedValue(step2)
-      const result = await workflowStore.createStep({ name: 'Step 2', step_type: 'single' })
+      const result = await workflowStore.createStep({ name: 'Step 2', execution_mode: 'single' })
 
       expect(result).toEqual(step2)
       expect(workflowStore.store.getState().steps).toHaveLength(2)
@@ -281,7 +284,7 @@ describe('workflowStore', () => {
 
     it('createStep returns null when no active workflow', async () => {
       workflowStore.clearActive()
-      const result = await workflowStore.createStep({ name: 'X', step_type: 'single' })
+      const result = await workflowStore.createStep({ name: 'X', execution_mode: 'single' })
       expect(result).toBeNull()
     })
   })

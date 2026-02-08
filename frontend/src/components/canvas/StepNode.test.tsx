@@ -20,8 +20,7 @@ const baseProps = {
   type: 'stepNode',
   data: {
     label: 'My Step',
-    stepType: 'llm',
-    description: 'A test step',
+    stepType: 'single',
     agentId: null,
     promptTemplateId: null,
     outputSchemaId: null,
@@ -53,21 +52,7 @@ describe('StepNode', () => {
 
   it('renders step type badge', () => {
     render(<StepNode {...baseProps} />)
-    expect(screen.getByText('llm')).toBeInTheDocument()
-  })
-
-  it('renders description text', () => {
-    render(<StepNode {...baseProps} />)
-    expect(screen.getByText('A test step')).toBeInTheDocument()
-  })
-
-  it('renders "No description" when description is null', () => {
-    const props = {
-      ...baseProps,
-      data: { ...baseProps.data, description: null },
-    }
-    render(<StepNode {...props} />)
-    expect(screen.getByText('No description')).toBeInTheDocument()
+    expect(screen.getByText('single')).toBeInTheDocument()
   })
 
   it('renders input and output handles', () => {

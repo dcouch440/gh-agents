@@ -7,28 +7,29 @@ const step1: WorkflowStep = {
   id: 'step-001',
   workflow_id: 'wf-001',
   name: 'First Step',
-  description: 'The first step',
-  step_type: 'llm',
   agent_id: 'agent-001',
+  execution_mode: 'single',
+  for_each_ref: null,
   prompt_template_id: null,
+  prompt_template: '{task_input}',
   output_schema_id: null,
+  output_variable_name: null,
+  interactive_agent_id: null,
   for_each_label_field: null,
-  config: null,
+  display_order: 0,
+  version: 1,
+  reasoning_trace: false,
+  verification_agent_ids: [],
   position_x: 0,
   position_y: 0,
-  created_at: '2025-01-01T00:00:00Z',
-  updated_at: '2025-01-01T00:00:00Z',
 }
 
 const step2: WorkflowStep = { ...step1, id: 'step-002', name: 'Second Step' }
 
 const edge1: WorkflowStepEdge = {
   id: 'edge-001',
-  workflow_id: 'wf-001',
   from_step_id: 'step-001',
   to_step_id: 'step-002',
-  condition: null,
-  created_at: '2025-01-01T00:00:00Z',
 }
 
 const {

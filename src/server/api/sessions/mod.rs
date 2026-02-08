@@ -746,7 +746,7 @@ pub async fn save_session_agent(
     let agent_id = Uuid::new_v4();
     let agent = crate::db::AgentRow {
         id: agent_id,
-        user_id: auth.user_id.0,
+        user_id: Some(auth.user_id.0),
         tier: None,
         name: request.name,
         system_prompt: draft_config.system_prompt,

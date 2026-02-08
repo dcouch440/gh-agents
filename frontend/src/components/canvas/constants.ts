@@ -7,11 +7,10 @@ export const CANVAS = {
 } as const
 
 export const STEP_TYPE_COLORS: Record<string, string> = {
-  llm: '#3b82f6',
+  single: '#3b82f6',
   for_each: '#2dd4bf',
-  router: '#a78bfa',
-  human: '#f59e0b',
-  tool: '#7d8590',
+  room: '#a78bfa',
+  cavernous: '#f59e0b',
 }
 
 export const DEFAULT_STEP_TYPE_COLOR = '#7d8590'

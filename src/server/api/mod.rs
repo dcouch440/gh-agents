@@ -111,11 +111,12 @@ pub use results::{delete_result, get_result, list_results, ResultQuery, ResultRe
 // Re-export workflow handlers and types
 pub use workflows::{
     add_step_document, add_workflow_edge, create_workflow, create_workflow_step, delete_workflow,
-    delete_workflow_step, get_workflow, get_workflow_step, list_step_documents,
-    list_workflow_edges, list_workflow_steps, list_workflows, remove_step_document,
-    remove_workflow_edge, update_workflow, update_workflow_step, CreateStepRequest,
-    CreateWorkflowRequest, EdgeRequest, EdgeResponse, StepDocumentRequest, StepDocumentResponse,
-    UpdateStepRequest, UpdateWorkflowRequest, WorkflowResponse, WorkflowStepResponse,
+    delete_workflow_edge_by_id, delete_workflow_step, get_workflow, get_workflow_step,
+    list_step_documents, list_workflow_edges, list_workflow_steps, list_workflows,
+    remove_step_document, remove_workflow_edge, update_workflow, update_workflow_step,
+    CreateStepRequest, CreateWorkflowRequest, EdgeRequest, EdgeResponse, StepDocumentRequest,
+    StepDocumentResponse, UpdateStepRequest, UpdateWorkflowRequest, WorkflowResponse,
+    WorkflowStepResponse,
 };
 
 // Re-export collection handlers and types

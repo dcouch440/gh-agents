@@ -498,8 +498,9 @@ pub trait WorkflowRepo: Send + Sync {
     // --- Edges ---
     async fn set_edges(&self, workflow_id: Uuid, edges: Vec<WorkflowStepEdgeRow>) -> Result<()>;
     async fn list_edges(&self, workflow_id: Uuid) -> Result<Vec<WorkflowStepEdgeRow>>;
-    async fn add_edge(&self, from_step_id: Uuid, to_step_id: Uuid) -> Result<()>;
+    async fn add_edge(&self, workflow_id: Uuid, from_step_id: Uuid, to_step_id: Uuid) -> Result<WorkflowStepEdgeRow>;
     async fn remove_edge(&self, from_step_id: Uuid, to_step_id: Uuid) -> Result<()>;
+    async fn delete_edge_by_id(&self, edge_id: Uuid) -> Result<()>;
 
     // --- Step documents ---
     async fn list_step_documents(&self, step_id: Uuid) -> Result<Vec<StepDocumentRow>>;

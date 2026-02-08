@@ -20,11 +20,9 @@ function RoomStepNode({ data, selected }: NodeProps<StepNode>) {
         <Typography variant="caption" color="info.main" fontWeight="bold">
           ROOM
         </Typography>
-        {data.description && (
-          <Typography variant="caption" display="block" color="text.secondary">
-            {data.description}
-          </Typography>
-        )}
+        <Typography variant="caption" display="block" color="text.secondary">
+          {data.stepType}
+        </Typography>
       </Box>
       <Handle type="source" position={Position.Bottom} />
     </>

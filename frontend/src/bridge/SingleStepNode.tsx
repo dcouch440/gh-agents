@@ -17,11 +17,9 @@ function SingleStepNode({ data, selected }: NodeProps<StepNode>) {
             {data.name}
           </Typography>
         </Box>
-        {data.description && (
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-            {data.description}
-          </Typography>
-        )}
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+          {data.stepType}
+        </Typography>
       </Box>
       <Handle type="source" position={Position.Bottom} />
     </>

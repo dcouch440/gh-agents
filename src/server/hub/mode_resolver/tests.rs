@@ -72,7 +72,7 @@ mod tests {
     fn test_agent(router_id: Option<Uuid>) -> AgentRow {
         AgentRow {
             id: Uuid::new_v4(),
-            user_id: Uuid::nil(),
+            user_id: None,
             tier: None,
             name: "test-agent".into(),
             system_prompt: "You are a test agent.".into(),

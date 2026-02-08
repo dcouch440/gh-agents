@@ -575,6 +575,9 @@ pub async fn apply_protocol(
             version: 1,
             reasoning_trace: false,
             verification_agent_ids: None,
+            position_x: None,
+            position_y: None,
+            name: None,
         };
 
         let created = wf_repo

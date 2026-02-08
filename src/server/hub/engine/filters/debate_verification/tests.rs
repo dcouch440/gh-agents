@@ -129,7 +129,7 @@ mod tests {
     fn make_agent(id: Uuid, name: &str) -> AgentRow {
         AgentRow {
             id,
-            user_id: Uuid::nil(),
+            user_id: None,
             tier: None,
             name: name.to_string(),
             system_prompt: format!("You are {name}, an expert reviewer."),

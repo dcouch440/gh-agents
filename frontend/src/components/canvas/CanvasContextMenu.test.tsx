@@ -34,12 +34,10 @@ describe('CanvasContextMenu', () => {
     expect(screen.getByText('Add Step')).toBeInTheDocument()
     expect(screen.getByText('LLM Step')).toBeInTheDocument()
     expect(screen.getByText('For-Each Step')).toBeInTheDocument()
-    expect(screen.getByText('Router Step')).toBeInTheDocument()
-    expect(screen.getByText('Human Review')).toBeInTheDocument()
-    expect(screen.getByText('Tool Step')).toBeInTheDocument()
+    expect(screen.getByText('Room Step')).toBeInTheDocument()
   })
 
-  it('calls createStep with correct type and rounded position on click', async () => {
+  it('calls createStep with correct execution_mode and rounded position on click', async () => {
     const onClose = vi.fn()
     const user = userEvent.setup()
     render(
@@ -49,8 +47,8 @@ describe('CanvasContextMenu', () => {
     await user.click(screen.getByText('LLM Step'))
 
     expect(mockCreateStep).toHaveBeenCalledWith({
-      name: 'New llm step',
-      step_type: 'llm',
+      name: 'New LLM Step',
+      execution_mode: 'single',
       position_x: 151,
       position_y: 251,
     })
@@ -67,7 +65,7 @@ describe('CanvasContextMenu', () => {
     expect(onClose).toHaveBeenCalledOnce()
   })
 
-  it('creates for_each step type correctly', async () => {
+  it('creates for_each execution_mode correctly', async () => {
     const user = userEvent.setup()
     render(
       <CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />,
@@ -76,7 +74,7 @@ describe('CanvasContextMenu', () => {
     await user.click(screen.getByText('For-Each Step'))
 
     expect(mockCreateStep).toHaveBeenCalledWith(
-      expect.objectContaining({ step_type: 'for_each' }),
+      expect.objectContaining({ execution_mode: 'for_each' }),
     )
   })
 })

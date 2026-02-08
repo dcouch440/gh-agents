@@ -16,20 +16,18 @@ type CanvasContextMenuProps = {
 }
 
 const STEP_TYPES = [
-  { key: 'llm', label: 'LLM Step' },
+  { key: 'single', label: 'LLM Step' },
   { key: 'for_each', label: 'For-Each Step' },
-  { key: 'router', label: 'Router Step' },
-  { key: 'human', label: 'Human Review' },
-  { key: 'tool', label: 'Tool Step' },
+  { key: 'room', label: 'Room Step' },
 ] as const
 
 function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
   if (!position) return null
 
-  const handleAdd = (stepType: string) => {
+  const handleAdd = (stepType: string, label: string) => {
     void workflowStore.createStep({
-      name: `New ${stepType} step`,
-      step_type: stepType,
+      name: `New ${label}`,
+      execution_mode: stepType,
       position_x: Math.round(position.flowX),
       position_y: Math.round(position.flowY),
     })
@@ -69,7 +67,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
         <Box
           key={st.key}
           onClick={() => {
-            handleAdd(st.key)
+            handleAdd(st.key, st.label)
           }}
           sx={{
             display: 'flex',

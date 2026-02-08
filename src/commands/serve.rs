@@ -8,6 +8,8 @@ use tracing::{debug, info};
 use crate::cli::Args;
 use crate::config::load_config;
 use crate::db::init_db;
+use crate::db::pg_repo::PgRepo;
+use crate::db::traits::{ProtocolRepo, ServerRepo};
 use crate::logging::{init_logging_with_file, LOG_DIR};
 use crate::server::start_server;
 

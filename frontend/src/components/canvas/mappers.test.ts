@@ -6,37 +6,37 @@ const step1: WorkflowStep = {
   id: 'step-001',
   workflow_id: 'wf-001',
   name: 'First Step',
-  description: 'The first step',
-  step_type: 'llm',
   agent_id: 'agent-001',
+  execution_mode: 'single',
+  for_each_ref: null,
   prompt_template_id: null,
+  prompt_template: '{task_input}',
   output_schema_id: null,
+  output_variable_name: null,
+  interactive_agent_id: null,
   for_each_label_field: null,
-  config: null,
+  display_order: 0,
+  version: 1,
+  reasoning_trace: false,
+  verification_agent_ids: [],
   position_x: 100,
   position_y: 200,
-  created_at: '2025-01-01T00:00:00Z',
-  updated_at: '2025-01-01T00:00:00Z',
 }
 
 const step2: WorkflowStep = {
   ...step1,
   id: 'step-002',
   name: 'Second Step',
-  description: null,
-  step_type: 'for_each',
-  agent_id: null,
+  execution_mode: 'for_each',
+  agent_id: 'agent-001',
   position_x: 400,
   position_y: 100,
 }
 
 const edge1: WorkflowStepEdge = {
   id: 'edge-001',
-  workflow_id: 'wf-001',
   from_step_id: 'step-001',
   to_step_id: 'step-002',
-  condition: 'always',
-  created_at: '2025-01-01T00:00:00Z',
 }
 
 describe('toRFNodes', () => {
@@ -51,8 +51,7 @@ describe('toRFNodes', () => {
       selected: false,
       data: {
         label: 'First Step',
-        stepType: 'llm',
-        description: 'The first step',
+        stepType: 'single',
         agentId: 'agent-001',
         promptTemplateId: null,
         outputSchemaId: null,
@@ -71,9 +70,10 @@ describe('toRFNodes', () => {
     expect(toRFNodes([], new Set())).toEqual([])
   })
 
-  it('preserves null description', () => {
-    const nodes = toRFNodes([step2], new Set())
-    expect(nodes[0]?.data.description).toBeNull()
+  it('falls back to execution_mode when name is null', () => {
+    const stepNoName: WorkflowStep = { ...step1, name: null }
+    const nodes = toRFNodes([stepNoName], new Set())
+    expect(nodes[0]?.data.label).toBe('single')
   })
 })
 
@@ -88,7 +88,6 @@ describe('toRFEdges', () => {
       source: 'step-001',
       target: 'step-002',
       selected: false,
-      data: { condition: 'always' },
     })
   })
 
