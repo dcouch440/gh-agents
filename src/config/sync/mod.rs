@@ -295,6 +295,59 @@ async fn sync_system_agents(
             let action = if result.created { "Created" } else { "Updated" };
             println!("  ✓ {}: {} ({})", action, agent.name, agent.role);
         }
+
+        // Sync default tools for this agent
+        if !agent.default_tools.is_empty() {
+            // Delete existing tool assignments for this agent
+            sqlx::query!(
+                r#"DELETE FROM agent_tools WHERE agent_id = $1"#,
+                agent_id
+            )
+            .execute(&mut **tx)
+            .await?;
+
+            // Insert new tool assignments
+            for tool_name in &agent.default_tools {
+                // Get tool ID
+                let tool = sqlx::query!(r#"SELECT id FROM tools WHERE name = $1"#, tool_name)
+                    .fetch_optional(&mut **tx)
+                    .await?;
+
+                let Some(tool) = tool else {
+                    if verbose {
+                        println!(
+                            "  ⚠ Tool '{}' not found in database, skipping for agent '{}'",
+                            tool_name, agent.name
+                        );
+                    }
+                    stats.add_error(format!(
+                        "Tool '{}' not found for agent '{}'",
+                        tool_name, agent.name
+                    ));
+                    continue;
+                };
+
+                sqlx::query!(
+                    r#"
+                    INSERT INTO agent_tools (agent_id, tool_id)
+                    VALUES ($1, $2)
+                    ON CONFLICT (agent_id, tool_id) DO NOTHING
+                    "#,
+                    agent_id,
+                    tool.id
+                )
+                .execute(&mut **tx)
+                .await?;
+            }
+
+            if verbose {
+                println!(
+                    "    ↳ Assigned {} tool(s) to {}",
+                    agent.default_tools.len(),
+                    agent.name
+                );
+            }
+        }
     }
 
     Ok(())
