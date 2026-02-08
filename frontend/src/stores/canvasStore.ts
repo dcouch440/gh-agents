@@ -17,6 +17,13 @@ type DragItem = {
   startY: number
 }
 
+type StepProtocolLink = {
+  protocolId: string
+  protocolType: string
+  protocolName: string
+  portNames: string[]
+}
+
 type CanvasState = {
   selectedStepIds: ReadonlySet<string>
   selectedEdgeIds: ReadonlySet<string>
@@ -27,6 +34,7 @@ type CanvasState = {
   interactionMode: InteractionMode
   dragItem: DragItem | null
   minimapVisible: boolean
+  stepProtocols: Readonly<Record<string, StepProtocolLink>>
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -34,6 +42,8 @@ type CanvasState = {
 const EMPTY_SET: ReadonlySet<string> = new Set()
 
 // ── Store ────────────────────────────────────────────────────────────────────
+
+const EMPTY_PROTOCOLS: Readonly<Record<string, StepProtocolLink>> = {}
 
 const store = logger('canvasStore', createStore<CanvasState>(() => ({
   selectedStepIds: EMPTY_SET,
@@ -45,6 +55,7 @@ const store = logger('canvasStore', createStore<CanvasState>(() => ({
   interactionMode: 'select',
   dragItem: null,
   minimapVisible: false,
+  stepProtocols: EMPTY_PROTOCOLS,
 })))
 
 // ── Selectors ────────────────────────────────────────────────────────────────
@@ -67,6 +78,9 @@ const selectMinimapVisible = (s: CanvasState): boolean => s.minimapVisible
 
 const selectHasSelection = (s: CanvasState): boolean =>
   s.selectedStepIds.size > 0 || s.selectedEdgeIds.size > 0
+
+const selectStepProtocols = (s: CanvasState): Readonly<Record<string, StepProtocolLink>> =>
+  s.stepProtocols
 
 // ── Selection ────────────────────────────────────────────────────────────────
 
@@ -130,6 +144,22 @@ const setDragItem = (item: DragItem | null): void => {
   store.setState({ dragItem: item })
 }
 
+// ── Step Protocol Linkage ────────────────────────────────────────────────────
+
+const linkStepProtocol = (stepId: string, link: StepProtocolLink): void => {
+  store.setState((s) => ({
+    stepProtocols: { ...s.stepProtocols, [stepId]: link },
+  }))
+}
+
+const unlinkStepProtocol = (stepId: string): void => {
+  store.setState((s) => ({
+    stepProtocols: Object.fromEntries(
+      Object.entries(s.stepProtocols).filter(([id]) => id !== stepId),
+    ),
+  }))
+}
+
 // ── Minimap ──────────────────────────────────────────────────────────────────
 
 const toggleMinimap = (): void => {
@@ -149,6 +179,7 @@ const reset = (): void => {
     interactionMode: 'select',
     dragItem: null,
     minimapVisible: false,
+    stepProtocols: EMPTY_PROTOCOLS,
   })
 }
 
@@ -165,6 +196,7 @@ export const canvasStore = {
   selectInteractionMode,
   selectMinimapVisible,
   selectHasSelection,
+  selectStepProtocols,
   selectSteps,
   selectEdges,
   addToSelection,
@@ -175,8 +207,10 @@ export const canvasStore = {
   closePanel,
   setInteractionMode,
   setDragItem,
+  linkStepProtocol,
+  unlinkStepProtocol,
   toggleMinimap,
   reset,
 }
 
-export type { CanvasState, PanelKind, InteractionMode, DragItem }
+export type { CanvasState, PanelKind, InteractionMode, DragItem, StepProtocolLink }

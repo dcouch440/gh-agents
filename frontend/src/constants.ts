@@ -226,6 +226,19 @@ export const API = {
   COLLECTION: (id: string) => `/collections/${id}`,
   COLLECTION_RUN: (id: string) => `/collections/${id}/run`,
   COLLECTION_RUN_STATUS: (runId: string) => `/collections/runs/${runId}/status`,
+
+  // Protocols
+  PROTOCOLS: "/protocols",
+  PROTOCOL: (id: string) => `/protocols/${id}`,
+  PROTOCOL_TYPES: "/protocols/types",
+  PROTOCOL_PORTS: (id: string) => `/protocols/${id}/ports`,
+  PROTOCOL_PORT: (protocolId: string, portId: string) =>
+    `/protocols/${protocolId}/ports/${portId}`,
+  PROTOCOL_PREVIEW: (id: string) => `/protocols/${id}/preview`,
+  PROTOCOL_APPLY: (id: string, stepId: string) =>
+    `/protocols/${id}/apply/${stepId}`,
+  PROTOCOL_UNAPPLY: (protocolId: string, stepId: string) =>
+    `/protocols/${protocolId}/unapply/${stepId}`,
 } as const;
 
 // Local Storage

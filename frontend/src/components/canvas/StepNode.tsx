@@ -8,7 +8,7 @@ import RepeatOutlined from '@mui/icons-material/RepeatOutlined'
 import ForumOutlined from '@mui/icons-material/ForumOutlined'
 import SettingsOutlined from '@mui/icons-material/SettingsOutlined'
 import type { StepNodeData } from './mappers'
-import { CANVAS, STEP_TYPE_COLORS, DEFAULT_STEP_TYPE_COLOR } from './constants'
+import { CANVAS, STEP_TYPE_COLORS, DEFAULT_STEP_TYPE_COLOR, PROTOCOL_TYPE_COLORS } from './constants'
 import { DESIGN } from '@/constants'
 
 const STEP_TYPE_ICONS: Record<string, typeof SettingsOutlined> = {
@@ -26,7 +26,8 @@ function StepNodeComponent({ data, selected }: NodeProps) {
   const hasInputs = nodeData.upstreamStepNames.length > 0
   const hasTools = nodeData.toolNames.length > 0
   const hasOutput = nodeData.outputSchemaName !== null
-  const hasBody = hasInputs || hasTools || hasOutput
+  const hasPorts = nodeData.protocolPortNames.length > 0
+  const hasBody = hasInputs || hasTools || hasOutput || hasPorts
 
   const subtitle = nodeData.agentName
     ? nodeData.modelId
@@ -87,18 +88,43 @@ function StepNodeComponent({ data, selected }: NodeProps) {
           >
             {nodeData.label}
           </Typography>
-          <Typography
-            sx={{
-              fontSize: 9,
-              textTransform: 'uppercase',
-              color: 'text.secondary',
-              letterSpacing: '0.05em',
-              fontWeight: 600,
-              flexShrink: 0,
-            }}
-          >
-            {nodeData.stepType}
-          </Typography>
+          {nodeData.protocolType !== null ? (
+            <Box
+              sx={{
+                px: 0.75,
+                py: 0.25,
+                borderRadius: '4px',
+                backgroundColor: `${PROTOCOL_TYPE_COLORS[nodeData.protocolType] ?? DEFAULT_STEP_TYPE_COLOR}20`,
+                flexShrink: 0,
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: 8,
+                  textTransform: 'uppercase',
+                  color: PROTOCOL_TYPE_COLORS[nodeData.protocolType] ?? DEFAULT_STEP_TYPE_COLOR,
+                  letterSpacing: '0.06em',
+                  fontWeight: 700,
+                  lineHeight: 1,
+                }}
+              >
+                {nodeData.protocolType}
+              </Typography>
+            </Box>
+          ) : (
+            <Typography
+              sx={{
+                fontSize: 9,
+                textTransform: 'uppercase',
+                color: 'text.secondary',
+                letterSpacing: '0.05em',
+                fontWeight: 600,
+                flexShrink: 0,
+              }}
+            >
+              {nodeData.stepType}
+            </Typography>
+          )}
         </Box>
         {subtitle !== null && (
           <Typography
@@ -234,6 +260,50 @@ function StepNodeComponent({ data, selected }: NodeProps) {
               >
                 {nodeData.outputSchemaName}
               </Typography>
+            </Box>
+          )}
+          {hasPorts && (
+            <Box>
+              <Typography
+                sx={{
+                  fontSize: 8,
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  color: 'text.disabled',
+                  letterSpacing: '0.06em',
+                  lineHeight: 1,
+                  mb: 0.5,
+                }}
+              >
+                Ports
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {nodeData.protocolPortNames.map((name) => (
+                  <Box
+                    key={name}
+                    sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      px: 0.75,
+                      py: 0.25,
+                      borderRadius: '4px',
+                      backgroundColor: `${PROTOCOL_TYPE_COLORS[nodeData.protocolType ?? ''] ?? DEFAULT_STEP_TYPE_COLOR}10`,
+                      border: 1,
+                      borderColor: `${PROTOCOL_TYPE_COLORS[nodeData.protocolType ?? ''] ?? DEFAULT_STEP_TYPE_COLOR}30`,
+                      fontSize: 10,
+                      color: 'text.secondary',
+                      lineHeight: 1.3,
+                      maxWidth: '100%',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {name}
+                  </Box>
+                ))}
+              </Box>
             </Box>
           )}
         </Box>

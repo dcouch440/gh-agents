@@ -4,7 +4,7 @@ export { StepEdge } from './StepEdge'
 export { CanvasContextMenu } from './CanvasContextMenu'
 export { usePositionPersist } from './usePositionPersist'
 export { toRFNodes, toRFEdges } from './mappers'
-export { CANVAS, STEP_TYPE_COLORS, DEFAULT_STEP_TYPE_COLOR } from './constants'
+export { CANVAS, STEP_TYPE_COLORS, DEFAULT_STEP_TYPE_COLOR, PROTOCOL_TYPE_COLORS } from './constants'
 export { nodeTypes } from './nodeTypes'
 export { edgeTypes } from './edgeTypes'
 

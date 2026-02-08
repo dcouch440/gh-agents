@@ -14,3 +14,11 @@ export const STEP_TYPE_COLORS: Record<string, string> = {
 }
 
 export const DEFAULT_STEP_TYPE_COLOR = '#7d8590'
+
+export const PROTOCOL_TYPE_COLORS: Record<string, string> = {
+  decomp: '#3b82f6',
+  route: '#a78bfa',
+  review: '#f85149',
+  transform: '#2dd4bf',
+  default: '#7d8590',
+}

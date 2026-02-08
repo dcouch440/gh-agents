@@ -72,6 +72,12 @@ import type {
   CreateCollectionRequest,
   UpdateCollectionRequest,
   WorkflowRunResponse,
+  Protocol,
+  ProtocolPort,
+  ProtocolTypeInfo,
+  CreateProtocolRequest,
+  UpdateProtocolRequest,
+  CreatePortRequest,
 } from '@/types'
 
 // ============================================================================
@@ -498,6 +504,37 @@ const collections = {
     baseApi.get<CollectionRun>(API.COLLECTION_RUN_STATUS(runId), config),
 }
 
+type ProtocolTypesResponse = { types: ProtocolTypeInfo[] }
+
+const protocols = {
+  list: (config?: RequestConfig) =>
+    baseApi.get<Protocol[]>(API.PROTOCOLS, config),
+
+  get: (id: string, config?: RequestConfig) =>
+    baseApi.get<Protocol>(API.PROTOCOL(id), config),
+
+  create: (body: CreateProtocolRequest, config?: RequestConfig) =>
+    baseApi.post<Protocol>(API.PROTOCOLS, body, config),
+
+  update: (id: string, body: UpdateProtocolRequest, config?: RequestConfig) =>
+    baseApi.put<Protocol>(API.PROTOCOL(id), body, config),
+
+  delete: (id: string, config?: RequestConfig) =>
+    baseApi.del<void>(API.PROTOCOL(id), config),
+
+  listTypes: (config?: RequestConfig) =>
+    baseApi.get<ProtocolTypesResponse>(API.PROTOCOL_TYPES, config),
+
+  createPort: (protocolId: string, body: CreatePortRequest, config?: RequestConfig) =>
+    baseApi.post<ProtocolPort>(API.PROTOCOL_PORTS(protocolId), body, config),
+
+  deletePort: (protocolId: string, portId: string, config?: RequestConfig) =>
+    baseApi.del<void>(API.PROTOCOL_PORT(protocolId, portId), config),
+
+  preview: (id: string, config?: RequestConfig) =>
+    baseApi.post<unknown>(API.PROTOCOL_PREVIEW(id), undefined, config),
+}
+
 // ============================================================================
 // Merge base API methods with typed endpoints into single `api` export
 // ============================================================================
@@ -533,4 +570,5 @@ export const api = {
   rooms,
   roomSessions,
   collections,
+  protocols,
 }

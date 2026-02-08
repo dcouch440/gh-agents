@@ -16,11 +16,13 @@ import {
   promptTemplateStore,
   outputSchemaStore,
   workflowStore,
+  protocolStore,
 } from "@/stores";
 import {DESIGN} from "@/constants";
 import {
   STEP_TYPE_COLORS,
   DEFAULT_STEP_TYPE_COLOR,
+  PROTOCOL_TYPE_COLORS,
 } from "@/components/canvas/constants";
 import {buildVariableCompletions} from "@/utils/variableContext";
 import {createVariableAutocomplete} from "@/utils/variableAutocomplete";
@@ -36,13 +38,14 @@ type StepPropertiesProps = {
   readOnly?: boolean;
 };
 
-type StepTab = "system" | "template" | "input" | "output";
+type StepTab = "system" | "template" | "input" | "output" | "protocol";
 
 const TAB_OPTIONS: TabOption[] = [
   {value: "system", label: "System"},
   {value: "template", label: "Template"},
   {value: "input", label: "Input"},
   {value: "output", label: "Output"},
+  {value: "protocol", label: "Protocol"},
 ];
 
 const EDITOR_CONTAINER_SX = {
@@ -120,46 +123,30 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
     agentStore.store,
     step.agent_id ? agentStore.selectById(step.agent_id) : () => undefined,
   );
+  const allProtocols = useStore(protocolStore.store, protocolStore.selectAll);
 
   useEffect(() => {
     void agentStore.fetchAll();
     void promptTemplateStore.fetchIfStale();
     void outputSchemaStore.fetchIfStale();
+    void protocolStore.fetchAll();
   }, []);
 
-  // ── Field handlers ─────────────────────────────────────────────────────────
-  // All edits patch the store only. Nothing hits the API until the user clicks
-  // Save on the canvas toolbar.
+  // ── Lookup maps ────────────────────────────────────────────────────────────
 
-  const handleFieldChange = useCallback(
-    (field: "name" | "prompt_template" | "system_prompt_suffix", value: string) => {
-      const storeValue = field === "prompt_template" ? value : value || null;
-      workflowStore.patchStepLocal(step.id, {[field]: storeValue} as Partial<WorkflowStep>);
-    },
-    [step.id],
+  const stepsById = useMemo(
+    () => new Map(steps.map((s) => [s.id, s])),
+    [steps],
   );
 
-  const handleAgentChange = useCallback(
-    (agentId: string | null) => {
-      if (agentId !== null) {
-        workflowStore.patchStepLocal(step.id, {agent_id: agentId});
-      }
-    },
-    [step.id],
+  const templatesMap = useMemo(
+    () => new Map(templates.map((t) => [t.id, t])),
+    [templates],
   );
 
-  const handleTemplateChange = useCallback(
-    (templateId: string | null) => {
-      workflowStore.patchStepLocal(step.id, {prompt_template_id: templateId});
-    },
-    [step.id],
-  );
-
-  const handleSchemaChange = useCallback(
-    (schemaId: string | null) => {
-      workflowStore.patchStepLocal(step.id, {output_schema_id: schemaId});
-    },
-    [step.id],
+  const schemasMap = useMemo(
+    () => new Map(schemas.map((s) => [s.id, s])),
+    [schemas],
   );
 
   // ── Dropdown options ────────────────────────────────────────────────────────
@@ -185,21 +172,43 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
     [schemas],
   );
 
-  // ── Lookup maps ────────────────────────────────────────────────────────────
+  // ── Field handlers ─────────────────────────────────────────────────────────
+  // All edits patch the store only. Nothing hits the API until the user clicks
+  // Save on the canvas toolbar.
 
-  const stepsById = useMemo(
-    () => new Map(steps.map((s) => [s.id, s])),
-    [steps],
+  const handleFieldChange = useCallback(
+    (field: "name" | "prompt_template" | "system_prompt_suffix", value: string) => {
+      const storeValue = field === "prompt_template" ? value : value || null;
+      workflowStore.patchStepLocal(step.id, {[field]: storeValue} as Partial<WorkflowStep>);
+    },
+    [step.id],
   );
 
-  const templatesMap = useMemo(
-    () => new Map(templates.map((t) => [t.id, t])),
-    [templates],
+  const handleAgentChange = useCallback(
+    (agentId: string | null) => {
+      if (agentId !== null) {
+        workflowStore.patchStepLocal(step.id, {agent_id: agentId});
+      }
+    },
+    [step.id],
   );
 
-  const schemasMap = useMemo(
-    () => new Map(schemas.map((s) => [s.id, s])),
-    [schemas],
+  const handleTemplateChange = useCallback(
+    (templateId: string | null) => {
+      const tpl = templateId ? templatesMap.get(templateId) : undefined;
+      workflowStore.patchStepLocal(step.id, {
+        prompt_template_id: templateId,
+        prompt_template: tpl?.template ?? '',
+      });
+    },
+    [step.id, templatesMap],
+  );
+
+  const handleSchemaChange = useCallback(
+    (schemaId: string | null) => {
+      workflowStore.patchStepLocal(step.id, {output_schema_id: schemaId});
+    },
+    [step.id],
   );
 
   // ── Graph connections (derived from edges) ──────────────────────────────
@@ -691,6 +700,137 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
               >
                 No output schema selected
               </Typography>
+            )}
+          </Box>
+        ) : null}
+
+        {/* ── Protocol tab ────────────────────────────────────────────── */}
+        {activeTab === "protocol" ? (
+          <Box sx={{flex: 1, overflow: "auto"}}>
+            <Typography sx={SECTION_LABEL_SX}>Available Protocols</Typography>
+            {allProtocols.length === 0 ? (
+              <EmptyState message="No protocols available" />
+            ) : (
+              allProtocols.map((proto) => {
+                const protoColor = PROTOCOL_TYPE_COLORS[proto.protocol_type] ?? DEFAULT_STEP_TYPE_COLOR;
+                return (
+                  <Box
+                    key={proto.id}
+                    sx={{
+                      borderBottom: 1,
+                      borderColor: "divider",
+                      px: "16px",
+                      py: "10px",
+                    }}
+                  >
+                    <Box sx={{display: "flex", alignItems: "center", gap: 1, mb: 0.5}}>
+                      <Box
+                        sx={{
+                          px: "6px",
+                          py: "2px",
+                          borderRadius: "4px",
+                          backgroundColor: `${protoColor}20`,
+                        }}
+                      >
+                        <Typography
+                          sx={{
+                            fontSize: 9,
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                            color: protoColor,
+                            letterSpacing: "0.06em",
+                            lineHeight: 1,
+                          }}
+                        >
+                          {proto.protocol_type}
+                        </Typography>
+                      </Box>
+                      <Typography
+                        sx={{
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: "text.primary",
+                          flex: 1,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {proto.name}
+                      </Typography>
+                    </Box>
+                    <Typography
+                      sx={{
+                        fontSize: 11,
+                        color: "text.secondary",
+                        lineHeight: 1.4,
+                        mb: proto.ports.length > 0 ? 1 : 0,
+                      }}
+                    >
+                      {proto.description}
+                    </Typography>
+                    {proto.ports.length > 0 && (
+                      <Box>
+                        <Typography
+                          sx={{
+                            fontSize: 9,
+                            fontWeight: 600,
+                            textTransform: "uppercase",
+                            color: "text.disabled",
+                            letterSpacing: "0.06em",
+                            mb: 0.5,
+                          }}
+                        >
+                          Ports ({proto.ports.length})
+                        </Typography>
+                        <Box sx={{display: "flex", flexWrap: "wrap", gap: 0.5}}>
+                          {proto.ports.map((port) => {
+                            const portAgent = agents.find((a) => a.id === port.agent_id);
+                            return (
+                              <Box
+                                key={port.id}
+                                sx={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 0.5,
+                                  px: "6px",
+                                  py: "2px",
+                                  borderRadius: "4px",
+                                  backgroundColor: `${protoColor}10`,
+                                  border: 1,
+                                  borderColor: `${protoColor}25`,
+                                }}
+                              >
+                                <Typography
+                                  sx={{fontSize: 10, color: "text.secondary", fontWeight: 500}}
+                                >
+                                  {port.port_name}
+                                </Typography>
+                                {portAgent ? (
+                                  <Typography
+                                    sx={{fontSize: 9, color: "text.disabled"}}
+                                  >
+                                    {portAgent.name}
+                                  </Typography>
+                                ) : null}
+                              </Box>
+                            );
+                          })}
+                        </Box>
+                      </Box>
+                    )}
+                    {proto.agent ? (
+                      <Box sx={{mt: 0.75}}>
+                        <Typography
+                          sx={{fontSize: 10, color: "text.disabled"}}
+                        >
+                          Agent: {proto.agent.name} ({proto.agent.model_id})
+                        </Typography>
+                      </Box>
+                    ) : null}
+                  </Box>
+                );
+              })
             )}
           </Box>
         ) : null}
