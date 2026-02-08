@@ -1,8 +1,8 @@
-//! SchemaEnhancementFilter — adds negative examples to schema instructions.
+//! SchemaEnhancementFilter — adds formatting guidance to schema instructions.
 //!
 //! When a step has an output_schema, this filter augments the system prompt
-//! with explicit "do NOT" patterns, reducing common LLM output mistakes
-//! like wrapping JSON in markdown fences or adding explanatory text.
+//! with positive formatting rules and WHY context, reducing common LLM output
+//! mistakes like wrapping JSON in markdown fences or adding explanatory text.
 
 use async_trait::async_trait;
 
@@ -39,12 +39,9 @@ impl ExecutionFilter for SchemaEnhancementFilter {
         let mut augmented = system_prompt;
         augmented.push_str(concat!(
             "\n\n<output_rules>\n",
-            "- Output ONLY the raw JSON object. No markdown code fences (```), no commentary.\n",
-            "- Do NOT wrap your response in ```json ... ```. The consumer parses raw JSON directly.\n",
-            "- Do NOT include any text before or after the JSON object.\n",
-            "- Do NOT include explanatory sentences like \"Here is the JSON:\".\n",
-            "- If a field is optional and you have no value, use null rather than omitting it.\n",
-            "- Every string value must be properly escaped JSON.\n",
+            "- Respond with the raw JSON object only. A downstream parser calls JSON.parse() on your entire response, so any surrounding text causes a parse failure.\n",
+            "- Use null for optional fields with no value. Omitting fields causes schema validation errors.\n",
+            "- Escape all string values as valid JSON. Unescaped newlines or quotes break the parser.\n",
             "</output_rules>",
         ));
 

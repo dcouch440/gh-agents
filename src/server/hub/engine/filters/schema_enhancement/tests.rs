@@ -27,8 +27,8 @@ mod tests {
         assert!(sys.starts_with("Base prompt."));
         assert!(sys.contains("<output_rules>"));
         assert!(sys.contains("</output_rules>"));
-        assert!(sys.contains("Do NOT wrap"));
-        assert!(sys.contains("Do NOT include any text"));
+        assert!(sys.contains("JSON.parse()"));
+        assert!(sys.contains("null for optional"));
     }
 
     #[tokio::test]

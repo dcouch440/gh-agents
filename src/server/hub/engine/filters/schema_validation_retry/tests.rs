@@ -67,7 +67,7 @@ mod tests {
             .unwrap();
         match action {
             ResponseAction::Retry { feedback } => {
-                assert!(feedback.contains("not valid JSON"));
+                assert!(feedback.contains("failed to parse"));
             }
             ResponseAction::Accept => panic!("expected Retry"),
         }
