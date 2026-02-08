@@ -29,7 +29,7 @@ beforeEach(() => {
 
 describe('promptTemplateStore', () => {
   it('fetchAll populates store', async () => {
-    mockList.mockResolvedValue({ items: [tpl1, tpl2] })
+    mockList.mockResolvedValue([tpl1, tpl2])
 
     await promptTemplateStore.fetchAll()
 
@@ -48,7 +48,7 @@ describe('promptTemplateStore', () => {
   })
 
   it('remove deletes item from store', async () => {
-    mockList.mockResolvedValue({ items: [tpl1, tpl2] })
+    mockList.mockResolvedValue([tpl1, tpl2])
     mockDelete.mockResolvedValue(undefined)
 
     await promptTemplateStore.fetchAll()

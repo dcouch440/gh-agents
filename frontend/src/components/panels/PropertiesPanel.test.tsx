@@ -63,6 +63,9 @@ vi.mock('@/stores', () => ({
       id ? _steps.value.find((s: WorkflowStep) => s.id === id) ?? null : null,
     selectEdgeById: (id: string | null) => () =>
       id ? _edges.value.find((e: WorkflowStepEdge) => e.id === id) ?? null : null,
+    selectUpstream: () => () => [],
+    selectDownstream: () => () => [],
+    updateStep: vi.fn(),
   },
   agentStore: {
     store: 'agent',

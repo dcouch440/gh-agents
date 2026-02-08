@@ -15,7 +15,6 @@ const outputSchemaStore = createResourceStore<OutputSchema, CreateOutputSchemaRe
     update: (id, body) => api.outputSchemas.update(id, body),
     delete: (id) => api.outputSchemas.delete(id),
   },
-  unwrapList: (res) => (res as { items: OutputSchema[] }).items,
 })
 
 export { outputSchemaStore }

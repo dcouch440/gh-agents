@@ -13,11 +13,10 @@ import { createVariableAutocomplete } from '@/utils/variableAutocomplete'
 import { extractVariables } from '@/utils/variables'
 import type { Extension } from '@codemirror/state'
 import type { VariableCompletion } from '@/utils/variableContext'
-import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
+import type { WorkflowStep } from '@/types/workflow'
 
 type StepPropertiesProps = {
   step: WorkflowStep
-  edges: WorkflowStepEdge[]
   steps: WorkflowStep[]
   readOnly?: boolean
 }
@@ -44,7 +43,7 @@ const EDITOR_CONTAINER_SX = {
   '& .cm-content': { paddingLeft: '1px' },
 } as const
 
-function StepProperties({ step, edges, steps, readOnly = false }: StepPropertiesProps) {
+function StepProperties({ step, steps, readOnly = false }: StepPropertiesProps) {
   const incomingSection = useCollapsible(true)
   const outgoingSection = useCollapsible(true)
   const configSection = useCollapsible(true)
@@ -178,6 +177,21 @@ function StepProperties({ step, edges, steps, readOnly = false }: StepProperties
     [schemas],
   )
 
+  // ── Graph connections (O(1) from store adjacency map) ────────────────────
+
+  const upstreamIds = useStore(workflowStore.store, workflowStore.selectUpstream(step.id))
+  const downstreamIds = useStore(workflowStore.store, workflowStore.selectDownstream(step.id))
+
+  const incomingSteps = useMemo(
+    () => upstreamIds.map((id) => stepsById.get(id)).filter((s): s is WorkflowStep => s !== undefined),
+    [upstreamIds, stepsById],
+  )
+
+  const downstreamSteps = useMemo(
+    () => downstreamIds.map((id) => stepsById.get(id)).filter((s): s is WorkflowStep => s !== undefined),
+    [downstreamIds, stepsById],
+  )
+
   // ── Variable autocomplete ────────────────────────────────────────────────
   // CodeMirror extensions must be stable (created once), but need access to
   // latest completions. We use a ref-based getter: the extension captures a
@@ -187,8 +201,8 @@ function StepProperties({ step, edges, steps, readOnly = false }: StepProperties
   const completionsRef = useRef<VariableCompletion[]>([])
 
   const variableCompletions = useMemo(
-    () => buildVariableCompletions(step.id, stepsById, edges, schemasMap),
-    [step.id, stepsById, edges, schemasMap],
+    () => buildVariableCompletions(upstreamIds, stepsById, schemasMap),
+    [upstreamIds, stepsById, schemasMap],
   )
 
   useEffect(() => {
@@ -205,26 +219,6 @@ function StepProperties({ step, edges, steps, readOnly = false }: StepProperties
   const hasVariableRef = useMemo(
     () => extractVariables(localPrompt).length > 0,
     [localPrompt],
-  )
-
-  // ── Graph connections ──────────────────────────────────────────────────────
-
-  const incomingSteps = useMemo(
-    () =>
-      edges
-        .filter((e) => e.to_step_id === step.id)
-        .map((e) => stepsById.get(e.from_step_id))
-        .filter((s): s is WorkflowStep => s !== undefined),
-    [edges, stepsById, step.id],
-  )
-
-  const downstreamSteps = useMemo(
-    () =>
-      edges
-        .filter((e) => e.from_step_id === step.id)
-        .map((e) => stepsById.get(e.to_step_id))
-        .filter((s): s is WorkflowStep => s !== undefined),
-    [edges, stepsById, step.id],
   )
 
   // ── Mode badge color ────────────────────────────────────────────────────────

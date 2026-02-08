@@ -15,7 +15,6 @@ const taskStore = createResourceStore<Task, CreateTaskRequest, Partial<Task>>({
     update: (id, body) => api.tasks.update(id, body),
     delete: (id) => api.tasks.delete(id),
   },
-  unwrapList: (res) => (res as { items: Task[] }).items,
 })
 
 export { taskStore }

@@ -42,7 +42,7 @@ beforeEach(() => {
 describe('sessionStore', () => {
   describe('fetchAll', () => {
     it('populates items from api.sessions.list()', async () => {
-      mockList.mockResolvedValue({ items: [session1, session2] })
+      mockList.mockResolvedValue([session1, session2])
       await sessionStore.fetchAll()
 
       const s = sessionStore.store.getState()
@@ -95,7 +95,7 @@ describe('sessionStore', () => {
 
   describe('remove', () => {
     it('optimistically deletes and calls api', async () => {
-      mockList.mockResolvedValue({ items: [session1] })
+      mockList.mockResolvedValue([session1])
       await sessionStore.fetchAll()
       expect(nmSize(sessionStore.store.getState().items)).toBe(1)
 
@@ -107,7 +107,7 @@ describe('sessionStore', () => {
     })
 
     it('rolls back on api failure', async () => {
-      mockList.mockResolvedValue({ items: [session1] })
+      mockList.mockResolvedValue([session1])
       await sessionStore.fetchAll()
 
       mockDelete.mockRejectedValue(new Error('Delete failed'))
@@ -119,7 +119,7 @@ describe('sessionStore', () => {
 
   describe('selectors', () => {
     it('selectAll returns array', async () => {
-      mockList.mockResolvedValue({ items: [session1, session2] })
+      mockList.mockResolvedValue([session1, session2])
       await sessionStore.fetchAll()
 
       const all = sessionStore.selectAll(sessionStore.store.getState())

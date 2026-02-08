@@ -29,7 +29,7 @@ beforeEach(() => {
 
 describe('resultStore', () => {
   it('fetchAll populates store', async () => {
-    mockList.mockResolvedValue({ items: [result1, result2] })
+    mockList.mockResolvedValue([result1, result2])
 
     await resultStore.fetchAll()
 

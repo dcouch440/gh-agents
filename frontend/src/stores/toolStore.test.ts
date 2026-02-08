@@ -29,7 +29,7 @@ beforeEach(() => {
 
 describe('toolStore', () => {
   it('fetchAll populates store', async () => {
-    mockList.mockResolvedValue({ items: [tool1, tool2] })
+    mockList.mockResolvedValue([tool1, tool2])
 
     await toolStore.fetchAll()
 
@@ -48,7 +48,7 @@ describe('toolStore', () => {
   })
 
   it('remove deletes item from store', async () => {
-    mockList.mockResolvedValue({ items: [tool1, tool2] })
+    mockList.mockResolvedValue([tool1, tool2])
     mockDelete.mockResolvedValue(undefined)
 
     await toolStore.fetchAll()

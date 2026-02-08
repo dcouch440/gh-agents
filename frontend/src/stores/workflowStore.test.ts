@@ -377,6 +377,60 @@ describe('workflowStore', () => {
     })
   })
 
+  describe('adjacency selectors', () => {
+    beforeEach(async () => {
+      mockGet.mockResolvedValue(wf1)
+      mockListSteps.mockResolvedValue([step1, step2])
+      mockListEdges.mockResolvedValue([edge1])
+      await workflowStore.loadWorkflow('wf1')
+    })
+
+    it('selectAdjacency builds map from edges', () => {
+      const adj = workflowStore.selectAdjacency(workflowStore.store.getState())
+      expect(adj['s1']).toEqual({ from: [], to: ['s2'] })
+      expect(adj['s2']).toEqual({ from: ['s1'], to: [] })
+    })
+
+    it('selectUpstream returns upstream IDs for a step', () => {
+      const upstream = workflowStore.selectUpstream('s2')(workflowStore.store.getState())
+      expect(upstream).toEqual(['s1'])
+    })
+
+    it('selectDownstream returns downstream IDs for a step', () => {
+      const downstream = workflowStore.selectDownstream('s1')(workflowStore.store.getState())
+      expect(downstream).toEqual(['s2'])
+    })
+
+    it('returns stable empty array for steps with no connections', () => {
+      const a = workflowStore.selectUpstream('s1')(workflowStore.store.getState())
+      const b = workflowStore.selectUpstream('nonexistent')(workflowStore.store.getState())
+      expect(a).toEqual([])
+      expect(b).toEqual([])
+      // Both should be the same EMPTY_ENTRY.from reference
+      expect(b).toBe(workflowStore.selectUpstream('another-missing')(workflowStore.store.getState()))
+    })
+
+    it('returns cached adjacency when edges have not changed', () => {
+      const state = workflowStore.store.getState()
+      const adj1 = workflowStore.selectAdjacency(state)
+      const adj2 = workflowStore.selectAdjacency(state)
+      expect(adj1).toBe(adj2) // Same reference
+    })
+
+    it('rebuilds adjacency after edge mutation', async () => {
+      const adj1 = workflowStore.selectAdjacency(workflowStore.store.getState())
+
+      const edge2: WorkflowStepEdge = { id: 'e2', from_step_id: 's2', to_step_id: 's1' }
+      mockCreateEdge.mockResolvedValue(edge2)
+      await workflowStore.addEdge({ from_step_id: 's2', to_step_id: 's1' })
+
+      const adj2 = workflowStore.selectAdjacency(workflowStore.store.getState())
+      expect(adj2).not.toBe(adj1) // New reference
+      expect(adj2['s1']?.from).toEqual(['s2'])
+      expect(adj2['s1']?.to).toEqual(['s2'])
+    })
+  })
+
   describe('stale data', () => {
     it('starts as stale (lastFetched is null)', () => {
       expect(workflowStore.selectIsStale(workflowStore.store.getState())).toBe(true)

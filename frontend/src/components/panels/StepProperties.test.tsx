@@ -24,6 +24,8 @@ const {
   mockAgentSelectAll,
   mockTemplateSelectAll,
   mockSchemaSelectAll,
+  mockSelectUpstream,
+  mockSelectDownstream,
 } = vi.hoisted(() => ({
   mockUpdateStep: vi.fn(() => Promise.resolve(null)),
   mockFetchAllAgents: vi.fn(() => Promise.resolve()),
@@ -33,6 +35,8 @@ const {
   mockAgentSelectAll: vi.fn(() => []),
   mockTemplateSelectAll: vi.fn(() => []),
   mockSchemaSelectAll: vi.fn(() => []),
+  mockSelectUpstream: vi.fn((): (_s: unknown) => readonly string[] => () => []),
+  mockSelectDownstream: vi.fn((): (_s: unknown) => readonly string[] => () => []),
 }))
 
 vi.mock('@/stores', () => ({
@@ -57,7 +61,10 @@ vi.mock('@/stores', () => ({
     fetchIfStale: mockFetchIfStaleSchemas,
   },
   workflowStore: {
+    store: { getState: vi.fn(), subscribe: vi.fn() },
     updateStep: mockUpdateStep,
+    selectUpstream: mockSelectUpstream,
+    selectDownstream: mockSelectDownstream,
   },
 }))
 
@@ -93,7 +100,7 @@ vi.mock('@/components/primitives', async () => {
 const renderStep = (props: Partial<Parameters<typeof StepProperties>[0]> = {}) =>
   render(
     <ThemeProvider theme={theme}>
-      <StepProperties step={mockWorkflowStep} edges={[]} steps={[]} {...props} />
+      <StepProperties step={mockWorkflowStep} steps={[]} {...props} />
     </ThemeProvider>,
   )
 
@@ -104,6 +111,8 @@ beforeEach(() => {
   mockAgentSelectAll.mockReturnValue([mockAgent, mockAgent2])
   mockTemplateSelectAll.mockReturnValue([mockPromptTemplate, mockPromptTemplate2])
   mockSchemaSelectAll.mockReturnValue([mockOutputSchema, mockOutputSchema2])
+  mockSelectUpstream.mockReturnValue(() => [])
+  mockSelectDownstream.mockReturnValue(() => [])
 })
 
 afterEach(() => {
@@ -341,30 +350,30 @@ describe('StepProperties', () => {
   })
 
   describe('incoming connections', () => {
-    it('renders upstream steps in Incoming section when edges point to this step', () => {
+    it('renders upstream steps in Incoming section via store adjacency', () => {
       const step2 = { ...mockWorkflowStep, id: 'step-002', name: 'Upstream' }
-      const edge = { id: 'e1', from_step_id: 'step-002', to_step_id: 'step-001' }
-      renderStep({ steps: [mockWorkflowStep, step2], edges: [edge] })
+      mockSelectUpstream.mockReturnValue(() => ['step-002'])
+      renderStep({ steps: [mockWorkflowStep, step2] })
       expect(screen.getByText('Incoming')).toBeInTheDocument()
       expect(screen.getByText('Upstream')).toBeInTheDocument()
     })
 
-    it('hides Incoming section when no upstream edges', () => {
+    it('hides Incoming section when no upstream steps', () => {
       renderStep()
       expect(screen.queryByText('Incoming')).not.toBeInTheDocument()
     })
   })
 
   describe('outgoing connections', () => {
-    it('renders downstream steps in Outgoing section when edges leave this step', () => {
+    it('renders downstream steps in Outgoing section via store adjacency', () => {
       const step2 = { ...mockWorkflowStep, id: 'step-002', name: 'Downstream' }
-      const edge = { id: 'e1', from_step_id: 'step-001', to_step_id: 'step-002' }
-      renderStep({ steps: [mockWorkflowStep, step2], edges: [edge] })
+      mockSelectDownstream.mockReturnValue(() => ['step-002'])
+      renderStep({ steps: [mockWorkflowStep, step2] })
       expect(screen.getByText('Outgoing')).toBeInTheDocument()
       expect(screen.getByText('Downstream')).toBeInTheDocument()
     })
 
-    it('hides Outgoing section when no downstream edges', () => {
+    it('hides Outgoing section when no downstream steps', () => {
       renderStep()
       expect(screen.queryByText('Outgoing')).not.toBeInTheDocument()
     })
