@@ -181,7 +181,7 @@ pub async fn create_agent(
         version: 1,
     };
 
-    state.repo().upsert_agent(auth.user_id, row.clone()).await?;
+    state.repo().upsert_agent(row.clone()).await?;
 
     Ok((StatusCode::CREATED, Json(AgentResponse::from_row(row))))
 }
@@ -257,7 +257,7 @@ pub async fn update_agent(
 
     state
         .repo()
-        .upsert_agent(auth.user_id, updated.clone())
+        .upsert_agent(updated.clone())
         .await?;
 
     Ok(Json(AgentResponse::from_row(updated)))

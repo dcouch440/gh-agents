@@ -447,7 +447,7 @@ impl ServerRepo for PgRepo {
         Ok(row.map(agent_row_from_pg))
     }
 
-    async fn upsert_agent(&self, user_id: UserId, agent: AgentRow) -> Result<()> {
+    async fn upsert_agent(&self, agent: AgentRow) -> Result<()> {
         sqlx::query(
             r#"
             INSERT INTO agents (id, user_id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, output_schema_id)
@@ -467,7 +467,7 @@ impl ServerRepo for PgRepo {
         "#,
         )
         .bind(agent.id)
-        .bind(user_id.0)
+        .bind(agent.user_id)
         .bind(&agent.name)
         .bind(&agent.system_prompt)
         .bind(&agent.persona_style)
