@@ -364,6 +364,106 @@ fn model_matching_no_match() {
     assert!(!found);
 }
 
+// ── Health check & model validation (wiremock) ───────────────────────
+
+#[tokio::test]
+async fn health_check_succeeds() {
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/tags"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"models":[]})))
+        .mount(&server)
+        .await;
+
+    let client = make_wiremock_client(&server, "llama3.1");
+    assert!(client.health_check().await.is_ok());
+}
+
+#[tokio::test]
+async fn health_check_fails_when_unreachable() {
+    // Port 1 requires root and won't be listening
+    let client = OllamaClient::new(OllamaConfig {
+        base_url: "http://127.0.0.1:1".to_string(),
+        model: "llama3.1".to_string(),
+        timeout_secs: 1,
+    })
+    .unwrap();
+
+    let result = client.health_check().await;
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        crate::llm::LLMError::ApiError { message, .. } => {
+            assert!(message.contains("not reachable"), "unexpected: {}", message);
+        }
+        e => panic!("Expected ApiError, got {:?}", e),
+    }
+}
+
+#[tokio::test]
+async fn validate_model_exact_match() {
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/tags"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            serde_json::json!({"models":[{"name":"llama3.1:latest"},{"name":"mistral:7b"}]}),
+        ))
+        .mount(&server)
+        .await;
+
+    let client = make_wiremock_client(&server, "llama3.1:latest");
+    assert!(client.validate_model().await.is_ok());
+}
+
+#[tokio::test]
+async fn validate_model_prefix_match() {
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/tags"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"models":[{"name":"llama3.1:latest"}]})),
+        )
+        .mount(&server)
+        .await;
+
+    let client = make_wiremock_client(&server, "llama3.1");
+    assert!(client.validate_model().await.is_ok());
+}
+
+#[tokio::test]
+async fn validate_model_not_found() {
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/tags"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"models":[{"name":"mistral:7b"}]})),
+        )
+        .mount(&server)
+        .await;
+
+    let client = make_wiremock_client(&server, "llama3.1");
+    let result = client.validate_model().await;
+    match result.unwrap_err() {
+        crate::llm::LLMError::AuthError(msg) => {
+            assert!(msg.contains("not found"), "unexpected message: {}", msg);
+        }
+        e => panic!("Expected AuthError, got {:?}", e),
+    }
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────
 
 fn make_client() -> OllamaClient {
@@ -371,6 +471,15 @@ fn make_client() -> OllamaClient {
         base_url: "http://localhost:11434".to_string(),
         model: "llama3.1".to_string(),
         timeout_secs: 300,
+    })
+    .unwrap()
+}
+
+fn make_wiremock_client(server: &wiremock::MockServer, model: &str) -> OllamaClient {
+    OllamaClient::new(OllamaConfig {
+        base_url: server.uri(),
+        model: model.to_string(),
+        timeout_secs: 5,
     })
     .unwrap()
 }

@@ -623,3 +623,71 @@ async fn send_message_invalid_json_response() {
 
     assert!(matches!(result.unwrap_err(), LLMError::ParseError(_)));
 }
+
+// ── SSE tool use parsing ─────────────────────────────────────────────
+
+#[test]
+fn parse_sse_tool_use_start() {
+    let line = r#"data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_123","name":"get_weather"}}"#;
+    let result = AnthropicClient::parse_sse_line(line);
+    assert!(result.is_some());
+    let chunk = result.unwrap().unwrap();
+    match chunk {
+        StreamChunk::ToolUseStart { index, id, name } => {
+            assert_eq!(index, 1);
+            assert_eq!(id, "toolu_123");
+            assert_eq!(name, "get_weather");
+        }
+        _ => panic!("Expected ToolUseStart, got {:?}", chunk),
+    }
+}
+
+#[test]
+fn parse_sse_input_json_delta() {
+    let line = r#"data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"city\":"}}"#;
+    let result = AnthropicClient::parse_sse_line(line);
+    assert!(result.is_some());
+    let chunk = result.unwrap().unwrap();
+    match chunk {
+        StreamChunk::InputJsonDelta {
+            index,
+            partial_json,
+        } => {
+            assert_eq!(index, 1);
+            assert_eq!(partial_json, r#"{"city":"#);
+        }
+        _ => panic!("Expected InputJsonDelta, got {:?}", chunk),
+    }
+}
+
+#[tokio::test]
+async fn send_message_rate_limited_with_retry_after() {
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let mock_server = MockServer::start().await;
+
+    let error_body =
+        r#"{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}"#;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(
+            ResponseTemplate::new(429)
+                .set_body_string(error_body)
+                .insert_header("retry-after", "2.5"),
+        )
+        .mount(&mock_server)
+        .await;
+
+    let config = AnthropicConfig::new("test-key").with_base_url(mock_server.uri());
+    let client = AnthropicClient::new(config).unwrap();
+
+    let request = LLMRequest::new("claude-3", vec![Message::user("Hi")]);
+    let result = client.send_message(request).await;
+
+    match result.unwrap_err() {
+        LLMError::RateLimited { retry_after_ms } => assert_eq!(retry_after_ms, 2500),
+        e => panic!("Expected RateLimited, got {:?}", e),
+    }
+}

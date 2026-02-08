@@ -98,3 +98,163 @@ fn request_serialization_works() {
     let parsed: LLMRequest = serde_json::from_str(&json).unwrap();
     assert_eq!(parsed, request);
 }
+
+// ── StreamAccumulator: tool use ──────────────────────────────────────
+
+#[test]
+fn accumulator_tool_use_single_block() {
+    let mut acc = StreamAccumulator::new();
+    acc.apply(&StreamChunk::MessageStart {
+        model: "claude-3".to_string(),
+        input_tokens: 20,
+    });
+    acc.apply(&StreamChunk::ToolUseStart {
+        index: 0,
+        id: "toolu_123".to_string(),
+        name: "get_weather".to_string(),
+    });
+    acc.apply(&StreamChunk::InputJsonDelta {
+        index: 0,
+        partial_json: r#"{"city":"#.to_string(),
+    });
+    acc.apply(&StreamChunk::InputJsonDelta {
+        index: 0,
+        partial_json: r#""London"}"#.to_string(),
+    });
+    acc.apply(&StreamChunk::ContentBlockStop { index: 0 });
+    acc.apply(&StreamChunk::MessageDelta {
+        stop_reason: Some(StopReason::ToolUse),
+        output_tokens: Some(15),
+    });
+
+    let response = acc.build().unwrap();
+    assert_eq!(response.stop_reason, StopReason::ToolUse);
+    assert!(response.content.is_empty());
+    assert_eq!(response.content_blocks.len(), 1);
+    match &response.content_blocks[0] {
+        ContentBlock::ToolUse { id, name, input } => {
+            assert_eq!(id, "toolu_123");
+            assert_eq!(name, "get_weather");
+            assert_eq!(input, &serde_json::json!({"city": "London"}));
+        }
+        _ => panic!("expected ToolUse content block"),
+    }
+}
+
+#[test]
+fn accumulator_text_plus_tool_use() {
+    let mut acc = StreamAccumulator::new();
+    acc.apply(&StreamChunk::MessageStart {
+        model: "claude-3".to_string(),
+        input_tokens: 10,
+    });
+    // Text block first
+    acc.apply(&StreamChunk::ContentDelta {
+        text: "Let me check".to_string(),
+        index: 0,
+    });
+    acc.apply(&StreamChunk::ContentBlockStop { index: 0 });
+    // Tool use block second
+    acc.apply(&StreamChunk::ToolUseStart {
+        index: 1,
+        id: "t1".to_string(),
+        name: "search".to_string(),
+    });
+    acc.apply(&StreamChunk::InputJsonDelta {
+        index: 1,
+        partial_json: r#"{"q":"test"}"#.to_string(),
+    });
+    acc.apply(&StreamChunk::ContentBlockStop { index: 1 });
+    acc.apply(&StreamChunk::MessageDelta {
+        stop_reason: Some(StopReason::ToolUse),
+        output_tokens: Some(20),
+    });
+
+    let response = acc.build().unwrap();
+    assert_eq!(response.content, "Let me check");
+    assert_eq!(response.content_blocks.len(), 2);
+    assert!(
+        matches!(&response.content_blocks[0], ContentBlock::Text { text } if text == "Let me check")
+    );
+    assert!(
+        matches!(&response.content_blocks[1], ContentBlock::ToolUse { name, .. } if name == "search")
+    );
+}
+
+#[test]
+fn accumulator_tool_use_invalid_json_input() {
+    let mut acc = StreamAccumulator::new();
+    acc.apply(&StreamChunk::MessageStart {
+        model: "claude-3".to_string(),
+        input_tokens: 5,
+    });
+    acc.apply(&StreamChunk::ToolUseStart {
+        index: 0,
+        id: "t1".to_string(),
+        name: "broken".to_string(),
+    });
+    acc.apply(&StreamChunk::InputJsonDelta {
+        index: 0,
+        partial_json: "not valid json".to_string(),
+    });
+    acc.apply(&StreamChunk::ContentBlockStop { index: 0 });
+    acc.apply(&StreamChunk::MessageDelta {
+        stop_reason: Some(StopReason::ToolUse),
+        output_tokens: Some(5),
+    });
+
+    let response = acc.build().unwrap();
+    match &response.content_blocks[0] {
+        ContentBlock::ToolUse { input, .. } => {
+            assert_eq!(input, &serde_json::json!({}));
+        }
+        _ => panic!("expected ToolUse content block"),
+    }
+}
+
+#[test]
+fn accumulator_tool_use_multiple_json_chunks() {
+    let mut acc = StreamAccumulator::new();
+    acc.apply(&StreamChunk::MessageStart {
+        model: "claude-3".to_string(),
+        input_tokens: 10,
+    });
+    acc.apply(&StreamChunk::ToolUseStart {
+        index: 0,
+        id: "t1".to_string(),
+        name: "create_file".to_string(),
+    });
+    // Split JSON across 4 chunks
+    acc.apply(&StreamChunk::InputJsonDelta {
+        index: 0,
+        partial_json: r#"{"#.to_string(),
+    });
+    acc.apply(&StreamChunk::InputJsonDelta {
+        index: 0,
+        partial_json: r#""path":"#.to_string(),
+    });
+    acc.apply(&StreamChunk::InputJsonDelta {
+        index: 0,
+        partial_json: r#""src/main.rs","#.to_string(),
+    });
+    acc.apply(&StreamChunk::InputJsonDelta {
+        index: 0,
+        partial_json: r#""content":"hello"}"#.to_string(),
+    });
+    acc.apply(&StreamChunk::ContentBlockStop { index: 0 });
+    acc.apply(&StreamChunk::MessageDelta {
+        stop_reason: Some(StopReason::ToolUse),
+        output_tokens: Some(10),
+    });
+
+    let response = acc.build().unwrap();
+    match &response.content_blocks[0] {
+        ContentBlock::ToolUse { input, .. } => {
+            assert_eq!(
+                input,
+                &serde_json::json!({"path": "src/main.rs", "content": "hello"})
+            );
+        }
+        _ => panic!("expected ToolUse content block"),
+    }
+}
