@@ -75,3 +75,6 @@ export type { AddButtonProps } from './AddButton'
 
 export { PanelToggle } from './PanelToggle'
 export type { PanelToggleProps } from './PanelToggle'
+
+export { PropertySelect } from './PropertySelect'
+export type { PropertySelectProps, PropertySelectOption } from './PropertySelect'
