@@ -3469,18 +3469,16 @@ impl SystemConfigRepo for PgRepo {
 impl ProtocolRepo for PgRepo {
     async fn create_protocol(
         &self,
-        user_id: Uuid,
         name: String,
         description: String,
         protocol_type: String,
         config: serde_json::Value,
     ) -> Result<ProtocolRow> {
         let row = sqlx::query_as::<_, ProtocolRow>(
-            "INSERT INTO protocols (user_id, name, description, protocol_type, config)
-             VALUES ($1, $2, $3, $4, $5)
-             RETURNING id, user_id, name, description, protocol_type, config, version, created_at, updated_at",
+            "INSERT INTO protocols (name, description, protocol_type, config)
+             VALUES ($1, $2, $3, $4)
+             RETURNING id, name, description, protocol_type, config, version, created_at, updated_at",
         )
-        .bind(user_id)
         .bind(&name)
         .bind(&description)
         .bind(&protocol_type)
@@ -3492,7 +3490,7 @@ impl ProtocolRepo for PgRepo {
 
     async fn get_protocol(&self, id: Uuid) -> Result<Option<ProtocolRow>> {
         let row = sqlx::query_as::<_, ProtocolRow>(
-            "SELECT id, user_id, name, description, protocol_type, config, version, created_at, updated_at
+            "SELECT id, name, description, protocol_type, config, version, created_at, updated_at
              FROM protocols WHERE id = $1",
         )
         .bind(id)
@@ -3501,15 +3499,34 @@ impl ProtocolRepo for PgRepo {
         Ok(row)
     }
 
-    async fn list_protocols(&self, user_id: Uuid) -> Result<Vec<ProtocolRow>> {
+    async fn list_protocols(&self) -> Result<Vec<ProtocolRow>> {
         let rows = sqlx::query_as::<_, ProtocolRow>(
-            "SELECT id, user_id, name, description, protocol_type, config, version, created_at, updated_at
-             FROM protocols WHERE user_id = $1 ORDER BY created_at DESC",
+            "SELECT id, name, description, protocol_type, config, version, created_at, updated_at
+             FROM protocols ORDER BY created_at DESC",
         )
-        .bind(user_id)
         .fetch_all(&self.pool)
         .await?;
         Ok(rows)
+    }
+
+    async fn seed_builtin_protocols(&self) -> Result<()> {
+        for p in crate::server::hub::protocols::builtins::builtin_protocol_definitions() {
+            sqlx::query(
+                r#"
+                INSERT INTO protocols (id, name, description, protocol_type, config)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (name) DO NOTHING
+            "#,
+            )
+            .bind(p.id)
+            .bind(&p.name)
+            .bind(&p.description)
+            .bind(&p.protocol_type)
+            .bind(&p.config)
+            .execute(&self.pool)
+            .await?;
+        }
+        Ok(())
     }
 
     async fn update_protocol(
@@ -3527,7 +3544,7 @@ impl ProtocolRepo for PgRepo {
                 version = version + 1,
                 updated_at = now()
              WHERE id = $1
-             RETURNING id, user_id, name, description, protocol_type, config, version, created_at, updated_at",
+             RETURNING id, name, description, protocol_type, config, version, created_at, updated_at",
         )
         .bind(id)
         .bind(name)

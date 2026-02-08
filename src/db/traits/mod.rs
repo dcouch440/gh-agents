@@ -1263,7 +1263,6 @@ pub trait ProtocolRepo: Send + Sync {
     /// Create a new protocol.
     async fn create_protocol(
         &self,
-        user_id: Uuid,
         name: String,
         description: String,
         protocol_type: String,
@@ -1273,8 +1272,11 @@ pub trait ProtocolRepo: Send + Sync {
     /// Get a protocol by ID.
     async fn get_protocol(&self, id: Uuid) -> Result<Option<ProtocolRow>>;
 
-    /// List all protocols for a user.
-    async fn list_protocols(&self, user_id: Uuid) -> Result<Vec<ProtocolRow>>;
+    /// List all protocols.
+    async fn list_protocols(&self) -> Result<Vec<ProtocolRow>>;
+
+    /// Seed the built-in system protocols. Idempotent via ON CONFLICT (name) DO NOTHING.
+    async fn seed_builtin_protocols(&self) -> Result<()>;
 
     /// Update a protocol.
     async fn update_protocol(

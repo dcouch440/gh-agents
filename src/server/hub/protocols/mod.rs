@@ -8,6 +8,7 @@
 //! UI → Protocol Layer (expand) → Workflow Primitives → DAG Executor (unchanged)
 //! ```
 
+pub mod builtins;
 pub mod error;
 pub mod expander;
 pub mod expanders;
@@ -112,12 +113,15 @@ impl ProtocolEngine {
 
     /// Register all built-in protocol expanders.
     fn register_builtins(&mut self) {
-        use expanders::{DecompExpander, ReviewExpander, RouteExpander, TransformExpander};
+        use expanders::{
+            DecompExpander, DefaultExpander, ReviewExpander, RouteExpander, TransformExpander,
+        };
 
         self.register(Arc::new(DecompExpander));
         self.register(Arc::new(TransformExpander));
         self.register(Arc::new(ReviewExpander));
         self.register(Arc::new(RouteExpander));
+        self.register(Arc::new(DefaultExpander));
     }
 }
 

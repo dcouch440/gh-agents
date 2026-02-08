@@ -43,6 +43,7 @@ mod tests {
         assert!(type_names.contains(&"transform"));
         assert!(type_names.contains(&"review"));
         assert!(type_names.contains(&"route"));
+        assert!(type_names.contains(&"default"));
     }
 
     #[test]

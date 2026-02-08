@@ -137,14 +137,13 @@ pub async fn list_protocol_types(
     Ok(Json(ProtocolTypesResponse { types }))
 }
 
-/// GET /api/protocols — List all protocols for the authenticated user.
+/// GET /api/protocols — List all protocols.
 pub async fn list_protocols(
     State(state): State<AppState>,
-    auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<ProtocolResponse>>, AppError> {
     let repo = &state.repos().protocols;
     let rows = repo
-        .list_protocols(auth.user_id.0)
+        .list_protocols()
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
@@ -180,7 +179,6 @@ pub async fn list_protocols(
 /// POST /api/protocols — Create a new protocol.
 pub async fn create_protocol(
     State(state): State<AppState>,
-    auth: auth_utils::AuthUser,
     Json(request): Json<CreateProtocolRequest>,
 ) -> Result<(StatusCode, Json<ProtocolResponse>), AppError> {
     // Validate protocol type is known
@@ -201,7 +199,6 @@ pub async fn create_protocol(
     let repo = &state.repos().protocols;
     let row = repo
         .create_protocol(
-            auth.user_id.0,
             request.name,
             request.description.unwrap_or_default(),
             request.protocol_type,
