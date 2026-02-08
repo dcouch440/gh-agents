@@ -282,8 +282,8 @@ mod tests {
 
         match action {
             ResponseAction::Retry { feedback } => {
-                assert!(feedback.contains("Verification Panel Feedback"));
-                assert!(feedback.contains("NEEDS REVISION"));
+                assert!(feedback.contains("<verification_feedback>"));
+                assert!(feedback.contains("needs_revision"));
                 assert!(feedback.contains("SQL injection risk on line 5"));
                 assert!(feedback.contains("Use parameterized queries"));
             }
@@ -414,14 +414,14 @@ mod tests {
 
         match action {
             ResponseAction::Retry { feedback } => {
-                // One agent should show APPROVED, the other NEEDS REVISION
+                // One agent should show approved, the other needs_revision
                 assert!(
-                    feedback.contains("APPROVED"),
-                    "feedback should contain APPROVED section"
+                    feedback.contains("verdict=\"approved\""),
+                    "feedback should contain approved reviewer section"
                 );
                 assert!(
-                    feedback.contains("NEEDS REVISION"),
-                    "feedback should contain NEEDS REVISION section"
+                    feedback.contains("verdict=\"needs_revision\""),
+                    "feedback should contain needs_revision reviewer section"
                 );
                 assert!(
                     feedback.contains("Missing input validation"),
