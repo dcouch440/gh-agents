@@ -477,6 +477,39 @@ pub async fn compose_prompt(
         step.prompt_template.clone()
     };
 
+    // If no prompt template exists, construct one from available inputs so data flows
+    // through without requiring explicit templates on every step.
+    let raw_prompt = if raw_prompt.is_empty() {
+        let mut parts: Vec<String> = Vec::new();
+        // Port inputs from upstream steps (wired via edges)
+        if let Some(ports) = port_inputs {
+            for (_, value) in ports {
+                match value {
+                    JsonValue::String(s) => parts.push(s.clone()),
+                    other => parts.push(
+                        serde_json::to_string_pretty(other)
+                            .unwrap_or_else(|_| other.to_string()),
+                    ),
+                }
+            }
+        }
+        // Prior outputs (port of entry / collection pipeline)
+        if parts.is_empty() {
+            for (_, value) in prior_outputs {
+                match value {
+                    JsonValue::String(s) => parts.push(s.clone()),
+                    other => parts.push(
+                        serde_json::to_string_pretty(other)
+                            .unwrap_or_else(|_| other.to_string()),
+                    ),
+                }
+            }
+        }
+        parts.join("\n\n")
+    } else {
+        raw_prompt
+    };
+
     // Merge port inputs into the variable resolution scope so {port_name} works
     let effective_outputs = if let Some(ports) = port_inputs {
         if !ports.is_empty() {
