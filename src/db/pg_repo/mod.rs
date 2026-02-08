@@ -3552,16 +3552,22 @@ impl ProtocolRepo for PgRepo {
         description: String,
         protocol_type: String,
         config: serde_json::Value,
+        agent_id: Option<Uuid>,
+        output_schema_id: Option<Uuid>,
+        prompt_template_id: Option<Uuid>,
     ) -> Result<ProtocolRow> {
         let row = sqlx::query_as::<_, ProtocolRow>(
-            "INSERT INTO protocols (name, description, protocol_type, config)
-             VALUES ($1, $2, $3, $4)
-             RETURNING id, name, description, protocol_type, config, version, created_at, updated_at",
+            "INSERT INTO protocols (name, description, protocol_type, config, agent_id, output_schema_id, prompt_template_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             RETURNING id, name, description, protocol_type, config, version, created_at, updated_at, agent_id, output_schema_id, prompt_template_id",
         )
         .bind(&name)
         .bind(&description)
         .bind(&protocol_type)
         .bind(&config)
+        .bind(agent_id)
+        .bind(output_schema_id)
+        .bind(prompt_template_id)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -3569,7 +3575,7 @@ impl ProtocolRepo for PgRepo {
 
     async fn get_protocol(&self, id: Uuid) -> Result<Option<ProtocolRow>> {
         let row = sqlx::query_as::<_, ProtocolRow>(
-            "SELECT id, name, description, protocol_type, config, version, created_at, updated_at
+            "SELECT id, name, description, protocol_type, config, version, created_at, updated_at, agent_id, output_schema_id, prompt_template_id
              FROM protocols WHERE id = $1",
         )
         .bind(id)
@@ -3580,7 +3586,7 @@ impl ProtocolRepo for PgRepo {
 
     async fn list_protocols(&self) -> Result<Vec<ProtocolRow>> {
         let rows = sqlx::query_as::<_, ProtocolRow>(
-            "SELECT id, name, description, protocol_type, config, version, created_at, updated_at
+            "SELECT id, name, description, protocol_type, config, version, created_at, updated_at, agent_id, output_schema_id, prompt_template_id
              FROM protocols ORDER BY created_at DESC",
         )
         .fetch_all(&self.pool)
@@ -3590,12 +3596,19 @@ impl ProtocolRepo for PgRepo {
 
     async fn seed_builtin_protocols(&self) -> Result<()> {
         for p in crate::server::hub::protocols::builtins::builtin_protocol_definitions() {
+            // Upsert protocol row. Agent/schema/template FKs are NULL for builtins —
+            // the expanders generate schemas and prompts dynamically from port config.
             sqlx::query(
                 r#"
                 INSERT INTO protocols (id, name, description, protocol_type, config)
                 VALUES ($1, $2, $3, $4, $5)
-                ON CONFLICT (name) DO NOTHING
-            "#,
+                ON CONFLICT (name) DO UPDATE SET
+                    description = EXCLUDED.description,
+                    protocol_type = EXCLUDED.protocol_type,
+                    config = EXCLUDED.config,
+                    version = protocols.version + 1,
+                    updated_at = now()
+                "#,
             )
             .bind(p.id)
             .bind(&p.name)
@@ -3614,21 +3627,30 @@ impl ProtocolRepo for PgRepo {
         name: Option<String>,
         description: Option<String>,
         config: Option<serde_json::Value>,
+        agent_id: Option<Uuid>,
+        output_schema_id: Option<Uuid>,
+        prompt_template_id: Option<Uuid>,
     ) -> Result<ProtocolRow> {
         let row = sqlx::query_as::<_, ProtocolRow>(
             "UPDATE protocols SET
                 name = COALESCE($2, name),
                 description = COALESCE($3, description),
                 config = COALESCE($4, config),
+                agent_id = COALESCE($5, agent_id),
+                output_schema_id = COALESCE($6, output_schema_id),
+                prompt_template_id = COALESCE($7, prompt_template_id),
                 version = version + 1,
                 updated_at = now()
              WHERE id = $1
-             RETURNING id, name, description, protocol_type, config, version, created_at, updated_at",
+             RETURNING id, name, description, protocol_type, config, version, created_at, updated_at, agent_id, output_schema_id, prompt_template_id",
         )
         .bind(id)
         .bind(name)
         .bind(description)
         .bind(config)
+        .bind(agent_id)
+        .bind(output_schema_id)
+        .bind(prompt_template_id)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)

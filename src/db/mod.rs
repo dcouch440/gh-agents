@@ -545,6 +545,9 @@ pub struct ProtocolRow {
     pub version: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub agent_id: Option<Uuid>,
+    pub output_schema_id: Option<Uuid>,
+    pub prompt_template_id: Option<Uuid>,
 }
 
 /// Row type for protocol port slots (agent assignments within a protocol).

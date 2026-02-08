@@ -800,11 +800,7 @@ mod tests {
         ) -> anyhow::Result<Option<crate::db::AgentRow>> {
             Ok(None)
         }
-        async fn upsert_agent(
-            &self,
-            _user_id: UserId,
-            _agent: crate::db::AgentRow,
-        ) -> anyhow::Result<()> {
+        async fn upsert_agent(&self, _agent: crate::db::AgentRow) -> anyhow::Result<()> {
             Ok(())
         }
         async fn delete_persisted_agent(&self, _agent_id: Uuid) -> anyhow::Result<()> {

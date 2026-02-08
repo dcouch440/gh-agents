@@ -38,6 +38,32 @@ pub struct ProtocolResponse {
     pub config: serde_json::Value,
     pub version: i32,
     pub ports: Vec<ProtocolPortResponse>,
+    pub agent: Option<ProtocolAgentResponse>,
+    pub output_schema: Option<ProtocolSchemaResponse>,
+    pub prompt_template: Option<ProtocolTemplateResponse>,
+}
+
+#[derive(Serialize)]
+pub struct ProtocolAgentResponse {
+    pub id: Uuid,
+    pub name: String,
+    pub system_prompt: String,
+    pub model_provider: String,
+    pub model_id: String,
+}
+
+#[derive(Serialize)]
+pub struct ProtocolSchemaResponse {
+    pub id: Uuid,
+    pub name: String,
+    pub schema: serde_json::Value,
+}
+
+#[derive(Serialize)]
+pub struct ProtocolTemplateResponse {
+    pub id: Uuid,
+    pub name: String,
+    pub content: String,
 }
 
 #[derive(Serialize)]
@@ -55,6 +81,9 @@ pub struct CreateProtocolRequest {
     pub description: Option<String>,
     pub protocol_type: String,
     pub config: Option<serde_json::Value>,
+    pub agent_id: Option<Uuid>,
+    pub output_schema_id: Option<Uuid>,
+    pub prompt_template_id: Option<Uuid>,
 }
 
 #[derive(Deserialize)]
@@ -62,6 +91,9 @@ pub struct UpdateProtocolRequest {
     pub name: Option<String>,
     pub description: Option<String>,
     pub config: Option<serde_json::Value>,
+    pub agent_id: Option<Uuid>,
+    pub output_schema_id: Option<Uuid>,
+    pub prompt_template_id: Option<Uuid>,
 }
 
 #[derive(Deserialize)]
@@ -153,6 +185,8 @@ pub async fn list_protocols(
             .list_protocol_ports(row.id)
             .await
             .map_err(|e| AppError::Internal(e.to_string()))?;
+        let (agent, output_schema, prompt_template) =
+            resolve_protocol_associations(&state, &row).await?;
         responses.push(ProtocolResponse {
             id: row.id,
             name: row.name,
@@ -170,6 +204,9 @@ pub async fn list_protocols(
                     display_order: p.display_order,
                 })
                 .collect(),
+            agent,
+            output_schema,
+            prompt_template,
         });
     }
 
@@ -203,9 +240,15 @@ pub async fn create_protocol(
             request.description.unwrap_or_default(),
             request.protocol_type,
             request.config.unwrap_or(serde_json::json!({})),
+            request.agent_id,
+            request.output_schema_id,
+            request.prompt_template_id,
         )
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let (agent, output_schema, prompt_template) =
+        resolve_protocol_associations(&state, &row).await?;
 
     Ok((
         StatusCode::CREATED,
@@ -217,6 +260,9 @@ pub async fn create_protocol(
             config: row.config,
             version: row.version,
             ports: vec![],
+            agent,
+            output_schema,
+            prompt_template,
         }),
     ))
 }
@@ -238,6 +284,9 @@ pub async fn get_protocol(
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
+    let (agent, output_schema, prompt_template) =
+        resolve_protocol_associations(&state, &row).await?;
+
     Ok(Json(ProtocolResponse {
         id: row.id,
         name: row.name,
@@ -255,6 +304,9 @@ pub async fn get_protocol(
                 display_order: p.display_order,
             })
             .collect(),
+        agent,
+        output_schema,
+        prompt_template,
     }))
 }
 
@@ -273,7 +325,15 @@ pub async fn update_protocol(
         .ok_or_else(|| AppError::not_found("protocol"))?;
 
     let row = repo
-        .update_protocol(id, request.name, request.description, request.config)
+        .update_protocol(
+            id,
+            request.name,
+            request.description,
+            request.config,
+            request.agent_id,
+            request.output_schema_id,
+            request.prompt_template_id,
+        )
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
@@ -281,6 +341,9 @@ pub async fn update_protocol(
         .list_protocol_ports(id)
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let (agent, output_schema, prompt_template) =
+        resolve_protocol_associations(&state, &row).await?;
 
     Ok(Json(ProtocolResponse {
         id: row.id,
@@ -299,6 +362,9 @@ pub async fn update_protocol(
                 display_order: p.display_order,
             })
             .collect(),
+        agent,
+        output_schema,
+        prompt_template,
     }))
 }
 
@@ -516,7 +582,11 @@ pub async fn apply_protocol(
     // 1. Create output schema
     let schema_name = format!("{} — auto-generated", protocol.name);
     let schema_row = os_repo
-        .create_output_schema(Some(auth.user_id.0), schema_name, expansion.output_schema.clone())
+        .create_output_schema(
+            Some(auth.user_id.0),
+            schema_name,
+            expansion.output_schema.clone(),
+        )
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
@@ -731,6 +801,70 @@ pub async fn unapply_protocol(
 // ============================================================================
 // Helpers
 // ============================================================================
+
+/// Resolve the associated agent, output schema, and prompt template for a protocol row.
+async fn resolve_protocol_associations(
+    state: &AppState,
+    row: &crate::db::ProtocolRow,
+) -> Result<
+    (
+        Option<ProtocolAgentResponse>,
+        Option<ProtocolSchemaResponse>,
+        Option<ProtocolTemplateResponse>,
+    ),
+    AppError,
+> {
+    let agent = if let Some(agent_id) = row.agent_id {
+        state
+            .repo()
+            .get_persisted_agent(agent_id)
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?
+            .map(|a| ProtocolAgentResponse {
+                id: a.id,
+                name: a.name,
+                system_prompt: a.system_prompt,
+                model_provider: a.model_provider,
+                model_id: a.model_id,
+            })
+    } else {
+        None
+    };
+
+    let output_schema = if let Some(schema_id) = row.output_schema_id {
+        state
+            .repos()
+            .output_schemas
+            .get_output_schema(schema_id)
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?
+            .map(|s| ProtocolSchemaResponse {
+                id: s.id,
+                name: s.name,
+                schema: s.schema,
+            })
+    } else {
+        None
+    };
+
+    let prompt_template = if let Some(template_id) = row.prompt_template_id {
+        state
+            .repos()
+            .prompt_templates
+            .get_prompt_template(template_id)
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?
+            .map(|t| ProtocolTemplateResponse {
+                id: t.id,
+                name: t.name,
+                content: t.content,
+            })
+    } else {
+        None
+    };
+
+    Ok((agent, output_schema, prompt_template))
+}
 
 /// Resolve agent names from agent IDs in the port rows.
 async fn resolve_agent_names(
