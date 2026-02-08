@@ -175,7 +175,7 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
       templates.map((t) => ({
         value: t.id,
         label: t.name,
-        secondary: `${t.variables.length} variable(s)`,
+        secondary: `${t.variables?.length ?? 0} variable(s)`,
       })),
     [templates],
   );

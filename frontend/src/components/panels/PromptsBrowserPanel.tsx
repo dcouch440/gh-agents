@@ -54,7 +54,7 @@ function PromptsBrowserPanel() {
           key={template.id}
           barColor={DESIGN.PORT_JSON}
           primary={template.name}
-          secondary={`${template.variables.length} variable(s)`}
+          secondary={`${template.variables?.length ?? 0} variable(s)`}
           highlight={template.id === selectedStep?.prompt_template_id}
           onClick={selectedStep ? () => { handleAssign(template.id) } : null}
         />
