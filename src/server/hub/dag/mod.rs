@@ -1129,7 +1129,7 @@ async fn execute_room_step(
 
     // 7. Create room session
     let session = room_repo
-        .create_room_session(room_id, Some(ctx.run_id))
+        .create_room_session(room_id)
         .await
         .map_err(|e| HubError::Internal(anyhow!("failed to create room session: {}", e)))?;
 

@@ -47,7 +47,7 @@ pub async fn insert_task(pool: &PgPool, user_id: UserId, task: &Task) -> Result<
 /// Get a task by ID
 pub async fn get_task(pool: &PgPool, user_id: UserId, id: &TaskId) -> Result<Option<Task>> {
     let row: Option<TaskRow> =
-        sqlx::query_as("SELECT id, slice_id, title, description, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks WHERE id = $1 AND user_id = $2")
+        sqlx::query_as("SELECT id, slice_id, title, description, assigned_agent, status, priority, context_files, metadata, retry_count, max_retries, last_error, created_at, updated_at FROM tasks WHERE id = $1 AND user_id = $2")
             .bind(id.0)
             .bind(user_id.0)
             .fetch_optional(pool)
@@ -80,7 +80,7 @@ pub async fn list_tasks_by_status(pool: &PgPool, status: TaskStatus) -> Result<V
     let status_str = format!("{:?}", status).to_lowercase();
 
     let rows: Vec<TaskRow> = sqlx::query_as(
-        "SELECT id, slice_id, title, description, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks WHERE status = $1 ORDER BY created_at DESC",
+        "SELECT id, slice_id, title, description, assigned_agent, status, priority, context_files, metadata, retry_count, max_retries, last_error, created_at, updated_at FROM tasks WHERE status = $1 ORDER BY created_at DESC",
     )
     .bind(&status_str)
     .fetch_all(pool)
@@ -103,7 +103,7 @@ pub async fn list_tasks(
 
     let rows: Vec<TaskRow> = if let Some(status_filter) = status {
         sqlx::query_as(
-            "SELECT id, slice_id, title, description, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks WHERE status = $1 AND user_id = $2 ORDER BY created_at DESC LIMIT $3"
+            "SELECT id, slice_id, title, description, assigned_agent, status, priority, context_files, metadata, retry_count, max_retries, last_error, created_at, updated_at FROM tasks WHERE status = $1 AND user_id = $2 ORDER BY created_at DESC LIMIT $3"
         )
         .bind(status_filter)
         .bind(user_id.0)
@@ -113,7 +113,7 @@ pub async fn list_tasks(
         .context("Failed to list tasks")?
     } else {
         sqlx::query_as(
-            "SELECT id, slice_id, title, description, assigned_agent, status, priority, context_files, metadata, created_at, updated_at FROM tasks WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2"
+            "SELECT id, slice_id, title, description, assigned_agent, status, priority, context_files, metadata, retry_count, max_retries, last_error, created_at, updated_at FROM tasks WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2"
         )
         .bind(user_id.0)
         .bind(limit)

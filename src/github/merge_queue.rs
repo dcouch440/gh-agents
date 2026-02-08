@@ -160,6 +160,7 @@ impl<R: MergeQueueRepo> MergeQueue<R> {
         owner: &str,
         repo: &str,
         pr_number: u32,
+        user_id: Uuid,
     ) -> Result<PrQueueEntry, QueueError> {
         let id = Uuid::new_v4();
         let now = Utc::now();
@@ -178,6 +179,7 @@ impl<R: MergeQueueRepo> MergeQueue<R> {
                 pr_number,
                 next_position,
                 now,
+                user_id,
             )
             .await?;
 
@@ -593,8 +595,9 @@ impl MergeQueueProcessor {
         owner: &str,
         repo: &str,
         pr_number: u32,
+        user_id: Uuid,
     ) -> Result<PrQueueEntry, QueueError> {
-        let entry = self.queue.add_to_queue(owner, repo, pr_number).await?;
+        let entry = self.queue.add_to_queue(owner, repo, pr_number, user_id).await?;
 
         if self.notifications.on_queued {
             if let Err(e) = self
@@ -1457,10 +1460,13 @@ mod tests {
         let mut mock = MockMergeQueueRepo::new();
         mock.expect_get_next_position().returning(|_, _| Ok(1));
         mock.expect_insert_queue_entry()
-            .returning(|_, _, _, _, _, _| Ok(()));
+            .returning(|_, _, _, _, _, _, _| Ok(()));
         let mq = MergeQueue::new(mock);
 
-        let entry = mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        let entry = mq
+            .add_to_queue("owner", "repo", 1, Uuid::new_v4())
+            .await
+            .unwrap();
         assert_eq!(entry.repo_owner, "owner");
         assert_eq!(entry.repo_name, "repo");
         assert_eq!(entry.pr_number, 1);
@@ -1479,12 +1485,18 @@ mod tests {
             Ok(call_count)
         });
         mock.expect_insert_queue_entry()
-            .returning(|_, _, _, _, _, _| Ok(()));
+            .returning(|_, _, _, _, _, _, _| Ok(()));
         let mq = MergeQueue::new(mock);
 
-        let e1 = mq.add_to_queue("owner", "repo", 1).await.unwrap();
+        let e1 = mq
+            .add_to_queue("owner", "repo", 1, Uuid::new_v4())
+            .await
+            .unwrap();
         assert_eq!(e1.queue_position, 1);
-        let e2 = mq.add_to_queue("owner", "repo", 2).await.unwrap();
+        let e2 = mq
+            .add_to_queue("owner", "repo", 2, Uuid::new_v4())
+            .await
+            .unwrap();
         assert_eq!(e2.queue_position, 2);
     }
 

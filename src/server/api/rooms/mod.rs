@@ -243,7 +243,7 @@ pub async fn create_room_session(
     Path(room_id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<crate::db::RoomSessionRow>), AppError> {
     let repo = &state.repos().rooms;
-    let row = repo.create_room_session(room_id, None).await?;
+    let row = repo.create_room_session(room_id).await?;
     Ok((StatusCode::CREATED, Json(row)))
 }
 
@@ -364,7 +364,7 @@ pub async fn get_room_transcript(
 
 /// POST /api/room-sessions/:id/close - Close a room session.
 ///
-/// If the session is linked to a DAG workflow (has a `run_id`), closing it
+/// If the session is linked to a DAG workflow (via step→room), closing it
 /// triggers DAG resume: per-agent outputs are extracted from the room transcript
 /// and the workflow continues from the paused room step.
 pub async fn close_room_session(
@@ -388,15 +388,15 @@ pub async fn close_room_session(
 
     state.broadcast_room(crate::server::ws::events::RoomEvent {
         room_session_id: session_id,
-        run_id: session.run_id,
+        run_id: None,
         user_id: None,
         kind: crate::server::ws::events::RoomEventKind::SessionComplete {
             turn_number: session.current_turn,
         },
     });
 
-    // If this session is DAG-linked, trigger workflow resume
-    if session.run_id.is_some() {
+    // Check if this session is DAG-linked via step→room relationship
+    {
         if let Some(wf_repo) = state.workflow_repo() {
             if let Ok(Some(step)) = wf_repo.find_step_by_room_id(session.room_id).await {
                 // Extract per-agent outputs from the room transcript

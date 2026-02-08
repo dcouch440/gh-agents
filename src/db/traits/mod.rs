@@ -39,6 +39,7 @@ pub trait MergeQueueRepo: Send + Sync {
         pr_number: u32,
         position: u32,
         now: DateTime<Utc>,
+        user_id: Uuid,
     ) -> Result<(), MergeQueueError>;
 
     /// Get the next queue position for a repo.
@@ -964,7 +965,6 @@ pub trait RoomRepo: Send + Sync {
     async fn create_room_session(
         &self,
         room_id: Uuid,
-        run_id: Option<Uuid>,
     ) -> Result<RoomSessionRow>;
 
     /// Get a room session by ID.

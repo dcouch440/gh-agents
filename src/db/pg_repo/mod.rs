@@ -123,14 +123,15 @@ impl MergeQueueRepo for PgRepo {
         pr_number: u32,
         position: u32,
         now: DateTime<Utc>,
+        user_id: Uuid,
     ) -> Result<(), MergeQueueError> {
         sqlx::query(
             r#"
             INSERT INTO pr_merge_queue (
                 id, repo_owner, repo_name, pr_number,
-                queue_position, status, created_at, updated_at
+                queue_position, status, created_at, updated_at, user_id
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             ON CONFLICT (repo_owner, repo_name, pr_number)
             DO UPDATE SET updated_at = excluded.updated_at
             "#,
@@ -143,6 +144,7 @@ impl MergeQueueRepo for PgRepo {
         .bind("pending")
         .bind(now)
         .bind(now)
+        .bind(user_id)
         .execute(&self.pool)
         .await?;
 
@@ -1467,8 +1469,9 @@ impl WorkflowRepo for PgRepo {
             .await?;
         for edge in &edges {
             sqlx::query(
-                "INSERT INTO workflow_step_edges (from_step_id, to_step_id) VALUES ($1, $2)",
+                "INSERT INTO workflow_step_edges (workflow_id, from_step_id, to_step_id) VALUES ($1, $2, $3)",
             )
+            .bind(workflow_id)
             .bind(edge.from_step_id)
             .bind(edge.to_step_id)
             .execute(&mut *tx)
@@ -1997,14 +2000,14 @@ impl TokenLedgerRepo for PgRepo {
     ) -> Result<Vec<ModelSpendRow>> {
         let rows = match since {
             Some(t) => {
-                sqlx::query_as::<_, ModelSpendRow>("SELECT model_id, SUM(input_tokens) AS total_input_tokens, SUM(output_tokens) AS total_output_tokens, CAST(SUM(cost_usd) AS FLOAT8) AS total_cost_usd, COUNT(*) AS call_count FROM token_ledger WHERE user_id = $1 AND created_at >= $2 GROUP BY model_id ORDER BY total_cost_usd DESC")
+                sqlx::query_as::<_, ModelSpendRow>("SELECT model_id, CAST(SUM(input_tokens) AS INT8) AS total_input_tokens, CAST(SUM(output_tokens) AS INT8) AS total_output_tokens, CAST(SUM(cost_usd) AS FLOAT8) AS total_cost_usd, COUNT(*) AS call_count FROM token_ledger WHERE user_id = $1 AND created_at >= $2 GROUP BY model_id ORDER BY total_cost_usd DESC")
                     .bind(user_id)
                     .bind(t)
                     .fetch_all(&self.pool)
                     .await?
             }
             None => {
-                sqlx::query_as::<_, ModelSpendRow>("SELECT model_id, SUM(input_tokens) AS total_input_tokens, SUM(output_tokens) AS total_output_tokens, CAST(SUM(cost_usd) AS FLOAT8) AS total_cost_usd, COUNT(*) AS call_count FROM token_ledger WHERE user_id = $1 GROUP BY model_id ORDER BY total_cost_usd DESC")
+                sqlx::query_as::<_, ModelSpendRow>("SELECT model_id, CAST(SUM(input_tokens) AS INT8) AS total_input_tokens, CAST(SUM(output_tokens) AS INT8) AS total_output_tokens, CAST(SUM(cost_usd) AS FLOAT8) AS total_cost_usd, COUNT(*) AS call_count FROM token_ledger WHERE user_id = $1 GROUP BY model_id ORDER BY total_cost_usd DESC")
                     .bind(user_id)
                     .fetch_all(&self.pool)
                     .await?
@@ -2331,7 +2334,7 @@ impl ToolRouterRepo for PgRepo {
 
     async fn get_mode_tools(&self, mode_id: Uuid) -> Result<Vec<ToolRow>> {
         let rows: Vec<ToolRow> = sqlx::query_as(
-            r#"SELECT t.id, t.user_id, t.name, t.display_name, t.description,
+            r#"SELECT t.id, t.name, t.display_name, t.description,
                t.parameters, t.created_at, t.version
                FROM tools t
                INNER JOIN tool_router_mode_tools trmt ON t.id = trmt.tool_id
@@ -2655,13 +2658,11 @@ impl RoomRepo for PgRepo {
     async fn create_room_session(
         &self,
         room_id: Uuid,
-        run_id: Option<Uuid>,
     ) -> Result<RoomSessionRow> {
         let row = sqlx::query_as::<_, RoomSessionRow>(
-            "INSERT INTO room_sessions (room_id, run_id) VALUES ($1, $2) RETURNING *",
+            "INSERT INTO room_sessions (room_id) VALUES ($1) RETURNING *",
         )
         .bind(room_id)
-        .bind(run_id)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
