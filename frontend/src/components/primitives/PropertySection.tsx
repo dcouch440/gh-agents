@@ -37,10 +37,12 @@ function PropertySection({
           }}
         >
           <Typography
-            variant="overline"
             sx={{
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
               color: 'text.secondary',
-              letterSpacing: '0.05em',
               lineHeight: 1,
             }}
           >

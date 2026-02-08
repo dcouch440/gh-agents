@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { Box } from '@mui/material'
-import { EditorView, placeholder as cmPlaceholder, keymap } from '@codemirror/view'
+import { EditorView, placeholder as cmPlaceholder, keymap, lineNumbers } from '@codemirror/view'
 import { EditorState, type Extension } from '@codemirror/state'
 import { markdown } from '@codemirror/lang-markdown'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
@@ -13,6 +13,7 @@ type CodeEditorProps = {
   language?: 'markdown'
   placeholder?: string
   readOnly?: boolean
+  showLineNumbers?: boolean
   height?: string
   className?: string
   extensions?: Extension[]
@@ -25,6 +26,7 @@ function CodeEditor({
   language = 'markdown',
   placeholder,
   readOnly = false,
+  showLineNumbers = false,
   height = '300px',
   className,
   extensions: extraExtensions = [],
@@ -64,6 +66,10 @@ function CodeEditor({
 
     if (placeholder) {
       baseExtensions.push(cmPlaceholder(placeholder))
+    }
+
+    if (showLineNumbers) {
+      baseExtensions.push(lineNumbers())
     }
 
     if (readOnly) {

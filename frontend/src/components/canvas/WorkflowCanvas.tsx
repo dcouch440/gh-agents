@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { FocusEvent as ReactFocusEvent } from 'react'
 import {
   ReactFlow,
   Background,
@@ -119,16 +118,6 @@ function WorkflowCanvasInner() {
     [screenToFlowPosition],
   )
 
-  // Clear selection when focus leaves the canvas entirely
-  const onCanvasBlur = useCallback((e: ReactFocusEvent) => {
-    if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget as globalThis.Node)) {
-      return
-    }
-    canvasStore.clearSelection()
-    setNodes((nds) => nds.map((n) => ({ ...n, selected: false })))
-    setEdges((eds) => eds.map((e) => ({ ...e, selected: false })))
-  }, [setNodes, setEdges])
-
   // Close context menu on pane click (RF handles deselection internally)
   const onPaneClick = useCallback(() => {
     setContextMenu(null)
@@ -136,8 +125,6 @@ function WorkflowCanvasInner() {
 
   return (
     <Box
-      tabIndex={-1}
-      onBlur={onCanvasBlur}
       sx={{
         width: '100%',
         height: '100%',

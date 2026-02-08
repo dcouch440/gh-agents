@@ -25,7 +25,7 @@ function PropertiesPanel() {
   }, [selectedEdgeIds, edges, selectedStep])
 
   if (selectedStep) {
-    return <StepProperties step={selectedStep} />
+    return <StepProperties step={selectedStep} edges={edges} steps={steps} />
   }
 
   if (selectedEdge) {

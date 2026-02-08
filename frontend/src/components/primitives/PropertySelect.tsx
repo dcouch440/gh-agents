@@ -68,19 +68,20 @@ function PropertySelect({
       )}
       sx={{
         fontSize: 11,
+        borderRadius: 0,
+        transition: 'background-color 100ms ease',
         '& .MuiSelect-select': {
-          py: '6px',
-          px: '12px',
+          py: '8px',
+          px: '16px',
         },
         '& .MuiOutlinedInput-notchedOutline': {
-          borderColor: 'divider',
+          border: 'none',
         },
-        '&:hover .MuiOutlinedInput-notchedOutline': {
-          borderColor: DESIGN.BORDER_HOVER,
+        '&:hover': {
+          backgroundColor: DESIGN.HOVER_OVERLAY,
         },
-        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-          borderColor: 'primary.main',
-          borderWidth: 1,
+        '&.Mui-focused': {
+          backgroundColor: DESIGN.ACTIVE_TINT,
         },
       }}
       MenuProps={{
