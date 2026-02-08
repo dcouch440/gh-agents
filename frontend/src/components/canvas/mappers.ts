@@ -11,6 +11,7 @@ type StepNodeData = {
   modelId: string | null
   outputSchemaName: string | null
   upstreamStepNames: string[]
+  toolNames: string[]
 }
 
 type StepNodeLookups = {
@@ -18,6 +19,7 @@ type StepNodeLookups = {
   outputSchemas: ReadonlyMap<string, { name: string }>
   stepNames: ReadonlyMap<string, string>
   edges: ReadonlyArray<{ from_step_id: string; to_step_id: string }>
+  toolsByAgent: ReadonlyMap<string, string[]>
 }
 
 const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node<StepNodeData>[] => {
@@ -33,6 +35,7 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node<StepNo
     const schema = step.output_schema_id ? lookups.outputSchemas.get(step.output_schema_id) : undefined
     const upstreamIds = upstreamMap.get(step.id) ?? []
     const upstreamStepNames = upstreamIds.map((id) => lookups.stepNames.get(id) ?? 'Unknown Step')
+    const toolNames = step.agent_id ? lookups.toolsByAgent.get(step.agent_id) ?? [] : []
 
     return {
       id: step.id,
@@ -48,6 +51,7 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node<StepNo
         modelId: agent?.model_id ?? null,
         outputSchemaName: schema?.name ?? null,
         upstreamStepNames,
+        toolNames,
       },
     }
   })

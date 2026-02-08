@@ -65,14 +65,28 @@ function WorkflowCanvasInner() {
     () => new Map(steps.map((s) => [s.id, s.name ?? s.execution_mode])),
     [steps],
   );
+  const toolsByAgentLookup = useMemo(() => {
+    const map = new Map<string, string[]>();
+    agents.forEach((agent) => {
+      const tools = agentStore.selectTools(agent.id)(
+        agentStore.store.getState(),
+      );
+      map.set(
+        agent.id,
+        tools.map((t) => t.name),
+      );
+    });
+    return map;
+  }, [agents]);
   const lookups = useMemo(
     (): StepNodeLookups => ({
       agents: agentLookup,
       outputSchemas: schemaLookup,
       stepNames: stepNameLookup,
       edges,
+      toolsByAgent: toolsByAgentLookup,
     }),
-    [agentLookup, schemaLookup, stepNameLookup, edges],
+    [agentLookup, schemaLookup, stepNameLookup, edges, toolsByAgentLookup],
   );
 
   // Map store data to RF format
@@ -181,7 +195,7 @@ function WorkflowCanvasInner() {
 
   // Context menu (right-click on pane)
   const onPaneContextMenu = useCallback(
-    (event: React.MouseEvent) => {
+    (event: React.MouseEvent | MouseEvent) => {
       event.preventDefault();
       const flowPosition = screenToFlowPosition({
         x: event.clientX,

@@ -28,6 +28,7 @@ const baseProps = {
     modelId: null,
     outputSchemaName: null,
     upstreamStepNames: [],
+    toolNames: [],
   },
   selected: false,
   isConnectable: true,
@@ -122,10 +123,48 @@ describe('StepNode', () => {
       expect(screen.getByText('ReviewSchema')).toBeInTheDocument()
     })
 
-    it('does not render body when no inputs and no output schema', () => {
+    it('renders tool pills in Tools section', () => {
+      const props = {
+        ...baseProps,
+        data: { ...baseProps.data, toolNames: ['github_search', 'code_analyzer'] },
+      }
+      render(<StepNode {...props} />)
+      expect(screen.getByText('Tools')).toBeInTheDocument()
+      expect(screen.getByText('github_search')).toBeInTheDocument()
+      expect(screen.getByText('code_analyzer')).toBeInTheDocument()
+    })
+
+    it('renders multiple tools with wrapping', () => {
+      const props = {
+        ...baseProps,
+        data: {
+          ...baseProps.data,
+          toolNames: ['tool1', 'tool2', 'tool3', 'tool4'],
+        },
+      }
+      render(<StepNode {...props} />)
+      expect(screen.getByText('Tools')).toBeInTheDocument()
+      expect(screen.getByText('tool1')).toBeInTheDocument()
+      expect(screen.getByText('tool2')).toBeInTheDocument()
+      expect(screen.getByText('tool3')).toBeInTheDocument()
+      expect(screen.getByText('tool4')).toBeInTheDocument()
+    })
+
+    it('does not render body when no inputs, tools, and no output schema', () => {
       render(<StepNode {...baseProps} />)
       expect(screen.queryByText('Inputs')).not.toBeInTheDocument()
+      expect(screen.queryByText('Tools')).not.toBeInTheDocument()
       expect(screen.queryByText('Output')).not.toBeInTheDocument()
+    })
+
+    it('does not render Tools section when toolNames is empty', () => {
+      const props = {
+        ...baseProps,
+        data: { ...baseProps.data, outputSchemaName: 'Schema' },
+      }
+      render(<StepNode {...props} />)
+      expect(screen.queryByText('Tools')).not.toBeInTheDocument()
+      expect(screen.getByText('Output')).toBeInTheDocument()
     })
 
     it('renders both Inputs and Output when both present', () => {
@@ -140,6 +179,26 @@ describe('StepNode', () => {
       render(<StepNode {...props} />)
       expect(screen.getByText('Inputs')).toBeInTheDocument()
       expect(screen.getByText('Step A')).toBeInTheDocument()
+      expect(screen.getByText('Output')).toBeInTheDocument()
+      expect(screen.getByText('MySchema')).toBeInTheDocument()
+    })
+
+    it('renders Inputs, Tools, and Output when all present', () => {
+      const props = {
+        ...baseProps,
+        data: {
+          ...baseProps.data,
+          upstreamStepNames: ['Step A'],
+          toolNames: ['github_search', 'slack_notify'],
+          outputSchemaName: 'MySchema',
+        },
+      }
+      render(<StepNode {...props} />)
+      expect(screen.getByText('Inputs')).toBeInTheDocument()
+      expect(screen.getByText('Step A')).toBeInTheDocument()
+      expect(screen.getByText('Tools')).toBeInTheDocument()
+      expect(screen.getByText('github_search')).toBeInTheDocument()
+      expect(screen.getByText('slack_notify')).toBeInTheDocument()
       expect(screen.getByText('Output')).toBeInTheDocument()
       expect(screen.getByText('MySchema')).toBeInTheDocument()
     })
