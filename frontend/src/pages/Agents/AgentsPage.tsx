@@ -31,17 +31,16 @@ function AgentsPage() {
   useEffect(() => { void agentStore.fetchAll(); void sessionStore.fetchAll() }, [])
   const [creatingSession, setCreatingSession] = useState<string | null>(null)
 
-  // Match agents with their workshop sessions
-  const agentsWithSessions = useMemo(() => {
-    return agents.map((agent) => {
-      // Find workshop session for this agent
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-      const session = sessions?.find(
-        (s) => s.mode_id === "workshop" && s.agent_id === agent.id,
-      );
-      return {agent, session};
-    });
-  }, [agents, sessions]);
+  // Build a Map for O(1) agent→session lookups
+  const sessionsByAgentId = useMemo(() => {
+    const map = new Map<string, (typeof sessions)[number]>()
+    for (const s of sessions) {
+      if (s.mode_id === 'workshop') {
+        map.set(s.agent_id, s)
+      }
+    }
+    return map
+  }, [sessions])
 
   const handleAgentClick = useCallback(
     async (agentId: string, sessionId?: string) => {
@@ -94,11 +93,7 @@ function AgentsPage() {
 
   const loading = agentsLoading || sessionsLoading
 
-  // Extract just the agents from agentsWithSessions for the table
-  const tableAgents = useMemo(
-    () => agentsWithSessions.map(({agent}) => agent),
-    [agentsWithSessions],
-  );
+  const tableAgents = agents
 
   // Define table columns
   const columns: TableColumn<Agent>[] = useMemo(
@@ -171,8 +166,7 @@ function AgentsPage() {
         width: 80,
         align: 'center' as const,
         render: (agent) => {
-          const {session} =
-            agentsWithSessions.find((a) => a.agent.id === agent.id) ?? {}
+          const session = sessionsByAgentId.get(agent.id)
           const isCreating = creatingSession === agent.id
 
           const actions: MenuAction[] = [
@@ -214,7 +208,7 @@ function AgentsPage() {
         },
       },
     ],
-    [agentsWithSessions, creatingSession, handleAgentClick, handleDeleteAgent, navigate],
+    [sessionsByAgentId, creatingSession, handleAgentClick, handleDeleteAgent, navigate],
   )
 
   return (
@@ -243,8 +237,7 @@ function AgentsPage() {
           defaultPageSize={25}
           pageSizeOptions={[10, 25, 50, 100]}
           onRowClick={(agent) => {
-            const {session} =
-              agentsWithSessions.find((a) => a.agent.id === agent.id) ?? {}
+            const session = sessionsByAgentId.get(agent.id)
             void handleAgentClick(agent.id, session?.id)
           }}
           stickyHeader

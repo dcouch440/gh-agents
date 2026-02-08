@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { Box, Typography } from '@mui/material'
 import { FadeIn } from '@/components/animation'
 import { PageHeader } from '@/components/primitives/PageHeader'
@@ -26,15 +26,23 @@ function ReviewQueuePage() {
   const [outputOpen, setOutputOpen] = useState(true)
 
   const chat = useInteractiveChat(selectedId ?? '')
-  const selectedExecution = executions.find((e) => e.id === selectedId) ?? null
 
-  const chatMessages: ChatMessageData[] = chat.messages
-    .filter((m) => m.role === 'user' || m.role === 'assistant')
-    .map((m) => ({
-      id: m.id,
-      role: m.role as 'user' | 'assistant',
-      content: m.content,
-    }))
+  const selectedExecution = useMemo(
+    () => executions.find((e) => e.id === selectedId) ?? null,
+    [executions, selectedId],
+  )
+
+  const chatMessages: ChatMessageData[] = useMemo(
+    () =>
+      chat.messages
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m) => ({
+          id: m.id,
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        })),
+    [chat.messages],
+  )
 
   const handleSend = useCallback(
     (message: string) => {

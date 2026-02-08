@@ -40,6 +40,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   reviewQueueStore.store.setState({
     executions: [],
+    executionIds: new Set<string>(),
     notification: null,
     loading: false,
     error: null,

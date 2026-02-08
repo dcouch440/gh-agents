@@ -39,6 +39,7 @@ type WorkflowExecutionState = {
   isRunning: boolean
   stepStates: Record<string, StepExecutionState>
   totalSteps: number
+  completedStepCount: number
   durationMs: number | null
   error: string | null
   startedAt: string | null
@@ -76,6 +77,7 @@ const store = createStore<WorkflowExecutionState>(() => ({
   isRunning: false,
   stepStates: {},
   totalSteps: 0,
+  completedStepCount: 0,
   durationMs: null,
   error: null,
   startedAt: null,
@@ -98,7 +100,7 @@ const selectStepState = (stepId: string) => (s: WorkflowExecutionState): StepExe
   s.stepStates[stepId]
 
 const selectCompletedStepCount = (s: WorkflowExecutionState): number =>
-  Object.values(s.stepStates).filter((ss) => ss.status === 'success').length
+  s.completedStepCount
 
 // ── WS Event Handler ────────────────────────────────────────────────────────
 
@@ -113,6 +115,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         isRunning: true,
         stepStates: {},
         totalSteps: d.total_steps,
+        completedStepCount: 0,
         durationMs: null,
         error: null,
         startedAt: msg.ts,
@@ -133,6 +136,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
     case WORKFLOW_EVENT.STEP_COMPLETED: {
       const d = msg.data as StepCompletedData
       store.setState((s) => ({
+        completedStepCount: s.completedStepCount + 1,
         stepStates: updateStep(s.stepStates, d.step_id, {
           status: 'success',
           output: d.output ?? null,
@@ -217,6 +221,7 @@ const reset = (): void => {
     isRunning: false,
     stepStates: {},
     totalSteps: 0,
+    completedStepCount: 0,
     durationMs: null,
     error: null,
     startedAt: null,

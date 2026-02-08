@@ -250,13 +250,15 @@ const handleWsEvent = (msg: WsWireMessage): void => {
       case ROOM_EVENT.SESSION_COMPLETE: {
         const sessionId = data.room_session_id as string
         store.setState((s) => {
-          const updated: Record<string, RoomSession[]> = {}
           for (const [roomId, sessions] of Object.entries(s.sessionsByRoom)) {
-            updated[roomId] = sessions.map((rs) =>
-              rs.id === sessionId ? { ...rs, status: 'completed' } : rs,
-            )
+            const idx = sessions.findIndex((rs) => rs.id === sessionId)
+            if (idx !== -1) {
+              const updated = sessions.slice()
+              updated[idx] = { ...sessions[idx], status: 'completed' }
+              return { sessionsByRoom: { ...s.sessionsByRoom, [roomId]: updated } }
+            }
           }
-          return { sessionsByRoom: updated }
+          return s
         })
         break
       }
