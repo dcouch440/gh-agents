@@ -71,11 +71,14 @@ pub struct WorkflowStepResponse {
     pub version: i32,
     pub reasoning_trace: bool,
     pub verification_agent_ids: Vec<Uuid>,
+    pub position_x: Option<f64>,
+    pub position_y: Option<f64>,
+    pub name: Option<String>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateStepRequest {
-    pub agent_id: Uuid,
+    pub agent_id: Option<Uuid>,
     pub execution_mode: Option<String>,
     pub for_each_ref: Option<String>,
     pub prompt_template_id: Option<Uuid>,
@@ -87,11 +90,14 @@ pub struct CreateStepRequest {
     pub display_order: Option<i32>,
     pub reasoning_trace: Option<bool>,
     pub verification_agent_ids: Option<Vec<Uuid>>,
+    pub position_x: Option<f64>,
+    pub position_y: Option<f64>,
+    pub name: Option<String>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateStepRequest {
-    pub agent_id: Uuid,
+    pub agent_id: Option<Uuid>,
     pub execution_mode: Option<String>,
     pub for_each_ref: Option<String>,
     pub prompt_template_id: Option<Uuid>,
@@ -103,6 +109,9 @@ pub struct UpdateStepRequest {
     pub display_order: Option<i32>,
     pub reasoning_trace: Option<bool>,
     pub verification_agent_ids: Option<Vec<Uuid>>,
+    pub position_x: Option<f64>,
+    pub position_y: Option<f64>,
+    pub name: Option<String>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -123,6 +132,7 @@ pub struct EdgeRequest {
 
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct EdgeResponse {
+    pub id: Uuid,
     pub from_step_id: Uuid,
     pub to_step_id: Uuid,
 }
@@ -166,6 +176,9 @@ fn step_response(r: crate::db::WorkflowStepRow) -> WorkflowStepResponse {
             .verification_agent_ids
             .and_then(|v| serde_json::from_value(v).ok())
             .unwrap_or_default(),
+        position_x: r.position_x,
+        position_y: r.position_y,
+        name: r.name,
     }
 }
 
@@ -411,7 +424,7 @@ pub async fn create_workflow_step(
     let step = crate::db::WorkflowStepRow {
         id: Uuid::new_v4(),
         workflow_id: wid,
-        agent_id: req.agent_id,
+        agent_id: req.agent_id.unwrap_or(crate::constants::DEFAULT_AGENT_ID),
         execution_mode: req.execution_mode.unwrap_or_else(|| "single".to_string()),
         agent_execution_mode: None, // NULL = inherit from workflow
         for_each_ref: req.for_each_ref,
@@ -430,6 +443,9 @@ pub async fn create_workflow_step(
         verification_agent_ids: req
             .verification_agent_ids
             .map(|ids| serde_json::to_value(ids).unwrap()),
+        position_x: req.position_x,
+        position_y: req.position_y,
+        name: req.name,
     };
     let row = repo.create_step(step).await?;
     Ok((StatusCode::CREATED, Json(step_response(row))))
@@ -542,15 +558,15 @@ pub async fn update_workflow_step(
     let step = crate::db::WorkflowStepRow {
         id: p.sid,
         workflow_id: p.wid,
-        agent_id: req.agent_id,
+        agent_id: req.agent_id.unwrap_or(existing.agent_id),
         execution_mode: req.execution_mode.unwrap_or(existing.execution_mode),
         agent_execution_mode: existing.agent_execution_mode, // Preserve existing value
-        for_each_ref: req.for_each_ref,
-        prompt_template_id: req.prompt_template_id,
+        for_each_ref: req.for_each_ref.or(existing.for_each_ref),
+        prompt_template_id: req.prompt_template_id.or(existing.prompt_template_id),
         prompt_template: req.prompt_template.unwrap_or(existing.prompt_template),
-        output_schema_id: req.output_schema_id,
-        output_variable_name: req.output_variable_name,
-        interactive_agent_id: req.interactive_agent_id,
+        output_schema_id: req.output_schema_id.or(existing.output_schema_id),
+        output_variable_name: req.output_variable_name.or(existing.output_variable_name),
+        interactive_agent_id: req.interactive_agent_id.or(existing.interactive_agent_id),
         for_each_label_field: req.for_each_label_field.or(existing.for_each_label_field),
         room_id: existing.room_id,
         routing_mode: existing.routing_mode,
@@ -562,6 +578,9 @@ pub async fn update_workflow_step(
             .verification_agent_ids
             .map(|ids| serde_json::to_value(ids).unwrap())
             .or(existing.verification_agent_ids),
+        position_x: req.position_x.or(existing.position_x),
+        position_y: req.position_y.or(existing.position_y),
+        name: req.name.or(existing.name),
     };
     let row = repo.update_step(step).await?;
     Ok(Json(step_response(row)))
@@ -639,6 +658,7 @@ pub async fn list_workflow_edges(
     Ok(Json(
         rows.into_iter()
             .map(|e| EdgeResponse {
+                id: e.id,
                 from_step_id: e.from_step_id,
                 to_step_id: e.to_step_id,
             })
@@ -655,7 +675,7 @@ pub async fn list_workflow_edges(
     params(("id" = Uuid, Path, description = "Workflow ID")),
     request_body = EdgeRequest,
     responses(
-        (status = 201, description = "Edge added"),
+        (status = 201, description = "Edge added", body = EdgeResponse),
         (status = 404, description = "Not found")
     )
 )]
@@ -664,7 +684,7 @@ pub async fn add_workflow_edge(
     auth: auth_utils::AuthUser,
     Path(wid): Path<Uuid>,
     Json(req): Json<EdgeRequest>,
-) -> Result<StatusCode, AppError> {
+) -> Result<(StatusCode, Json<EdgeResponse>), AppError> {
     let repo = &state.repos().workflows;
     let wf = repo
         .get_workflow(wid)
@@ -673,8 +693,15 @@ pub async fn add_workflow_edge(
     if wf.user_id != auth.user_id.0 {
         return Err(AppError::not_found("Workflow"));
     }
-    repo.add_edge(req.from_step_id, req.to_step_id).await?;
-    Ok(StatusCode::CREATED)
+    let edge = repo.add_edge(wid, req.from_step_id, req.to_step_id).await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(EdgeResponse {
+            id: edge.id,
+            from_step_id: edge.from_step_id,
+            to_step_id: edge.to_step_id,
+        }),
+    ))
 }
 
 /// DELETE /api/workflows/:id/edges
@@ -705,6 +732,38 @@ pub async fn remove_workflow_edge(
         return Err(AppError::not_found("Workflow"));
     }
     repo.remove_edge(req.from_step_id, req.to_step_id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// DELETE /api/workflows/:wid/edges/:eid
+#[utoipa::path(
+    delete,
+    path = "/api/workflows/{wid}/edges/{eid}",
+    tag = "Workflow Edges",
+    security(("bearer_auth" = [])),
+    params(
+        ("wid" = Uuid, Path, description = "Workflow ID"),
+        ("eid" = Uuid, Path, description = "Edge ID")
+    ),
+    responses(
+        (status = 204, description = "Edge removed"),
+        (status = 404, description = "Not found")
+    )
+)]
+pub async fn delete_workflow_edge_by_id(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path((wid, eid)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, AppError> {
+    let repo = &state.repos().workflows;
+    let wf = repo
+        .get_workflow(wid)
+        .await?
+        .ok_or(AppError::not_found("Workflow"))?;
+    if wf.user_id != auth.user_id.0 {
+        return Err(AppError::not_found("Workflow"));
+    }
+    repo.delete_edge_by_id(eid).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

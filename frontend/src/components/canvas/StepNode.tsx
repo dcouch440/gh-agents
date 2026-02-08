@@ -75,36 +75,6 @@ function StepNodeComponent({ data, selected }: NodeProps) {
         </Typography>
       </Box>
 
-      {/* Body */}
-      <Box sx={{ px: 1.5, py: 1, minHeight: 24 }}>
-        {nodeData.description ? (
-          <Typography
-            sx={{
-              fontSize: 11,
-              color: 'text.secondary',
-              lineHeight: 1.4,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-            }}
-          >
-            {nodeData.description}
-          </Typography>
-        ) : (
-          <Typography
-            sx={{
-              fontSize: 11,
-              color: 'text.disabled',
-              fontStyle: 'italic',
-            }}
-          >
-            No description
-          </Typography>
-        )}
-      </Box>
-
       {/* Input Handle (left) */}
       <Handle
         type="target"

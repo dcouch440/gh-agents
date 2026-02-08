@@ -27,6 +27,12 @@ pub const MODEL_SONNET: &str = "claude-sonnet-4-20250514";
 /// Primary utility model (Haiku tier).
 pub const MODEL_HAIKU: &str = "claude-3-5-haiku-20241022";
 
+// ── Well-known IDs ────────────────────────────────────────────────────────
+
+/// Default agent UUID (seeded by migration 0012).
+/// Used when a workflow step is created without an explicit agent_id.
+pub const DEFAULT_AGENT_ID: uuid::Uuid = uuid::Uuid::from_u128(1);
+
 // ── Defaults ───────────────────────────────────────────────────────────────
 
 /// Default model used when no tier/config is specified.
@@ -256,6 +262,7 @@ pub mod routes {
     pub const WORKFLOW_STEPS: &str = "/workflows/:id/steps";
     pub const WORKFLOW_STEP: &str = "/workflows/:wid/steps/:sid";
     pub const WORKFLOW_EDGES: &str = "/workflows/:id/edges";
+    pub const WORKFLOW_EDGE: &str = "/workflows/:wid/edges/:eid";
     pub const WORKFLOW_STEP_DOCUMENTS: &str = "/workflows/:wid/steps/:sid/documents";
 
     // Workflow Collections

@@ -159,7 +159,7 @@ pub async fn create_agent(
 
     let row = crate::db::AgentRow {
         id: Uuid::new_v4(),
-        user_id: auth.user_id.0,
+        user_id: Some(auth.user_id.0),
         tier: None,
         name: request.name.trim().to_string(),
         system_prompt: request.system_prompt.unwrap_or_default(),
@@ -232,7 +232,7 @@ pub async fn update_agent(
 
     let updated = crate::db::AgentRow {
         id: existing.id,
-        user_id: auth.user_id.0,
+        user_id: Some(auth.user_id.0),
         tier: None,
         name: request.name.unwrap_or(existing.name),
         system_prompt: request.system_prompt.unwrap_or(existing.system_prompt),

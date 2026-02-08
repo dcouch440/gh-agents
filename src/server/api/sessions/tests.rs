@@ -26,7 +26,7 @@ mod tests {
     fn make_agent(id: Uuid, owner_id: Uuid) -> AgentRow {
         AgentRow {
             id,
-            user_id: owner_id,
+            user_id: Some(owner_id),
             tier: None,
             name: "test".to_string(),
             system_prompt: "".to_string(),

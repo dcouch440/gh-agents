@@ -230,54 +230,52 @@ export const mockResult: Result = {
 
 export const mockWorkflow: Workflow = {
   id: 'workflow-001',
-  user_id: 'user-001',
   name: 'Test Workflow',
   description: 'A test workflow',
   created_at: '2025-01-01T00:00:00Z',
-  updated_at: '2025-01-01T00:00:00Z',
+  container_enabled: false,
+  target_repo_url: null,
+  target_branch: null,
+  vpn_enabled: false,
 }
 
 export const mockWorkflowStep: WorkflowStep = {
   id: 'step-001',
   workflow_id: 'workflow-001',
   name: 'First Step',
-  description: 'The first step',
-  step_type: 'llm',
   agent_id: 'agent-001',
+  execution_mode: 'single',
+  for_each_ref: null,
   prompt_template_id: null,
+  prompt_template: '{task_input}',
   output_schema_id: null,
+  output_variable_name: null,
+  interactive_agent_id: null,
   for_each_label_field: null,
-  config: null,
+  display_order: 0,
+  version: 1,
+  reasoning_trace: false,
+  verification_agent_ids: [],
   position_x: 0,
   position_y: 0,
-  created_at: '2025-01-01T00:00:00Z',
-  updated_at: '2025-01-01T00:00:00Z',
 }
 
 export const mockWorkflowStep2: WorkflowStep = {
+  ...mockWorkflowStep,
   id: 'step-002',
-  workflow_id: 'workflow-001',
   name: 'Second Step',
-  description: null,
-  step_type: 'for_each',
-  agent_id: null,
-  prompt_template_id: null,
-  output_schema_id: null,
+  execution_mode: 'for_each',
+  agent_id: 'agent-001',
   for_each_label_field: 'label',
-  config: null,
   position_x: 400,
   position_y: 100,
-  created_at: '2025-01-01T00:00:00Z',
-  updated_at: '2025-01-01T00:00:00Z',
+  display_order: 1,
 }
 
 export const mockWorkflowEdge: WorkflowStepEdge = {
   id: 'edge-001',
-  workflow_id: 'workflow-001',
   from_step_id: 'step-001',
   to_step_id: 'step-002',
-  condition: null,
-  created_at: '2025-01-01T00:00:00Z',
 }
 
 export const mockOutputSchema: OutputSchema = {

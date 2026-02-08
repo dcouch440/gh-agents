@@ -46,9 +46,8 @@ function StepProperties({ step }: StepPropertiesProps) {
   return (
     <Box>
       <PropertySection title="General" {...general}>
-        <PropertyRow label="Name" value={step.name} />
-        <PropertyRow label="Type" value={step.step_type} />
-        <PropertyRow label="Description" value={step.description ?? 'None'} last />
+        <PropertyRow label="Name" value={step.name ?? 'Unnamed'} />
+        <PropertyRow label="Mode" value={step.execution_mode} last />
       </PropertySection>
 
       <PropertySection title="Agent" {...agentSection}>
@@ -90,8 +89,8 @@ function StepProperties({ step }: StepPropertiesProps) {
       </PropertySection>
 
       <PropertySection title="Position" {...positionSection}>
-        <PropertyRow label="X" value={String(step.position_x)} mono />
-        <PropertyRow label="Y" value={String(step.position_y)} mono last />
+        <PropertyRow label="X" value={String(step.position_x ?? 0)} mono />
+        <PropertyRow label="Y" value={String(step.position_y ?? 0)} mono last />
       </PropertySection>
     </Box>
   )

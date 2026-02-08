@@ -47,23 +47,22 @@ beforeEach(() => {
 
 describe('StepProperties', () => {
   describe('general section', () => {
-    it('renders step name, type, and description', () => {
+    it('renders step name and execution mode', () => {
       render(<StepProperties step={mockWorkflowStep} />)
       expect(screen.getByText('First Step')).toBeInTheDocument()
-      expect(screen.getByText('llm')).toBeInTheDocument()
-      expect(screen.getByText('The first step')).toBeInTheDocument()
+      expect(screen.getByText('single')).toBeInTheDocument()
     })
 
-    it('shows "None" when description is null', () => {
-      const step = { ...mockWorkflowStep, description: null }
+    it('shows "Unnamed" when name is null', () => {
+      const step = { ...mockWorkflowStep, name: null }
       render(<StepProperties step={step} />)
-      expect(screen.getByText('None')).toBeInTheDocument()
+      expect(screen.getByText('Unnamed')).toBeInTheDocument()
     })
   })
 
   describe('agent section', () => {
     it('shows "None assigned" when no agent', () => {
-      const step = { ...mockWorkflowStep, agent_id: null }
+      const step = { ...mockWorkflowStep, agent_id: 'missing' }
       render(<StepProperties step={step} />)
       const nones = screen.getAllByText('None assigned')
       expect(nones.length).toBeGreaterThanOrEqual(1)

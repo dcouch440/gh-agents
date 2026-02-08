@@ -12,27 +12,28 @@ type Workflow = {
 type WorkflowStep = {
   id: string
   workflow_id: string
-  name: string
-  description: string | null
-  step_type: string
-  agent_id: string | null
+  agent_id: string
+  execution_mode: string
+  for_each_ref: string | null
   prompt_template_id: string | null
+  prompt_template: string
   output_schema_id: string | null
+  output_variable_name: string | null
+  interactive_agent_id: string | null
   for_each_label_field: string | null
-  config: Record<string, unknown> | null
-  position_x: number
-  position_y: number
-  created_at: string
-  updated_at: string
+  display_order: number
+  version: number
+  reasoning_trace: boolean
+  verification_agent_ids: string[]
+  position_x: number | null
+  position_y: number | null
+  name: string | null
 }
 
 type WorkflowStepEdge = {
   id: string
-  workflow_id: string
   from_step_id: string
   to_step_id: string
-  condition: string | null
-  created_at: string
 }
 
 type StepDocument = {
@@ -52,15 +53,21 @@ type CreateWorkflowRequest = {
 type UpdateWorkflowRequest = Partial<CreateWorkflowRequest>
 
 type CreateStepRequest = {
-  name: string
-  description?: string
-  step_type: string
   agent_id?: string
-  prompt_template_id?: string
-  output_schema_id?: string
-  config?: Record<string, unknown>
+  execution_mode?: string
   position_x?: number
   position_y?: number
+  name?: string
+  prompt_template_id?: string
+  output_schema_id?: string
+  for_each_label_field?: string
+  for_each_ref?: string
+  prompt_template?: string
+  output_variable_name?: string
+  interactive_agent_id?: string
+  display_order?: number
+  reasoning_trace?: boolean
+  verification_agent_ids?: string[]
 }
 
 type UpdateStepRequest = Partial<CreateStepRequest>
@@ -68,7 +75,6 @@ type UpdateStepRequest = Partial<CreateStepRequest>
 type EdgeRequest = {
   from_step_id: string
   to_step_id: string
-  condition?: string
 }
 
 type StepDocumentRequest = {

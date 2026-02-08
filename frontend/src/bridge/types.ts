@@ -11,13 +11,11 @@ type StepNodeData = {
   stepId: string
   workflowId: string
   name: string
-  description: string | null
   stepType: string
   agentId: string | null
   promptTemplateId: string | null
   outputSchemaId: string | null
   forEachLabelField: string | null
-  config: Record<string, unknown> | null
   executionState: StepExecutionState | null
   hovered: boolean
 }
@@ -28,8 +26,6 @@ type StepNode = Node<StepNodeData, 'singleStep' | 'forEachStep' | 'roomStep'>
 
 type EdgeData = {
   edgeId: string
-  workflowId: string
-  condition: string | null
   hovered: boolean
 }
 

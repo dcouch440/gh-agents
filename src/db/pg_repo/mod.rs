@@ -705,7 +705,7 @@ impl ServerRepo for PgRepo {
 #[derive(sqlx::FromRow)]
 struct PgAgentRow {
     id: Uuid,
-    user_id: Uuid,
+    user_id: Option<Uuid>,
     name: String,
     system_prompt: String,
     persona_style: Option<String>,
@@ -1303,8 +1303,8 @@ impl WorkflowRepo for PgRepo {
     async fn create_step(&self, step: WorkflowStepRow) -> Result<WorkflowStepRow> {
         let row: WorkflowStepRow = sqlx::query_as(
             r#"
-            INSERT INTO workflow_steps (id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, for_each_label_field, display_order, reasoning_trace, verification_agent_ids)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            INSERT INTO workflow_steps (id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, for_each_label_field, display_order, reasoning_trace, verification_agent_ids, position_x, position_y, name)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
             RETURNING *
             "#,
         )
@@ -1322,6 +1322,9 @@ impl WorkflowRepo for PgRepo {
         .bind(step.display_order)
         .bind(step.reasoning_trace)
         .bind(&step.verification_agent_ids)
+        .bind(step.position_x)
+        .bind(step.position_y)
+        .bind(&step.name)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -1352,8 +1355,9 @@ impl WorkflowRepo for PgRepo {
             UPDATE workflow_steps
             SET agent_id = $1, execution_mode = $2, for_each_ref = $3, prompt_template_id = $4, prompt_template = $5,
                 output_schema_id = $6, output_variable_name = $7, interactive_agent_id = $8, for_each_label_field = $9, display_order = $10,
-                reasoning_trace = $11, verification_agent_ids = $12, version = version + 1
-            WHERE id = $13
+                reasoning_trace = $11, verification_agent_ids = $12, position_x = $13, position_y = $14, name = $15,
+                version = version + 1
+            WHERE id = $16
             RETURNING *
             "#,
         )
@@ -1369,6 +1373,9 @@ impl WorkflowRepo for PgRepo {
         .bind(step.display_order)
         .bind(step.reasoning_trace)
         .bind(&step.verification_agent_ids)
+        .bind(step.position_x)
+        .bind(step.position_y)
+        .bind(&step.name)
         .bind(step.id)
         .fetch_one(&self.pool)
         .await?;
@@ -1418,8 +1425,20 @@ impl WorkflowRepo for PgRepo {
         Ok(rows)
     }
 
-    async fn add_edge(&self, from_step_id: Uuid, to_step_id: Uuid) -> Result<()> {
-        sqlx::query("INSERT INTO workflow_step_edges (from_step_id, to_step_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
+    async fn add_edge(&self, workflow_id: Uuid, from_step_id: Uuid, to_step_id: Uuid) -> Result<WorkflowStepEdgeRow> {
+        let row: WorkflowStepEdgeRow = sqlx::query_as(
+            "INSERT INTO workflow_step_edges (workflow_id, from_step_id, to_step_id) VALUES ($1, $2, $3) ON CONFLICT (workflow_id, from_step_id, to_step_id) DO UPDATE SET from_step_id = EXCLUDED.from_step_id RETURNING *",
+        )
+        .bind(workflow_id)
+        .bind(from_step_id)
+        .bind(to_step_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn remove_edge(&self, from_step_id: Uuid, to_step_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM workflow_step_edges WHERE from_step_id = $1 AND to_step_id = $2")
             .bind(from_step_id)
             .bind(to_step_id)
             .execute(&self.pool)
@@ -1427,10 +1446,9 @@ impl WorkflowRepo for PgRepo {
         Ok(())
     }
 
-    async fn remove_edge(&self, from_step_id: Uuid, to_step_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM workflow_step_edges WHERE from_step_id = $1 AND to_step_id = $2")
-            .bind(from_step_id)
-            .bind(to_step_id)
+    async fn delete_edge_by_id(&self, edge_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM workflow_step_edges WHERE id = $1")
+            .bind(edge_id)
             .execute(&self.pool)
             .await?;
         Ok(())

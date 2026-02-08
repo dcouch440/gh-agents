@@ -20,7 +20,7 @@ pub async fn verify_agent_ownership(
         .get_persisted_agent(agent_id)
         .await?
         .ok_or(AppError::not_found("Agent"))?;
-    if agent.user_id != auth.user_id.0 {
+    if agent.user_id != Some(auth.user_id.0) {
         return Err(AppError::not_found("Agent"));
     }
     Ok(agent)

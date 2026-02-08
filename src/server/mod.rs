@@ -287,7 +287,7 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         .route(
             routes::WORKFLOW_STEP,
             get(api::get_workflow_step)
-                .put(api::update_workflow_step)
+                .patch(api::update_workflow_step)
                 .delete(api::delete_workflow_step),
         )
         .route(
@@ -295,6 +295,10 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             get(api::list_workflow_edges)
                 .post(api::add_workflow_edge)
                 .delete(api::remove_workflow_edge),
+        )
+        .route(
+            routes::WORKFLOW_EDGE,
+            delete(api::delete_workflow_edge_by_id),
         )
         .route(
             routes::WORKFLOW_STEP_DOCUMENTS,

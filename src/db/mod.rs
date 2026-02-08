@@ -17,7 +17,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct AgentRow {
     pub id: Uuid,
-    pub user_id: Uuid,
+    pub user_id: Option<Uuid>,
     pub tier: Option<String>,
     pub name: String,
     pub system_prompt: String,
@@ -145,6 +145,9 @@ pub struct WorkflowStepRow {
     pub version: i32,
     pub reasoning_trace: bool,
     pub verification_agent_ids: Option<serde_json::Value>,
+    pub position_x: Option<f64>,
+    pub position_y: Option<f64>,
+    pub name: Option<String>,
 }
 
 /// Row type for a workflow step edge (DAG edge).
