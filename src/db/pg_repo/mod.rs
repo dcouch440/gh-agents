@@ -26,6 +26,77 @@ use crate::db::{
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
 
+/// Maximum retries on serialization failure (Postgres error 40001).
+const SERIALIZABLE_MAX_RETRIES: u32 = 3;
+
+/// Check whether a sqlx error is a Postgres serialization failure (40001).
+fn is_serialization_failure(e: &sqlx::Error) -> bool {
+    matches!(
+        e,
+        sqlx::Error::Database(db_err) if db_err.code().as_deref() == Some("40001")
+    )
+}
+
+/// Check whether an anyhow error wraps a serialization failure.
+#[allow(dead_code)]
+fn is_serialization_failure_anyhow(e: &anyhow::Error) -> bool {
+    e.downcast_ref::<sqlx::Error>()
+        .is_some_and(is_serialization_failure)
+}
+
+/// Run a block inside a SERIALIZABLE transaction with automatic retry on
+/// serialization failure (Postgres error code 40001). The block receives `$tx`
+/// as a mutable transaction — use `&mut *$tx` for query execution. The macro
+/// handles commit; do NOT commit inside the block. Use `?` normally — errors
+/// are caught and classified (serialization failures trigger retry, others
+/// propagate immediately).
+macro_rules! run_serializable {
+    ($pool:expr, |$tx:ident| { $($body:tt)* }) => {{
+        let mut _last_err: Option<anyhow::Error> = None;
+        let mut _succeeded = false;
+        for _attempt in 0..SERIALIZABLE_MAX_RETRIES {
+            let mut $tx = $pool.begin().await?;
+            sqlx::query("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
+                .execute(&mut *$tx)
+                .await?;
+
+            let _body_result: Result<()> = (async {
+                $($body)*
+            }).await;
+
+            match _body_result {
+                Ok(()) => match $tx.commit().await {
+                    Ok(()) => {
+                        _succeeded = true;
+                        break;
+                    }
+                    Err(e) if is_serialization_failure(&e) => {
+                        tracing::warn!(
+                            attempt = _attempt,
+                            "serialization failure on commit, retrying"
+                        );
+                        _last_err = Some(anyhow::Error::from(e));
+                        continue;
+                    }
+                    Err(e) => return Err(e.into()),
+                },
+                Err(e) if is_serialization_failure_anyhow(&e) => {
+                    tracing::warn!(attempt = _attempt, "serialization failure, retrying");
+                    _last_err = Some(e);
+                    continue;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        if !_succeeded {
+            return Err(_last_err.unwrap_or_else(|| {
+                anyhow::anyhow!("serializable transaction failed after max retries")
+            }));
+        }
+        Ok(())
+    }};
+}
+
 /// Production repository backed by PostgreSQL.
 #[derive(Clone)]
 pub struct PgRepo {
@@ -487,23 +558,21 @@ impl ServerRepo for PgRepo {
     }
 
     async fn set_agent_tools(&self, agent_id: Uuid, tool_ids: Vec<Uuid>) -> Result<()> {
-        let mut tx = self.pool.begin().await?;
-
-        sqlx::query("DELETE FROM agent_tools WHERE agent_id = $1")
-            .bind(agent_id)
-            .execute(&mut *tx)
-            .await?;
-
-        for tool_id in tool_ids {
-            sqlx::query("INSERT INTO agent_tools (agent_id, tool_id) VALUES ($1, $2)")
+        run_serializable!(self.pool, |tx| {
+            sqlx::query("DELETE FROM agent_tools WHERE agent_id = $1")
                 .bind(agent_id)
-                .bind(tool_id)
                 .execute(&mut *tx)
                 .await?;
-        }
 
-        tx.commit().await?;
-        Ok(())
+            for tool_id in &tool_ids {
+                sqlx::query("INSERT INTO agent_tools (agent_id, tool_id) VALUES ($1, $2)")
+                    .bind(agent_id)
+                    .bind(tool_id)
+                    .execute(&mut *tx)
+                    .await?;
+            }
+            Ok(())
+        })
     }
 
     async fn seed_builtin_tools(&self) -> Result<()> {
@@ -539,23 +608,21 @@ impl ServerRepo for PgRepo {
     }
 
     async fn set_agent_context(&self, agent_id: Uuid, document_ids: Vec<Uuid>) -> Result<()> {
-        let mut tx = self.pool.begin().await?;
-
-        sqlx::query("DELETE FROM agent_context WHERE agent_id = $1")
-            .bind(agent_id)
-            .execute(&mut *tx)
-            .await?;
-
-        for doc_id in document_ids {
-            sqlx::query("INSERT INTO agent_context (agent_id, document_id) VALUES ($1, $2)")
+        run_serializable!(self.pool, |tx| {
+            sqlx::query("DELETE FROM agent_context WHERE agent_id = $1")
                 .bind(agent_id)
-                .bind(doc_id)
                 .execute(&mut *tx)
                 .await?;
-        }
 
-        tx.commit().await?;
-        Ok(())
+            for doc_id in &document_ids {
+                sqlx::query("INSERT INTO agent_context (agent_id, document_id) VALUES ($1, $2)")
+                    .bind(agent_id)
+                    .bind(doc_id)
+                    .execute(&mut *tx)
+                    .await?;
+            }
+            Ok(())
+        })
     }
 
     // --- Session management ---
@@ -799,7 +866,7 @@ impl UserRepo for PgRepo {
             r#"
             INSERT INTO users (id, email, password_hash, created_at, updated_at)
             VALUES (gen_random_uuid(), $1, $2, NOW(), NOW())
-            RETURNING id, email, password_hash, github_id, github_login, github_token_encrypted, created_at, updated_at
+            RETURNING id, email, password_hash, github_id, github_login, github_token_encrypted, is_admin, created_at, updated_at
             "#,
         )
         .bind(email)
@@ -872,7 +939,7 @@ impl UserRepo for PgRepo {
             r#"
             INSERT INTO users (id, email, github_id, github_login, github_token_encrypted, created_at, updated_at)
             VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW(), NOW())
-            RETURNING id, email, password_hash, github_id, github_login, github_token_encrypted, created_at, updated_at
+            RETURNING id, email, password_hash, github_id, github_login, github_token_encrypted, is_admin, created_at, updated_at
             "#,
         )
         .bind(email)
@@ -1425,7 +1492,12 @@ impl WorkflowRepo for PgRepo {
         Ok(rows)
     }
 
-    async fn add_edge(&self, workflow_id: Uuid, from_step_id: Uuid, to_step_id: Uuid) -> Result<WorkflowStepEdgeRow> {
+    async fn add_edge(
+        &self,
+        workflow_id: Uuid,
+        from_step_id: Uuid,
+        to_step_id: Uuid,
+    ) -> Result<WorkflowStepEdgeRow> {
         let row: WorkflowStepEdgeRow = sqlx::query_as(
             "INSERT INTO workflow_step_edges (workflow_id, from_step_id, to_step_id) VALUES ($1, $2, $3) ON CONFLICT (workflow_id, from_step_id, to_step_id) DO UPDATE SET from_step_id = EXCLUDED.from_step_id RETURNING *",
         )
@@ -2097,23 +2169,22 @@ impl ToolRouterRepo for PgRepo {
     }
 
     async fn set_router_tools(&self, router_id: Uuid, tool_ids: &[Uuid]) -> Result<()> {
-        let mut tx = self.pool.begin().await?;
-
-        sqlx::query("DELETE FROM tool_router_tools WHERE router_id = $1")
-            .bind(router_id)
-            .execute(&mut *tx)
-            .await?;
-
-        for tool_id in tool_ids {
-            sqlx::query("INSERT INTO tool_router_tools (router_id, tool_id) VALUES ($1, $2)")
+        let tool_ids = tool_ids.to_vec();
+        run_serializable!(self.pool, |tx| {
+            sqlx::query("DELETE FROM tool_router_tools WHERE router_id = $1")
                 .bind(router_id)
-                .bind(tool_id)
                 .execute(&mut *tx)
                 .await?;
-        }
 
-        tx.commit().await?;
-        Ok(())
+            for tool_id in &tool_ids {
+                sqlx::query("INSERT INTO tool_router_tools (router_id, tool_id) VALUES ($1, $2)")
+                    .bind(router_id)
+                    .bind(tool_id)
+                    .execute(&mut *tx)
+                    .await?;
+            }
+            Ok(())
+        })
     }
 
     // --- Router Modes ---
@@ -2274,25 +2345,24 @@ impl ToolRouterRepo for PgRepo {
     }
 
     async fn set_mode_tools(&self, mode_id: Uuid, tool_ids: &[Uuid]) -> Result<()> {
-        let mut tx = self.pool.begin().await?;
+        let tool_ids = tool_ids.to_vec();
+        run_serializable!(self.pool, |tx| {
+            sqlx::query("DELETE FROM tool_router_mode_tools WHERE mode_id = $1")
+                .bind(mode_id)
+                .execute(&mut *tx)
+                .await?;
 
-        // Delete all existing associations
-        sqlx::query("DELETE FROM tool_router_mode_tools WHERE mode_id = $1")
-            .bind(mode_id)
-            .execute(&mut *tx)
-            .await?;
-
-        // Insert new associations
-        for tool_id in tool_ids {
-            sqlx::query("INSERT INTO tool_router_mode_tools (mode_id, tool_id) VALUES ($1, $2)")
+            for tool_id in &tool_ids {
+                sqlx::query(
+                    "INSERT INTO tool_router_mode_tools (mode_id, tool_id) VALUES ($1, $2)",
+                )
                 .bind(mode_id)
                 .bind(tool_id)
                 .execute(&mut *tx)
                 .await?;
-        }
-
-        tx.commit().await?;
-        Ok(())
+            }
+            Ok(())
+        })
     }
 }
 
@@ -2559,26 +2629,25 @@ impl RoomRepo for PgRepo {
     }
 
     async fn set_room_members(&self, room_id: Uuid, members: &[RoomMemberInput]) -> Result<()> {
-        let mut tx = self.pool.begin().await?;
-
-        sqlx::query("DELETE FROM room_members WHERE room_id = $1")
-            .bind(room_id)
-            .execute(&mut *tx)
-            .await?;
-
-        for member in members {
-            sqlx::query("INSERT INTO room_members (room_id, agent_id, display_name, role_description, display_order) VALUES ($1, $2, $3, $4, $5)")
+        let members = members.to_vec();
+        run_serializable!(self.pool, |tx| {
+            sqlx::query("DELETE FROM room_members WHERE room_id = $1")
                 .bind(room_id)
-                .bind(member.agent_id)
-                .bind(member.display_name.as_deref())
-                .bind(&member.role_description)
-                .bind(member.display_order)
                 .execute(&mut *tx)
                 .await?;
-        }
 
-        tx.commit().await?;
-        Ok(())
+            for member in &members {
+                sqlx::query("INSERT INTO room_members (room_id, agent_id, display_name, role_description, display_order) VALUES ($1, $2, $3, $4, $5)")
+                    .bind(room_id)
+                    .bind(member.agent_id)
+                    .bind(member.display_name.as_deref())
+                    .bind(&member.role_description)
+                    .bind(member.display_order)
+                    .execute(&mut *tx)
+                    .await?;
+            }
+            Ok(())
+        })
     }
 
     // --- Room sessions ---
@@ -2909,26 +2978,22 @@ impl WorkflowCollectionRepo for PgRepo {
         collection_id: Uuid,
         edges: Vec<CollectionWorkflowEdgeRow>,
     ) -> Result<()> {
-        let mut tx = self.pool.begin().await?;
-
-        // Delete existing edges
-        sqlx::query("DELETE FROM collection_workflow_edges WHERE collection_id = $1")
-            .bind(collection_id)
-            .execute(&mut *tx)
-            .await?;
-
-        // Insert new edges
-        for edge in edges {
-            sqlx::query("INSERT INTO collection_workflow_edges (from_workflow_id, to_workflow_id, collection_id) VALUES ($1, $2, $3)")
-                .bind(edge.from_workflow_id)
-                .bind(edge.to_workflow_id)
+        run_serializable!(self.pool, |tx| {
+            sqlx::query("DELETE FROM collection_workflow_edges WHERE collection_id = $1")
                 .bind(collection_id)
                 .execute(&mut *tx)
                 .await?;
-        }
 
-        tx.commit().await?;
-        Ok(())
+            for edge in &edges {
+                sqlx::query("INSERT INTO collection_workflow_edges (from_workflow_id, to_workflow_id, collection_id) VALUES ($1, $2, $3)")
+                    .bind(edge.from_workflow_id)
+                    .bind(edge.to_workflow_id)
+                    .bind(collection_id)
+                    .execute(&mut *tx)
+                    .await?;
+            }
+            Ok(())
+        })
     }
 
     async fn list_collection_edges(
@@ -3179,27 +3244,23 @@ impl WorkflowStepAgentRepo for PgRepo {
         step_id: Uuid,
         agents: Vec<WorkflowStepAgentRow>,
     ) -> Result<()> {
-        let mut tx = self.pool.begin().await?;
-
-        // Delete existing agents
-        sqlx::query("DELETE FROM workflow_step_agents WHERE step_id = $1")
-            .bind(step_id)
-            .execute(&mut *tx)
-            .await?;
-
-        // Insert new agents
-        for agent in agents {
-            sqlx::query("INSERT INTO workflow_step_agents (step_id, agent_id, execution_strategy, agent_order) VALUES ($1, $2, $3, $4)")
+        run_serializable!(self.pool, |tx| {
+            sqlx::query("DELETE FROM workflow_step_agents WHERE step_id = $1")
                 .bind(step_id)
-                .bind(agent.agent_id)
-                .bind(agent.execution_strategy)
-                .bind(agent.agent_order)
                 .execute(&mut *tx)
                 .await?;
-        }
 
-        tx.commit().await?;
-        Ok(())
+            for agent in &agents {
+                sqlx::query("INSERT INTO workflow_step_agents (step_id, agent_id, execution_strategy, agent_order) VALUES ($1, $2, $3, $4)")
+                    .bind(step_id)
+                    .bind(agent.agent_id)
+                    .bind(&agent.execution_strategy)
+                    .bind(agent.agent_order)
+                    .execute(&mut *tx)
+                    .await?;
+            }
+            Ok(())
+        })
     }
 }
 

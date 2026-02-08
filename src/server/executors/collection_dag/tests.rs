@@ -202,7 +202,12 @@ async fn test_variable_resolution() {
         async fn list_edges(&self, _: Uuid) -> Result<Vec<crate::db::WorkflowStepEdgeRow>> {
             unimplemented!()
         }
-        async fn add_edge(&self, _: Uuid, _: Uuid, _: Uuid) -> Result<crate::db::WorkflowStepEdgeRow> {
+        async fn add_edge(
+            &self,
+            _: Uuid,
+            _: Uuid,
+            _: Uuid,
+        ) -> Result<crate::db::WorkflowStepEdgeRow> {
             unimplemented!()
         }
         async fn remove_edge(&self, _: Uuid, _: Uuid) -> Result<()> {

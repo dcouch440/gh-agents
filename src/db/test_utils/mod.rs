@@ -48,6 +48,14 @@ pub struct TestDb {
 impl TestDb {
     /// Create a fresh test database with all migrations applied.
     pub async fn new() -> Self {
+        Self::new_with_connections(1).await
+    }
+
+    /// Create a fresh test database with a custom connection pool size.
+    ///
+    /// Use `max > 1` for concurrency tests that need multiple simultaneous
+    /// transactions (e.g. testing serializable isolation).
+    pub async fn new_with_connections(max: u32) -> Self {
         let permit = std::sync::Arc::clone(&DB_SEMAPHORE)
             .acquire_owned()
             .await
@@ -64,7 +72,7 @@ impl TestDb {
         let test_url = replace_db_name(&admin_url(), &db_name);
 
         let pool = PgPoolOptions::new()
-            .max_connections(1)
+            .max_connections(max)
             .acquire_timeout(Duration::from_secs(30))
             .idle_timeout(Duration::from_secs(5))
             .connect(&test_url)
