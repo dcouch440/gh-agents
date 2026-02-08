@@ -17,18 +17,18 @@ fn admin_url() -> String {
 /// Shared admin pool across all tests to avoid connection exhaustion.
 static ADMIN_POOL: OnceCell<PgPool> = OnceCell::const_new();
 
-/// Limit concurrent test DBs to stay under Postgres max_connections (100).
-/// Each test holds 1 connection + the shared admin pool uses up to 5,
-/// so we allow up to 80 concurrent tests as a safe margin.
+/// Limit concurrent test DBs to avoid overwhelming Postgres.
+/// Each test creates a DB, runs migrations, and holds a connection.
+/// Keep this low — each test DB involves CREATE DATABASE + full migration run.
 static DB_SEMAPHORE: once_cell::sync::Lazy<std::sync::Arc<Semaphore>> =
-    once_cell::sync::Lazy::new(|| std::sync::Arc::new(Semaphore::new(80)));
+    once_cell::sync::Lazy::new(|| std::sync::Arc::new(Semaphore::new(4)));
 
 async fn shared_admin_pool() -> &'static PgPool {
     ADMIN_POOL
         .get_or_init(|| async {
             PgPoolOptions::new()
                 .max_connections(10)
-                .acquire_timeout(Duration::from_secs(60))
+                .acquire_timeout(Duration::from_secs(120))
                 .idle_timeout(Duration::from_secs(120))
                 .connect(&admin_url())
                 .await
@@ -73,8 +73,8 @@ impl TestDb {
 
         let pool = PgPoolOptions::new()
             .max_connections(max)
-            .acquire_timeout(Duration::from_secs(30))
-            .idle_timeout(Duration::from_secs(5))
+            .acquire_timeout(Duration::from_secs(120))
+            .idle_timeout(Duration::from_secs(30))
             .connect(&test_url)
             .await
             .unwrap();

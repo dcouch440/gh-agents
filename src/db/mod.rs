@@ -399,12 +399,13 @@ pub struct RoomMemberRow {
 pub struct RoomSessionRow {
     pub id: Uuid,
     pub room_id: Uuid,
-    pub run_id: Option<Uuid>,
     pub status: String,
     pub current_turn: i32,
     pub transcript_summary: Option<String>,
     pub started_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
+    pub structured_outputs: Option<serde_json::Value>,
+    pub final_decision: Option<serde_json::Value>,
 }
 
 /// Labeled entry from a room transcript (cross-execution join).

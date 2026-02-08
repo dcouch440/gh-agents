@@ -130,6 +130,7 @@ async fn merge_queue_insert_and_get() {
     let db = TestDb::new().await;
     let repo = PgRepo::new(db.pool.clone());
 
+    let user_id = create_test_user(&repo).await;
     let id = Uuid::new_v4();
     let owner = "testowner".to_string();
     let repo_name = "testrepo".to_string();
@@ -145,6 +146,7 @@ async fn merge_queue_insert_and_get() {
         pr_number,
         position,
         now,
+        user_id,
     )
     .await
     .unwrap();
@@ -167,6 +169,7 @@ async fn merge_queue_get_next_position() {
     let db = TestDb::new().await;
     let repo = PgRepo::new(db.pool.clone());
 
+    let user_id = create_test_user(&repo).await;
     let owner = "testowner".to_string();
     let repo_name = "testrepo".to_string();
     let now = Utc::now();
@@ -179,7 +182,7 @@ async fn merge_queue_get_next_position() {
     assert_eq!(pos1, 1);
 
     // Insert entry at position 1
-    repo.insert_queue_entry(Uuid::new_v4(), owner.clone(), repo_name.clone(), 1, 1, now)
+    repo.insert_queue_entry(Uuid::new_v4(), owner.clone(), repo_name.clone(), 1, 1, now, user_id)
         .await
         .unwrap();
 
@@ -199,6 +202,7 @@ async fn merge_queue_delete_entry() {
     let db = TestDb::new().await;
     let repo = PgRepo::new(db.pool.clone());
 
+    let user_id = create_test_user(&repo).await;
     let owner = "testowner".to_string();
     let repo_name = "testrepo".to_string();
     let pr_number = 42;
@@ -212,6 +216,7 @@ async fn merge_queue_delete_entry() {
         pr_number,
         1,
         now,
+        user_id,
     )
     .await
     .unwrap();
@@ -239,6 +244,7 @@ async fn merge_queue_update_status() {
     let db = TestDb::new().await;
     let repo = PgRepo::new(db.pool.clone());
 
+    let user_id = create_test_user(&repo).await;
     let owner = "testowner".to_string();
     let repo_name = "testrepo".to_string();
     let pr_number = 42;
@@ -252,6 +258,7 @@ async fn merge_queue_update_status() {
         pr_number,
         1,
         now,
+        user_id,
     )
     .await
     .unwrap();
@@ -286,12 +293,13 @@ async fn merge_queue_reset_interrupted() {
     let db = TestDb::new().await;
     let repo = PgRepo::new(db.pool.clone());
 
+    let user_id = create_test_user(&repo).await;
     let owner = "testowner".to_string();
     let repo_name = "testrepo".to_string();
     let now = Utc::now();
 
     // Insert entries with in_progress status
-    repo.insert_queue_entry(Uuid::new_v4(), owner.clone(), repo_name.clone(), 1, 1, now)
+    repo.insert_queue_entry(Uuid::new_v4(), owner.clone(), repo_name.clone(), 1, 1, now, user_id)
         .await
         .unwrap();
     repo.update_entry_status(
@@ -484,7 +492,7 @@ async fn document_repo_create_and_get() {
     let db = TestDb::new().await;
     let repo = PgRepo::new(db.pool.clone());
 
-    let user_id = Uuid::new_v4();
+    let user_id = create_test_user(&repo).await;
     let title = "Test Document".to_string();
     let content = "This is test content".to_string();
     let doc_type = "note".to_string();
@@ -527,7 +535,7 @@ async fn document_repo_update() {
     let db = TestDb::new().await;
     let repo = PgRepo::new(db.pool.clone());
 
-    let user_id = Uuid::new_v4();
+    let user_id = create_test_user(&repo).await;
 
     // Create document
     let doc = repo
@@ -566,7 +574,7 @@ async fn document_repo_delete() {
     let db = TestDb::new().await;
     let repo = PgRepo::new(db.pool.clone());
 
-    let user_id = Uuid::new_v4();
+    let user_id = create_test_user(&repo).await;
 
     // Create document
     let doc = repo
@@ -598,7 +606,7 @@ async fn document_repo_list_by_user() {
     let db = TestDb::new().await;
     let repo = PgRepo::new(db.pool.clone());
 
-    let user_id = Uuid::new_v4();
+    let user_id = create_test_user(&repo).await;
 
     // Create multiple documents
     for i in 1..=3 {
@@ -646,7 +654,7 @@ async fn create_test_router(repo: &PgRepo, user_id: Uuid) -> ToolRouterRow {
 async fn test_create_and_get_router_mode() {
     let db = TestDb::new().await;
     let repo = PgRepo::new(db.pool.clone());
-    let user_id = Uuid::new_v4();
+    let user_id = create_test_user(&repo).await;
 
     let router = create_test_router(&repo, user_id).await;
 
@@ -685,7 +693,7 @@ async fn test_create_and_get_router_mode() {
 async fn test_get_router_mode_by_key() {
     let db = TestDb::new().await;
     let repo = PgRepo::new(db.pool.clone());
-    let user_id = Uuid::new_v4();
+    let user_id = create_test_user(&repo).await;
 
     let router = create_test_router(&repo, user_id).await;
 
@@ -728,7 +736,7 @@ async fn test_get_router_mode_by_key() {
 async fn test_list_router_modes_ordering() {
     let db = TestDb::new().await;
     let repo = PgRepo::new(db.pool.clone());
-    let user_id = Uuid::new_v4();
+    let user_id = create_test_user(&repo).await;
 
     let router = create_test_router(&repo, user_id).await;
 
@@ -766,7 +774,7 @@ async fn test_list_router_modes_ordering() {
 async fn test_update_router_mode_partial() {
     let db = TestDb::new().await;
     let repo = PgRepo::new(db.pool.clone());
-    let user_id = Uuid::new_v4();
+    let user_id = create_test_user(&repo).await;
 
     let router = create_test_router(&repo, user_id).await;
 
@@ -817,7 +825,7 @@ async fn test_update_router_mode_partial() {
 async fn test_delete_router_mode() {
     let db = TestDb::new().await;
     let repo = PgRepo::new(db.pool.clone());
-    let user_id = Uuid::new_v4();
+    let user_id = create_test_user(&repo).await;
 
     let router = create_test_router(&repo, user_id).await;
 
@@ -856,7 +864,7 @@ async fn test_delete_router_mode() {
 async fn test_get_mode_tools() {
     let db = TestDb::new().await;
     let repo = PgRepo::new(db.pool.clone());
-    let user_id = Uuid::new_v4();
+    let user_id = create_test_user(&repo).await;
 
     let router = create_test_router(&repo, user_id).await;
 
@@ -932,7 +940,7 @@ async fn test_get_mode_tools() {
 async fn test_set_mode_tools_replaces() {
     let db = TestDb::new().await;
     let repo = PgRepo::new(db.pool.clone());
-    let user_id = Uuid::new_v4();
+    let user_id = create_test_user(&repo).await;
 
     let router = create_test_router(&repo, user_id).await;
 
@@ -1024,7 +1032,7 @@ async fn test_set_mode_tools_replaces() {
 async fn test_set_mode_tools_empty() {
     let db = TestDb::new().await;
     let repo = PgRepo::new(db.pool.clone());
-    let user_id = Uuid::new_v4();
+    let user_id = create_test_user(&repo).await;
 
     let router = create_test_router(&repo, user_id).await;
 
@@ -1075,7 +1083,7 @@ async fn test_set_mode_tools_empty() {
 async fn test_mode_boolean_flags() {
     let db = TestDb::new().await;
     let repo = PgRepo::new(db.pool.clone());
-    let user_id = Uuid::new_v4();
+    let user_id = create_test_user(&repo).await;
 
     let router = create_test_router(&repo, user_id).await;
 
@@ -1576,15 +1584,28 @@ async fn agent_execution_routing_update() {
         .unwrap();
 
     let routing = serde_json::json!({"intent": "decompose", "confidence": 0.95});
-    let doc_id = Uuid::new_v4();
 
-    repo.update_agent_execution_routing(exec.id, &routing, Some(doc_id))
+    // Create a real document so the FK constraint is satisfied
+    let doc = repo
+        .create_document(
+            user,
+            None,
+            "Routing Doc".to_string(),
+            "Content".to_string(),
+            "note".to_string(),
+            format!("ref-{}", Uuid::new_v4().simple()),
+            vec![],
+        )
+        .await
+        .unwrap();
+
+    repo.update_agent_execution_routing(exec.id, &routing, Some(doc.id))
         .await
         .unwrap();
 
     let fetched = repo.get_agent_execution(exec.id).await.unwrap().unwrap();
     assert_eq!(fetched.routing_analysis, Some(routing));
-    assert_eq!(fetched.selected_routing_document_id, Some(doc_id));
+    assert_eq!(fetched.selected_routing_document_id, Some(doc.id));
 
     db.cleanup().await;
 }
@@ -1951,8 +1972,8 @@ async fn room_session_lifecycle() {
     let room = create_test_room(&repo, user).await;
 
     // Create session
-    let session = repo.create_room_session(room.id, None).await.unwrap();
-    assert_eq!(session.status, "running");
+    let session = repo.create_room_session(room.id).await.unwrap();
+    assert_eq!(session.status, "active");
     assert_eq!(session.current_turn, 0);
     assert!(session.transcript_summary.is_none());
     assert!(session.completed_at.is_none());
@@ -2016,7 +2037,7 @@ async fn room_transcript_join_ordering() {
     .await
     .unwrap();
 
-    let session = repo.create_room_session(room.id, None).await.unwrap();
+    let session = repo.create_room_session(room.id).await.unwrap();
 
     // Create executions per agent
     let exec_a = repo
