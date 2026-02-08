@@ -280,12 +280,31 @@ export const mockWorkflowEdge: WorkflowStepEdge = {
 
 export const mockOutputSchema: OutputSchema = {
   id: 'schema-001',
-  user_id: 'user-001',
   name: 'Test Schema',
-  description: 'A test output schema',
-  json_schema: { type: 'object', properties: { result: { type: 'string' } } },
+  schema: { type: 'object', properties: { result: { type: 'string' } } },
   created_at: '2025-01-01T00:00:00Z',
-  updated_at: '2025-01-01T00:00:00Z',
+}
+
+export const mockAgent2: Agent = {
+  ...mockAgent,
+  id: 'agent-002',
+  name: 'CodeBot',
+  model_id: 'claude-opus-4-5-20251101',
+}
+
+export const mockPromptTemplate2: PromptTemplate = {
+  ...mockPromptTemplate,
+  id: 'template-002',
+  name: 'Code Review Template',
+  template: 'Review {{code}} and provide {{format}}',
+  variables: ['code', 'format'],
+}
+
+export const mockOutputSchema2: OutputSchema = {
+  id: 'schema-002',
+  name: 'Review Schema',
+  schema: { type: 'object', properties: { review: { type: 'string' } } },
+  created_at: '2025-01-01T00:00:00Z',
 }
 
 // ── Execution ────────────────────────────────────────────────────────────────

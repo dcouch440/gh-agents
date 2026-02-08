@@ -14,6 +14,9 @@ export { useCommandPalette } from './useCommandPalette'
 export { useCommandRegistry } from './useCommandRegistry'
 export { useConfirmModal } from './useConfirmModal'
 
+// Utility
+export { useDebounceCallback } from './useDebounceCallback'
+
 // Data
 export { useSendSessionMessage } from './useChatMutations'
 export { useWebSocket } from './useWebSocket'
