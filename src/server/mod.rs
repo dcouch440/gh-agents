@@ -306,6 +306,7 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
                 .post(api::add_step_document)
                 .delete(api::remove_step_document),
         )
+        .route(routes::WORKFLOW_RUN, post(api::run_workflow))
         .route(
             routes::COLLECTIONS,
             get(api::list_collections).post(api::create_collection),

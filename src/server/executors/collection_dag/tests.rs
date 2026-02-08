@@ -303,7 +303,7 @@ async fn test_variable_resolution() {
 
     let workflow_exec = WorkflowExecutionRow {
         id: Uuid::new_v4(),
-        collection_run_id: Uuid::new_v4(),
+        collection_run_id: Some(Uuid::new_v4()),
         workflow_id,
         user_id: Uuid::new_v4(),
         status: "completed".to_string(),
