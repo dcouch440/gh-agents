@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { toRFNodes, toRFEdges } from './mappers'
+import type { StepNodeLookups } from './mappers'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 
 const step1: WorkflowStep = {
@@ -39,9 +40,20 @@ const edge1: WorkflowStepEdge = {
   to_step_id: 'step-002',
 }
 
+const emptyLookups: StepNodeLookups = {
+  agents: new Map(),
+  outputSchemas: new Map(),
+  stepNames: new Map(),
+  edges: [],
+}
+
 describe('toRFNodes', () => {
   it('maps WorkflowStep array to React Flow nodes', () => {
-    const nodes = toRFNodes([step1, step2])
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      stepNames: new Map([['step-001', 'First Step'], ['step-002', 'Second Step']]),
+    }
+    const nodes = toRFNodes([step1, step2], lookups)
 
     expect(nodes).toHaveLength(2)
     expect(nodes[0]).toEqual({
@@ -54,18 +66,62 @@ describe('toRFNodes', () => {
         agentId: 'agent-001',
         promptTemplateId: null,
         outputSchemaId: null,
+        agentName: null,
+        modelId: null,
+        outputSchemaName: null,
+        upstreamStepNames: [],
       },
     })
   })
 
   it('returns empty array for empty input', () => {
-    expect(toRFNodes([])).toEqual([])
+    expect(toRFNodes([], emptyLookups)).toEqual([])
   })
 
   it('falls back to execution_mode when name is null', () => {
     const stepNoName: WorkflowStep = { ...step1, name: null }
-    const nodes = toRFNodes([stepNoName])
+    const nodes = toRFNodes([stepNoName], emptyLookups)
     expect(nodes[0]?.data.label).toBe('single')
+  })
+
+  it('resolves agent name and model from lookups', () => {
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      agents: new Map([['agent-001', { name: 'TestBot', model_id: 'claude-sonnet-4' }]]),
+    }
+    const nodes = toRFNodes([step1], lookups)
+    expect(nodes[0]?.data.agentName).toBe('TestBot')
+    expect(nodes[0]?.data.modelId).toBe('claude-sonnet-4')
+  })
+
+  it('resolves output schema name from lookups', () => {
+    const stepWithSchema: WorkflowStep = { ...step1, output_schema_id: 'schema-001' }
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      outputSchemas: new Map([['schema-001', { name: 'ReviewSchema' }]]),
+    }
+    const nodes = toRFNodes([stepWithSchema], lookups)
+    expect(nodes[0]?.data.outputSchemaName).toBe('ReviewSchema')
+  })
+
+  it('computes upstream step names from edges', () => {
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      stepNames: new Map([['step-001', 'First Step'], ['step-002', 'Second Step']]),
+      edges: [{ from_step_id: 'step-001', to_step_id: 'step-002' }],
+    }
+    const nodes = toRFNodes([step1, step2], lookups)
+    expect(nodes[1]?.data.upstreamStepNames).toEqual(['First Step'])
+    expect(nodes[0]?.data.upstreamStepNames).toEqual([])
+  })
+
+  it('falls back to "Unknown Step" when upstream step not in stepNames', () => {
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      edges: [{ from_step_id: 'step-999', to_step_id: 'step-001' }],
+    }
+    const nodes = toRFNodes([step1], lookups)
+    expect(nodes[0]?.data.upstreamStepNames).toEqual(['Unknown Step'])
   })
 })
 

@@ -63,6 +63,14 @@ vi.mock('@/stores', () => ({
     },
     openRightPanelIfClosed: mockOpenRightPanelIfClosed,
   },
+  agentStore: {
+    store: 'agent',
+    selectAll: () => [],
+  },
+  outputSchemaStore: {
+    store: 'outputSchema',
+    selectAll: () => [],
+  },
 }))
 
 // Mock React Flow — jsdom can't render SVG canvas

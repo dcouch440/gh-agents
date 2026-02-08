@@ -15,8 +15,9 @@ import type {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import Box from '@mui/material/Box'
-import { useStore, workflowStore, canvasStore, layoutStore } from '@/stores'
+import { useStore, workflowStore, canvasStore, layoutStore, agentStore, outputSchemaStore } from '@/stores'
 import { toRFNodes, toRFEdges } from './mappers'
+import type { StepNodeLookups } from './mappers'
 import { nodeTypes } from './nodeTypes'
 import { edgeTypes } from './edgeTypes'
 import { usePositionPersist } from './usePositionPersist'
@@ -28,13 +29,23 @@ function WorkflowCanvasInner() {
   const { setNodes, setEdges, fitView, screenToFlowPosition } = useReactFlow()
   const steps = useStore(workflowStore.store, workflowStore.selectSteps)
   const edges = useStore(workflowStore.store, workflowStore.selectEdges)
+  const agents = useStore(agentStore.store, agentStore.selectAll)
+  const schemas = useStore(outputSchemaStore.store, outputSchemaStore.selectAll)
   const minimapVisible = useStore(canvasStore.store, canvasStore.selectMinimapVisible)
   const { onNodeDragStop } = usePositionPersist()
   const [contextMenu, setContextMenu] = useState<MenuPosition>(null)
   const initialFitDone = useRef(false)
 
+  // Build lookup maps for node data enrichment
+  const lookups = useMemo((): StepNodeLookups => ({
+    agents: new Map(agents.map((a) => [a.id, { name: a.name, model_id: a.model_id }])),
+    outputSchemas: new Map(schemas.map((s) => [s.id, { name: s.name }])),
+    stepNames: new Map(steps.map((s) => [s.id, s.name ?? s.execution_mode])),
+    edges,
+  }), [agents, schemas, steps, edges])
+
   // Map store data to RF format
-  const rfNodes = useMemo(() => toRFNodes(steps), [steps])
+  const rfNodes = useMemo(() => toRFNodes(steps, lookups), [steps, lookups])
   const rfEdges = useMemo(() => toRFEdges(edges), [edges])
 
   // Push store updates into RF, preserving selection state

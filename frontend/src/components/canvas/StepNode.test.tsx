@@ -24,6 +24,10 @@ const baseProps = {
     agentId: null,
     promptTemplateId: null,
     outputSchemaId: null,
+    agentName: null,
+    modelId: null,
+    outputSchemaName: null,
+    upstreamStepNames: [],
   },
   selected: false,
   isConnectable: true,
@@ -69,5 +73,75 @@ describe('StepNode', () => {
     render(<StepNode {...props} />)
     expect(screen.getByText('Loop Step')).toBeInTheDocument()
     expect(screen.getByText('for_each')).toBeInTheDocument()
+  })
+
+  describe('subtitle', () => {
+    it('renders agent name and model when both present', () => {
+      const props = {
+        ...baseProps,
+        data: { ...baseProps.data, agentName: 'TestBot', modelId: 'claude-sonnet-4' },
+      }
+      render(<StepNode {...props} />)
+      expect(screen.getByText('TestBot \u00b7 claude-sonnet-4')).toBeInTheDocument()
+    })
+
+    it('renders only agent name when modelId is null', () => {
+      const props = {
+        ...baseProps,
+        data: { ...baseProps.data, agentName: 'TestBot', modelId: null },
+      }
+      render(<StepNode {...props} />)
+      expect(screen.getByText('TestBot')).toBeInTheDocument()
+    })
+
+    it('does not render subtitle when agentName is null', () => {
+      render(<StepNode {...baseProps} />)
+      expect(screen.queryByText(/TestBot/)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('body sections', () => {
+    it('renders upstream step pills in Inputs section', () => {
+      const props = {
+        ...baseProps,
+        data: { ...baseProps.data, upstreamStepNames: ['Parse Input', 'Fetch Data'] },
+      }
+      render(<StepNode {...props} />)
+      expect(screen.getByText('Inputs')).toBeInTheDocument()
+      expect(screen.getByText('Parse Input')).toBeInTheDocument()
+      expect(screen.getByText('Fetch Data')).toBeInTheDocument()
+    })
+
+    it('renders output schema name in Output section', () => {
+      const props = {
+        ...baseProps,
+        data: { ...baseProps.data, outputSchemaName: 'ReviewSchema' },
+      }
+      render(<StepNode {...props} />)
+      expect(screen.getByText('Output')).toBeInTheDocument()
+      expect(screen.getByText('ReviewSchema')).toBeInTheDocument()
+    })
+
+    it('does not render body when no inputs and no output schema', () => {
+      render(<StepNode {...baseProps} />)
+      expect(screen.queryByText('Inputs')).not.toBeInTheDocument()
+      expect(screen.queryByText('Output')).not.toBeInTheDocument()
+    })
+
+    it('renders both Inputs and Output when both present', () => {
+      const props = {
+        ...baseProps,
+        data: {
+          ...baseProps.data,
+          upstreamStepNames: ['Step A'],
+          outputSchemaName: 'MySchema',
+        },
+      }
+      render(<StepNode {...props} />)
+      expect(screen.getByText('Inputs')).toBeInTheDocument()
+      expect(screen.getByText('Step A')).toBeInTheDocument()
+      expect(screen.getByText('Output')).toBeInTheDocument()
+      expect(screen.getByText('MySchema')).toBeInTheDocument()
+    })
   })
 })
