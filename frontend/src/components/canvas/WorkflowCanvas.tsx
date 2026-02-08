@@ -118,8 +118,27 @@ function WorkflowCanvasInner() {
     [screenToFlowPosition],
   )
 
-  // Close context menu on pane click (RF handles deselection internally)
+  // Context menu (right-click on node)
+  const onNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: { id: string; position: { x: number; y: number } }) => {
+      event.preventDefault()
+      setContextMenu({
+        x: event.clientX,
+        y: event.clientY,
+        flowX: node.position.x,
+        flowY: node.position.y,
+        nodeId: node.id,
+      })
+    },
+    [],
+  )
+
+  // Close context menu on pane or node click
   const onPaneClick = useCallback(() => {
+    setContextMenu(null)
+  }, [])
+
+  const onNodeClick = useCallback(() => {
     setContextMenu(null)
   }, [])
 
@@ -151,7 +170,9 @@ function WorkflowCanvasInner() {
         onNodesDelete={onNodesDelete}
         onEdgesDelete={onEdgesDelete}
         onPaneContextMenu={onPaneContextMenu}
+        onNodeContextMenu={onNodeContextMenu}
         onPaneClick={onPaneClick}
+        onNodeClick={onNodeClick}
         deleteKeyCode={['Backspace', 'Delete']}
         multiSelectionKeyCode="Shift"
         snapToGrid

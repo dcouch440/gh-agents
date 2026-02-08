@@ -8,6 +8,7 @@ type MenuPosition = {
   y: number
   flowX: number
   flowY: number
+  nodeId?: string
 } | null
 
 type CanvasContextMenuProps = {
@@ -34,6 +35,13 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
     onClose()
   }
 
+  const handleDelete = () => {
+    if (position.nodeId) {
+      void workflowStore.deleteStep(position.nodeId)
+    }
+    onClose()
+  }
+
   return (
     <Box
       sx={{
@@ -50,25 +58,9 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
         py: 0.5,
       }}
     >
-      <Typography
-        sx={{
-          px: 1.5,
-          py: 0.75,
-          fontSize: 10,
-          textTransform: 'uppercase',
-          color: 'text.disabled',
-          letterSpacing: '0.05em',
-          fontWeight: 600,
-        }}
-      >
-        Add Step
-      </Typography>
-      {STEP_TYPES.map((st) => (
+      {position.nodeId !== undefined ? (
         <Box
-          key={st.key}
-          onClick={() => {
-            handleAdd(st.key, st.label)
-          }}
+          onClick={handleDelete}
           sx={{
             display: 'flex',
             alignItems: 'center',
@@ -79,20 +71,57 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
             '&:hover': { backgroundColor: 'action.hover' },
           }}
         >
-          <Box
-            sx={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              backgroundColor: STEP_TYPE_COLORS[st.key] ?? DEFAULT_STEP_TYPE_COLOR,
-              flexShrink: 0,
-            }}
-          />
-          <Typography sx={{ fontSize: 12, color: 'text.primary' }}>
-            {st.label}
+          <Typography sx={{ fontSize: 12, color: 'error.main' }}>
+            Delete Step
           </Typography>
         </Box>
-      ))}
+      ) : (
+        <>
+          <Typography
+            sx={{
+              px: 1.5,
+              py: 0.75,
+              fontSize: 10,
+              textTransform: 'uppercase',
+              color: 'text.disabled',
+              letterSpacing: '0.05em',
+              fontWeight: 600,
+            }}
+          >
+            Add Step
+          </Typography>
+          {STEP_TYPES.map((st) => (
+            <Box
+              key={st.key}
+              onClick={() => {
+                handleAdd(st.key, st.label)
+              }}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                px: 1.5,
+                py: 0.75,
+                cursor: 'pointer',
+                '&:hover': { backgroundColor: 'action.hover' },
+              }}
+            >
+              <Box
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  backgroundColor: STEP_TYPE_COLORS[st.key] ?? DEFAULT_STEP_TYPE_COLOR,
+                  flexShrink: 0,
+                }}
+              />
+              <Typography sx={{ fontSize: 12, color: 'text.primary' }}>
+                {st.label}
+              </Typography>
+            </Box>
+          ))}
+        </>
+      )}
     </Box>
   )
 }

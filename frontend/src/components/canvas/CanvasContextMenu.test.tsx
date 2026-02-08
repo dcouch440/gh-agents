@@ -3,13 +3,15 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CanvasContextMenu } from './CanvasContextMenu'
 
-const { mockCreateStep } = vi.hoisted(() => ({
+const { mockCreateStep, mockDeleteStep } = vi.hoisted(() => ({
   mockCreateStep: vi.fn(),
+  mockDeleteStep: vi.fn(),
 }))
 
 vi.mock('@/stores', () => ({
   workflowStore: {
     createStep: mockCreateStep,
+    deleteStep: mockDeleteStep,
   },
 }))
 
@@ -76,5 +78,46 @@ describe('CanvasContextMenu', () => {
     expect(mockCreateStep).toHaveBeenCalledWith(
       expect.objectContaining({ execution_mode: 'for_each' }),
     )
+  })
+
+  describe('node context menu', () => {
+    const nodePosition = { ...defaultPosition, nodeId: 'step-123' }
+
+    it('renders Delete Step when position has nodeId', () => {
+      render(
+        <CanvasContextMenu position={nodePosition} onClose={vi.fn()} />,
+      )
+      expect(screen.getByText('Delete Step')).toBeInTheDocument()
+    })
+
+    it('does not render Add Step options when nodeId is present', () => {
+      render(
+        <CanvasContextMenu position={nodePosition} onClose={vi.fn()} />,
+      )
+      expect(screen.queryByText('Add Step')).not.toBeInTheDocument()
+      expect(screen.queryByText('LLM Step')).not.toBeInTheDocument()
+    })
+
+    it('calls deleteStep with correct node ID on click', async () => {
+      const user = userEvent.setup()
+      render(
+        <CanvasContextMenu position={nodePosition} onClose={vi.fn()} />,
+      )
+
+      await user.click(screen.getByText('Delete Step'))
+
+      expect(mockDeleteStep).toHaveBeenCalledWith('step-123')
+    })
+
+    it('calls onClose after delete', async () => {
+      const onClose = vi.fn()
+      const user = userEvent.setup()
+      render(
+        <CanvasContextMenu position={nodePosition} onClose={onClose} />,
+      )
+
+      await user.click(screen.getByText('Delete Step'))
+      expect(onClose).toHaveBeenCalledOnce()
+    })
   })
 })
