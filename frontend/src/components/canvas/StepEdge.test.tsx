@@ -1,8 +1,10 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { StepEdge } from './StepEdge'
 
 const mockGetBezierPath = vi.fn(() => ['M 0 0 C 50 0, 50 100, 100 100', 50, 50])
+const mockDeleteElements = vi.fn(() => Promise.resolve())
 
 vi.mock('@xyflow/react', () => ({
   BaseEdge: ({ path, style }: { path: string; style: React.CSSProperties }) => (
@@ -10,7 +12,11 @@ vi.mock('@xyflow/react', () => ({
       <path data-testid="edge-path" d={path} style={style} />
     </svg>
   ),
+  EdgeLabelRenderer: ({ children }: { children: React.ReactNode }) => <div data-testid="edge-label">{children}</div>,
   getBezierPath: (...args: unknown[]) => mockGetBezierPath(...args),
+  useReactFlow: () => ({
+    deleteElements: mockDeleteElements,
+  }),
   Position: { Left: 'left', Right: 'right' },
 }))
 
@@ -44,6 +50,10 @@ const baseProps = {
   selectable: true,
   focusable: true,
 }
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
 
 describe('StepEdge', () => {
   it('renders an edge path', () => {
@@ -90,5 +100,28 @@ describe('StepEdge', () => {
     )
     const path = container.querySelector('[data-testid="edge-path"]')
     expect(path).toHaveStyle({ opacity: '0.8' })
+  })
+
+  it('renders delete button', () => {
+    render(
+      <svg>
+        <StepEdge {...baseProps} />
+      </svg>,
+    )
+    expect(screen.getByTestId('edge-label')).toBeInTheDocument()
+  })
+
+  it('calls deleteElements when delete button is clicked', async () => {
+    const user = userEvent.setup()
+    render(
+      <svg>
+        <StepEdge {...baseProps} />
+      </svg>,
+    )
+
+    const deleteButton = screen.getByRole('button')
+    await user.click(deleteButton)
+
+    expect(mockDeleteElements).toHaveBeenCalledWith({ edges: [{ id: 'edge-001' }] })
   })
 })

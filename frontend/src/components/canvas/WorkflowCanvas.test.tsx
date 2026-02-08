@@ -75,10 +75,11 @@ vi.mock('@/stores', () => ({
 
 // Mock React Flow — jsdom can't render SVG canvas
 vi.mock('@xyflow/react', () => {
-  const MockReactFlow = ({ children, onSelectionChange, onConnect, onNodesDelete, onEdgesDelete }: {
+  const MockReactFlow = ({ children, onSelectionChange, onConnect, onReconnect, onNodesDelete, onEdgesDelete }: {
     children?: React.ReactNode
     onSelectionChange?: (params: { nodes: { id: string }[]; edges: { id: string }[] }) => void
     onConnect?: (connection: { source: string; target: string }) => void
+    onReconnect?: (oldEdge: { id: string }, newConnection: { source: string; target: string }) => void
     onNodesDelete?: (nodes: { id: string }[]) => void
     onEdgesDelete?: (edges: { id: string }[]) => void
   }) => (
@@ -86,6 +87,7 @@ vi.mock('@xyflow/react', () => {
       data-testid="react-flow"
       data-on-selection-change={onSelectionChange ? 'yes' : 'no'}
       data-on-connect={onConnect ? 'yes' : 'no'}
+      data-on-reconnect={onReconnect ? 'yes' : 'no'}
       data-on-nodes-delete={onNodesDelete ? 'yes' : 'no'}
       data-on-edges-delete={onEdgesDelete ? 'yes' : 'no'}
     >
@@ -159,5 +161,11 @@ describe('WorkflowCanvas', () => {
     const rf = screen.getByTestId('react-flow')
     expect(rf.dataset.onNodesDelete).toBe('yes')
     expect(rf.dataset.onEdgesDelete).toBe('yes')
+  })
+
+  it('wires reconnect callback', () => {
+    render(<WorkflowCanvas />)
+    const rf = screen.getByTestId('react-flow')
+    expect(rf.dataset.onReconnect).toBe('yes')
   })
 })
