@@ -533,10 +533,9 @@ pub struct SystemConfigRow {
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct ProtocolRow {
     pub id: Uuid,
-    pub user_id: Uuid,
     pub name: String,
     pub description: String,
-    pub protocol_type: String, // "decomp", "transform", "review", "route"
+    pub protocol_type: String, // "decomp", "transform", "review", "route", "default"
     pub config: serde_json::Value,
     pub version: i32,
     pub created_at: DateTime<Utc>,

@@ -7,7 +7,7 @@ use std::path::Path;
 use crate::config::sync_config;
 use crate::db::init_db;
 use crate::db::pg_repo::PgRepo;
-use crate::db::traits::ServerRepo;
+use crate::db::traits::{ProtocolRepo, ServerRepo};
 
 /// Run config sync command
 pub async fn run_sync(config_dir: &Path, dry_run: bool, verbose: bool) -> Result<()> {
@@ -21,9 +21,10 @@ pub async fn run_sync(config_dir: &Path, dry_run: bool, verbose: bool) -> Result
     // Initialize database
     let pool = init_db().await?;
 
-    // Seed built-in tools (idempotent)
+    // Seed built-in tools and protocols (idempotent)
     if !dry_run {
         seed_builtin_tools(&pool, verbose).await?;
+        seed_builtin_protocols(&pool, verbose).await?;
     }
 
     // Sync capabilities and tool assignments from YAML
@@ -64,6 +65,22 @@ async fn seed_builtin_tools(pool: &PgPool, verbose: bool) -> Result<()> {
 
     if verbose {
         println!("✓ Tools seeded");
+    }
+
+    Ok(())
+}
+
+/// Seed built-in protocols (system-wide, idempotent)
+async fn seed_builtin_protocols(pool: &PgPool, verbose: bool) -> Result<()> {
+    if verbose {
+        println!("🔧 Seeding built-in protocols...");
+    }
+
+    let repo = PgRepo::new(pool.clone());
+    repo.seed_builtin_protocols().await?;
+
+    if verbose {
+        println!("✓ Protocols seeded");
     }
 
     Ok(())
