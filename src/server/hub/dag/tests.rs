@@ -507,3 +507,675 @@ fn room_composite_envelope_structure() {
     let nested = resolve_dot_path(&envelope_data, &nested_path).unwrap();
     assert_eq!(nested, "use microservices");
 }
+
+// =========================================================================
+// Integration Tests: execute_workflow_via_engine
+// =========================================================================
+//
+// These tests exercise the full DAG execution pipeline end-to-end using mock
+// LLM providers and mock repositories. No Postgres required.
+
+use super::execute_workflow_via_engine;
+use super::WorkflowExecutionContext;
+use crate::db::traits::{
+    MockAgentExecutionRepo, MockServerRepo, MockTokenLedgerRepo, MockWorkflowRepo,
+};
+use crate::db::{AgentExecutionRow, AgentRow, ExecutionMessageRow, TokenLedgerRow};
+use crate::llm::{
+    LLMError, LLMProvider, LLMRequest, LLMResponse, StopReason, StreamChunk, TokenUsage,
+};
+use crate::server::hub::engine::ExecutionEngine;
+use crate::server::hub::error::HubError;
+use crate::server::state::test_helpers::MockReposBuilder;
+use crate::server::state::AppStateBuilder;
+use crate::types::AppConfig;
+use async_trait::async_trait;
+use chrono::Utc;
+use futures::Stream;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
+
+// ---------------------------------------------------------------------------
+// Mock LLM Providers
+// ---------------------------------------------------------------------------
+
+/// Returns the same response on every call.
+struct FixedProvider {
+    response: LLMResponse,
+}
+
+#[async_trait]
+impl LLMProvider for FixedProvider {
+    async fn send_message(&self, _req: LLMRequest) -> Result<LLMResponse, LLMError> {
+        Ok(self.response.clone())
+    }
+    async fn send_message_stream(
+        &self,
+        _req: LLMRequest,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError> {
+        Err(LLMError::StreamError("not implemented".into()))
+    }
+    fn provider_name(&self) -> &'static str {
+        "fixed"
+    }
+    fn model_id(&self) -> &str {
+        "test-model"
+    }
+}
+
+/// Returns different responses on sequential calls. Wraps to the last response
+/// if more calls are made than responses available.
+struct SequentialProvider {
+    responses: Vec<LLMResponse>,
+    call_count: AtomicU32,
+}
+
+#[async_trait]
+impl LLMProvider for SequentialProvider {
+    async fn send_message(&self, _req: LLMRequest) -> Result<LLMResponse, LLMError> {
+        let n = self.call_count.fetch_add(1, Ordering::SeqCst) as usize;
+        let idx = n.min(self.responses.len() - 1);
+        Ok(self.responses[idx].clone())
+    }
+    async fn send_message_stream(
+        &self,
+        _req: LLMRequest,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError> {
+        Err(LLMError::StreamError("not implemented".into()))
+    }
+    fn provider_name(&self) -> &'static str {
+        "sequential"
+    }
+    fn model_id(&self) -> &str {
+        "test-model"
+    }
+}
+
+/// Returns a valid response but cancels a token on the first call.
+struct CancellingProvider {
+    response: LLMResponse,
+    token: CancellationToken,
+    call_count: AtomicU32,
+}
+
+#[async_trait]
+impl LLMProvider for CancellingProvider {
+    async fn send_message(&self, _req: LLMRequest) -> Result<LLMResponse, LLMError> {
+        let n = self.call_count.fetch_add(1, Ordering::SeqCst);
+        if n == 0 {
+            self.token.cancel();
+        }
+        Ok(self.response.clone())
+    }
+    async fn send_message_stream(
+        &self,
+        _req: LLMRequest,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError> {
+        Err(LLMError::StreamError("not implemented".into()))
+    }
+    fn provider_name(&self) -> &'static str {
+        "cancelling"
+    }
+    fn model_id(&self) -> &str {
+        "test-model"
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Dummy Row Factories
+// ---------------------------------------------------------------------------
+
+fn dummy_ae_row() -> AgentExecutionRow {
+    AgentExecutionRow {
+        id: Uuid::new_v4(),
+        agent_id: Uuid::new_v4(),
+        workflow_step_id: None,
+        workflow_execution_id: None,
+        is_interactive: false,
+        parent_agent_execution_id: None,
+        system_prompt_rendered: String::new(),
+        input: String::new(),
+        output: None,
+        structured_output: None,
+        selected_mode_id: None,
+        room_session_id: None,
+        speaker_order: None,
+        status: "running".into(),
+        started_at: Utc::now(),
+        completed_at: None,
+        routing_analysis: None,
+        selected_routing_document_id: None,
+        is_exemplary: false,
+    }
+}
+
+fn dummy_msg_row() -> ExecutionMessageRow {
+    ExecutionMessageRow {
+        id: Uuid::new_v4(),
+        agent_execution_id: Uuid::new_v4(),
+        role: "system".into(),
+        content: String::new(),
+        tool_call_id: None,
+        input_tokens: 0,
+        output_tokens: 0,
+        created_at: Utc::now(),
+    }
+}
+
+fn dummy_tl_row() -> TokenLedgerRow {
+    TokenLedgerRow {
+        id: Uuid::new_v4(),
+        user_id: Uuid::new_v4(),
+        agent_execution_id: None,
+        model_id: "test-model".into(),
+        input_tokens: 0,
+        output_tokens: 0,
+        cost_usd: 0.0,
+        created_at: Utc::now(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Test Helpers
+// ---------------------------------------------------------------------------
+
+fn make_test_agent(id: Uuid) -> AgentRow {
+    AgentRow {
+        id,
+        user_id: None,
+        tier: None,
+        name: "Test Agent".into(),
+        system_prompt: "You are a test agent.".into(),
+        persona_style: None,
+        model_provider: "anthropic".into(),
+        model_id: "claude-sonnet-4-20250514".into(),
+        model_max_tokens: 4096,
+        model_temperature: 0.7,
+        status: Some("active".into()),
+        router_mode: None,
+        router_id: None,
+        output_schema_id: None,
+        version: 1,
+    }
+}
+
+fn make_integration_step(
+    id: Uuid,
+    agent_id: Uuid,
+    prompt: &str,
+    var_name: Option<&str>,
+    order: i32,
+) -> WorkflowStepRow {
+    WorkflowStepRow {
+        id,
+        workflow_id: Uuid::new_v4(),
+        agent_id,
+        execution_mode: "single".into(),
+        agent_execution_mode: None,
+        for_each_ref: None,
+        prompt_template_id: None,
+        prompt_template: prompt.into(),
+        output_schema_id: None,
+        output_variable_name: var_name.map(|s| s.into()),
+        interactive_agent_id: None,
+        for_each_label_field: None,
+        room_id: None,
+        routing_mode: None,
+        routing_field: None,
+        display_order: order,
+        version: 1,
+        reasoning_trace: false,
+        verification_agent_ids: None,
+        position_x: None,
+        position_y: None,
+        name: None,
+    }
+}
+
+fn make_for_each_integration_step(
+    id: Uuid,
+    agent_id: Uuid,
+    for_each_ref: &str,
+    var_name: Option<&str>,
+    order: i32,
+) -> WorkflowStepRow {
+    WorkflowStepRow {
+        id,
+        workflow_id: Uuid::new_v4(),
+        agent_id,
+        execution_mode: "for_each".into(),
+        agent_execution_mode: Some("parallel".into()),
+        for_each_ref: Some(for_each_ref.into()),
+        prompt_template_id: None,
+        prompt_template: "Process item".into(),
+        output_schema_id: None,
+        output_variable_name: var_name.map(|s| s.into()),
+        interactive_agent_id: None,
+        for_each_label_field: None,
+        room_id: None,
+        routing_mode: None,
+        routing_field: None,
+        display_order: order,
+        version: 1,
+        reasoning_trace: false,
+        verification_agent_ids: None,
+        position_x: None,
+        position_y: None,
+        name: None,
+    }
+}
+
+fn make_ctx() -> WorkflowExecutionContext {
+    WorkflowExecutionContext {
+        stage_execution_id: Uuid::new_v4(),
+        run_id: Uuid::new_v4(),
+        user_id: Uuid::new_v4(),
+        initial_input: "test input".into(),
+        prior_outputs: HashMap::new(),
+        execution_context: None,
+        container_config: None,
+        wg_client: None,
+    }
+}
+
+fn make_llm_response(content: &str, input_tokens: u32, output_tokens: u32) -> LLMResponse {
+    LLMResponse {
+        content: content.into(),
+        content_blocks: vec![],
+        model: "test-model".into(),
+        stop_reason: StopReason::EndTurn,
+        usage: TokenUsage {
+            input_tokens,
+            output_tokens,
+        },
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Harness Builder
+// ---------------------------------------------------------------------------
+
+struct TestHarness {
+    engine: ExecutionEngine,
+    state: crate::server::state::AppState,
+    _rx: tokio::sync::mpsc::Receiver<crate::server::state::ConsumerMessage>,
+}
+
+/// Build a test harness with a single agent. The provided LLM provider is
+/// used for the ExecutionEngine. MockServerRepo is configured to return the
+/// agent for any `get_persisted_agent` call matching the given `agent_id`.
+fn build_test_harness(agent_id: Uuid, provider: Arc<dyn LLMProvider + Send + Sync>) -> TestHarness {
+    let agent = make_test_agent(agent_id);
+
+    // MockServerRepo
+    let mut server_repo = MockServerRepo::new();
+    let agent_clone = agent.clone();
+    server_repo
+        .expect_get_persisted_agent()
+        .returning(move |id| {
+            if id == agent_id {
+                Ok(Some(agent_clone.clone()))
+            } else {
+                Ok(None)
+            }
+        });
+    server_repo
+        .expect_get_agent_tools()
+        .returning(|_| Ok(vec![]));
+    server_repo
+        .expect_get_agent_guidances()
+        .returning(|_, _| Ok(vec![]));
+    server_repo
+        .expect_get_agent_context()
+        .returning(|_| Ok(vec![]));
+
+    // MockWorkflowRepo
+    let mut wf_repo = MockWorkflowRepo::new();
+    wf_repo.expect_get_step_inputs().returning(|_| Ok(vec![]));
+    wf_repo.expect_get_step_outputs().returning(|_| Ok(vec![]));
+    wf_repo
+        .expect_get_step_routing_rules()
+        .returning(|_| Ok(vec![]));
+    wf_repo
+        .expect_list_step_documents()
+        .returning(|_| Ok(vec![]));
+
+    // MockAgentExecutionRepo
+    let mut ae_repo = MockAgentExecutionRepo::new();
+    ae_repo
+        .expect_create_agent_execution()
+        .returning(|_, _, _, _, _, _, _, _, _| Ok(dummy_ae_row()));
+    ae_repo
+        .expect_create_execution_message()
+        .returning(|_, _, _, _, _, _| Ok(dummy_msg_row()));
+    ae_repo
+        .expect_update_agent_execution_status()
+        .returning(|_, _, _, _| Ok(dummy_ae_row()));
+    ae_repo
+        .expect_list_exemplary_executions()
+        .returning(|_, _, _| Ok(vec![]));
+
+    // MockTokenLedgerRepo
+    let mut tl_repo = MockTokenLedgerRepo::new();
+    tl_repo
+        .expect_insert_ledger_entry()
+        .returning(|_, _, _, _, _, _| Ok(dummy_tl_row()));
+
+    let repos = MockReposBuilder::new()
+        .with_workflows(Arc::new(wf_repo))
+        .with_agent_executions(Arc::new(ae_repo))
+        .with_token_ledger(Arc::new(tl_repo))
+        .build();
+
+    let engine = ExecutionEngine::new(provider.clone());
+
+    let (state, rx) = AppStateBuilder::new()
+        .with_server_repo(Arc::new(server_repo))
+        .with_repos(repos)
+        .with_config(AppConfig::default())
+        .with_provider(provider)
+        .build_for_test();
+
+    TestHarness {
+        engine,
+        state,
+        _rx: rx,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn single_step_workflow_executes() {
+    let agent_id = Uuid::new_v4();
+    let step_id = Uuid::new_v4();
+    let provider = Arc::new(FixedProvider {
+        response: make_llm_response(r#"{"result":"hello"}"#, 10, 5),
+    });
+    let harness = build_test_harness(agent_id, provider);
+    let ctx = make_ctx();
+
+    let steps = vec![make_integration_step(
+        step_id,
+        agent_id,
+        "Generate output",
+        Some("output"),
+        0,
+    )];
+    let edges = vec![];
+
+    let result =
+        execute_workflow_via_engine(&harness.engine, &harness.state, &ctx, &steps, &edges, None)
+            .await;
+
+    let result = result.unwrap();
+    assert_eq!(result.total_input_tokens, 10);
+    assert_eq!(result.total_output_tokens, 5);
+    assert_eq!(result.outputs.len(), 1);
+    // Outputs are keyed by step UUID (not variable name)
+    assert!(result.outputs.contains_key(&step_id.to_string()));
+}
+
+#[tokio::test]
+async fn two_step_linear_workflow() {
+    let agent_id = Uuid::new_v4();
+    let s1 = Uuid::new_v4();
+    let s2 = Uuid::new_v4();
+    let provider = Arc::new(FixedProvider {
+        response: make_llm_response(r#"{"data":"test"}"#, 10, 5),
+    });
+    let harness = build_test_harness(agent_id, provider);
+    let ctx = make_ctx();
+
+    let steps = vec![
+        make_integration_step(s1, agent_id, "Step one", Some("step1_out"), 0),
+        make_integration_step(
+            s2,
+            agent_id,
+            "Step two uses {step1_out}",
+            Some("step2_out"),
+            1,
+        ),
+    ];
+    let edges = vec![make_edge(s1, s2)];
+
+    let result =
+        execute_workflow_via_engine(&harness.engine, &harness.state, &ctx, &steps, &edges, None)
+            .await
+            .unwrap();
+
+    assert_eq!(result.outputs.len(), 2);
+    // Outputs are keyed by step UUID
+    assert!(result.outputs.contains_key(&s1.to_string()));
+    assert!(result.outputs.contains_key(&s2.to_string()));
+    assert_eq!(result.total_input_tokens, 20);
+    assert_eq!(result.total_output_tokens, 10);
+}
+
+#[tokio::test]
+async fn three_step_diamond_dag() {
+    let agent_id = Uuid::new_v4();
+    let s1 = Uuid::new_v4();
+    let s2 = Uuid::new_v4();
+    let s3 = Uuid::new_v4();
+    let s4 = Uuid::new_v4();
+    let provider = Arc::new(FixedProvider {
+        response: make_llm_response(r#"{"ok":true}"#, 10, 5),
+    });
+    let harness = build_test_harness(agent_id, provider);
+    let ctx = make_ctx();
+
+    let steps = vec![
+        make_integration_step(s1, agent_id, "Start", Some("start"), 0),
+        make_integration_step(s2, agent_id, "Branch A", Some("branch_a"), 1),
+        make_integration_step(s3, agent_id, "Branch B", Some("branch_b"), 2),
+        make_integration_step(s4, agent_id, "Merge", Some("merged"), 3),
+    ];
+    let edges = vec![
+        make_edge(s1, s2),
+        make_edge(s1, s3),
+        make_edge(s2, s4),
+        make_edge(s3, s4),
+    ];
+
+    let result =
+        execute_workflow_via_engine(&harness.engine, &harness.state, &ctx, &steps, &edges, None)
+            .await
+            .unwrap();
+
+    assert_eq!(result.outputs.len(), 4);
+    assert_eq!(result.total_input_tokens, 40);
+    assert_eq!(result.total_output_tokens, 20);
+}
+
+#[tokio::test]
+async fn dag_cycle_returns_error() {
+    let agent_id = Uuid::new_v4();
+    let s1 = Uuid::new_v4();
+    let s2 = Uuid::new_v4();
+    // Provider should never be called — cycle detected before execution
+    let provider = Arc::new(FixedProvider {
+        response: make_llm_response("unused", 0, 0),
+    });
+    let harness = build_test_harness(agent_id, provider);
+    let ctx = make_ctx();
+
+    let steps = vec![
+        make_integration_step(s1, agent_id, "A", None, 0),
+        make_integration_step(s2, agent_id, "B", None, 1),
+    ];
+    let edges = vec![make_edge(s1, s2), make_edge(s2, s1)];
+
+    let result =
+        execute_workflow_via_engine(&harness.engine, &harness.state, &ctx, &steps, &edges, None)
+            .await;
+
+    assert!(matches!(result, Err(HubError::DagCycle)));
+}
+
+#[tokio::test]
+async fn missing_agent_returns_error() {
+    let real_agent_id = Uuid::new_v4();
+    let missing_agent_id = Uuid::new_v4();
+    let step_id = Uuid::new_v4();
+    let provider = Arc::new(FixedProvider {
+        response: make_llm_response("unused", 0, 0),
+    });
+    // Harness is built for real_agent_id, but step references missing_agent_id
+    let harness = build_test_harness(real_agent_id, provider);
+    let ctx = make_ctx();
+
+    let steps = vec![make_integration_step(
+        step_id,
+        missing_agent_id,
+        "Prompt",
+        None,
+        0,
+    )];
+    let edges = vec![];
+
+    let result =
+        execute_workflow_via_engine(&harness.engine, &harness.state, &ctx, &steps, &edges, None)
+            .await;
+
+    assert!(matches!(
+        result,
+        Err(HubError::AgentNotFound {
+            step_id: _,
+            agent_id: _
+        })
+    ));
+}
+
+#[tokio::test]
+async fn cancellation_before_execution() {
+    let agent_id = Uuid::new_v4();
+    let step_id = Uuid::new_v4();
+    let provider = Arc::new(FixedProvider {
+        response: make_llm_response("unused", 0, 0),
+    });
+    let harness = build_test_harness(agent_id, provider);
+    let ctx = make_ctx();
+
+    let steps = vec![make_integration_step(step_id, agent_id, "Prompt", None, 0)];
+    let edges = vec![];
+
+    let token = CancellationToken::new();
+    token.cancel();
+
+    let result = execute_workflow_via_engine(
+        &harness.engine,
+        &harness.state,
+        &ctx,
+        &steps,
+        &edges,
+        Some(&token),
+    )
+    .await;
+
+    assert!(matches!(result, Err(HubError::Cancelled)));
+}
+
+#[tokio::test]
+async fn cancellation_between_steps() {
+    let agent_id = Uuid::new_v4();
+    let s1 = Uuid::new_v4();
+    let s2 = Uuid::new_v4();
+    let token = CancellationToken::new();
+
+    let provider = Arc::new(CancellingProvider {
+        response: make_llm_response(r#"{"done":true}"#, 10, 5),
+        token: token.clone(),
+        call_count: AtomicU32::new(0),
+    });
+    let harness = build_test_harness(agent_id, provider);
+    let ctx = make_ctx();
+
+    let steps = vec![
+        make_integration_step(s1, agent_id, "Step 1", Some("s1_out"), 0),
+        make_integration_step(s2, agent_id, "Step 2", Some("s2_out"), 1),
+    ];
+    let edges = vec![make_edge(s1, s2)];
+
+    let result = execute_workflow_via_engine(
+        &harness.engine,
+        &harness.state,
+        &ctx,
+        &steps,
+        &edges,
+        Some(&token),
+    )
+    .await;
+
+    assert!(matches!(result, Err(HubError::Cancelled)));
+}
+
+#[tokio::test]
+async fn for_each_step_iterates_array() {
+    let agent_id = Uuid::new_v4();
+    let s1 = Uuid::new_v4();
+    let s2 = Uuid::new_v4();
+
+    let provider = Arc::new(SequentialProvider {
+        responses: vec![
+            // Step 1: returns a JSON array
+            make_llm_response(r#"[{"item":"a"},{"item":"b"},{"item":"c"}]"#, 10, 5),
+            // Step 2 iterations: each returns a simple object
+            make_llm_response(r#"{"processed":"ok"}"#, 8, 4),
+        ],
+        call_count: AtomicU32::new(0),
+    });
+    let harness = build_test_harness(agent_id, provider);
+    let ctx = make_ctx();
+
+    let steps = vec![
+        make_integration_step(s1, agent_id, "Generate items", Some("items"), 0),
+        make_for_each_integration_step(s2, agent_id, "items", Some("processed"), 1),
+    ];
+    let edges = vec![make_edge(s1, s2)];
+
+    let result =
+        execute_workflow_via_engine(&harness.engine, &harness.state, &ctx, &steps, &edges, None)
+            .await
+            .unwrap();
+
+    assert_eq!(result.outputs.len(), 2);
+    // Outputs are keyed by step UUID
+    assert!(result.outputs.contains_key(&s1.to_string()));
+    assert!(result.outputs.contains_key(&s2.to_string()));
+    // 1 call for step 1 + 3 calls for step 2 (3 items)
+    // Step 1: 10 input, 5 output
+    // Step 2: 3 * 8 input = 24, 3 * 4 output = 12
+    assert_eq!(result.total_input_tokens, 34);
+    assert_eq!(result.total_output_tokens, 17);
+}
+
+#[tokio::test]
+async fn for_each_not_array_returns_error() {
+    let agent_id = Uuid::new_v4();
+    let s1 = Uuid::new_v4();
+    let s2 = Uuid::new_v4();
+
+    // Step 1 returns a plain string, not a JSON array
+    let provider = Arc::new(FixedProvider {
+        response: make_llm_response("just a string, not an array", 10, 5),
+    });
+    let harness = build_test_harness(agent_id, provider);
+    let ctx = make_ctx();
+
+    let steps = vec![
+        make_integration_step(s1, agent_id, "Generate", Some("items"), 0),
+        make_for_each_integration_step(s2, agent_id, "items", Some("processed"), 1),
+    ];
+    let edges = vec![make_edge(s1, s2)];
+
+    let result =
+        execute_workflow_via_engine(&harness.engine, &harness.state, &ctx, &steps, &edges, None)
+            .await;
+
+    assert!(matches!(result, Err(HubError::ForEachNotArray { .. })));
+}
