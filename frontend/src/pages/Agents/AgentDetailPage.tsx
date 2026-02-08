@@ -1,5 +1,5 @@
 import { useParams } from 'react-router-dom'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Box, Typography, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material'
 import { useStore, toolStore, documentStore, agentStore, toolRouterStore } from '@/stores'
 import { api } from '@/api'
@@ -140,6 +140,11 @@ function AgentDetailPage() {
   const [toolAssignmentTarget, setToolAssignmentTarget] = useState<{ type: 'router' | 'mode'; id: string } | null>(null)
   const [assignedToolIds, setAssignedToolIds] = useState<string[]>([])
 
+  const availableDocuments = useMemo(() => {
+    const assignedIds = new Set(agentDocs.map((ad) => ad.id))
+    return allDocuments.filter((doc) => !assignedIds.has(doc.id))
+  }, [allDocuments, agentDocs])
+
   if (!id) {
     return <ErrorMessage message="No agent ID provided" />
   }
@@ -171,10 +176,6 @@ function AgentDetailPage() {
       await removeDocument(documentId)
     }
   }
-
-  const availableDocuments = allDocuments.filter(
-    (doc) => !agentDocs.some((ad) => ad.id === doc.id),
-  )
 
   const docColumns: Column<DocumentListItem>[] = [
     { key: 'title', header: 'Title', render: (doc) => doc.title },
