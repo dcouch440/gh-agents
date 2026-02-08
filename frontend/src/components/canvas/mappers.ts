@@ -9,15 +9,11 @@ type StepNodeData = {
   outputSchemaId: string | null
 }
 
-const toRFNodes = (
-  steps: WorkflowStep[],
-  selectedIds: ReadonlySet<string>,
-): Node<StepNodeData>[] =>
+const toRFNodes = (steps: WorkflowStep[]): Node<StepNodeData>[] =>
   steps.map((step) => ({
     id: step.id,
     type: 'stepNode',
     position: { x: step.position_x ?? 0, y: step.position_y ?? 0 },
-    selected: selectedIds.has(step.id),
     data: {
       label: step.name ?? step.execution_mode,
       stepType: step.execution_mode,
@@ -27,16 +23,12 @@ const toRFNodes = (
     },
   }))
 
-const toRFEdges = (
-  edges: WorkflowStepEdge[],
-  selectedIds: ReadonlySet<string>,
-): Edge[] =>
+const toRFEdges = (edges: WorkflowStepEdge[]): Edge[] =>
   edges.map((edge) => ({
     id: edge.id,
     type: 'stepEdge',
     source: edge.from_step_id,
     target: edge.to_step_id,
-    selected: selectedIds.has(edge.id),
   }))
 
 export { toRFNodes, toRFEdges }

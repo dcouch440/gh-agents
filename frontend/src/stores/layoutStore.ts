@@ -85,6 +85,12 @@ const openRightPanel = (section: string): void => {
   store.setState({ rightPanelOpen: true, rightPanelSection: section })
 }
 
+const openRightPanelIfClosed = (section: string): void => {
+  if (!store.getState().rightPanelOpen) {
+    openRightPanel(section)
+  }
+}
+
 const closeRightPanel = (): void => {
   store.setState({ rightPanelOpen: false })
 }
@@ -126,6 +132,7 @@ export const layoutStore = {
   closeLeftPanel,
   toggleLeftPanel,
   openRightPanel,
+  openRightPanelIfClosed,
   closeRightPanel,
   toggleRightPanel,
   setRightPanelWidth,

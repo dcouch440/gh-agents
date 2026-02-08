@@ -6,29 +6,33 @@ import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 const {
   mockSelectSteps,
   mockSelectEdges,
+  mockClearSelection,
+  mockOpenRightPanelIfClosed,
   mockAddEdge,
   mockDeleteStep,
   mockRemoveEdge,
   _steps,
   _edges,
-  _selectedStepIds,
-  _selectedEdgeIds,
   _minimapVisible,
   mockFitView,
   mockScreenToFlowPosition,
+  mockSetNodes,
+  mockSetEdges,
 } = vi.hoisted(() => ({
   mockSelectSteps: vi.fn(),
   mockSelectEdges: vi.fn(),
+  mockClearSelection: vi.fn(),
+  mockOpenRightPanelIfClosed: vi.fn(),
   mockAddEdge: vi.fn(),
   mockDeleteStep: vi.fn(),
   mockRemoveEdge: vi.fn(),
   _steps: { value: [] as WorkflowStep[] },
   _edges: { value: [] as WorkflowStepEdge[] },
-  _selectedStepIds: { value: new Set<string>() },
-  _selectedEdgeIds: { value: new Set<string>() },
   _minimapVisible: { value: false },
   mockFitView: vi.fn(),
   mockScreenToFlowPosition: vi.fn(() => ({ x: 0, y: 0 })),
+  mockSetNodes: vi.fn(),
+  mockSetEdges: vi.fn(),
 }))
 
 vi.mock('@/stores', () => ({
@@ -48,11 +52,16 @@ vi.mock('@/stores', () => ({
   },
   canvasStore: {
     store: 'canvas',
-    selectSelectedStepIds: () => _selectedStepIds.value,
-    selectSelectedEdgeIds: () => _selectedEdgeIds.value,
     selectMinimapVisible: () => _minimapVisible.value,
     selectSteps: mockSelectSteps,
     selectEdges: mockSelectEdges,
+    clearSelection: mockClearSelection,
+  },
+  layoutStore: {
+    store: {
+      getState: () => ({ rightPanelOpen: false, rightPanelSection: null }),
+    },
+    openRightPanelIfClosed: mockOpenRightPanelIfClosed,
   },
 }))
 
@@ -87,9 +96,9 @@ vi.mock('@xyflow/react', () => {
     useReactFlow: () => ({
       fitView: mockFitView,
       screenToFlowPosition: mockScreenToFlowPosition,
+      setNodes: mockSetNodes,
+      setEdges: mockSetEdges,
     }),
-    applyNodeChanges: vi.fn((changes: unknown[], nodes: unknown[]) => nodes),
-    applyEdgeChanges: vi.fn((changes: unknown[], edges: unknown[]) => edges),
     Position: { Left: 'left', Right: 'right' },
   }
 })
@@ -100,8 +109,6 @@ beforeEach(() => {
   vi.clearAllMocks()
   _steps.value = []
   _edges.value = []
-  _selectedStepIds.value = new Set()
-  _selectedEdgeIds.value = new Set()
   _minimapVisible.value = false
 })
 

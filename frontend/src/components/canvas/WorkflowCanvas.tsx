@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { FocusEvent as ReactFocusEvent } from 'react'
 import {
   ReactFlow,
   Background,
@@ -6,22 +7,16 @@ import {
   useReactFlow,
   ReactFlowProvider,
   BackgroundVariant,
-  applyNodeChanges,
-  applyEdgeChanges,
 } from '@xyflow/react'
 import type {
   OnSelectionChangeParams,
   Connection,
   OnNodesDelete,
   OnEdgesDelete,
-  NodeChange,
-  EdgeChange,
-  Node,
-  Edge,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import Box from '@mui/material/Box'
-import { useStore, workflowStore, canvasStore } from '@/stores'
+import { useStore, workflowStore, canvasStore, layoutStore } from '@/stores'
 import { toRFNodes, toRFEdges } from './mappers'
 import { nodeTypes } from './nodeTypes'
 import { edgeTypes } from './edgeTypes'
@@ -31,64 +26,56 @@ import type { MenuPosition } from './CanvasContextMenu'
 import { CANVAS } from './constants'
 
 function WorkflowCanvasInner() {
-  const reactFlowInstance = useReactFlow()
+  const { setNodes, setEdges, fitView, screenToFlowPosition } = useReactFlow()
   const steps = useStore(workflowStore.store, workflowStore.selectSteps)
   const edges = useStore(workflowStore.store, workflowStore.selectEdges)
-  const selectedStepIds = useStore(canvasStore.store, canvasStore.selectSelectedStepIds)
-  const selectedEdgeIds = useStore(canvasStore.store, canvasStore.selectSelectedEdgeIds)
   const minimapVisible = useStore(canvasStore.store, canvasStore.selectMinimapVisible)
   const { onNodeDragStop } = usePositionPersist()
   const [contextMenu, setContextMenu] = useState<MenuPosition>(null)
   const initialFitDone = useRef(false)
 
-  // Store-derived RF data
-  const rfNodesFromStore = useMemo(
-    () => toRFNodes(steps, selectedStepIds),
-    [steps, selectedStepIds],
-  )
-  const rfEdgesFromStore = useMemo(
-    () => toRFEdges(edges, selectedEdgeIds),
-    [edges, selectedEdgeIds],
-  )
+  // Map store data to RF format
+  const rfNodes = useMemo(() => toRFNodes(steps), [steps])
+  const rfEdges = useMemo(() => toRFEdges(edges), [edges])
 
-  // Local state for smooth dragging — synced from store
-  const [localNodes, setLocalNodes] = useState<Node[]>([])
-  const [localEdges, setLocalEdges] = useState<Edge[]>([])
+  // Push store updates into RF, preserving selection state
+  useEffect(() => {
+    setNodes((current) => {
+      const selMap = new Map(current.map((n) => [n.id, n.selected ?? false]))
+      return rfNodes.map((n) => ({
+        ...n,
+        selected: selMap.get(n.id) ?? false,
+      }))
+    })
+  }, [rfNodes, setNodes])
 
   useEffect(() => {
-    setLocalNodes(rfNodesFromStore)
-  }, [rfNodesFromStore])
-
-  useEffect(() => {
-    setLocalEdges(rfEdgesFromStore)
-  }, [rfEdgesFromStore])
+    setEdges((current) => {
+      const selMap = new Map(current.map((e) => [e.id, e.selected ?? false]))
+      return rfEdges.map((e) => ({
+        ...e,
+        selected: selMap.get(e.id) ?? false,
+      }))
+    })
+  }, [rfEdges, setEdges])
 
   // Fit to view on initial load
   useEffect(() => {
     if (steps.length > 0 && !initialFitDone.current) {
       initialFitDone.current = true
       setTimeout(() => {
-        void reactFlowInstance.fitView({ padding: CANVAS.FIT_VIEW_PADDING })
+        void fitView({ padding: CANVAS.FIT_VIEW_PADDING })
       }, 50)
     }
-  }, [steps, reactFlowInstance])
+  }, [steps, fitView])
 
-  // Handle node position changes during drag (local only)
-  const onNodesChange = useCallback((changes: NodeChange[]) => {
-    setLocalNodes((nds) => applyNodeChanges(changes, nds))
-  }, [])
-
-  // Handle edge changes (local only)
-  const onEdgesChange = useCallback((changes: EdgeChange[]) => {
-    setLocalEdges((eds) => applyEdgeChanges(changes, eds))
-  }, [])
-
-  // Selection sync: RF → canvasStore
+  // Selection sync: RF → canvasStore (read-only mirror for sidebar panels)
   const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
-    const nodeIds = params.nodes.map((n) => n.id)
-    const edgeIds = params.edges.map((e) => e.id)
-    canvasStore.selectSteps(nodeIds)
-    canvasStore.selectEdges(edgeIds)
+    canvasStore.selectSteps(params.nodes.map((n) => n.id))
+    canvasStore.selectEdges(params.edges.map((e) => e.id))
+    if (params.nodes.length > 0 || params.edges.length > 0) {
+      layoutStore.openRightPanelIfClosed('properties')
+    }
   }, [])
 
   // Edge creation
@@ -118,7 +105,7 @@ function WorkflowCanvasInner() {
   const onPaneContextMenu = useCallback(
     (event: React.MouseEvent) => {
       event.preventDefault()
-      const flowPosition = reactFlowInstance.screenToFlowPosition({
+      const flowPosition = screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
       })
@@ -129,20 +116,33 @@ function WorkflowCanvasInner() {
         flowY: flowPosition.y,
       })
     },
-    [reactFlowInstance],
+    [screenToFlowPosition],
   )
 
-  // Close context menu on pane click
+  // Clear selection when focus leaves the canvas entirely
+  const onCanvasBlur = useCallback((e: ReactFocusEvent) => {
+    if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget as globalThis.Node)) {
+      return
+    }
+    canvasStore.clearSelection()
+    setNodes((nds) => nds.map((n) => ({ ...n, selected: false })))
+    setEdges((eds) => eds.map((e) => ({ ...e, selected: false })))
+  }, [setNodes, setEdges])
+
+  // Close context menu on pane click (RF handles deselection internally)
   const onPaneClick = useCallback(() => {
     setContextMenu(null)
   }, [])
 
   return (
     <Box
+      tabIndex={-1}
+      onBlur={onCanvasBlur}
       sx={{
         width: '100%',
         height: '100%',
         position: 'relative',
+        outline: 'none',
         '& .react-flow': {
           '--xy-background-color': 'transparent',
           '--xy-node-background-color': 'transparent',
@@ -154,12 +154,10 @@ function WorkflowCanvasInner() {
       }}
     >
       <ReactFlow
-        nodes={localNodes}
-        edges={localEdges}
+        defaultNodes={rfNodes}
+        defaultEdges={rfEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
         onSelectionChange={onSelectionChange}
         onNodeDragStop={onNodeDragStop}
         onConnect={onConnect}
