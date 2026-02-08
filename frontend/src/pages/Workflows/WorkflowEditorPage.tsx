@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
-import { useStore, workflowStore, agentStore, outputSchemaStore } from '@/stores'
+import { useStore, workflowStore, agentStore, outputSchemaStore, protocolStore } from '@/stores'
 import { WorkflowCanvas } from '@/components/canvas'
 import { LoadingSpinner } from '@/components/primitives'
 import { LAYOUT_COLORS } from '@/constants'
@@ -19,6 +19,7 @@ function WorkflowEditorPage() {
     void workflowStore.loadWorkflow(id)
     void agentStore.fetchAll()
     void outputSchemaStore.fetchIfStale()
+    void protocolStore.fetchAll()
     return () => { workflowStore.clearActive() }
   }, [id, navigate])
 

@@ -23,6 +23,7 @@ import {
   layoutStore,
   agentStore,
   outputSchemaStore,
+  protocolStore,
 } from "@/stores";
 import {toRFNodes, toRFEdges} from "./mappers";
 import type {StepNodeLookups} from "./mappers";
@@ -52,16 +53,22 @@ function WorkflowCanvasInner() {
     agentStore.store,
     (s) => s.toolsByAgent,
   );
+  const stepProtocols = useStore(canvasStore.store, canvasStore.selectStepProtocols);
   const {onNodeDragStop} = usePositionPersist();
   const [contextMenu, setContextMenu] = useState<MenuPosition>(null);
   const initialFitDone = useRef(false);
 
-  // Fetch tools for all agents when they load
+  // Fetch tools for all agents when they load + protocol types
   useEffect(() => {
     agents.forEach((agent) => {
       void agentStore.fetchTools(agent.id);
     });
   }, [agents]);
+
+  useEffect(() => {
+    void protocolStore.fetchAll();
+    void protocolStore.fetchTypes();
+  }, []);
 
   // Build lookup maps for node data enrichment (split to avoid rebuilding stable maps on step changes)
   const agentLookup = useMemo(
@@ -88,6 +95,17 @@ function WorkflowCanvasInner() {
     });
     return map;
   }, [agents, toolsByAgent]);
+  const protocolsByStepLookup = useMemo(() => {
+    const map = new Map<string, { protocol_type: string; name: string; portNames: string[] }>();
+    for (const [stepId, link] of Object.entries(stepProtocols)) {
+      map.set(stepId, {
+        protocol_type: link.protocolType,
+        name: link.protocolName,
+        portNames: link.portNames,
+      });
+    }
+    return map;
+  }, [stepProtocols]);
   const lookups = useMemo(
     (): StepNodeLookups => ({
       agents: agentLookup,
@@ -95,8 +113,9 @@ function WorkflowCanvasInner() {
       stepNames: stepNameLookup,
       edges,
       toolsByAgent: toolsByAgentLookup,
+      protocolsByStep: protocolsByStepLookup,
     }),
-    [agentLookup, schemaLookup, stepNameLookup, edges, toolsByAgentLookup],
+    [agentLookup, schemaLookup, stepNameLookup, edges, toolsByAgentLookup, protocolsByStepLookup],
   );
 
   // Map store data to RF format

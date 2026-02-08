@@ -18,3 +18,4 @@ export type { RouterMode, CreateRouterModeRequest, UpdateRouterModeRequest, SetM
 export type { ToolRouter, CreateToolRouterRequest, UpdateToolRouterRequest, SetRouterToolsRequest } from './toolRouter'
 export type { Room, RoomMember, RoomSession, RoomTranscriptEntry, RoomOutput, CreateRoomRequest, UpdateRoomRequest, AddRoomMemberRequest, SetRoomMembersRequest, RoomMessageRequest } from './room'
 export type { Collection, CollectionRun, CreateCollectionRequest, UpdateCollectionRequest } from './collection'
+export type { Protocol, ProtocolPort, ProtocolAgent, ProtocolSchema, ProtocolTemplate, ProtocolTypeInfo, CreateProtocolRequest, UpdateProtocolRequest, CreatePortRequest } from './protocol'

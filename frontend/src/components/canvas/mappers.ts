@@ -1,6 +1,12 @@
 import type { Node, Edge } from '@xyflow/react'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 
+type ProtocolStepInfo = {
+  protocol_type: string
+  name: string
+  portNames: string[]
+}
+
 type StepNodeData = {
   label: string
   stepType: string
@@ -12,6 +18,9 @@ type StepNodeData = {
   outputSchemaName: string | null
   upstreamStepNames: string[]
   toolNames: string[]
+  protocolType: string | null
+  protocolName: string | null
+  protocolPortNames: string[]
 }
 
 type StepNodeLookups = {
@@ -20,6 +29,7 @@ type StepNodeLookups = {
   stepNames: ReadonlyMap<string, string>
   edges: ReadonlyArray<{ from_step_id: string; to_step_id: string }>
   toolsByAgent: ReadonlyMap<string, string[]>
+  protocolsByStep: ReadonlyMap<string, ProtocolStepInfo>
 }
 
 const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node<StepNodeData>[] => {
@@ -36,6 +46,7 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node<StepNo
     const upstreamIds = upstreamMap.get(step.id) ?? []
     const upstreamStepNames = upstreamIds.map((id) => lookups.stepNames.get(id) ?? 'Unknown Step')
     const toolNames = step.agent_id ? lookups.toolsByAgent.get(step.agent_id) ?? [] : []
+    const protocolInfo = lookups.protocolsByStep.get(step.id)
 
     return {
       id: step.id,
@@ -52,6 +63,9 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node<StepNo
         outputSchemaName: schema?.name ?? null,
         upstreamStepNames,
         toolNames,
+        protocolType: protocolInfo?.protocol_type ?? null,
+        protocolName: protocolInfo?.name ?? null,
+        protocolPortNames: protocolInfo?.portNames ?? [],
       },
     }
   })
