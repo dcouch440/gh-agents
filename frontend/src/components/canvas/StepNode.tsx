@@ -24,8 +24,9 @@ function StepNodeComponent({ data, selected }: NodeProps) {
   const IconComponent = STEP_TYPE_ICONS[nodeData.stepType] ?? DEFAULT_STEP_TYPE_ICON
 
   const hasInputs = nodeData.upstreamStepNames.length > 0
+  const hasTools = nodeData.toolNames.length > 0
   const hasOutput = nodeData.outputSchemaName !== null
-  const hasBody = hasInputs || hasOutput
+  const hasBody = hasInputs || hasTools || hasOutput
 
   const subtitle = nodeData.agentName
     ? nodeData.modelId
@@ -136,6 +137,50 @@ function StepNodeComponent({ data, selected }: NodeProps) {
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                 {nodeData.upstreamStepNames.map((name, idx) => (
+                  <Box
+                    key={idx}
+                    sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      px: 0.75,
+                      py: 0.25,
+                      borderRadius: '4px',
+                      backgroundColor: 'rgba(255,255,255,0.03)',
+                      border: 1,
+                      borderColor: 'divider',
+                      fontSize: 10,
+                      color: 'text.secondary',
+                      lineHeight: 1.3,
+                      maxWidth: '100%',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {name}
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          )}
+          {hasTools && (
+            <Box>
+              <Typography
+                sx={{
+                  fontSize: 8,
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  color: 'text.disabled',
+                  letterSpacing: '0.06em',
+                  lineHeight: 1,
+                  mb: 0.5,
+                }}
+              >
+                Tools
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {nodeData.toolNames.map((name, idx) => (
                   <Box
                     key={idx}
                     sx={{
