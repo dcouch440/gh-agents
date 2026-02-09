@@ -160,6 +160,8 @@ const selectHistoricalRun = (s: WorkflowExecutionState): WorkflowExecutionSummar
 
 const selectHistoryLoading = (s: WorkflowExecutionState): boolean => s.historyLoading
 
+const selectHistoryError = (s: WorkflowExecutionState): string | null => s.historyError
+
 // ── History Actions ─────────────────────────────────────────────────────────
 
 const fetchRuns = async (workflowId: string): Promise<void> => {
@@ -346,6 +348,7 @@ export const workflowExecutionStore = {
   selectSelectedHistoricalRunId,
   selectHistoricalRun,
   selectHistoryLoading,
+  selectHistoryError,
   fetchRuns,
   viewHistoricalRun,
   returnToLive,
