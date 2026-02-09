@@ -1,16 +1,16 @@
 import { motion } from 'framer-motion';
 
 export function DocumenterIcon() {
-  // 8-tooth gear polygon centered at origin (0,0), inner radius 12, outer radius 16
+  // 8-tooth gear polygon centered at origin, scaled down (~0.85x): inner ~10, outer ~13.5
   const gearPoints =
-    '-1.9,-11.9 -2.0,-15.9 2.0,-15.9 1.9,-11.9 ' +
-    '7.1,-9.7 9.9,-12.6 12.6,-9.8 9.7,-7.0 ' +
-    '11.9,-1.9 15.9,-1.9 15.9,2.0 11.9,1.9 ' +
-    '9.7,7.1 12.6,9.9 9.9,12.6 7.1,9.7 ' +
-    '1.9,11.9 2.0,15.9 -2.0,15.9 -1.9,11.9 ' +
-    '-7.0,9.7 -9.9,12.6 -12.6,9.9 -9.7,7.1 ' +
-    '-11.9,1.9 -15.9,2.0 -15.9,-1.9 -11.9,-1.9 ' +
-    '-9.7,-7.0 -12.6,-9.8 -9.9,-12.6 -7.0,-9.7';
+    '-1.6,-10.1 -1.7,-13.5 1.7,-13.5 1.6,-10.1 ' +
+    '6.0,-8.2 8.4,-10.7 10.7,-8.3 8.2,-6.0 ' +
+    '10.1,-1.6 13.5,-1.6 13.5,1.7 10.1,1.6 ' +
+    '8.2,6.0 10.7,8.4 8.4,10.7 6.0,8.2 ' +
+    '1.6,10.1 1.7,13.5 -1.7,13.5 -1.6,10.1 ' +
+    '-6.0,8.2 -8.4,10.7 -10.7,8.4 -8.2,6.0 ' +
+    '-10.1,1.6 -13.5,1.7 -13.5,-1.6 -10.1,-1.6 ' +
+    '-8.2,-6.0 -10.7,-8.3 -8.4,-10.7 -6.0,-8.2';
 
   return (
     <svg
@@ -37,16 +37,16 @@ export function DocumenterIcon() {
         </motion.g>
       </g>
       {/* Gear center ring */}
-      <circle cx="18" cy="18" r="5" fill="none" stroke="#F57C00" strokeWidth="1.5" opacity="0.6" />
+      <circle cx="18" cy="18" r="4" fill="none" stroke="#F57C00" strokeWidth="1.5" opacity="0.6" />
 
-      {/* Document sitting on top */}
-      <rect x="10" y="8" width="16" height="20" rx="2" fill="white" stroke="#F57C00" strokeWidth="1.5" />
+      {/* Document sitting on top — dark stroke for contrast against orange gear */}
+      <rect x="11" y="9" width="14" height="18" rx="2" fill="white" stroke="#78909C" strokeWidth="1" />
       {/* Corner fold */}
-      <path d="M22 8v4a2 2 0 002 2h2" stroke="#F57C00" strokeWidth="1.2" fill="white" />
+      <path d="M21 9v3.5a1.5 1.5 0 001.5 1.5H26" stroke="#78909C" strokeWidth="0.8" fill="white" />
       {/* Text lines */}
-      <rect x="13" y="16" width="10" height="1.2" rx="0.6" fill="#F57C00" opacity="0.5" />
-      <rect x="13" y="19" width="8" height="1.2" rx="0.6" fill="#F57C00" opacity="0.3" />
-      <rect x="13" y="22" width="10" height="1.2" rx="0.6" fill="#F57C00" opacity="0.2" />
+      <rect x="13.5" y="17" width="9" height="1.2" rx="0.6" fill="#78909C" opacity="0.5" />
+      <rect x="13.5" y="19.5" width="7" height="1.2" rx="0.6" fill="#78909C" opacity="0.3" />
+      <rect x="13.5" y="22" width="9" height="1.2" rx="0.6" fill="#78909C" opacity="0.2" />
     </svg>
   );
 }
