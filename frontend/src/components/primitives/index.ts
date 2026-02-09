@@ -78,3 +78,6 @@ export type { PanelToggleProps } from './PanelToggle'
 
 export { PropertySelect } from './PropertySelect'
 export type { PropertySelectProps, PropertySelectOption } from './PropertySelect'
+
+export { VariableChipStrip } from './VariableChipStrip'
+export type { VariableChipStripProps } from './VariableChipStrip'

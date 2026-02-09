@@ -511,6 +511,63 @@ fn room_composite_envelope_structure() {
 }
 
 // =========================================================================
+// resolve_output_key / to_snake_case
+// =========================================================================
+
+use super::{resolve_output_key, to_snake_case};
+use crate::db::StepOutputRow;
+
+#[test]
+fn to_snake_case_basic() {
+    assert_eq!(to_snake_case("Research Agent"), "research_agent");
+    assert_eq!(to_snake_case("Write a Summery Report"), "write_a_summery_report");
+    assert_eq!(to_snake_case("single"), "single");
+    assert_eq!(to_snake_case("  Leading Spaces  "), "leading_spaces");
+}
+
+#[test]
+fn resolve_output_key_prefers_port() {
+    let step = make_step(Uuid::new_v4(), "", Some("legacy_var"), 0);
+    let port = StepOutputRow {
+        id: Uuid::new_v4(),
+        workflow_step_id: step.id,
+        port_name: "port_name".into(),
+        port_type: "string".into(),
+        json_path: "$".into(),
+        description: None,
+        json_schema: None,
+        created_at: chrono::Utc::now(),
+    };
+    let mut outputs = HashMap::new();
+    outputs.insert(step.id, vec![port]);
+
+    assert_eq!(resolve_output_key(&step, &outputs), "port_name");
+}
+
+#[test]
+fn resolve_output_key_falls_back_to_variable_name() {
+    let step = make_step(Uuid::new_v4(), "", Some("my_var"), 0);
+    let outputs = HashMap::new();
+    assert_eq!(resolve_output_key(&step, &outputs), "my_var");
+}
+
+#[test]
+fn resolve_output_key_auto_derives_from_step_name() {
+    let mut step = make_step(Uuid::new_v4(), "", None, 0);
+    step.name = Some("Research Agent".into());
+    let outputs = HashMap::new();
+    assert_eq!(resolve_output_key(&step, &outputs), "research_agent");
+}
+
+#[test]
+fn resolve_output_key_auto_derives_from_execution_mode() {
+    let step = make_step(Uuid::new_v4(), "", None, 0);
+    // step.name is None, so falls back to execution_mode ("single")
+    let outputs = HashMap::new();
+    assert_eq!(resolve_output_key(&step, &outputs), "single");
+}
+
+// =========================================================================
 // Integration Tests: execute_workflow_via_engine
 // =========================================================================
 //

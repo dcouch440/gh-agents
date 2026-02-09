@@ -66,7 +66,7 @@ vi.mock('@/stores', () => ({
 }))
 
 vi.mock('@/utils/variableContext', () => ({
-  buildVariableCompletions: vi.fn(() => []),
+  buildVariableCompletions: vi.fn(() => ({ completions: [], autoNamed: [] })),
 }))
 
 vi.mock('@/utils/variableAutocomplete', () => ({

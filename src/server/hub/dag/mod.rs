@@ -72,7 +72,7 @@ pub use utils::{
 };
 
 /// Determine the output key for a step: prefer the first output port name,
-/// fall back to the legacy `output_variable_name` field.
+/// then `output_variable_name`, then auto-derive from the step name.
 fn resolve_output_key(
     step: &WorkflowStepRow,
     step_outputs: &HashMap<Uuid, Vec<StepOutputRow>>,
@@ -84,7 +84,27 @@ fn resolve_output_key(
             }
         }
     }
-    step.output_variable_name.clone().unwrap_or_default()
+    if let Some(ref var_name) = step.output_variable_name {
+        if !var_name.is_empty() {
+            return var_name.clone();
+        }
+    }
+    // Auto-derive from step name (snake_case)
+    let source = step.name.as_deref().unwrap_or(&step.execution_mode);
+    to_snake_case(source)
+}
+
+/// Convert a name to snake_case for auto-derived variable names.
+fn to_snake_case(name: &str) -> String {
+    name.trim()
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '_' })
+        .collect::<String>()
+        .split('_')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("_")
 }
 
 /// Wrap a step output into a StepExecutionEnvelope for port-based data flow.
