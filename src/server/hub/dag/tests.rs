@@ -520,7 +520,10 @@ use crate::db::StepOutputRow;
 #[test]
 fn to_snake_case_basic() {
     assert_eq!(to_snake_case("Research Agent"), "research_agent");
-    assert_eq!(to_snake_case("Write a Summery Report"), "write_a_summery_report");
+    assert_eq!(
+        to_snake_case("Write a Summery Report"),
+        "write_a_summery_report"
+    );
     assert_eq!(to_snake_case("single"), "single");
     assert_eq!(to_snake_case("  Leading Spaces  "), "leading_spaces");
 }
@@ -907,7 +910,7 @@ fn build_test_harness(agent_id: Uuid, provider: Arc<dyn LLMProvider + Send + Syn
     let mut ae_repo = MockAgentExecutionRepo::new();
     ae_repo
         .expect_create_agent_execution()
-        .returning(|_, _, _, _, _, _, _, _, _| Ok(dummy_ae_row()));
+        .returning(|_, _, _, _, _, _, _, _, _, _| Ok(dummy_ae_row()));
     ae_repo
         .expect_create_execution_message()
         .returning(|_, _, _, _, _, _| Ok(dummy_msg_row()));

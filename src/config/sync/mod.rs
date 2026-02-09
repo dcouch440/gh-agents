@@ -299,12 +299,9 @@ async fn sync_system_agents(
         // Sync default tools for this agent
         if !agent.default_tools.is_empty() {
             // Delete existing tool assignments for this agent
-            sqlx::query!(
-                r#"DELETE FROM agent_tools WHERE agent_id = $1"#,
-                agent_id
-            )
-            .execute(&mut **tx)
-            .await?;
+            sqlx::query!(r#"DELETE FROM agent_tools WHERE agent_id = $1"#, agent_id)
+                .execute(&mut **tx)
+                .await?;
 
             // Insert new tool assignments
             for tool_name in &agent.default_tools {

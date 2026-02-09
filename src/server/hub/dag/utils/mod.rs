@@ -488,8 +488,7 @@ pub async fn compose_prompt(
                 match value {
                     JsonValue::String(s) => parts.push(s.clone()),
                     other => parts.push(
-                        serde_json::to_string_pretty(other)
-                            .unwrap_or_else(|_| other.to_string()),
+                        serde_json::to_string_pretty(other).unwrap_or_else(|_| other.to_string()),
                     ),
                 }
             }
@@ -500,8 +499,7 @@ pub async fn compose_prompt(
                 match value {
                     JsonValue::String(s) => parts.push(s.clone()),
                     other => parts.push(
-                        serde_json::to_string_pretty(other)
-                            .unwrap_or_else(|_| other.to_string()),
+                        serde_json::to_string_pretty(other).unwrap_or_else(|_| other.to_string()),
                     ),
                 }
             }

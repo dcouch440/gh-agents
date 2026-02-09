@@ -340,6 +340,7 @@ pub async fn execute_room_turn(
                 mode.selected_mode_id, // Track which mode was used
                 Some(session.id),      // room_session_id
                 Some(i as i32),        // speaker_order
+                None,                  // workflow_execution_id
             )
             .await
             .map_err(HubError::Internal)?;

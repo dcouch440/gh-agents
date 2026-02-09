@@ -1753,9 +1753,10 @@ impl AgentExecutionRepo for PgRepo {
         selected_mode_id: Option<Uuid>,
         room_session_id: Option<Uuid>,
         speaker_order: Option<i32>,
+        workflow_execution_id: Option<Uuid>,
     ) -> Result<AgentExecutionRow> {
         let row = sqlx::query_as::<_, AgentExecutionRow>(
-            "INSERT INTO agent_executions (agent_id, workflow_step_id, is_interactive, parent_agent_execution_id, system_prompt_rendered, input, selected_mode_id, room_session_id, speaker_order) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *",
+            "INSERT INTO agent_executions (agent_id, workflow_step_id, is_interactive, parent_agent_execution_id, system_prompt_rendered, input, selected_mode_id, room_session_id, speaker_order, workflow_execution_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *",
         )
         .bind(agent_id)
         .bind(workflow_step_id)
@@ -1766,6 +1767,7 @@ impl AgentExecutionRepo for PgRepo {
         .bind(selected_mode_id)
         .bind(room_session_id)
         .bind(speaker_order)
+        .bind(workflow_execution_id)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)

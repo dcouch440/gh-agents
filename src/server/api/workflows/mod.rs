@@ -16,10 +16,12 @@ use crate::constants::MAX_TITLE_LENGTH;
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::WorkflowCollectionRepo;
 use crate::server::auth as auth_utils;
-use crate::server::hub::dag::{broadcast_workflow_event, execute_workflow_via_engine, WorkflowExecutionContext};
-use crate::server::ws::events::WorkflowEventKind;
+use crate::server::hub::dag::{
+    broadcast_workflow_event, execute_workflow_via_engine, WorkflowExecutionContext,
+};
 use crate::server::hub::ExecutionEngine;
 use crate::server::state::AppState;
+use crate::server::ws::events::WorkflowEventKind;
 
 // ============================================================================
 // Workflow Types
@@ -983,9 +985,7 @@ pub async fn run_workflow(
         .clone();
     let engine = ExecutionEngine::new(provider);
 
-    let initial_input = body
-        .and_then(|b| b.0.initial_input)
-        .unwrap_or_default();
+    let initial_input = body.and_then(|b| b.0.initial_input).unwrap_or_default();
 
     let mut prior_outputs = HashMap::new();
     if !initial_input.is_empty() {

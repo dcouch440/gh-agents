@@ -1695,6 +1695,7 @@ async fn run_step_via_engine(
             mode.selected_mode_id, // Track which mode was used
             None,
             None,
+            Some(ctx.stage_execution_id),
         )
         .await
         .map_err(|e| anyhow::anyhow!("failed to create agent execution: {}", e))?;
@@ -1744,6 +1745,10 @@ async fn run_step_via_engine(
     filter_ctx
         .metadata
         .insert("user_id".into(), serde_json::to_value(ctx.user_id).unwrap());
+    filter_ctx.metadata.insert(
+        "workflow_execution_id".into(),
+        serde_json::to_value(ctx.stage_execution_id).unwrap(),
+    );
 
     let mut filters: Vec<Arc<dyn ExecutionFilter>> =
         vec![Arc::new(AgentGuidanceFilter::new(state.repo().clone()))];
@@ -2825,6 +2830,7 @@ async fn execute_cavernous_step(
             None,
             None,
             None,
+            Some(ctx.stage_execution_id),
         )
         .await
         .map_err(|e| anyhow::anyhow!("failed to create cavernous agent execution: {}", e))?;
@@ -3231,6 +3237,7 @@ async fn run_cavernous_subtask(
             mode.selected_mode_id,
             None,
             None,
+            Some(ctx.stage_execution_id),
         )
         .await
         .map_err(|e| anyhow::anyhow!("failed to create subtask agent execution: {}", e))?;

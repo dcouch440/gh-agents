@@ -136,7 +136,7 @@ const agents = {
     baseApi.get<AgentContextResponse>(API.AGENT_CONTEXT(id), config),
 
   setContext: (id: string, docIds: string[], config?: RequestConfig) =>
-    baseApi.put<void>(API.AGENT_CONTEXT(id), docIds, config),
+    baseApi.put<void>(API.AGENT_CONTEXT(id), { document_ids: docIds }, config),
 }
 
 const tasks = {

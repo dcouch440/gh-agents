@@ -254,6 +254,10 @@ impl ExecutionFilter for DebateVerificationFilter {
             .metadata
             .get("user_id")
             .and_then(|v| serde_json::from_value(v.clone()).ok());
+        let workflow_execution_id: Option<Uuid> = ctx
+            .metadata
+            .get("workflow_execution_id")
+            .and_then(|v| serde_json::from_value(v.clone()).ok());
         let step_id = ctx.step_id;
 
         // Launch parallel critique tasks.
@@ -315,6 +319,7 @@ impl ExecutionFilter for DebateVerificationFilter {
                             None,
                             None,
                             None,
+                            workflow_execution_id,
                         )
                         .await
                     {
