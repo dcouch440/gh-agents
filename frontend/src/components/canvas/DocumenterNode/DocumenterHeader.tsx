@@ -1,7 +1,7 @@
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import {useTheme} from "@mui/material/styles";
-import {DocumenterIcon} from "@/animated/framer-motion-animation";
+import {DocumenterIcon} from "@/components/canvas/Icons/DocumentIcon";
 
 type DocumenterHeaderProps = {
   name: string;
