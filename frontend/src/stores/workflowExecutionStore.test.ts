@@ -325,6 +325,78 @@ describe('workflowExecutionStore', () => {
     })
   })
 
+  describe('history actions', () => {
+    it('viewHistoricalRun sets history mode and selects run', () => {
+      workflowExecutionStore.store.setState({
+        runs: [
+          { id: 'run-a', workflow_id: 'w1', status: 'completed', started_at: '2025-01-01T00:00:00Z', completed_at: '2025-01-01T00:01:00Z', outputs: null, error: null },
+          { id: 'run-b', workflow_id: 'w1', status: 'failed', started_at: '2025-01-02T00:00:00Z', completed_at: '2025-01-02T00:01:00Z', outputs: null, error: 'oops' },
+        ],
+      })
+
+      workflowExecutionStore.viewHistoricalRun('run-b')
+
+      const s = getState()
+      expect(s.viewMode).toBe('history')
+      expect(s.selectedHistoricalRunId).toBe('run-b')
+      expect(s.historicalRun?.id).toBe('run-b')
+      expect(s.historicalRun?.error).toBe('oops')
+    })
+
+    it('returnToLive clears history selection', () => {
+      workflowExecutionStore.store.setState({
+        viewMode: 'history',
+        selectedHistoricalRunId: 'run-a',
+        historicalRun: { id: 'run-a', workflow_id: 'w1', status: 'completed', started_at: null, completed_at: null, outputs: null, error: null },
+      })
+
+      workflowExecutionStore.returnToLive()
+
+      const s = getState()
+      expect(s.viewMode).toBe('live')
+      expect(s.selectedHistoricalRunId).toBeNull()
+      expect(s.historicalRun).toBeNull()
+    })
+
+    it('STARTED event auto-switches to live mode', () => {
+      workflowExecutionStore.store.setState({
+        viewMode: 'history',
+        selectedHistoricalRunId: 'run-old',
+        historicalRun: { id: 'run-old', workflow_id: 'w1', status: 'completed', started_at: null, completed_at: null, outputs: null, error: null },
+      })
+
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 2 }),
+      )
+
+      const s = getState()
+      expect(s.viewMode).toBe('live')
+      expect(s.selectedHistoricalRunId).toBeNull()
+      expect(s.historicalRun).toBeNull()
+    })
+
+    it('reset clears history state', () => {
+      workflowExecutionStore.store.setState({
+        viewMode: 'history',
+        runs: [{ id: 'run-a', workflow_id: 'w1', status: 'completed', started_at: null, completed_at: null, outputs: null, error: null }],
+        selectedHistoricalRunId: 'run-a',
+        historicalRun: { id: 'run-a', workflow_id: 'w1', status: 'completed', started_at: null, completed_at: null, outputs: null, error: null },
+        historyLoading: true,
+        historyError: 'some error',
+      })
+
+      workflowExecutionStore.reset()
+
+      const s = getState()
+      expect(s.viewMode).toBe('live')
+      expect(s.runs).toEqual([])
+      expect(s.selectedHistoricalRunId).toBeNull()
+      expect(s.historicalRun).toBeNull()
+      expect(s.historyLoading).toBe(false)
+      expect(s.historyError).toBeNull()
+    })
+  })
+
   describe('selectors', () => {
     it('selectStepState returns step or undefined', () => {
       workflowExecutionStore.handleWsEvent(

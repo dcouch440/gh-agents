@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { createStore } from './lib'
+import { api } from '@/api'
 import { WORKFLOW_EVENT } from '@/types/ws'
 import type { WsWireMessage } from '@/types/ws'
 import type {
@@ -16,6 +17,7 @@ import type {
   WorkflowFailedData,
   WorkflowResumedData,
 } from '@/types/ws'
+import type { WorkflowExecutionSummary } from '@/types'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,7 +45,10 @@ type StepTimelineEvent = {
   ts: string
 }
 
+type ViewMode = 'live' | 'history'
+
 type WorkflowExecutionState = {
+  // Live execution state
   runId: string | null
   workflowId: string | null
   isRunning: boolean
@@ -55,6 +60,13 @@ type WorkflowExecutionState = {
   error: string | null
   startedAt: string | null
   completedAt: string | null
+  // History state
+  viewMode: ViewMode
+  runs: WorkflowExecutionSummary[]
+  selectedHistoricalRunId: string | null
+  historicalRun: WorkflowExecutionSummary | null
+  historyLoading: boolean
+  historyError: string | null
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -83,9 +95,12 @@ const updateStep = (
   [stepId]: { ...(states[stepId] ?? makeDefaultStepState()), ...patch },
 })
 
+const extractError = (e: unknown): string =>
+  e instanceof Error ? e.message : 'Unknown error'
+
 // ── Store ────────────────────────────────────────────────────────────────────
 
-const store = createStore<WorkflowExecutionState>(() => ({
+const initialState: WorkflowExecutionState = {
   runId: null,
   workflowId: null,
   isRunning: false,
@@ -97,7 +112,15 @@ const store = createStore<WorkflowExecutionState>(() => ({
   error: null,
   startedAt: null,
   completedAt: null,
-}))
+  viewMode: 'live',
+  runs: [],
+  selectedHistoricalRunId: null,
+  historicalRun: null,
+  historyLoading: false,
+  historyError: null,
+}
+
+const store = createStore<WorkflowExecutionState>(() => ({ ...initialState }))
 
 // ── Selectors ────────────────────────────────────────────────────────────────
 
@@ -127,6 +150,46 @@ const selectCompletedAt = (s: WorkflowExecutionState): string | null => s.comple
 
 const selectDurationMs = (s: WorkflowExecutionState): number | null => s.durationMs
 
+const selectViewMode = (s: WorkflowExecutionState): ViewMode => s.viewMode
+
+const selectRuns = (s: WorkflowExecutionState): WorkflowExecutionSummary[] => s.runs
+
+const selectSelectedHistoricalRunId = (s: WorkflowExecutionState): string | null => s.selectedHistoricalRunId
+
+const selectHistoricalRun = (s: WorkflowExecutionState): WorkflowExecutionSummary | null => s.historicalRun
+
+const selectHistoryLoading = (s: WorkflowExecutionState): boolean => s.historyLoading
+
+// ── History Actions ─────────────────────────────────────────────────────────
+
+const fetchRuns = async (workflowId: string): Promise<void> => {
+  store.setState({ historyLoading: true, historyError: null })
+  try {
+    const data = await api.workflows.listExecutions(workflowId)
+    store.setState({ runs: data, historyLoading: false })
+  } catch (e) {
+    store.setState({ historyLoading: false, historyError: extractError(e) })
+  }
+}
+
+const viewHistoricalRun = (runId: string): void => {
+  const { runs } = store.getState()
+  const run = runs.find((r) => r.id === runId) ?? null
+  store.setState({
+    viewMode: 'history',
+    selectedHistoricalRunId: runId,
+    historicalRun: run,
+  })
+}
+
+const returnToLive = (): void => {
+  store.setState({
+    viewMode: 'live',
+    selectedHistoricalRunId: null,
+    historicalRun: null,
+  })
+}
+
 // ── WS Event Handler ────────────────────────────────────────────────────────
 
 const handleWsEvent = (msg: WsWireMessage): void => {
@@ -146,6 +209,9 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         error: null,
         startedAt: msg.ts,
         completedAt: null,
+        viewMode: 'live',
+        selectedHistoricalRunId: null,
+        historicalRun: null,
       })
       break
     }
@@ -215,20 +281,24 @@ const handleWsEvent = (msg: WsWireMessage): void => {
     }
     case WORKFLOW_EVENT.COMPLETED: {
       const d = msg.data as WorkflowCompletedData
+      const currentWorkflowId = store.getState().workflowId
       store.setState({
         isRunning: false,
         durationMs: d.duration_ms ?? null,
         completedAt: msg.ts,
       })
+      if (currentWorkflowId) void fetchRuns(currentWorkflowId)
       break
     }
     case WORKFLOW_EVENT.FAILED: {
       const d = msg.data as WorkflowFailedData
+      const currentWorkflowId = store.getState().workflowId
       store.setState({
         isRunning: false,
         error: d.error,
         completedAt: msg.ts,
       })
+      if (currentWorkflowId) void fetchRuns(currentWorkflowId)
       break
     }
     case WORKFLOW_EVENT.RESUMED: {
@@ -252,19 +322,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
 // ── Reset ────────────────────────────────────────────────────────────────────
 
 const reset = (): void => {
-  store.setState({
-    runId: null,
-    workflowId: null,
-    isRunning: false,
-    stepStates: {},
-    eventLog: [],
-    totalSteps: 0,
-    completedStepCount: 0,
-    durationMs: null,
-    error: null,
-    startedAt: null,
-    completedAt: null,
-  })
+  store.setState({ ...initialState })
 }
 
 // ── Export ────────────────────────────────────────────────────────────────────
@@ -283,8 +341,16 @@ export const workflowExecutionStore = {
   selectStartedAt,
   selectCompletedAt,
   selectDurationMs,
+  selectViewMode,
+  selectRuns,
+  selectSelectedHistoricalRunId,
+  selectHistoricalRun,
+  selectHistoryLoading,
+  fetchRuns,
+  viewHistoricalRun,
+  returnToLive,
   handleWsEvent,
   reset,
 }
 
-export type { WorkflowExecutionState, StepExecutionState, StepExecutionStatus, StepTimelineEvent }
+export type { WorkflowExecutionState, StepExecutionState, StepExecutionStatus, StepTimelineEvent, ViewMode }

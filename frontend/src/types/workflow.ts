@@ -90,6 +90,16 @@ type WorkflowRunResponse = {
   status: string
 }
 
+type WorkflowExecutionSummary = {
+  id: string
+  workflow_id: string
+  status: string
+  started_at: string | null
+  completed_at: string | null
+  outputs: Record<string, unknown> | null
+  error: string | null
+}
+
 export type {
   Workflow,
   WorkflowStep,
@@ -102,4 +112,5 @@ export type {
   EdgeRequest,
   StepDocumentRequest,
   WorkflowRunResponse,
+  WorkflowExecutionSummary,
 }
