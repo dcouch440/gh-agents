@@ -23,6 +23,9 @@ type StepExecutionStatus = 'idle' | 'pending' | 'running' | 'success' | 'error' 
 
 type StepExecutionState = {
   status: StepExecutionStatus
+  stepName: string | null
+  agentId: string | null
+  executionId: string | null
   output: string | null
   error: string | null
   inputTokens: number | null
@@ -33,11 +36,19 @@ type StepExecutionState = {
   completedAt: string | null
 }
 
+type StepTimelineEvent = {
+  stepId: string
+  stepName: string | null
+  eventType: 'started' | 'completed' | 'failed' | 'paused' | 'resumed'
+  ts: string
+}
+
 type WorkflowExecutionState = {
   runId: string | null
   workflowId: string | null
   isRunning: boolean
   stepStates: Record<string, StepExecutionState>
+  eventLog: StepTimelineEvent[]
   totalSteps: number
   completedStepCount: number
   durationMs: number | null
@@ -50,6 +61,9 @@ type WorkflowExecutionState = {
 
 const makeDefaultStepState = (): StepExecutionState => ({
   status: 'pending',
+  stepName: null,
+  agentId: null,
+  executionId: null,
   output: null,
   error: null,
   inputTokens: null,
@@ -76,6 +90,7 @@ const store = createStore<WorkflowExecutionState>(() => ({
   workflowId: null,
   isRunning: false,
   stepStates: {},
+  eventLog: [],
   totalSteps: 0,
   completedStepCount: 0,
   durationMs: null,
@@ -102,6 +117,16 @@ const selectStepState = (stepId: string) => (s: WorkflowExecutionState): StepExe
 const selectCompletedStepCount = (s: WorkflowExecutionState): number =>
   s.completedStepCount
 
+const selectEventLog = (s: WorkflowExecutionState): StepTimelineEvent[] => s.eventLog
+
+const selectStepStates = (s: WorkflowExecutionState): Record<string, StepExecutionState> => s.stepStates
+
+const selectStartedAt = (s: WorkflowExecutionState): string | null => s.startedAt
+
+const selectCompletedAt = (s: WorkflowExecutionState): string | null => s.completedAt
+
+const selectDurationMs = (s: WorkflowExecutionState): number | null => s.durationMs
+
 // ── WS Event Handler ────────────────────────────────────────────────────────
 
 const handleWsEvent = (msg: WsWireMessage): void => {
@@ -114,6 +139,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         workflowId: d.workflow_id,
         isRunning: true,
         stepStates: {},
+        eventLog: [],
         totalSteps: d.total_steps,
         completedStepCount: 0,
         durationMs: null,
@@ -128,8 +154,12 @@ const handleWsEvent = (msg: WsWireMessage): void => {
       store.setState((s) => ({
         stepStates: updateStep(s.stepStates, d.step_id, {
           status: 'running',
+          stepName: d.step_name,
+          agentId: d.agent_id ?? null,
+          executionId: d.execution_id ?? null,
           startedAt: msg.ts,
         }),
+        eventLog: [...s.eventLog, { stepId: d.step_id, stepName: d.step_name, eventType: 'started' as const, ts: msg.ts }],
       }))
       break
     }
@@ -139,12 +169,14 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         completedStepCount: s.completedStepCount + 1,
         stepStates: updateStep(s.stepStates, d.step_id, {
           status: 'success',
+          stepName: d.step_name,
           output: d.output ?? null,
           inputTokens: d.input_tokens ?? null,
           outputTokens: d.output_tokens ?? null,
           durationMs: d.duration_ms ?? null,
           completedAt: msg.ts,
         }),
+        eventLog: [...s.eventLog, { stepId: d.step_id, stepName: d.step_name, eventType: 'completed' as const, ts: msg.ts }],
       }))
       break
     }
@@ -153,9 +185,11 @@ const handleWsEvent = (msg: WsWireMessage): void => {
       store.setState((s) => ({
         stepStates: updateStep(s.stepStates, d.step_id, {
           status: 'error',
+          stepName: d.step_name,
           error: d.error,
           completedAt: msg.ts,
         }),
+        eventLog: [...s.eventLog, { stepId: d.step_id, stepName: d.step_name, eventType: 'failed' as const, ts: msg.ts }],
       }))
       break
     }
@@ -164,7 +198,9 @@ const handleWsEvent = (msg: WsWireMessage): void => {
       store.setState((s) => ({
         stepStates: updateStep(s.stepStates, d.step_id, {
           status: 'paused',
+          stepName: d.step_name,
         }),
+        eventLog: [...s.eventLog, { stepId: d.step_id, stepName: d.step_name, eventType: 'paused' as const, ts: msg.ts }],
       }))
       break
     }
@@ -203,6 +239,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
           status: 'running',
           startedAt: msg.ts,
         }),
+        eventLog: [...s.eventLog, { stepId: d.step_id, stepName: s.stepStates[d.step_id]?.stepName ?? null, eventType: 'resumed' as const, ts: msg.ts }],
       }))
       break
     }
@@ -220,6 +257,7 @@ const reset = (): void => {
     workflowId: null,
     isRunning: false,
     stepStates: {},
+    eventLog: [],
     totalSteps: 0,
     completedStepCount: 0,
     durationMs: null,
@@ -240,8 +278,13 @@ export const workflowExecutionStore = {
   selectError,
   selectStepState,
   selectCompletedStepCount,
+  selectEventLog,
+  selectStepStates,
+  selectStartedAt,
+  selectCompletedAt,
+  selectDurationMs,
   handleWsEvent,
   reset,
 }
 
-export type { WorkflowExecutionState, StepExecutionState, StepExecutionStatus }
+export type { WorkflowExecutionState, StepExecutionState, StepExecutionStatus, StepTimelineEvent }

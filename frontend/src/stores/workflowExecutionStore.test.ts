@@ -167,10 +167,150 @@ describe('workflowExecutionStore', () => {
     })
   })
 
+  describe('eventLog', () => {
+    it('STARTED clears eventLog', () => {
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: 's1', step_name: 'A', agent_id: null, execution_id: null }),
+      )
+      expect(getState().eventLog).toHaveLength(1)
+
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 2 }),
+      )
+      expect(getState().eventLog).toEqual([])
+    })
+
+    it('STEP_STARTED appends to eventLog', () => {
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 2 }),
+      )
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: 's1', step_name: 'Step A', agent_id: 'a1', execution_id: 'e1' }),
+      )
+
+      const log = getState().eventLog
+      expect(log).toHaveLength(1)
+      expect(log[0]).toEqual({ stepId: 's1', stepName: 'Step A', eventType: 'started', ts: '2025-01-01T00:00:00Z' })
+    })
+
+    it('STEP_COMPLETED appends to eventLog', () => {
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STEP_COMPLETED, {
+          workflow_id: 'w1', step_id: 's1', step_name: 'Step A', agent_id: null,
+          output: 'done', input_tokens: 10, output_tokens: 5, duration_ms: 100,
+        }),
+      )
+
+      const log = getState().eventLog
+      expect(log).toHaveLength(1)
+      expect(log[0].eventType).toBe('completed')
+    })
+
+    it('STEP_FAILED appends to eventLog', () => {
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STEP_FAILED, { workflow_id: 'w1', step_id: 's1', step_name: 'Step A', error: 'boom' }),
+      )
+
+      expect(getState().eventLog).toHaveLength(1)
+      expect(getState().eventLog[0].eventType).toBe('failed')
+    })
+
+    it('STEP_PAUSED appends to eventLog', () => {
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STEP_PAUSED, { workflow_id: 'w1', step_id: 's1', step_name: 'Step A' }),
+      )
+
+      expect(getState().eventLog).toHaveLength(1)
+      expect(getState().eventLog[0].eventType).toBe('paused')
+    })
+
+    it('RESUMED appends to eventLog', () => {
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 1 }),
+      )
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STEP_PAUSED, { workflow_id: 'w1', step_id: 's1', step_name: 'Step A' }),
+      )
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.RESUMED, { workflow_id: 'w1', step_id: 's1' }),
+      )
+
+      const log = getState().eventLog
+      expect(log).toHaveLength(2) // paused + resumed (STARTED clears log)
+      expect(log[1].eventType).toBe('resumed')
+      expect(log[1].stepName).toBe('Step A') // uses name from prior step state
+    })
+
+    it('maintains chronological order across events', () => {
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 2 }),
+      )
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: 's1', step_name: 'A', agent_id: null, execution_id: null }),
+      )
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STEP_COMPLETED, { workflow_id: 'w1', step_id: 's1', step_name: 'A', agent_id: null, output: 'ok', input_tokens: 1, output_tokens: 1, duration_ms: 10 }),
+      )
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: 's2', step_name: 'B', agent_id: null, execution_id: null }),
+      )
+
+      const log = getState().eventLog
+      expect(log).toHaveLength(3)
+      expect(log.map((e) => e.eventType)).toEqual(['started', 'completed', 'started'])
+      expect(log.map((e) => e.stepId)).toEqual(['s1', 's1', 's2'])
+    })
+  })
+
+  describe('step metadata capture', () => {
+    it('STEP_STARTED captures stepName, agentId, executionId', () => {
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STEP_STARTED, {
+          workflow_id: 'w1', step_id: 's1', step_name: 'Analyze Data', agent_id: 'agent-99', execution_id: 'exec-42',
+        }),
+      )
+
+      const step = getState().stepStates['s1']
+      expect(step.stepName).toBe('Analyze Data')
+      expect(step.agentId).toBe('agent-99')
+      expect(step.executionId).toBe('exec-42')
+    })
+
+    it('STEP_COMPLETED captures stepName', () => {
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STEP_COMPLETED, {
+          workflow_id: 'w1', step_id: 's1', step_name: 'Generate Report', agent_id: null,
+          output: 'report', input_tokens: 10, output_tokens: 5, duration_ms: 200,
+        }),
+      )
+
+      expect(getState().stepStates['s1'].stepName).toBe('Generate Report')
+    })
+
+    it('STEP_FAILED captures stepName', () => {
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STEP_FAILED, { workflow_id: 'w1', step_id: 's1', step_name: 'Parse Input', error: 'bad json' }),
+      )
+
+      expect(getState().stepStates['s1'].stepName).toBe('Parse Input')
+    })
+
+    it('STEP_PAUSED captures stepName', () => {
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STEP_PAUSED, { workflow_id: 'w1', step_id: 's1', step_name: 'Human Review' }),
+      )
+
+      expect(getState().stepStates['s1'].stepName).toBe('Human Review')
+    })
+  })
+
   describe('reset', () => {
-    it('clears all execution state', () => {
+    it('clears all execution state including eventLog', () => {
       workflowExecutionStore.handleWsEvent(
         makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 3 }),
+      )
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: 's1', step_name: 'A', agent_id: null, execution_id: null }),
       )
 
       workflowExecutionStore.reset()
@@ -181,6 +321,7 @@ describe('workflowExecutionStore', () => {
       expect(s.isRunning).toBe(false)
       expect(s.stepStates).toEqual({})
       expect(s.totalSteps).toBe(0)
+      expect(s.eventLog).toEqual([])
     })
   })
 
