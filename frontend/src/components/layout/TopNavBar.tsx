@@ -26,12 +26,12 @@ function TopNavBar({ navItems, utilityItems, trailing }: TopNavBarProps) {
             height: 28,
             borderRadius: '6px',
             position: 'relative',
-            color: item.isActive ? 'primary.main' : 'text.secondary',
+            color: item.isActive ? theme.palette.custom.chromeTextActive : theme.palette.custom.chromeText,
             backgroundColor: 'transparent',
             transition: `color ${ANIMATION.FAST}ms ease, filter ${ANIMATION.FAST}ms ease`,
-            filter: item.isActive ? theme.palette.custom.activeGlow : 'none',
+            filter: item.isActive ? theme.palette.custom.chromeActiveGlow : 'none',
             '&:hover': {
-              color: item.isActive ? 'primary.light' : 'text.primary',
+              color: theme.palette.custom.chromeTextHover,
               backgroundColor: 'transparent',
             },
             '&::after': item.isActive
@@ -43,7 +43,7 @@ function TopNavBar({ navItems, utilityItems, trailing }: TopNavBarProps) {
                   right: 4,
                   height: 2,
                   borderRadius: 1,
-                  background: theme.palette.custom.activeGradient,
+                  background: theme.palette.custom.chromeActiveBar,
                 }
               : undefined,
           }}
@@ -74,9 +74,11 @@ function TopNavBar({ navItems, utilityItems, trailing }: TopNavBarProps) {
         alignItems: 'center',
         px: 1,
         borderBottom: 1,
-        borderColor: 'divider',
+        borderColor: theme.palette.mode === 'light' ? 'rgba(61, 43, 31, 0.15)' : 'divider',
         backgroundColor: theme.palette.custom.chromeBg,
-        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.2)',
+        boxShadow: theme.palette.mode === 'light'
+          ? '0 1px 3px rgba(0, 0, 0, 0.15)'
+          : '0 1px 2px rgba(0, 0, 0, 0.2)',
         zIndex: 10,
         position: 'relative',
         gap: 0.25,

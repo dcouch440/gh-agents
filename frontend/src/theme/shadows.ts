@@ -22,7 +22,7 @@ const lightShadows: Shadows = [
   '0 16px 34px rgba(61, 43, 31, 0.11)',
   '0 16px 36px rgba(61, 43, 31, 0.11)',
   '0 18px 38px rgba(61, 43, 31, 0.12)',
-  '0 18px 40px rgba(61, 43, 31, 0.12)',
+  '0 18px 40px T)',
   '0 20px 42px rgba(61, 43, 31, 0.13)',
   '0 20px 44px rgba(61, 43, 31, 0.13)',
   '0 22px 46px rgba(61, 43, 31, 0.13)',

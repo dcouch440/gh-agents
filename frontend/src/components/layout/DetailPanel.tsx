@@ -123,14 +123,20 @@ function DetailPanel({
           py: 1,
           minHeight: 44,
           borderBottom: 1,
-          borderColor: 'divider',
+          borderColor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.1)' : 'divider',
+          backgroundColor: theme.palette.mode === 'light' ? theme.palette.custom.chromeBg : 'transparent',
           opacity: isOpen ? 1 : 0,
           transition: `opacity ${ANIMATION.FAST}ms ease`,
         }}
       >
         <Typography
           variant="body2"
-          sx={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden' }}
+          sx={{
+            fontWeight: 600,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            color: theme.palette.mode === 'light' ? theme.palette.custom.chromeTextActive : 'text.primary',
+          }}
         >
           {title}
         </Typography>
@@ -141,17 +147,17 @@ function DetailPanel({
             width: 24,
             height: 24,
             borderRadius: '50%',
-            color: 'text.disabled',
+            color: theme.palette.mode === 'light' ? theme.palette.custom.chromeText : 'text.disabled',
             backgroundColor: 'transparent',
             transition: `all ${ANIMATION.FAST}ms ease`,
             '&:hover': {
-              color: 'text.secondary',
-              backgroundColor: theme.palette.custom.activeTintStrong,
+              color: theme.palette.mode === 'light' ? theme.palette.custom.chromeTextHover : 'text.secondary',
+              backgroundColor: theme.palette.mode === 'light' ? 'rgba(61,43,31,0.1)' : theme.palette.custom.activeTintStrong,
               transform: 'scale(1.05)',
             },
             '&:active': {
               transform: 'scale(0.95)',
-              backgroundColor: theme.palette.custom.borderHover,
+              backgroundColor: theme.palette.mode === 'light' ? 'rgba(61,43,31,0.15)' : theme.palette.custom.borderHover,
             },
           }}
         >
