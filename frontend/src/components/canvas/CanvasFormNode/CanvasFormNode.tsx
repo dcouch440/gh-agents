@@ -1,0 +1,200 @@
+import { memo, useState } from 'react'
+import { Handle, Position, NodeResizer } from '@xyflow/react'
+import Box from '@mui/material/Box'
+import Tooltip from '@mui/material/Tooltip'
+import { useTheme } from '@mui/material/styles'
+import { CANVAS } from '../constants'
+import { FORM_NODE } from './constants'
+import type { CanvasFormNodeProps } from './types'
+
+function CanvasFormNodeComponent({
+  header,
+  headerHeight = FORM_NODE.HEADER_HEIGHT,
+  tabs,
+  activeTabId,
+  onTabChange,
+  selected,
+  accentColor,
+}: CanvasFormNodeProps) {
+  const theme = useTheme()
+  const resolvedAccent = accentColor ?? theme.palette.primary.main
+  const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0]
+  const [hovered, setHovered] = useState(false)
+
+  return (
+    <Box
+      onMouseEnter={() => { setHovered(true) }}
+      onMouseLeave={() => { setHovered(false) }}
+      sx={{
+        width: '100%',
+        height: '100%',
+        borderRadius: '12px',
+        backgroundColor: theme.palette.mode === 'light'
+          ? theme.palette.custom.cavityBg
+          : 'background.paper',
+        border: 2,
+        borderColor: selected ? resolvedAccent : 'divider',
+        boxShadow: selected
+          ? theme.palette.mode === 'dark'
+            ? `0 0 0 1px ${resolvedAccent}40, 0 8px 32px rgba(59, 130, 246, 0.18), 0 2px 8px rgba(0, 0, 0, 0.3)`
+            : `0 0 0 1px ${resolvedAccent}30, 0 12px 40px rgba(45, 27, 14, 0.18), 0 4px 12px rgba(255, 150, 79, 0.12)`
+          : theme.palette.mode === 'dark'
+            ? '0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)'
+            : '0 8px 32px rgba(45, 27, 14, 0.14), 0 2px 8px rgba(45, 27, 14, 0.08)',
+        transition: 'border-color 150ms ease, box-shadow 150ms ease',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        cursor: 'default',
+      }}
+    >
+      <NodeResizer
+        isVisible={hovered || selected}
+        minWidth={FORM_NODE.MIN_WIDTH}
+        minHeight={FORM_NODE.MIN_HEIGHT}
+        maxWidth={FORM_NODE.MAX_WIDTH}
+        maxHeight={FORM_NODE.MAX_HEIGHT}
+        lineStyle={{
+          borderColor: 'transparent',
+          borderWidth: 0,
+        }}
+        handleStyle={{
+          width: 8,
+          height: 8,
+          borderRadius: 2,
+          backgroundColor: 'transparent',
+          borderColor: 'transparent',
+        }}
+      />
+
+      {/* Header slot — draggable area */}
+      {header !== null && (
+        <Box
+          sx={{
+            height: headerHeight,
+            overflow: 'hidden',
+            borderBottom: 1,
+            borderColor: 'divider',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: theme.palette.custom.bgHeader,
+            flexShrink: 0,
+            cursor: 'grab',
+            '&:active': { cursor: 'grabbing' },
+          }}
+        >
+          {header}
+        </Box>
+      )}
+
+      {/* Horizontal tab strip — draggable area */}
+      <Box
+        role="tablist"
+        sx={{
+          height: FORM_NODE.TAB_STRIP_HEIGHT,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.25,
+          px: 0.5,
+          borderBottom: 1,
+          borderColor: 'divider',
+          backgroundColor: theme.palette.custom.bgHeader,
+          flexShrink: 0,
+        }}
+      >
+        {tabs.map((tab) => {
+          const isActive = tab.id === activeTabId
+          const IconComponent = tab.icon
+          return (
+            <Tooltip key={tab.id} title={tab.tooltip} placement="bottom">
+              <Box
+                onClick={() => { onTabChange(tab.id) }}
+                role="tab"
+                tabIndex={0}
+                aria-selected={isActive}
+                aria-label={tab.tooltip}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') onTabChange(tab.id)
+                }}
+                sx={{
+                  width: 28,
+                  height: 24,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  position: 'relative',
+                  backgroundColor: isActive
+                    ? theme.palette.custom.activeTint
+                    : 'transparent',
+                  transition: 'background-color 120ms ease',
+                  '&:hover': isActive
+                    ? {}
+                    : { backgroundColor: theme.palette.custom.hoverOverlay },
+                  ...(isActive
+                    ? {
+                        '&::after': {
+                          content: '""',
+                          position: 'absolute',
+                          bottom: -4,
+                          left: 4,
+                          right: 4,
+                          height: 2,
+                          borderRadius: 1,
+                          backgroundColor: resolvedAccent,
+                        },
+                      }
+                    : {}),
+                }}
+              >
+                <IconComponent
+                  sx={{
+                    fontSize: 16,
+                    color: isActive ? resolvedAccent : 'text.secondary',
+                    transition: 'color 120ms ease',
+                  }}
+                />
+              </Box>
+            </Tooltip>
+          )
+        })}
+      </Box>
+
+      {/* Content area — full-bleed, no padding, interactive */}
+      <Box
+        className="nowheel nodrag nopan"
+        sx={{ flex: 1, overflow: 'auto', position: 'relative', cursor: 'text' }}
+      >
+        {activeTab?.content}
+      </Box>
+
+      {/* Handles */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        style={{
+          width: CANVAS.HANDLE_SIZE,
+          height: CANVAS.HANDLE_SIZE,
+          background: resolvedAccent,
+          border: `2px solid ${theme.palette.custom.bgHeader}`,
+        }}
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        style={{
+          width: CANVAS.HANDLE_SIZE,
+          height: CANVAS.HANDLE_SIZE,
+          background: resolvedAccent,
+          border: `2px solid ${theme.palette.custom.bgHeader}`,
+        }}
+      />
+    </Box>
+  )
+}
+
+const CanvasFormNode = memo(CanvasFormNodeComponent)
+
+export { CanvasFormNode }

@@ -9,6 +9,7 @@ export function HeroIllustration() {
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.6 }}
+          style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
           x="80"
           y="40"
           width="160"
@@ -73,16 +74,22 @@ export function HeroIllustration() {
 
         {/* Gear shape */}
         <motion.g
-          initial={{ opacity: 0, rotate: -30 }}
-          animate={{ opacity: 1, rotate: 0 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           transition={{ duration: 0.6, delay: 1.0 }}
-          style={{ transformOrigin: '290px 190px' }}
         >
           <circle cx="290" cy="190" r="24" fill="#FFF7ED" stroke="#F57C00" strokeWidth="2" />
-          <motion.path
-            animate={{ rotate: 360 }}
-            transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
-            style={{ transformOrigin: '290px 190px' }}
+          <animateTransform
+            xlinkHref="#gear-teeth"
+            attributeName="transform"
+            type="rotate"
+            from="0 290 190"
+            to="360 290 190"
+            dur="20s"
+            repeatCount="indefinite"
+          />
+          <path
+            id="gear-teeth"
             d="M290 162a4 4 0 014 4v4a20 20 0 018.5 4.9l2.8-2.8a4 4 0 015.7 5.7l-2.8 2.8A20 20 0 01314 190h4a4 4 0 010 8h-4a20 20 0 01-4.9 8.5l2.8 2.8a4 4 0 01-5.7 5.7l-2.8-2.8a20 20 0 01-8.5 4.9v4a4 4 0 01-8 0v-4a20 20 0 01-8.5-4.9l-2.8 2.8a4 4 0 01-5.7-5.7l2.8-2.8A20 20 0 01266 198h-4a4 4 0 010-8h4a20 20 0 014.9-8.5l-2.8-2.8a4 4 0 015.7-5.7l2.8 2.8A20 20 0 01286 170v-4a4 4 0 014-4z"
             fill="none"
             stroke="#F57C00"
@@ -138,6 +145,7 @@ export function HeroIllustration() {
         <motion.circle
           animate={{ scale: [1, 1.4, 1], opacity: [0.3, 0, 0.3] }}
           transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+          style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
           cx="290"
           cy="190"
           r="30"

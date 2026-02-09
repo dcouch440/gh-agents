@@ -27,6 +27,7 @@ const PROTOCOL_LABELS: Record<string, string> = {
   route: 'Route',
   review: 'Review',
   transform: 'Transform',
+  documenter: 'Documenter',
 }
 
 function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
@@ -74,6 +75,18 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
       }
     }
     void createAndLink()
+    onClose()
+  }
+
+  const handleAddDocumenter = (event: React.MouseEvent) => {
+    event.stopPropagation()
+    event.preventDefault()
+    void workflowStore.createStep({
+      name: 'New Documenter',
+      execution_mode: 'documenter',
+      position_x: Math.round(position.flowX),
+      position_y: Math.round(position.flowY),
+    })
     onClose()
   }
 
@@ -217,6 +230,32 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
               ))}
             </>
           )}
+          <Box sx={{ mx: 1.5, my: 0.5, borderTop: 1, borderColor: 'divider' }} />
+          <Box
+            onClick={handleAddDocumenter}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              px: 1.5,
+              py: 0.75,
+              cursor: 'pointer',
+              '&:hover': { backgroundColor: 'action.hover' },
+            }}
+          >
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                backgroundColor: PROTOCOL_TYPE_COLORS['documenter'] ?? DEFAULT_STEP_TYPE_COLOR,
+                flexShrink: 0,
+              }}
+            />
+            <Typography sx={{ fontSize: 12, color: 'text.primary' }}>
+              Documenter
+            </Typography>
+          </Box>
         </>
       )}
     </Box>
