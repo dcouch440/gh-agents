@@ -3169,6 +3169,23 @@ impl WorkflowCollectionRepo for PgRepo {
         Ok(row)
     }
 
+    async fn list_workflow_executions_by_workflow(
+        &self,
+        workflow_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<Vec<WorkflowExecutionRow>> {
+        let rows = sqlx::query_as::<_, WorkflowExecutionRow>(
+            "SELECT * FROM workflow_executions \
+             WHERE workflow_id = $1 AND user_id = $2 \
+             ORDER BY started_at DESC NULLS LAST",
+        )
+        .bind(workflow_id)
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
     async fn create_standalone_workflow_execution(
         &self,
         workflow_id: Uuid,

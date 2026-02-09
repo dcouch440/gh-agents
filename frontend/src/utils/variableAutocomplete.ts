@@ -33,7 +33,7 @@ const createVariableAutocomplete = (
     if (afterBrace.includes('}')) return null
 
     // Validate that the text after `{` looks like a partial variable path
-    if (afterBrace.length > 0 && !/^[a-zA-Z_][a-zA-Z0-9_.]*$/.test(afterBrace)) return null
+    if (afterBrace.length > 0 && !/^[a-zA-Z_][a-zA-Z0-9_.$]*$/.test(afterBrace)) return null
 
     const completions = getCompletions()
     if (completions.length === 0) return null

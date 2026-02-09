@@ -493,6 +493,7 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
                 placeholder="Enter system prompt extension..."
                 height="100%"
                 readOnly={readOnly}
+                extensions={[autocompleteExtension]}
               />
             </Box>
           </Box>

@@ -72,6 +72,7 @@ import type {
   CreateCollectionRequest,
   UpdateCollectionRequest,
   WorkflowRunResponse,
+  WorkflowExecutionSummary,
   Protocol,
   ProtocolPort,
   ProtocolTypeInfo,
@@ -348,6 +349,9 @@ const workflows = {
 
   run: (id: string, body?: { initial_input?: string }, config?: RequestConfig) =>
     baseApi.post<WorkflowRunResponse>(API.WORKFLOW_RUN(id), body ?? {}, config),
+
+  listExecutions: (workflowId: string, config?: RequestConfig) =>
+    baseApi.get<WorkflowExecutionSummary[]>(API.WORKFLOW_EXECUTIONS(workflowId), config),
 }
 
 const contextResponse = {

@@ -2,8 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { ExecutionPanel } from './ExecutionPanel'
 import type { StepExecutionState, StepTimelineEvent } from '@/stores'
+import type { WorkflowExecutionSummary } from '@/types'
 
 const {
+  _activeWorkflowId,
   _runId,
   _isRunning,
   _eventLog,
@@ -14,7 +16,16 @@ const {
   _startedAt,
   _completedAt,
   _stepStates,
+  _viewMode,
+  _runs,
+  _selectedHistoricalRunId,
+  _historicalRun,
+  _historyLoading,
+  _fetchRuns,
+  _viewHistoricalRun,
+  _returnToLive,
 } = vi.hoisted(() => ({
+  _activeWorkflowId: { value: null as string | null },
   _runId: { value: null as string | null },
   _isRunning: { value: false },
   _eventLog: { value: [] as StepTimelineEvent[] },
@@ -25,6 +36,14 @@ const {
   _startedAt: { value: null as string | null },
   _completedAt: { value: null as string | null },
   _stepStates: { value: {} as Record<string, StepExecutionState> },
+  _viewMode: { value: 'live' as 'live' | 'history' },
+  _runs: { value: [] as WorkflowExecutionSummary[] },
+  _selectedHistoricalRunId: { value: null as string | null },
+  _historicalRun: { value: null as WorkflowExecutionSummary | null },
+  _historyLoading: { value: false },
+  _fetchRuns: { fn: vi.fn() },
+  _viewHistoricalRun: { fn: vi.fn() },
+  _returnToLive: { fn: vi.fn() },
 }))
 
 vi.mock('@/stores', () => ({
@@ -32,6 +51,10 @@ vi.mock('@/stores', () => ({
     if (typeof selector === 'function') return (selector as (s: unknown) => unknown)(null)
     return undefined
   }),
+  workflowStore: {
+    store: 'workflow',
+    selectActiveWorkflowId: () => _activeWorkflowId.value,
+  },
   workflowExecutionStore: {
     store: 'workflowExecution',
     selectRunId: () => _runId.value,
@@ -44,11 +67,20 @@ vi.mock('@/stores', () => ({
     selectStartedAt: () => _startedAt.value,
     selectCompletedAt: () => _completedAt.value,
     selectStepStates: () => _stepStates.value,
+    selectViewMode: () => _viewMode.value,
+    selectRuns: () => _runs.value,
+    selectSelectedHistoricalRunId: () => _selectedHistoricalRunId.value,
+    selectHistoricalRun: () => _historicalRun.value,
+    selectHistoryLoading: () => _historyLoading.value,
+    fetchRuns: (...args: unknown[]): void => { _fetchRuns.fn(...args) },
+    viewHistoricalRun: (...args: unknown[]): void => { _viewHistoricalRun.fn(...args) },
+    returnToLive: (): void => { _returnToLive.fn() },
   },
 }))
 
 beforeEach(() => {
   vi.clearAllMocks()
+  _activeWorkflowId.value = null
   _runId.value = null
   _isRunning.value = false
   _eventLog.value = []
@@ -59,15 +91,20 @@ beforeEach(() => {
   _startedAt.value = null
   _completedAt.value = null
   _stepStates.value = {}
+  _viewMode.value = 'live'
+  _runs.value = []
+  _selectedHistoricalRunId.value = null
+  _historicalRun.value = null
+  _historyLoading.value = false
 })
 
 describe('ExecutionPanel', () => {
-  it('renders empty state when no runId', () => {
+  it('renders empty state when no runId and no history', () => {
     render(<ExecutionPanel />)
     expect(screen.getByText('Run a workflow to see execution details')).toBeInTheDocument()
   })
 
-  it('renders run header and timeline when runId exists', () => {
+  it('renders run header and timeline when runId exists in live mode', () => {
     _runId.value = 'run-123'
     _isRunning.value = true
     _totalSteps.value = 3
@@ -131,5 +168,32 @@ describe('ExecutionPanel', () => {
     _runId.value = 'abcdef12-3456-7890'
     render(<ExecutionPanel />)
     expect(screen.getByText('Run abcdef12')).toBeInTheDocument()
+  })
+
+  it('shows run selector when history exists but no live run', () => {
+    _runs.value = [
+      { id: 'run-old', workflow_id: 'wf-1', status: 'completed', started_at: '2025-01-01T00:00:00Z', completed_at: '2025-01-01T00:01:00Z', outputs: null, error: null },
+    ]
+    render(<ExecutionPanel />)
+    expect(screen.queryByText('Run a workflow to see execution details')).not.toBeInTheDocument()
+  })
+
+  it('renders historical run summary in history mode', () => {
+    _viewMode.value = 'history'
+    _historicalRun.value = {
+      id: 'run-hist',
+      workflow_id: 'wf-1',
+      status: 'completed',
+      started_at: '2025-01-01T00:00:00Z',
+      completed_at: '2025-01-01T00:00:10Z',
+      outputs: { '': { response: 'Hello' } },
+      error: null,
+    }
+    _runs.value = [_historicalRun.value]
+    _selectedHistoricalRunId.value = 'run-hist'
+
+    render(<ExecutionPanel />)
+    // Should not show the live timeline
+    expect(screen.queryByText('Running...')).not.toBeInTheDocument()
   })
 })

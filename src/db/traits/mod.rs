@@ -1124,6 +1124,12 @@ pub trait WorkflowCollectionRepo: Send + Sync {
         error: Option<String>,
     ) -> Result<WorkflowExecutionRow>;
 
+    async fn list_workflow_executions_by_workflow(
+        &self,
+        workflow_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<Vec<WorkflowExecutionRow>>;
+
     // --- Standalone Workflow Execution (no collection) ---
     async fn create_standalone_workflow_execution(
         &self,
