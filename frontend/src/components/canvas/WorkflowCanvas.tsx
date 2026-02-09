@@ -143,14 +143,25 @@ function WorkflowCanvasInner() {
         }));
       }
 
-      // Data-only change — update data + position, never touch selection
+      // Data-only change — update data, position, type, style; never touch selection
       const newDataMap = new Map(rfNodes.map((n) => [n.id, n]));
       return current.map((n) => {
         const updated = newDataMap.get(n.id);
         if (!updated) return n;
-        if (n.data === updated.data && n.position === updated.position)
+        if (
+          n.data === updated.data &&
+          n.position === updated.position &&
+          n.type === updated.type &&
+          n.style === updated.style
+        )
           return n;
-        return {...n, data: updated.data, position: updated.position};
+        return {
+          ...n,
+          data: updated.data,
+          position: updated.position,
+          type: updated.type,
+          style: updated.style,
+        };
       });
     });
   }, [rfNodes, setNodes]);
