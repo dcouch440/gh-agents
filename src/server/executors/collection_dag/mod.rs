@@ -15,10 +15,10 @@ use crate::db::{
 };
 use crate::server::hub::dag::{broadcast_workflow_event, execute_workflow_via_engine};
 use crate::server::hub::dag::{ContainerExecutionConfig, DagPaused, WorkflowExecutionContext};
-use crate::server::ws::events::WorkflowEventKind;
 use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::error::HubError;
 use crate::server::state::AppState;
+use crate::server::ws::events::WorkflowEventKind;
 
 /// Executor for workflow collections (DAG of workflows).
 pub struct CollectionDagExecutor<R>

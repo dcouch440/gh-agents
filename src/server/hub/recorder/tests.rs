@@ -103,6 +103,7 @@ async fn record_agent_execution_without_repo_fails() {
             "system prompt",
             "user prompt",
             None,
+            None,
         )
         .await;
     assert!(result.is_err());

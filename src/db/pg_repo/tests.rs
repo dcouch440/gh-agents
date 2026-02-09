@@ -1337,6 +1337,7 @@ async fn agent_execution_create_and_get() {
             None, // selected_mode_id
             None, // room_session_id
             None, // speaker_order
+            None, // workflow_execution_id
         )
         .await
         .unwrap();
@@ -1375,7 +1376,7 @@ async fn agent_execution_status_transitions() {
     // --- completed: sets completed_at + stores output ---
     let exec1 = repo
         .create_agent_execution(
-            agent.id, None, false, None, "sys", "input1", None, None, None,
+            agent.id, None, false, None, "sys", "input1", None, None, None, None,
         )
         .await
         .unwrap();
@@ -1399,7 +1400,7 @@ async fn agent_execution_status_transitions() {
     // --- failed: sets completed_at ---
     let exec2 = repo
         .create_agent_execution(
-            agent.id, None, false, None, "sys", "input2", None, None, None,
+            agent.id, None, false, None, "sys", "input2", None, None, None, None,
         )
         .await
         .unwrap();
@@ -1413,7 +1414,7 @@ async fn agent_execution_status_transitions() {
     // --- COALESCE: passing None preserves previous output ---
     let exec3 = repo
         .create_agent_execution(
-            agent.id, None, false, None, "sys", "input3", None, None, None,
+            agent.id, None, false, None, "sys", "input3", None, None, None, None,
         )
         .await
         .unwrap();
@@ -1449,14 +1450,18 @@ async fn agent_execution_list_by_user() {
     let mut exec_ids = Vec::new();
     for _ in 0..3 {
         let exec = repo
-            .create_agent_execution(agent.id, None, true, None, "sys", "input", None, None, None)
-            .await
-            .unwrap();
-        // Link to workflow_execution via raw SQL
-        sqlx::query("UPDATE agent_executions SET workflow_execution_id = $1 WHERE id = $2")
-            .bind(we_id)
-            .bind(exec.id)
-            .execute(&db.pool)
+            .create_agent_execution(
+                agent.id,
+                None,
+                true,
+                None,
+                "sys",
+                "input",
+                None,
+                None,
+                None,
+                Some(we_id),
+            )
             .await
             .unwrap();
         exec_ids.push(exec.id);
@@ -1509,6 +1514,7 @@ async fn agent_execution_completed_for_step_ids() {
             None,
             None,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -1524,6 +1530,7 @@ async fn agent_execution_completed_for_step_ids() {
             None,
             "s",
             "i",
+            None,
             None,
             None,
             None,
@@ -1545,6 +1552,7 @@ async fn agent_execution_completed_for_step_ids() {
         None,
         None,
         None,
+        None,
     )
     .await
     .unwrap();
@@ -1558,6 +1566,7 @@ async fn agent_execution_completed_for_step_ids() {
             None,
             "s",
             "i",
+            None,
             None,
             None,
             None,
@@ -1594,7 +1603,9 @@ async fn agent_execution_routing_update() {
     let agent = create_test_agent(&repo, user).await;
 
     let exec = repo
-        .create_agent_execution(agent.id, None, false, None, "s", "i", None, None, None)
+        .create_agent_execution(
+            agent.id, None, false, None, "s", "i", None, None, None, None,
+        )
         .await
         .unwrap();
 
@@ -1644,6 +1655,7 @@ async fn agent_execution_exemplary_toggle() {
             None,
             "s",
             "i",
+            None,
             None,
             None,
             None,
@@ -2066,6 +2078,7 @@ async fn room_transcript_join_ordering() {
             None,
             Some(session.id),
             Some(1),
+            None,
         )
         .await
         .unwrap();
@@ -2080,6 +2093,7 @@ async fn room_transcript_join_ordering() {
             None,
             Some(session.id),
             Some(2),
+            None,
         )
         .await
         .unwrap();
