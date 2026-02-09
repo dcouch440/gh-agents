@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import AddRounded from '@mui/icons-material/AddRounded'
-import { DESIGN } from '@/constants'
 
 type AddButtonProps = {
   label: string
@@ -29,7 +28,7 @@ function AddButton({ label, onClick, icon = null }: AddButtonProps) {
         color: 'text.secondary',
         '&:hover': {
           color: 'primary.main',
-          backgroundColor: DESIGN.ACTIVE_TINT_STRONG,
+          backgroundColor: (theme) => theme.palette.custom.activeTintStrong,
         },
       }}
     >

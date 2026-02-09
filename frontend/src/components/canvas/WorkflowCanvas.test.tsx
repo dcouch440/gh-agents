@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen } from '@/test/render'
 import { WorkflowCanvas } from './WorkflowCanvas'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 
@@ -54,6 +54,7 @@ vi.mock('@/stores', () => ({
   canvasStore: {
     store: 'canvas',
     selectMinimapVisible: () => _minimapVisible.value,
+    selectStepProtocols: () => ({}),
     selectSteps: mockSelectSteps,
     selectEdges: mockSelectEdges,
     clearSelection: mockClearSelection,
@@ -72,6 +73,11 @@ vi.mock('@/stores', () => ({
   outputSchemaStore: {
     store: 'outputSchema',
     selectAll: () => [],
+  },
+  protocolStore: {
+    store: 'protocol',
+    fetchAll: vi.fn(),
+    fetchTypes: vi.fn(),
   },
 }))
 

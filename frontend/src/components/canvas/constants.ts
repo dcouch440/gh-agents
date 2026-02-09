@@ -2,7 +2,6 @@ export const CANVAS = {
   NODE_WIDTH: 260,
   HANDLE_SIZE: 12,
   GRID_SIZE: 24,
-  GRID_DOT_COLOR: 'rgba(255, 255, 255, 0.03)',
   FIT_VIEW_PADDING: 0.15,
 } as const
 

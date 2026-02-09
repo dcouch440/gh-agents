@@ -4,7 +4,6 @@ import Box from '@mui/material/Box'
 import { useStore, workflowStore, agentStore, outputSchemaStore, protocolStore } from '@/stores'
 import { WorkflowCanvas } from '@/components/canvas'
 import { LoadingSpinner } from '@/components/primitives'
-import { LAYOUT_COLORS } from '@/constants'
 
 function WorkflowEditorPage() {
   const { id } = useParams<{ id: string }>()
@@ -44,7 +43,7 @@ function WorkflowEditorPage() {
       sx={{
         width: '100%',
         height: '100%',
-        backgroundColor: LAYOUT_COLORS.CAVITY_BG,
+        backgroundColor: (theme) => theme.palette.custom.cavityBg,
       }}
     >
       <WorkflowCanvas />

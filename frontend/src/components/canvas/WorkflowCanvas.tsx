@@ -16,6 +16,7 @@ import type {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import Box from "@mui/material/Box";
+import {useTheme} from "@mui/material/styles";
 import {
   useStore,
   workflowStore,
@@ -36,6 +37,7 @@ import type {MenuPosition} from "./CanvasContextMenu";
 import {CANVAS} from "./constants";
 
 function WorkflowCanvasInner() {
+  const theme = useTheme();
   const {setNodes, setEdges, fitView, screenToFlowPosition} = useReactFlow();
   const steps = useStore(workflowStore.store, workflowStore.selectSteps);
   const edges = useStore(workflowStore.store, workflowStore.selectEdges);
@@ -279,8 +281,8 @@ function WorkflowCanvasInner() {
           "--xy-node-background-color": "transparent",
           "--xy-node-border": "none",
           "--xy-node-border-radius": "12px",
-          "--xy-minimap-background-color": "rgba(6, 10, 16, 0.9)",
-          "--xy-minimap-mask-background-color": "rgba(0, 0, 0, 0.7)",
+          "--xy-minimap-background-color": theme.palette.custom.minimapBg,
+          "--xy-minimap-mask-background-color": theme.palette.custom.minimapMask,
         },
       }}
     >
@@ -311,14 +313,14 @@ function WorkflowCanvasInner() {
           variant={BackgroundVariant.Dots}
           gap={CANVAS.GRID_SIZE}
           size={1}
-          color={CANVAS.GRID_DOT_COLOR}
+          color={theme.palette.custom.gridDotColor}
         />
         {minimapVisible && (
           <MiniMap
-            nodeStrokeColor="#3b82f6"
-            nodeColor="#111318"
+            nodeStrokeColor={theme.palette.primary.main}
+            nodeColor={theme.palette.background.paper}
             nodeBorderRadius={8}
-            maskColor="rgba(0, 0, 0, 0.7)"
+            maskColor={theme.palette.custom.minimapMask}
           />
         )}
       </ReactFlow>

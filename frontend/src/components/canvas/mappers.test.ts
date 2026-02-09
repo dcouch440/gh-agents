@@ -47,6 +47,7 @@ const emptyLookups: StepNodeLookups = {
   stepNames: new Map(),
   edges: [],
   toolsByAgent: new Map(),
+  protocolsByStep: new Map(),
 }
 
 describe('toRFNodes', () => {
@@ -73,6 +74,9 @@ describe('toRFNodes', () => {
         outputSchemaName: null,
         upstreamStepNames: [],
         toolNames: [],
+        protocolType: null,
+        protocolName: null,
+        protocolPortNames: [],
       },
     })
   })

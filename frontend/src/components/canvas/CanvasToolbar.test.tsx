@@ -1,10 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen } from '@/test/render'
 import userEvent from '@testing-library/user-event'
-import { ThemeProvider, createTheme } from '@mui/material'
 import { CanvasToolbar } from './CanvasToolbar'
-
-const theme = createTheme({ palette: { mode: 'dark' } })
 
 const {
   mockSelectDirty,
@@ -31,9 +28,7 @@ vi.mock('@/stores', () => ({
 
 const renderToolbar = () =>
   render(
-    <ThemeProvider theme={theme}>
-      <CanvasToolbar />
-    </ThemeProvider>,
+    <CanvasToolbar />,
   )
 
 beforeEach(() => {

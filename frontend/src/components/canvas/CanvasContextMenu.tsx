@@ -100,7 +100,9 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
         border: 1,
         borderColor: 'divider',
         borderRadius: '8px',
-        boxShadow: '0 4px 24px rgba(0, 0, 0, 0.4)',
+        boxShadow: (theme) => theme.palette.mode === 'dark'
+          ? '0 4px 24px rgba(0, 0, 0, 0.4)'
+          : '0 4px 24px rgba(61, 43, 31, 0.12)',
         minWidth: 160,
         py: 0.5,
       }}

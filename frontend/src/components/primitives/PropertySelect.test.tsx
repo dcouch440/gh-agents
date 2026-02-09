@@ -1,11 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within } from '@/test/render'
 import userEvent from '@testing-library/user-event'
-import { ThemeProvider, createTheme } from '@mui/material'
 import { PropertySelect } from './PropertySelect'
 import type { PropertySelectOption } from './PropertySelect'
-
-const theme = createTheme({ palette: { mode: 'dark' } })
 
 const options: PropertySelectOption[] = [
   { value: 'a', label: 'Alpha', secondary: 'First' },
@@ -16,14 +13,12 @@ const options: PropertySelectOption[] = [
 const renderSelect = (props: Partial<Parameters<typeof PropertySelect>[0]> = {}) => {
   const onChange = vi.fn()
   const result = render(
-    <ThemeProvider theme={theme}>
-      <PropertySelect
-        value={null}
-        options={options}
-        onChange={onChange}
-        {...props}
-      />
-    </ThemeProvider>,
+    <PropertySelect
+      value={null}
+      options={options}
+      onChange={onChange}
+      {...props}
+    />,
   )
   return { onChange, ...result }
 }

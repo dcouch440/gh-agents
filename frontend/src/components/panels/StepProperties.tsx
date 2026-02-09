@@ -19,6 +19,7 @@ import {
   workflowStore,
   protocolStore,
 } from "@/stores";
+import {useTheme} from "@mui/material/styles";
 import {DESIGN} from "@/constants";
 import {
   STEP_TYPE_COLORS,
@@ -105,6 +106,7 @@ const SCHEMA_PREVIEW_SX = {
 } as const;
 
 function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
+  const theme = useTheme();
   const [activeTab, setActiveTab] = useState<StepTab>("template");
 
   // ── Store data ──────────────────────────────────────────────────────────────
@@ -292,7 +294,7 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
       <Box
         sx={{
           height: 2,
-          background: DESIGN.ACTIVE_GRADIENT,
+          background: theme.palette.custom.activeGradient,
           opacity: 0.6,
           flexShrink: 0,
         }}
@@ -328,7 +330,7 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
                 "&:hover": {borderColor: "divider"},
                 "&.Mui-focused": {
                   borderColor: "primary.main",
-                  backgroundColor: DESIGN.ACTIVE_TINT,
+                  backgroundColor: theme.palette.custom.activeTint,
                 },
               }}
             />

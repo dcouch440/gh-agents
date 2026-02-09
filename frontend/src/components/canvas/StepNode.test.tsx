@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen } from '@/test/render'
 import { StepNode } from './StepNode'
 
 vi.mock('@xyflow/react', () => ({
@@ -9,11 +9,6 @@ vi.mock('@xyflow/react', () => ({
   Position: { Left: 'left', Right: 'right' },
 }))
 
-vi.mock('@/constants', () => ({
-  DESIGN: {
-    BG_HEADER: '#0d1017',
-  },
-}))
 
 const baseProps = {
   id: 'step-001',
@@ -29,6 +24,8 @@ const baseProps = {
     outputSchemaName: null,
     upstreamStepNames: [],
     toolNames: [],
+    protocolPortNames: [],
+    protocolType: null,
   },
   selected: false,
   isConnectable: true,
