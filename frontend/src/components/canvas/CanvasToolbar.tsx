@@ -16,6 +16,7 @@ import CheckCircleOutline from "@mui/icons-material/CheckCircleOutline";
 import PlayArrowOutlined from "@mui/icons-material/PlayArrowOutlined";
 import ErrorOutline from "@mui/icons-material/ErrorOutline";
 import InputOutlined from "@mui/icons-material/InputOutlined";
+import {useTheme} from "@mui/material/styles";
 import {useStore, workflowStore} from "@/stores";
 import {api} from "@/api";
 import {LS_WORKFLOW_TEST_INPUT} from "@/constants";
@@ -23,6 +24,8 @@ import {LS_WORKFLOW_TEST_INPUT} from "@/constants";
 type RunStatus = "idle" | "running" | "completed" | "error";
 
 function RunButton() {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
   const activeWorkflowId = useStore(
     workflowStore.store,
     workflowStore.selectActiveWorkflowId,
@@ -148,24 +151,24 @@ function RunButton() {
                 height: 32,
                 borderRadius: "10px",
                 backgroundColor: inputExpanded
-                  ? "rgba(59, 130, 246, 0.2)"
-                  : "rgba(12, 16, 24, 0.85)",
+                  ? `${theme.palette.primary.main}33`
+                  : theme.palette.custom.floatingPanelBg,
                 backdropFilter: "blur(12px)",
                 border: "1px solid",
                 borderColor: inputExpanded
-                  ? "rgba(59, 130, 246, 0.4)"
-                  : "rgba(240, 246, 252, 0.1)",
+                  ? `${theme.palette.primary.main}66`
+                  : theme.palette.custom.floatingPanelBorder,
                 color: inputExpanded
-                  ? "#60a5fa"
-                  : "rgba(240, 246, 252, 0.7)",
+                  ? theme.palette.primary.light
+                  : theme.palette.text.secondary,
                 transition: "all 0.2s ease",
                 "&:hover": {
                   backgroundColor: inputExpanded
-                    ? "rgba(59, 130, 246, 0.3)"
-                    : "rgba(240, 246, 252, 0.08)",
+                    ? `${theme.palette.primary.main}4d`
+                    : theme.palette.custom.hoverOverlay,
                   borderColor: inputExpanded
-                    ? "rgba(59, 130, 246, 0.5)"
-                    : "rgba(240, 246, 252, 0.2)",
+                    ? `${theme.palette.primary.main}80`
+                    : theme.palette.custom.borderHover,
                 },
               }}
             >
@@ -246,11 +249,13 @@ function RunButton() {
               width: 320,
               p: 1.5,
               borderRadius: "12px",
-              backgroundColor: "rgba(12, 16, 24, 0.92)",
+              backgroundColor: theme.palette.custom.floatingPanelBg,
               backdropFilter: "blur(16px)",
               border: "1px solid",
-              borderColor: "rgba(240, 246, 252, 0.1)",
-              boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
+              borderColor: theme.palette.custom.floatingPanelBorder,
+              boxShadow: isDark
+                ? "0 8px 32px rgba(0, 0, 0, 0.4)"
+                : "0 8px 32px rgba(61, 43, 31, 0.12)",
             }}
           >
             <Box
@@ -264,7 +269,7 @@ function RunButton() {
               <Typography
                 variant="caption"
                 sx={{
-                  color: "rgba(240, 246, 252, 0.6)",
+                  color: theme.palette.text.secondary,
                   fontWeight: 600,
                   fontSize: 11,
                   letterSpacing: "0.05em",
@@ -301,22 +306,22 @@ function RunButton() {
                 "& .MuiOutlinedInput-root": {
                   fontSize: 12,
                   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                  color: "rgba(240, 246, 252, 0.9)",
-                  backgroundColor: "rgba(0, 0, 0, 0.3)",
+                  color: theme.palette.text.primary,
+                  backgroundColor: isDark ? "rgba(0, 0, 0, 0.3)" : "rgba(61, 43, 31, 0.04)",
                   borderRadius: "8px",
                   "& fieldset": {
-                    borderColor: "rgba(240, 246, 252, 0.08)",
+                    borderColor: theme.palette.divider,
                   },
                   "&:hover fieldset": {
-                    borderColor: "rgba(240, 246, 252, 0.15)",
+                    borderColor: theme.palette.custom.borderHover,
                   },
                   "&.Mui-focused fieldset": {
-                    borderColor: "rgba(59, 130, 246, 0.5)",
+                    borderColor: `${theme.palette.primary.main}80`,
                     borderWidth: 1,
                   },
                 },
                 "& .MuiOutlinedInput-input::placeholder": {
-                  color: "rgba(240, 246, 252, 0.3)",
+                  color: theme.palette.text.disabled,
                   fontSize: 11,
                 },
               }}
@@ -329,6 +334,8 @@ function RunButton() {
 }
 
 function SaveDiscardBar() {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
   const dirty = useStore(workflowStore.store, workflowStore.selectDirty);
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
@@ -382,17 +389,19 @@ function SaveDiscardBar() {
           px: 2,
           py: 1.25,
           borderRadius: "16px",
-          backgroundColor: "rgba(12, 16, 24, 0.92)",
+          backgroundColor: theme.palette.custom.floatingPanelBg,
           backdropFilter: "blur(16px)",
           border: "1px solid",
-          borderColor: "rgba(240, 246, 252, 0.12)",
-          boxShadow:
-            "0 8px 32px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05)",
+          borderColor: theme.palette.custom.floatingPanelBorder,
+          boxShadow: isDark
+            ? "0 8px 32px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05)"
+            : "0 8px 32px rgba(61, 43, 31, 0.12), 0 1px 2px rgba(61, 43, 31, 0.06)",
           transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
           "&:hover": {
-            borderColor: "rgba(240, 246, 252, 0.18)",
-            boxShadow:
-              "0 12px 40px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08)",
+            borderColor: theme.palette.custom.borderHover,
+            boxShadow: isDark
+              ? "0 12px 40px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08)"
+              : "0 12px 40px rgba(61, 43, 31, 0.16), 0 2px 4px rgba(61, 43, 31, 0.08)",
           },
         }}
       >
@@ -420,15 +429,15 @@ function SaveDiscardBar() {
                 fontSize: 13,
                 fontWeight: 500,
                 textTransform: "none",
-                borderColor: "rgba(240, 246, 252, 0.14)",
-                color: "rgba(240, 246, 252, 0.9)",
+                borderColor: theme.palette.custom.floatingPanelBorder,
+                color: theme.palette.text.primary,
                 px: 2,
                 py: 0.75,
                 minWidth: 100,
                 transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                 "&:hover": {
-                  borderColor: "rgba(240, 246, 252, 0.3)",
-                  backgroundColor: "rgba(255, 255, 255, 0.08)",
+                  borderColor: theme.palette.custom.borderHover,
+                  backgroundColor: theme.palette.custom.activeTintStrong,
                   "& .MuiSvgIcon-root": {
                     transform: "rotate(-30deg)",
                   },
@@ -437,8 +446,8 @@ function SaveDiscardBar() {
                   transform: "scale(0.98)",
                 },
                 "&.Mui-disabled": {
-                  borderColor: "rgba(240, 246, 252, 0.06)",
-                  color: "rgba(240, 246, 252, 0.3)",
+                  borderColor: theme.palette.divider,
+                  color: theme.palette.text.disabled,
                 },
               }}
             >
@@ -486,18 +495,18 @@ function SaveDiscardBar() {
                 minWidth: 100,
                 background: justSaved
                   ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
-                  : "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+                  : `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
                 boxShadow: justSaved
                   ? "0 4px 12px rgba(16, 185, 129, 0.4)"
-                  : "0 4px 12px rgba(59, 130, 246, 0.4)",
+                  : `0 4px 12px ${theme.palette.primary.main}66`,
                 transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                 "&:hover": {
                   background: justSaved
                     ? "linear-gradient(135deg, #059669 0%, #047857 100%)"
-                    : "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
+                    : `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.dark} 100%)`,
                   boxShadow: justSaved
                     ? "0 6px 16px rgba(16, 185, 129, 0.5)"
-                    : "0 6px 16px rgba(59, 130, 246, 0.5)",
+                    : `0 6px 16px ${theme.palette.primary.main}80`,
                   transform: "translateY(-1px)",
                   "& .MuiSvgIcon-root": {
                     transform: "scale(1.1)",
@@ -507,10 +516,10 @@ function SaveDiscardBar() {
                   transform: "translateY(0) scale(0.98)",
                   boxShadow: justSaved
                     ? "0 2px 8px rgba(16, 185, 129, 0.4)"
-                    : "0 2px 8px rgba(59, 130, 246, 0.4)",
+                    : `0 2px 8px ${theme.palette.primary.main}66`,
                 },
                 "&.Mui-disabled": {
-                  background: "rgba(59, 130, 246, 0.3)",
+                  background: `${theme.palette.primary.main}4d`,
                   color: "rgba(255, 255, 255, 0.5)",
                 },
               }}

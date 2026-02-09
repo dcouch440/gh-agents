@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import { DESIGN } from '@/constants'
 
 type PropertyRowProps = {
   label: string
@@ -28,7 +27,7 @@ function PropertyRow({
         pt: '6px',
         pb: last ? '12px' : '6px',
         transition: 'background-color 100ms ease',
-        '&:hover': { backgroundColor: DESIGN.HOVER_OVERLAY },
+        '&:hover': { backgroundColor: (theme) => theme.palette.custom.hoverOverlay },
       }}
     >
       <Typography

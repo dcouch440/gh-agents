@@ -2,7 +2,6 @@ import Select from '@mui/material/Select'
 import MenuItem from '@mui/material/MenuItem'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import { DESIGN } from '@/constants'
 
 type PropertySelectOption = {
   value: string
@@ -78,10 +77,10 @@ function PropertySelect({
           border: 'none',
         },
         '&:hover': {
-          backgroundColor: DESIGN.HOVER_OVERLAY,
+          backgroundColor: (theme) => theme.palette.custom.hoverOverlay,
         },
         '&.Mui-focused': {
-          backgroundColor: DESIGN.ACTIVE_TINT,
+          backgroundColor: (theme) => theme.palette.custom.activeTint,
         },
       }}
       MenuProps={{
@@ -95,9 +94,9 @@ function PropertySelect({
               py: '6px',
               px: '12px',
               transition: 'background-color 100ms ease',
-              '&:hover': { backgroundColor: DESIGN.HOVER_OVERLAY },
-              '&.Mui-selected': { backgroundColor: DESIGN.ACTIVE_TINT },
-              '&.Mui-selected:hover': { backgroundColor: DESIGN.ACTIVE_TINT_STRONG },
+              '&:hover': { backgroundColor: (theme) => theme.palette.custom.hoverOverlay },
+              '&.Mui-selected': { backgroundColor: (theme) => theme.palette.custom.activeTint },
+              '&.Mui-selected:hover': { backgroundColor: (theme) => theme.palette.custom.activeTintStrong },
             },
           },
         },

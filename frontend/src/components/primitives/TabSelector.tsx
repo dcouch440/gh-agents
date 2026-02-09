@@ -1,6 +1,5 @@
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import { DESIGN } from '@/constants'
 
 type TabOption = {
   value: string
@@ -36,12 +35,12 @@ function TabSelector({ options, value, onChange }: TabSelectorProps) {
               userSelect: 'none',
               borderBottom: '2px solid',
               borderColor: isActive ? 'primary.main' : 'transparent',
-              backgroundColor: isActive ? DESIGN.ACTIVE_TINT : 'transparent',
+              backgroundColor: (theme) => isActive ? theme.palette.custom.activeTint : 'transparent',
               transition: 'all 120ms ease',
               '&:hover': isActive
                 ? {}
                 : {
-                    backgroundColor: DESIGN.HOVER_OVERLAY,
+                    backgroundColor: (theme) => theme.palette.custom.hoverOverlay,
                   },
             }}
           >

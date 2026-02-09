@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen } from '@/test/render'
 import { PropertiesPanel } from './PropertiesPanel'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 
@@ -88,6 +88,11 @@ vi.mock('@/stores', () => ({
   },
   layoutStore: {
     openRightPanel: vi.fn(),
+  },
+  protocolStore: {
+    store: 'protocol',
+    selectAll: () => [],
+    fetchAll: vi.fn(),
   },
 }))
 

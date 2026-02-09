@@ -3,7 +3,8 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import CloseRounded from '@mui/icons-material/CloseRounded';
-import { LAYOUT, ANIMATION, DESIGN } from '@/constants';
+import { useTheme } from '@mui/material/styles';
+import { LAYOUT, ANIMATION } from '@/constants';
 
 type DetailPanelProps = {
   side: 'left' | 'right';
@@ -22,6 +23,7 @@ function DetailPanel({
   side, isOpen, onClose, title, children,
   width, isDragging = false, onResize, onDragStart, onDragEnd,
 }: DetailPanelProps) {
+  const theme = useTheme();
   const isLeft = side === 'left';
   const panelWidth = width ?? LAYOUT.PANEL_WIDTH;
   const startXRef = useRef(0);
@@ -85,7 +87,7 @@ function DetailPanel({
         borderRight: isLeft ? 1 : 0,
         borderLeft: isLeft ? 0 : 1,
         borderColor: isOpen ? 'divider' : 'transparent',
-        backgroundColor: DESIGN.BG_PANEL,
+        backgroundColor: theme.palette.custom.bgPanel,
         display: 'flex',
         flexDirection: 'column',
         position: 'relative',
@@ -144,12 +146,12 @@ function DetailPanel({
             transition: `all ${ANIMATION.FAST}ms ease`,
             '&:hover': {
               color: 'text.secondary',
-              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              backgroundColor: theme.palette.custom.activeTintStrong,
               transform: 'scale(1.05)',
             },
             '&:active': {
               transform: 'scale(0.95)',
-              backgroundColor: 'rgba(255, 255, 255, 0.12)',
+              backgroundColor: theme.palette.custom.borderHover,
             },
           }}
         >

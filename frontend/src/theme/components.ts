@@ -3,21 +3,21 @@ import type { Components, Theme } from '@mui/material/styles';
 const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
   const isDark = mode === 'dark';
 
-  const surfaceBg = isDark ? '#15181e' : '#ffffff';
-  const elevatedBg = isDark ? '#1a1d25' : '#ffffff';
+  const surfaceBg = isDark ? '#15181e' : '#faf7f2';
+  const elevatedBg = isDark ? '#1a1d25' : '#faf7f2';
 
   return {
     MuiCssBaseline: {
       styleOverrides: {
         body: {
-          scrollbarColor: isDark ? '#3a3f4b #111318' : '#c1c8cd #f8f9fb',
+          scrollbarColor: isDark ? '#3a3f4b #111318' : '#c4b9aa #f5f0e8',
           '&::-webkit-scrollbar, & *::-webkit-scrollbar': {
             width: 6,
             height: 6,
           },
           '&::-webkit-scrollbar-thumb, & *::-webkit-scrollbar-thumb': {
             borderRadius: 6,
-            backgroundColor: isDark ? '#3a3f4b' : '#c1c8cd',
+            backgroundColor: isDark ? '#3a3f4b' : '#c4b9aa',
           },
           '&::-webkit-scrollbar-track, & *::-webkit-scrollbar-track': {
             backgroundColor: 'transparent',
@@ -92,8 +92,8 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
           fontSize: '0.75rem',
           textTransform: 'uppercase' as const,
           letterSpacing: '0.04em',
-          color: isDark ? '#7d8590' : '#64748b',
-          backgroundColor: isDark ? 'rgba(255, 255, 255, 0.02)' : '#f8f9fb',
+          color: isDark ? '#7d8590' : '#7a6858',
+          backgroundColor: isDark ? 'rgba(255, 255, 255, 0.02)' : '#f0ebe3',
         },
       },
     },
@@ -113,7 +113,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
           '&:hover .MuiOutlinedInput-notchedOutline': {
             borderColor: isDark
               ? 'rgba(240, 246, 252, 0.15)'
-              : 'rgba(15, 23, 42, 0.15)',
+              : 'rgba(61, 43, 31, 0.15)',
           },
           '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
             borderColor: theme.palette.primary.main,
@@ -139,7 +139,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
       styleOverrides: {
         paper: ({ theme }) => ({
           backgroundImage: 'none',
-          backgroundColor: isDark ? '#111318' : '#ffffff',
+          backgroundColor: isDark ? '#111318' : '#faf7f2',
           border: `1px solid ${theme.palette.divider}`,
           borderRadius: 16,
         }),
@@ -151,7 +151,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
       },
       styleOverrides: {
         root: ({ theme }) => ({
-          backgroundColor: isDark ? '#09090b' : '#f8f9fb',
+          backgroundColor: isDark ? '#09090b' : '#f0ebe3',
           backdropFilter: 'blur(12px)',
           borderBottom: `1px solid ${theme.palette.divider}`,
         }),
@@ -160,7 +160,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
     MuiDrawer: {
       styleOverrides: {
         paper: ({ theme }) => ({
-          backgroundColor: isDark ? '#0d0f14' : '#ffffff',
+          backgroundColor: isDark ? '#0d0f14' : '#faf7f2',
           borderRight: `1px solid ${theme.palette.divider}`,
         }),
       },
@@ -178,8 +178,8 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
           letterSpacing: '0.01em',
           borderRadius: 8,
           padding: '6px 12px',
-          backgroundColor: isDark ? '#1a1d25' : '#0f172a',
-          border: `1px solid ${isDark ? 'rgba(240, 246, 252, 0.08)' : 'rgba(15, 23, 42, 0.1)'}`,
+          backgroundColor: isDark ? '#1a1d25' : '#3d2b1f',
+          border: `1px solid ${isDark ? 'rgba(240, 246, 252, 0.08)' : 'rgba(61, 43, 31, 0.1)'}`,
           backdropFilter: 'blur(8px)',
           boxShadow: isDark
             ? '0 4px 12px rgba(0, 0, 0, 0.4)'
@@ -214,7 +214,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
         root: {
           borderColor: isDark
             ? 'rgba(240, 246, 252, 0.06)'
-            : 'rgba(15, 23, 42, 0.08)',
+            : 'rgba(61, 43, 31, 0.08)',
         },
       },
     },

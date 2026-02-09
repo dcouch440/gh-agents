@@ -3,13 +3,13 @@ import { Handle, Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
+import { useTheme } from '@mui/material/styles'
 import SmartToyOutlined from '@mui/icons-material/SmartToyOutlined'
 import RepeatOutlined from '@mui/icons-material/RepeatOutlined'
 import ForumOutlined from '@mui/icons-material/ForumOutlined'
 import SettingsOutlined from '@mui/icons-material/SettingsOutlined'
 import type { StepNodeData } from './mappers'
 import { CANVAS, STEP_TYPE_COLORS, DEFAULT_STEP_TYPE_COLOR, PROTOCOL_TYPE_COLORS } from './constants'
-import { DESIGN } from '@/constants'
 
 const STEP_TYPE_ICONS: Record<string, typeof SettingsOutlined> = {
   single: SmartToyOutlined,
@@ -19,6 +19,7 @@ const STEP_TYPE_ICONS: Record<string, typeof SettingsOutlined> = {
 const DEFAULT_STEP_TYPE_ICON = SettingsOutlined
 
 function StepNodeComponent({ data, selected }: NodeProps) {
+  const theme = useTheme()
   const nodeData = data as StepNodeData
   const accentColor = STEP_TYPE_COLORS[nodeData.stepType] ?? DEFAULT_STEP_TYPE_COLOR
   const IconComponent = STEP_TYPE_ICONS[nodeData.stepType] ?? DEFAULT_STEP_TYPE_ICON
@@ -44,8 +45,8 @@ function StepNodeComponent({ data, selected }: NodeProps) {
         border: 2,
         borderColor: selected ? 'primary.main' : 'divider',
         boxShadow: selected
-          ? '0 8px 32px rgba(59, 130, 246, 0.15)'
-          : '0 4px 24px rgba(0, 0, 0, 0.4)',
+          ? `0 8px 32px ${theme.palette.mode === 'dark' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(192, 80, 46, 0.12)'}`
+          : `0 4px 24px ${theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.4)' : 'rgba(61, 43, 31, 0.10)'}`,
         transition: 'border-color 150ms ease, box-shadow 150ms ease',
         overflow: 'hidden',
       }}
@@ -55,7 +56,7 @@ function StepNodeComponent({ data, selected }: NodeProps) {
         sx={{
           px: 1.5,
           py: 1,
-          backgroundColor: DESIGN.BG_HEADER,
+          backgroundColor: theme.palette.custom.bgHeader,
           borderBottom: hasBody ? 1 : 0,
           borderColor: 'divider',
         }}
@@ -172,7 +173,7 @@ function StepNodeComponent({ data, selected }: NodeProps) {
                       px: 0.75,
                       py: 0.25,
                       borderRadius: '4px',
-                      backgroundColor: 'rgba(255,255,255,0.03)',
+                      backgroundColor: theme.palette.custom.hoverOverlay,
                       border: 1,
                       borderColor: 'divider',
                       fontSize: 10,
@@ -216,7 +217,7 @@ function StepNodeComponent({ data, selected }: NodeProps) {
                       px: 0.75,
                       py: 0.25,
                       borderRadius: '4px',
-                      backgroundColor: 'rgba(255,255,255,0.03)',
+                      backgroundColor: theme.palette.custom.hoverOverlay,
                       border: 1,
                       borderColor: 'divider',
                       fontSize: 10,
@@ -317,7 +318,7 @@ function StepNodeComponent({ data, selected }: NodeProps) {
           width: CANVAS.HANDLE_SIZE,
           height: CANVAS.HANDLE_SIZE,
           background: DEFAULT_STEP_TYPE_COLOR,
-          border: `2px solid ${DESIGN.BG_HEADER}`,
+          border: `2px solid ${theme.palette.custom.bgHeader}`,
         }}
       />
       <Handle
@@ -327,7 +328,7 @@ function StepNodeComponent({ data, selected }: NodeProps) {
           width: CANVAS.HANDLE_SIZE,
           height: CANVAS.HANDLE_SIZE,
           background: DEFAULT_STEP_TYPE_COLOR,
-          border: `2px solid ${DESIGN.BG_HEADER}`,
+          border: `2px solid ${theme.palette.custom.bgHeader}`,
         }}
       />
     </Box>

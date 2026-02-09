@@ -3,7 +3,8 @@ import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import { Tooltip } from '@/components/primitives/Tooltip';
 import Badge from '@mui/material/Badge';
-import { LAYOUT, LAYOUT_COLORS, ANIMATION, DESIGN } from '@/constants';
+import { useTheme } from '@mui/material/styles';
+import { LAYOUT, ANIMATION } from '@/constants';
 import type { NavBarItem } from './types';
 
 type TopNavBarProps = {
@@ -13,6 +14,8 @@ type TopNavBarProps = {
 };
 
 function TopNavBar({ navItems, utilityItems, trailing }: TopNavBarProps) {
+  const theme = useTheme();
+
   const renderItem = (item: NavBarItem) => {
     return (
       <Tooltip key={item.key} title={item.label} placement="bottom">
@@ -26,7 +29,7 @@ function TopNavBar({ navItems, utilityItems, trailing }: TopNavBarProps) {
             color: item.isActive ? 'primary.main' : 'text.secondary',
             backgroundColor: 'transparent',
             transition: `color ${ANIMATION.FAST}ms ease, filter ${ANIMATION.FAST}ms ease`,
-            filter: item.isActive ? DESIGN.ACTIVE_GLOW : 'none',
+            filter: item.isActive ? theme.palette.custom.activeGlow : 'none',
             '&:hover': {
               color: item.isActive ? 'primary.light' : 'text.primary',
               backgroundColor: 'transparent',
@@ -40,7 +43,7 @@ function TopNavBar({ navItems, utilityItems, trailing }: TopNavBarProps) {
                   right: 4,
                   height: 2,
                   borderRadius: 1,
-                  background: DESIGN.ACTIVE_GRADIENT,
+                  background: theme.palette.custom.activeGradient,
                 }
               : undefined,
           }}
@@ -72,7 +75,7 @@ function TopNavBar({ navItems, utilityItems, trailing }: TopNavBarProps) {
         px: 1,
         borderBottom: 1,
         borderColor: 'divider',
-        backgroundColor: LAYOUT_COLORS.CHROME_BG,
+        backgroundColor: theme.palette.custom.chromeBg,
         boxShadow: '0 1px 2px rgba(0, 0, 0, 0.2)',
         zIndex: 10,
         position: 'relative',

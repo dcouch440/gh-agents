@@ -14,7 +14,7 @@ import { useStore, authStore, selectUser, selectAuthStatus, layoutStore, reviewQ
 import { useNavigation } from '@/hooks/useNavigation';
 import { LoadingSpinner } from '@/components/primitives';
 import { RightPanelContent } from '@/components/panels';
-import { ROUTES, LAYOUT_COLORS } from '@/constants';
+import { ROUTES } from '@/constants';
 import type { NavBarItem } from './types';
 import type { RailItem } from './IconRail';
 
@@ -122,7 +122,7 @@ function AppLayout() {
             px: isCanvasPage ? 0 : 2.5,
             py: isCanvasPage ? 0 : 2,
             minWidth: 0,
-            backgroundColor: LAYOUT_COLORS.CAVITY_BG,
+            backgroundColor: (theme) => theme.palette.custom.cavityBg,
           }}
         >
           <Outlet />

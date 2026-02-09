@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen } from '@/test/render'
 import userEvent from '@testing-library/user-event'
 import { CanvasContextMenu } from './CanvasContextMenu'
 
@@ -9,9 +9,23 @@ const { mockCreateStep, mockDeleteStep } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/stores', () => ({
+  useStore: vi.fn((_store: unknown, selector: unknown) => {
+    if (typeof selector === 'function') return (selector as (s: unknown) => unknown)(null)
+    return undefined
+  }),
   workflowStore: {
     createStep: mockCreateStep,
     deleteStep: mockDeleteStep,
+  },
+  protocolStore: {
+    store: 'protocol',
+    selectTypes: () => [],
+    selectAll: () => [],
+    fetchAll: vi.fn(),
+    fetchTypes: vi.fn(),
+  },
+  canvasStore: {
+    linkStepProtocol: vi.fn(),
   },
 }))
 

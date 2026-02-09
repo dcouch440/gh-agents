@@ -267,26 +267,9 @@ export const SIDEBAR = {
   WIDTH_COLLAPSED: 64,
 } as const;
 
-// Layout Colors
-export const LAYOUT_COLORS = {
-  CHROME_BG: '#12161f',
-  CAVITY_BG: '#060a10',
-  CAVITY_BG_LIGHT: '#eef0f4',
-} as const;
-
-// Design Tokens (derived from v2 mockup)
+// Semantic identity colors (mode-independent — used for visual identity, not surfaces)
+// Surface/overlay tokens are in src/theme/customTokens.ts and accessed via theme.palette.custom.*
 export const DESIGN = {
-  // Extended backgrounds
-  BG_HEADER: '#0d1017',
-  BG_EDITOR: '#0a0e14',
-  BG_PANEL: '#0e1219',
-
-  // Extended borders
-  BORDER_HOVER: 'rgba(240, 246, 252, 0.12)',
-
-  // Extended text
-  TEXT_FAINT: '#2d333b',
-
   // Port type colors
   PORT_STRING: '#3b82f6',
   PORT_JSON: '#a78bfa',
@@ -301,17 +284,6 @@ export const DESIGN = {
   SYN_COMMENT: '#484f58',
   SYN_FUNCTION: '#d2a8ff',
   SYN_TAG: '#7ee787',
-
-  // Active item styling
-  ACTIVE_GRADIENT: 'linear-gradient(90deg, #3b82f6, #2dd4bf)',
-  ACTIVE_GRADIENT_VERTICAL: 'linear-gradient(180deg, #3b82f6, #2dd4bf)',
-  ACTIVE_GLOW: 'drop-shadow(0 0 4px rgba(59, 130, 246, 0.4))',
-
-  // Panel detail tokens
-  HOVER_OVERLAY: 'rgba(255, 255, 255, 0.02)',
-  SEPARATOR_SUBTLE: 'rgba(240, 246, 252, 0.03)',
-  ACTIVE_TINT: 'rgba(59, 130, 246, 0.04)',
-  ACTIVE_TINT_STRONG: 'rgba(59, 130, 246, 0.06)',
 } as const;
 
 // Animation

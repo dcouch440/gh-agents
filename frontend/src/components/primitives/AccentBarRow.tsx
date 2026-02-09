@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import { DESIGN } from '@/constants'
 import { AccentBar } from './AccentBar'
 
 type AccentBarRowProps = {
@@ -29,11 +28,11 @@ function AccentBarRow({
       sx={{
         display: 'flex',
         alignItems: 'stretch',
-        borderBottom: `1px solid ${DESIGN.SEPARATOR_SUBTLE}`,
-        backgroundColor: highlight ? DESIGN.ACTIVE_TINT : 'transparent',
+        borderBottom: (theme) => `1px solid ${theme.palette.custom.separatorSubtle}`,
+        backgroundColor: (theme) => highlight ? theme.palette.custom.activeTint : 'transparent',
         cursor: onClick !== null ? 'pointer' : 'default',
         transition: 'background-color 100ms ease',
-        '&:hover': { backgroundColor: DESIGN.HOVER_OVERLAY },
+        '&:hover': { backgroundColor: (theme) => theme.palette.custom.hoverOverlay },
       }}
     >
       <AccentBar color={barColor} />

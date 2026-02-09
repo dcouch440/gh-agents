@@ -3,7 +3,8 @@ import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import { Tooltip } from '@/components/primitives/Tooltip';
 import Badge from '@mui/material/Badge';
-import { LAYOUT, LAYOUT_COLORS, ANIMATION, DESIGN } from '@/constants';
+import { useTheme } from '@mui/material/styles';
+import { LAYOUT, ANIMATION } from '@/constants';
 import type { NavBarItem } from './types';
 
 type RailItem = NavBarItem;
@@ -16,6 +17,7 @@ type IconRailProps = {
 };
 
 function IconRail({ side, topItems, bottomItems, footer }: IconRailProps) {
+  const theme = useTheme();
   const isLeft = side === 'left';
   const tooltipPlacement = isLeft ? 'right' : 'left';
 
@@ -32,7 +34,7 @@ function IconRail({ side, topItems, bottomItems, footer }: IconRailProps) {
             color: item.isActive ? 'primary.main' : 'text.secondary',
             backgroundColor: 'transparent',
             transition: `color ${ANIMATION.FAST}ms ease, filter ${ANIMATION.FAST}ms ease`,
-            filter: item.isActive ? DESIGN.ACTIVE_GLOW : 'none',
+            filter: item.isActive ? theme.palette.custom.activeGlow : 'none',
             '&:hover': {
               color: item.isActive ? 'primary.light' : 'text.primary',
               backgroundColor: 'transparent',
@@ -46,7 +48,7 @@ function IconRail({ side, topItems, bottomItems, footer }: IconRailProps) {
                   bottom: 4,
                   width: 2,
                   borderRadius: 1,
-                  background: DESIGN.ACTIVE_GRADIENT_VERTICAL,
+                  background: theme.palette.custom.activeGradientVertical,
                 }
               : undefined,
           }}
@@ -81,7 +83,7 @@ function IconRail({ side, topItems, bottomItems, footer }: IconRailProps) {
         borderRight: isLeft ? 1 : 0,
         borderLeft: isLeft ? 0 : 1,
         borderColor: 'divider',
-        backgroundColor: LAYOUT_COLORS.CHROME_BG,
+        backgroundColor: theme.palette.custom.chromeBg,
       }}
     >
       {/* Top items */}

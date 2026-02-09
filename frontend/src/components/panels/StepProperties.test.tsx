@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen } from '@/test/render'
 import userEvent from '@testing-library/user-event'
-import { ThemeProvider, createTheme } from '@mui/material'
 import { StepProperties } from './StepProperties'
 import {
   mockWorkflowStep,
@@ -12,8 +11,6 @@ import {
   mockOutputSchema,
   mockOutputSchema2,
 } from '@/test/fixtures'
-
-const theme = createTheme({ palette: { mode: 'dark' } })
 
 const {
   mockPatchStepLocal,
@@ -63,6 +60,11 @@ vi.mock('@/stores', () => ({
     patchStepLocal: mockPatchStepLocal,
     selectEdges: mockSelectEdges,
   },
+  protocolStore: {
+    store: { getState: vi.fn(), subscribe: vi.fn() },
+    selectAll: () => [],
+    fetchAll: vi.fn(),
+  },
 }))
 
 vi.mock('@/utils/variableContext', () => ({
@@ -96,9 +98,7 @@ vi.mock('@/components/primitives', async () => {
 
 const renderStep = (props: Partial<Parameters<typeof StepProperties>[0]> = {}) =>
   render(
-    <ThemeProvider theme={theme}>
-      <StepProperties step={mockWorkflowStep} steps={[]} {...props} />
-    </ThemeProvider>,
+    <StepProperties step={mockWorkflowStep} steps={[]} {...props} />,
   )
 
 beforeEach(() => {
