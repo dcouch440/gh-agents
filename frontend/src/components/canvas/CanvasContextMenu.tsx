@@ -102,7 +102,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
         borderRadius: '8px',
         boxShadow: (theme) => theme.palette.mode === 'dark'
           ? '0 4px 24px rgba(0, 0, 0, 0.4)'
-          : '0 4px 24px rgba(61, 43, 31, 0.12)',
+          : '0 4px 24px rgba(45, 27, 14, 0.14)',
         minWidth: 160,
         py: 0.5,
       }}

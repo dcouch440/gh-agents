@@ -74,7 +74,7 @@ function TopNavBar({ navItems, utilityItems, trailing }: TopNavBarProps) {
         alignItems: 'center',
         px: 1,
         borderBottom: 1,
-        borderColor: theme.palette.mode === 'light' ? 'rgba(61, 43, 31, 0.15)' : 'divider',
+        borderColor: theme.palette.mode === 'light' ? 'rgba(45, 27, 14, 0.18)' : 'divider',
         backgroundColor: theme.palette.custom.chromeBg,
         boxShadow: theme.palette.mode === 'light'
           ? '0 1px 3px rgba(0, 0, 0, 0.15)'
