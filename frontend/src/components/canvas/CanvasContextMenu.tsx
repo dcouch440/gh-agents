@@ -35,7 +35,9 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
 
   if (!position) return null
 
-  const handleAdd = (stepType: string, label: string) => {
+  const handleAdd = (event: React.MouseEvent, stepType: string, label: string) => {
+    event.stopPropagation()
+    event.preventDefault()
     void workflowStore.createStep({
       name: `New ${label}`,
       execution_mode: stepType,
@@ -45,7 +47,9 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
     onClose()
   }
 
-  const handleAddProtocol = (protocolType: string) => {
+  const handleAddProtocol = (event: React.MouseEvent, protocolType: string) => {
+    event.stopPropagation()
+    event.preventDefault()
     const label = PROTOCOL_LABELS[protocolType] ?? protocolType
     // Find the matching protocol to get its agent
     const protocol = allProtocols.find((p) => p.protocol_type === protocolType)
@@ -73,7 +77,9 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
     onClose()
   }
 
-  const handleDelete = () => {
+  const handleDelete = (event: React.MouseEvent) => {
+    event.stopPropagation()
+    event.preventDefault()
     if (position.nodeId) {
       void workflowStore.deleteStep(position.nodeId)
     }
@@ -134,8 +140,8 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
           {STEP_TYPES.map((st) => (
             <Box
               key={st.key}
-              onClick={() => {
-                handleAdd(st.key, st.label)
+              onClick={(event) => {
+                handleAdd(event, st.key, st.label)
               }}
               sx={{
                 display: 'flex',
@@ -180,8 +186,8 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
               {visibleProtocolTypes.map((pt) => (
                 <Box
                   key={pt.name}
-                  onClick={() => {
-                    handleAddProtocol(pt.name)
+                  onClick={(event) => {
+                    handleAddProtocol(event, pt.name)
                   }}
                   sx={{
                     display: 'flex',
