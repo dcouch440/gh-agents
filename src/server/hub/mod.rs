@@ -26,6 +26,10 @@ use crate::llm::LLMProvider;
 use crate::types::UserId;
 
 use super::state::AppState;
+use engine::filters::{
+    ExecutionFilter, FilterContext, PartialJsonRecoveryFilter, SchemaEnhancementFilter,
+    SchemaValidationRetryFilter,
+};
 use strategies::router::RouterConfig;
 
 pub use engine::{ExecutionEngine, ExecutionResult};
@@ -178,9 +182,27 @@ pub async fn run_chat(
         chat_config
     };
 
+    // Load output schema and build filter pipeline if configured
+    let mut chat_config = chat_config;
+    let schema_filters = if let Some(schema_id) = agent.output_schema_id {
+        if let Some((schema_xml, filter_ctx, filters)) =
+            load_schema_filters(state, schema_id, &chat_config.model_id, agent_id).await
+        {
+            chat_config.system_prompt.push_str(&schema_xml);
+            Some((filter_ctx, filters))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     // Create strategy, engine, sink, recorder
     let strategy = ChatStrategy::new(chat_config, state.clone(), user_id, session_id, message_id);
-    let engine = ExecutionEngine::new(provider);
+    let mut engine = ExecutionEngine::new(provider);
+    if let Some((filter_ctx, filters)) = schema_filters {
+        engine = engine.with_filter_context(filter_ctx).with_filters(filters);
+    }
     let sink = streaming::SseSink::new(state.clone(), message_id);
     let ae_repo = state.agent_execution_repo();
     let tl_repo = state.token_ledger_repo();
@@ -275,6 +297,8 @@ pub struct DraftConfig {
     pub model_temperature: f32,
     #[serde(default)]
     pub tool_names: Vec<String>,
+    #[serde(default)]
+    pub output_schema_id: Option<Uuid>,
 }
 
 impl TryFrom<serde_json::Value> for DraftConfig {
@@ -308,14 +332,28 @@ pub async fn run_chat_with_config(
     cancel: Option<&CancellationToken>,
 ) -> Result<ExecutionResult, HubError> {
     // Build ChatConfig from DraftConfig
-    let chat_config = ChatConfig {
+    let mut chat_config = ChatConfig {
         system_prompt: draft_config.system_prompt,
         tool_names: draft_config.tool_names,
-        model_id: draft_config.model_id,
+        model_id: draft_config.model_id.clone(),
         temperature: draft_config.model_temperature,
         max_history: 50,
         max_rounds: 10,
         context_budget: 480_000,
+    };
+
+    // Load output schema and build filter pipeline if configured
+    let schema_filters = if let Some(schema_id) = draft_config.output_schema_id {
+        if let Some((schema_xml, filter_ctx, filters)) =
+            load_schema_filters(state, schema_id, &chat_config.model_id, Uuid::nil()).await
+        {
+            chat_config.system_prompt.push_str(&schema_xml);
+            Some((filter_ctx, filters))
+        } else {
+            None
+        }
+    } else {
+        None
     };
 
     // Create strategy, engine, sink, recorder
@@ -326,7 +364,10 @@ pub async fn run_chat_with_config(
         Some(session_id),
         message_id,
     );
-    let engine = ExecutionEngine::new(provider);
+    let mut engine = ExecutionEngine::new(provider);
+    if let Some((filter_ctx, filters)) = schema_filters {
+        engine = engine.with_filter_context(filter_ctx).with_filters(filters);
+    }
     let sink = streaming::SseSink::new(state.clone(), message_id);
     let ae_repo = state.agent_execution_repo();
     let tl_repo = state.token_ledger_repo();
@@ -339,6 +380,34 @@ pub async fn run_chat_with_config(
     engine
         .execute(&strategy, content, &sink, &recorder, cancel)
         .await
+}
+
+/// Load an output schema and build filter pipeline for schema enforcement.
+///
+/// Returns the schema XML to append to the system prompt, plus the filter context
+/// and filter vec to attach to the engine. Returns `None` if no schema is configured.
+async fn load_schema_filters(
+    state: &AppState,
+    schema_id: Uuid,
+    model_id: &str,
+    agent_id: Uuid,
+) -> Option<(String, FilterContext, Vec<Arc<dyn ExecutionFilter>>)> {
+    let os_repo = &state.repos().output_schemas;
+    let schema = os_repo.get_output_schema(schema_id).await.ok()??;
+
+    let schema_xml = format!(
+        "\n\n<schema>\nYour response is parsed directly by a JSON parser. Respond with a valid JSON object matching this schema:\n```json\n{}\n```\n</schema>",
+        serde_json::to_string_pretty(&schema.schema).unwrap_or_default()
+    );
+
+    let filter_ctx = FilterContext::new(model_id, agent_id).with_schema(schema.schema);
+    let filters: Vec<Arc<dyn ExecutionFilter>> = vec![
+        Arc::new(SchemaEnhancementFilter::new()),
+        Arc::new(SchemaValidationRetryFilter::new()),
+        Arc::new(PartialJsonRecoveryFilter::new()),
+    ];
+
+    Some((schema_xml, filter_ctx, filters))
 }
 
 /// Classify the user's message into one of the agent's modes using a RouterStrategy call.
