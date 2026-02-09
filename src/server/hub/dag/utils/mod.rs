@@ -110,6 +110,7 @@ pub struct WorkflowExecutionResult {
     pub total_input_tokens: i64,
     pub total_output_tokens: i64,
     pub total_cost_usd: f32,
+    pub duration_ms: u64,
 }
 
 // ============================================================================
