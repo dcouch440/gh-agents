@@ -384,6 +384,7 @@ function AgentWorkshopPage() {
           model_id: getFullModelId(initialState.modelId),
           model_max_tokens: initialState.maxTokens,
           model_temperature: initialState.temperature,
+          output_schema_id: initialState.outputSchemaId,
         };
 
         // Create session with draft config (no agent)
@@ -438,6 +439,7 @@ function AgentWorkshopPage() {
         model_id: getFullModelId(state.modelId),
         model_max_tokens: state.maxTokens,
         model_temperature: state.temperature,
+        output_schema_id: state.outputSchemaId,
       };
       void api.sessions.updateConfig(state.sessionId, draftConfig);
     }, 500);
@@ -452,6 +454,7 @@ function AgentWorkshopPage() {
     state.modelId,
     state.maxTokens,
     state.temperature,
+    state.outputSchemaId,
   ]);
 
   // Warn on unsaved navigation

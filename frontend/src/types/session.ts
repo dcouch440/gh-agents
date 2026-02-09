@@ -4,6 +4,7 @@ type DraftConfig = {
   model_max_tokens: number
   model_temperature: number
   tool_names?: string[]
+  output_schema_id?: string | null
 }
 
 type Session = {
