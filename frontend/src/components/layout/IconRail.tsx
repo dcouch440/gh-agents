@@ -31,12 +31,12 @@ function IconRail({ side, topItems, bottomItems, footer }: IconRailProps) {
             height: 28,
             borderRadius: '6px',
             position: 'relative',
-            color: item.isActive ? 'primary.main' : 'text.secondary',
+            color: item.isActive ? theme.palette.custom.chromeTextActive : theme.palette.custom.chromeText,
             backgroundColor: 'transparent',
             transition: `color ${ANIMATION.FAST}ms ease, filter ${ANIMATION.FAST}ms ease`,
-            filter: item.isActive ? theme.palette.custom.activeGlow : 'none',
+            filter: item.isActive ? theme.palette.custom.chromeActiveGlow : 'none',
             '&:hover': {
-              color: item.isActive ? 'primary.light' : 'text.primary',
+              color: theme.palette.custom.chromeTextHover,
               backgroundColor: 'transparent',
             },
             '&::before': item.isActive
@@ -48,7 +48,7 @@ function IconRail({ side, topItems, bottomItems, footer }: IconRailProps) {
                   bottom: 4,
                   width: 2,
                   borderRadius: 1,
-                  background: theme.palette.custom.activeGradientVertical,
+                  background: theme.palette.custom.chromeActiveBar,
                 }
               : undefined,
           }}

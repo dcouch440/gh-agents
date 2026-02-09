@@ -18,10 +18,15 @@ type CustomTokens = {
   minimapMask: string;
   floatingPanelBg: string;
   floatingPanelBorder: string;
+  chromeText: string;
+  chromeTextActive: string;
+  chromeTextHover: string;
+  chromeActiveGlow: string;
+  chromeActiveBar: string;
 };
 
 const lightCustomTokens: CustomTokens = {
-  chromeBg: '#f0ebe3',
+  chromeBg: '#d09070',
   cavityBg: '#ebe5db',
   bgHeader: '#e8e2d8',
   bgEditor: '#f5f0e8',
@@ -40,6 +45,11 @@ const lightCustomTokens: CustomTokens = {
   minimapMask: 'rgba(245, 240, 232, 0.7)',
   floatingPanelBg: 'rgba(250, 247, 242, 0.95)',
   floatingPanelBorder: 'rgba(61, 43, 31, 0.12)',
+  chromeText: 'rgba(61, 43, 31, 0.55)',
+  chromeTextActive: '#3d2b1f',
+  chromeTextHover: 'rgba(61, 43, 31, 0.78)',
+  chromeActiveGlow: 'drop-shadow(0 0 3px rgba(61, 43, 31, 0.25))',
+  chromeActiveBar: '#3d2b1f',
 };
 
 const darkCustomTokens: CustomTokens = {
@@ -62,6 +72,11 @@ const darkCustomTokens: CustomTokens = {
   minimapMask: 'rgba(0, 0, 0, 0.7)',
   floatingPanelBg: 'rgba(12, 16, 24, 0.92)',
   floatingPanelBorder: 'rgba(240, 246, 252, 0.1)',
+  chromeText: '#7d8590',
+  chromeTextActive: '#3b82f6',
+  chromeTextHover: '#f0f6fc',
+  chromeActiveGlow: 'drop-shadow(0 0 4px rgba(59, 130, 246, 0.4))',
+  chromeActiveBar: '#3b82f6',
 };
 
 const getCustomTokens = (mode: 'light' | 'dark'): CustomTokens =>

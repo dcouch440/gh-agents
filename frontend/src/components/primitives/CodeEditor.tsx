@@ -1,12 +1,12 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { Box } from '@mui/material'
+import { useTheme } from '@mui/material/styles'
 import { EditorView, placeholder as cmPlaceholder, keymap, lineNumbers, tooltips } from '@codemirror/view'
 import { EditorState, type Extension } from '@codemirror/state'
 import { markdown } from '@codemirror/lang-markdown'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { completionKeymap } from '@codemirror/autocomplete'
-import { syntaxHighlighting } from '@codemirror/language'
-import { oneDarkTheme, oneDarkHighlightStyle } from '@codemirror/theme-one-dark'
+import { getEditorThemeExtensions } from './editorThemes'
 
 type CodeEditorProps = {
   value: string
@@ -33,6 +33,8 @@ function CodeEditor({
   extensions: extraExtensions = [],
   editorViewRef,
 }: CodeEditorProps) {
+  const theme = useTheme()
+  const mode = theme.palette.mode
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const isUpdatingRef = useRef(false)
@@ -57,8 +59,7 @@ function CodeEditor({
     const baseExtensions: Extension[] = [
       keymap.of([...completionKeymap, ...defaultKeymap, ...historyKeymap]),
       history(),
-      oneDarkTheme,
-      syntaxHighlighting(oneDarkHighlightStyle),
+      ...getEditorThemeExtensions(mode),
       EditorView.lineWrapping,
       tooltips({ parent: document.body }),
       updateListener,
@@ -96,9 +97,9 @@ function CodeEditor({
       viewRef.current = null
       editorViewRef?.(null)
     }
-    // Only run on mount/unmount
+    // Rebuild when theme mode changes; other deps intentionally omitted
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [mode])
 
   // Sync external value changes
   useEffect(() => {
