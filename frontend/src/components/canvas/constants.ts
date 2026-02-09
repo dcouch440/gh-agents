@@ -19,6 +19,6 @@ export const PROTOCOL_TYPE_COLORS: Record<string, string> = {
   route: '#a78bfa',
   review: '#f85149',
   transform: '#2dd4bf',
-  documenter: '#F57C00',
+  documenter: '#D4793E',
   default: '#7d8590',
 }
