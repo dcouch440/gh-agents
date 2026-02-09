@@ -200,23 +200,6 @@ describe('StepProperties', () => {
       expect(screen.getByText('Test Template')).toBeInTheDocument()
     })
 
-    it('shows validation warning when prompt has no variable references', () => {
-      const step = { ...mockWorkflowStep, prompt_template: 'No variables here' }
-      renderStep({ step })
-      expect(screen.getByText(/No variable references found/)).toBeInTheDocument()
-    })
-
-    it('hides validation warning when prompt contains variable references', () => {
-      renderStep()
-      // mockWorkflowStep has prompt_template: '{task_input}' which contains a variable
-      expect(screen.queryByText(/No variable references found/)).not.toBeInTheDocument()
-    })
-
-    it('hides validation warning when prompt is empty', () => {
-      const step = { ...mockWorkflowStep, prompt_template: '' }
-      renderStep({ step })
-      expect(screen.queryByText(/No variable references found/)).not.toBeInTheDocument()
-    })
   })
 
   describe('output tab', () => {
@@ -353,10 +336,5 @@ describe('StepProperties', () => {
       expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
     })
 
-    it('hides validation warning in readOnly mode', () => {
-      const step = { ...mockWorkflowStep, prompt_template: 'No variables here' }
-      renderStep({ step, readOnly: true })
-      expect(screen.queryByText(/No variable references found/)).not.toBeInTheDocument()
-    })
   })
 })

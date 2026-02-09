@@ -26,7 +26,6 @@ import {
 } from "@/components/canvas/constants";
 import {buildVariableCompletions} from "@/utils/variableContext";
 import {createVariableAutocomplete} from "@/utils/variableAutocomplete";
-import {extractVariables} from "@/utils/variables";
 import type {Extension} from "@codemirror/state";
 import type {VariableCompletion} from "@/utils/variableContext";
 import type {WorkflowStep} from "@/types/workflow";
@@ -532,21 +531,6 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
                 />
               </Box>
             )}
-
-            {/* Validation warning */}
-            {!readOnly &&
-            step.prompt_template.trim().length > 0 &&
-            extractVariables(step.prompt_template).length === 0 ? (
-              <Box sx={{px: "16px", pb: "6px"}}>
-                <Typography
-                  sx={{fontSize: 10, color: "warning.main", fontWeight: 500}}
-                >
-                  {
-                    "No variable references found. Use { to insert upstream data."
-                  }
-                </Typography>
-              </Box>
-            ) : null}
 
             {/* Editor */}
             <Box sx={EDITOR_CONTAINER_SX}>
