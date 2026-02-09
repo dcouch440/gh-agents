@@ -1,5 +1,56 @@
 import { motion } from 'framer-motion';
 
+export function DocumenterIcon() {
+  // 8-tooth gear polygon centered at origin (0,0), inner radius 12, outer radius 16
+  const gearPoints =
+    '-1.9,-11.9 -2.0,-15.9 2.0,-15.9 1.9,-11.9 ' +
+    '7.1,-9.7 9.9,-12.6 12.6,-9.8 9.7,-7.0 ' +
+    '11.9,-1.9 15.9,-1.9 15.9,2.0 11.9,1.9 ' +
+    '9.7,7.1 12.6,9.9 9.9,12.6 7.1,9.7 ' +
+    '1.9,11.9 2.0,15.9 -2.0,15.9 -1.9,11.9 ' +
+    '-7.0,9.7 -9.9,12.6 -12.6,9.9 -9.7,7.1 ' +
+    '-11.9,1.9 -15.9,2.0 -15.9,-1.9 -11.9,-1.9 ' +
+    '-9.7,-7.0 -12.6,-9.8 -9.9,-12.6 -7.0,-9.7';
+
+  return (
+    <svg
+      width="36"
+      height="36"
+      viewBox="0 0 36 36"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      {/* Spinning gear behind the document — drawn at origin, translated to center */}
+      <g transform="translate(18, 18)">
+        <motion.g
+          animate={{ rotate: 360 }}
+          transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+        >
+          <polygon
+            points={gearPoints}
+            fill="#F57C00"
+            opacity="0.85"
+            stroke="#F57C00"
+            strokeWidth="1.2"
+            strokeLinejoin="round"
+          />
+        </motion.g>
+      </g>
+      {/* Gear center ring */}
+      <circle cx="18" cy="18" r="5" fill="none" stroke="#F57C00" strokeWidth="1.5" opacity="0.6" />
+
+      {/* Document sitting on top */}
+      <rect x="10" y="8" width="16" height="20" rx="2" fill="white" stroke="#F57C00" strokeWidth="1.5" />
+      {/* Corner fold */}
+      <path d="M22 8v4a2 2 0 002 2h2" stroke="#F57C00" strokeWidth="1.2" fill="white" />
+      {/* Text lines */}
+      <rect x="13" y="16" width="10" height="1.2" rx="0.6" fill="#F57C00" opacity="0.5" />
+      <rect x="13" y="19" width="8" height="1.2" rx="0.6" fill="#F57C00" opacity="0.3" />
+      <rect x="13" y="22" width="10" height="1.2" rx="0.6" fill="#F57C00" opacity="0.2" />
+    </svg>
+  );
+}
+
 export function HeroIllustration() {
   return (
     <div className="w-full max-w-lg mx-auto">

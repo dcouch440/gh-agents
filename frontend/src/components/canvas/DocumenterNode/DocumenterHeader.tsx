@@ -1,14 +1,23 @@
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import {useTheme} from "@mui/material/styles";
-import {HeroIllustration} from "@/animated/framer-motion-animation";
+import {DocumenterIcon} from "@/animated/framer-motion-animation";
 
 type DocumenterHeaderProps = {
   name: string;
   documentNames: string[];
+  documentCount: number;
+  modelId: string | null;
+  agentName: string | null;
 };
 
-function DocumenterHeader({name, documentNames}: DocumenterHeaderProps) {
+function DocumenterHeader({
+  name,
+  documentNames,
+  documentCount,
+  modelId,
+  agentName,
+}: DocumenterHeaderProps) {
   const theme = useTheme();
   const docSummary =
     documentNames.length > 0 ? documentNames.join(" \u00b7 ") : null;
@@ -19,76 +28,152 @@ function DocumenterHeader({name, documentNames}: DocumenterHeaderProps) {
         width: "100%",
         height: "100%",
         display: "flex",
-        alignItems: "stretch",
+        alignItems: "center",
+        gap: 1.5,
+        px: 1.5,
         overflow: "hidden",
       }}
     >
-      {/* SVG panel — its own background strip */}
+      {/* Icon */}
       <Box
         sx={{
           flexShrink: 0,
-          width: 80,
+          width: 36,
+          height: 36,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          overflow: "hidden",
-          borderRight: 1,
-          borderColor: "divider",
-          backgroundColor: theme.palette.mode === "light"
-            ? "rgba(255, 150, 79, 0.06)"
-            : "rgba(59, 130, 246, 0.04)",
-          "& > div": {width: "100%", height: "100%"},
-          "& svg": {width: "160%", height: "160%", marginLeft: "-30%"},
         }}
       >
-        <HeroIllustration />
+        <DocumenterIcon />
       </Box>
 
-      {/* Text panel */}
+      {/* Title + subtitle */}
       <Box
         sx={{
           flex: 1,
+          minWidth: 0,
           display: "flex",
           flexDirection: "column",
-          justifyContent: "center",
-          px: 2,
           gap: 0.25,
-          minWidth: 0,
         }}
       >
         <Typography
           sx={{
-            fontSize: 16,
+            fontSize: 14,
             fontWeight: 600,
             color: "text.primary",
             lineHeight: 1.2,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
           }}
         >
           {name}
         </Typography>
-        {docSummary !== null && (
-          <Typography
+        <Typography
+          sx={{
+            fontSize: 11,
+            color: docSummary !== null ? "text.secondary" : "text.disabled",
+            lineHeight: 1.2,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {docSummary ?? "No documents"}
+        </Typography>
+      </Box>
+
+      {/* Metadata badges */}
+      <Box
+        sx={{
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          gap: 0.5,
+        }}
+      >
+        {documentCount > 0 && (
+          <Box
             sx={{
-              fontSize: 10,
-              color: "text.secondary",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
+              display: "inline-flex",
+              alignItems: "center",
+              px: 0.75,
+              py: 0.25,
+              borderRadius: "4px",
+              backgroundColor: theme.palette.custom.hoverOverlay,
+              border: 1,
+              borderColor: "divider",
             }}
           >
-            {docSummary}
-          </Typography>
+            <Typography
+              sx={{
+                fontSize: 10,
+                color: "text.secondary",
+                lineHeight: 1,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {documentCount} {documentCount === 1 ? "doc" : "docs"}
+            </Typography>
+          </Box>
         )}
-        {documentNames.length > 0 && (
-          <Typography
+        {agentName !== null && (
+          <Box
             sx={{
-              fontSize: 9,
-              color: "text.disabled",
+              display: "inline-flex",
+              alignItems: "center",
+              px: 0.75,
+              py: 0.25,
+              borderRadius: "4px",
+              backgroundColor: theme.palette.custom.hoverOverlay,
+              border: 1,
+              borderColor: "divider",
             }}
           >
-            {documentNames.length}{" "}
-            {documentNames.length === 1 ? "document" : "documents"}
-          </Typography>
+            <Typography
+              sx={{
+                fontSize: 10,
+                color: "text.secondary",
+                lineHeight: 1,
+                whiteSpace: "nowrap",
+                maxWidth: 80,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {agentName}
+            </Typography>
+          </Box>
+        )}
+        {modelId !== null && (
+          <Box
+            sx={{
+              display: "inline-flex",
+              alignItems: "center",
+              px: 0.75,
+              py: 0.25,
+              borderRadius: "4px",
+              backgroundColor: theme.palette.custom.hoverOverlay,
+              border: 1,
+              borderColor: "divider",
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: 10,
+                color: "text.secondary",
+                lineHeight: 1,
+                whiteSpace: "nowrap",
+                maxWidth: 80,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {modelId}
+            </Typography>
+          </Box>
         )}
       </Box>
     </Box>

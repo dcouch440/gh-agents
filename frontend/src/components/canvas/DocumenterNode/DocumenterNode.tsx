@@ -85,6 +85,9 @@ function DocumenterNodeComponent({ data, selected }: NodeProps) {
         <DocumenterHeader
           name={nodeData.label}
           documentNames={nodeData.documentNames}
+          documentCount={nodeData.documents.length}
+          modelId={nodeData.modelId}
+          agentName={nodeData.agentName}
         />
       }
       tabs={tabs}
