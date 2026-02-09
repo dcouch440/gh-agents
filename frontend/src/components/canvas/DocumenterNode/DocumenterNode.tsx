@@ -3,7 +3,7 @@ import type { NodeProps } from '@xyflow/react'
 import EditOutlined from '@mui/icons-material/EditOutlined'
 import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
 import InputOutlined from '@mui/icons-material/InputOutlined'
-import SettingsOutlined from '@mui/icons-material/SettingsOutlined'
+import TimelineOutlined from '@mui/icons-material/TimelineOutlined'
 import { CanvasFormNode } from '../CanvasFormNode'
 import type { CanvasFormTab } from '../CanvasFormNode'
 import { PROTOCOL_TYPE_COLORS } from '../constants'
@@ -12,7 +12,7 @@ import { PromptTab } from './tabs/PromptTab'
 import { DocumentsTab } from './tabs/DocumentsTab'
 import type { DocumentDef } from './tabs/DocumentsTab'
 import { InputsTab } from './tabs/InputsTab'
-import { SettingsTab } from './tabs/SettingsTab'
+import { ActivityTab } from './tabs/SettingsTab'
 
 type DocumenterNodeData = {
   label: string
@@ -72,10 +72,10 @@ function DocumenterNodeComponent({ data, selected }: NodeProps) {
       content: <InputsTab upstreamStepNames={upstreamStepNames} />,
     },
     {
-      id: 'settings',
-      icon: SettingsOutlined,
-      tooltip: 'Settings',
-      content: <SettingsTab modelId={nodeData.modelId} agentName={nodeData.agentName} />,
+      id: 'activity',
+      icon: TimelineOutlined,
+      tooltip: 'Activity',
+      content: <ActivityTab />,
     },
   ]
 
