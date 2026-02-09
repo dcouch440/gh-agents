@@ -257,6 +257,23 @@ CREATE TABLE protocol_document_defs (
 
 Stores the user's document definitions on the protocol step. Links to the actual document once created. This is the configuration that drives the auto-generated system prompt.
 
+## The Bigger Pattern: Protocols as Agents
+
+The documenter protocol is the first protocol that **thinks**. Today's protocols (decomp, review, route) are static templates — pure functions that map port config to steps and edges. The documenter introduces an LLM call into the expander, making it the first protocol that looks at context and decides its own execution strategy.
+
+This pattern, once proven, unlocks intelligent versions of every protocol type:
+- **Smart decomp**: instead of the user pre-defining ports, the protocol agent looks at the task + available agent capabilities and generates the fan-out itself
+- **Smart review**: adapts its evaluation criteria based on what it's actually reviewing
+- **Smart route**: understands content semantics, not just field matching
+
+### Design-Time Generation, Not Runtime
+
+A critical constraint: **the canvas must be fully formed before execution starts.** The DAG loads all steps and edges upfront, topologically sorts them, and iterates. It does not support runtime topology changes.
+
+This means intelligent protocols generate at **Apply time**, not at runtime. The Apply endpoint (`POST /api/protocols/:id/apply/:step_id`) already does exactly this — it runs an expander and creates steps + edges on the canvas. Today that expander is a pure function. Making it async and LLM-powered is the only change needed. Everything downstream of the expander (step creation, edge wiring, snapshot storage) stays identical.
+
+For protocols like smart decomp where the generated steps are **visible** (user needs to wire them), this becomes a "Generate" action: the user writes a prompt, hits Generate, the protocol agent creates the steps, and they appear on the canvas for the user to review and wire before execution. Same Apply infrastructure, different visibility.
+
 ## What We Are NOT Building (Yet)
 
 - **Auto mode**: Agent decides what documents to create. For now, documents are always user-configured. This is a future mode toggle (manual vs auto) where the agent's first call determines the document topology.
