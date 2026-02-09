@@ -606,6 +606,7 @@ pub trait AgentExecutionRepo: Send + Sync {
         selected_mode_id: Option<Uuid>,
         room_session_id: Option<Uuid>,
         speaker_order: Option<i32>,
+        workflow_execution_id: Option<Uuid>,
     ) -> Result<AgentExecutionRow>;
     async fn get_agent_execution(&self, id: Uuid) -> Result<Option<AgentExecutionRow>>;
     async fn update_agent_execution_status(
