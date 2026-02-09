@@ -28,16 +28,16 @@ export function DocumenterIcon() {
         >
           <polygon
             points={gearPoints}
-            fill="#F57C00"
+            fill="#E8862E"
             opacity="0.85"
-            stroke="#F57C00"
+            stroke="#E8862E"
             strokeWidth="1.2"
             strokeLinejoin="round"
           />
         </motion.g>
       </g>
       {/* Gear center ring */}
-      <circle cx="18" cy="18" r="4" fill="none" stroke="#F57C00" strokeWidth="1.5" opacity="0.6" />
+      <circle cx="18" cy="18" r="4" fill="none" stroke="#E8862E" strokeWidth="1.5" opacity="0.6" />
 
       {/* Document sitting on top — dark stroke for contrast against orange gear */}
       <rect x="11" y="9" width="14" height="18" rx="2" fill="white" stroke="#78909C" strokeWidth="1" />
@@ -83,7 +83,7 @@ export function HeroIllustration() {
             width={i === 4 ? 80 : 112}
             height="8"
             rx="4"
-            fill={i < 2 ? '#F57C00' : '#E5E7EB'}
+            fill={i < 2 ? '#C4854A' : '#E5E7EB'}
             opacity={i < 2 ? 0.3 : 0.5}
           />
         ))}
@@ -105,7 +105,7 @@ export function HeroIllustration() {
           animate={{ pathLength: 1, opacity: 1 }}
           transition={{ duration: 0.8, delay: 0.8 }}
           d="M240 140h40q10 0 10 10v20"
-          stroke="#F57C00"
+          stroke="#C4854A"
           strokeWidth="2"
           strokeDasharray="6 4"
           fill="none"
@@ -117,7 +117,7 @@ export function HeroIllustration() {
           animate={{ pathLength: 1, opacity: 1 }}
           transition={{ duration: 0.8, delay: 1.0 }}
           d="M290 210v30q0 10 10 10h20"
-          stroke="#F57C00"
+          stroke="#C4854A"
           strokeWidth="2"
           strokeDasharray="6 4"
           fill="none"
@@ -129,7 +129,7 @@ export function HeroIllustration() {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.6, delay: 1.0 }}
         >
-          <circle cx="290" cy="190" r="24" fill="#FFF7ED" stroke="#F57C00" strokeWidth="2" />
+          <circle cx="290" cy="190" r="24" fill="#FFF7ED" stroke="#C4854A" strokeWidth="2" />
           <animateTransform
             xlinkHref="#gear-teeth"
             attributeName="transform"
@@ -143,11 +143,11 @@ export function HeroIllustration() {
             id="gear-teeth"
             d="M290 162a4 4 0 014 4v4a20 20 0 018.5 4.9l2.8-2.8a4 4 0 015.7 5.7l-2.8 2.8A20 20 0 01314 190h4a4 4 0 010 8h-4a20 20 0 01-4.9 8.5l2.8 2.8a4 4 0 01-5.7 5.7l-2.8-2.8a20 20 0 01-8.5 4.9v4a4 4 0 01-8 0v-4a20 20 0 01-8.5-4.9l-2.8 2.8a4 4 0 01-5.7-5.7l2.8-2.8A20 20 0 01266 198h-4a4 4 0 010-8h4a20 20 0 014.9-8.5l-2.8-2.8a4 4 0 015.7-5.7l2.8 2.8A20 20 0 01286 170v-4a4 4 0 014-4z"
             fill="none"
-            stroke="#F57C00"
+            stroke="#C4854A"
             strokeWidth="1.5"
             opacity="0.4"
           />
-          <circle cx="290" cy="190" r="10" fill="none" stroke="#F57C00" strokeWidth="2" />
+          <circle cx="290" cy="190" r="10" fill="none" stroke="#C4854A" strokeWidth="2" />
         </motion.g>
 
         {/* Floating data nodes */}
@@ -158,7 +158,7 @@ export function HeroIllustration() {
           cy="120"
           r="12"
           fill="#FFF7ED"
-          stroke="#F57C00"
+          stroke="#C4854A"
           strokeWidth="2"
         />
         <motion.rect
@@ -170,7 +170,7 @@ export function HeroIllustration() {
           height="24"
           rx="6"
           fill="#FFF7ED"
-          stroke="#F57C00"
+          stroke="#C4854A"
           strokeWidth="2"
         />
 
@@ -179,7 +179,7 @@ export function HeroIllustration() {
           animate={{ y: [0, -6, 0] }}
           transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
           d="M323 250l5 5 9-9"
-          stroke="#F57C00"
+          stroke="#C4854A"
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -187,9 +187,9 @@ export function HeroIllustration() {
 
         {/* Small dots in top node */}
         <motion.g animate={{ y: [0, -6, 0] }} transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}>
-          <circle cx="336" cy="118" r="2" fill="#F57C00" />
-          <circle cx="340" cy="122" r="2" fill="#F57C00" />
-          <circle cx="344" cy="118" r="2" fill="#F57C00" />
+          <circle cx="336" cy="118" r="2" fill="#C4854A" />
+          <circle cx="340" cy="122" r="2" fill="#C4854A" />
+          <circle cx="344" cy="118" r="2" fill="#C4854A" />
         </motion.g>
 
         {/* Pulse ring around gear */}
@@ -201,7 +201,7 @@ export function HeroIllustration() {
           cy="190"
           r="30"
           fill="none"
-          stroke="#F57C00"
+          stroke="#C4854A"
           strokeWidth="1"
         />
 
@@ -213,7 +213,7 @@ export function HeroIllustration() {
           cx="260"
           cy="140"
           r="3"
-          fill="#F57C00"
+          fill="#C4854A"
         />
         <motion.circle
           initial={{ opacity: 0 }}
@@ -222,7 +222,7 @@ export function HeroIllustration() {
           cx="290"
           cy="220"
           r="3"
-          fill="#F57C00"
+          fill="#C4854A"
         />
       </svg>
     </div>

@@ -27,10 +27,10 @@ type CustomTokens = {
 
 const lightCustomTokens: CustomTokens = {
   chromeBg: '#D47830',
-  cavityBg: '#F0EBE3',
-  bgHeader: '#F4F0EA',
-  bgEditor: '#F9F6F1',
-  bgPanel: '#F6F2EC',
+  cavityBg: '#F5F3F0',
+  bgHeader: '#FAF9F7',
+  bgEditor: '#FCFBFA',
+  bgPanel: '#F8F7F5',
   borderHover: 'rgba(45, 27, 14, 0.15)',
   textFaint: '#CFC7BB',
   hoverOverlay: 'rgba(45, 27, 14, 0.04)',
