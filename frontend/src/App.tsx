@@ -3,6 +3,8 @@ import { RouterProvider } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import { ThemeModeProvider, CommandPaletteProvider } from './contexts'
+import { WebSocketProvider } from './contexts/WebSocketContext'
+import { WsStoreRouter } from './stores/ws/WsStoreRouter'
 import { useThemeMode } from './hooks/useThemeMode'
 import { router } from './router'
 import { createAppTheme } from './theme'
@@ -24,11 +26,14 @@ function AppInner() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <CommandPaletteProvider>
-        <CommandPalette />
-        <RouterProvider router={router} />
-      </CommandPaletteProvider>
-      <ReviewQueueNotification />
+      <WebSocketProvider>
+        <WsStoreRouter />
+        <CommandPaletteProvider>
+          <CommandPalette />
+          <RouterProvider router={router} />
+        </CommandPaletteProvider>
+        <ReviewQueueNotification />
+      </WebSocketProvider>
     </ThemeProvider>
   )
 }
