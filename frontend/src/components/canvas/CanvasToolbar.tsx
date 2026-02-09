@@ -255,7 +255,7 @@ function RunButton() {
               borderColor: theme.palette.custom.floatingPanelBorder,
               boxShadow: isDark
                 ? "0 8px 32px rgba(0, 0, 0, 0.4)"
-                : "0 8px 32px rgba(61, 43, 31, 0.12)",
+                : "0 8px 32px rgba(45, 27, 14, 0.12)",
             }}
           >
             <Box
@@ -307,7 +307,7 @@ function RunButton() {
                   fontSize: 12,
                   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
                   color: theme.palette.text.primary,
-                  backgroundColor: isDark ? "rgba(0, 0, 0, 0.3)" : "rgba(61, 43, 31, 0.04)",
+                  backgroundColor: isDark ? "rgba(0, 0, 0, 0.3)" : "rgba(45, 27, 14, 0.04)",
                   borderRadius: "8px",
                   "& fieldset": {
                     borderColor: theme.palette.divider,
@@ -395,13 +395,13 @@ function SaveDiscardBar() {
           borderColor: theme.palette.custom.floatingPanelBorder,
           boxShadow: isDark
             ? "0 8px 32px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05)"
-            : "0 8px 32px rgba(61, 43, 31, 0.12), 0 1px 2px rgba(61, 43, 31, 0.06)",
+            : "0 8px 32px rgba(45, 27, 14, 0.12), 0 1px 2px rgba(45, 27, 14, 0.06)",
           transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
           "&:hover": {
             borderColor: theme.palette.custom.borderHover,
             boxShadow: isDark
               ? "0 12px 40px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08)"
-              : "0 12px 40px rgba(61, 43, 31, 0.16), 0 2px 4px rgba(61, 43, 31, 0.08)",
+              : "0 12px 40px rgba(45, 27, 14, 0.16), 0 2px 4px rgba(45, 27, 14, 0.08)",
           },
         }}
       >

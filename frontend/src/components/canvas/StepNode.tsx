@@ -45,8 +45,8 @@ function StepNodeComponent({ data, selected }: NodeProps) {
         border: 2,
         borderColor: selected ? 'primary.main' : 'divider',
         boxShadow: selected
-          ? `0 8px 32px ${theme.palette.mode === 'dark' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(192, 80, 46, 0.12)'}`
-          : `0 4px 24px ${theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.4)' : 'rgba(61, 43, 31, 0.10)'}`,
+          ? `0 8px 32px ${theme.palette.mode === 'dark' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 150, 79, 0.16)'}`
+          : `0 4px 24px ${theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.4)' : 'rgba(45, 27, 14, 0.12)'}`,
         transition: 'border-color 150ms ease, box-shadow 150ms ease',
         overflow: 'hidden',
       }}

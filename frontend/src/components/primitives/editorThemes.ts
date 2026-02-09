@@ -9,100 +9,100 @@ import type { Extension } from '@codemirror/state'
 const lightEditorTheme = EditorView.theme(
   {
     '&': {
-      backgroundColor: '#f5f0e8',
-      color: '#3d2b1f',
+      backgroundColor: '#F9F6F1',
+      color: '#2D1B0E',
     },
     '.cm-content': {
-      caretColor: '#c0502e',
+      caretColor: '#FF964F',
     },
     '.cm-cursor, .cm-dropCursor': {
-      borderLeftColor: '#c0502e',
+      borderLeftColor: '#FF964F',
     },
     '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':
       {
-        backgroundColor: 'rgba(192, 80, 46, 0.12)',
+        backgroundColor: 'rgba(255, 150, 79, 0.14)',
       },
     '.cm-panels': {
-      backgroundColor: '#f0ebe3',
-      color: '#3d2b1f',
+      backgroundColor: '#F4F0EA',
+      color: '#2D1B0E',
     },
     '.cm-panels.cm-panels-top': {
-      borderBottom: '1px solid rgba(61, 43, 31, 0.08)',
+      borderBottom: '1px solid rgba(45, 27, 14, 0.10)',
     },
     '.cm-panels.cm-panels-bottom': {
-      borderTop: '1px solid rgba(61, 43, 31, 0.08)',
+      borderTop: '1px solid rgba(45, 27, 14, 0.10)',
     },
     '.cm-searchMatch': {
-      backgroundColor: 'rgba(192, 80, 46, 0.15)',
-      outline: '1px solid rgba(192, 80, 46, 0.3)',
+      backgroundColor: 'rgba(255, 150, 79, 0.18)',
+      outline: '1px solid rgba(255, 150, 79, 0.35)',
     },
     '.cm-searchMatch.cm-searchMatch-selected': {
-      backgroundColor: 'rgba(107, 143, 113, 0.2)',
+      backgroundColor: 'rgba(78, 138, 90, 0.22)',
     },
     '.cm-activeLine': {
-      backgroundColor: 'rgba(61, 43, 31, 0.03)',
+      backgroundColor: 'rgba(45, 27, 14, 0.03)',
     },
     '.cm-selectionMatch': {
-      backgroundColor: 'rgba(192, 80, 46, 0.08)',
+      backgroundColor: 'rgba(255, 150, 79, 0.10)',
     },
     '&.cm-focused .cm-matchingBracket, &.cm-focused .cm-nonmatchingBracket': {
-      backgroundColor: 'rgba(107, 143, 113, 0.25)',
+      backgroundColor: 'rgba(78, 138, 90, 0.28)',
     },
     '.cm-gutters': {
-      backgroundColor: '#f0ebe3',
-      color: '#a89b8c',
-      borderRight: '1px solid rgba(61, 43, 31, 0.06)',
+      backgroundColor: '#F4F0EA',
+      color: '#A39283',
+      borderRight: '1px solid rgba(45, 27, 14, 0.08)',
     },
     '.cm-activeLineGutter': {
-      backgroundColor: 'rgba(61, 43, 31, 0.04)',
+      backgroundColor: 'rgba(45, 27, 14, 0.04)',
     },
     '.cm-foldPlaceholder': {
-      backgroundColor: 'rgba(61, 43, 31, 0.05)',
+      backgroundColor: 'rgba(45, 27, 14, 0.06)',
       border: 'none',
-      color: '#7a6858',
+      color: '#6B5742',
     },
     '.cm-tooltip': {
-      backgroundColor: '#faf7f2',
-      border: '1px solid rgba(61, 43, 31, 0.1)',
+      backgroundColor: '#FEFCFA',
+      border: '1px solid rgba(45, 27, 14, 0.12)',
     },
     '.cm-tooltip .cm-tooltip-arrow:before': {
-      borderTopColor: 'rgba(61, 43, 31, 0.1)',
-      borderBottomColor: 'rgba(61, 43, 31, 0.1)',
+      borderTopColor: 'rgba(45, 27, 14, 0.12)',
+      borderBottomColor: 'rgba(45, 27, 14, 0.12)',
     },
     '.cm-tooltip .cm-tooltip-arrow:after': {
-      borderTopColor: '#faf7f2',
-      borderBottomColor: '#faf7f2',
+      borderTopColor: '#FEFCFA',
+      borderBottomColor: '#FEFCFA',
     },
     '.cm-tooltip-autocomplete': {
       '& > ul > li[aria-selected]': {
-        backgroundColor: 'rgba(192, 80, 46, 0.1)',
-        color: '#3d2b1f',
+        backgroundColor: 'rgba(255, 150, 79, 0.12)',
+        color: '#2D1B0E',
       },
     },
     '.cm-placeholder': {
-      color: '#a89b8c',
+      color: '#A39283',
     },
   },
   { dark: false },
 )
 
 const lightHighlightStyle = HighlightStyle.define([
-  { tag: tags.keyword, color: '#993e24' },
-  { tag: [tags.name, tags.deleted, tags.character, tags.propertyName, tags.macroName], color: '#c0502e' },
-  { tag: [tags.function(tags.variableName), tags.labelName], color: '#993e24' },
-  { tag: [tags.color, tags.constant(tags.name), tags.standard(tags.name)], color: '#8b664c' },
-  { tag: [tags.definition(tags.name), tags.separator], color: '#3d2b1f' },
-  { tag: [tags.typeName, tags.className, tags.number, tags.changed, tags.annotation, tags.modifier, tags.self, tags.namespace], color: '#a06824' },
-  { tag: [tags.operator, tags.operatorKeyword, tags.url, tags.escape, tags.regexp, tags.link, tags.special(tags.string)], color: '#8b664c' },
-  { tag: [tags.meta, tags.comment], color: '#a89b8c' },
+  { tag: tags.keyword, color: '#D47830' },
+  { tag: [tags.name, tags.deleted, tags.character, tags.propertyName, tags.macroName], color: '#FF964F' },
+  { tag: [tags.function(tags.variableName), tags.labelName], color: '#D47830' },
+  { tag: [tags.color, tags.constant(tags.name), tags.standard(tags.name)], color: '#725438' },
+  { tag: [tags.definition(tags.name), tags.separator], color: '#2D1B0E' },
+  { tag: [tags.typeName, tags.className, tags.number, tags.changed, tags.annotation, tags.modifier, tags.self, tags.namespace], color: '#955C0A' },
+  { tag: [tags.operator, tags.operatorKeyword, tags.url, tags.escape, tags.regexp, tags.link, tags.special(tags.string)], color: '#725438' },
+  { tag: [tags.meta, tags.comment], color: '#A39283' },
   { tag: tags.strong, fontWeight: 'bold' },
   { tag: tags.emphasis, fontStyle: 'italic' },
   { tag: tags.strikethrough, textDecoration: 'line-through' },
-  { tag: tags.link, color: '#587a5e', textDecoration: 'underline' },
-  { tag: tags.heading, fontWeight: 'bold', color: '#993e24' },
-  { tag: [tags.atom, tags.bool, tags.special(tags.variableName)], color: '#a06824' },
-  { tag: [tags.processingInstruction, tags.string, tags.inserted], color: '#587a5e' },
-  { tag: tags.invalid, color: '#b5382a' },
+  { tag: tags.link, color: '#3B7046', textDecoration: 'underline' },
+  { tag: tags.heading, fontWeight: 'bold', color: '#D47830' },
+  { tag: [tags.atom, tags.bool, tags.special(tags.variableName)], color: '#955C0A' },
+  { tag: [tags.processingInstruction, tags.string, tags.inserted], color: '#3B7046' },
+  { tag: tags.invalid, color: '#BF3326' },
 ])
 
 /* ── Public API ──────────────────────────────────────────── */
