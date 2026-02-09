@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import Box from '@mui/material/Box'
 import PlayArrowOutlined from '@mui/icons-material/PlayArrowOutlined'
+import ErrorOutline from '@mui/icons-material/ErrorOutline'
 import { EmptyState } from '@/components/primitives'
 import { useStore, workflowExecutionStore, workflowStore } from '@/stores'
 import { ExecutionRunSelector } from './ExecutionRunSelector'
@@ -37,6 +38,7 @@ function ExecutionPanel() {
   const selectedHistoricalRunId = useStore(workflowExecutionStore.store, workflowExecutionStore.selectSelectedHistoricalRunId)
   const historicalRun = useStore(workflowExecutionStore.store, workflowExecutionStore.selectHistoricalRun)
   const historyLoading = useStore(workflowExecutionStore.store, workflowExecutionStore.selectHistoryLoading)
+  const historyError = useStore(workflowExecutionStore.store, workflowExecutionStore.selectHistoryError)
 
   const stepIds = useMemo(() => deriveStepIds(eventLog), [eventLog])
 
@@ -50,6 +52,14 @@ function ExecutionPanel() {
   const hasHistory = runs.length > 0
 
   if (!hasLiveRun && !hasHistory && !historyLoading) {
+    if (historyError) {
+      return (
+        <EmptyState
+          icon={<ErrorOutline fontSize="large" />}
+          message={`Failed to load history: ${historyError}`}
+        />
+      )
+    }
     return (
       <EmptyState
         icon={<PlayArrowOutlined fontSize="large" />}

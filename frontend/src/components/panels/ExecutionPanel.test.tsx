@@ -21,6 +21,7 @@ const {
   _selectedHistoricalRunId,
   _historicalRun,
   _historyLoading,
+  _historyError,
   _fetchRuns,
   _viewHistoricalRun,
   _returnToLive,
@@ -41,6 +42,7 @@ const {
   _selectedHistoricalRunId: { value: null as string | null },
   _historicalRun: { value: null as WorkflowExecutionSummary | null },
   _historyLoading: { value: false },
+  _historyError: { value: null as string | null },
   _fetchRuns: { fn: vi.fn() },
   _viewHistoricalRun: { fn: vi.fn() },
   _returnToLive: { fn: vi.fn() },
@@ -72,6 +74,7 @@ vi.mock('@/stores', () => ({
     selectSelectedHistoricalRunId: () => _selectedHistoricalRunId.value,
     selectHistoricalRun: () => _historicalRun.value,
     selectHistoryLoading: () => _historyLoading.value,
+    selectHistoryError: () => _historyError.value,
     fetchRuns: (...args: unknown[]): void => { _fetchRuns.fn(...args) },
     viewHistoricalRun: (...args: unknown[]): void => { _viewHistoricalRun.fn(...args) },
     returnToLive: (): void => { _returnToLive.fn() },
@@ -96,6 +99,7 @@ beforeEach(() => {
   _selectedHistoricalRunId.value = null
   _historicalRun.value = null
   _historyLoading.value = false
+  _historyError.value = null
 })
 
 describe('ExecutionPanel', () => {
@@ -176,6 +180,12 @@ describe('ExecutionPanel', () => {
     ]
     render(<ExecutionPanel />)
     expect(screen.queryByText('Run a workflow to see execution details')).not.toBeInTheDocument()
+  })
+
+  it('shows error message when history fetch fails', () => {
+    _historyError.value = '404 Not Found'
+    render(<ExecutionPanel />)
+    expect(screen.getByText('Failed to load history: 404 Not Found')).toBeInTheDocument()
   })
 
   it('renders historical run summary in history mode', () => {
