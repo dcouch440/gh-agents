@@ -9,6 +9,7 @@ import {
   AccentBarRow,
   TabSelector,
   EmptyState,
+  VariableChipStrip,
 } from "@/components/primitives";
 import {
   useStore,
@@ -210,6 +211,10 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
     [step.id],
   );
 
+  const handleCopyVariable = useCallback((label: string) => {
+    void navigator.clipboard.writeText(label);
+  }, []);
+
   // ── Graph connections (derived from edges) ──────────────────────────────
 
   const edges = useStore(workflowStore.store, workflowStore.selectEdges);
@@ -245,14 +250,22 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
 
   const completionsRef = useRef<VariableCompletion[]>([]);
 
-  const variableCompletions = useMemo(
-    () => buildVariableCompletions(upstreamIds, stepsById, schemasMap),
-    [upstreamIds, stepsById, schemasMap],
+  const variableContext = useMemo(
+    () => buildVariableCompletions(upstreamIds, stepsById, schemasMap, step),
+    [upstreamIds, stepsById, schemasMap, step],
   );
 
   useEffect(() => {
-    completionsRef.current = variableCompletions;
-  }, [variableCompletions]);
+    completionsRef.current = variableContext.completions;
+  }, [variableContext]);
+
+  // Auto-set output_variable_name on upstream steps that don't have one,
+  // so the backend can resolve variable references at execution time.
+  useEffect(() => {
+    for (const { stepId, derivedName } of variableContext.autoNamed) {
+      workflowStore.patchStepLocal(stepId, { output_variable_name: derivedName });
+    }
+  }, [variableContext.autoNamed]);
 
   // The getter reads completionsRef.current lazily at autocomplete-trigger time,
   // not during render. The useMemo just creates the stable extension wrapper.
@@ -464,6 +477,9 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
             {/* Divider */}
             <Box sx={{borderTop: 1, borderColor: "divider"}} />
 
+            {/* Available variables */}
+            <VariableChipStrip completions={variableContext.completions} onCopy={handleCopyVariable} />
+
             {/* Step-level extension (editable) */}
             <Typography sx={SECTION_LABEL_SX}>Step Extension</Typography>
             <Box sx={{...EDITOR_CONTAINER_SX, flex: 1, minHeight: 120}}>
@@ -531,6 +547,9 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
                 />
               </Box>
             )}
+
+            {/* Available variables */}
+            <VariableChipStrip completions={variableContext.completions} onCopy={handleCopyVariable} />
 
             {/* Editor */}
             <Box sx={EDITOR_CONTAINER_SX}>

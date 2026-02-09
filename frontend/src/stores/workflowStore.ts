@@ -248,6 +248,7 @@ const saveAllDirtySteps = async (): Promise<void> => {
       prompt_template: step.prompt_template,
       prompt_template_id: step.prompt_template_id ?? undefined,
       output_schema_id: step.output_schema_id ?? undefined,
+      output_variable_name: step.output_variable_name ?? undefined,
       system_prompt_suffix: step.system_prompt_suffix ?? undefined,
     }
     return api.workflows.updateStep(wid, stepId, body)
