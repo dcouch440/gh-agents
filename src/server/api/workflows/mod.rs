@@ -16,7 +16,8 @@ use crate::constants::MAX_TITLE_LENGTH;
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::WorkflowCollectionRepo;
 use crate::server::auth as auth_utils;
-use crate::server::hub::dag::{execute_workflow_via_engine, WorkflowExecutionContext};
+use crate::server::hub::dag::{broadcast_workflow_event, execute_workflow_via_engine, WorkflowExecutionContext};
+use crate::server::ws::events::WorkflowEventKind;
 use crate::server::hub::ExecutionEngine;
 use crate::server::state::AppState;
 
@@ -1021,6 +1022,11 @@ pub async fn run_workflow(
                 for output in result.outputs.values() {
                     if let Some(structured) = &output.structured_output {
                         aggregated.insert(output.variable_name.clone(), structured.clone());
+                    } else if !output.raw_output.is_empty() {
+                        aggregated.insert(
+                            output.variable_name.clone(),
+                            serde_json::Value::String(output.raw_output.clone()),
+                        );
                     }
                 }
                 let outputs_json = serde_json::Value::Object(aggregated);
@@ -1033,16 +1039,31 @@ pub async fn run_workflow(
                         None,
                     )
                     .await;
+                broadcast_workflow_event(
+                    &bg_state,
+                    &ctx,
+                    id,
+                    WorkflowEventKind::Completed {
+                        duration_ms: Some(result.duration_ms),
+                    },
+                );
             }
             Err(e) => {
+                let error_msg = e.to_string();
                 let _ = bg_collection_repo
                     .update_workflow_execution_status(
                         execution_id,
                         "failed",
                         None,
-                        Some(e.to_string()),
+                        Some(error_msg.clone()),
                     )
                     .await;
+                broadcast_workflow_event(
+                    &bg_state,
+                    &ctx,
+                    id,
+                    WorkflowEventKind::Failed { error: error_msg },
+                );
             }
         }
     });

@@ -13,8 +13,9 @@ use crate::db::traits::{WorkflowCollectionRepo, WorkflowRepo};
 use crate::db::{
     CollectionRunRow, CollectionWorkflowEdgeRow, CollectionWorkflowRow, WorkflowExecutionRow,
 };
-use crate::server::hub::dag::execute_workflow_via_engine;
+use crate::server::hub::dag::{broadcast_workflow_event, execute_workflow_via_engine};
 use crate::server::hub::dag::{ContainerExecutionConfig, DagPaused, WorkflowExecutionContext};
+use crate::server::ws::events::WorkflowEventKind;
 use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::error::HubError;
 use crate::server::state::AppState;
@@ -485,6 +486,15 @@ where
                     )
                     .await?;
 
+                broadcast_workflow_event(
+                    &self.state,
+                    &ctx,
+                    workflow_id,
+                    WorkflowEventKind::Completed {
+                        duration_ms: Some(wf_result.duration_ms),
+                    },
+                );
+
                 Ok(workflow_exec)
             }
             Err(HubError::AwaitingUser {
@@ -522,6 +532,14 @@ where
                         Some(error_msg.clone()),
                     )
                     .await?;
+                broadcast_workflow_event(
+                    &self.state,
+                    &ctx,
+                    workflow_id,
+                    WorkflowEventKind::Failed {
+                        error: error_msg.clone(),
+                    },
+                );
                 Err(anyhow!("Workflow {} failed: {}", workflow_id, error_msg))
             }
         }
@@ -640,8 +658,12 @@ fn aggregate_step_outputs(
 
     for (_step_id, output) in step_outputs {
         if let Some(structured) = &output.structured_output {
-            // Use the output variable name as the key
             aggregated.insert(output.variable_name.clone(), structured.clone());
+        } else if !output.raw_output.is_empty() {
+            aggregated.insert(
+                output.variable_name.clone(),
+                JsonValue::String(output.raw_output.clone()),
+            );
         }
     }
 

@@ -48,7 +48,7 @@ use crate::server::executors::room::{
 };
 
 /// Emit a workflow lifecycle event via WebSocket broadcast.
-fn broadcast_workflow_event(
+pub fn broadcast_workflow_event(
     state: &AppState,
     ctx: &WorkflowExecutionContext,
     workflow_id: Uuid,
@@ -598,32 +598,12 @@ pub async fn execute_workflow_via_engine(
                         error: format!("{}", e),
                     },
                 );
-                broadcast_workflow_event(
-                    state,
-                    ctx,
-                    workflow_id,
-                    WorkflowEventKind::Failed {
-                        error: format!(
-                            "Step '{}' failed: {}",
-                            step.output_variable_name.as_deref().unwrap_or("unknown"),
-                            e
-                        ),
-                    },
-                );
             }
         }
         step_result?;
     }
 
-    // Broadcast: workflow completed
-    broadcast_workflow_event(
-        state,
-        ctx,
-        workflow_id,
-        WorkflowEventKind::Completed {
-            duration_ms: Some(start_time.elapsed().as_millis() as u64),
-        },
-    );
+    let duration_ms = start_time.elapsed().as_millis() as u64;
 
     let final_outputs: HashMap<String, StepOutput> = completed
         .into_iter()
@@ -635,6 +615,7 @@ pub async fn execute_workflow_via_engine(
         total_input_tokens,
         total_output_tokens,
         total_cost_usd,
+        duration_ms,
     })
 }
 
@@ -2336,6 +2317,7 @@ pub async fn resume_workflow_via_engine(
     pre_var_outputs: HashMap<String, JsonValue>,
     cancel: Option<&CancellationToken>,
 ) -> Result<WorkflowExecutionResult, HubError> {
+    let start_time = std::time::Instant::now();
     let sorted = topological_sort(steps, edges).map_err(|_| HubError::DagCycle)?;
     let step_map: HashMap<Uuid, &WorkflowStepRow> = steps.iter().map(|s| (s.id, s)).collect();
 
@@ -2535,6 +2517,7 @@ pub async fn resume_workflow_via_engine(
         total_input_tokens,
         total_output_tokens,
         total_cost_usd,
+        duration_ms: start_time.elapsed().as_millis() as u64,
     })
 }
 
