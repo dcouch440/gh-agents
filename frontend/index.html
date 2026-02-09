@@ -13,15 +13,29 @@
           else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) t = 'light';
         } catch(e) {}
         document.documentElement.setAttribute('data-theme', t);
-        document.documentElement.style.backgroundColor = t === 'dark' ? '#080c12' : '#f8f9fb';
+        document.documentElement.style.backgroundColor = t === 'dark' ? '#080c12' : '#F9F6F1';
       })();
     </script>
 
     <!-- Splash screen styles — inline so they're available before any bundled CSS -->
     <style>
       html, body { margin: 0; padding: 0; }
-      html[data-theme="dark"]  { background-color: #080c12; }
-      html[data-theme="light"] { background-color: #f8f9fb; }
+
+      /* Theme tokens — consumed by splash SVG and text */
+      html[data-theme="dark"] {
+        --splash-bg: #080c12;
+        --splash-gear-1: #3b82f6;
+        --splash-gear-2: #2dd4bf;
+        --splash-glow-opacity: 0.55;
+        --splash-wordmark: #3b82f6;
+      }
+      html[data-theme="light"] {
+        --splash-bg: #F9F6F1;
+        --splash-gear-1: #FF964F;
+        --splash-gear-2: #D47830;
+        --splash-glow-opacity: 0.4;
+        --splash-wordmark: #D47830;
+      }
 
       #nexor-splash {
         position: fixed;
@@ -31,12 +45,11 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
+        background-color: var(--splash-bg);
         opacity: 1;
         transition: opacity 600ms cubic-bezier(0.4, 0, 0.2, 1);
         pointer-events: none;
       }
-      html[data-theme="dark"]  #nexor-splash { background-color: #080c12; }
-      html[data-theme="light"] #nexor-splash { background-color: #f8f9fb; }
 
       #nexor-splash.splash-exit  { opacity: 0; }
       #nexor-splash.splash-hidden { display: none; }
@@ -50,6 +63,11 @@
         width: 72px;
         height: 72px;
         animation: nexor-spin 4s linear infinite;
+        transition: transform 700ms cubic-bezier(0.4, 0, 0.2, 1), opacity 600ms ease;
+      }
+      #nexor-splash.splash-exit .nexor-gear {
+        transform: translateY(-40px);
+        opacity: 0;
       }
 
       /* Wordmark pulse */
@@ -62,22 +80,13 @@
         font-size: 26px;
         letter-spacing: 0.14em;
         text-transform: uppercase;
+        color: var(--splash-wordmark);
         animation: nexor-pulse 2.4s ease-in-out infinite;
-      }
-      html[data-theme="dark"]  .nexor-wordmark { color: #3b82f6; }
-      html[data-theme="light"] .nexor-wordmark { color: #2563eb; }
-
-      /* Light mode: softer glow */
-      html[data-theme="light"] .nexor-gear-stroke {
-        stroke: #2563eb;
-      }
-      html[data-theme="light"] .nexor-gear-group {
-        filter: drop-shadow(0 0 4px rgba(37, 99, 235, 0.18));
       }
 
       /* Accessibility: respect reduced motion */
       @media (prefers-reduced-motion: reduce) {
-        .nexor-gear     { animation-duration: 0s; }
+        .nexor-gear     { animation-duration: 0s; transition-duration: 0s; }
         .nexor-wordmark { animation-duration: 0s; opacity: 1; }
         #nexor-splash   { transition-duration: 0s; }
       }
@@ -99,9 +108,9 @@
             <stop offset="0%" stop-color="#3b82f6" />
             <stop offset="100%" stop-color="#2dd4bf" />
           </linearGradient>
-          <filter id="gear-glow" x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="1.8" result="blur" />
-            <feFlood flood-color="#3b82f6" flood-opacity="0.35" />
+          <filter id="gear-glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="blur" />
+            <feFlood flood-color="#3b82f6" flood-opacity="0.55" />
             <feComposite in2="blur" operator="in" result="glow" />
             <feMerge>
               <feMergeNode in="glow" />
@@ -112,7 +121,6 @@
         <g class="nexor-gear-group" filter="url(#gear-glow)" transform="translate(50,50)">
           <!-- 12-tooth gear: outer r=38, root r=30, computed for perfect symmetry -->
           <path
-            class="nexor-gear-stroke"
             fill="none"
             stroke="url(#gear-grad)"
             stroke-width="2"
@@ -139,6 +147,18 @@
         </g>
       </svg>
       <div class="nexor-wordmark">nexor</div>
+      <script>
+        (function() {
+          var dark = document.documentElement.getAttribute('data-theme') !== 'light';
+          if (dark) return; // SVG defaults are already dark-themed
+          var stops = document.querySelectorAll('#gear-grad stop');
+          stops[0].setAttribute('stop-color', '#FF964F');
+          stops[1].setAttribute('stop-color', '#D47830');
+          var flood = document.querySelector('#gear-glow feFlood');
+          flood.setAttribute('flood-color', '#FF964F');
+          flood.setAttribute('flood-opacity', '0.4');
+        })();
+      </script>
     </div>
 
     <div id="root"></div>
