@@ -83,6 +83,7 @@ const selectCommandPaletteOpen = (s: UIState): boolean => s.commandPaletteOpen
 const setTheme = (mode: ThemeMode): void => {
   store.setState({ theme: mode })
   lsSet(LS_THEME, mode)
+  document.documentElement.setAttribute('data-theme', mode)
 }
 
 const toggleTheme = (): void => {

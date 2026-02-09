@@ -7,7 +7,6 @@ import IconButton from "@mui/material/IconButton";
 import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
-import CircularProgress from "@mui/material/CircularProgress";
 import Fade from "@mui/material/Fade";
 import Zoom from "@mui/material/Zoom";
 import SaveOutlined from "@mui/icons-material/SaveOutlined";
@@ -20,6 +19,7 @@ import {useTheme} from "@mui/material/styles";
 import {useStore, workflowStore} from "@/stores";
 import {api} from "@/api";
 import {LS_WORKFLOW_TEST_INPUT} from "@/constants";
+import {GradientButton} from "@/components/primitives";
 
 type RunStatus = "idle" | "running" | "completed" | "error";
 
@@ -82,10 +82,8 @@ function RunButton() {
 
   if (!activeWorkflowId) return null;
 
-  const icon =
-    runStatus === "running" ? (
-      <CircularProgress size={14} thickness={5} color="inherit" />
-    ) : runStatus === "completed" ? (
+  const runIcon =
+    runStatus === "completed" ? (
       <Zoom in timeout={200}>
         <CheckCircleOutline sx={{fontSize: 16}} />
       </Zoom>
@@ -97,7 +95,7 @@ function RunButton() {
       />
     );
 
-  const label =
+  const runLabel =
     runStatus === "running"
       ? "Running..."
       : runStatus === "completed"
@@ -106,19 +104,12 @@ function RunButton() {
           ? "Failed"
           : "Run";
 
-  const bgGradient =
+  const runColor =
     runStatus === "completed"
-      ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+      ? "success" as const
       : runStatus === "error"
-        ? "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)"
-        : "linear-gradient(135deg, #10b981 0%, #059669 100%)";
-
-  const shadow =
-    runStatus === "completed"
-      ? "0 4px 12px rgba(16, 185, 129, 0.4)"
-      : runStatus === "error"
-        ? "0 4px 12px rgba(239, 68, 68, 0.4)"
-        : "0 4px 12px rgba(16, 185, 129, 0.4)";
+        ? "error" as const
+        : "primary" as const;
 
   return (
     <Fade in timeout={300}>
@@ -191,54 +182,15 @@ function RunButton() {
             placement="left"
           >
             <span>
-              <Button
-                size="small"
-                variant="contained"
-                startIcon={icon}
-                onClick={() => {
-                  void handleRun();
-                }}
+              <GradientButton
+                onClick={() => { void handleRun(); }}
+                icon={runIcon}
+                color={runColor}
+                loading={runStatus === "running"}
                 disabled={runStatus === "running"}
-                sx={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  textTransform: "none",
-                  px: 2.5,
-                  py: 0.75,
-                  minWidth: 90,
-                  background: bgGradient,
-                  boxShadow: shadow,
-                  borderRadius: "12px",
-                  transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-                  "&:hover": {
-                    background:
-                      runStatus === "completed"
-                        ? "linear-gradient(135deg, #059669 0%, #047857 100%)"
-                        : runStatus === "error"
-                          ? "linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)"
-                          : "linear-gradient(135deg, #059669 0%, #047857 100%)",
-                    boxShadow:
-                      runStatus === "completed"
-                        ? "0 6px 16px rgba(16, 185, 129, 0.5)"
-                        : runStatus === "error"
-                          ? "0 6px 16px rgba(239, 68, 68, 0.5)"
-                          : "0 6px 16px rgba(16, 185, 129, 0.5)",
-                    transform: "translateY(-1px)",
-                    "& .MuiSvgIcon-root": {
-                      transform: "scale(1.1)",
-                    },
-                  },
-                  "&:active": {
-                    transform: "translateY(0) scale(0.98)",
-                  },
-                  "&.Mui-disabled": {
-                    background: "rgba(16, 185, 129, 0.3)",
-                    color: "rgba(255, 255, 255, 0.5)",
-                  },
-                }}
               >
-                {label}
-              </Button>
+                {runLabel}
+              </GradientButton>
             </span>
           </Tooltip>
         </Box>
@@ -463,69 +415,26 @@ function SaveDiscardBar() {
           placement="top"
         >
           <span>
-            <Button
-              size="small"
-              variant="contained"
-              startIcon={
-                saving ? (
-                  <CircularProgress size={14} thickness={5} color="inherit" />
-                ) : justSaved ? (
+            <GradientButton
+              onClick={() => { void handleSave(); }}
+              loading={saving}
+              disabled={saving}
+              color={justSaved ? "success" : "primary"}
+              icon={
+                justSaved ? (
                   <Zoom in timeout={200}>
                     <CheckCircleOutline sx={{fontSize: 16}} />
                   </Zoom>
                 ) : (
                   <SaveOutlined
-                    sx={{
-                      fontSize: 16,
-                      transition: "transform 0.2s ease",
-                    }}
+                    sx={{ fontSize: 16, transition: "transform 0.2s ease" }}
                   />
                 )
               }
-              onClick={() => {
-                void handleSave();
-              }}
-              disabled={saving}
-              sx={{
-                fontSize: 13,
-                fontWeight: 600,
-                textTransform: "none",
-                px: 2.5,
-                py: 0.75,
-                minWidth: 100,
-                background: justSaved
-                  ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
-                  : `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-                boxShadow: justSaved
-                  ? "0 4px 12px rgba(16, 185, 129, 0.4)"
-                  : `0 4px 12px ${theme.palette.primary.main}66`,
-                transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-                "&:hover": {
-                  background: justSaved
-                    ? "linear-gradient(135deg, #059669 0%, #047857 100%)"
-                    : `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.dark} 100%)`,
-                  boxShadow: justSaved
-                    ? "0 6px 16px rgba(16, 185, 129, 0.5)"
-                    : `0 6px 16px ${theme.palette.primary.main}80`,
-                  transform: "translateY(-1px)",
-                  "& .MuiSvgIcon-root": {
-                    transform: "scale(1.1)",
-                  },
-                },
-                "&:active": {
-                  transform: "translateY(0) scale(0.98)",
-                  boxShadow: justSaved
-                    ? "0 2px 8px rgba(16, 185, 129, 0.4)"
-                    : `0 2px 8px ${theme.palette.primary.main}66`,
-                },
-                "&.Mui-disabled": {
-                  background: `${theme.palette.primary.main}4d`,
-                  color: "rgba(255, 255, 255, 0.5)",
-                },
-              }}
+              minWidth={100}
             >
               {saving ? "Saving..." : justSaved ? "Saved!" : "Save"}
-            </Button>
+            </GradientButton>
           </span>
         </Tooltip>
       </Box>

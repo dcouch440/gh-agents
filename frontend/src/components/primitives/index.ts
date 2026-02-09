@@ -81,3 +81,6 @@ export type { PropertySelectProps, PropertySelectOption } from './PropertySelect
 
 export { VariableChipStrip } from './VariableChipStrip'
 export type { VariableChipStripProps } from './VariableChipStrip'
+
+export { GradientButton } from './GradientButton'
+export type { GradientButtonProps, GradientButtonColor } from './GradientButton'
