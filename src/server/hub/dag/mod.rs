@@ -62,6 +62,7 @@ pub fn broadcast_workflow_event(
     });
 }
 
+pub mod documenter;
 pub mod utils;
 pub use utils::{
     build_routing_instruction_block, check_step_readiness, compose_prompt, evaluate_edge_condition,
