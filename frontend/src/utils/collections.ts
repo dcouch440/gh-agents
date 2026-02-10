@@ -117,6 +117,21 @@ class Collections {
   // ── Single-Pass Transforms ───────────────────────────────────────────
 
   /**
+   * Transform each element 1:1 via a mapping function.
+   * Replaces `arr.map(fn)` with an indexed for-loop that produces
+   * a PACKED output array (via `[]` + `.push()`).
+   * O(n), 1 output array.
+   */
+  static mapBy<T, U>(items: readonly T[], fn: (item: T) => U): U[] {
+    const result: U[] = []
+    const n = items.length
+    for (let i = 0; i < n; i++) {
+      result.push(fn(items[i]!))
+    }
+    return result
+  }
+
+  /**
    * Combined filter + map in a single pass.
    * Return `null` to skip an item, or a transformed value to include it.
    * Replaces `.filter(pred).map(transform)` chains (which allocate 2 arrays).

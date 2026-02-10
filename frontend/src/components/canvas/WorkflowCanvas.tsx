@@ -101,7 +101,7 @@ function WorkflowCanvasInner() {
   const toolsByAgentLookup = useMemo(
     () => Collections.toLookupMap(agents, (a) => a.id, (a) => {
       const tools = toolsByAgent[a.id] ?? [];
-      return tools.map((t) => t.name);
+      return Collections.mapBy(tools, (t) => t.name);
     }),
     [agents, toolsByAgent],
   );
@@ -146,7 +146,7 @@ function WorkflowCanvasInner() {
       if (hasStructuralChange) {
         // Nodes added/removed — full replacement, preserve selection
         const selMap = Collections.toLookupMap(current, (n) => n.id, (n) => n.selected ?? false);
-        return rfNodes.map((n) => ({
+        return Collections.mapBy(rfNodes, (n) => ({
           ...n,
           selected: selMap.get(n.id) ?? false,
         }));
@@ -193,7 +193,7 @@ function WorkflowCanvasInner() {
 
       if (hasStructuralChange) {
         const selMap = Collections.toLookupMap(current, (e) => e.id, (e) => e.selected ?? false);
-        return rfEdges.map((e) => ({
+        return Collections.mapBy(rfEdges, (e) => ({
           ...e,
           selected: selMap.get(e.id) ?? false,
         }));
@@ -230,8 +230,8 @@ function WorkflowCanvasInner() {
   // Selection sync: RF → canvasStore (read-only mirror for sidebar panels)
   const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
     batch(() => {
-      canvasStore.selectSteps(params.nodes.map((n) => n.id));
-      canvasStore.selectEdges(params.edges.map((e) => e.id));
+      canvasStore.selectSteps(Collections.mapBy(params.nodes, (n: {id: string}) => n.id));
+      canvasStore.selectEdges(Collections.mapBy(params.edges, (e: {id: string}) => e.id));
       if (params.nodes.length > 0 || params.edges.length > 0) {
         layoutStore.openRightPanelIfClosed("properties");
       }
