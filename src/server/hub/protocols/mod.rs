@@ -9,9 +9,12 @@
 //! ```
 
 pub mod builtins;
+pub mod context;
 pub mod error;
+pub mod execution_recorder;
 pub mod expander;
 pub mod expanders;
+pub mod json_utils;
 pub mod prompt_gen;
 pub mod schema_gen;
 pub mod template_resolve;

@@ -12,13 +12,10 @@ use uuid::Uuid;
 use crate::agents::execution_tools;
 use crate::execution::ExecutionContext;
 use crate::llm::{Message, Tool};
+use crate::server::hub::error::HubError;
+use crate::server::hub::strategy::ExecutionStrategy;
 use crate::server::state::AppState;
 use crate::types::UserId;
-
-use super::super::error::HubError;
-use super::super::strategy::ExecutionStrategy;
-
-mod tests;
 
 /// Configuration for the documenter research phase.
 pub struct DocumenterResearchConfig {

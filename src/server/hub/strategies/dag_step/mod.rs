@@ -211,46 +211,10 @@ impl DagStepStrategy {
 pub use super::compute_cost;
 
 /// Try to parse JSON from the LLM's final response.
+///
+/// Delegates to the shared [`json_utils::parse_structured_output`] utility.
 pub(crate) fn parse_structured_output(content: &str) -> Option<Value> {
-    let trimmed = content.trim();
-
-    // Try direct parse
-    if let Ok(v) = serde_json::from_str::<Value>(trimmed) {
-        if v.is_object() || v.is_array() {
-            return Some(v);
-        }
-    }
-
-    // Try extracting from ```json code fence
-    if let Some(start) = trimmed.find("```json") {
-        if let Some(end) = trimmed[start + 7..].find("```") {
-            let json_str = trimmed[start + 7..start + 7 + end].trim();
-            if let Ok(v) = serde_json::from_str::<Value>(json_str) {
-                return Some(v);
-            }
-        }
-    }
-
-    // Try extracting from ``` code fence
-    if let Some(start) = trimmed.find("```") {
-        if let Some(end) = trimmed[start + 3..].find("```") {
-            let json_str = trimmed[start + 3..start + 3 + end].trim();
-            if let Ok(v) = serde_json::from_str::<Value>(json_str) {
-                return Some(v);
-            }
-        }
-    }
-
-    // Try finding { ... }
-    if let Some(start) = trimmed.find('{') {
-        if let Some(end) = trimmed.rfind('}') {
-            if let Ok(v) = serde_json::from_str::<Value>(&trimmed[start..=end]) {
-                return Some(v);
-            }
-        }
-    }
-
-    None
+    crate::server::hub::protocols::json_utils::parse_structured_output(content)
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────

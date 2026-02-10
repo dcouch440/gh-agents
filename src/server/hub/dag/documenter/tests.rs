@@ -3,9 +3,11 @@ mod tests {
     use serde_json::json;
 
     use crate::server::hub::dag::documenter::{
-        build_context_block, build_documents_output, compose_research_prompt, compose_write_prompt,
-        determine_persist_action, extract_json_content, ContextDocument, DocumentPersistAction,
+        build_documents_output, compose_research_prompt, compose_write_prompt,
+        determine_persist_action, DocumentPersistAction,
     };
+    use crate::server::hub::protocols::context::{build_context_block, ContextDocument};
+    use crate::server::hub::protocols::json_utils::extract_json_from_llm_response;
     use crate::server::hub::dag::utils::StepOutput;
     use crate::server::ws::events::WorkflowEventKind;
 
@@ -161,12 +163,12 @@ mod tests {
         assert!(result.contains("</document_abcd1234>"));
     }
 
-    // ── extract_json_content tests ──────────────────────────────────────
+    // ── extract_json_from_llm_response tests ──────────────────────────────────────
 
     #[test]
     fn parse_strategy_output_raw_json() {
         let raw = r#"{"documents": [{"name": "API Ref"}]}"#;
-        let result = extract_json_content(raw);
+        let result = extract_json_from_llm_response(raw);
         assert_eq!(result, raw);
     }
 
@@ -175,7 +177,7 @@ mod tests {
         let fenced = r#"```json
 {"documents": [{"name": "API Ref"}]}
 ```"#;
-        let result = extract_json_content(fenced);
+        let result = extract_json_from_llm_response(fenced);
         let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
         assert_eq!(parsed["documents"][0]["name"], "API Ref");
     }
@@ -185,7 +187,7 @@ mod tests {
         let fenced = r#"```
 {"documents": [{"name": "Guide"}]}
 ```"#;
-        let result = extract_json_content(fenced);
+        let result = extract_json_from_llm_response(fenced);
         let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
         assert_eq!(parsed["documents"][0]["name"], "Guide");
     }
@@ -195,7 +197,7 @@ mod tests {
         let messy = r#"Here is the plan:
 {"documents": [{"name": "Overview"}]}
 That's it."#;
-        let result = extract_json_content(messy);
+        let result = extract_json_from_llm_response(messy);
         let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
         assert_eq!(parsed["documents"][0]["name"], "Overview");
     }
@@ -209,7 +211,7 @@ That's it."#;
 ```
 
 This plan covers the main topics."#;
-        let result = extract_json_content(content);
+        let result = extract_json_from_llm_response(content);
         let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
         assert_eq!(parsed["documents"][0]["name"], "Architecture");
     }
