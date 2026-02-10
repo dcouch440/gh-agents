@@ -85,9 +85,6 @@ impl ExecutionStrategy for TestStrategy {
     async fn execute_tool(&self, _name: &str, _input: &serde_json::Value) -> serde_json::Value {
         serde_json::json!({"error": "no tools"})
     }
-    async fn on_complete(&self, _response: &str, _usage: &TokenUsage) -> Result<(), HubError> {
-        Ok(())
-    }
 }
 
 fn make_mock_recorder() -> (
@@ -181,9 +178,6 @@ async fn execute_context_budget_exceeded() {
         }
         async fn execute_tool(&self, _: &str, _: &serde_json::Value) -> serde_json::Value {
             serde_json::Value::Null
-        }
-        async fn on_complete(&self, _: &str, _: &TokenUsage) -> Result<(), HubError> {
-            Ok(())
         }
     }
 
@@ -345,9 +339,6 @@ async fn execute_max_rounds_exhausted() {
         }
         async fn execute_tool(&self, _: &str, _: &serde_json::Value) -> serde_json::Value {
             serde_json::json!({"ok": true})
-        }
-        async fn on_complete(&self, _: &str, _: &TokenUsage) -> Result<(), HubError> {
-            Ok(())
         }
     }
 
@@ -579,9 +570,6 @@ async fn execute_multiple_tools_single_round() {
             self.count.fetch_add(1, Ordering::SeqCst);
             serde_json::json!({"ok": true})
         }
-        async fn on_complete(&self, _: &str, _: &TokenUsage) -> Result<(), HubError> {
-            Ok(())
-        }
     }
 
     let provider = Arc::new(MultiToolProvider { calls: call_count });
@@ -717,9 +705,6 @@ async fn execute_cancelled_between_tool_rounds() {
             // Cancel after executing first tool
             self.token.cancel();
             serde_json::json!({"ok": true})
-        }
-        async fn on_complete(&self, _: &str, _: &TokenUsage) -> Result<(), HubError> {
-            Ok(())
         }
     }
 

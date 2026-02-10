@@ -7,10 +7,11 @@
 use async_trait::async_trait;
 use serde_json::Value;
 use tracing::info;
+use uuid::Uuid;
 
 use crate::agents::execution_tools;
 use crate::execution::ExecutionContext;
-use crate::llm::{Message, TokenUsage, Tool};
+use crate::llm::{Message, Tool};
 use crate::server::state::AppState;
 use crate::types::UserId;
 
@@ -106,25 +107,11 @@ impl ExecutionStrategy for DocumenterResearchStrategy {
         }
     }
 
-    async fn on_complete(&self, _response: &str, usage: &TokenUsage) -> Result<(), HubError> {
-        if let (Some(state), Some(user_id)) = (&self.config.state, &self.config.user_id) {
-            let tl_repo = &state.repos().token_ledger;
-            let cost = super::compute_cost(
-                &self.config.model_id,
-                usage.input_tokens as i64,
-                usage.output_tokens as i64,
-            );
-            let _ = tl_repo
-                .insert_ledger_entry(
-                    user_id.0,
-                    None,
-                    &self.config.model_id,
-                    usage.input_tokens as i64,
-                    usage.output_tokens as i64,
-                    cost,
-                )
-                .await;
-        }
-        Ok(())
+    fn state(&self) -> Option<&AppState> {
+        self.config.state.as_ref()
+    }
+
+    fn user_id(&self) -> Option<Uuid> {
+        self.config.user_id.map(|u| u.0)
     }
 }

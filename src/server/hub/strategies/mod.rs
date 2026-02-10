@@ -20,6 +20,33 @@ pub use interactive_chat::{InteractiveChatConfig, InteractiveChatStrategy};
 pub use room_speaker::{RoomSpeakerConfig, RoomSpeakerStrategy};
 pub use router::RouterStrategy;
 
+use crate::llm::TokenUsage;
+use crate::server::state::AppState;
+use uuid::Uuid;
+
+/// Log token usage to the ledger. Shared by all strategies that track costs.
+pub async fn log_token_usage(
+    state: &AppState,
+    user_id: Uuid,
+    agent_execution_id: Option<Uuid>,
+    model_id: &str,
+    usage: &TokenUsage,
+) {
+    let cost = compute_cost(model_id, usage.input_tokens as i64, usage.output_tokens as i64);
+    let _ = state
+        .repos()
+        .token_ledger
+        .insert_ledger_entry(
+            user_id,
+            agent_execution_id,
+            model_id,
+            usage.input_tokens as i64,
+            usage.output_tokens as i64,
+            cost,
+        )
+        .await;
+}
+
 /// Approximate cost computation per model ($/1M tokens).
 /// Local models (Ollama) are free — returns $0.00.
 pub fn compute_cost(model_id: &str, input_tokens: i64, output_tokens: i64) -> f32 {
