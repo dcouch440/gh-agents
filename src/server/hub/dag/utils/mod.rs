@@ -563,16 +563,18 @@ pub async fn compose_prompt(
 
     // Append agent context documents (global to agent)
     if let Some(_d_repo) = doc_repo {
-        if let Ok(agent_docs) = server_repo.get_agent_context(step.agent_id).await {
-            if !agent_docs.is_empty() && !context_opened {
-                full_prompt.push_str("\n\n<context>");
-                context_opened = true;
-            }
-            for doc in &agent_docs {
-                full_prompt.push_str(&format!(
-                    "\n<document title=\"{}\" source=\"agent\">\n{}\n</document>",
-                    doc.title, doc.content
-                ));
+        if let Some(agent_id) = step.agent_id {
+            if let Ok(agent_docs) = server_repo.get_agent_context(agent_id).await {
+                if !agent_docs.is_empty() && !context_opened {
+                    full_prompt.push_str("\n\n<context>");
+                    context_opened = true;
+                }
+                for doc in &agent_docs {
+                    full_prompt.push_str(&format!(
+                        "\n<document title=\"{}\" source=\"agent\">\n{}\n</document>",
+                        doc.title, doc.content
+                    ));
+                }
             }
         }
     }

@@ -603,7 +603,7 @@ impl ServerRepo for PgRepo {
 
     async fn get_agent_context(&self, agent_id: Uuid) -> Result<Vec<DocumentRow>> {
         let rows = sqlx::query_as::<_, DocumentRow>(
-            "SELECT d.id, d.user_id, d.session_id, d.title, d.content, d.summary, d.doc_type, d.ref_tag, d.tags, d.created_at, d.updated_at FROM documents d INNER JOIN agent_context ac ON d.id = ac.document_id WHERE ac.agent_id = $1 ORDER BY d.title",
+            "SELECT d.id, d.user_id, d.session_id, d.title, d.content, d.summary, d.doc_type, d.ref_tag, d.tags, d.created_at, d.updated_at, d.workflow_id, d.target_length, d.is_static, d.source_protocol_step_id FROM documents d INNER JOIN agent_context ac ON d.id = ac.document_id WHERE ac.agent_id = $1 ORDER BY d.title",
         )
         .bind(agent_id)
         .fetch_all(&self.pool)
@@ -980,7 +980,7 @@ impl DocumentRepo for PgRepo {
             r#"
             INSERT INTO documents (id, user_id, session_id, title, content, doc_type, ref_tag, tags)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at
+            RETURNING id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at, workflow_id, target_length, is_static, source_protocol_step_id
             "#,
         )
         .bind(id)
@@ -1013,7 +1013,7 @@ impl DocumentRepo for PgRepo {
                 tags = COALESCE($3, tags),
                 updated_at = NOW()
             WHERE id = $4
-            RETURNING id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at
+            RETURNING id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at, workflow_id, target_length, is_static, source_protocol_step_id
             "#,
         )
         .bind(content)
@@ -1036,7 +1036,7 @@ impl DocumentRepo for PgRepo {
     }
 
     async fn get_document(&self, doc_id: Uuid) -> Result<Option<DocumentRow>> {
-        let row: Option<DocumentRow> = sqlx::query_as("SELECT id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at FROM documents WHERE id = $1")
+        let row: Option<DocumentRow> = sqlx::query_as("SELECT id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at, workflow_id, target_length, is_static, source_protocol_step_id FROM documents WHERE id = $1")
             .bind(doc_id)
             .fetch_optional(&self.pool)
             .await?;
@@ -1044,7 +1044,7 @@ impl DocumentRepo for PgRepo {
     }
 
     async fn get_document_by_ref_tag(&self, ref_tag: &str) -> Result<Option<DocumentRow>> {
-        let row: Option<DocumentRow> = sqlx::query_as("SELECT id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at FROM documents WHERE ref_tag = $1")
+        let row: Option<DocumentRow> = sqlx::query_as("SELECT id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at, workflow_id, target_length, is_static, source_protocol_step_id FROM documents WHERE ref_tag = $1")
             .bind(ref_tag)
             .fetch_optional(&self.pool)
             .await?;
@@ -1053,7 +1053,7 @@ impl DocumentRepo for PgRepo {
 
     async fn list_documents(&self, user_id: Uuid) -> Result<Vec<DocumentRow>> {
         let rows: Vec<DocumentRow> =
-            sqlx::query_as("SELECT id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at FROM documents WHERE user_id = $1 ORDER BY updated_at DESC")
+            sqlx::query_as("SELECT id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at, workflow_id, target_length, is_static, source_protocol_step_id FROM documents WHERE user_id = $1 ORDER BY updated_at DESC")
                 .bind(user_id)
                 .fetch_all(&self.pool)
                 .await?;
@@ -1376,8 +1376,8 @@ impl WorkflowRepo for PgRepo {
     async fn create_step(&self, step: WorkflowStepRow) -> Result<WorkflowStepRow> {
         let row: WorkflowStepRow = sqlx::query_as(
             r#"
-            INSERT INTO workflow_steps (id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, for_each_label_field, display_order, reasoning_trace, verification_agent_ids, position_x, position_y, name, system_prompt_suffix)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+            INSERT INTO workflow_steps (id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, for_each_label_field, display_order, reasoning_trace, verification_agent_ids, position_x, position_y, name, system_prompt_suffix, visible)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
             RETURNING *
             "#,
         )
@@ -1399,6 +1399,7 @@ impl WorkflowRepo for PgRepo {
         .bind(step.position_y)
         .bind(&step.name)
         .bind(&step.system_prompt_suffix)
+        .bind(step.visible)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -1430,8 +1431,8 @@ impl WorkflowRepo for PgRepo {
             SET agent_id = $1, execution_mode = $2, for_each_ref = $3, prompt_template_id = $4, prompt_template = $5,
                 output_schema_id = $6, output_variable_name = $7, interactive_agent_id = $8, for_each_label_field = $9, display_order = $10,
                 reasoning_trace = $11, verification_agent_ids = $12, position_x = $13, position_y = $14, name = $15, system_prompt_suffix = $16,
-                version = version + 1
-            WHERE id = $17
+                visible = $17, version = version + 1
+            WHERE id = $18
             RETURNING *
             "#,
         )
@@ -1451,6 +1452,7 @@ impl WorkflowRepo for PgRepo {
         .bind(step.position_y)
         .bind(&step.name)
         .bind(&step.system_prompt_suffix)
+        .bind(step.visible)
         .bind(step.id)
         .fetch_one(&self.pool)
         .await?;
@@ -1568,7 +1570,7 @@ impl WorkflowRepo for PgRepo {
 
     async fn list_document_defs(&self, step_id: Uuid) -> Result<Vec<ProtocolDocumentDefRow>> {
         let rows = sqlx::query_as::<_, ProtocolDocumentDefRow>(
-            "SELECT id, step_id, name, description, target_length, display_order, created_at FROM protocol_document_defs WHERE step_id = $1 ORDER BY display_order, created_at",
+            "SELECT id, step_id, name, description, target_length, display_order, created_at, protocol_id, document_id FROM protocol_document_defs WHERE step_id = $1 ORDER BY display_order, created_at",
         )
         .bind(step_id)
         .fetch_all(&self.pool)
@@ -1581,7 +1583,7 @@ impl WorkflowRepo for PgRepo {
         def: ProtocolDocumentDefRow,
     ) -> Result<ProtocolDocumentDefRow> {
         let row = sqlx::query_as::<_, ProtocolDocumentDefRow>(
-            "INSERT INTO protocol_document_defs (id, step_id, name, description, target_length, display_order) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, step_id, name, description, target_length, display_order, created_at",
+            "INSERT INTO protocol_document_defs (id, step_id, name, description, target_length, display_order, protocol_id, document_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, step_id, name, description, target_length, display_order, created_at, protocol_id, document_id",
         )
         .bind(def.id)
         .bind(def.step_id)
@@ -1589,6 +1591,8 @@ impl WorkflowRepo for PgRepo {
         .bind(&def.description)
         .bind(def.target_length)
         .bind(def.display_order)
+        .bind(def.protocol_id)
+        .bind(def.document_id)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -1602,7 +1606,7 @@ impl WorkflowRepo for PgRepo {
         target_length: i32,
     ) -> Result<ProtocolDocumentDefRow> {
         let row = sqlx::query_as::<_, ProtocolDocumentDefRow>(
-            "UPDATE protocol_document_defs SET name = $2, description = $3, target_length = $4 WHERE id = $1 RETURNING id, step_id, name, description, target_length, display_order, created_at",
+            "UPDATE protocol_document_defs SET name = $2, description = $3, target_length = $4 WHERE id = $1 RETURNING id, step_id, name, description, target_length, display_order, created_at, protocol_id, document_id",
         )
         .bind(id)
         .bind(&name)

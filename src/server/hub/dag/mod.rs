@@ -539,14 +539,21 @@ pub async fn execute_workflow_via_engine(
         }
 
         // Load agent
+        let agent_id = step.agent_id.ok_or_else(|| {
+            HubError::Internal(anyhow::anyhow!(
+                "step {} has no agent_id for mode '{}'",
+                step_id,
+                step.execution_mode
+            ))
+        })?;
         let agent = state
             .repo()
-            .get_persisted_agent(step.agent_id)
+            .get_persisted_agent(agent_id)
             .await
             .map_err(|e| anyhow::anyhow!("failed to load agent: {}", e))?
             .ok_or_else(|| HubError::AgentNotFound {
                 step_id: *step_id,
-                agent_id: step.agent_id,
+                agent_id,
             })?;
 
         // Resolve provider: use registry if agent targets non-default provider
@@ -1975,14 +1982,21 @@ async fn execute_for_each_chain(
             .get(step_id)
             .ok_or_else(|| HubError::Internal(anyhow!("chain step {} not found", step_id)))?;
 
+        let default_agent_id = step.agent_id.ok_or_else(|| {
+            HubError::Internal(anyhow::anyhow!(
+                "chain step {} has no agent_id for mode '{}'",
+                step_id,
+                step.execution_mode
+            ))
+        })?;
         let default_agent = state
             .repo()
-            .get_persisted_agent(step.agent_id)
+            .get_persisted_agent(default_agent_id)
             .await
             .map_err(|e| anyhow::anyhow!("failed to load agent: {}", e))?
             .ok_or_else(|| HubError::AgentNotFound {
                 step_id: *step_id,
-                agent_id: step.agent_id,
+                agent_id: default_agent_id,
             })?;
 
         let routing_rules = port_meta.routing_rules.get(step_id).cloned();
@@ -2498,14 +2512,21 @@ pub async fn resume_workflow_via_engine(
             continue;
         }
 
+        let agent_id = step.agent_id.ok_or_else(|| {
+            HubError::Internal(anyhow::anyhow!(
+                "step {} has no agent_id for mode '{}'",
+                step_id,
+                step.execution_mode
+            ))
+        })?;
         let agent = state
             .repo()
-            .get_persisted_agent(step.agent_id)
+            .get_persisted_agent(agent_id)
             .await
             .map_err(|e| anyhow::anyhow!("failed to load agent: {}", e))?
             .ok_or_else(|| HubError::AgentNotFound {
                 step_id: *step_id,
-                agent_id: step.agent_id,
+                agent_id,
             })?;
 
         if step.execution_mode == "room" {

@@ -94,7 +94,7 @@ impl ProtocolExpander for DecompExpander {
         let fallback_agent_id = config.ports[0].agent_id;
         let steps = vec![StepDefinition {
             port_name: "dispatch".to_string(),
-            agent_id: fallback_agent_id,
+            agent_id: Some(fallback_agent_id),
             execution_mode: "for_each".to_string(),
             prompt_template: None,
             output_schema: None,
@@ -348,6 +348,6 @@ mod tests {
         let expansion = DecompExpander.expand(&config).unwrap();
 
         // Dispatch step's agent_id should be first port's agent (fallback)
-        assert_eq!(expansion.steps[0].agent_id, config.ports[0].agent_id);
+        assert_eq!(expansion.steps[0].agent_id, Some(config.ports[0].agent_id));
     }
 }

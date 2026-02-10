@@ -135,7 +135,7 @@ pub struct ApplyResponse {
 pub struct CreatedStepResponse {
     pub port_name: String,
     pub step_id: Uuid,
-    pub agent_id: Uuid,
+    pub agent_id: Option<Uuid>,
 }
 
 #[derive(Serialize)]
@@ -649,6 +649,7 @@ pub async fn apply_protocol(
             position_y: None,
             name: None,
             system_prompt_suffix: None,
+            visible: true,
         };
 
         let created = wf_repo

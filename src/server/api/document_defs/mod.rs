@@ -55,7 +55,7 @@ impl DocumentDefResponse {
     fn from_row(row: crate::db::ProtocolDocumentDefRow) -> Self {
         Self {
             id: row.id.to_string(),
-            step_id: row.step_id.to_string(),
+            step_id: row.step_id.map(|id| id.to_string()).unwrap_or_default(),
             name: row.name,
             description: row.description,
             target_length: row.target_length,
@@ -126,7 +126,11 @@ pub async fn list_document_defs(
 ) -> Result<Json<Vec<DocumentDefResponse>>, AppError> {
     verify_step_access(&state, wid, sid, auth.user_id.0).await?;
     let rows = state.repos().workflows.list_document_defs(sid).await?;
-    Ok(Json(rows.into_iter().map(DocumentDefResponse::from_row).collect()))
+    Ok(Json(
+        rows.into_iter()
+            .map(DocumentDefResponse::from_row)
+            .collect(),
+    ))
 }
 
 /// POST /api/workflows/:wid/steps/:sid/document-defs
@@ -155,16 +159,21 @@ pub async fn create_document_def(
 
     let def = crate::db::ProtocolDocumentDefRow {
         id: Uuid::new_v4(),
-        step_id: sid,
+        step_id: Some(sid),
         name: req.name,
         description: req.description,
         target_length: req.target_length,
         display_order: req.display_order,
         created_at: chrono::Utc::now(),
+        protocol_id: None,
+        document_id: None,
     };
 
     let row = state.repos().workflows.create_document_def(def).await?;
-    Ok((StatusCode::CREATED, Json(DocumentDefResponse::from_row(row))))
+    Ok((
+        StatusCode::CREATED,
+        Json(DocumentDefResponse::from_row(row)),
+    ))
 }
 
 /// PATCH /api/workflows/:wid/steps/:sid/document-defs/:did

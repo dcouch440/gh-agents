@@ -42,11 +42,9 @@ impl ExecutionFilter for DocumenterPromptFilter {
             None => return Ok((system_prompt, messages)),
         };
 
-        let defs = self
-            .repo
-            .list_document_defs(step_id)
-            .await
-            .map_err(|e| HubError::Internal(anyhow::anyhow!("Failed to fetch document defs: {e}")))?;
+        let defs = self.repo.list_document_defs(step_id).await.map_err(|e| {
+            HubError::Internal(anyhow::anyhow!("Failed to fetch document defs: {e}"))
+        })?;
 
         if defs.is_empty() {
             debug!(

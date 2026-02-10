@@ -60,7 +60,7 @@ async fn create_test_step(repo: &PgRepo, workflow_id: Uuid, agent_id: Uuid) -> W
     let step = WorkflowStepRow {
         id: Uuid::new_v4(),
         workflow_id,
-        agent_id,
+        agent_id: Some(agent_id),
         execution_mode: "single".to_string(),
         agent_execution_mode: None,
         for_each_ref: None,
@@ -81,6 +81,7 @@ async fn create_test_step(repo: &PgRepo, workflow_id: Uuid, agent_id: Uuid) -> W
         position_y: None,
         name: None,
         system_prompt_suffix: None,
+        visible: true,
     };
     repo.create_step(step).await.unwrap()
 }

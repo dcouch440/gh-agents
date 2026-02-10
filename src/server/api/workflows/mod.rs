@@ -67,7 +67,7 @@ pub struct UpdateWorkflowRequest {
 pub struct WorkflowStepResponse {
     pub id: Uuid,
     pub workflow_id: Uuid,
-    pub agent_id: Uuid,
+    pub agent_id: Option<Uuid>,
     pub execution_mode: String,
     pub for_each_ref: Option<String>,
     pub prompt_template_id: Option<Uuid>,
@@ -84,6 +84,7 @@ pub struct WorkflowStepResponse {
     pub position_y: Option<f64>,
     pub name: Option<String>,
     pub system_prompt_suffix: Option<String>,
+    pub visible: bool,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -192,6 +193,7 @@ fn step_response(r: crate::db::WorkflowStepRow) -> WorkflowStepResponse {
         position_y: r.position_y,
         name: r.name,
         system_prompt_suffix: r.system_prompt_suffix,
+        visible: r.visible,
     }
 }
 
@@ -448,9 +450,9 @@ pub async fn create_workflow_step(
         }
     }
 
-    let (resolved_agent_id, resolved_schema_id, resolved_reasoning) =
+    let (resolved_agent_id, resolved_schema_id, resolved_reasoning): (Option<Uuid>, _, _) =
         if execution_mode == "entry" || execution_mode == "document" {
-            (crate::constants::DEFAULT_AGENT_ID, None, false)
+            (None, None, false)
         } else if execution_mode == "documenter" {
             let proto = state
                 .repos()
@@ -461,15 +463,15 @@ pub async fn create_workflow_step(
                 .flatten();
             match proto {
                 Some(p) => (
-                    p.agent_id.unwrap_or(crate::constants::DEFAULT_AGENT_ID),
+                    None, // documenter steps are agent-less
                     p.output_schema_id,
                     true, // documenter always reasons
                 ),
-                None => (crate::constants::DEFAULT_AGENT_ID, None, false),
+                None => (None, None, false),
             }
         } else {
             (
-                req.agent_id.unwrap_or(crate::constants::DEFAULT_AGENT_ID),
+                Some(req.agent_id.unwrap_or(crate::constants::DEFAULT_AGENT_ID)),
                 req.output_schema_id,
                 req.reasoning_trace.unwrap_or(false),
             )
@@ -501,6 +503,7 @@ pub async fn create_workflow_step(
         position_y: req.position_y,
         name: req.name,
         system_prompt_suffix: req.system_prompt_suffix,
+        visible: true,
     };
     let row = repo.create_step(step).await?;
     Ok((StatusCode::CREATED, Json(step_response(row))))
@@ -613,7 +616,7 @@ pub async fn update_workflow_step(
     let step = crate::db::WorkflowStepRow {
         id: p.sid,
         workflow_id: p.wid,
-        agent_id: req.agent_id.unwrap_or(existing.agent_id),
+        agent_id: req.agent_id.or(existing.agent_id),
         execution_mode: req.execution_mode.unwrap_or(existing.execution_mode),
         agent_execution_mode: existing.agent_execution_mode, // Preserve existing value
         for_each_ref: req.for_each_ref.or(existing.for_each_ref),
@@ -637,6 +640,7 @@ pub async fn update_workflow_step(
         position_y: req.position_y.or(existing.position_y),
         name: req.name.or(existing.name),
         system_prompt_suffix: req.system_prompt_suffix.or(existing.system_prompt_suffix),
+        visible: existing.visible,
     };
     let row = repo.update_step(step).await?;
     Ok(Json(step_response(row)))

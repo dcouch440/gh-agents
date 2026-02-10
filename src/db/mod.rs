@@ -38,12 +38,36 @@ pub struct AgentRow {
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct ProtocolDocumentDefRow {
     pub id: Uuid,
-    pub step_id: Uuid,
+    pub step_id: Option<Uuid>,
     pub name: String,
     pub description: String,
     pub target_length: i32,
     pub display_order: i32,
     pub created_at: DateTime<Utc>,
+    pub protocol_id: Option<Uuid>,
+    pub document_id: Option<Uuid>,
+}
+
+/// Row type for protocol execution audit trail (documenter hidden phases).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct ProtocolExecutionRow {
+    pub id: Uuid,
+    pub protocol_step_id: Uuid,
+    pub workflow_run_id: Option<Uuid>,
+    pub phase: String,
+    pub document_def_id: Option<Uuid>,
+    pub agent_id: Option<Uuid>,
+    pub input_prompt: Option<String>,
+    pub output_content: Option<String>,
+    pub status: String,
+    pub error_message: Option<String>,
+    pub tokens_in: Option<i32>,
+    pub tokens_out: Option<i32>,
+    pub cost_usd: Option<f64>,
+    pub model: Option<String>,
+    pub capabilities_used: Option<Vec<String>>,
+    pub created_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
 }
 
 /// Row type for agent guidance (distilled feedback / learned instructions).
@@ -86,6 +110,10 @@ pub struct DocumentRow {
     pub tags: Option<Vec<String>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub workflow_id: Option<Uuid>,
+    pub target_length: Option<i32>,
+    pub is_static: Option<bool>,
+    pub source_protocol_step_id: Option<Uuid>,
 }
 
 /// Search result for documents (no full content).
@@ -141,8 +169,8 @@ pub struct WorkflowRow {
 pub struct WorkflowStepRow {
     pub id: Uuid,
     pub workflow_id: Uuid,
-    pub agent_id: Uuid,
-    pub execution_mode: String, // "single", "for_each", or "room"
+    pub agent_id: Option<Uuid>,
+    pub execution_mode: String, // "single", "for_each", "room", "documenter", etc.
     pub agent_execution_mode: Option<String>, // "sequential" or "parallel", NULL = inherit from workflow
     pub for_each_ref: Option<String>,
     pub prompt_template_id: Option<Uuid>,
@@ -162,6 +190,7 @@ pub struct WorkflowStepRow {
     pub position_y: Option<f64>,
     pub name: Option<String>,
     pub system_prompt_suffix: Option<String>,
+    pub visible: bool,
 }
 
 /// Row type for a workflow step edge (DAG edge).
