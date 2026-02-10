@@ -6,7 +6,6 @@ import {
   DialogContentText,
   DialogActions,
   Alert,
-  CircularProgress,
 } from '@mui/material'
 import {Button} from '@/components/primitives'
 
@@ -66,17 +65,16 @@ function ConfirmModal({
       </DialogContent>
 
       <DialogActions sx={{px: 3, py: 2}}>
-        <Button onClick={onClose} disabled={loading}>
+        <Button onClick={onClose} disabled={loading} variant="secondary">
           {cancelText}
         </Button>
         <Button
           onClick={handleConfirm}
-          variant="contained"
-          color={confirmColor}
+          variant={confirmColor === 'error' ? 'danger' : 'primary'}
           disabled={loading}
-          startIcon={loading ? <CircularProgress size={16} /> : undefined}
+          loading={loading}
         >
-          {loading ? 'Processing...' : confirmText}
+          {confirmText}
         </Button>
       </DialogActions>
     </Dialog>

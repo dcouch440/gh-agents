@@ -26,7 +26,8 @@ function WorkflowsPage() {
   const workflows = useStore(workflowStore.store, workflowStore.selectAll)
   const loading = useStore(workflowStore.store, workflowStore.selectLoading)
   const error = useStore(workflowStore.store, workflowStore.selectError)
-  const confirm = useConfirmModal()
+  const confirmModal = useConfirmModal()
+  const { openConfirm } = confirmModal
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
 
@@ -45,19 +46,18 @@ function WorkflowsPage() {
   }, [newName, navigate])
 
   const handleDelete = useCallback(
-    async (workflow: Workflow) => {
-      confirm.openConfirm({
+    (workflow: Workflow) => {
+      openConfirm({
         title: 'Delete Workflow',
         message: `Are you sure you want to delete "${workflow.name}"? This action cannot be undone.`,
         confirmText: 'Delete',
         confirmColor: 'error',
-      })
-
-      await confirm.confirmAsync(async () => {
-        await workflowStore.remove(workflow.id)
+        onConfirm: async () => {
+          await workflowStore.remove(workflow.id)
+        },
       })
     },
-    [confirm],
+    [openConfirm],
   )
 
   const formatDate = (iso: string): string => {
@@ -215,16 +215,16 @@ function WorkflowsPage() {
         )}
 
         <ConfirmModal
-          open={confirm.open}
-          onClose={confirm.closeConfirm}
-          onConfirm={confirm.onConfirm}
-          title={confirm.title}
-          message={confirm.message}
-          confirmText={confirm.confirmText}
-          cancelText={confirm.cancelText}
-          confirmColor={confirm.confirmColor}
-          loading={confirm.loading}
-          error={confirm.error}
+          open={confirmModal.open}
+          onClose={confirmModal.closeConfirm}
+          onConfirm={confirmModal.handleConfirm}
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmText={confirmModal.confirmText}
+          cancelText={confirmModal.cancelText}
+          confirmColor={confirmModal.confirmColor}
+          loading={confirmModal.loading}
+          error={confirmModal.error}
         />
       </Box>
     </FadeIn>
