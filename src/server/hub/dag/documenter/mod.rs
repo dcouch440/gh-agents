@@ -9,26 +9,26 @@
 //! 3. **Write** — parallel per-document single-turn LLM calls producing final content
 
 use anyhow::anyhow;
-use chrono::Utc;
 use serde_json::Value as JsonValue;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use crate::db::{ProtocolDocumentDefRow, ProtocolExecutionRow, WorkflowStepRow};
+use crate::db::{ProtocolDocumentDefRow, WorkflowStepRow};
 use crate::server::hub::capability_resolver::resolve_capabilities_to_tools;
 use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::error::HubError;
+use crate::server::hub::protocols::execution_recorder::ProtocolExecutionRecorder;
 use crate::server::hub::recorder::ExecutionRecorder;
 use crate::server::hub::strategies::compute_cost;
-use crate::server::hub::strategies::documenter_research::{
+use crate::server::hub::strategies::documenter::coordinator::{
+    DocumenterCoordinatorConfig, DocumenterCoordinatorStrategy,
+};
+use crate::server::hub::strategies::documenter::research::{
     DocumenterResearchConfig, DocumenterResearchStrategy,
 };
-use crate::server::hub::strategies::documenter_strategy::{
-    DocumenterStrategyConfig, DocumenterStrategyStrategy,
-};
-use crate::server::hub::strategies::documenter_writer::{
+use crate::server::hub::strategies::documenter::writer::{
     DocumenterWriterConfig, DocumenterWriterStrategy,
 };
 use crate::server::hub::streaming::NullSink;
@@ -65,6 +65,7 @@ pub(crate) struct DocumenterExecutor<'a> {
     prompt: &'a str,
     cancel: Option<&'a CancellationToken>,
     upstream_context: &'a [ContextDocument],
+    recorder: ProtocolExecutionRecorder<'a>,
 }
 
 /// Internal result from a single research or write task.
@@ -87,85 +88,8 @@ struct StrategyPhaseResult {
     cost_usd: f32,
 }
 
-/// A context document available to the documenter pipeline.
-///
-/// Loaded from agent context and step documents, then selectively injected
-/// into research and write phase prompts based on strategy LLM assignments.
-#[derive(Debug, Clone)]
-pub(crate) struct ContextDocument {
-    pub(crate) short_id: String,
-    pub(crate) title: String,
-    pub(crate) content: String,
-}
-
-/// Extract JSON content from an LLM response, stripping markdown code fences if present.
-///
-/// Tries in order: raw JSON, `` ```json `` fences, bare `` ``` `` fences, then `{…}` extraction.
-pub(crate) fn extract_json_content(content: &str) -> String {
-    let trimmed = content.trim();
-
-    // Try raw parse first
-    if serde_json::from_str::<serde_json::Value>(trimmed).is_ok() {
-        return trimmed.to_string();
-    }
-
-    // Try ```json fence
-    if let Some(start) = trimmed.find("```json") {
-        if let Some(end) = trimmed[start + 7..].find("```") {
-            return trimmed[start + 7..start + 7 + end].trim().to_string();
-        }
-    }
-
-    // Try bare ``` fence
-    if let Some(start) = trimmed.find("```") {
-        if let Some(end) = trimmed[start + 3..].find("```") {
-            return trimmed[start + 3..start + 3 + end].trim().to_string();
-        }
-    }
-
-    // Try extracting { ... }
-    if let Some(start) = trimmed.find('{') {
-        if let Some(end) = trimmed.rfind('}') {
-            return trimmed[start..=end].to_string();
-        }
-    }
-
-    trimmed.to_string()
-}
-
-/// Build a `<context>` block from assigned document IDs.
-///
-/// - If `all_docs` is empty, returns empty string (no context exists).
-/// - If `assigned_ids` is empty, includes ALL docs (backward compat).
-/// - If `assigned_ids` is non-empty, filters to only matching docs.
-pub(crate) fn build_context_block(assigned_ids: &[String], all_docs: &[ContextDocument]) -> String {
-    if all_docs.is_empty() {
-        return String::new();
-    }
-
-    let relevant_docs: Vec<&ContextDocument> = if assigned_ids.is_empty() {
-        all_docs.iter().collect()
-    } else {
-        all_docs
-            .iter()
-            .filter(|d| assigned_ids.contains(&d.short_id))
-            .collect()
-    };
-
-    if relevant_docs.is_empty() {
-        return String::new();
-    }
-
-    let mut block = String::from("<context>");
-    for doc in relevant_docs {
-        block.push_str(&format!(
-            "\n<document_{} title=\"{}\">\n{}\n</document_{}>",
-            doc.short_id, doc.title, doc.content, doc.short_id
-        ));
-    }
-    block.push_str("\n</context>");
-    block
-}
+pub(crate) use crate::server::hub::protocols::context::{build_context_block, ContextDocument};
+use crate::server::hub::protocols::json_utils::extract_json_from_llm_response;
 
 impl<'a> DocumenterExecutor<'a> {
     pub fn new(
@@ -177,6 +101,11 @@ impl<'a> DocumenterExecutor<'a> {
         cancel: Option<&'a CancellationToken>,
         upstream_context: &'a [ContextDocument],
     ) -> Self {
+        let recorder = ProtocolExecutionRecorder::new(
+            &*state.repos().protocols,
+            step.id,
+            ctx.run_id,
+        );
         Self {
             engine,
             state,
@@ -185,6 +114,7 @@ impl<'a> DocumenterExecutor<'a> {
             prompt,
             cancel,
             upstream_context,
+            recorder,
         }
     }
 
@@ -349,10 +279,10 @@ impl<'a> DocumenterExecutor<'a> {
 
         // Create protocol execution record
         let exec_row = self
-            .create_execution_row("strategy", None, Some(self.prompt))
+            .recorder.create_phase("strategy", None, Some(self.prompt))
             .await?;
 
-        let strategy = DocumenterStrategyStrategy::new(DocumenterStrategyConfig {
+        let strategy = DocumenterCoordinatorStrategy::new(DocumenterCoordinatorConfig {
             system_prompt: system_prompt.to_string(),
             model_id: model_id.to_string(),
             state: Some(self.state.clone()),
@@ -374,7 +304,7 @@ impl<'a> DocumenterExecutor<'a> {
                 );
 
                 // Parse strategy output (strip markdown code fences if present)
-                let json_str = extract_json_content(&exec_result.content);
+                let json_str = extract_json_from_llm_response(&exec_result.content);
                 match serde_json::from_str::<types::StrategyOutput>(&json_str) {
                     Ok(strategy_output) => {
                         // Validate: every plan should reference a known doc def
@@ -389,7 +319,7 @@ impl<'a> DocumenterExecutor<'a> {
                             }
                         }
 
-                        self.update_execution_row(
+                        self.recorder.update_phase(
                             exec_row.id,
                             "complete",
                             Some(&exec_result.content),
@@ -413,7 +343,7 @@ impl<'a> DocumenterExecutor<'a> {
                     Err(parse_err) => {
                         let err_msg = format!("Failed to parse strategy output: {}", parse_err);
                         error!(step_id = %self.step.id, %err_msg);
-                        self.update_execution_row(
+                        self.recorder.update_phase(
                             exec_row.id,
                             "failed",
                             Some(&exec_result.content),
@@ -431,7 +361,7 @@ impl<'a> DocumenterExecutor<'a> {
             Err(e) => {
                 let err_msg = format!("Strategy phase LLM call failed: {}", e);
                 error!(step_id = %self.step.id, %err_msg);
-                self.update_execution_row(
+                self.recorder.update_phase(
                     exec_row.id,
                     "failed",
                     None,
@@ -471,7 +401,7 @@ impl<'a> DocumenterExecutor<'a> {
 
             // Create execution row before spawning
             let exec_row = match self
-                .create_execution_row("research", doc_def_id, Some(&plan.research_strategy))
+                .recorder.create_phase("research", doc_def_id, Some(&plan.research_strategy))
                 .await
             {
                 Ok(row) => row,
@@ -579,7 +509,7 @@ impl<'a> DocumenterExecutor<'a> {
                     } else {
                         "failed"
                     };
-                    self.update_execution_row(
+                    self.recorder.update_phase(
                         task_result.exec_id,
                         status,
                         Some(&task_result.content),
@@ -671,7 +601,7 @@ impl<'a> DocumenterExecutor<'a> {
             let input_prompt =
                 compose_write_prompt(writer_prompt_prefix, &context_block, &research.content);
             let exec_row = match self
-                .create_execution_row("write", doc_def_id, Some(&input_prompt))
+                .recorder.create_phase("write", doc_def_id, Some(&input_prompt))
                 .await
             {
                 Ok(row) => row,
@@ -809,7 +739,7 @@ impl<'a> DocumenterExecutor<'a> {
                     } else {
                         "failed"
                     };
-                    self.update_execution_row(
+                    self.recorder.update_phase(
                         task_result.exec_id,
                         status,
                         Some(&task_result.content),
@@ -968,67 +898,6 @@ impl<'a> DocumenterExecutor<'a> {
         );
     }
 
-    async fn create_execution_row(
-        &self,
-        phase: &str,
-        document_def_id: Option<Uuid>,
-        input_prompt: Option<&str>,
-    ) -> Result<ProtocolExecutionRow, HubError> {
-        let row = ProtocolExecutionRow {
-            id: Uuid::new_v4(),
-            protocol_step_id: self.step.id,
-            workflow_run_id: Some(self.ctx.run_id),
-            phase: phase.to_string(),
-            document_def_id,
-            agent_id: None,
-            input_prompt: input_prompt.map(String::from),
-            output_content: None,
-            status: "running".to_string(),
-            error_message: None,
-            tokens_in: None,
-            tokens_out: None,
-            cost_usd: None,
-            model: None,
-            capabilities_used: None,
-            created_at: Utc::now(),
-            completed_at: None,
-        };
-
-        self.state
-            .repos()
-            .protocols
-            .create_protocol_execution(row)
-            .await
-            .map_err(|e| HubError::Internal(anyhow!("failed to create execution row: {}", e)))
-    }
-
-    async fn update_execution_row(
-        &self,
-        id: Uuid,
-        status: &str,
-        output_content: Option<&str>,
-        error_message: Option<&str>,
-        tokens_in: i64,
-        tokens_out: i64,
-        cost_usd: f32,
-        model: Option<&str>,
-    ) {
-        let _ = self
-            .state
-            .repos()
-            .protocols
-            .update_protocol_execution_status(
-                id,
-                status.to_string(),
-                output_content.map(String::from),
-                error_message.map(String::from),
-                Some(tokens_in as i32),
-                Some(tokens_out as i32),
-                Some(cost_usd as f64),
-                model.map(String::from),
-            )
-            .await;
-    }
 }
 
 /// Build a structured output JSON summarising document results.
