@@ -1,4 +1,4 @@
-export const DOCUMENT_NODE = {
+export const CONTEXT_NODE = {
   DEFAULT_WIDTH: 420,
   DEFAULT_HEIGHT: 360,
   MIN_WIDTH: 280,
@@ -6,5 +6,5 @@ export const DOCUMENT_NODE = {
   MAX_WIDTH: 800,
   MAX_HEIGHT: 700,
   HEADER_HEIGHT: 44,
-  ACCENT_COLOR: '#D4793E',
+  ACCENT_COLOR: '#10b981',
 } as const

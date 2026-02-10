@@ -33,10 +33,12 @@ function WorkflowCanvasInner() {
   const minimapVisible = useStore(canvasStore.store, canvasStore.selectMinimapVisible)
   const toolsByAgent = useStore(agentStore.store, agentStore.selectToolsByAgent)
   const stepProtocols = useStore(canvasStore.store, canvasStore.selectStepProtocols)
+  const documentDefsByStep = useStore(workflowStore.store, workflowStore.selectDocumentDefsByStep)
   const { onNodeDragStop } = usePositionPersist()
   const [contextMenu, setContextMenu] = useState<MenuPosition>(null)
   const initialFitDone = useRef(false)
   const fetchedToolAgentIds = useRef(new Set<string>())
+  const fetchedDocDefStepIds = useRef(new Set<string>())
 
   // Fetch tools for agents not yet fetched
   useEffect(() => {
@@ -47,6 +49,16 @@ function WorkflowCanvasInner() {
       }
     })
   }, [agents])
+
+  // Fetch document defs for documenter steps not yet fetched
+  useEffect(() => {
+    steps.forEach((step) => {
+      if (step.execution_mode === 'documenter' && !fetchedDocDefStepIds.current.has(step.id)) {
+        fetchedDocDefStepIds.current.add(step.id)
+        void workflowStore.fetchDocumentDefs(step.id)
+      }
+    })
+  }, [steps])
 
   useEffect(() => {
     void protocolStore.fetchAll()
@@ -115,8 +127,9 @@ function WorkflowCanvasInner() {
       edges,
       toolsByAgent: toolsByAgentLookup,
       protocolsByStep: protocolsByStepLookup,
+      documentDefsByStep,
     }),
-    [agentLookup, schemaLookup, stepNameLookup, edges, toolsByAgentLookup, protocolsByStepLookup],
+    [agentLookup, schemaLookup, stepNameLookup, edges, toolsByAgentLookup, protocolsByStepLookup, documentDefsByStep],
   )
 
   // Map store data to RF format
@@ -239,6 +252,18 @@ function WorkflowCanvasInner() {
     })
   }, [])
 
+  // Edge validation — context nodes are source-only, no self-loops
+  const isValidConnection = useCallback(
+    (connection: Connection) => {
+      const targetStep = steps.find((s) => s.id === connection.target)
+      if (!targetStep) return false
+      if (targetStep.execution_mode === 'context') return false
+      if (connection.source === connection.target) return false
+      return true
+    },
+    [steps],
+  )
+
   // Edge creation
   const onConnect = useCallback((connection: Connection) => {
     if (!connection.source || !connection.target) return
@@ -353,6 +378,7 @@ function WorkflowCanvasInner() {
         edgeTypes={edgeTypes}
         onSelectionChange={onSelectionChange}
         onNodeDragStop={onNodeDragStop}
+        isValidConnection={isValidConnection}
         onConnect={onConnect}
         onReconnect={onReconnect}
         onNodesDelete={onNodesDelete}

@@ -472,8 +472,8 @@ pub async fn execute_workflow_via_engine(
             continue;
         }
 
-        // Entry / document steps pass through their prompt_template as output — no LLM call
-        if step.execution_mode == "entry" || step.execution_mode == "document" {
+        // Context steps pass through their prompt_template as output — no LLM call
+        if step.execution_mode == "context" {
             let step_start = std::time::Instant::now();
             let output_key = resolve_output_key(step, &port_meta.step_outputs);
             let content = if step.prompt_template.is_empty() {
@@ -535,7 +535,7 @@ pub async fn execute_workflow_via_engine(
                 },
             );
 
-            info!(step_id = %step.id, "Entry step pass-through completed");
+            info!(step_id = %step.id, "Context step pass-through completed");
             continue;
         }
 
