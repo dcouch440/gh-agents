@@ -109,6 +109,7 @@ function CanvasFormNodeComponent({
           return (
             <Tooltip key={tab.id} title={tab.tooltip} placement="bottom">
               <Box
+                data-testid={`tab-${tab.id}`}
                 onClick={() => { onTabChange(tab.id) }}
                 role="tab"
                 tabIndex={0}

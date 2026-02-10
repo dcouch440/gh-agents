@@ -1,7 +1,10 @@
+import { useCallback } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import { useStore, workflowStore, protocolStore, canvasStore } from '@/stores'
 import { STEP_TYPE_COLORS, DEFAULT_STEP_TYPE_COLOR, PROTOCOL_TYPE_COLORS } from './constants'
+
+const VIEWPORT_PADDING = 8
 
 type MenuPosition = {
   x: number
@@ -35,6 +38,20 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
   const allProtocols = useStore(protocolStore.store, protocolStore.selectAll)
   const steps = useStore(workflowStore.store, workflowStore.selectSteps)
   const hasEntry = steps.some((s) => s.execution_mode === 'entry')
+
+  // Callback ref: clamp menu position to stay within viewport after mount
+  const menuRef = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return
+    const rect = node.getBoundingClientRect()
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    if (rect.right > vw - VIEWPORT_PADDING) {
+      node.style.left = `${vw - rect.width - VIEWPORT_PADDING}px`
+    }
+    if (rect.bottom > vh - VIEWPORT_PADDING) {
+      node.style.top = `${vh - rect.height - VIEWPORT_PADDING}px`
+    }
+  }, [])
 
   if (!position) return null
 
@@ -131,6 +148,8 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
 
   return (
     <Box
+      ref={menuRef}
+      data-testid="canvas-context-menu"
       onMouseDown={(e) => { e.stopPropagation() }}
       sx={{
         position: 'fixed',
@@ -150,6 +169,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
     >
       {position.nodeId !== undefined ? (
         <Box
+          data-testid="ctx-delete-step"
           onClick={handleDelete}
           sx={{
             display: 'flex',
@@ -183,6 +203,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
           {STEP_TYPES.map((st) => (
             <Box
               key={st.key}
+              data-testid={`ctx-add-${st.key}`}
               onClick={(event) => {
                 handleAdd(event, st.key, st.label)
               }}
@@ -260,6 +281,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
           )}
           <Box sx={{ mx: 1.5, my: 0.5, borderTop: 1, borderColor: 'divider' }} />
           <Box
+            data-testid="ctx-add-documenter"
             onClick={handleAddDocumenter}
             sx={{
               display: 'flex',
@@ -299,6 +321,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
             Document
           </Typography>
           <Box
+            data-testid="ctx-add-entry"
             onClick={handleAddEntry}
             sx={{
               display: 'flex',
@@ -325,6 +348,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
             </Typography>
           </Box>
           <Box
+            data-testid="ctx-add-document"
             onClick={handleAddDocument}
             sx={{
               display: 'flex',

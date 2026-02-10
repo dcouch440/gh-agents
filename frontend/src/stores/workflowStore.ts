@@ -14,6 +14,8 @@ import type {
   UpdateStepRequest,
   WorkflowStepEdge,
   EdgeRequest,
+  DocumentDef,
+  CreateDocumentDefRequest,
 } from '@/types/workflow'
 import type { Document } from '@/types/document'
 
@@ -25,6 +27,7 @@ type WorkflowState = {
   steps: NormalizedMap<WorkflowStep>
   edges: NormalizedMap<WorkflowStepEdge>
   documentsByStep: Record<string, Document[]>
+  documentDefsByStep: Record<string, DocumentDef[]>
   dirtyStepIds: Set<string>
   loading: boolean
   error: string | null
@@ -42,6 +45,7 @@ const store = logger('workflowStore', createStore<WorkflowState>(() => ({
   steps: createNormalizedMap<WorkflowStep>(),
   edges: createNormalizedMap<WorkflowStepEdge>(),
   documentsByStep: {},
+  documentDefsByStep: {},
   dirtyStepIds: new Set<string>(),
   loading: false,
   error: null,
@@ -57,6 +61,7 @@ const extractError = (e: unknown): string =>
 const getActiveId = (): string | null => store.getState().activeWorkflowId
 
 const EMPTY_DOCS: Document[] = []
+const EMPTY_DEFS: DocumentDef[] = []
 
 // ── Selectors ────────────────────────────────────────────────────────────────
 
@@ -79,6 +84,9 @@ const selectEdgeById = (id: string | null) => (s: WorkflowState): WorkflowStepEd
 
 const selectStepDocuments = (stepId: string) => (s: WorkflowState): Document[] =>
   s.documentsByStep[stepId] ?? EMPTY_DOCS
+
+const selectStepDocumentDefs = (stepId: string) => (s: WorkflowState): DocumentDef[] =>
+  s.documentDefsByStep[stepId] ?? EMPTY_DEFS
 
 const selectLoading = (s: WorkflowState): boolean => s.loading
 
@@ -154,6 +162,7 @@ const loadWorkflow = async (id: string): Promise<void> => {
       steps: nmFromArray(steps),
       edges: nmFromArray(edges),
       documentsByStep: {},
+      documentDefsByStep: {},
       dirtyStepIds: new Set<string>(),
       loading: false,
       dirty: false,
@@ -169,6 +178,7 @@ const clearActive = (): void => {
     steps: createNormalizedMap<WorkflowStep>(),
     edges: createNormalizedMap<WorkflowStepEdge>(),
     documentsByStep: {},
+    documentDefsByStep: {},
     dirtyStepIds: new Set<string>(),
     dirty: false,
   })
@@ -188,6 +198,12 @@ const patchStepLocal = (stepId: string, partial: Partial<WorkflowStep>): void =>
   store.setState((s) => {
     const existing = nmGet(s.steps, stepId)
     if (!existing) return {}
+
+    // Skip if all values in partial are already identical
+    const keys = Object.keys(partial) as (keyof WorkflowStep)[]
+    const hasChange = keys.some((k) => !Object.is(existing[k], partial[k]))
+    if (!hasChange) return {}
+
     const nextDirty = new Set(s.dirtyStepIds)
     nextDirty.add(stepId)
     return {
@@ -331,6 +347,36 @@ const removeStepDocument = async (stepId: string, docId: string): Promise<void> 
   await fetchStepDocuments(stepId)
 }
 
+// ── Document Defs ───────────────────────────────────────────────────────────
+
+const fetchDocumentDefs = async (stepId: string): Promise<void> => {
+  const wid = getActiveId()
+  if (!wid) return
+  try {
+    const defs = await api.workflows.listDocumentDefs(wid, stepId)
+    store.setState((s) => ({
+      documentDefsByStep: { ...s.documentDefsByStep, [stepId]: defs },
+    }))
+  } catch (e) {
+    store.setState({ error: extractError(e) })
+  }
+}
+
+const createDocumentDef = async (stepId: string, body: CreateDocumentDefRequest): Promise<DocumentDef | null> => {
+  const wid = getActiveId()
+  if (!wid) return null
+  const def = await api.workflows.createDocumentDef(wid, stepId, body)
+  await fetchDocumentDefs(stepId)
+  return def
+}
+
+const deleteDocumentDef = async (stepId: string, defId: string): Promise<void> => {
+  const wid = getActiveId()
+  if (!wid) return
+  await api.workflows.deleteDocumentDef(wid, stepId, defId)
+  await fetchDocumentDefs(stepId)
+}
+
 // ── Sync / Utility ───────────────────────────────────────────────────────────
 
 const setDirty = (dirty: boolean): void => {
@@ -353,6 +399,7 @@ export const workflowStore = {
   selectStepById,
   selectEdgeById,
   selectStepDocuments,
+  selectStepDocumentDefs,
   selectLoading,
   selectError,
   selectDirty,
@@ -377,6 +424,9 @@ export const workflowStore = {
   fetchStepDocuments,
   addStepDocument,
   removeStepDocument,
+  fetchDocumentDefs,
+  createDocumentDef,
+  deleteDocumentDef,
   setDirty,
   upsert,
 }
