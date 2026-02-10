@@ -14,6 +14,8 @@ type CustomTokens = {
   activeGradientVertical: string;
   activeGlow: string;
   gridDotColor: string;
+  gridLineColor: string;
+  canvasVignette: string;
   minimapBg: string;
   minimapMask: string;
   floatingPanelBg: string;
@@ -41,6 +43,8 @@ const lightCustomTokens: CustomTokens = {
   activeGradientVertical: 'linear-gradient(180deg, #FF964F, #4E8A5A)',
   activeGlow: 'drop-shadow(0 0 6px rgba(255, 150, 79, 0.35))',
   gridDotColor: 'rgba(45, 27, 14, 0.18)',
+  gridLineColor: 'rgba(45, 27, 14, 0.07)',
+  canvasVignette: 'rgba(45, 27, 14, 0.06)',
   minimapBg: 'rgba(240, 235, 227, 0.9)',
   minimapMask: 'rgba(249, 246, 241, 0.7)',
   floatingPanelBg: 'rgba(254, 252, 250, 0.96)',
@@ -67,7 +71,9 @@ const darkCustomTokens: CustomTokens = {
   activeGradient: 'linear-gradient(90deg, #3b82f6, #2dd4bf)',
   activeGradientVertical: 'linear-gradient(180deg, #3b82f6, #2dd4bf)',
   activeGlow: 'drop-shadow(0 0 4px rgba(59, 130, 246, 0.4))',
-  gridDotColor: 'rgba(255, 255, 255, 0.03)',
+  gridDotColor: 'rgba(255, 255, 255, 0.05)',
+  gridLineColor: 'rgba(255, 255, 255, 0.025)',
+  canvasVignette: 'rgba(0, 0, 0, 0.15)',
   minimapBg: 'rgba(6, 10, 16, 0.9)',
   minimapMask: 'rgba(0, 0, 0, 0.7)',
   floatingPanelBg: 'rgba(12, 16, 24, 0.92)',
