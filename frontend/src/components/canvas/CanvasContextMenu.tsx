@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import { useStore, workflowStore, protocolStore, canvasStore } from '@/stores'
-import { STEP_TYPE_COLORS, DEFAULT_STEP_TYPE_COLOR, PROTOCOL_TYPE_COLORS } from './constants'
+import { DEFAULT_STEP_TYPE_COLOR, PROTOCOL_TYPE_COLORS, STEP_TYPE_COLORS } from './constants'
 
 const VIEWPORT_PADDING = 8
 
@@ -19,17 +19,7 @@ type CanvasContextMenuProps = {
   onClose: () => void
 }
 
-const STEP_TYPES = [
-  { key: 'single', label: 'LLM Step' },
-  { key: 'for_each', label: 'For-Each Step' },
-  { key: 'room', label: 'Room Step' },
-] as const
-
 const PROTOCOL_LABELS: Record<string, string> = {
-  decomp: 'Decomp',
-  route: 'Route',
-  review: 'Review',
-  transform: 'Transform',
   documenter: 'Documenter',
 }
 
@@ -53,18 +43,6 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
 
   if (!position) return null
 
-  const handleAdd = (event: React.MouseEvent, stepType: string, label: string) => {
-    event.stopPropagation()
-    event.preventDefault()
-    void workflowStore.createStep({
-      name: `New ${label}`,
-      execution_mode: stepType,
-      position_x: Math.round(position.flowX),
-      position_y: Math.round(position.flowY),
-    })
-    onClose()
-  }
-
   const handleAddProtocol = (event: React.MouseEvent, protocolType: string) => {
     event.stopPropagation()
     event.preventDefault()
@@ -78,7 +56,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
         agent_id: protocol?.agent?.id,
         output_schema_id: protocol?.output_schema?.id,
         prompt_template_id: protocol?.prompt_template?.id,
-        prompt_template: protocol?.prompt_template?.content ?? '',
+        prompt_template: '',
         position_x: Math.round(position.flowX),
         position_y: Math.round(position.flowY),
       })
@@ -101,18 +79,6 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
     void workflowStore.createStep({
       name: 'Context',
       execution_mode: 'context',
-      position_x: Math.round(position.flowX),
-      position_y: Math.round(position.flowY),
-    })
-    onClose()
-  }
-
-  const handleAddDocumenter = (event: React.MouseEvent) => {
-    event.stopPropagation()
-    event.preventDefault()
-    void workflowStore.createStep({
-      name: 'New Documenter',
-      execution_mode: 'documenter',
       position_x: Math.round(position.flowX),
       position_y: Math.round(position.flowY),
     })
@@ -178,109 +144,53 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
               fontWeight: 600,
             }}
           >
-            Add Step
+            Protocols
           </Typography>
-          {STEP_TYPES.map((st) => (
-            <Box
-              key={st.key}
-              data-testid={`ctx-add-${st.key}`}
-              onClick={(event) => {
-                handleAdd(event, st.key, st.label)
-              }}
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
-                px: 1.5,
-                py: 0.75,
-                cursor: 'pointer',
-                '&:hover': { backgroundColor: 'action.hover' },
-              }}
-            >
+          {protocolTypes
+            .filter((pt) => pt.name === 'documenter')
+            .map((pt) => (
               <Box
-                sx={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  backgroundColor: STEP_TYPE_COLORS[st.key] ?? DEFAULT_STEP_TYPE_COLOR,
-                  flexShrink: 0,
+                key={pt.name}
+                data-testid="ctx-add-documenter"
+                onClick={(event) => {
+                  handleAddProtocol(event, pt.name)
                 }}
-              />
-              <Typography sx={{ fontSize: 12, color: 'text.primary' }}>{st.label}</Typography>
-            </Box>
-          ))}
-          {protocolTypes.length > 0 && (
-            <>
-              <Box sx={{ mx: 1.5, my: 0.5, borderTop: 1, borderColor: 'divider' }} />
-              <Typography
                 sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
                   px: 1.5,
                   py: 0.75,
-                  fontSize: 10,
-                  textTransform: 'uppercase',
-                  color: 'text.disabled',
-                  letterSpacing: '0.05em',
-                  fontWeight: 600,
+                  cursor: 'pointer',
+                  '&:hover': { backgroundColor: 'action.hover' },
                 }}
               >
-                Protocol
-              </Typography>
-              {protocolTypes.map((pt) => (
                 <Box
-                  key={pt.name}
-                  onClick={(event) => {
-                    handleAddProtocol(event, pt.name)
-                  }}
                   sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                    px: 1.5,
-                    py: 0.75,
-                    cursor: 'pointer',
-                    '&:hover': { backgroundColor: 'action.hover' },
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    backgroundColor: PROTOCOL_TYPE_COLORS[pt.name] ?? DEFAULT_STEP_TYPE_COLOR,
+                    flexShrink: 0,
                   }}
-                >
-                  <Box
-                    sx={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      backgroundColor: PROTOCOL_TYPE_COLORS[pt.name] ?? DEFAULT_STEP_TYPE_COLOR,
-                      flexShrink: 0,
-                    }}
-                  />
-                  <Typography sx={{ fontSize: 12, color: 'text.primary' }}>{PROTOCOL_LABELS[pt.name] ?? pt.name}</Typography>
-                </Box>
-              ))}
-            </>
-          )}
+                />
+                <Typography sx={{ fontSize: 12, color: 'text.primary' }}>{PROTOCOL_LABELS[pt.name] ?? pt.name}</Typography>
+              </Box>
+            ))}
           <Box sx={{ mx: 1.5, my: 0.5, borderTop: 1, borderColor: 'divider' }} />
-          <Box
-            data-testid="ctx-add-documenter"
-            onClick={handleAddDocumenter}
+          <Typography
             sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
               px: 1.5,
               py: 0.75,
-              cursor: 'pointer',
-              '&:hover': { backgroundColor: 'action.hover' },
+              fontSize: 10,
+              textTransform: 'uppercase',
+              color: 'text.disabled',
+              letterSpacing: '0.05em',
+              fontWeight: 600,
             }}
           >
-            <Box
-              sx={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                backgroundColor: PROTOCOL_TYPE_COLORS['documenter'] ?? DEFAULT_STEP_TYPE_COLOR,
-                flexShrink: 0,
-              }}
-            />
-            <Typography sx={{ fontSize: 12, color: 'text.primary' }}>Documenter</Typography>
-          </Box>
-          <Box sx={{ mx: 1.5, my: 0.5, borderTop: 1, borderColor: 'divider' }} />
+            Utilities
+          </Typography>
           <Box
             data-testid="ctx-add-context"
             onClick={handleAddContext}
