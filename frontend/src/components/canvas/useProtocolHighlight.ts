@@ -1,25 +1,7 @@
 import { useStore, canvasStore } from '@/stores'
 import type { CanvasState } from '@/stores'
-import { Collections } from '@/utils/collections'
-
-const HighlightMode = {
-  NONE: 'none',
-  HOVER: 'hover',
-  SELECT: 'select',
-} as const
-
-type HighlightMode = (typeof HighlightMode)[keyof typeof HighlightMode]
-
-const CanvasNodeKind = {
-  CONTEXT: 'context',
-  DOCUMENT: 'document',
-  PROTOCOL: 'protocol',
-  STEP: 'step',
-} as const
-
-type CanvasNodeKind = (typeof CanvasNodeKind)[keyof typeof CanvasNodeKind]
-
-const HOVER_ELIGIBLE_KINDS = Collections.toSet<CanvasNodeKind>(['context', 'document'])
+import type { CanvasNodeKind } from './canvasKinds'
+import { HighlightMode, HOVER_ELIGIBLE_KINDS } from './canvasKinds'
 
 const hoverStateManager = (nodeKind: CanvasNodeKind, nodeId: string, protocolStepId: string | null) =>
   (s: CanvasState): HighlightMode => {
@@ -44,5 +26,4 @@ const useProtocolHighlight = (nodeKind: CanvasNodeKind, nodeId: string, protocol
   return mode
 }
 
-export { useProtocolHighlight, CanvasNodeKind, HighlightMode, hoverStateManager }
-export type { HighlightMode }
+export { useProtocolHighlight, hoverStateManager }

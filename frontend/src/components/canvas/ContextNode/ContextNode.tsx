@@ -11,7 +11,8 @@ import { ContextNodeHeader } from './ContextNodeHeader'
 import { ContextNodeContent } from './ContextNodeContent'
 import type { ContextNodeData } from './types'
 import { nodeDataEqual } from '../mappers'
-import { useProtocolHighlight, CanvasNodeKind, HighlightMode } from '../useProtocolHighlight'
+import { CanvasNodeKind, HighlightMode } from '../canvasKinds'
+import { useProtocolHighlight } from '../useProtocolHighlight'
 
 function ContextNodeComponent({ id, data, selected }: NodeProps) {
   const theme = useTheme()

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { useProtocolHighlight, CanvasNodeKind, HighlightMode } from './useProtocolHighlight'
+import { CanvasNodeKind, HighlightMode } from './canvasKinds'
+import { useProtocolHighlight } from './useProtocolHighlight'
 import { canvasStore } from '@/stores'
 
 describe('useProtocolHighlight', () => {

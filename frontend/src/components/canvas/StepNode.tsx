@@ -12,7 +12,8 @@ import type { StepNodeData } from './mappers'
 import { nodeDataEqual } from './mappers'
 import { CanvasHandle } from './CanvasHandle'
 import { CANVAS, DEFAULT_STEP_TYPE_COLOR, PROTOCOL_TYPE_COLORS, GREYSCALE_ACCENT } from './constants'
-import { useProtocolHighlight, CanvasNodeKind, HighlightMode } from './useProtocolHighlight'
+import { CanvasNodeKind, HighlightMode } from './canvasKinds'
+import { useProtocolHighlight } from './useProtocolHighlight'
 
 const STEP_TYPE_ICONS: Record<string, typeof SettingsOutlined> = {
   single: SmartToyOutlined,

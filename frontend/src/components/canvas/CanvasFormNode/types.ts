@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type SettingsOutlined from '@mui/icons-material/SettingsOutlined'
-import type { HighlightMode } from '../useProtocolHighlight'
+import type { HighlightMode } from '../canvasKinds'
 
 /**
  * Configuration for a single tab in the horizontal icon tab strip.
