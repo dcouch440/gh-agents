@@ -68,6 +68,7 @@ vi.mock('@/stores', () => ({
   agentStore: {
     store: 'agent',
     selectAll: () => [],
+    selectToolsByAgent: (s: { toolsByAgent: Record<string, unknown[]> }) => s.toolsByAgent,
     fetchTools: vi.fn(),
   },
   outputSchemaStore: {
@@ -136,9 +137,10 @@ describe('WorkflowCanvas', () => {
     expect(screen.getByTestId('react-flow')).toBeInTheDocument()
   })
 
-  it('renders background', () => {
+  it('renders backgrounds', () => {
     render(<WorkflowCanvas />)
-    expect(screen.getByTestId('background')).toBeInTheDocument()
+    const backgrounds = screen.getAllByTestId('background')
+    expect(backgrounds).toHaveLength(2)
   })
 
   it('does not render minimap by default', () => {

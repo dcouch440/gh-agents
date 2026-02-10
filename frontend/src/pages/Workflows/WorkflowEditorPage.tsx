@@ -9,7 +9,6 @@ import {
   protocolStore,
 } from "@/stores";
 import {WorkflowCanvas} from "@/components/canvas";
-import {LoadingSpinner} from "@/components/primitives";
 
 function WorkflowEditorPage() {
   const {id} = useParams<{id: string}>();
