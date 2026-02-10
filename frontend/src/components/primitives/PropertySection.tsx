@@ -12,12 +12,7 @@ type PropertySectionProps = {
   children: ReactNode
 }
 
-function PropertySection({
-  title,
-  open = true,
-  onToggle = null,
-  children,
-}: PropertySectionProps) {
+function PropertySection({ title, open = true, onToggle = null, children }: PropertySectionProps) {
   const isCollapsible = onToggle !== null
 
   return (
@@ -60,11 +55,7 @@ function PropertySection({
           ) : null}
         </Box>
       ) : null}
-      {isCollapsible ? (
-        <Collapse in={open}>{children}</Collapse>
-      ) : (
-        children
-      )}
+      {isCollapsible ? <Collapse in={open}>{children}</Collapse> : children}
     </Box>
   )
 }

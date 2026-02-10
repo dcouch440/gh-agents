@@ -19,13 +19,7 @@ describe('AddButton', () => {
   })
 
   it('renders custom icon when provided', () => {
-    render(
-      <AddButton
-        label="Custom"
-        onClick={vi.fn()}
-        icon={<span data-testid="custom-icon">+</span>}
-      />
-    )
+    render(<AddButton label="Custom" onClick={vi.fn()} icon={<span data-testid="custom-icon">+</span>} />)
     expect(screen.getByTestId('custom-icon')).toBeInTheDocument()
   })
 

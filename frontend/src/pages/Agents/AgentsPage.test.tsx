@@ -1,9 +1,9 @@
-import {describe, it, expect, vi, beforeEach} from 'vitest'
-import {render, screen} from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import {MemoryRouter} from 'react-router-dom'
-import {AgentsPage} from './AgentsPage'
-import type {Agent} from '@/types/agent'
+import { MemoryRouter } from 'react-router-dom'
+import { AgentsPage } from './AgentsPage'
+import type { Agent } from '@/types/agent'
 
 const mockNavigate = vi.hoisted(() => vi.fn())
 const mockCreateSession = vi.hoisted(() => vi.fn())
@@ -11,7 +11,7 @@ const mockRemoveAgent = vi.hoisted(() => vi.fn())
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom')
-  return {...actual, useNavigate: () => mockNavigate}
+  return { ...actual, useNavigate: () => mockNavigate }
 })
 
 const mockAgents: Agent[] = [
@@ -79,7 +79,7 @@ vi.mock('@/stores/sessionStore', () => ({
 
 vi.mock('@/api', () => ({
   api: {
-    sessions: {create: mockCreateSession},
+    sessions: { create: mockCreateSession },
   },
 }))
 
@@ -160,9 +160,7 @@ describe('AgentsPage', () => {
       </MemoryRouter>,
     )
 
-    expect(
-      screen.getByText('No agents yet. Create your first one in the workshop!'),
-    ).toBeInTheDocument()
+    expect(screen.getByText('No agents yet. Create your first one in the workshop!')).toBeInTheDocument()
   })
 
   it('shows error message', () => {
@@ -185,9 +183,7 @@ describe('AgentsPage', () => {
       </MemoryRouter>,
     )
 
-    const searchInput = screen.getByPlaceholderText(
-      'Search agents by name, model, or prompt...',
-    )
+    const searchInput = screen.getByPlaceholderText('Search agents by name, model, or prompt...')
     expect(searchInput).toBeInTheDocument()
   })
 
@@ -352,8 +348,6 @@ describe('AgentsPage', () => {
 
     // Confirmation modal should open
     expect(screen.getByText('Delete Agent')).toBeInTheDocument()
-    expect(
-      screen.getByText(/Are you sure you want to delete "Alice Agent"/i),
-    ).toBeInTheDocument()
+    expect(screen.getByText(/Are you sure you want to delete "Alice Agent"/i)).toBeInTheDocument()
   })
 })

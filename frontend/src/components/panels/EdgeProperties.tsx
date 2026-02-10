@@ -11,15 +11,9 @@ type EdgePropertiesProps = {
 function EdgeProperties({ edge, steps }: EdgePropertiesProps) {
   const connection = useCollapsible(true)
 
-  const fromStep = useMemo(
-    () => steps.find((s) => s.id === edge.from_step_id),
-    [steps, edge.from_step_id],
-  )
+  const fromStep = useMemo(() => steps.find((s) => s.id === edge.from_step_id), [steps, edge.from_step_id])
 
-  const toStep = useMemo(
-    () => steps.find((s) => s.id === edge.to_step_id),
-    [steps, edge.to_step_id],
-  )
+  const toStep = useMemo(() => steps.find((s) => s.id === edge.to_step_id), [steps, edge.to_step_id])
 
   return (
     <PropertySection title="Connection" {...connection}>

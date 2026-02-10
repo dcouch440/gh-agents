@@ -1,31 +1,31 @@
 type CustomTokens = {
-  chromeBg: string;
-  cavityBg: string;
-  bgHeader: string;
-  bgEditor: string;
-  bgPanel: string;
-  borderHover: string;
-  textFaint: string;
-  hoverOverlay: string;
-  separatorSubtle: string;
-  activeTint: string;
-  activeTintStrong: string;
-  activeGradient: string;
-  activeGradientVertical: string;
-  activeGlow: string;
-  gridDotColor: string;
-  gridLineColor: string;
-  canvasVignette: string;
-  minimapBg: string;
-  minimapMask: string;
-  floatingPanelBg: string;
-  floatingPanelBorder: string;
-  chromeText: string;
-  chromeTextActive: string;
-  chromeTextHover: string;
-  chromeActiveGlow: string;
-  chromeActiveBar: string;
-};
+  chromeBg: string
+  cavityBg: string
+  bgHeader: string
+  bgEditor: string
+  bgPanel: string
+  borderHover: string
+  textFaint: string
+  hoverOverlay: string
+  separatorSubtle: string
+  activeTint: string
+  activeTintStrong: string
+  activeGradient: string
+  activeGradientVertical: string
+  activeGlow: string
+  gridDotColor: string
+  gridLineColor: string
+  canvasVignette: string
+  minimapBg: string
+  minimapMask: string
+  floatingPanelBg: string
+  floatingPanelBorder: string
+  chromeText: string
+  chromeTextActive: string
+  chromeTextHover: string
+  chromeActiveGlow: string
+  chromeActiveBar: string
+}
 
 const lightCustomTokens: CustomTokens = {
   chromeBg: '#D47830',
@@ -54,7 +54,7 @@ const lightCustomTokens: CustomTokens = {
   chromeTextHover: 'rgba(254, 252, 250, 0.90)',
   chromeActiveGlow: 'drop-shadow(0 0 4px rgba(255, 150, 79, 0.4))',
   chromeActiveBar: '#FEFCFA',
-};
+}
 
 const darkCustomTokens: CustomTokens = {
   chromeBg: '#12161f',
@@ -83,10 +83,9 @@ const darkCustomTokens: CustomTokens = {
   chromeTextHover: '#f0f6fc',
   chromeActiveGlow: 'drop-shadow(0 0 4px rgba(59, 130, 246, 0.4))',
   chromeActiveBar: '#3b82f6',
-};
+}
 
-const getCustomTokens = (mode: 'light' | 'dark'): CustomTokens =>
-  mode === 'light' ? lightCustomTokens : darkCustomTokens;
+const getCustomTokens = (mode: 'light' | 'dark'): CustomTokens => (mode === 'light' ? lightCustomTokens : darkCustomTokens)
 
-export { getCustomTokens };
-export type { CustomTokens };
+export { getCustomTokens }
+export type { CustomTokens }

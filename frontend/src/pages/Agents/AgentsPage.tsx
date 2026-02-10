@@ -1,23 +1,15 @@
-import {useEffect, useMemo, useState, useCallback} from 'react'
-import {useNavigate} from 'react-router-dom'
-import {Box, Button, Typography} from '@mui/material'
+import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Box, Button, Typography } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import WorkshopIcon from '@mui/icons-material/Science'
 import VisibilityIcon from '@mui/icons-material/Visibility'
-import {FadeIn} from '@/components/animation'
-import {
-  PageHeader,
-  Table,
-  StatusBadge,
-  ActionMenu,
-  ConfirmModal,
-  type TableColumn,
-  type MenuAction,
-} from '@/components/primitives'
-import {useConfirmModal} from '@/hooks/useConfirmModal'
-import {useStore, agentStore, sessionStore} from '@/stores'
-import {api} from '@/api'
-import type {Agent} from '@/types/agent'
+import { FadeIn } from '@/components/animation'
+import { PageHeader, Table, StatusBadge, ActionMenu, ConfirmModal, type TableColumn, type MenuAction } from '@/components/primitives'
+import { useConfirmModal } from '@/hooks/useConfirmModal'
+import { useStore, agentStore, sessionStore } from '@/stores'
+import { api } from '@/api'
+import type { Agent } from '@/types/agent'
 
 function AgentsPage() {
   const navigate = useNavigate()
@@ -29,7 +21,10 @@ function AgentsPage() {
   const confirmModal = useConfirmModal()
   const { openConfirm } = confirmModal
 
-  useEffect(() => { void agentStore.fetchAll(); void sessionStore.fetchAll() }, [])
+  useEffect(() => {
+    void agentStore.fetchAll()
+    void sessionStore.fetchAll()
+  }, [])
   const [creatingSession, setCreatingSession] = useState<string | null>(null)
 
   // Build a Map for O(1) agent→session lookups
@@ -47,26 +42,26 @@ function AgentsPage() {
     async (agentId: string, sessionId?: string) => {
       if (sessionId) {
         // Open existing workshop session
-        void navigate(`/agents/workshop/${sessionId}`);
+        void navigate(`/agents/workshop/${sessionId}`)
       } else {
         // Create a new session for this existing agent
-        setCreatingSession(agentId);
+        setCreatingSession(agentId)
         try {
           const session = await api.sessions.create({
-            mode_id: "workshop",
+            mode_id: 'workshop',
             agent_id: agentId,
-            title: "Agent Workshop",
-          });
-          void navigate(`/agents/workshop/${session.id}`);
+            title: 'Agent Workshop',
+          })
+          void navigate(`/agents/workshop/${session.id}`)
         } catch (err) {
-          console.error("Failed to create session:", err);
+          console.error('Failed to create session:', err)
         } finally {
-          setCreatingSession(null);
+          setCreatingSession(null)
         }
       }
     },
     [navigate],
-  );
+  )
 
   const handleNewWorkshop = useCallback(() => {
     void navigate('/agents/workshop')
@@ -133,9 +128,7 @@ function AgentsPage() {
         sortable: true,
         align: 'right' as const,
         width: 120,
-        render: (agent) => (
-          <Typography variant="body2">{agent.model_temperature}</Typography>
-        ),
+        render: (agent) => <Typography variant="body2">{agent.model_temperature}</Typography>,
       },
       {
         key: 'max_tokens',
@@ -143,11 +136,7 @@ function AgentsPage() {
         sortable: true,
         align: 'right' as const,
         width: 120,
-        render: (agent) => (
-          <Typography variant="body2">
-            {agent.model_max_tokens.toLocaleString()}
-          </Typography>
-        ),
+        render: (agent) => <Typography variant="body2">{agent.model_max_tokens.toLocaleString()}</Typography>,
       },
       {
         key: 'status',
@@ -195,12 +184,7 @@ function AgentsPage() {
             },
           ]
 
-          return (
-            <ActionMenu
-              actions={actions}
-              ariaLabel={`Actions for ${agent.name}`}
-            />
-          )
+          return <ActionMenu actions={actions} ariaLabel={`Actions for ${agent.name}`} />
         },
       },
     ],
@@ -257,4 +241,4 @@ function AgentsPage() {
   )
 }
 
-export {AgentsPage};
+export { AgentsPage }

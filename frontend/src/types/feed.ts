@@ -1,11 +1,4 @@
-type FeedItemType =
-  | 'agent_report'
-  | 'task_started'
-  | 'task_completed'
-  | 'error'
-  | 'user_message'
-  | 'system_notice'
-  | 'milestone'
+type FeedItemType = 'agent_report' | 'task_started' | 'task_completed' | 'error' | 'user_message' | 'system_notice' | 'milestone'
 
 type VerbosityLevel = 'quiet' | 'normal' | 'verbose'
 

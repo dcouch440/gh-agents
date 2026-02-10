@@ -18,9 +18,7 @@ import type { VariableCompletion } from './variableContext'
  *   Use a ref-based pattern so the extension captures a stable function reference
  *   that always reads the latest data without requiring editor remount.
  */
-const createVariableAutocomplete = (
-  getCompletions: () => VariableCompletion[],
-): Extension => {
+const createVariableAutocomplete = (getCompletions: () => VariableCompletion[]): Extension => {
   const completionSource = (ctx: CompletionContext): CompletionResult | null => {
     // Scan backward from cursor to find an opening `{`
     const line = ctx.state.doc.lineAt(ctx.pos)

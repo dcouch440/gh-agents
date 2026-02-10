@@ -5,11 +5,7 @@
 import { useSyncExternalStore, useCallback, useRef } from 'react'
 import type { StoreApi } from './types'
 
-const useStore = <T, S>(
-  store: StoreApi<T>,
-  selector: (state: T) => S,
-  equalityFn: (a: S, b: S) => boolean = Object.is,
-): S => {
+const useStore = <T, S>(store: StoreApi<T>, selector: (state: T) => S, equalityFn: (a: S, b: S) => boolean = Object.is): S => {
   const selectedRef = useRef<S>(selector(store.getState()))
 
   // getSnapshot captures selector directly in its closure, so it always uses

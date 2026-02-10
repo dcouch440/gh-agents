@@ -22,34 +22,42 @@ type AgentState = {
 
 // ── Store ────────────────────────────────────────────────────────────────────
 
-const store = logger('agentStore', createStore<AgentState>(() => ({
-  items: createNormalizedMap<Agent>(),
-  stats: null,
-  toolsByAgent: {},
-  contextByAgent: {},
-  loading: false,
-  error: null,
-})))
+const store = logger(
+  'agentStore',
+  createStore<AgentState>(() => ({
+    items: createNormalizedMap<Agent>(),
+    stats: null,
+    toolsByAgent: {},
+    contextByAgent: {},
+    loading: false,
+    error: null,
+  })),
+)
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const extractError = (e: unknown): string =>
-  e instanceof Error ? e.message : 'agents: unknown error'
+const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'agents: unknown error')
 
 // ── Selectors ────────────────────────────────────────────────────────────────
 
 const selectAll = (s: AgentState): Agent[] => toArray(s.items)
 
-const selectById = (id: string) => (s: AgentState): Agent | undefined =>
-  nmGet(s.items, id)
+const selectById =
+  (id: string) =>
+  (s: AgentState): Agent | undefined =>
+    nmGet(s.items, id)
 
 const selectStats = (s: AgentState): AgentPoolStats | null => s.stats
 
-const selectTools = (agentId: string) => (s: AgentState): Tool[] =>
-  s.toolsByAgent[agentId] ?? []
+const selectTools =
+  (agentId: string) =>
+  (s: AgentState): Tool[] =>
+    s.toolsByAgent[agentId] ?? []
 
-const selectContext = (agentId: string) => (s: AgentState): DocumentListItem[] =>
-  s.contextByAgent[agentId] ?? []
+const selectContext =
+  (agentId: string) =>
+  (s: AgentState): DocumentListItem[] =>
+    s.contextByAgent[agentId] ?? []
 
 const selectLoading = (s: AgentState): boolean => s.loading
 

@@ -1,7 +1,4 @@
-import {
-  createNormalizedMap, nmFromArray, toArray,
-  nmGet, nmHas, nmSize, nmSet, nmDelete, nmMerge,
-} from './NormalizedMap'
+import { createNormalizedMap, nmFromArray, toArray, nmGet, nmHas, nmSize, nmSet, nmDelete, nmMerge } from './NormalizedMap'
 
 type Item = { id: string; name: string }
 

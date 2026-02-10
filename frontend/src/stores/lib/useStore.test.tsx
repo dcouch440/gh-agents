@@ -10,8 +10,7 @@ type TestState = {
   nested: { x: number }
 }
 
-const makeStore = () =>
-  createStore<TestState>(() => ({ a: 1, b: 2, nested: { x: 10 } }))
+const makeStore = () => createStore<TestState>(() => ({ a: 1, b: 2, nested: { x: 10 } }))
 
 describe('useStore', () => {
   it('returns selected slice of state', () => {
@@ -59,11 +58,7 @@ describe('useStore', () => {
     let renderCount = 0
 
     function TestComponent() {
-      const slice = useStore(
-        store,
-        (s) => ({ a: s.a, b: s.b }),
-        shallow,
-      )
+      const slice = useStore(store, (s) => ({ a: s.a, b: s.b }), shallow)
       renderCount++
       return <div data-testid="sum">{slice.a + slice.b}</div>
     }

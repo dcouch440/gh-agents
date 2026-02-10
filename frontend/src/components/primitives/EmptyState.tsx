@@ -20,11 +20,7 @@ function EmptyState({ icon, message, action }: EmptyStateProps) {
         gap: 1.5,
       }}
     >
-      {icon ? (
-        <Box sx={{ color: 'text.secondary', opacity: 0.5, fontSize: '2.5rem', display: 'flex' }}>
-          {icon}
-        </Box>
-      ) : null}
+      {icon ? <Box sx={{ color: 'text.secondary', opacity: 0.5, fontSize: '2.5rem', display: 'flex' }}>{icon}</Box> : null}
       <Typography variant="body2" color="text.secondary">
         {message}
       </Typography>

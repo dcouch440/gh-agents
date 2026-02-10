@@ -19,11 +19,19 @@ type LayoutState = {
 // ── Safe localStorage ────────────────────────────────────────────────────────
 
 const lsGet = (key: string): string | null => {
-  try { return localStorage.getItem(key) } catch { return null }
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
 }
 
 const lsSet = (key: string, value: string): void => {
-  try { localStorage.setItem(key, value) } catch { /* noop */ }
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    /* noop */
+  }
 }
 
 // ── Store ────────────────────────────────────────────────────────────────────

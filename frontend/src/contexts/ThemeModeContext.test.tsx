@@ -98,9 +98,7 @@ describe('ThemeModeContext', () => {
 
     it('throws when useThemeMode is used outside provider', () => {
       const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
-      expect(() => render(<TestConsumer />)).toThrow(
-        'useThemeMode must be used within ThemeModeProvider',
-      )
+      expect(() => render(<TestConsumer />)).toThrow('useThemeMode must be used within ThemeModeProvider')
       spy.mockRestore()
     })
   })

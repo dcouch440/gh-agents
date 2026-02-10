@@ -75,12 +75,11 @@ describe('useInteractiveChat', () => {
     })
 
     // Mock SSE stream: immediately invoke onDone so refetch triggers
-    const updatedMessages = [
-      mockExecutionMessage,
-      { ...mockExecutionMessage, id: 'msg-002', role: 'assistant' as const, content: 'OK' },
-    ]
+    const updatedMessages = [mockExecutionMessage, { ...mockExecutionMessage, id: 'msg-002', role: 'assistant' as const, content: 'OK' }]
     mockCreateSSEStream.mockImplementation((_path: string, callbacks: { onDone: () => void }) => {
-      setTimeout(() => { callbacks.onDone() }, 0)
+      setTimeout(() => {
+        callbacks.onDone()
+      }, 0)
       return () => {}
     })
     mockGetMessages.mockResolvedValueOnce({ messages: updatedMessages })
@@ -89,10 +88,7 @@ describe('useInteractiveChat', () => {
       await result.current.sendMessage('Hello')
     })
 
-    expect(mockSendMessage).toHaveBeenCalledWith(
-      'agent-exec-001',
-      { content: 'Hello' },
-    )
+    expect(mockSendMessage).toHaveBeenCalledWith('agent-exec-001', { content: 'Hello' })
 
     // Wait for SSE onDone to trigger refetch
     await waitFor(() => {
@@ -116,10 +112,7 @@ describe('useInteractiveChat', () => {
       await result.current.approve({ status: 'approved' })
     })
 
-    expect(mockApprove).toHaveBeenCalledWith(
-      'agent-exec-001',
-      { structured_output: { status: 'approved' } },
-    )
+    expect(mockApprove).toHaveBeenCalledWith('agent-exec-001', { structured_output: { status: 'approved' } })
   })
 
   it('sets error on fetch failure', async () => {

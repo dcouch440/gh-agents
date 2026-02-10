@@ -1,18 +1,13 @@
-import {describe, it, expect, vi, beforeEach} from 'vitest'
-import {render, screen, waitFor} from '@testing-library/react'
-import {userEvent} from '@testing-library/user-event'
-import {OutputSchemaFormDialog} from './OutputSchemaFormDialog'
-import {ApiError} from '@/api'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
+import { userEvent } from '@testing-library/user-event'
+import { OutputSchemaFormDialog } from './OutputSchemaFormDialog'
+import { ApiError } from '@/api'
 
 // Mock JsonEditor to avoid CodeMirror issues in tests
 vi.mock('@/components/primitives', () => ({
-  JsonEditor: ({value, onChange}: {value: string; onChange: (v: string) => void}) => (
-    <textarea
-      data-testid="json-editor"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      aria-label="JSON Schema"
-    />
+  JsonEditor: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+    <textarea data-testid="json-editor" value={value} onChange={(e) => onChange(e.target.value)} aria-label="JSON Schema" />
   ),
 }))
 
@@ -21,7 +16,7 @@ const mockCreate = vi.hoisted(() => vi.fn())
 const mockSchema = {
   id: 'mock-schema-id',
   name: 'Mock Schema',
-  schema: {type: 'object', properties: {}},
+  schema: { type: 'object', properties: {} },
   created_at: '2024-01-01T00:00:00Z',
 }
 
@@ -63,7 +58,7 @@ describe('OutputSchemaFormDialog', () => {
     const user = userEvent.setup()
     render(<OutputSchemaFormDialog {...defaultProps} />)
 
-    const createButton = screen.getByRole('button', {name: /create/i})
+    const createButton = screen.getByRole('button', { name: /create/i })
     await user.click(createButton)
 
     await waitFor(() => {
@@ -107,7 +102,7 @@ describe('OutputSchemaFormDialog', () => {
     await user.click(jsonEditor)
     await user.paste('not valid json')
 
-    const createButton = screen.getByRole('button', {name: /create/i})
+    const createButton = screen.getByRole('button', { name: /create/i })
     await user.click(createButton)
 
     await waitFor(() => {
@@ -122,7 +117,7 @@ describe('OutputSchemaFormDialog', () => {
     const mockSchema = {
       id: 'new-schema-id',
       name: 'Test Schema',
-      schema: {type: 'object', properties: {}},
+      schema: { type: 'object', properties: {} },
       created_at: '2024-01-01T00:00:00Z',
     }
 
@@ -133,13 +128,13 @@ describe('OutputSchemaFormDialog', () => {
     const nameInput = screen.getByLabelText(/name/i)
     await user.type(nameInput, 'Test Schema')
 
-    const createButton = screen.getByRole('button', {name: /create/i})
+    const createButton = screen.getByRole('button', { name: /create/i })
     await user.click(createButton)
 
     await waitFor(() => {
       expect(mockCreate).toHaveBeenCalledWith({
         name: 'Test Schema',
-        schema: {type: 'object', properties: {}},
+        schema: { type: 'object', properties: {} },
       })
     })
 
@@ -149,12 +144,10 @@ describe('OutputSchemaFormDialog', () => {
 
   it('handles 409 conflict errors', async () => {
     const user = userEvent.setup()
-    const conflictError = new ApiError(
-      'http_error',
-      'Conflict: name already exists',
-      '/api/output-schemas',
-      {status: 409, statusText: 'Conflict'}
-    )
+    const conflictError = new ApiError('http_error', 'Conflict: name already exists', '/api/output-schemas', {
+      status: 409,
+      statusText: 'Conflict',
+    })
 
     // Override the default mock behavior for this test
     mockCreate.mockRejectedValueOnce(conflictError)
@@ -164,7 +157,7 @@ describe('OutputSchemaFormDialog', () => {
     const nameInput = screen.getByLabelText(/name/i)
     await user.type(nameInput, 'Duplicate Schema')
 
-    const createButton = screen.getByRole('button', {name: /create/i})
+    const createButton = screen.getByRole('button', { name: /create/i })
     await user.click(createButton)
 
     await waitFor(() => {
@@ -186,7 +179,7 @@ describe('OutputSchemaFormDialog', () => {
     const nameInput = screen.getByLabelText(/name/i)
     await user.type(nameInput, 'Test Schema')
 
-    const createButton = screen.getByRole('button', {name: /create/i})
+    const createButton = screen.getByRole('button', { name: /create/i })
     await user.click(createButton)
 
     await waitFor(() => {
@@ -203,7 +196,7 @@ describe('OutputSchemaFormDialog', () => {
     const nameInput = screen.getByLabelText(/name/i)
     await user.type(nameInput, 'Test Schema')
 
-    const cancelButton = screen.getByRole('button', {name: /cancel/i})
+    const cancelButton = screen.getByRole('button', { name: /cancel/i })
     await user.click(cancelButton)
 
     expect(defaultProps.onClose).toHaveBeenCalled()
@@ -215,7 +208,7 @@ describe('OutputSchemaFormDialog', () => {
       id: 'new-schema-id',
       name: 'Test Schema',
       description: '',
-      schema: {type: 'object', properties: {}},
+      schema: { type: 'object', properties: {} },
       user_id: 'user-1',
       created_at: '2024-01-01T00:00:00Z',
       updated_at: '2024-01-01T00:00:00Z',
@@ -223,12 +216,12 @@ describe('OutputSchemaFormDialog', () => {
 
     mockCreate.mockResolvedValue(mockSchema)
 
-    const {rerender} = render(<OutputSchemaFormDialog {...defaultProps} />)
+    const { rerender } = render(<OutputSchemaFormDialog {...defaultProps} />)
 
     const nameInput = screen.getByLabelText(/name/i)
     await user.type(nameInput, 'Test Schema')
 
-    const createButton = screen.getByRole('button', {name: /create/i})
+    const createButton = screen.getByRole('button', { name: /create/i })
     await user.click(createButton)
 
     await waitFor(() => {
@@ -246,7 +239,7 @@ describe('OutputSchemaFormDialog', () => {
     const mockSchema = {
       id: 'new-schema-id',
       name: 'Test Schema',
-      schema: {type: 'object', properties: {}},
+      schema: { type: 'object', properties: {} },
       created_at: '2024-01-01T00:00:00Z',
     }
 
@@ -257,13 +250,13 @@ describe('OutputSchemaFormDialog', () => {
     const nameInput = screen.getByLabelText(/name/i)
     await user.type(nameInput, '  Test Schema  ')
 
-    const createButton = screen.getByRole('button', {name: /create/i})
+    const createButton = screen.getByRole('button', { name: /create/i })
     await user.click(createButton)
 
     await waitFor(() => {
       expect(mockCreate).toHaveBeenCalledWith({
         name: 'Test Schema',
-        schema: {type: 'object', properties: {}},
+        schema: { type: 'object', properties: {} },
       })
     })
   })

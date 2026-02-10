@@ -1,80 +1,87 @@
-import { type ReactNode, useCallback, useEffect, useRef } from 'react';
-import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
-import IconButton from '@mui/material/IconButton';
-import CloseRounded from '@mui/icons-material/CloseRounded';
-import { useTheme } from '@mui/material/styles';
-import { LAYOUT, ANIMATION } from '@/constants';
+import { type ReactNode, useCallback, useEffect, useRef } from 'react'
+import Box from '@mui/material/Box'
+import Typography from '@mui/material/Typography'
+import IconButton from '@mui/material/IconButton'
+import CloseRounded from '@mui/icons-material/CloseRounded'
+import { useTheme } from '@mui/material/styles'
+import { LAYOUT, ANIMATION } from '@/constants'
 
 type DetailPanelProps = {
-  side: 'left' | 'right';
-  isOpen: boolean;
-  onClose: () => void;
-  title: string;
-  children: ReactNode;
-  width?: number;
-  isDragging?: boolean;
-  onResize?: (width: number) => void;
-  onDragStart?: () => void;
-  onDragEnd?: () => void;
-};
+  side: 'left' | 'right'
+  isOpen: boolean
+  onClose: () => void
+  title: string
+  children: ReactNode
+  width?: number
+  isDragging?: boolean
+  onResize?: (width: number) => void
+  onDragStart?: () => void
+  onDragEnd?: () => void
+}
 
 function DetailPanel({
-  side, isOpen, onClose, title, children,
-  width, isDragging = false, onResize, onDragStart, onDragEnd,
+  side,
+  isOpen,
+  onClose,
+  title,
+  children,
+  width,
+  isDragging = false,
+  onResize,
+  onDragStart,
+  onDragEnd,
 }: DetailPanelProps) {
-  const theme = useTheme();
-  const isLeft = side === 'left';
-  const panelWidth = width ?? LAYOUT.PANEL_WIDTH;
-  const startXRef = useRef(0);
-  const startWidthRef = useRef(0);
-  const listenersRef = useRef<{ move: (e: MouseEvent) => void; up: () => void } | null>(null);
+  const theme = useTheme()
+  const isLeft = side === 'left'
+  const panelWidth = width ?? LAYOUT.PANEL_WIDTH
+  const startXRef = useRef(0)
+  const startWidthRef = useRef(0)
+  const listenersRef = useRef<{ move: (e: MouseEvent) => void; up: () => void } | null>(null)
 
   const cleanup = useCallback(() => {
     if (listenersRef.current) {
-      document.removeEventListener('mousemove', listenersRef.current.move);
-      document.removeEventListener('mouseup', listenersRef.current.up);
-      listenersRef.current = null;
+      document.removeEventListener('mousemove', listenersRef.current.move)
+      document.removeEventListener('mouseup', listenersRef.current.up)
+      listenersRef.current = null
     }
-    document.body.style.userSelect = '';
-    document.body.style.cursor = '';
-    onDragEnd?.();
-  }, [onDragEnd]);
+    document.body.style.userSelect = ''
+    document.body.style.cursor = ''
+    onDragEnd?.()
+  }, [onDragEnd])
 
   const startDrag = useCallback(
     (e: React.MouseEvent) => {
-      if (!onResize) return;
-      e.preventDefault();
-      cleanup();
-      onDragStart?.();
-      startXRef.current = e.clientX;
-      startWidthRef.current = panelWidth;
-      document.body.style.userSelect = 'none';
-      document.body.style.cursor = 'col-resize';
+      if (!onResize) return
+      e.preventDefault()
+      cleanup()
+      onDragStart?.()
+      startXRef.current = e.clientX
+      startWidthRef.current = panelWidth
+      document.body.style.userSelect = 'none'
+      document.body.style.cursor = 'col-resize'
 
       const move = (ev: MouseEvent) => {
-        const delta = isLeft
-          ? ev.clientX - startXRef.current
-          : startXRef.current - ev.clientX;
-        const next = Math.max(
-          LAYOUT.PANEL_MIN_WIDTH,
-          Math.min(LAYOUT.PANEL_MAX_WIDTH, startWidthRef.current + delta),
-        );
-        onResize(next);
-      };
+        const delta = isLeft ? ev.clientX - startXRef.current : startXRef.current - ev.clientX
+        const next = Math.max(LAYOUT.PANEL_MIN_WIDTH, Math.min(LAYOUT.PANEL_MAX_WIDTH, startWidthRef.current + delta))
+        onResize(next)
+      }
 
-      const up = () => { cleanup(); };
+      const up = () => {
+        cleanup()
+      }
 
-      listenersRef.current = { move, up };
-      document.addEventListener('mousemove', move);
-      document.addEventListener('mouseup', up);
+      listenersRef.current = { move, up }
+      document.addEventListener('mousemove', move)
+      document.addEventListener('mouseup', up)
     },
     [isLeft, onResize, panelWidth, cleanup, onDragStart],
-  );
+  )
 
   useEffect(() => {
-    return () => { cleanup(); };
-  }, [cleanup]);
+    return () => {
+      cleanup()
+    }
+  }, [cleanup])
 
   return (
     <Box
@@ -177,8 +184,8 @@ function DetailPanel({
         {children}
       </Box>
     </Box>
-  );
+  )
 }
 
-export { DetailPanel };
-export type { DetailPanelProps };
+export { DetailPanel }
+export type { DetailPanelProps }

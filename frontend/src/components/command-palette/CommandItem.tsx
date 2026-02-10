@@ -1,16 +1,16 @@
-import { type ReactNode } from 'react';
-import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
-import { ANIMATION } from '@/constants';
+import { type ReactNode } from 'react'
+import Box from '@mui/material/Box'
+import Typography from '@mui/material/Typography'
+import { ANIMATION } from '@/constants'
 
 type CommandItemProps = {
-  icon?: ReactNode;
-  label: string;
-  description?: string;
-  shortcut?: string;
-  selected: boolean;
-  onSelect: () => void;
-};
+  icon?: ReactNode
+  label: string
+  description?: string
+  shortcut?: string
+  selected: boolean
+  onSelect: () => void
+}
 
 function CommandItemRow({ icon, label, description, shortcut, selected, onSelect }: CommandItemProps) {
   return (
@@ -34,11 +34,7 @@ function CommandItemRow({ icon, label, description, shortcut, selected, onSelect
         },
       }}
     >
-      {icon && (
-        <Box sx={{ color: 'text.secondary', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-          {icon}
-        </Box>
-      )}
+      {icon && <Box sx={{ color: 'text.secondary', display: 'flex', alignItems: 'center', flexShrink: 0 }}>{icon}</Box>}
 
       <Box sx={{ flexGrow: 1, minWidth: 0 }}>
         <Typography variant="body2" sx={{ fontWeight: 500, color: 'text.primary' }} noWrap>
@@ -70,8 +66,8 @@ function CommandItemRow({ icon, label, description, shortcut, selected, onSelect
         </Typography>
       )}
     </Box>
-  );
+  )
 }
 
-export { CommandItemRow };
-export type { CommandItemProps };
+export { CommandItemRow }
+export type { CommandItemProps }

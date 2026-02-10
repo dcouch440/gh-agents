@@ -20,9 +20,7 @@ beforeEach(() => {
 describe('workflowExecutionStore', () => {
   describe('handleWsEvent', () => {
     it('STARTED initializes execution state', () => {
-      workflowExecutionStore.handleWsEvent(
-        makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 3 }),
-      )
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 3 }))
 
       const s = getState()
       expect(s.runId).toBe('run-1')
@@ -34,9 +32,7 @@ describe('workflowExecutionStore', () => {
     })
 
     it('STEP_STARTED sets step to running', () => {
-      workflowExecutionStore.handleWsEvent(
-        makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 2 }),
-      )
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 2 }))
       workflowExecutionStore.handleWsEvent(
         makeMsg(WORKFLOW_EVENT.STEP_STARTED, {
           workflow_id: 'w1',
@@ -56,7 +52,11 @@ describe('workflowExecutionStore', () => {
     it('STEP_COMPLETED sets step to success with metrics', () => {
       workflowExecutionStore.handleWsEvent(
         makeMsg(WORKFLOW_EVENT.STEP_STARTED, {
-          workflow_id: 'w1', step_id: 's1', step_name: 'Step One', agent_id: null, execution_id: null,
+          workflow_id: 'w1',
+          step_id: 's1',
+          step_name: 'Step One',
+          agent_id: null,
+          execution_id: null,
         }),
       )
       workflowExecutionStore.handleWsEvent(
@@ -84,7 +84,10 @@ describe('workflowExecutionStore', () => {
     it('STEP_FAILED sets step to error', () => {
       workflowExecutionStore.handleWsEvent(
         makeMsg(WORKFLOW_EVENT.STEP_FAILED, {
-          workflow_id: 'w1', step_id: 's1', step_name: 'Step One', error: 'timeout',
+          workflow_id: 'w1',
+          step_id: 's1',
+          step_name: 'Step One',
+          error: 'timeout',
         }),
       )
 
@@ -96,7 +99,9 @@ describe('workflowExecutionStore', () => {
     it('STEP_PAUSED sets step to paused', () => {
       workflowExecutionStore.handleWsEvent(
         makeMsg(WORKFLOW_EVENT.STEP_PAUSED, {
-          workflow_id: 'w1', step_id: 's1', step_name: 'Step One',
+          workflow_id: 'w1',
+          step_id: 's1',
+          step_name: 'Step One',
         }),
       )
 
@@ -106,7 +111,11 @@ describe('workflowExecutionStore', () => {
     it('FOR_EACH_PROGRESS updates progress', () => {
       workflowExecutionStore.handleWsEvent(
         makeMsg(WORKFLOW_EVENT.FOR_EACH_PROGRESS, {
-          workflow_id: 'w1', step_id: 's1', step_name: 'Step One', completed: 3, total: 10,
+          workflow_id: 'w1',
+          step_id: 's1',
+          step_name: 'Step One',
+          completed: 3,
+          total: 10,
         }),
       )
 
@@ -115,12 +124,8 @@ describe('workflowExecutionStore', () => {
     })
 
     it('COMPLETED marks workflow as finished', () => {
-      workflowExecutionStore.handleWsEvent(
-        makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 1 }),
-      )
-      workflowExecutionStore.handleWsEvent(
-        makeMsg(WORKFLOW_EVENT.COMPLETED, { workflow_id: 'w1', duration_ms: 5000 }),
-      )
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 1 }))
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.COMPLETED, { workflow_id: 'w1', duration_ms: 5000 }))
 
       const s = getState()
       expect(s.isRunning).toBe(false)
@@ -129,12 +134,8 @@ describe('workflowExecutionStore', () => {
     })
 
     it('FAILED marks workflow as failed with error', () => {
-      workflowExecutionStore.handleWsEvent(
-        makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 1 }),
-      )
-      workflowExecutionStore.handleWsEvent(
-        makeMsg(WORKFLOW_EVENT.FAILED, { workflow_id: 'w1', error: 'step explosion' }),
-      )
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 1 }))
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.FAILED, { workflow_id: 'w1', error: 'step explosion' }))
 
       const s = getState()
       expect(s.isRunning).toBe(false)
@@ -142,17 +143,11 @@ describe('workflowExecutionStore', () => {
     })
 
     it('RESUMED sets running and updates step', () => {
-      workflowExecutionStore.handleWsEvent(
-        makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 2 }),
-      )
-      workflowExecutionStore.handleWsEvent(
-        makeMsg(WORKFLOW_EVENT.STEP_PAUSED, { workflow_id: 'w1', step_id: 's1', step_name: 'Step One' }),
-      )
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 2 }))
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.STEP_PAUSED, { workflow_id: 'w1', step_id: 's1', step_name: 'Step One' }))
       workflowExecutionStore.store.setState({ isRunning: false })
 
-      workflowExecutionStore.handleWsEvent(
-        makeMsg(WORKFLOW_EVENT.RESUMED, { workflow_id: 'w1', step_id: 's1' }),
-      )
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.RESUMED, { workflow_id: 'w1', step_id: 's1' }))
 
       expect(getState().isRunning).toBe(true)
       expect(getState().stepStates['s1'].status).toBe('running')
@@ -160,9 +155,7 @@ describe('workflowExecutionStore', () => {
 
     it('ignores unknown events', () => {
       const before = getState()
-      workflowExecutionStore.handleWsEvent(
-        makeMsg('unknown_event', { foo: 'bar' }),
-      )
+      workflowExecutionStore.handleWsEvent(makeMsg('unknown_event', { foo: 'bar' }))
       expect(getState()).toBe(before)
     })
   })
@@ -174,16 +167,12 @@ describe('workflowExecutionStore', () => {
       )
       expect(getState().eventLog).toHaveLength(1)
 
-      workflowExecutionStore.handleWsEvent(
-        makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 2 }),
-      )
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 2 }))
       expect(getState().eventLog).toEqual([])
     })
 
     it('STEP_STARTED appends to eventLog', () => {
-      workflowExecutionStore.handleWsEvent(
-        makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 2 }),
-      )
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 2 }))
       workflowExecutionStore.handleWsEvent(
         makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: 's1', step_name: 'Step A', agent_id: 'a1', execution_id: 'e1' }),
       )
@@ -196,8 +185,14 @@ describe('workflowExecutionStore', () => {
     it('STEP_COMPLETED appends to eventLog', () => {
       workflowExecutionStore.handleWsEvent(
         makeMsg(WORKFLOW_EVENT.STEP_COMPLETED, {
-          workflow_id: 'w1', step_id: 's1', step_name: 'Step A', agent_id: null,
-          output: 'done', input_tokens: 10, output_tokens: 5, duration_ms: 100,
+          workflow_id: 'w1',
+          step_id: 's1',
+          step_name: 'Step A',
+          agent_id: null,
+          output: 'done',
+          input_tokens: 10,
+          output_tokens: 5,
+          duration_ms: 100,
         }),
       )
 
@@ -216,24 +211,16 @@ describe('workflowExecutionStore', () => {
     })
 
     it('STEP_PAUSED appends to eventLog', () => {
-      workflowExecutionStore.handleWsEvent(
-        makeMsg(WORKFLOW_EVENT.STEP_PAUSED, { workflow_id: 'w1', step_id: 's1', step_name: 'Step A' }),
-      )
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.STEP_PAUSED, { workflow_id: 'w1', step_id: 's1', step_name: 'Step A' }))
 
       expect(getState().eventLog).toHaveLength(1)
       expect(getState().eventLog[0].eventType).toBe('paused')
     })
 
     it('RESUMED appends to eventLog', () => {
-      workflowExecutionStore.handleWsEvent(
-        makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 1 }),
-      )
-      workflowExecutionStore.handleWsEvent(
-        makeMsg(WORKFLOW_EVENT.STEP_PAUSED, { workflow_id: 'w1', step_id: 's1', step_name: 'Step A' }),
-      )
-      workflowExecutionStore.handleWsEvent(
-        makeMsg(WORKFLOW_EVENT.RESUMED, { workflow_id: 'w1', step_id: 's1' }),
-      )
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 1 }))
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.STEP_PAUSED, { workflow_id: 'w1', step_id: 's1', step_name: 'Step A' }))
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.RESUMED, { workflow_id: 'w1', step_id: 's1' }))
 
       const log = getState().eventLog
       expect(log).toHaveLength(2) // paused + resumed (STARTED clears log)
@@ -242,14 +229,21 @@ describe('workflowExecutionStore', () => {
     })
 
     it('maintains chronological order across events', () => {
-      workflowExecutionStore.handleWsEvent(
-        makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 2 }),
-      )
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 2 }))
       workflowExecutionStore.handleWsEvent(
         makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: 's1', step_name: 'A', agent_id: null, execution_id: null }),
       )
       workflowExecutionStore.handleWsEvent(
-        makeMsg(WORKFLOW_EVENT.STEP_COMPLETED, { workflow_id: 'w1', step_id: 's1', step_name: 'A', agent_id: null, output: 'ok', input_tokens: 1, output_tokens: 1, duration_ms: 10 }),
+        makeMsg(WORKFLOW_EVENT.STEP_COMPLETED, {
+          workflow_id: 'w1',
+          step_id: 's1',
+          step_name: 'A',
+          agent_id: null,
+          output: 'ok',
+          input_tokens: 1,
+          output_tokens: 1,
+          duration_ms: 10,
+        }),
       )
       workflowExecutionStore.handleWsEvent(
         makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: 's2', step_name: 'B', agent_id: null, execution_id: null }),
@@ -266,7 +260,11 @@ describe('workflowExecutionStore', () => {
     it('STEP_STARTED captures stepName, agentId, executionId', () => {
       workflowExecutionStore.handleWsEvent(
         makeMsg(WORKFLOW_EVENT.STEP_STARTED, {
-          workflow_id: 'w1', step_id: 's1', step_name: 'Analyze Data', agent_id: 'agent-99', execution_id: 'exec-42',
+          workflow_id: 'w1',
+          step_id: 's1',
+          step_name: 'Analyze Data',
+          agent_id: 'agent-99',
+          execution_id: 'exec-42',
         }),
       )
 
@@ -279,8 +277,14 @@ describe('workflowExecutionStore', () => {
     it('STEP_COMPLETED captures stepName', () => {
       workflowExecutionStore.handleWsEvent(
         makeMsg(WORKFLOW_EVENT.STEP_COMPLETED, {
-          workflow_id: 'w1', step_id: 's1', step_name: 'Generate Report', agent_id: null,
-          output: 'report', input_tokens: 10, output_tokens: 5, duration_ms: 200,
+          workflow_id: 'w1',
+          step_id: 's1',
+          step_name: 'Generate Report',
+          agent_id: null,
+          output: 'report',
+          input_tokens: 10,
+          output_tokens: 5,
+          duration_ms: 200,
         }),
       )
 
@@ -306,9 +310,7 @@ describe('workflowExecutionStore', () => {
 
   describe('reset', () => {
     it('clears all execution state including eventLog', () => {
-      workflowExecutionStore.handleWsEvent(
-        makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 3 }),
-      )
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 3 }))
       workflowExecutionStore.handleWsEvent(
         makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: 's1', step_name: 'A', agent_id: null, execution_id: null }),
       )
@@ -329,8 +331,24 @@ describe('workflowExecutionStore', () => {
     it('viewHistoricalRun sets history mode and selects run', () => {
       workflowExecutionStore.store.setState({
         runs: [
-          { id: 'run-a', workflow_id: 'w1', status: 'completed', started_at: '2025-01-01T00:00:00Z', completed_at: '2025-01-01T00:01:00Z', outputs: null, error: null },
-          { id: 'run-b', workflow_id: 'w1', status: 'failed', started_at: '2025-01-02T00:00:00Z', completed_at: '2025-01-02T00:01:00Z', outputs: null, error: 'oops' },
+          {
+            id: 'run-a',
+            workflow_id: 'w1',
+            status: 'completed',
+            started_at: '2025-01-01T00:00:00Z',
+            completed_at: '2025-01-01T00:01:00Z',
+            outputs: null,
+            error: null,
+          },
+          {
+            id: 'run-b',
+            workflow_id: 'w1',
+            status: 'failed',
+            started_at: '2025-01-02T00:00:00Z',
+            completed_at: '2025-01-02T00:01:00Z',
+            outputs: null,
+            error: 'oops',
+          },
         ],
       })
 
@@ -347,7 +365,15 @@ describe('workflowExecutionStore', () => {
       workflowExecutionStore.store.setState({
         viewMode: 'history',
         selectedHistoricalRunId: 'run-a',
-        historicalRun: { id: 'run-a', workflow_id: 'w1', status: 'completed', started_at: null, completed_at: null, outputs: null, error: null },
+        historicalRun: {
+          id: 'run-a',
+          workflow_id: 'w1',
+          status: 'completed',
+          started_at: null,
+          completed_at: null,
+          outputs: null,
+          error: null,
+        },
       })
 
       workflowExecutionStore.returnToLive()
@@ -362,12 +388,18 @@ describe('workflowExecutionStore', () => {
       workflowExecutionStore.store.setState({
         viewMode: 'history',
         selectedHistoricalRunId: 'run-old',
-        historicalRun: { id: 'run-old', workflow_id: 'w1', status: 'completed', started_at: null, completed_at: null, outputs: null, error: null },
+        historicalRun: {
+          id: 'run-old',
+          workflow_id: 'w1',
+          status: 'completed',
+          started_at: null,
+          completed_at: null,
+          outputs: null,
+          error: null,
+        },
       })
 
-      workflowExecutionStore.handleWsEvent(
-        makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 2 }),
-      )
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 2 }))
 
       const s = getState()
       expect(s.viewMode).toBe('live')
@@ -380,7 +412,15 @@ describe('workflowExecutionStore', () => {
         viewMode: 'history',
         runs: [{ id: 'run-a', workflow_id: 'w1', status: 'completed', started_at: null, completed_at: null, outputs: null, error: null }],
         selectedHistoricalRunId: 'run-a',
-        historicalRun: { id: 'run-a', workflow_id: 'w1', status: 'completed', started_at: null, completed_at: null, outputs: null, error: null },
+        historicalRun: {
+          id: 'run-a',
+          workflow_id: 'w1',
+          status: 'completed',
+          started_at: null,
+          completed_at: null,
+          outputs: null,
+          error: null,
+        },
         historyLoading: true,
         historyError: 'some error',
       })
@@ -401,7 +441,11 @@ describe('workflowExecutionStore', () => {
     it('selectStepState returns step or undefined', () => {
       workflowExecutionStore.handleWsEvent(
         makeMsg(WORKFLOW_EVENT.STEP_STARTED, {
-          workflow_id: 'w1', step_id: 's1', step_name: 'Step One', agent_id: null, execution_id: null,
+          workflow_id: 'w1',
+          step_id: 's1',
+          step_name: 'Step One',
+          agent_id: null,
+          execution_id: null,
         }),
       )
 
@@ -412,19 +456,34 @@ describe('workflowExecutionStore', () => {
     it('selectCompletedStepCount counts success steps', () => {
       workflowExecutionStore.handleWsEvent(
         makeMsg(WORKFLOW_EVENT.STEP_COMPLETED, {
-          workflow_id: 'w1', step_id: 's1', step_name: 'A', agent_id: null,
-          output: null, input_tokens: null, output_tokens: null, duration_ms: null,
+          workflow_id: 'w1',
+          step_id: 's1',
+          step_name: 'A',
+          agent_id: null,
+          output: null,
+          input_tokens: null,
+          output_tokens: null,
+          duration_ms: null,
         }),
       )
       workflowExecutionStore.handleWsEvent(
         makeMsg(WORKFLOW_EVENT.STEP_COMPLETED, {
-          workflow_id: 'w1', step_id: 's2', step_name: 'B', agent_id: null,
-          output: null, input_tokens: null, output_tokens: null, duration_ms: null,
+          workflow_id: 'w1',
+          step_id: 's2',
+          step_name: 'B',
+          agent_id: null,
+          output: null,
+          input_tokens: null,
+          output_tokens: null,
+          duration_ms: null,
         }),
       )
       workflowExecutionStore.handleWsEvent(
         makeMsg(WORKFLOW_EVENT.STEP_FAILED, {
-          workflow_id: 'w1', step_id: 's3', step_name: 'C', error: 'fail',
+          workflow_id: 'w1',
+          step_id: 's3',
+          step_name: 'C',
+          error: 'fail',
         }),
       )
 

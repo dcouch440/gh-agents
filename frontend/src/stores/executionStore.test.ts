@@ -2,14 +2,7 @@ import { executionStore } from './executionStore'
 import { nmSize, nmGet, createNormalizedMap } from './lib'
 import type { AgentExecution, ExecutionMessage } from '@/types/execution'
 
-const {
-  mockList,
-  mockGet,
-  mockGetMessages,
-  mockSendMessage,
-  mockApprove,
-  mockCreateSSEStream,
-} = vi.hoisted(() => ({
+const { mockList, mockGet, mockGetMessages, mockSendMessage, mockApprove, mockCreateSSEStream } = vi.hoisted(() => ({
   mockList: vi.fn(),
   mockGet: vi.fn(),
   mockGetMessages: vi.fn(),

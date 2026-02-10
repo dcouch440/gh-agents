@@ -1,4 +1,4 @@
-import type { Shadows } from '@mui/material/styles';
+import type { Shadows } from '@mui/material/styles'
 
 const lightShadows: Shadows = [
   'none',
@@ -26,7 +26,7 @@ const lightShadows: Shadows = [
   '0 20px 42px rgba(45, 27, 14, 0.13)',
   '0 20px 44px rgba(45, 27, 14, 0.13)',
   '0 22px 46px rgba(45, 27, 14, 0.13)',
-];
+]
 
 const darkShadows: Shadows = [
   'none',
@@ -54,9 +54,8 @@ const darkShadows: Shadows = [
   '0 20px 42px rgba(0, 0, 0, 0.48)',
   '0 20px 44px rgba(0, 0, 0, 0.48)',
   '0 22px 46px rgba(0, 0, 0, 0.50)',
-];
+]
 
-const getShadows = (mode: 'light' | 'dark'): Shadows =>
-  mode === 'light' ? lightShadows : darkShadows;
+const getShadows = (mode: 'light' | 'dark'): Shadows => (mode === 'light' ? lightShadows : darkShadows)
 
-export { getShadows };
+export { getShadows }

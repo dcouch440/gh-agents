@@ -4,9 +4,30 @@ import { FeedStream } from './FeedStream'
 import type { FeedItem } from '@/types'
 
 const items: FeedItem[] = [
-  { id: 'f1', agent_id: 'a1', content: 'Started search', item_type: 'task_started', verbosity_level: 'normal', timestamp: '2026-01-31T10:00:00Z' },
-  { id: 'f2', agent_id: 'a1', content: 'Found 3 files', item_type: 'agent_report', verbosity_level: 'normal', timestamp: '2026-01-31T10:00:05Z' },
-  { id: 'f3', agent_id: 'a2', content: 'Auth module updated', item_type: 'milestone', verbosity_level: 'normal', timestamp: '2026-01-31T10:00:10Z' },
+  {
+    id: 'f1',
+    agent_id: 'a1',
+    content: 'Started search',
+    item_type: 'task_started',
+    verbosity_level: 'normal',
+    timestamp: '2026-01-31T10:00:00Z',
+  },
+  {
+    id: 'f2',
+    agent_id: 'a1',
+    content: 'Found 3 files',
+    item_type: 'agent_report',
+    verbosity_level: 'normal',
+    timestamp: '2026-01-31T10:00:05Z',
+  },
+  {
+    id: 'f3',
+    agent_id: 'a2',
+    content: 'Auth module updated',
+    item_type: 'milestone',
+    verbosity_level: 'normal',
+    timestamp: '2026-01-31T10:00:10Z',
+  },
 ]
 
 describe('FeedStream', () => {

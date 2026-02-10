@@ -1,4 +1,4 @@
-import {useState, useCallback, useRef} from 'react'
+import { useState, useCallback, useRef } from 'react'
 
 type ConfirmModalState = {
   open: boolean
@@ -66,7 +66,7 @@ const useConfirmModal = (): UseConfirmModalReturn => {
   }, [])
 
   const closeConfirm = useCallback(() => {
-    setState((prev) => ({...prev, open: false, loading: false, error: null}))
+    setState((prev) => ({ ...prev, open: false, loading: false, error: null }))
     pendingActionRef.current = null
   }, [])
 
@@ -74,13 +74,13 @@ const useConfirmModal = (): UseConfirmModalReturn => {
     const action = pendingActionRef.current
     if (!action) return
 
-    setState((prev) => ({...prev, loading: true, error: null}))
+    setState((prev) => ({ ...prev, loading: true, error: null }))
     try {
       await action()
-      setState((prev) => ({...prev, open: false, loading: false}))
+      setState((prev) => ({ ...prev, open: false, loading: false }))
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Operation failed'
-      setState((prev) => ({...prev, loading: false, error: errorMsg}))
+      setState((prev) => ({ ...prev, loading: false, error: errorMsg }))
     }
   }, [])
 
@@ -99,5 +99,5 @@ const useConfirmModal = (): UseConfirmModalReturn => {
   }
 }
 
-export {useConfirmModal}
-export type {UseConfirmModalReturn, ConfirmOptions}
+export { useConfirmModal }
+export type { UseConfirmModalReturn, ConfirmOptions }

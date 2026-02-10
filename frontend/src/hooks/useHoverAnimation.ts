@@ -1,19 +1,19 @@
-import type { SxProps, Theme } from '@mui/material/styles';
-import { ANIMATION } from '@/constants';
-import { useReducedMotion } from './useReducedMotion';
+import type { SxProps, Theme } from '@mui/material/styles'
+import { ANIMATION } from '@/constants'
+import { useReducedMotion } from './useReducedMotion'
 
 type HoverAnimationOptions = {
-  lift?: number;
-  shadow?: number;
-};
+  lift?: number
+  shadow?: number
+}
 
 const useHoverAnimation = (options?: HoverAnimationOptions): SxProps<Theme> => {
-  const reducedMotion = useReducedMotion();
+  const reducedMotion = useReducedMotion()
 
-  if (reducedMotion) return {};
+  if (reducedMotion) return {}
 
-  const lift = options?.lift ?? 2;
-  const shadow = options?.shadow ?? 2;
+  const lift = options?.lift ?? 2
+  const shadow = options?.shadow ?? 2
 
   return {
     transition: `transform ${ANIMATION.FAST}ms ease, box-shadow ${ANIMATION.FAST}ms ease`,
@@ -21,7 +21,7 @@ const useHoverAnimation = (options?: HoverAnimationOptions): SxProps<Theme> => {
       transform: `translateY(-${lift}px)`,
       boxShadow: shadow,
     },
-  };
-};
+  }
+}
 
-export { useHoverAnimation };
+export { useHoverAnimation }

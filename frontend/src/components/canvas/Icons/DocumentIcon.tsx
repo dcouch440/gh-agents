@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion } from 'framer-motion'
 
 export function DocumenterIcon() {
   // 8-tooth gear polygon centered at origin, scaled down (~0.85x): inner ~10, outer ~13.5
@@ -10,30 +10,14 @@ export function DocumenterIcon() {
     '1.6,10.1 1.7,13.5 -1.7,13.5 -1.6,10.1 ' +
     '-6.0,8.2 -8.4,10.7 -10.7,8.4 -8.2,6.0 ' +
     '-10.1,1.6 -13.5,1.7 -13.5,-1.6 -10.1,-1.6 ' +
-    '-8.2,-6.0 -10.7,-8.3 -8.4,-10.7 -6.0,-8.2';
+    '-8.2,-6.0 -10.7,-8.3 -8.4,-10.7 -6.0,-8.2'
 
   return (
-    <svg
-      width="36"
-      height="36"
-      viewBox="0 0 36 36"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
+    <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
       {/* Spinning gear behind the document — drawn at origin, translated to center */}
       <g transform="translate(18, 18)">
-        <motion.g
-          animate={{ rotate: 360 }}
-          transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
-        >
-          <polygon
-            points={gearPoints}
-            fill="#E8862E"
-            opacity="0.85"
-            stroke="#E8862E"
-            strokeWidth="1.2"
-            strokeLinejoin="round"
-          />
+        <motion.g animate={{ rotate: 360 }} transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}>
+          <polygon points={gearPoints} fill="#E8862E" opacity="0.85" stroke="#E8862E" strokeWidth="1.2" strokeLinejoin="round" />
         </motion.g>
       </g>
       {/* Gear center ring */}
@@ -48,7 +32,7 @@ export function DocumenterIcon() {
       <rect x="13.5" y="19.5" width="7" height="1.2" rx="0.6" fill="#78909C" opacity="0.3" />
       <rect x="13.5" y="22" width="9" height="1.2" rx="0.6" fill="#78909C" opacity="0.2" />
     </svg>
-  );
+  )
 }
 
 export function HeroIllustration() {
@@ -124,11 +108,7 @@ export function HeroIllustration() {
         />
 
         {/* Gear shape */}
-        <motion.g
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.6, delay: 1.0 }}
-        >
+        <motion.g initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6, delay: 1.0 }}>
           <circle cx="290" cy="190" r="24" fill="#FFF7ED" stroke="#C4854A" strokeWidth="2" />
           <animateTransform
             xlinkHref="#gear-teeth"
@@ -226,5 +206,5 @@ export function HeroIllustration() {
         />
       </svg>
     </div>
-  );
+  )
 }

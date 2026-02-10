@@ -1,122 +1,112 @@
-import type {CSSProperties} from "react";
-import {useCallback, useEffect, useMemo, useRef, useState} from "react";
-import {
-  ReactFlow,
-  Background,
-  MiniMap,
-  useReactFlow,
-  ReactFlowProvider,
-  BackgroundVariant,
-} from "@xyflow/react";
-import type {
-  OnSelectionChangeParams,
-  Connection,
-  OnNodesDelete,
-  OnEdgesDelete,
-  Edge,
-} from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
-import Box from "@mui/material/Box";
-import {useTheme} from "@mui/material/styles";
-import {
-  useStore,
-  batch,
-  workflowStore,
-  canvasStore,
-  layoutStore,
-  agentStore,
-  outputSchemaStore,
-  protocolStore,
-} from "@/stores";
-import {toRFNodes, toRFEdges, nodeDataEqual} from "./mappers";
-import type {StepNodeLookups} from "./mappers";
-import {Collections} from "@/utils/collections";
-import {nodeTypes} from "./nodeTypes";
-import {edgeTypes} from "./edgeTypes";
-import {usePositionPersist} from "./usePositionPersist";
-import {CanvasToolbar} from "./CanvasToolbar";
-import {CanvasContextMenu} from "./CanvasContextMenu";
-import type {MenuPosition} from "./CanvasContextMenu";
-import {CANVAS} from "./constants";
+import type { CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ReactFlow, Background, MiniMap, useReactFlow, ReactFlowProvider, BackgroundVariant } from '@xyflow/react'
+import type { OnSelectionChangeParams, Connection, OnNodesDelete, OnEdgesDelete, Edge } from '@xyflow/react'
+import '@xyflow/react/dist/style.css'
+import Box from '@mui/material/Box'
+import { useTheme } from '@mui/material/styles'
+import { useStore, batch, workflowStore, canvasStore, layoutStore, agentStore, outputSchemaStore, protocolStore } from '@/stores'
+import { toRFNodes, toRFEdges, nodeDataEqual } from './mappers'
+import type { StepNodeLookups } from './mappers'
+import { Collections } from '@/utils/collections'
+import { nodeTypes } from './nodeTypes'
+import { edgeTypes } from './edgeTypes'
+import { usePositionPersist } from './usePositionPersist'
+import { CanvasToolbar } from './CanvasToolbar'
+import { CanvasContextMenu } from './CanvasContextMenu'
+import type { MenuPosition } from './CanvasContextMenu'
+import { CANVAS } from './constants'
 
-const stylesEqual = (
-  a: CSSProperties | undefined,
-  b: CSSProperties | undefined,
-): boolean => {
+const stylesEqual = (a: CSSProperties | undefined, b: CSSProperties | undefined): boolean => {
   if (a === b) return true
   if (a === undefined || b === undefined) return false
   return a.width === b.width && a.height === b.height
 }
 
 function WorkflowCanvasInner() {
-  const theme = useTheme();
-  const {setNodes, setEdges, fitView, screenToFlowPosition} = useReactFlow();
-  const steps = useStore(workflowStore.store, workflowStore.selectSteps);
-  const edges = useStore(workflowStore.store, workflowStore.selectEdges);
-  const agents = useStore(agentStore.store, agentStore.selectAll);
-  const schemas = useStore(
-    outputSchemaStore.store,
-    outputSchemaStore.selectAll,
-  );
-  const minimapVisible = useStore(
-    canvasStore.store,
-    canvasStore.selectMinimapVisible,
-  );
-  const toolsByAgent = useStore(agentStore.store, agentStore.selectToolsByAgent);
-  const stepProtocols = useStore(canvasStore.store, canvasStore.selectStepProtocols);
-  const {onNodeDragStop} = usePositionPersist();
-  const [contextMenu, setContextMenu] = useState<MenuPosition>(null);
-  const initialFitDone = useRef(false);
-  const fetchedToolAgentIds = useRef(new Set<string>());
+  const theme = useTheme()
+  const { setNodes, setEdges, fitView, screenToFlowPosition } = useReactFlow()
+  const steps = useStore(workflowStore.store, workflowStore.selectSteps)
+  const edges = useStore(workflowStore.store, workflowStore.selectEdges)
+  const agents = useStore(agentStore.store, agentStore.selectAll)
+  const schemas = useStore(outputSchemaStore.store, outputSchemaStore.selectAll)
+  const minimapVisible = useStore(canvasStore.store, canvasStore.selectMinimapVisible)
+  const toolsByAgent = useStore(agentStore.store, agentStore.selectToolsByAgent)
+  const stepProtocols = useStore(canvasStore.store, canvasStore.selectStepProtocols)
+  const { onNodeDragStop } = usePositionPersist()
+  const [contextMenu, setContextMenu] = useState<MenuPosition>(null)
+  const initialFitDone = useRef(false)
+  const fetchedToolAgentIds = useRef(new Set<string>())
 
   // Fetch tools for agents not yet fetched
   useEffect(() => {
     agents.forEach((agent) => {
       if (!fetchedToolAgentIds.current.has(agent.id)) {
-        fetchedToolAgentIds.current.add(agent.id);
-        void agentStore.fetchTools(agent.id);
+        fetchedToolAgentIds.current.add(agent.id)
+        void agentStore.fetchTools(agent.id)
       }
-    });
-  }, [agents]);
+    })
+  }, [agents])
 
   useEffect(() => {
-    void protocolStore.fetchAll();
-    void protocolStore.fetchTypes();
-  }, []);
+    void protocolStore.fetchAll()
+    void protocolStore.fetchTypes()
+  }, [])
 
   // Build lookup maps for node data enrichment (split to avoid rebuilding stable maps on step changes)
   const agentLookup = useMemo(
-    () => Collections.toLookupMap(agents, (a) => a.id, (a) => ({name: a.name, model_id: a.model_id})),
+    () =>
+      Collections.toLookupMap(
+        agents,
+        (a) => a.id,
+        (a) => ({ name: a.name, model_id: a.model_id }),
+      ),
     [agents],
-  );
+  )
   const schemaLookup = useMemo(
-    () => Collections.toLookupMap(schemas, (s) => s.id, (s) => ({name: s.name})),
+    () =>
+      Collections.toLookupMap(
+        schemas,
+        (s) => s.id,
+        (s) => ({ name: s.name }),
+      ),
     [schemas],
-  );
+  )
   const stepNameLookup = useMemo(
-    () => Collections.toLookupMap(steps, (s) => s.id, (s) => s.name ?? s.execution_mode),
+    () =>
+      Collections.toLookupMap(
+        steps,
+        (s) => s.id,
+        (s) => s.name ?? s.execution_mode,
+      ),
     [steps],
-  );
+  )
   // todo: why use map here?
   const toolsByAgentLookup = useMemo(
-    () => Collections.toLookupMap(agents, (a) => a.id, (a) => {
-      const tools = toolsByAgent[a.id] ?? [];
-      return Collections.mapBy(tools, (t) => t.name);
-    }),
+    () =>
+      Collections.toLookupMap(
+        agents,
+        (a) => a.id,
+        (a) => {
+          const tools = toolsByAgent[a.id] ?? []
+          return Collections.mapBy(tools, (t) => t.name)
+        },
+      ),
     [agents, toolsByAgent],
-  );
+  )
   const protocolsByStepLookup = useMemo(
-    () => Collections.toLookupMap(
-      Object.entries(stepProtocols),
-      ([stepId]) => stepId,
-      ([, link]) => ({
-        protocol_type: link.protocolType,
-        name: link.protocolName,
-        portNames: link.portNames,
-      }),
-    ),
+    () =>
+      Collections.toLookupMap(
+        Object.entries(stepProtocols),
+        ([stepId]) => stepId,
+        ([, link]) => ({
+          protocol_type: link.protocolType,
+          name: link.protocolName,
+          portNames: link.portNames,
+        }),
+      ),
     [stepProtocols],
-  );
+  )
   const lookups = useMemo(
     (): StepNodeLookups => ({
       agents: agentLookup,
@@ -127,227 +117,235 @@ function WorkflowCanvasInner() {
       protocolsByStep: protocolsByStepLookup,
     }),
     [agentLookup, schemaLookup, stepNameLookup, edges, toolsByAgentLookup, protocolsByStepLookup],
-  );
+  )
 
   // Map store data to RF format
-  const rfNodes = useMemo(() => toRFNodes(steps, lookups), [steps, lookups]);
-  const rfEdges = useMemo(() => toRFEdges(edges), [edges]);
+  const rfNodes = useMemo(() => toRFNodes(steps, lookups), [steps, lookups])
+  const rfEdges = useMemo(() => toRFEdges(edges), [edges])
 
   // Push store updates into RF — only touch data + position, never clobber selection
   useEffect(() => {
     setNodes((current) => {
-      const currentIds = Collections.toSetBy(current, (n) => n.id);
-      const newIds = Collections.toSetBy(rfNodes, (n) => n.id);
+      const currentIds = Collections.toSetBy(current, (n) => n.id)
+      const newIds = Collections.toSetBy(rfNodes, (n) => n.id)
 
-      const hasStructuralChange =
-        rfNodes.some((n) => !currentIds.has(n.id)) ||
-        current.some((n) => !newIds.has(n.id));
+      const hasStructuralChange = rfNodes.some((n) => !currentIds.has(n.id)) || current.some((n) => !newIds.has(n.id))
 
       if (hasStructuralChange) {
         // Nodes added/removed — full replacement, preserve selection
-        const selMap = Collections.toLookupMap(current, (n) => n.id, (n) => n.selected ?? false);
+        const selMap = Collections.toLookupMap(
+          current,
+          (n) => n.id,
+          (n) => n.selected ?? false,
+        )
         return Collections.mapBy(rfNodes, (n) => ({
           ...n,
           selected: selMap.get(n.id) ?? false,
-        }));
+        }))
       }
 
       // Data-only change — value-compare, return current when nothing changed.
       // NEVER overwrite position here: RF owns position state (updated via drag),
       // and the store catches up via onNodeDragStop. Overwriting mid-drag causes
       // nodes to snap back to stale store positions.
-      const newDataMap = Collections.keyBy(rfNodes, (n) => n.id);
-      let anyChanged = false;
-      const result: typeof current = [];
+      const newDataMap = Collections.keyBy(rfNodes, (n) => n.id)
+      let anyChanged = false
+      const result: typeof current = []
       for (let i = 0; i < current.length; i++) {
-        const n = current[i]!;
-        const updated = newDataMap.get(n.id);
-        if (!updated) { result.push(n); continue; }
+        const n = current[i]!
+        const updated = newDataMap.get(n.id)
+        if (!updated) {
+          result.push(n)
+          continue
+        }
 
-        const dEq = nodeDataEqual(n.data, updated.data);
-        const tEq = n.type === updated.type;
-        const sEq = stylesEqual(n.style, updated.style);
+        const dEq = nodeDataEqual(n.data, updated.data)
+        const tEq = n.type === updated.type
+        const sEq = stylesEqual(n.style, updated.style)
 
-        if (dEq && tEq && sEq) { result.push(n); continue; }
+        if (dEq && tEq && sEq) {
+          result.push(n)
+          continue
+        }
 
-        anyChanged = true;
+        anyChanged = true
         result.push({
           ...n,
           data: dEq ? n.data : updated.data,
           type: updated.type,
           style: sEq ? n.style : updated.style,
-        });
+        })
       }
 
-      return anyChanged ? result : current;
-    });
-  }, [rfNodes, setNodes]);
+      return anyChanged ? result : current
+    })
+  }, [rfNodes, setNodes])
 
   useEffect(() => {
     setEdges((current) => {
-      const currentIds = Collections.toSetBy(current, (e) => e.id);
-      const newIds = Collections.toSetBy(rfEdges, (e) => e.id);
-      const hasStructuralChange =
-        rfEdges.some((e) => !currentIds.has(e.id)) ||
-        current.some((e) => !newIds.has(e.id));
+      const currentIds = Collections.toSetBy(current, (e) => e.id)
+      const newIds = Collections.toSetBy(rfEdges, (e) => e.id)
+      const hasStructuralChange = rfEdges.some((e) => !currentIds.has(e.id)) || current.some((e) => !newIds.has(e.id))
 
       if (hasStructuralChange) {
-        const selMap = Collections.toLookupMap(current, (e) => e.id, (e) => e.selected ?? false);
+        const selMap = Collections.toLookupMap(
+          current,
+          (e) => e.id,
+          (e) => e.selected ?? false,
+        )
         return Collections.mapBy(rfEdges, (e) => ({
           ...e,
           selected: selMap.get(e.id) ?? false,
-        }));
+        }))
       }
 
-      const newEdgeMap = Collections.keyBy(rfEdges, (e) => e.id);
-      let anyChanged = false;
-      const result: typeof current = [];
+      const newEdgeMap = Collections.keyBy(rfEdges, (e) => e.id)
+      let anyChanged = false
+      const result: typeof current = []
       for (let i = 0; i < current.length; i++) {
-        const e = current[i]!;
-        const updated = newEdgeMap.get(e.id);
-        if (!updated) { result.push(e); continue; }
-        if (e.source === updated.source && e.target === updated.target && e.type === updated.type) {
-          result.push(e); continue;
+        const e = current[i]!
+        const updated = newEdgeMap.get(e.id)
+        if (!updated) {
+          result.push(e)
+          continue
         }
-        anyChanged = true;
-        result.push({...e, source: updated.source, target: updated.target, type: updated.type});
+        if (e.source === updated.source && e.target === updated.target && e.type === updated.type) {
+          result.push(e)
+          continue
+        }
+        anyChanged = true
+        result.push({ ...e, source: updated.source, target: updated.target, type: updated.type })
       }
 
-      return anyChanged ? result : current;
-    });
-  }, [rfEdges, setEdges]);
+      return anyChanged ? result : current
+    })
+  }, [rfEdges, setEdges])
 
   // Fit to view on initial load
   useEffect(() => {
     if (steps.length > 0 && !initialFitDone.current) {
-      initialFitDone.current = true;
+      initialFitDone.current = true
       setTimeout(() => {
-        void fitView({padding: CANVAS.FIT_VIEW_PADDING});
-      }, 50);
+        void fitView({ padding: CANVAS.FIT_VIEW_PADDING })
+      }, 50)
     }
-  }, [steps, fitView]);
+  }, [steps, fitView])
 
   // Selection sync: RF → canvasStore (read-only mirror for sidebar panels)
   const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
     batch(() => {
-      canvasStore.selectSteps(Collections.mapBy(params.nodes, (n: {id: string}) => n.id));
-      canvasStore.selectEdges(Collections.mapBy(params.edges, (e: {id: string}) => e.id));
-    });
-  }, []);
+      canvasStore.selectSteps(Collections.mapBy(params.nodes, (n: { id: string }) => n.id))
+      canvasStore.selectEdges(Collections.mapBy(params.edges, (e: { id: string }) => e.id))
+      if (params.nodes.length > 0 || params.edges.length > 0) {
+        layoutStore.openRightPanelIfClosed('properties')
+      }
+    })
+  }, [])
 
   // Edge creation
   const onConnect = useCallback((connection: Connection) => {
-    if (!connection.source || !connection.target) return;
+    if (!connection.source || !connection.target) return
     void workflowStore.addEdge({
       from_step_id: connection.source,
       to_step_id: connection.target,
-    });
-  }, []);
+    })
+  }, [])
 
   // Edge reconnection (drag from handle to detach/reconnect)
-  const onReconnect = useCallback(
-    (oldEdge: Edge, newConnection: Connection) => {
-      if (!newConnection.source || !newConnection.target) return;
+  const onReconnect = useCallback((oldEdge: Edge, newConnection: Connection) => {
+    if (!newConnection.source || !newConnection.target) return
 
-      // Delete old edge
-      void workflowStore.removeEdge(oldEdge.id);
+    // Delete old edge
+    void workflowStore.removeEdge(oldEdge.id)
 
-      // Create new edge with updated source/target
-      void workflowStore.addEdge({
-        from_step_id: newConnection.source,
-        to_step_id: newConnection.target,
-      });
-    },
-    [],
-  );
+    // Create new edge with updated source/target
+    void workflowStore.addEdge({
+      from_step_id: newConnection.source,
+      to_step_id: newConnection.target,
+    })
+  }, [])
 
   // Node deletion
   const onNodesDelete: OnNodesDelete = useCallback((deleted) => {
     for (const node of deleted) {
-      void workflowStore.deleteStep(node.id);
+      void workflowStore.deleteStep(node.id)
     }
-  }, []);
+  }, [])
 
   // Edge deletion
   const onEdgesDelete: OnEdgesDelete = useCallback((deleted) => {
     for (const edge of deleted) {
-      void workflowStore.removeEdge(edge.id);
+      void workflowStore.removeEdge(edge.id)
     }
-  }, []);
+  }, [])
 
   // Context menu (right-click on pane)
   const onPaneContextMenu = useCallback(
     (event: React.MouseEvent | MouseEvent) => {
-      event.preventDefault();
+      event.preventDefault()
       const flowPosition = screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
-      });
+      })
       setContextMenu({
         x: event.clientX,
         y: event.clientY,
         flowX: flowPosition.x,
         flowY: flowPosition.y,
-      });
+      })
     },
     [screenToFlowPosition],
-  );
+  )
 
   // Context menu (right-click on node)
-  const onNodeContextMenu = useCallback(
-    (
-      event: React.MouseEvent,
-      node: {id: string; position: {x: number; y: number}},
-    ) => {
-      event.preventDefault();
-      setContextMenu({
-        x: event.clientX,
-        y: event.clientY,
-        flowX: node.position.x,
-        flowY: node.position.y,
-        nodeId: node.id,
-      });
-    },
-    [],
-  );
+  const onNodeContextMenu = useCallback((event: React.MouseEvent, node: { id: string; position: { x: number; y: number } }) => {
+    event.preventDefault()
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      flowX: node.position.x,
+      flowY: node.position.y,
+      nodeId: node.id,
+    })
+  }, [])
 
   // Close context menu on pane or node click
   const onPaneClick = useCallback(() => {
-    setContextMenu(null);
-  }, []);
+    setContextMenu(null)
+  }, [])
 
   const onNodeClick = useCallback(() => {
-    setContextMenu(null);
-  }, []);
+    setContextMenu(null)
+  }, [])
 
   const onCanvasMouseDown = useCallback(() => {
-    setContextMenu(null);
-  }, []);
+    setContextMenu(null)
+  }, [])
 
   return (
     <Box
       data-testid="workflow-canvas"
       onMouseDown={onCanvasMouseDown}
       sx={{
-        width: "100%",
-        height: "100%",
-        position: "relative",
-        outline: "none",
-        "&::after": {
+        width: '100%',
+        height: '100%',
+        position: 'relative',
+        outline: 'none',
+        '&::after': {
           content: '""',
-          position: "absolute",
+          position: 'absolute',
           inset: 0,
-          pointerEvents: "none",
+          pointerEvents: 'none',
           zIndex: 0,
           background: `radial-gradient(ellipse at 50% 50%, transparent 60%, ${theme.palette.custom.canvasVignette})`,
         },
-        "& .react-flow": {
-          "--xy-background-color": "transparent",
-          "--xy-node-background-color": "transparent",
-          "--xy-node-border": "none",
-          "--xy-node-border-radius": "12px",
-          "--xy-minimap-background-color": theme.palette.custom.minimapBg,
-          "--xy-minimap-mask-background-color": theme.palette.custom.minimapMask,
+        '& .react-flow': {
+          '--xy-background-color': 'transparent',
+          '--xy-node-background-color': 'transparent',
+          '--xy-node-border': 'none',
+          '--xy-node-border-radius': '12px',
+          '--xy-minimap-background-color': theme.palette.custom.minimapBg,
+          '--xy-minimap-mask-background-color': theme.palette.custom.minimapMask,
         },
       }}
     >
@@ -366,13 +364,13 @@ function WorkflowCanvasInner() {
         onNodeContextMenu={onNodeContextMenu}
         onPaneClick={onPaneClick}
         onNodeClick={onNodeClick}
-        deleteKeyCode={["Backspace", "Delete"]}
+        deleteKeyCode={['Backspace', 'Delete']}
         multiSelectionKeyCode="Shift"
         reconnectRadius={20}
         snapToGrid
         snapGrid={[CANVAS.GRID_SIZE, CANVAS.GRID_SIZE]}
         fitView={false}
-        proOptions={{hideAttribution: true}}
+        proOptions={{ hideAttribution: true }}
       >
         <Background
           id="stitch-lines"
@@ -401,11 +399,11 @@ function WorkflowCanvasInner() {
       <CanvasContextMenu
         position={contextMenu}
         onClose={() => {
-          setContextMenu(null);
+          setContextMenu(null)
         }}
       />
     </Box>
-  );
+  )
 }
 
 function WorkflowCanvas() {
@@ -413,7 +411,7 @@ function WorkflowCanvas() {
     <ReactFlowProvider>
       <WorkflowCanvasInner />
     </ReactFlowProvider>
-  );
+  )
 }
 
-export {WorkflowCanvas};
+export { WorkflowCanvas }

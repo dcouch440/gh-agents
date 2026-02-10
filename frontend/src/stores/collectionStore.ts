@@ -5,12 +5,7 @@
 import { createStore, createNormalizedMap, nmFromArray, nmSet, nmDelete, toArray, nmGet } from './lib'
 import type { NormalizedMap } from './lib'
 import { api } from '@/api'
-import type {
-  Collection,
-  CollectionRun,
-  CreateCollectionRequest,
-  UpdateCollectionRequest,
-} from '@/types/collection'
+import type { Collection, CollectionRun, CreateCollectionRequest, UpdateCollectionRequest } from '@/types/collection'
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -32,8 +27,7 @@ const store = createStore<CollectionState>(() => ({
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const extractError = (e: unknown): string =>
-  e instanceof Error ? e.message : 'collections: unknown error'
+const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'collections: unknown error')
 
 const EMPTY_RUNS: CollectionRun[] = []
 
@@ -41,11 +35,15 @@ const EMPTY_RUNS: CollectionRun[] = []
 
 const selectAll = (s: CollectionState): Collection[] => toArray(s.items)
 
-const selectById = (id: string) => (s: CollectionState): Collection | undefined =>
-  nmGet(s.items, id)
+const selectById =
+  (id: string) =>
+  (s: CollectionState): Collection | undefined =>
+    nmGet(s.items, id)
 
-const selectRuns = (collectionId: string) => (s: CollectionState): CollectionRun[] =>
-  s.runsByCollection[collectionId] ?? EMPTY_RUNS
+const selectRuns =
+  (collectionId: string) =>
+  (s: CollectionState): CollectionRun[] =>
+    s.runsByCollection[collectionId] ?? EMPTY_RUNS
 
 const selectLoading = (s: CollectionState): boolean => s.loading
 
@@ -110,9 +108,7 @@ const fetchRunStatus = async (runId: string): Promise<CollectionRun> => {
   store.setState((s) => ({
     runsByCollection: {
       ...s.runsByCollection,
-      [run.collection_id]: (s.runsByCollection[run.collection_id] ?? []).map((r) =>
-        r.id === runId ? run : r,
-      ),
+      [run.collection_id]: (s.runsByCollection[run.collection_id] ?? []).map((r) => (r.id === runId ? run : r)),
     },
   }))
   return run

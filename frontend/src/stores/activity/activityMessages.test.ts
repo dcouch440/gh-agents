@@ -16,17 +16,44 @@ describe('activityMessage', () => {
   })
 
   it('workflow:step_started', () => {
-    const event: ActivityEvent = { type: 'workflow:step_started', workflowId: 'wf-1', stepId: 's-1', stepName: 'Analyze', agentId: null, executionId: null }
+    const event: ActivityEvent = {
+      type: 'workflow:step_started',
+      workflowId: 'wf-1',
+      stepId: 's-1',
+      stepName: 'Analyze',
+      agentId: null,
+      executionId: null,
+    }
     expect(activityMessage(event)).toBe('Step "Analyze" started')
   })
 
   it('workflow:step_completed with duration', () => {
-    const event: ActivityEvent = { type: 'workflow:step_completed', workflowId: 'wf-1', stepId: 's-1', stepName: 'Analyze', agentId: null, output: null, inputTokens: null, outputTokens: null, durationMs: 1200 }
+    const event: ActivityEvent = {
+      type: 'workflow:step_completed',
+      workflowId: 'wf-1',
+      stepId: 's-1',
+      stepName: 'Analyze',
+      agentId: null,
+      output: null,
+      inputTokens: null,
+      outputTokens: null,
+      durationMs: 1200,
+    }
     expect(activityMessage(event)).toBe('Step "Analyze" completed (1200ms)')
   })
 
   it('workflow:step_completed without duration', () => {
-    const event: ActivityEvent = { type: 'workflow:step_completed', workflowId: 'wf-1', stepId: 's-1', stepName: 'Analyze', agentId: null, output: null, inputTokens: null, outputTokens: null, durationMs: null }
+    const event: ActivityEvent = {
+      type: 'workflow:step_completed',
+      workflowId: 'wf-1',
+      stepId: 's-1',
+      stepName: 'Analyze',
+      agentId: null,
+      output: null,
+      inputTokens: null,
+      outputTokens: null,
+      durationMs: null,
+    }
     expect(activityMessage(event)).toBe('Step "Analyze" completed')
   })
 
@@ -42,7 +69,14 @@ describe('activityMessage', () => {
   })
 
   it('workflow:for_each_progress', () => {
-    const event: ActivityEvent = { type: 'workflow:for_each_progress', workflowId: 'wf-1', stepId: 's-1', stepName: 'Process', completed: 3, total: 10 }
+    const event: ActivityEvent = {
+      type: 'workflow:for_each_progress',
+      workflowId: 'wf-1',
+      stepId: 's-1',
+      stepName: 'Process',
+      completed: 3,
+      total: 10,
+    }
     expect(activityMessage(event)).toBe('Step "Process" progress: 3/10')
   })
 
@@ -70,19 +104,42 @@ describe('activityMessage', () => {
   // ── Room ──────────────────────────────────────────────────────────────
 
   it('room:speaker_start', () => {
-    const event: ActivityEvent = { type: 'room:speaker_start', roomSessionId: 'rs-1', agentId: 'a-1', agentName: 'Alice', speakerOrder: 1, turnNumber: 2 }
+    const event: ActivityEvent = {
+      type: 'room:speaker_start',
+      roomSessionId: 'rs-1',
+      agentId: 'a-1',
+      agentName: 'Alice',
+      speakerOrder: 1,
+      turnNumber: 2,
+    }
     expect(activityMessage(event)).toContain('Alice')
     expect(activityMessage(event)).toContain('speaking')
   })
 
   it('room:speaker_token', () => {
-    const event: ActivityEvent = { type: 'room:speaker_token', roomSessionId: 'rs-1', agentId: 'a-1', agentName: 'Alice', content: 'Hello world', speakerOrder: 1, turnNumber: 2 }
+    const event: ActivityEvent = {
+      type: 'room:speaker_token',
+      roomSessionId: 'rs-1',
+      agentId: 'a-1',
+      agentName: 'Alice',
+      content: 'Hello world',
+      speakerOrder: 1,
+      turnNumber: 2,
+    }
     expect(activityMessage(event)).toContain('Alice')
     expect(activityMessage(event)).toContain('Hello world')
   })
 
   it('room:speaker_end', () => {
-    const event: ActivityEvent = { type: 'room:speaker_end', roomSessionId: 'rs-1', agentId: 'a-1', agentName: 'Alice', content: 'Full message', speakerOrder: 1, turnNumber: 2 }
+    const event: ActivityEvent = {
+      type: 'room:speaker_end',
+      roomSessionId: 'rs-1',
+      agentId: 'a-1',
+      agentName: 'Alice',
+      content: 'Full message',
+      speakerOrder: 1,
+      turnNumber: 2,
+    }
     expect(activityMessage(event)).toContain('Alice')
     expect(activityMessage(event)).toContain('finished')
   })

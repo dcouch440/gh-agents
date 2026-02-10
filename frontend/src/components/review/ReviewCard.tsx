@@ -9,8 +9,7 @@ type ReviewCardProps = {
   onSelect: (id: string) => void
 }
 
-const truncate = (text: string, maxLen: number): string =>
-  text.length > maxLen ? `${text.slice(0, maxLen)}...` : text
+const truncate = (text: string, maxLen: number): string => (text.length > maxLen ? `${text.slice(0, maxLen)}...` : text)
 
 function ReviewCard({ execution, selected, onSelect }: ReviewCardProps) {
   const firstLine = execution.input.split('\n')[0] ?? 'Untitled'
@@ -37,12 +36,7 @@ function ReviewCard({ execution, selected, onSelect }: ReviewCardProps) {
         <ExecutionStatusBadge status={execution.status} />
       </Box>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
-          noWrap
-        >
+        <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }} noWrap>
           {truncate(execution.input, 80)}
         </Typography>
         <TimeAgo timestamp={execution.started_at} />

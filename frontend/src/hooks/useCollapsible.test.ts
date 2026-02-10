@@ -17,10 +17,14 @@ describe('useCollapsible', () => {
     const { result } = renderHook(() => useCollapsible())
     expect(result.current.open).toBe(true)
 
-    act(() => { result.current.onToggle() })
+    act(() => {
+      result.current.onToggle()
+    })
     expect(result.current.open).toBe(false)
 
-    act(() => { result.current.onToggle() })
+    act(() => {
+      result.current.onToggle()
+    })
     expect(result.current.open).toBe(true)
   })
 

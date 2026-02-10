@@ -33,24 +33,31 @@ const store = createStore<ToolRouterState>(() => ({
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const extractError = (e: unknown): string =>
-  e instanceof Error ? e.message : 'toolRouters: unknown error'
+const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'toolRouters: unknown error')
 
 // ── Selectors ────────────────────────────────────────────────────────────────
 
 const selectAll = (s: ToolRouterState): ToolRouter[] => toArray(s.items)
 
-const selectById = (id: string) => (s: ToolRouterState): ToolRouter | undefined =>
-  nmGet(s.items, id)
+const selectById =
+  (id: string) =>
+  (s: ToolRouterState): ToolRouter | undefined =>
+    nmGet(s.items, id)
 
-const selectRouterTools = (routerId: string) => (s: ToolRouterState): Tool[] =>
-  s.toolsByRouter[routerId] ?? []
+const selectRouterTools =
+  (routerId: string) =>
+  (s: ToolRouterState): Tool[] =>
+    s.toolsByRouter[routerId] ?? []
 
-const selectModes = (routerId: string) => (s: ToolRouterState): RouterMode[] =>
-  s.modesByRouter[routerId] ?? []
+const selectModes =
+  (routerId: string) =>
+  (s: ToolRouterState): RouterMode[] =>
+    s.modesByRouter[routerId] ?? []
 
-const selectModeTools = (modeId: string) => (s: ToolRouterState): Tool[] =>
-  s.toolsByMode[modeId] ?? []
+const selectModeTools =
+  (modeId: string) =>
+  (s: ToolRouterState): Tool[] =>
+    s.toolsByMode[modeId] ?? []
 
 const selectLoading = (s: ToolRouterState): boolean => s.loading
 

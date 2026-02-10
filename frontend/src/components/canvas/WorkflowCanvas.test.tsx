@@ -84,7 +84,14 @@ vi.mock('@/stores', () => ({
 
 // Mock React Flow — jsdom can't render SVG canvas
 vi.mock('@xyflow/react', () => {
-  const MockReactFlow = ({ children, onSelectionChange, onConnect, onReconnect, onNodesDelete, onEdgesDelete }: {
+  const MockReactFlow = ({
+    children,
+    onSelectionChange,
+    onConnect,
+    onReconnect,
+    onNodesDelete,
+    onEdgesDelete,
+  }: {
     children?: React.ReactNode
     onSelectionChange?: (params: { nodes: { id: string }[]; edges: { id: string }[] }) => void
     onConnect?: (connection: { source: string; target: string }) => void

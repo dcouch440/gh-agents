@@ -1,5 +1,5 @@
-import {useState, useMemo, useCallback} from 'react'
-import type {TableColumn} from './types'
+import { useState, useMemo, useCallback } from 'react'
+import type { TableColumn } from './types'
 
 type UseTableColumnsProps<T> = {
   columns: TableColumn<T>[]
@@ -14,10 +14,7 @@ type UseTableColumnsReturn<T> = {
   hideAllColumns: () => void
 }
 
-function useTableColumns<T>({
-  columns,
-  defaultVisibleColumns,
-}: UseTableColumnsProps<T>): UseTableColumnsReturn<T> {
+function useTableColumns<T>({ columns, defaultVisibleColumns }: UseTableColumnsProps<T>): UseTableColumnsReturn<T> {
   // Initialize visible columns
   const [hiddenColumnKeys, setHiddenColumnKeys] = useState<Set<string>>(() => {
     if (defaultVisibleColumns) {
@@ -28,10 +25,7 @@ function useTableColumns<T>({
   })
 
   // Filter visible columns
-  const visibleColumns = useMemo(
-    () => columns.filter((col) => !hiddenColumnKeys.has(col.key)),
-    [columns, hiddenColumnKeys],
-  )
+  const visibleColumns = useMemo(() => columns.filter((col) => !hiddenColumnKeys.has(col.key)), [columns, hiddenColumnKeys])
 
   // Toggle column visibility
   const toggleColumnVisibility = useCallback((columnKey: string) => {
@@ -68,5 +62,5 @@ function useTableColumns<T>({
   }
 }
 
-export {useTableColumns}
-export type {UseTableColumnsProps, UseTableColumnsReturn}
+export { useTableColumns }
+export type { UseTableColumnsProps, UseTableColumnsReturn }

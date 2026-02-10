@@ -20,15 +20,7 @@ const formatDuration = (ms: number): string => {
   return `${mins}m ${secs}s`
 }
 
-function ExecutionRunHeader({
-  isRunning,
-  completedSteps,
-  totalSteps,
-  durationMs,
-  error,
-  startedAt,
-  completedAt,
-}: ExecutionRunHeaderProps) {
+function ExecutionRunHeader({ isRunning, completedSteps, totalSteps, durationMs, error, startedAt, completedAt }: ExecutionRunHeaderProps) {
   const [elapsed, setElapsed] = useState<number>(0)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 

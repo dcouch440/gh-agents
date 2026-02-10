@@ -16,14 +16,7 @@ const VARIANT_COLOR_MAP = {
 } as const
 
 function StatusBadge({ label, variant }: StatusBadgeProps) {
-  return (
-    <Chip
-      label={label}
-      color={VARIANT_COLOR_MAP[variant]}
-      size="small"
-      sx={{ fontWeight: 500 }}
-    />
-  )
+  return <Chip label={label} color={VARIANT_COLOR_MAP[variant]} size="small" sx={{ fontWeight: 500 }} />
 }
 
 export { StatusBadge }

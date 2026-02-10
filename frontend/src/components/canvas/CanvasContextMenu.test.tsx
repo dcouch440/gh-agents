@@ -41,16 +41,12 @@ const defaultPosition = { x: 200, y: 300, flowX: 150.5, flowY: 250.7 }
 
 describe('CanvasContextMenu', () => {
   it('renders nothing when position is null', () => {
-    const { container } = render(
-      <CanvasContextMenu position={null} onClose={vi.fn()} />,
-    )
+    const { container } = render(<CanvasContextMenu position={null} onClose={vi.fn()} />)
     expect(container.firstChild).toBeNull()
   })
 
   it('renders menu with step type options', () => {
-    render(
-      <CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />,
-    )
+    render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
     expect(screen.getByText('Add Step')).toBeInTheDocument()
     expect(screen.getByText('LLM Step')).toBeInTheDocument()
     expect(screen.getByText('For-Each Step')).toBeInTheDocument()
@@ -60,9 +56,7 @@ describe('CanvasContextMenu', () => {
   it('calls createStep with correct execution_mode and rounded position on click', async () => {
     const onClose = vi.fn()
     const user = userEvent.setup()
-    render(
-      <CanvasContextMenu position={defaultPosition} onClose={onClose} />,
-    )
+    render(<CanvasContextMenu position={defaultPosition} onClose={onClose} />)
 
     await user.click(screen.getByText('LLM Step'))
 
@@ -77,9 +71,7 @@ describe('CanvasContextMenu', () => {
   it('calls onClose after adding a step', async () => {
     const onClose = vi.fn()
     const user = userEvent.setup()
-    render(
-      <CanvasContextMenu position={defaultPosition} onClose={onClose} />,
-    )
+    render(<CanvasContextMenu position={defaultPosition} onClose={onClose} />)
 
     await user.click(screen.getByText('For-Each Step'))
     expect(onClose).toHaveBeenCalledOnce()
@@ -87,40 +79,30 @@ describe('CanvasContextMenu', () => {
 
   it('creates for_each execution_mode correctly', async () => {
     const user = userEvent.setup()
-    render(
-      <CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />,
-    )
+    render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
 
     await user.click(screen.getByText('For-Each Step'))
 
-    expect(mockCreateStep).toHaveBeenCalledWith(
-      expect.objectContaining({ execution_mode: 'for_each' }),
-    )
+    expect(mockCreateStep).toHaveBeenCalledWith(expect.objectContaining({ execution_mode: 'for_each' }))
   })
 
   describe('node context menu', () => {
     const nodePosition = { ...defaultPosition, nodeId: 'step-123' }
 
     it('renders Delete Step when position has nodeId', () => {
-      render(
-        <CanvasContextMenu position={nodePosition} onClose={vi.fn()} />,
-      )
+      render(<CanvasContextMenu position={nodePosition} onClose={vi.fn()} />)
       expect(screen.getByText('Delete Step')).toBeInTheDocument()
     })
 
     it('does not render Add Step options when nodeId is present', () => {
-      render(
-        <CanvasContextMenu position={nodePosition} onClose={vi.fn()} />,
-      )
+      render(<CanvasContextMenu position={nodePosition} onClose={vi.fn()} />)
       expect(screen.queryByText('Add Step')).not.toBeInTheDocument()
       expect(screen.queryByText('LLM Step')).not.toBeInTheDocument()
     })
 
     it('calls deleteStep with correct node ID on click', async () => {
       const user = userEvent.setup()
-      render(
-        <CanvasContextMenu position={nodePosition} onClose={vi.fn()} />,
-      )
+      render(<CanvasContextMenu position={nodePosition} onClose={vi.fn()} />)
 
       await user.click(screen.getByText('Delete Step'))
 
@@ -130,9 +112,7 @@ describe('CanvasContextMenu', () => {
     it('calls onClose after delete', async () => {
       const onClose = vi.fn()
       const user = userEvent.setup()
-      render(
-        <CanvasContextMenu position={nodePosition} onClose={onClose} />,
-      )
+      render(<CanvasContextMenu position={nodePosition} onClose={onClose} />)
 
       await user.click(screen.getByText('Delete Step'))
       expect(onClose).toHaveBeenCalledOnce()

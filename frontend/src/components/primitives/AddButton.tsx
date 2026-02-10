@@ -15,7 +15,9 @@ function AddButton({ label, onClick, icon = null }: AddButtonProps) {
       onClick={onClick}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick() }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') onClick()
+      }}
       sx={{
         display: 'flex',
         alignItems: 'center',
@@ -32,12 +34,8 @@ function AddButton({ label, onClick, icon = null }: AddButtonProps) {
         },
       }}
     >
-      {icon ?? (
-        <AddRounded sx={{ fontSize: 14 }} />
-      )}
-      <Typography sx={{ fontSize: 11, fontWeight: 500 }}>
-        {label}
-      </Typography>
+      {icon ?? <AddRounded sx={{ fontSize: 14 }} />}
+      <Typography sx={{ fontSize: 11, fontWeight: 500 }}>{label}</Typography>
     </Box>
   )
 }

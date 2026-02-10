@@ -25,10 +25,7 @@ function CollapsibleSection({ title, open, onToggle, children }: CollapsibleSect
           userSelect: 'none',
         }}
       >
-        <Typography
-          variant="caption"
-          sx={{ fontFamily: 'monospace', color: 'text.secondary', lineHeight: 1 }}
-        >
+        <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary', lineHeight: 1 }}>
           {open ? '\u25BC' : '\u25B6'}
         </Typography>
         <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>

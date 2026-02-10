@@ -18,14 +18,7 @@ type PropertySelectProps = {
   accentColor?: string
 }
 
-function PropertySelect({
-  value,
-  options,
-  onChange,
-  placeholder = 'Select...',
-  allowNone = false,
-  accentColor,
-}: PropertySelectProps) {
+function PropertySelect({ value, options, onChange, placeholder = 'Select...', allowNone = false, accentColor }: PropertySelectProps) {
   const selected = options.find((o) => o.value === value)
 
   return (
@@ -104,9 +97,7 @@ function PropertySelect({
     >
       {allowNone ? (
         <MenuItem value="">
-          <Typography sx={{ fontSize: 11, color: 'text.secondary', fontStyle: 'italic' }}>
-            None
-          </Typography>
+          <Typography sx={{ fontSize: 11, color: 'text.secondary', fontStyle: 'italic' }}>None</Typography>
         </MenuItem>
       ) : null}
       {options.map((opt) => (

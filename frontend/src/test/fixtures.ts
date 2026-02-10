@@ -201,7 +201,9 @@ export const mockPromptTemplate: PromptTemplate = {
 
 export const mockCostResponse: CostResponse = {
   total_spend: 0.15,
-  models: [{ model_id: 'claude-sonnet-4-20250514', total_input_tokens: 10000, total_output_tokens: 5000, total_cost_usd: 0.15, call_count: 10 }],
+  models: [
+    { model_id: 'claude-sonnet-4-20250514', total_input_tokens: 10000, total_output_tokens: 5000, total_cost_usd: 0.15, call_count: 10 },
+  ],
 }
 
 const mockModelConfig = { provider: 'anthropic', model_id: 'claude-sonnet-4-20250514', max_tokens: 8192, temperature: 0.7 }

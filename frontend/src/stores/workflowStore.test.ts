@@ -392,9 +392,7 @@ describe('workflowStore', () => {
         workflowStore.store.setState((s) => ({
           steps: nmSet(s.steps, step2.id, step2),
         }))
-        mockUpdateStep
-          .mockResolvedValueOnce({ ...step1, name: 'S1' })
-          .mockResolvedValueOnce({ ...step2, name: 'S2' })
+        mockUpdateStep.mockResolvedValueOnce({ ...step1, name: 'S1' }).mockResolvedValueOnce({ ...step2, name: 'S2' })
 
         workflowStore.patchStepLocal('s1', { name: 'S1' })
         workflowStore.patchStepLocal('s2', { name: 'S2' })

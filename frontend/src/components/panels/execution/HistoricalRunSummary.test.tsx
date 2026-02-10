@@ -27,19 +27,13 @@ describe('HistoricalRunSummary', () => {
   })
 
   it('renders failed run with error message', () => {
-    render(
-      <HistoricalRunSummary run={makeRun({ status: 'failed', error: 'LLM timeout' })} />,
-    )
+    render(<HistoricalRunSummary run={makeRun({ status: 'failed', error: 'LLM timeout' })} />)
     expect(screen.getByTestId('badge')).toHaveTextContent('Failed')
     expect(screen.getByText('LLM timeout')).toBeInTheDocument()
   })
 
   it('renders outputs with response field', () => {
-    render(
-      <HistoricalRunSummary
-        run={makeRun({ outputs: { '': { response: 'Hello world' } } })}
-      />,
-    )
+    render(<HistoricalRunSummary run={makeRun({ outputs: { '': { response: 'Hello world' } } })} />)
     expect(screen.getByTestId('markdown')).toBeInTheDocument()
   })
 

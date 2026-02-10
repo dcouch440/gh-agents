@@ -9,8 +9,12 @@ const makeCommand = (type: string, description: string): Command & { executeCall
     description,
     executeCalls: 0,
     undoCalls: 0,
-    execute: () => { cmd.executeCalls++ },
-    undo: () => { cmd.undoCalls++ },
+    execute: () => {
+      cmd.executeCalls++
+    },
+    undo: () => {
+      cmd.undoCalls++
+    },
   }
   return cmd
 }

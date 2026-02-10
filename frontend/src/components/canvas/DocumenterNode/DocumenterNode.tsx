@@ -33,35 +33,41 @@ function DocumenterNodeComponent({ id, data, selected }: NodeProps) {
   const promptValue = nodeData.promptValue
   const upstreamStepNames = nodeData.upstreamStepNames
 
-  const documentDefs = useStore(
-    workflowStore.store,
-    workflowStore.selectStepDocumentDefs(id),
-  )
+  const documentDefs = useStore(workflowStore.store, workflowStore.selectStepDocumentDefs(id))
 
   useEffect(() => {
     void workflowStore.fetchDocumentDefs(id)
   }, [id])
 
-  const handlePromptChange = useCallback((value: string) => {
-    workflowStore.patchStepLocal(id, { prompt_template: value })
-  }, [id])
+  const handlePromptChange = useCallback(
+    (value: string) => {
+      workflowStore.patchStepLocal(id, { prompt_template: value })
+    },
+    [id],
+  )
 
   const handleAddDocument = useCallback(() => {
     setAdding(true)
   }, [])
 
-  const handleSubmitNew = useCallback((body: CreateDocumentDefRequest) => {
-    void workflowStore.createDocumentDef(id, body)
-    setAdding(false)
-  }, [id])
+  const handleSubmitNew = useCallback(
+    (body: CreateDocumentDefRequest) => {
+      void workflowStore.createDocumentDef(id, body)
+      setAdding(false)
+    },
+    [id],
+  )
 
   const handleCancelAdd = useCallback(() => {
     setAdding(false)
   }, [])
 
-  const handleRemoveDocument = useCallback((defId: string) => {
-    void workflowStore.deleteDocumentDef(id, defId)
-  }, [id])
+  const handleRemoveDocument = useCallback(
+    (defId: string) => {
+      void workflowStore.deleteDocumentDef(id, defId)
+    },
+    [id],
+  )
 
   const accentColor = PROTOCOL_TYPE_COLORS['documenter']
 
@@ -122,9 +128,7 @@ function DocumenterNodeComponent({ id, data, selected }: NodeProps) {
 }
 
 const documenterNodeEqual = (prev: NodeProps, next: NodeProps): boolean =>
-  prev.selected === next.selected &&
-  prev.id === next.id &&
-  nodeDataEqual(prev.data, next.data)
+  prev.selected === next.selected && prev.id === next.id && nodeDataEqual(prev.data, next.data)
 
 const DocumenterNode = memo(DocumenterNodeComponent, documenterNodeEqual)
 

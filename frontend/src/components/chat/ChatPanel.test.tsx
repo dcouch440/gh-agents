@@ -4,21 +4,13 @@ import { ChatPanel, type ChatMessageData } from './ChatPanel'
 
 vi.mock('./ChatMessage', () => ({
   ChatMessage: (props: { role: string; content: string; streaming?: boolean }) => (
-    <div
-      data-testid="chat-message"
-      data-role={props.role}
-      data-content={props.content}
-      data-streaming={props.streaming ?? ''}
-    />
+    <div data-testid="chat-message" data-role={props.role} data-content={props.content} data-streaming={props.streaming ?? ''} />
   ),
 }))
 
 vi.mock('./ChatInput', () => ({
   ChatInput: (props: { onSend: (msg: string) => void; disabled?: boolean }) => (
-    <div
-      data-testid="chat-input"
-      data-disabled={props.disabled ?? ''}
-    />
+    <div data-testid="chat-input" data-disabled={props.disabled ?? ''} />
   ),
 }))
 

@@ -33,7 +33,11 @@ type VariableContext = {
  * Derive a snake_case variable name from a step name.
  */
 const toSnakeCase = (name: string): string =>
-  name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+  name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '')
 
 /**
  * Generate .$ element access completions for a nested array field
@@ -101,9 +105,7 @@ const buildVariableCompletions = (
 
     // Root variable
     const schema = upStep.output_schema_id ? schemas.get(upStep.output_schema_id) : undefined
-    const rootType = schema
-      ? (typeof schema.schema.type === 'string' ? schema.schema.type : 'object')
-      : 'any'
+    const rootType = schema ? (typeof schema.schema.type === 'string' ? schema.schema.type : 'object') : 'any'
     const isRootArray = rootType === 'array'
 
     completions.push({

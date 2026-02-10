@@ -1,14 +1,5 @@
 import type { ReactNode } from 'react'
-import {
-  Table,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableCell,
-  TableSortLabel,
-  TableContainer,
-  Paper,
-} from '@mui/material'
+import { Table, TableHead, TableBody, TableRow, TableCell, TableSortLabel, TableContainer, Paper } from '@mui/material'
 
 type SortDirection = 'asc' | 'desc'
 
@@ -28,14 +19,7 @@ type DataTableProps<T> = {
   onSort?: ((columnKey: string) => void) | null
 }
 
-function DataTable<T>({
-  columns,
-  rows,
-  rowKey,
-  sortColumn,
-  sortDirection,
-  onSort,
-}: DataTableProps<T>) {
+function DataTable<T>({ columns, rows, rowKey, sortColumn, sortDirection, onSort }: DataTableProps<T>) {
   return (
     <TableContainer component={Paper} elevation={0}>
       <Table size="small">

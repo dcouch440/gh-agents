@@ -3,13 +3,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
-import {
-  api,
-  ApiError,
-  configure,
-  addInterceptor,
-  cancelInFlightRequests,
-} from './client'
+import { api, ApiError, configure, addInterceptor, cancelInFlightRequests } from './client'
 
 const { mockFetch, mockGetItem } = vi.hoisted(() => ({
   mockFetch: vi.fn(),
@@ -100,7 +94,7 @@ describe('api client', () => {
         expect.objectContaining({
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
-        })
+        }),
       )
       expect(result).toEqual({ data: 'test' })
     })
@@ -123,7 +117,7 @@ describe('api client', () => {
             'Content-Type': 'application/json',
             Authorization: 'Bearer test-token',
           },
-        })
+        }),
       )
     })
 
@@ -231,7 +225,7 @@ describe('api client', () => {
             'Content-Type': 'application/json',
             Authorization: 'Bearer test-token',
           },
-        })
+        }),
       )
       expect(result).toEqual({ id: '123' })
     })
@@ -292,7 +286,7 @@ describe('api client', () => {
         expect.objectContaining({
           method: 'PATCH',
           body: '{"status":"active"}',
-        })
+        }),
       )
       expect(result).toEqual({ updated: true })
     })
@@ -315,7 +309,7 @@ describe('api client', () => {
         expect.objectContaining({
           method: 'PUT',
           body: '{"name":"new"}',
-        })
+        }),
       )
       expect(result).toEqual({ replaced: true })
     })
@@ -336,7 +330,7 @@ describe('api client', () => {
         'http://localhost:3000/api/test',
         expect.objectContaining({
           method: 'DELETE',
-        })
+        }),
       )
       expect(result).toBeUndefined()
     })
@@ -379,7 +373,7 @@ describe('api client', () => {
             'Content-Type': 'application/json',
             'X-Custom-Header': 'value',
           },
-        })
+        }),
       )
     })
 
@@ -394,7 +388,7 @@ describe('api client', () => {
             abortSignal?.addEventListener('abort', () => {
               reject(new DOMException('Aborted', 'AbortError'))
             })
-          })
+          }),
       )
 
       const promise = api.get('/test', { timeout: 10 })
@@ -460,9 +454,7 @@ describe('api client', () => {
         headers: new Headers(),
       })
 
-      await expect(
-        api.get('/test', { retries: 2, retryDelay: 1 })
-      ).rejects.toMatchObject({
+      await expect(api.get('/test', { retries: 2, retryDelay: 1 })).rejects.toMatchObject({
         type: 'http_error',
         status: 404,
       })
@@ -515,11 +507,7 @@ describe('api client', () => {
         headers: new Headers(),
       })
 
-      const [result1, result2, result3] = await Promise.all([
-        api.get('/test'),
-        api.get('/test'),
-        api.get('/test'),
-      ])
+      const [result1, result2, result3] = await Promise.all([api.get('/test'), api.get('/test'), api.get('/test')])
 
       expect(mockFetch).toHaveBeenCalledTimes(1)
       expect(result1).toEqual({ data: 'test' })
@@ -536,10 +524,7 @@ describe('api client', () => {
         headers: new Headers(),
       })
 
-      await Promise.all([
-        api.post('/test', { data: 'test' }),
-        api.post('/test', { data: 'test' }),
-      ])
+      await Promise.all([api.post('/test', { data: 'test' }), api.post('/test', { data: 'test' })])
 
       expect(mockFetch).toHaveBeenCalledTimes(2)
     })
@@ -556,7 +541,7 @@ describe('api client', () => {
             controller.signal.addEventListener('abort', () => {
               reject(new DOMException('Aborted', 'AbortError'))
             })
-          })
+          }),
       )
 
       const promise = api.get('/test', { signal: controller.signal })
@@ -598,7 +583,7 @@ describe('api client', () => {
           headers: expect.objectContaining({
             'X-Intercepted': 'true',
           }),
-        })
+        }),
       )
 
       remove()
@@ -651,7 +636,7 @@ describe('api client', () => {
         expect.objectContaining({
           type: 'http_error',
           status: 401,
-        })
+        }),
       )
 
       remove()
@@ -695,7 +680,7 @@ describe('api client', () => {
             abortSignal?.addEventListener('abort', () => {
               reject(new DOMException('Aborted', 'AbortError'))
             })
-          })
+          }),
       )
 
       const promise = api.get('/test')

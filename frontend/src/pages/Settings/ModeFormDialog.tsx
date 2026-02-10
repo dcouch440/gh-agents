@@ -125,8 +125,7 @@ const validate = (state: FormState, isEdit: boolean): ValidationError | null => 
     if (!/^[a-z][a-z0-9_]*$/.test(state.mode_key)) {
       return {
         field: 'mode_key',
-        message:
-          'Mode key must start with a lowercase letter and contain only lowercase letters, numbers, and underscores',
+        message: 'Mode key must start with a lowercase letter and contain only lowercase letters, numbers, and underscores',
       }
     }
   }
@@ -162,17 +161,13 @@ const validate = (state: FormState, isEdit: boolean): ValidationError | null => 
   return null
 }
 
-function ModeFormDialog({
-  open,
-  onClose,
-  onSave,
-  mode,
-  routerId,
-}: ModeFormDialogProps) {
+function ModeFormDialog({ open, onClose, onSave, mode, routerId }: ModeFormDialogProps) {
   const [state, dispatch] = useReducer(formReducer, initialFormState)
   const allTools = useStore(toolStore.store, toolStore.selectAll)
 
-  useEffect(() => { void toolStore.fetchAll() }, [])
+  useEffect(() => {
+    void toolStore.fetchAll()
+  }, [])
   const isEdit = mode !== null
 
   useEffect(() => {
@@ -203,7 +198,9 @@ function ModeFormDialog({
         }
       }
       void load()
-      return () => { cancelled = true }
+      return () => {
+        cancelled = true
+      }
     } else {
       dispatch({ type: 'RESET' })
     }
@@ -287,25 +284,17 @@ function ModeFormDialog({
           <TextField
             label="Mode Key"
             value={state.mode_key}
-            onChange={(e) =>
-              dispatch({ type: 'SET_MODE_KEY', value: e.target.value })
-            }
+            onChange={(e) => dispatch({ type: 'SET_MODE_KEY', value: e.target.value })}
             disabled={isEdit || state.saving}
             required
             fullWidth
-            helperText={
-              isEdit
-                ? 'Mode key cannot be changed'
-                : 'Lowercase letters, numbers, and underscores only'
-            }
+            helperText={isEdit ? 'Mode key cannot be changed' : 'Lowercase letters, numbers, and underscores only'}
           />
 
           <TextField
             label="Display Name"
             value={state.display_name}
-            onChange={(e) =>
-              dispatch({ type: 'SET_DISPLAY_NAME', value: e.target.value })
-            }
+            onChange={(e) => dispatch({ type: 'SET_DISPLAY_NAME', value: e.target.value })}
             disabled={state.saving}
             required
             fullWidth
@@ -314,9 +303,7 @@ function ModeFormDialog({
           <TextField
             label="Description"
             value={state.description}
-            onChange={(e) =>
-              dispatch({ type: 'SET_DESCRIPTION', value: e.target.value })
-            }
+            onChange={(e) => dispatch({ type: 'SET_DESCRIPTION', value: e.target.value })}
             disabled={state.saving}
             multiline
             rows={3}
@@ -326,9 +313,7 @@ function ModeFormDialog({
           <TextField
             label="System Prompt"
             value={state.system_prompt}
-            onChange={(e) =>
-              dispatch({ type: 'SET_SYSTEM_PROMPT', value: e.target.value })
-            }
+            onChange={(e) => dispatch({ type: 'SET_SYSTEM_PROMPT', value: e.target.value })}
             disabled={state.saving}
             multiline
             rows={5}
@@ -417,9 +402,7 @@ function ModeFormDialog({
 
           <Divider />
 
-          <Typography variant="subtitle2">
-            Tools ({state.selectedToolIds.length} selected)
-          </Typography>
+          <Typography variant="subtitle2">Tools ({state.selectedToolIds.length} selected)</Typography>
           {allTools.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
               No tools available

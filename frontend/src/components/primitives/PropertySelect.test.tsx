@@ -12,14 +12,7 @@ const options: PropertySelectOption[] = [
 
 const renderSelect = (props: Partial<Parameters<typeof PropertySelect>[0]> = {}) => {
   const onChange = vi.fn()
-  const result = render(
-    <PropertySelect
-      value={null}
-      options={options}
-      onChange={onChange}
-      {...props}
-    />,
-  )
+  const result = render(<PropertySelect value={null} options={options} onChange={onChange} {...props} />)
   return { onChange, ...result }
 }
 

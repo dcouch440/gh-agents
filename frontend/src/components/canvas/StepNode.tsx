@@ -31,11 +31,7 @@ function StepNodeComponent({ data, selected }: NodeProps) {
   const hasPorts = nodeData.protocolPortNames.length > 0
   const hasBody = hasInputs || hasTools || hasOutput || hasPorts
 
-  const subtitle = nodeData.agentName
-    ? nodeData.modelId
-      ? `${nodeData.agentName} \u00b7 ${nodeData.modelId}`
-      : nodeData.agentName
-    : null
+  const subtitle = nodeData.agentName ? (nodeData.modelId ? `${nodeData.agentName} \u00b7 ${nodeData.modelId}` : nodeData.agentName) : null
 
   return (
     <Box
@@ -336,9 +332,7 @@ function StepNodeComponent({ data, selected }: NodeProps) {
   )
 }
 
-const stepNodeEqual = (prev: NodeProps, next: NodeProps): boolean =>
-  prev.selected === next.selected &&
-  nodeDataEqual(prev.data, next.data)
+const stepNodeEqual = (prev: NodeProps, next: NodeProps): boolean => prev.selected === next.selected && nodeDataEqual(prev.data, next.data)
 
 const StepNode = memo(StepNodeComponent, stepNodeEqual)
 

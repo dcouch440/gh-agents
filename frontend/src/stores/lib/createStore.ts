@@ -12,9 +12,7 @@ const createStore = <T>(creator: StateCreator<T>): StoreApi<T> => {
   const getState = (): T => state
 
   const setState: SetState<T> = (partial: Partial<T> | ((s: T) => Partial<T>)) => {
-    const nextPartial = typeof partial === 'function'
-      ? (partial as (s: T) => Partial<T>)(state)
-      : partial
+    const nextPartial = typeof partial === 'function' ? (partial as (s: T) => Partial<T>)(state) : partial
 
     state = Object.assign({}, state, nextPartial)
 

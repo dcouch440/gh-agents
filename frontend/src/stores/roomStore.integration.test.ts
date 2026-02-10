@@ -5,7 +5,17 @@ import { createNormalizedMap } from './lib'
 
 vi.mock('@/api', () => ({
   api: {
-    rooms: { get: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), listMembers: vi.fn(), addMember: vi.fn(), setMembers: vi.fn(), removeMember: vi.fn(), createSession: vi.fn() },
+    rooms: {
+      get: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      listMembers: vi.fn(),
+      addMember: vi.fn(),
+      setMembers: vi.fn(),
+      removeMember: vi.fn(),
+      createSession: vi.fn(),
+    },
     roomSessions: { get: vi.fn(), close: vi.fn(), getTranscript: vi.fn(), listOutputs: vi.fn(), sendMessage: vi.fn() },
   },
 }))
@@ -39,9 +49,36 @@ beforeEach(() => {
 describe('roomStore integration', () => {
   describe('speaker sequence → session complete', () => {
     it('accumulates transcript then marks session complete', () => {
-      handle(makeMsg(ROOM_EVENT.SPEAKER_END, { room_session_id: 'rs1', agent_id: 'a1', agent_name: 'Alice', content: 'Hello', speaker_order: 0, turn_number: 0 }))
-      handle(makeMsg(ROOM_EVENT.SPEAKER_END, { room_session_id: 'rs1', agent_id: 'a2', agent_name: 'Bob', content: 'Hi there', speaker_order: 1, turn_number: 0 }))
-      handle(makeMsg(ROOM_EVENT.SPEAKER_END, { room_session_id: 'rs1', agent_id: 'a1', agent_name: 'Alice', content: 'Goodbye', speaker_order: 2, turn_number: 1 }))
+      handle(
+        makeMsg(ROOM_EVENT.SPEAKER_END, {
+          room_session_id: 'rs1',
+          agent_id: 'a1',
+          agent_name: 'Alice',
+          content: 'Hello',
+          speaker_order: 0,
+          turn_number: 0,
+        }),
+      )
+      handle(
+        makeMsg(ROOM_EVENT.SPEAKER_END, {
+          room_session_id: 'rs1',
+          agent_id: 'a2',
+          agent_name: 'Bob',
+          content: 'Hi there',
+          speaker_order: 1,
+          turn_number: 0,
+        }),
+      )
+      handle(
+        makeMsg(ROOM_EVENT.SPEAKER_END, {
+          room_session_id: 'rs1',
+          agent_id: 'a1',
+          agent_name: 'Alice',
+          content: 'Goodbye',
+          speaker_order: 2,
+          turn_number: 1,
+        }),
+      )
 
       const transcript = roomStore.selectTranscript(roomStore.store.getState())
       expect(transcript).toHaveLength(3)
@@ -79,13 +116,31 @@ describe('roomStore integration', () => {
 
   describe('mixed valid + malformed', () => {
     it('only valid events applied', () => {
-      handle(makeMsg(ROOM_EVENT.SPEAKER_END, { room_session_id: 'rs1', agent_id: 'a1', agent_name: 'Alice', content: 'First', speaker_order: 0, turn_number: 0 }))
+      handle(
+        makeMsg(ROOM_EVENT.SPEAKER_END, {
+          room_session_id: 'rs1',
+          agent_id: 'a1',
+          agent_name: 'Alice',
+          content: 'First',
+          speaker_order: 0,
+          turn_number: 0,
+        }),
+      )
 
       const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
       handle(makeMsg('totally_fake_event', { garbage: true }))
       spy.mockRestore()
 
-      handle(makeMsg(ROOM_EVENT.SPEAKER_END, { room_session_id: 'rs1', agent_id: 'a2', agent_name: 'Bob', content: 'Second', speaker_order: 1, turn_number: 0 }))
+      handle(
+        makeMsg(ROOM_EVENT.SPEAKER_END, {
+          room_session_id: 'rs1',
+          agent_id: 'a2',
+          agent_name: 'Bob',
+          content: 'Second',
+          speaker_order: 1,
+          turn_number: 0,
+        }),
+      )
 
       const transcript = roomStore.selectTranscript(roomStore.store.getState())
       expect(transcript).toHaveLength(2)

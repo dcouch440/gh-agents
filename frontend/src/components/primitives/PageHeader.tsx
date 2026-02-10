@@ -18,27 +18,14 @@ function PageHeader({ title, description, breadcrumbs, children }: PageHeaderPro
   return (
     <Box sx={{ mb: 3 }}>
       {breadcrumbs && breadcrumbs.length > 0 ? (
-        <MuiBreadcrumbs
-          sx={{ mb: 1, '& .MuiBreadcrumbs-separator': { fontSize: '0.75rem' } }}
-        >
+        <MuiBreadcrumbs sx={{ mb: 1, '& .MuiBreadcrumbs-separator': { fontSize: '0.75rem' } }}>
           {breadcrumbs.map((crumb, i) =>
             crumb.path ? (
-              <Link
-                key={i}
-                component={RouterLink}
-                to={crumb.path}
-                underline="hover"
-                color="text.secondary"
-                sx={{ fontSize: '0.8125rem' }}
-              >
+              <Link key={i} component={RouterLink} to={crumb.path} underline="hover" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
                 {crumb.label}
               </Link>
             ) : (
-              <Typography
-                key={i}
-                color="text.primary"
-                sx={{ fontSize: '0.8125rem' }}
-              >
+              <Typography key={i} color="text.primary" sx={{ fontSize: '0.8125rem' }}>
                 {crumb.label}
               </Typography>
             ),
@@ -63,11 +50,7 @@ function PageHeader({ title, description, breadcrumbs, children }: PageHeaderPro
             </Typography>
           ) : null}
         </Box>
-        {children ? (
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            {children}
-          </Box>
-        ) : null}
+        {children ? <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>{children}</Box> : null}
       </Box>
     </Box>
   )

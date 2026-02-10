@@ -10,9 +10,39 @@ const stats: AgentPoolStats = {
 }
 
 const agents: Agent[] = [
-  { id: 'a1', name: 'Atlas', system_prompt: '', model_provider: 'anthropic', model_id: 'opus', model_max_tokens: 16384, model_temperature: 0.7, status: 'working', version: 1 },
-  { id: 'a2', name: 'Forge', system_prompt: '', model_provider: 'anthropic', model_id: 'sonnet', model_max_tokens: 8192, model_temperature: 0.7, status: 'idle', version: 1 },
-  { id: 'a3', name: 'Shield', system_prompt: '', model_provider: 'anthropic', model_id: 'sonnet', model_max_tokens: 8192, model_temperature: 0.7, status: 'waiting_for_context', version: 1 },
+  {
+    id: 'a1',
+    name: 'Atlas',
+    system_prompt: '',
+    model_provider: 'anthropic',
+    model_id: 'opus',
+    model_max_tokens: 16384,
+    model_temperature: 0.7,
+    status: 'working',
+    version: 1,
+  },
+  {
+    id: 'a2',
+    name: 'Forge',
+    system_prompt: '',
+    model_provider: 'anthropic',
+    model_id: 'sonnet',
+    model_max_tokens: 8192,
+    model_temperature: 0.7,
+    status: 'idle',
+    version: 1,
+  },
+  {
+    id: 'a3',
+    name: 'Shield',
+    system_prompt: '',
+    model_provider: 'anthropic',
+    model_id: 'sonnet',
+    model_max_tokens: 8192,
+    model_temperature: 0.7,
+    status: 'waiting_for_context',
+    version: 1,
+  },
 ]
 
 describe('AgentPoolStatus', () => {

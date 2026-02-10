@@ -18,29 +18,35 @@ type ProtocolState = {
 
 // ── Store ────────────────────────────────────────────────────────────────────
 
-const store = logger('protocolStore', createStore<ProtocolState>(() => ({
-  items: createNormalizedMap<Protocol>(),
-  types: [],
-  loading: false,
-  error: null,
-})))
+const store = logger(
+  'protocolStore',
+  createStore<ProtocolState>(() => ({
+    items: createNormalizedMap<Protocol>(),
+    types: [],
+    loading: false,
+    error: null,
+  })),
+)
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const extractError = (e: unknown): string =>
-  e instanceof Error ? e.message : 'protocols: unknown error'
+const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'protocols: unknown error')
 
 // ── Selectors ────────────────────────────────────────────────────────────────
 
 const selectAll = (s: ProtocolState): Protocol[] => toArray(s.items)
 
-const selectById = (id: string) => (s: ProtocolState): Protocol | undefined =>
-  nmGet(s.items, id)
+const selectById =
+  (id: string) =>
+  (s: ProtocolState): Protocol | undefined =>
+    nmGet(s.items, id)
 
 const selectTypes = (s: ProtocolState): ProtocolTypeInfo[] => s.types
 
-const selectByType = (protocolType: string) => (s: ProtocolState): Protocol[] =>
-  toArray(s.items).filter((p) => p.protocol_type === protocolType)
+const selectByType =
+  (protocolType: string) =>
+  (s: ProtocolState): Protocol[] =>
+    toArray(s.items).filter((p) => p.protocol_type === protocolType)
 
 const selectLoading = (s: ProtocolState): boolean => s.loading
 

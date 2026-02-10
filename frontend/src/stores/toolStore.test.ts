@@ -19,8 +19,26 @@ vi.mock('@/api', () => ({
   },
 }))
 
-const tool1 = { id: 't1', name: 'Grep', description: 'Search', category: 'search', parameter_schema: {}, output_schema: {}, enabled: true, is_builtin: true }
-const tool2 = { id: 't2', name: 'Write', description: 'Write files', category: 'fs', parameter_schema: {}, output_schema: {}, enabled: true, is_builtin: true }
+const tool1 = {
+  id: 't1',
+  name: 'Grep',
+  description: 'Search',
+  category: 'search',
+  parameter_schema: {},
+  output_schema: {},
+  enabled: true,
+  is_builtin: true,
+}
+const tool2 = {
+  id: 't2',
+  name: 'Write',
+  description: 'Write files',
+  category: 'fs',
+  parameter_schema: {},
+  output_schema: {},
+  enabled: true,
+  is_builtin: true,
+}
 
 beforeEach(() => {
   vi.clearAllMocks()

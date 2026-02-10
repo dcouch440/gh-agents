@@ -34,9 +34,7 @@ describe('ToggleGroup', () => {
   })
 
   it('applies className', () => {
-    const { container } = render(
-      <ToggleGroup options={options} value="a" onChange={vi.fn()} className="extra" />
-    )
+    const { container } = render(<ToggleGroup options={options} value="a" onChange={vi.fn()} className="extra" />)
     expect(container.firstChild).toHaveClass('extra')
   })
 })

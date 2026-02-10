@@ -21,8 +21,32 @@ vi.mock('@/api', () => ({
   },
 }))
 
-const doc1 = { id: 'd1', user_id: 'u1', session_id: null, title: 'README', content: '# Hello', summary: null, doc_type: 'markdown', ref_tag: null, tags: null, created_at: '2025-01-01T00:00:00Z', updated_at: '2025-01-01T00:00:00Z' }
-const doc2 = { id: 'd2', user_id: 'u1', session_id: null, title: 'Notes', content: 'Some notes', summary: 'Notes summary', doc_type: 'text', ref_tag: 'notes', tags: ['dev'], created_at: '2025-01-01T00:00:00Z', updated_at: '2025-01-01T00:00:00Z' }
+const doc1 = {
+  id: 'd1',
+  user_id: 'u1',
+  session_id: null,
+  title: 'README',
+  content: '# Hello',
+  summary: null,
+  doc_type: 'markdown',
+  ref_tag: null,
+  tags: null,
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
+}
+const doc2 = {
+  id: 'd2',
+  user_id: 'u1',
+  session_id: null,
+  title: 'Notes',
+  content: 'Some notes',
+  summary: 'Notes summary',
+  doc_type: 'text',
+  ref_tag: 'notes',
+  tags: ['dev'],
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
+}
 
 beforeEach(() => {
   vi.clearAllMocks()

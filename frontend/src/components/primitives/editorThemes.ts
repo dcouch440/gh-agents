@@ -18,10 +18,9 @@ const lightEditorTheme = EditorView.theme(
     '.cm-cursor, .cm-dropCursor': {
       borderLeftColor: '#FF964F',
     },
-    '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':
-      {
-        backgroundColor: 'rgba(255, 150, 79, 0.14)',
-      },
+    '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
+      backgroundColor: 'rgba(255, 150, 79, 0.14)',
+    },
     '.cm-panels': {
       backgroundColor: '#F4F0EA',
       color: '#2D1B0E',
@@ -92,8 +91,14 @@ const lightHighlightStyle = HighlightStyle.define([
   { tag: [tags.function(tags.variableName), tags.labelName], color: '#D47830' },
   { tag: [tags.color, tags.constant(tags.name), tags.standard(tags.name)], color: '#725438' },
   { tag: [tags.definition(tags.name), tags.separator], color: '#2D1B0E' },
-  { tag: [tags.typeName, tags.className, tags.number, tags.changed, tags.annotation, tags.modifier, tags.self, tags.namespace], color: '#955C0A' },
-  { tag: [tags.operator, tags.operatorKeyword, tags.url, tags.escape, tags.regexp, tags.link, tags.special(tags.string)], color: '#725438' },
+  {
+    tag: [tags.typeName, tags.className, tags.number, tags.changed, tags.annotation, tags.modifier, tags.self, tags.namespace],
+    color: '#955C0A',
+  },
+  {
+    tag: [tags.operator, tags.operatorKeyword, tags.url, tags.escape, tags.regexp, tags.link, tags.special(tags.string)],
+    color: '#725438',
+  },
   { tag: [tags.meta, tags.comment], color: '#A39283' },
   { tag: tags.strong, fontWeight: 'bold' },
   { tag: tags.emphasis, fontStyle: 'italic' },

@@ -1,27 +1,19 @@
 import { agentStore } from './agentStore'
 import { nmSize, nmGet, createNormalizedMap } from './lib'
 
-const {
-  mockList,
-  mockGet,
-  mockCreate,
-  mockUpdate,
-  mockDelete,
-  mockGetTools,
-  mockSetTools,
-  mockGetContext,
-  mockSetContext,
-} = vi.hoisted(() => ({
-  mockList: vi.fn(),
-  mockGet: vi.fn(),
-  mockCreate: vi.fn(),
-  mockUpdate: vi.fn(),
-  mockDelete: vi.fn(),
-  mockGetTools: vi.fn(),
-  mockSetTools: vi.fn(),
-  mockGetContext: vi.fn(),
-  mockSetContext: vi.fn(),
-}))
+const { mockList, mockGet, mockCreate, mockUpdate, mockDelete, mockGetTools, mockSetTools, mockGetContext, mockSetContext } = vi.hoisted(
+  () => ({
+    mockList: vi.fn(),
+    mockGet: vi.fn(),
+    mockCreate: vi.fn(),
+    mockUpdate: vi.fn(),
+    mockDelete: vi.fn(),
+    mockGetTools: vi.fn(),
+    mockSetTools: vi.fn(),
+    mockGetContext: vi.fn(),
+    mockSetContext: vi.fn(),
+  }),
+)
 
 vi.mock('@/api', () => ({
   api: {
@@ -39,12 +31,52 @@ vi.mock('@/api', () => ({
   },
 }))
 
-const agent1 = { id: 'a1', name: 'Agent 1', system_prompt: '', model_provider: 'anthropic', model_id: 'claude-3', model_max_tokens: 4096, model_temperature: 0.7, status: 'idle', output_schema_id: null, router_id: null, version: 1 }
-const agent2 = { id: 'a2', name: 'Agent 2', system_prompt: '', model_provider: 'anthropic', model_id: 'claude-3', model_max_tokens: 4096, model_temperature: 0.7, status: 'idle', output_schema_id: null, router_id: null, version: 1 }
+const agent1 = {
+  id: 'a1',
+  name: 'Agent 1',
+  system_prompt: '',
+  model_provider: 'anthropic',
+  model_id: 'claude-3',
+  model_max_tokens: 4096,
+  model_temperature: 0.7,
+  status: 'idle',
+  output_schema_id: null,
+  router_id: null,
+  version: 1,
+}
+const agent2 = {
+  id: 'a2',
+  name: 'Agent 2',
+  system_prompt: '',
+  model_provider: 'anthropic',
+  model_id: 'claude-3',
+  model_max_tokens: 4096,
+  model_temperature: 0.7,
+  status: 'idle',
+  output_schema_id: null,
+  router_id: null,
+  version: 1,
+}
 const stats = { total: 2, available: 2, max: 10 }
 
-const tool1 = { id: 't1', name: 'Grep', description: 'Search', category: 'search', parameter_schema: {}, output_schema: {}, enabled: true, is_builtin: true }
-const doc1 = { id: 'd1', name: 'Doc 1', doc_type: 'text', size_bytes: 100, created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' }
+const tool1 = {
+  id: 't1',
+  name: 'Grep',
+  description: 'Search',
+  category: 'search',
+  parameter_schema: {},
+  output_schema: {},
+  enabled: true,
+  is_builtin: true,
+}
+const doc1 = {
+  id: 'd1',
+  name: 'Doc 1',
+  doc_type: 'text',
+  size_bytes: 100,
+  created_at: '2024-01-01T00:00:00Z',
+  updated_at: '2024-01-01T00:00:00Z',
+}
 
 beforeEach(() => {
   vi.clearAllMocks()

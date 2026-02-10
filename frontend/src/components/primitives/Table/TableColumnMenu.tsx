@@ -1,16 +1,7 @@
-import {useState} from 'react'
-import {
-  IconButton,
-  Menu,
-  MenuItem,
-  Checkbox,
-  ListItemText,
-  Divider,
-  Button,
-  Box,
-} from '@mui/material'
+import { useState } from 'react'
+import { IconButton, Menu, MenuItem, Checkbox, ListItemText, Divider, Button, Box } from '@mui/material'
 import ViewColumnIcon from '@mui/icons-material/ViewColumn'
-import type {TableColumn} from './types'
+import type { TableColumn } from './types'
 
 type TableColumnMenuProps<T> = {
   columns: TableColumn<T>[]
@@ -20,13 +11,7 @@ type TableColumnMenuProps<T> = {
   onHideAll: () => void
 }
 
-function TableColumnMenu<T>({
-  columns,
-  hiddenColumnKeys,
-  onToggleColumn,
-  onShowAll,
-  onHideAll,
-}: TableColumnMenuProps<T>) {
+function TableColumnMenu<T>({ columns, hiddenColumnKeys, onToggleColumn, onShowAll, onHideAll }: TableColumnMenuProps<T>) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const open = Boolean(anchorEl)
 
@@ -60,11 +45,11 @@ function TableColumnMenu<T>({
         open={open}
         onClose={handleClose}
         PaperProps={{
-          sx: {minWidth: 200},
+          sx: { minWidth: 200 },
         }}
       >
-        <Box sx={{px: 2, py: 1}}>
-          <Box sx={{display: 'flex', gap: 1, mb: 1}}>
+        <Box sx={{ px: 2, py: 1 }}>
+          <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
             <Button size="small" onClick={onShowAll} fullWidth variant="outlined">
               Show All
             </Button>
@@ -81,16 +66,8 @@ function TableColumnMenu<T>({
           const isLastVisible = visibleCount === 1 && isVisible
 
           return (
-            <MenuItem
-              key={column.key}
-              onClick={() => !isLastVisible && onToggleColumn(column.key)}
-              disabled={isLastVisible}
-            >
-              <Checkbox
-                checked={isVisible}
-                disabled={isLastVisible}
-                sx={{p: 0, mr: 1}}
-              />
+            <MenuItem key={column.key} onClick={() => !isLastVisible && onToggleColumn(column.key)} disabled={isLastVisible}>
+              <Checkbox checked={isVisible} disabled={isLastVisible} sx={{ p: 0, mr: 1 }} />
               <ListItemText primary={column.header} />
             </MenuItem>
           )
@@ -100,5 +77,5 @@ function TableColumnMenu<T>({
   )
 }
 
-export {TableColumnMenu}
-export type {TableColumnMenuProps}
+export { TableColumnMenu }
+export type { TableColumnMenuProps }

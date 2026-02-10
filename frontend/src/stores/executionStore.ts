@@ -7,11 +7,7 @@ import type { NormalizedMap } from './lib'
 import { api } from '@/api'
 import { createSSEStream } from '@/api/sse'
 import { API } from '@/constants'
-import type {
-  AgentExecution,
-  ExecutionMessage,
-  ApproveExecutionRequest,
-} from '@/types/execution'
+import type { AgentExecution, ExecutionMessage, ApproveExecutionRequest } from '@/types/execution'
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -35,8 +31,7 @@ const store = createStore<ExecutionState>(() => ({
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const extractError = (e: unknown): string =>
-  e instanceof Error ? e.message : 'executions: unknown error'
+const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'executions: unknown error')
 
 const EMPTY_MESSAGES: ExecutionMessage[] = []
 
@@ -44,11 +39,15 @@ const EMPTY_MESSAGES: ExecutionMessage[] = []
 
 const selectAll = (s: ExecutionState): AgentExecution[] => toArray(s.items)
 
-const selectById = (id: string) => (s: ExecutionState): AgentExecution | undefined =>
-  nmGet(s.items, id)
+const selectById =
+  (id: string) =>
+  (s: ExecutionState): AgentExecution | undefined =>
+    nmGet(s.items, id)
 
-const selectMessages = (id: string) => (s: ExecutionState): ExecutionMessage[] =>
-  s.messagesByExecution[id] ?? EMPTY_MESSAGES
+const selectMessages =
+  (id: string) =>
+  (s: ExecutionState): ExecutionMessage[] =>
+    s.messagesByExecution[id] ?? EMPTY_MESSAGES
 
 const selectLoading = (s: ExecutionState): boolean => s.loading
 
@@ -122,42 +121,39 @@ const sendMessage = async (executionId: string, content: string): Promise<void> 
     const tempIndex = (store.getState().messagesByExecution[executionId] ?? []).length - 1
 
     // Open SSE stream
-    const abort = createSSEStream(
-      API.EXECUTION_MESSAGE_STREAM(executionId, response.stream_id),
-      {
-        onEvent: (event) => {
-          if (event.event === 'token') {
-            const tokenText = JSON.parse(event.data) as string
-            accumulated += tokenText
-            const current = accumulated
-            store.setState((s) => {
-              const msgs = s.messagesByExecution[executionId] ?? []
-              const updated = msgs.slice()
-              updated[tempIndex] = { ...msgs[tempIndex], content: current }
-              return {
-                messagesByExecution: {
-                  ...s.messagesByExecution,
-                  [executionId]: updated,
-                },
-              }
-            })
-          }
-        },
-        onDone: () => {
-          store.setState((s) => ({
-            activeStreams: { ...s.activeStreams, [executionId]: null },
-          }))
-          void fetchMessages(executionId)
-        },
-        onError: (err) => {
-          store.setState((s) => ({
-            activeStreams: { ...s.activeStreams, [executionId]: null },
-            error: err.message,
-          }))
-          void fetchMessages(executionId)
-        },
+    const abort = createSSEStream(API.EXECUTION_MESSAGE_STREAM(executionId, response.stream_id), {
+      onEvent: (event) => {
+        if (event.event === 'token') {
+          const tokenText = JSON.parse(event.data) as string
+          accumulated += tokenText
+          const current = accumulated
+          store.setState((s) => {
+            const msgs = s.messagesByExecution[executionId] ?? []
+            const updated = msgs.slice()
+            updated[tempIndex] = { ...msgs[tempIndex], content: current }
+            return {
+              messagesByExecution: {
+                ...s.messagesByExecution,
+                [executionId]: updated,
+              },
+            }
+          })
+        }
       },
-    )
+      onDone: () => {
+        store.setState((s) => ({
+          activeStreams: { ...s.activeStreams, [executionId]: null },
+        }))
+        void fetchMessages(executionId)
+      },
+      onError: (err) => {
+        store.setState((s) => ({
+          activeStreams: { ...s.activeStreams, [executionId]: null },
+          error: err.message,
+        }))
+        void fetchMessages(executionId)
+      },
+    })
 
     store.setState((s) => ({
       activeStreams: { ...s.activeStreams, [executionId]: abort },
@@ -178,13 +174,8 @@ const stopStream = (executionId: string): void => {
   }
 }
 
-const approve = async (
-  executionId: string,
-  structuredOutput?: Record<string, unknown>,
-): Promise<void> => {
-  const body: ApproveExecutionRequest | undefined = structuredOutput
-    ? { structured_output: structuredOutput }
-    : undefined
+const approve = async (executionId: string, structuredOutput?: Record<string, unknown>): Promise<void> => {
+  const body: ApproveExecutionRequest | undefined = structuredOutput ? { structured_output: structuredOutput } : undefined
   await api.agentExecutions.approve(executionId, body)
   await fetchMessages(executionId)
 }

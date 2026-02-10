@@ -29,10 +29,29 @@ describe('workflowExecutionStore integration', () => {
       expect(getState().totalSteps).toBe(3)
 
       for (const stepId of ['s1', 's2', 's3']) {
-        handle(makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: stepId, step_name: stepId, agent_id: null, execution_id: null }))
+        handle(
+          makeMsg(WORKFLOW_EVENT.STEP_STARTED, {
+            workflow_id: 'w1',
+            step_id: stepId,
+            step_name: stepId,
+            agent_id: null,
+            execution_id: null,
+          }),
+        )
         expect(getState().stepStates[stepId].status).toBe('running')
 
-        handle(makeMsg(WORKFLOW_EVENT.STEP_COMPLETED, { workflow_id: 'w1', step_id: stepId, step_name: stepId, agent_id: null, output: `${stepId} done`, input_tokens: 10, output_tokens: 5, duration_ms: 100 }))
+        handle(
+          makeMsg(WORKFLOW_EVENT.STEP_COMPLETED, {
+            workflow_id: 'w1',
+            step_id: stepId,
+            step_name: stepId,
+            agent_id: null,
+            output: `${stepId} done`,
+            input_tokens: 10,
+            output_tokens: 5,
+            duration_ms: 100,
+          }),
+        )
         expect(getState().stepStates[stepId].status).toBe('success')
       }
 
@@ -49,14 +68,35 @@ describe('workflowExecutionStore integration', () => {
   describe('for-each lifecycle', () => {
     it('tracks for-each progress across iterations', () => {
       handle(makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 1 }))
-      handle(makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: 's1', step_name: 'ForEach', agent_id: null, execution_id: null }))
+      handle(
+        makeMsg(WORKFLOW_EVENT.STEP_STARTED, {
+          workflow_id: 'w1',
+          step_id: 's1',
+          step_name: 'ForEach',
+          agent_id: null,
+          execution_id: null,
+        }),
+      )
 
       for (let i = 1; i <= 3; i++) {
-        handle(makeMsg(WORKFLOW_EVENT.FOR_EACH_PROGRESS, { workflow_id: 'w1', step_id: 's1', step_name: 'ForEach', completed: i, total: 3 }))
+        handle(
+          makeMsg(WORKFLOW_EVENT.FOR_EACH_PROGRESS, { workflow_id: 'w1', step_id: 's1', step_name: 'ForEach', completed: i, total: 3 }),
+        )
         expect(getState().stepStates['s1'].forEachProgress).toEqual({ completed: i, total: 3 })
       }
 
-      handle(makeMsg(WORKFLOW_EVENT.STEP_COMPLETED, { workflow_id: 'w1', step_id: 's1', step_name: 'ForEach', agent_id: null, output: 'done', input_tokens: 30, output_tokens: 15, duration_ms: 500 }))
+      handle(
+        makeMsg(WORKFLOW_EVENT.STEP_COMPLETED, {
+          workflow_id: 'w1',
+          step_id: 's1',
+          step_name: 'ForEach',
+          agent_id: null,
+          output: 'done',
+          input_tokens: 30,
+          output_tokens: 15,
+          duration_ms: 500,
+        }),
+      )
       handle(makeMsg(WORKFLOW_EVENT.COMPLETED, { workflow_id: 'w1', duration_ms: 600 }))
 
       const s = getState()
@@ -69,7 +109,9 @@ describe('workflowExecutionStore integration', () => {
   describe('pause/resume lifecycle', () => {
     it('STARTED → STEP_STARTED → STEP_PAUSED → RESUMED → STEP_COMPLETED → COMPLETED', () => {
       handle(makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 1 }))
-      handle(makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: 's1', step_name: 'Review', agent_id: null, execution_id: null }))
+      handle(
+        makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: 's1', step_name: 'Review', agent_id: null, execution_id: null }),
+      )
       expect(getState().stepStates['s1'].status).toBe('running')
 
       handle(makeMsg(WORKFLOW_EVENT.STEP_PAUSED, { workflow_id: 'w1', step_id: 's1', step_name: 'Review' }))
@@ -79,7 +121,18 @@ describe('workflowExecutionStore integration', () => {
       expect(getState().isRunning).toBe(true)
       expect(getState().stepStates['s1'].status).toBe('running')
 
-      handle(makeMsg(WORKFLOW_EVENT.STEP_COMPLETED, { workflow_id: 'w1', step_id: 's1', step_name: 'Review', agent_id: null, output: 'approved', input_tokens: 5, output_tokens: 2, duration_ms: 200 }))
+      handle(
+        makeMsg(WORKFLOW_EVENT.STEP_COMPLETED, {
+          workflow_id: 'w1',
+          step_id: 's1',
+          step_name: 'Review',
+          agent_id: null,
+          output: 'approved',
+          input_tokens: 5,
+          output_tokens: 2,
+          duration_ms: 200,
+        }),
+      )
       handle(makeMsg(WORKFLOW_EVENT.COMPLETED, { workflow_id: 'w1', duration_ms: 300 }))
 
       expect(getState().isRunning).toBe(false)
@@ -92,7 +145,18 @@ describe('workflowExecutionStore integration', () => {
       handle(makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 2 }))
 
       handle(makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: 's1', step_name: 'A', agent_id: null, execution_id: null }))
-      handle(makeMsg(WORKFLOW_EVENT.STEP_COMPLETED, { workflow_id: 'w1', step_id: 's1', step_name: 'A', agent_id: null, output: 'ok', input_tokens: 10, output_tokens: 5, duration_ms: 100 }))
+      handle(
+        makeMsg(WORKFLOW_EVENT.STEP_COMPLETED, {
+          workflow_id: 'w1',
+          step_id: 's1',
+          step_name: 'A',
+          agent_id: null,
+          output: 'ok',
+          input_tokens: 10,
+          output_tokens: 5,
+          duration_ms: 100,
+        }),
+      )
 
       handle(makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: 's2', step_name: 'B', agent_id: null, execution_id: null }))
       handle(makeMsg(WORKFLOW_EVENT.STEP_FAILED, { workflow_id: 'w1', step_id: 's2', step_name: 'B', error: 'LLM timeout' }))
@@ -143,7 +207,18 @@ describe('workflowExecutionStore integration', () => {
       expect(getState().stepStates['s1'].status).toBe('running')
 
       // Now valid completion
-      handle(makeMsg(WORKFLOW_EVENT.STEP_COMPLETED, { workflow_id: 'w1', step_id: 's1', step_name: 'A', agent_id: null, output: 'ok', input_tokens: 1, output_tokens: 1, duration_ms: 10 }))
+      handle(
+        makeMsg(WORKFLOW_EVENT.STEP_COMPLETED, {
+          workflow_id: 'w1',
+          step_id: 's1',
+          step_name: 'A',
+          agent_id: null,
+          output: 'ok',
+          input_tokens: 1,
+          output_tokens: 1,
+          duration_ms: 10,
+        }),
+      )
       expect(getState().stepStates['s1'].status).toBe('success')
     })
   })

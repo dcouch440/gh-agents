@@ -1,14 +1,5 @@
 import { useState } from 'react'
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Checkbox,
-  FormControlLabel,
-  Box,
-  Typography,
-} from '@mui/material'
+import { Dialog, DialogTitle, DialogContent, DialogActions, Checkbox, FormControlLabel, Box, Typography } from '@mui/material'
 import { Button, LoadingSpinner } from '@/components/primitives'
 import type { Tool } from '@/types'
 
@@ -65,13 +56,7 @@ function ToolAssignmentContent({
             {allTools.map((tool) => (
               <FormControlLabel
                 key={tool.id}
-                control={
-                  <Checkbox
-                    checked={selectedIds.has(tool.id)}
-                    onChange={() => handleToggle(tool.id)}
-                    size="small"
-                  />
-                }
+                control={<Checkbox checked={selectedIds.has(tool.id)} onChange={() => handleToggle(tool.id)} size="small" />}
                 label={
                   <Box>
                     <Typography variant="body2" sx={{ fontWeight: 500 }}>
@@ -101,16 +86,7 @@ function ToolAssignmentContent({
   )
 }
 
-function ToolAssignmentDialog({
-  open,
-  onClose,
-  onSave,
-  allTools,
-  assignedToolIds,
-  saving,
-  loading,
-  title,
-}: ToolAssignmentDialogProps) {
+function ToolAssignmentDialog({ open, onClose, onSave, allTools, assignedToolIds, saving, loading, title }: ToolAssignmentDialogProps) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>{title}</DialogTitle>

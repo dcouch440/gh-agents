@@ -11,9 +11,7 @@ const shallow = <T>(a: T, b: T): boolean => {
   const keysB = Object.keys(b)
   if (keysA.length !== keysB.length) return false
 
-  return keysA.every(
-    (key) => Object.hasOwn(b as object, key) && Object.is(a[key as keyof T], b[key as keyof T]),
-  )
+  return keysA.every((key) => Object.hasOwn(b as object, key) && Object.is(a[key as keyof T], b[key as keyof T]))
 }
 
 export { shallow }

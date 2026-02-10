@@ -1,12 +1,12 @@
-import {useEffect, useRef, useCallback} from 'react'
-import {Box} from '@mui/material'
-import {useTheme} from '@mui/material/styles'
-import {EditorView, placeholder as cmPlaceholder, keymap} from '@codemirror/view'
-import {EditorState, type Extension} from '@codemirror/state'
-import {json, jsonParseLinter} from '@codemirror/lang-json'
-import {defaultKeymap, history, historyKeymap} from '@codemirror/commands'
-import {getEditorThemeExtensions} from './editorThemes'
-import {linter} from '@codemirror/lint'
+import { useEffect, useRef, useCallback } from 'react'
+import { Box } from '@mui/material'
+import { useTheme } from '@mui/material/styles'
+import { EditorView, placeholder as cmPlaceholder, keymap } from '@codemirror/view'
+import { EditorState, type Extension } from '@codemirror/state'
+import { json, jsonParseLinter } from '@codemirror/lang-json'
+import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
+import { getEditorThemeExtensions } from './editorThemes'
+import { linter } from '@codemirror/lint'
 
 type JsonEditorProps = {
   value: string
@@ -17,14 +17,7 @@ type JsonEditorProps = {
   className?: string
 }
 
-function JsonEditor({
-  value,
-  onChange,
-  placeholder,
-  readOnly = false,
-  height = '300px',
-  className,
-}: JsonEditorProps) {
+function JsonEditor({ value, onChange, placeholder, readOnly = false, height = '300px', className }: JsonEditorProps) {
   const theme = useTheme()
   const mode = theme.palette.mode
   const containerRef = useRef<HTMLDivElement>(null)
@@ -93,7 +86,7 @@ function JsonEditor({
 
     isUpdatingRef.current = true
     view.dispatch({
-      changes: {from: 0, to: currentDoc.length, insert: value},
+      changes: { from: 0, to: currentDoc.length, insert: value },
     })
     isUpdatingRef.current = false
   }, [value])
@@ -123,5 +116,5 @@ function JsonEditor({
   )
 }
 
-export {JsonEditor}
-export type {JsonEditorProps}
+export { JsonEditor }
+export type { JsonEditorProps }

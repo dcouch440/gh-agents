@@ -53,12 +53,59 @@ vi.mock('@/api', () => ({
   },
 }))
 
-const router1 = { id: 'r1', user_id: 'u1', name: 'Router 1', description: null, system_prompt: 'prompt', model_id: 'claude-3', is_active: true, parent_router_id: null, level: 0, created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' }
-const router2 = { id: 'r2', user_id: 'u1', name: 'Router 2', description: null, system_prompt: 'prompt', model_id: 'claude-3', is_active: true, parent_router_id: null, level: 0, created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' }
+const router1 = {
+  id: 'r1',
+  user_id: 'u1',
+  name: 'Router 1',
+  description: null,
+  system_prompt: 'prompt',
+  model_id: 'claude-3',
+  is_active: true,
+  parent_router_id: null,
+  level: 0,
+  created_at: '2024-01-01T00:00:00Z',
+  updated_at: '2024-01-01T00:00:00Z',
+}
+const router2 = {
+  id: 'r2',
+  user_id: 'u1',
+  name: 'Router 2',
+  description: null,
+  system_prompt: 'prompt',
+  model_id: 'claude-3',
+  is_active: true,
+  parent_router_id: null,
+  level: 0,
+  created_at: '2024-01-01T00:00:00Z',
+  updated_at: '2024-01-01T00:00:00Z',
+}
 
-const tool1 = { id: 't1', name: 'Grep', description: 'Search', category: 'search', parameter_schema: {}, output_schema: {}, enabled: true, is_builtin: true }
+const tool1 = {
+  id: 't1',
+  name: 'Grep',
+  description: 'Search',
+  category: 'search',
+  parameter_schema: {},
+  output_schema: {},
+  enabled: true,
+  is_builtin: true,
+}
 
-const mode1 = { id: 'm1', router_id: 'r1', mode_key: 'default', display_name: 'Default', description: '', system_prompt: '', temperature: 0.7, max_tokens: 8192, append_to_agent_system_prompt: false, append_to_agent_tools: true, display_order: 0, created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' }
+const mode1 = {
+  id: 'm1',
+  router_id: 'r1',
+  mode_key: 'default',
+  display_name: 'Default',
+  description: '',
+  system_prompt: '',
+  temperature: 0.7,
+  max_tokens: 8192,
+  append_to_agent_system_prompt: false,
+  append_to_agent_tools: true,
+  display_order: 0,
+  created_at: '2024-01-01T00:00:00Z',
+  updated_at: '2024-01-01T00:00:00Z',
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -147,7 +194,12 @@ describe('toolRouterStore', () => {
     it('createMode appends to modesByRouter', async () => {
       mockCreateMode.mockResolvedValue(mode1)
 
-      const result = await toolRouterStore.createMode('r1', { mode_key: 'default', display_name: 'Default', description: '', system_prompt: '' })
+      const result = await toolRouterStore.createMode('r1', {
+        mode_key: 'default',
+        display_name: 'Default',
+        description: '',
+        system_prompt: '',
+      })
 
       expect(result).toEqual(mode1)
       expect(toolRouterStore.store.getState().modesByRouter['r1']).toEqual([mode1])

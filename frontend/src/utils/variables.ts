@@ -29,17 +29,17 @@ export function extractVariables(template: string): string[] {
   // Regex matches: {variable} or {variable.nested.path.0.field} or {items.$.field}
   // Must start with letter or underscore, followed by alphanumeric/underscore
   // Also supports $ for for-each current element syntax
-  const regex = /\{([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_$]+)*)\}/g;
-  const roots = new Set<string>();
+  const regex = /\{([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_$]+)*)\}/g
+  const roots = new Set<string>()
 
-  let match;
+  let match
   while ((match = regex.exec(template)) !== null) {
-    const fullPath = match[1]; // e.g., "output.items.0.name" or "items.$.name"
-    const rootVar = fullPath.split('.')[0]; // e.g., "output" or "items"
-    roots.add(rootVar);
+    const fullPath = match[1] // e.g., "output.items.0.name" or "items.$.name"
+    const rootVar = fullPath.split('.')[0] // e.g., "output" or "items"
+    roots.add(rootVar)
   }
 
-  return Array.from(roots).sort();
+  return Array.from(roots).sort()
 }
 
 /**
@@ -57,17 +57,11 @@ export function extractVariables(template: string): string[] {
  * @param mockData - Map of variable name → JSON string
  * @returns Template with variables resolved
  */
-export function resolveVariables(
-  template: string,
-  mockData: Record<string, string>
-): string {
-  return template.replace(
-    /\{([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)*)\}/g,
-    (match, path: string) => {
-      const resolved = resolvePath(path, mockData);
-      return resolved ?? match; // Keep {variable} if unresolved
-    }
-  );
+export function resolveVariables(template: string, mockData: Record<string, string>): string {
+  return template.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)*)\}/g, (match, path: string) => {
+    const resolved = resolvePath(path, mockData)
+    return resolved ?? match // Keep {variable} if unresolved
+  })
 }
 
 /**
@@ -85,66 +79,63 @@ export function resolveVariables(
  * @param mockData - Map of variable name → JSON string
  * @returns Resolved value as string, or null if unresolved
  */
-function resolvePath(
-  path: string,
-  mockData: Record<string, string>
-): string | null {
-  const parts = path.split('.');
-  const rootVar = parts[0];
+function resolvePath(path: string, mockData: Record<string, string>): string | null {
+  const parts = path.split('.')
+  const rootVar = parts[0]
   if (!rootVar) {
-    return null; // Empty path
+    return null // Empty path
   }
 
   // Get root JSON string
-  const jsonText = mockData[rootVar];
+  const jsonText = mockData[rootVar]
   if (!jsonText?.trim()) {
-    return null; // Unresolved
+    return null // Unresolved
   }
 
   // Parse JSON
-  let root: unknown;
+  let root: unknown
   try {
-    root = JSON.parse(jsonText) as unknown;
+    root = JSON.parse(jsonText) as unknown
   } catch {
-    return null; // Invalid JSON → unresolved
+    return null // Invalid JSON → unresolved
   }
 
   // Navigate dot-path
-  let current: unknown = root;
+  let current: unknown = root
   for (let i = 1; i < parts.length; i++) {
-    const part = parts[i];
+    const part = parts[i]
 
     // Try as array index first
-    const idx = parseInt(part, 10);
+    const idx = parseInt(part, 10)
     if (!isNaN(idx) && Array.isArray(current)) {
-      current = current[idx];
+      current = current[idx]
     } else if (isObject(current)) {
-      current = current[part];
+      current = current[part]
     } else {
-      return null; // Can't navigate further
+      return null // Can't navigate further
     }
 
     if (current === undefined || current === null) {
-      return null; // Path doesn't exist
+      return null // Path doesn't exist
     }
   }
 
   // Stringify result
   if (typeof current === 'string') {
-    return current;
+    return current
   }
   if (typeof current === 'number' || typeof current === 'boolean') {
-    return String(current);
+    return String(current)
   }
   // Objects/arrays → JSON string
-  return JSON.stringify(current);
+  return JSON.stringify(current)
 }
 
 /**
  * Type guard for plain objects
  */
 function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /**
@@ -156,20 +147,18 @@ function isObject(value: unknown): value is Record<string, unknown> {
  * @param jsonText - JSON string to validate
  * @returns Validation result with error message if invalid
  */
-export function validateVariableData(
-  jsonText: string
-): {valid: boolean; error?: string} {
-  const trimmed = jsonText.trim();
+export function validateVariableData(jsonText: string): { valid: boolean; error?: string } {
+  const trimmed = jsonText.trim()
 
   if (!trimmed) {
-    return {valid: true}; // Empty is valid (unresolved)
+    return { valid: true } // Empty is valid (unresolved)
   }
 
   try {
-    JSON.parse(trimmed);
-    return {valid: true};
+    JSON.parse(trimmed)
+    return { valid: true }
   } catch (e) {
-    const error = e instanceof Error ? e.message : 'Invalid JSON';
-    return {valid: false, error};
+    const error = e instanceof Error ? e.message : 'Invalid JSON'
+    return { valid: false, error }
   }
 }

@@ -20,7 +20,9 @@ function WsStoreRouter() {
       subscribe(WS_TOPIC.ROOM, activityStore.handleWsEvent),
       subscribe(WS_TOPIC.WORKFLOW, activityStore.handleWsEvent),
     ]
-    return () => { unsubs.forEach((fn) => fn()) }
+    return () => {
+      unsubs.forEach((fn) => fn())
+    }
   }, [subscribe])
 
   return null

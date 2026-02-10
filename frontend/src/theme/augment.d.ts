@@ -1,10 +1,10 @@
-import type { CustomTokens } from './customTokens';
+import type { CustomTokens } from './customTokens'
 
 declare module '@mui/material/styles' {
   interface Palette {
-    custom: CustomTokens;
+    custom: CustomTokens
   }
   interface PaletteOptions {
-    custom?: CustomTokens;
+    custom?: CustomTokens
   }
 }

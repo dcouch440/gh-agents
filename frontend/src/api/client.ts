@@ -39,13 +39,7 @@ type Interceptor = {
 // Error Types
 // ============================================================================
 
-type ApiErrorType =
-  | 'network_error'
-  | 'timeout_error'
-  | 'abort_error'
-  | 'http_error'
-  | 'parse_error'
-  | 'validation_error'
+type ApiErrorType = 'network_error' | 'timeout_error' | 'abort_error' | 'http_error' | 'parse_error' | 'validation_error'
 
 class ApiError extends Error {
   readonly type: ApiErrorType
@@ -54,12 +48,7 @@ class ApiError extends Error {
   readonly body?: unknown
   readonly url: string
 
-  constructor(
-    type: ApiErrorType,
-    message: string,
-    url: string,
-    details?: { status?: number; statusText?: string; body?: unknown }
-  ) {
+  constructor(type: ApiErrorType, message: string, url: string, details?: { status?: number; statusText?: string; body?: unknown }) {
     super(message)
     this.name = 'ApiError'
     this.type = type
@@ -154,12 +143,7 @@ const buildHeaders = (customHeaders?: Record<string, string>): Record<string, st
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
-const executeRequest = async <T>(
-  path: string,
-  method: HttpMethod,
-  body?: unknown,
-  config: RequestConfig = {}
-): Promise<T> => {
+const executeRequest = async <T>(path: string, method: HttpMethod, body?: unknown, config: RequestConfig = {}): Promise<T> => {
   const url = `${API_BASE}${path}`
   const timeout = config.timeout ?? defaultTimeout
   const retries = config.retries ?? defaultRetries
@@ -307,12 +291,7 @@ const getCacheKey = (path: string, method: HttpMethod, body?: unknown): string =
   return `${method}:${path}:${bodyKey}`
 }
 
-const deduplicate = async <T>(
-  path: string,
-  method: HttpMethod,
-  body: unknown,
-  execute: () => Promise<T>
-): Promise<T> => {
+const deduplicate = async <T>(path: string, method: HttpMethod, body: unknown, execute: () => Promise<T>): Promise<T> => {
   // Only deduplicate GET requests
   if (method !== 'GET') {
     return execute()
@@ -338,26 +317,18 @@ const deduplicate = async <T>(
 // Public API
 // ============================================================================
 
-const request = async <T>(
-  path: string,
-  method: HttpMethod,
-  body?: unknown,
-  config?: RequestConfig
-): Promise<T> => {
+const request = async <T>(path: string, method: HttpMethod, body?: unknown, config?: RequestConfig): Promise<T> => {
   return deduplicate(path, method, body, () => executeRequest<T>(path, method, body, config))
 }
 
 const api = {
   get: <T>(path: string, config?: RequestConfig) => request<T>(path, 'GET', undefined, config),
 
-  post: <T>(path: string, body?: unknown, config?: RequestConfig) =>
-    request<T>(path, 'POST', body, config),
+  post: <T>(path: string, body?: unknown, config?: RequestConfig) => request<T>(path, 'POST', body, config),
 
-  patch: <T>(path: string, body: unknown, config?: RequestConfig) =>
-    request<T>(path, 'PATCH', body, config),
+  patch: <T>(path: string, body: unknown, config?: RequestConfig) => request<T>(path, 'PATCH', body, config),
 
-  put: <T>(path: string, body: unknown, config?: RequestConfig) =>
-    request<T>(path, 'PUT', body, config),
+  put: <T>(path: string, body: unknown, config?: RequestConfig) => request<T>(path, 'PUT', body, config),
 
   del: <T = void>(path: string, config?: RequestConfig) => request<T>(path, 'DELETE', undefined, config),
 }

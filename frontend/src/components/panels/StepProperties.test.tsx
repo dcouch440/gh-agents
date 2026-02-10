@@ -79,7 +79,12 @@ vi.mock('@/components/primitives', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('@/components/primitives')
   return {
     ...actual,
-    CodeEditor: ({ value, onChange, placeholder, readOnly }: {
+    CodeEditor: ({
+      value,
+      onChange,
+      placeholder,
+      readOnly,
+    }: {
       value: string
       onChange: (v: string) => void
       placeholder?: string
@@ -88,7 +93,9 @@ vi.mock('@/components/primitives', async () => {
       <textarea
         data-testid="code-editor"
         value={value}
-        onChange={(e) => { onChange(e.target.value) }}
+        onChange={(e) => {
+          onChange(e.target.value)
+        }}
         placeholder={placeholder}
         readOnly={readOnly}
       />
@@ -97,9 +104,7 @@ vi.mock('@/components/primitives', async () => {
 })
 
 const renderStep = (props: Partial<Parameters<typeof StepProperties>[0]> = {}) =>
-  render(
-    <StepProperties step={mockWorkflowStep} steps={[]} {...props} />,
-  )
+  render(<StepProperties step={mockWorkflowStep} steps={[]} {...props} />)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -199,7 +204,6 @@ describe('StepProperties', () => {
       renderStep({ step })
       expect(screen.getByText('Test Template')).toBeInTheDocument()
     })
-
   })
 
   describe('output tab', () => {
@@ -217,9 +221,7 @@ describe('StepProperties', () => {
     it('renders downstream steps in Outgoing section', async () => {
       const user = userEvent.setup()
       const step2 = { ...mockWorkflowStep, id: 'step-002', name: 'Downstream' }
-      mockSelectEdges.mockReturnValue([
-        { id: 'e1', from_step_id: 'step-001', to_step_id: 'step-002' },
-      ])
+      mockSelectEdges.mockReturnValue([{ id: 'e1', from_step_id: 'step-001', to_step_id: 'step-002' }])
       renderStep({ steps: [mockWorkflowStep, step2] })
 
       const outputTab = screen.getByText('Output')
@@ -244,9 +246,7 @@ describe('StepProperties', () => {
     it('renders upstream steps', async () => {
       const user = userEvent.setup()
       const step2 = { ...mockWorkflowStep, id: 'step-002', name: 'Upstream' }
-      mockSelectEdges.mockReturnValue([
-        { id: 'e1', from_step_id: 'step-002', to_step_id: 'step-001' },
-      ])
+      mockSelectEdges.mockReturnValue([{ id: 'e1', from_step_id: 'step-002', to_step_id: 'step-001' }])
       renderStep({ steps: [mockWorkflowStep, step2] })
 
       const inputTab = screen.getByText('Input')
@@ -263,9 +263,7 @@ describe('StepProperties', () => {
         name: 'Upstream',
         output_schema_id: 'schema-001',
       }
-      mockSelectEdges.mockReturnValue([
-        { id: 'e1', from_step_id: 'step-002', to_step_id: 'step-001' },
-      ])
+      mockSelectEdges.mockReturnValue([{ id: 'e1', from_step_id: 'step-002', to_step_id: 'step-001' }])
       renderStep({ steps: [mockWorkflowStep, step2] })
 
       const inputTab = screen.getByText('Input')
@@ -335,6 +333,5 @@ describe('StepProperties', () => {
       renderStep({ readOnly: true })
       expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
     })
-
   })
 })

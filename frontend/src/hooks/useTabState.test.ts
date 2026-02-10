@@ -11,7 +11,9 @@ describe('useTabState', () => {
   it('updates value on onChange', () => {
     const { result } = renderHook(() => useTabState('decomp'))
 
-    act(() => { result.current.onChange('route') })
+    act(() => {
+      result.current.onChange('route')
+    })
     expect(result.current.value).toBe('route')
   })
 

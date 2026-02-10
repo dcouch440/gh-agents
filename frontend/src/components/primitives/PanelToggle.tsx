@@ -11,7 +11,9 @@ function PanelToggle({ checked, onChange }: PanelToggleProps) {
     <Box sx={{ display: 'flex', alignItems: 'center' }}>
       <Switch
         checked={checked}
-        onChange={(_, value) => { onChange(value) }}
+        onChange={(_, value) => {
+          onChange(value)
+        }}
         size="small"
         sx={{
           width: 28,

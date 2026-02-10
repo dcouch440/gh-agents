@@ -17,15 +17,18 @@ const useDebounceCallback = <T>(callback: (value: T) => void, delayMs: number): 
     }
   }, [])
 
-  return useCallback((value: T) => {
-    if (timeoutRef.current !== null) {
-      clearTimeout(timeoutRef.current)
-    }
-    timeoutRef.current = setTimeout(() => {
-      callbackRef.current(value)
-      timeoutRef.current = null
-    }, delayMs)
-  }, [delayMs])
+  return useCallback(
+    (value: T) => {
+      if (timeoutRef.current !== null) {
+        clearTimeout(timeoutRef.current)
+      }
+      timeoutRef.current = setTimeout(() => {
+        callbackRef.current(value)
+        timeoutRef.current = null
+      }, delayMs)
+    },
+    [delayMs],
+  )
 }
 
 export { useDebounceCallback }

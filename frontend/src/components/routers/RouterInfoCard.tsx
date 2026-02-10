@@ -17,10 +17,7 @@ function RouterInfoCard({ router, onEdit, onDelete, onManageTools }: RouterInfoC
           <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
             {router.name}
           </Typography>
-          <StatusBadge
-            label={router.is_active ? 'Active' : 'Inactive'}
-            variant={router.is_active ? 'success' : 'neutral'}
-          />
+          <StatusBadge label={router.is_active ? 'Active' : 'Inactive'} variant={router.is_active ? 'success' : 'neutral'} />
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button variant="secondary" size="small" onClick={onManageTools}>

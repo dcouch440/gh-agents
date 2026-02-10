@@ -1,4 +1,4 @@
-import {TablePagination as MuiTablePagination} from '@mui/material'
+import { TablePagination as MuiTablePagination } from '@mui/material'
 
 type TablePaginationProps = {
   count: number
@@ -34,5 +34,5 @@ function TablePagination({
   )
 }
 
-export {TablePagination}
-export type {TablePaginationProps}
+export { TablePagination }
+export type { TablePaginationProps }

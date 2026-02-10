@@ -44,19 +44,12 @@ vi.mock('@/hooks/useChatMutations', () => ({
 
 vi.mock('@/components/primitives/CodeEditor', () => ({
   CodeEditor: ({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) => (
-    <textarea
-      data-testid="code-editor"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-    />
+    <textarea data-testid="code-editor" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
   ),
 }))
 
 vi.mock('@/components/primitives/MarkdownPreview', () => ({
-  MarkdownPreview: ({ content }: { content: string }) => (
-    <div data-testid="markdown-preview">{content}</div>
-  ),
+  MarkdownPreview: ({ content }: { content: string }) => <div data-testid="markdown-preview">{content}</div>,
 }))
 
 vi.mock('@/components/DocumentSelector', () => ({
@@ -67,7 +60,7 @@ const renderPage = () =>
   render(
     <MemoryRouter>
       <AgentWorkshopPage />
-    </MemoryRouter>
+    </MemoryRouter>,
   )
 
 describe('AgentWorkshopPage', () => {
@@ -83,7 +76,7 @@ describe('AgentWorkshopPage', () => {
         expect.objectContaining({
           mode_id: 'workshop',
           title: 'Agent Workshop',
-        })
+        }),
       )
     })
   })
@@ -156,10 +149,7 @@ describe('AgentWorkshopPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => {
-      expect(mockSessionSaveAgent).toHaveBeenCalledWith(
-        'session-001',
-        expect.objectContaining({ name: 'MyAgent' })
-      )
+      expect(mockSessionSaveAgent).toHaveBeenCalledWith('session-001', expect.objectContaining({ name: 'MyAgent' }))
     })
 
     await waitFor(() => {
@@ -230,12 +220,7 @@ describe('AgentWorkshopPage', () => {
     fireEvent.keyDown(chatTextarea, { key: 'Enter' })
 
     await waitFor(() => {
-      expect(mockSend).toHaveBeenCalledWith(
-        'session-001',
-        { message: 'Hello agent' },
-        expect.any(Function),
-        expect.any(Function),
-      )
+      expect(mockSend).toHaveBeenCalledWith('session-001', { message: 'Hello agent' }, expect.any(Function), expect.any(Function))
     })
   })
 })

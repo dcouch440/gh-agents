@@ -10,18 +10,18 @@ import {
   Box,
   Checkbox,
 } from '@mui/material'
-import {useCallback} from 'react'
-import {Skeleton as MuiSkeleton} from '@mui/material'
-import {LoadingSpinner, EmptyState, ErrorMessage} from '@/components/primitives'
-import {useTableState} from './useTableState'
-import {useTableColumns} from './useTableColumns'
-import {TableToolbar} from './TableToolbar'
-import {TablePagination} from './TablePagination'
-import {TableColumnMenu} from './TableColumnMenu'
-import {TableExportButton} from './TableExportButton'
-import {getDensityPadding, exportToCSV, exportToJSON} from './utils'
-import {Collections} from '@/utils/collections'
-import type {TableProps, TableColumn} from './types'
+import { useCallback } from 'react'
+import { Skeleton as MuiSkeleton } from '@mui/material'
+import { LoadingSpinner, EmptyState, ErrorMessage } from '@/components/primitives'
+import { useTableState } from './useTableState'
+import { useTableColumns } from './useTableColumns'
+import { TableToolbar } from './TableToolbar'
+import { TablePagination } from './TablePagination'
+import { TableColumnMenu } from './TableColumnMenu'
+import { TableExportButton } from './TableExportButton'
+import { getDensityPadding, exportToCSV, exportToJSON } from './utils'
+import { Collections } from '@/utils/collections'
+import type { TableProps, TableColumn } from './types'
 
 function Table<T>({
   data,
@@ -51,13 +51,7 @@ function Table<T>({
   onRowClick,
 }: TableProps<T>) {
   // Column visibility management
-  const {
-    visibleColumns,
-    hiddenColumnKeys,
-    toggleColumnVisibility,
-    showAllColumns,
-    hideAllColumns,
-  } = useTableColumns({
+  const { visibleColumns, hiddenColumnKeys, toggleColumnVisibility, showAllColumns, hideAllColumns } = useTableColumns({
     columns,
     defaultVisibleColumns,
   })
@@ -109,7 +103,7 @@ function Table<T>({
   // Loading state
   if (loading && data.length === 0) {
     return (
-      <Box sx={{p: 4}}>
+      <Box sx={{ p: 4 }}>
         <LoadingSpinner centered label="Loading data..." />
       </Box>
     )
@@ -118,7 +112,7 @@ function Table<T>({
   // Error state
   if (error) {
     return (
-      <Box sx={{p: 2}}>
+      <Box sx={{ p: 2 }}>
         <ErrorMessage message={error} />
       </Box>
     )
@@ -127,7 +121,7 @@ function Table<T>({
   // Empty state
   if (!loading && totalRows === 0) {
     return (
-      <Box sx={{p: 4}}>
+      <Box sx={{ p: 4 }}>
         <EmptyState message={emptyMessage} />
       </Box>
     )
@@ -146,15 +140,9 @@ function Table<T>({
 
   // Check if all displayed rows are selected
   const allDisplayedKeys = displayedData.map((row) => keyExtractor(row))
-  const allSelected =
-    enableSelection &&
-    allDisplayedKeys.length > 0 &&
-    allDisplayedKeys.every((key) => selectedRowKeys.has(key))
+  const allSelected = enableSelection && allDisplayedKeys.length > 0 && allDisplayedKeys.every((key) => selectedRowKeys.has(key))
 
-  const someSelected =
-    enableSelection &&
-    allDisplayedKeys.some((key) => selectedRowKeys.has(key)) &&
-    !allSelected
+  const someSelected = enableSelection && allDisplayedKeys.some((key) => selectedRowKeys.has(key)) && !allSelected
 
   return (
     <TableContainer component={Paper} elevation={0}>
@@ -176,29 +164,22 @@ function Table<T>({
           }
           exportButton={
             enableExport ? (
-              <TableExportButton
-                onExportCSV={handleExportCSV}
-                onExportJSON={handleExportJSON}
-                disabled={displayedData.length === 0}
-              />
+              <TableExportButton onExportCSV={handleExportCSV} onExportJSON={handleExportJSON} disabled={displayedData.length === 0} />
             ) : undefined
           }
         />
       )}
-      <MuiTable
-        size={density === 'compact' ? 'small' : 'medium'}
-        stickyHeader={stickyHeader}
-      >
+      <MuiTable size={density === 'compact' ? 'small' : 'medium'} stickyHeader={stickyHeader}>
         <TableHead>
           <TableRow>
             {enableSelection && (
-              <TableCell padding="checkbox" sx={{p: padding}}>
+              <TableCell padding="checkbox" sx={{ p: padding }}>
                 {selectionMode === 'multiple' && (
                   <Checkbox
                     indeterminate={someSelected}
                     checked={allSelected}
                     onChange={() => toggleAllSelection(allDisplayedKeys)}
-                    inputProps={{'aria-label': 'Select all rows'}}
+                    inputProps={{ 'aria-label': 'Select all rows' }}
                   />
                 )}
               </TableCell>
@@ -220,11 +201,7 @@ function Table<T>({
                   }}
                 >
                   {isSortable ? (
-                    <TableSortLabel
-                      active={isActive}
-                      direction={isActive ? sortDirection : 'asc'}
-                      onClick={() => handleSort(column.key)}
-                    >
+                    <TableSortLabel active={isActive} direction={isActive ? sortDirection : 'asc'} onClick={() => handleSort(column.key)}>
                       {column.header}
                     </TableSortLabel>
                   ) : (
@@ -238,15 +215,15 @@ function Table<T>({
         <TableBody>
           {loading ? (
             // Loading skeleton rows
-            Array.from({length: 5}).map((_, index) => (
+            Array.from({ length: 5 }).map((_, index) => (
               <TableRow key={index}>
                 {enableSelection && (
-                  <TableCell padding="checkbox" sx={{p: padding}}>
+                  <TableCell padding="checkbox" sx={{ p: padding }}>
                     <MuiSkeleton variant="rectangular" width={24} height={24} />
                   </TableCell>
                 )}
                 {visibleColumns.map((column) => (
-                  <TableCell key={column.key} sx={{p: padding}}>
+                  <TableCell key={column.key} sx={{ p: padding }}>
                     <MuiSkeleton variant="text" />
                   </TableCell>
                 ))}
@@ -255,11 +232,7 @@ function Table<T>({
           ) : displayedData.length === 0 ? (
             // No filtered results
             <TableRow>
-              <TableCell
-                colSpan={visibleColumns.length + (enableSelection ? 1 : 0)}
-                align="center"
-                sx={{py: 4}}
-              >
+              <TableCell colSpan={visibleColumns.length + (enableSelection ? 1 : 0)} align="center" sx={{ py: 4 }}>
                 <EmptyState message="No results found" />
               </TableCell>
             </TableRow>
@@ -279,12 +252,12 @@ function Table<T>({
                   }}
                 >
                   {enableSelection && (
-                    <TableCell padding="checkbox" sx={{p: padding}}>
+                    <TableCell padding="checkbox" sx={{ p: padding }}>
                       <Checkbox
                         checked={isSelected}
                         onChange={() => toggleRowSelection(rowKey)}
                         onClick={(e) => e.stopPropagation()}
-                        inputProps={{'aria-label': `Select row ${rowKey}`}}
+                        inputProps={{ 'aria-label': `Select row ${rowKey}` }}
                       />
                     </TableCell>
                   )}
@@ -302,17 +275,15 @@ function Table<T>({
                         }),
                       }}
                     >
-                      {column.render ? (
-                        column.render(row)
-                      ) : (
-                        (() => {
-                          const value = (row as Record<string, unknown>)[column.key]
-                          if (value === null || value === undefined) return ''
-                          if (typeof value === 'object') return JSON.stringify(value)
-                          // At this point, value is a primitive (string, number, boolean, bigint, symbol)
-                          return String(value as string | number | boolean | bigint | symbol)
-                        })()
-                      )}
+                      {column.render
+                        ? column.render(row)
+                        : (() => {
+                            const value = (row as Record<string, unknown>)[column.key]
+                            if (value === null || value === undefined) return ''
+                            if (typeof value === 'object') return JSON.stringify(value)
+                            // At this point, value is a primitive (string, number, boolean, bigint, symbol)
+                            return String(value as string | number | boolean | bigint | symbol)
+                          })()}
                     </TableCell>
                   ))}
                 </TableRow>
@@ -335,5 +306,5 @@ function Table<T>({
   )
 }
 
-export {Table}
-export type {TableProps, TableColumn}
+export { Table }
+export type { TableProps, TableColumn }

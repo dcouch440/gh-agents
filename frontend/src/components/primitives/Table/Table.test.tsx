@@ -1,8 +1,8 @@
-import {describe, it, expect, vi} from 'vitest'
-import {render, screen, within} from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import {Table} from './Table'
-import type {TableColumn} from './types'
+import { Table } from './Table'
+import type { TableColumn } from './types'
 
 type TestRow = {
   id: string
@@ -11,26 +11,20 @@ type TestRow = {
 }
 
 const mockData: TestRow[] = [
-  {id: '1', name: 'Alice', age: 30},
-  {id: '2', name: 'Bob', age: 25},
-  {id: '3', name: 'Charlie', age: 35},
+  { id: '1', name: 'Alice', age: 30 },
+  { id: '2', name: 'Bob', age: 25 },
+  { id: '3', name: 'Charlie', age: 35 },
 ]
 
 const mockColumns: TableColumn<TestRow>[] = [
-  {key: 'name', header: 'Name', sortable: true},
-  {key: 'age', header: 'Age', sortable: true},
+  { key: 'name', header: 'Name', sortable: true },
+  { key: 'age', header: 'Age', sortable: true },
 ]
 
 describe('Table', () => {
   describe('rendering', () => {
     it('renders table with data', () => {
-      render(
-        <Table
-          data={mockData}
-          keyExtractor={(row) => row.id}
-          columns={mockColumns}
-        />,
-      )
+      render(<Table data={mockData} keyExtractor={(row) => row.id} columns={mockColumns} />)
 
       expect(screen.getByText('Alice')).toBeInTheDocument()
       expect(screen.getByText('Bob')).toBeInTheDocument()
@@ -38,13 +32,7 @@ describe('Table', () => {
     })
 
     it('renders column headers', () => {
-      render(
-        <Table
-          data={mockData}
-          keyExtractor={(row) => row.id}
-          columns={mockColumns}
-        />,
-      )
+      render(<Table data={mockData} keyExtractor={(row) => row.id} columns={mockColumns} />)
 
       expect(screen.getByText('Name')).toBeInTheDocument()
       expect(screen.getByText('Age')).toBeInTheDocument()
@@ -59,13 +47,7 @@ describe('Table', () => {
         },
       ]
 
-      render(
-        <Table
-          data={mockData}
-          keyExtractor={(row) => row.id}
-          columns={customColumns}
-        />,
-      )
+      render(<Table data={mockData} keyExtractor={(row) => row.id} columns={customColumns} />)
 
       expect(screen.getByText('ALICE')).toBeInTheDocument()
     })
@@ -73,14 +55,7 @@ describe('Table', () => {
 
   describe('loading state', () => {
     it('shows loading spinner when loading and no data', () => {
-      render(
-        <Table
-          data={[]}
-          keyExtractor={(row) => row.id}
-          columns={mockColumns}
-          loading
-        />,
-      )
+      render(<Table data={[]} keyExtractor={(row) => row.id} columns={mockColumns} loading />)
 
       expect(screen.getByText('Loading data...')).toBeInTheDocument()
     })
@@ -88,14 +63,7 @@ describe('Table', () => {
 
   describe('error state', () => {
     it('shows error message when error is set', () => {
-      render(
-        <Table
-          data={mockData}
-          keyExtractor={(row) => row.id}
-          columns={mockColumns}
-          error="Something went wrong"
-        />,
-      )
+      render(<Table data={mockData} keyExtractor={(row) => row.id} columns={mockColumns} error="Something went wrong" />)
 
       expect(screen.getByText('Something went wrong')).toBeInTheDocument()
     })
@@ -103,14 +71,7 @@ describe('Table', () => {
 
   describe('empty state', () => {
     it('shows empty state when no data', () => {
-      render(
-        <Table
-          data={[]}
-          keyExtractor={(row) => row.id}
-          columns={mockColumns}
-          emptyMessage="No data available"
-        />,
-      )
+      render(<Table data={[]} keyExtractor={(row) => row.id} columns={mockColumns} emptyMessage="No data available" />)
 
       expect(screen.getByText('No data available')).toBeInTheDocument()
     })
@@ -120,14 +81,7 @@ describe('Table', () => {
     it('sorts data when column header is clicked', async () => {
       const user = userEvent.setup()
 
-      render(
-        <Table
-          data={mockData}
-          keyExtractor={(row) => row.id}
-          columns={mockColumns}
-          enableSorting
-        />,
-      )
+      render(<Table data={mockData} keyExtractor={(row) => row.id} columns={mockColumns} enableSorting />)
 
       const nameHeader = screen.getByText('Name')
       await user.click(nameHeader)
@@ -140,14 +94,7 @@ describe('Table', () => {
     it('toggles sort direction on second click', async () => {
       const user = userEvent.setup()
 
-      render(
-        <Table
-          data={mockData}
-          keyExtractor={(row) => row.id}
-          columns={mockColumns}
-          enableSorting
-        />,
-      )
+      render(<Table data={mockData} keyExtractor={(row) => row.id} columns={mockColumns} enableSorting />)
 
       const nameHeader = screen.getByText('Name')
       await user.click(nameHeader) // Sort asc
@@ -159,14 +106,7 @@ describe('Table', () => {
     })
 
     it('has sortable column headers', () => {
-      render(
-        <Table
-          data={mockData}
-          keyExtractor={(row) => row.id}
-          columns={mockColumns}
-          enableSorting
-        />,
-      )
+      render(<Table data={mockData} keyExtractor={(row) => row.id} columns={mockColumns} enableSorting />)
 
       const nameHeader = screen.getByText('Name')
       expect(nameHeader.closest('span')).toHaveClass('MuiTableSortLabel-root')
@@ -175,15 +115,7 @@ describe('Table', () => {
 
   describe('search', () => {
     it('shows search input when enableSearch is true', () => {
-      render(
-        <Table
-          data={mockData}
-          keyExtractor={(row) => row.id}
-          columns={mockColumns}
-          enableSearch
-          searchPlaceholder="Search..."
-        />,
-      )
+      render(<Table data={mockData} keyExtractor={(row) => row.id} columns={mockColumns} enableSearch searchPlaceholder="Search..." />)
 
       expect(screen.getByPlaceholderText('Search...')).toBeInTheDocument()
     })
@@ -191,15 +123,7 @@ describe('Table', () => {
     it('filters data based on search query', async () => {
       const user = userEvent.setup()
 
-      render(
-        <Table
-          data={mockData}
-          keyExtractor={(row) => row.id}
-          columns={mockColumns}
-          enableSearch
-          searchFields={['name']}
-        />,
-      )
+      render(<Table data={mockData} keyExtractor={(row) => row.id} columns={mockColumns} enableSearch searchFields={['name']} />)
 
       const searchInput = screen.getByPlaceholderText('Search...')
       await user.type(searchInput, 'Alice')
@@ -213,36 +137,20 @@ describe('Table', () => {
   })
 
   describe('pagination', () => {
-    const largeData = Array.from({length: 50}, (_, i) => ({
+    const largeData = Array.from({ length: 50 }, (_, i) => ({
       id: String(i),
       name: `Person ${i}`,
       age: 20 + i,
     }))
 
     it('shows pagination controls when enablePagination is true', () => {
-      render(
-        <Table
-          data={largeData}
-          keyExtractor={(row) => row.id}
-          columns={mockColumns}
-          enablePagination
-          defaultPageSize={10}
-        />,
-      )
+      render(<Table data={largeData} keyExtractor={(row) => row.id} columns={mockColumns} enablePagination defaultPageSize={10} />)
 
       expect(screen.getByText('Rows per page:')).toBeInTheDocument()
     })
 
     it('paginates data correctly', () => {
-      render(
-        <Table
-          data={largeData}
-          keyExtractor={(row) => row.id}
-          columns={mockColumns}
-          enablePagination
-          defaultPageSize={10}
-        />,
-      )
+      render(<Table data={largeData} keyExtractor={(row) => row.id} columns={mockColumns} enablePagination defaultPageSize={10} />)
 
       const rows = screen.getAllByRole('row')
       // 1 header + 10 data rows
@@ -252,14 +160,7 @@ describe('Table', () => {
 
   describe('selection', () => {
     it('shows checkboxes when enableSelection is true', () => {
-      render(
-        <Table
-          data={mockData}
-          keyExtractor={(row) => row.id}
-          columns={mockColumns}
-          enableSelection
-        />,
-      )
+      render(<Table data={mockData} keyExtractor={(row) => row.id} columns={mockColumns} enableSelection />)
 
       const checkboxes = screen.getAllByRole('checkbox')
       // 1 select all + 3 row checkboxes
@@ -316,14 +217,7 @@ describe('Table', () => {
       const user = userEvent.setup()
       const onRowClick = vi.fn()
 
-      render(
-        <Table
-          data={mockData}
-          keyExtractor={(row) => row.id}
-          columns={mockColumns}
-          onRowClick={onRowClick}
-        />,
-      )
+      render(<Table data={mockData} keyExtractor={(row) => row.id} columns={mockColumns} onRowClick={onRowClick} />)
 
       const rows = screen.getAllByRole('row')
       const firstDataRow = rows[1] // Skip header
@@ -336,28 +230,14 @@ describe('Table', () => {
 
   describe('column visibility', () => {
     it('shows column menu when enableSearch is true', () => {
-      render(
-        <Table
-          data={mockData}
-          keyExtractor={(row) => row.id}
-          columns={mockColumns}
-          enableSearch
-        />,
-      )
+      render(<Table data={mockData} keyExtractor={(row) => row.id} columns={mockColumns} enableSearch />)
 
       const columnMenuButton = screen.getByLabelText('Column visibility')
       expect(columnMenuButton).toBeInTheDocument()
     })
 
     it('can hide and show columns via menu', () => {
-      render(
-        <Table
-          data={mockData}
-          keyExtractor={(row) => row.id}
-          columns={mockColumns}
-          enableSearch
-        />,
-      )
+      render(<Table data={mockData} keyExtractor={(row) => row.id} columns={mockColumns} enableSearch />)
 
       // Column menu exists
       const columnMenuButton = screen.getByLabelText('Column visibility')
@@ -367,14 +247,7 @@ describe('Table', () => {
 
   describe('density', () => {
     it('renders with compact density', () => {
-      render(
-        <Table
-          data={mockData}
-          keyExtractor={(row) => row.id}
-          columns={mockColumns}
-          density="compact"
-        />,
-      )
+      render(<Table data={mockData} keyExtractor={(row) => row.id} columns={mockColumns} density="compact" />)
 
       // Table renders successfully with compact density
       expect(screen.getByText('Alice')).toBeInTheDocument()

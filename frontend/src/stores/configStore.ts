@@ -31,8 +31,7 @@ const store = createStore<ConfigState>(() => ({
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const extractError = (e: unknown): string =>
-  e instanceof Error ? e.message : 'config: unknown error'
+const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'config: unknown error')
 
 // ── Selectors ────────────────────────────────────────────────────────────────
 
@@ -44,8 +43,7 @@ const selectLoading = (s: ConfigState): boolean => s.loading
 
 const selectError = (s: ConfigState): string | null => s.error
 
-const selectIsStale = (s: ConfigState): boolean =>
-  s.lastFetched === null || Date.now() - s.lastFetched > STALE_THRESHOLD_MS
+const selectIsStale = (s: ConfigState): boolean => s.lastFetched === null || Date.now() - s.lastFetched > STALE_THRESHOLD_MS
 
 // ── Async Actions ────────────────────────────────────────────────────────────
 

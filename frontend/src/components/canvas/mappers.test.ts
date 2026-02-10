@@ -54,7 +54,10 @@ describe('toRFNodes', () => {
   it('maps WorkflowStep array to React Flow nodes', () => {
     const lookups: StepNodeLookups = {
       ...emptyLookups,
-      stepNames: new Map([['step-001', 'First Step'], ['step-002', 'Second Step']]),
+      stepNames: new Map([
+        ['step-001', 'First Step'],
+        ['step-002', 'Second Step'],
+      ]),
     }
     const nodes = toRFNodes([step1, step2], lookups)
 
@@ -114,7 +117,10 @@ describe('toRFNodes', () => {
   it('computes upstream step names from edges', () => {
     const lookups: StepNodeLookups = {
       ...emptyLookups,
-      stepNames: new Map([['step-001', 'First Step'], ['step-002', 'Second Step']]),
+      stepNames: new Map([
+        ['step-001', 'First Step'],
+        ['step-002', 'Second Step'],
+      ]),
       edges: [{ from_step_id: 'step-001', to_step_id: 'step-002' }],
     }
     const nodes = toRFNodes([step1, step2], lookups)

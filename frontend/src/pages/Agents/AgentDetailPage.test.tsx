@@ -4,14 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { AgentDetailPage } from './AgentDetailPage'
 import type { Agent } from '@/types/agent'
 
-const {
-  mockFetchOne,
-  mockFetchContext,
-  mockFetchRouterOne,
-  mockFetchModes,
-  _agentState,
-  _routerState,
-} = vi.hoisted(() => ({
+const { mockFetchOne, mockFetchContext, mockFetchRouterOne, mockFetchModes, _agentState, _routerState } = vi.hoisted(() => ({
   mockFetchOne: vi.fn(),
   mockFetchContext: vi.fn(),
   mockFetchRouterOne: vi.fn(),
@@ -93,7 +86,14 @@ vi.mock('@/api', () => ({
   api: {
     agents: { update: vi.fn(), getContext: vi.fn().mockResolvedValue({ documents: [] }) },
     tools: { list: vi.fn().mockResolvedValue({ items: [] }), get: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
-    documents: { list: vi.fn().mockResolvedValue({ items: [] }), get: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), search: vi.fn() },
+    documents: {
+      list: vi.fn().mockResolvedValue({ items: [] }),
+      get: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      search: vi.fn(),
+    },
     toolRouters: { list: vi.fn().mockResolvedValue([]), get: vi.fn() },
     routerModes: { listByRouter: vi.fn().mockResolvedValue([]) },
   },

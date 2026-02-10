@@ -14,11 +14,8 @@ describe('StatusBadge', () => {
     expect(chip).toBeInTheDocument()
   })
 
-  it.each(['success', 'warning', 'error', 'info', 'neutral'] as const)(
-    'renders with variant %s',
-    (variant) => {
-      render(<StatusBadge label="Test" variant={variant} />)
-      expect(screen.getByText('Test')).toBeInTheDocument()
-    },
-  )
+  it.each(['success', 'warning', 'error', 'info', 'neutral'] as const)('renders with variant %s', (variant) => {
+    render(<StatusBadge label="Test" variant={variant} />)
+    expect(screen.getByText('Test')).toBeInTheDocument()
+  })
 })

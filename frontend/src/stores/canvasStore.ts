@@ -45,18 +45,21 @@ const EMPTY_SET: ReadonlySet<string> = new Set()
 
 const EMPTY_PROTOCOLS: Readonly<Record<string, StepProtocolLink>> = {}
 
-const store = logger('canvasStore', createStore<CanvasState>(() => ({
-  selectedStepIds: EMPTY_SET,
-  selectedEdgeIds: EMPTY_SET,
-  hoveredStepId: null,
-  hoveredEdgeId: null,
-  panel: 'closed',
-  panelTargetId: null,
-  interactionMode: 'select',
-  dragItem: null,
-  minimapVisible: false,
-  stepProtocols: EMPTY_PROTOCOLS,
-})))
+const store = logger(
+  'canvasStore',
+  createStore<CanvasState>(() => ({
+    selectedStepIds: EMPTY_SET,
+    selectedEdgeIds: EMPTY_SET,
+    hoveredStepId: null,
+    hoveredEdgeId: null,
+    panel: 'closed',
+    panelTargetId: null,
+    interactionMode: 'select',
+    dragItem: null,
+    minimapVisible: false,
+    stepProtocols: EMPTY_PROTOCOLS,
+  })),
+)
 
 // ── Selectors ────────────────────────────────────────────────────────────────
 
@@ -76,11 +79,9 @@ const selectInteractionMode = (s: CanvasState): InteractionMode => s.interaction
 
 const selectMinimapVisible = (s: CanvasState): boolean => s.minimapVisible
 
-const selectHasSelection = (s: CanvasState): boolean =>
-  s.selectedStepIds.size > 0 || s.selectedEdgeIds.size > 0
+const selectHasSelection = (s: CanvasState): boolean => s.selectedStepIds.size > 0 || s.selectedEdgeIds.size > 0
 
-const selectStepProtocols = (s: CanvasState): Readonly<Record<string, StepProtocolLink>> =>
-  s.stepProtocols
+const selectStepProtocols = (s: CanvasState): Readonly<Record<string, StepProtocolLink>> => s.stepProtocols
 
 // ── Selection ────────────────────────────────────────────────────────────────
 
@@ -154,9 +155,7 @@ const linkStepProtocol = (stepId: string, link: StepProtocolLink): void => {
 
 const unlinkStepProtocol = (stepId: string): void => {
   store.setState((s) => ({
-    stepProtocols: Object.fromEntries(
-      Object.entries(s.stepProtocols).filter(([id]) => id !== stepId),
-    ),
+    stepProtocols: Object.fromEntries(Object.entries(s.stepProtocols).filter(([id]) => id !== stepId)),
   }))
 }
 

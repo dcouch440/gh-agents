@@ -1,4 +1,4 @@
-import type {ReactNode} from 'react'
+import type { ReactNode } from 'react'
 
 type SortDirection = 'asc' | 'desc'
 
@@ -103,11 +103,4 @@ type TableState = {
   visibleColumns: Set<string>
 }
 
-export type {
-  SortDirection,
-  TableColumn,
-  RowAction,
-  TableDensity,
-  TableProps,
-  TableState,
-}
+export type { SortDirection, TableColumn, RowAction, TableDensity, TableProps, TableState }

@@ -1,14 +1,9 @@
-import type {SortDirection} from './types'
+import type { SortDirection } from './types'
 
 /**
  * Generic sort comparator function
  */
-function sortData<T>(
-  data: T[],
-  sortColumn: string | null,
-  sortDirection: SortDirection,
-  sortFn?: (a: T, b: T) => number,
-): T[] {
+function sortData<T>(data: T[], sortColumn: string | null, sortDirection: SortDirection, sortFn?: (a: T, b: T) => number): T[] {
   if (!sortColumn) return data
 
   const sorted = [...data].sort((a, b) => {
@@ -27,7 +22,7 @@ function sortData<T>(
 
     // String comparison
     if (typeof aVal === 'string' && typeof bVal === 'string') {
-      return aVal.localeCompare(bVal, undefined, {numeric: true, sensitivity: 'base'})
+      return aVal.localeCompare(bVal, undefined, { numeric: true, sensitivity: 'base' })
     }
 
     // Number comparison
@@ -41,14 +36,8 @@ function sortData<T>(
     }
 
     // Fallback: convert to string (handle objects)
-    const aStr =
-      typeof aVal === 'object'
-        ? JSON.stringify(aVal)
-        : String(aVal as string | number | boolean | bigint | symbol)
-    const bStr =
-      typeof bVal === 'object'
-        ? JSON.stringify(bVal)
-        : String(bVal as string | number | boolean | bigint | symbol)
+    const aStr = typeof aVal === 'object' ? JSON.stringify(aVal) : String(aVal as string | number | boolean | bigint | symbol)
+    const bStr = typeof bVal === 'object' ? JSON.stringify(bVal) : String(bVal as string | number | boolean | bigint | symbol)
     return aStr.localeCompare(bStr)
   })
 
@@ -58,11 +47,7 @@ function sortData<T>(
 /**
  * Filter data based on search query across specified fields
  */
-function filterData<T>(
-  data: T[],
-  searchQuery: string,
-  searchFields?: (keyof T)[],
-): T[] {
+function filterData<T>(data: T[], searchQuery: string, searchFields?: (keyof T)[]): T[] {
   if (!searchQuery.trim()) return data
 
   const query = searchQuery.trim().toLowerCase()
@@ -75,8 +60,7 @@ function filterData<T>(
       const value = row[field]
       if (value === null || value === undefined) return false
       // Handle objects by converting to JSON
-      const stringValue =
-        typeof value === 'object' ? JSON.stringify(value) : String(value)
+      const stringValue = typeof value === 'object' ? JSON.stringify(value) : String(value)
       return stringValue.toLowerCase().includes(query)
     })
   })
@@ -108,11 +92,7 @@ function getDensityPadding(density: 'compact' | 'normal' | 'comfortable'): strin
 /**
  * Export data to CSV
  */
-function exportToCSV<T>(
-  data: T[],
-  columns: {key: string; header: string}[],
-  filename: string,
-): void {
+function exportToCSV<T>(data: T[], columns: { key: string; header: string }[], filename: string): void {
   // Create CSV header
   const header = columns.map((col) => col.header).join(',')
 
@@ -132,9 +112,7 @@ function exportToCSV<T>(
           stringValue = String(value as string | number | boolean | bigint | symbol)
         }
         const escaped = stringValue.replace(/"/g, '""')
-        return stringValue.includes(',') || stringValue.includes('"')
-          ? `"${escaped}"`
-          : escaped
+        return stringValue.includes(',') || stringValue.includes('"') ? `"${escaped}"` : escaped
       })
       .join(','),
   )
@@ -143,7 +121,7 @@ function exportToCSV<T>(
   const csv = [header, ...rows].join('\n')
 
   // Create blob and download
-  const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'})
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
   const link = document.createElement('a')
   const url = URL.createObjectURL(blob)
   link.setAttribute('href', url)
@@ -160,7 +138,7 @@ function exportToCSV<T>(
  */
 function exportToJSON<T>(data: T[], filename: string): void {
   const json = JSON.stringify(data, null, 2)
-  const blob = new Blob([json], {type: 'application/json'})
+  const blob = new Blob([json], { type: 'application/json' })
   const link = document.createElement('a')
   const url = URL.createObjectURL(blob)
   link.setAttribute('href', url)
@@ -172,4 +150,4 @@ function exportToJSON<T>(data: T[], filename: string): void {
   URL.revokeObjectURL(url)
 }
 
-export {sortData, filterData, paginateData, getDensityPadding, exportToCSV, exportToJSON}
+export { sortData, filterData, paginateData, getDensityPadding, exportToCSV, exportToJSON }

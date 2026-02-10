@@ -22,16 +22,7 @@ const VARIANT_MAP = {
   danger: 'contained',
 } as const
 
-function Button({
-  onClick,
-  children,
-  variant = 'primary',
-  size = 'small',
-  disabled,
-  loading,
-  icon,
-  type = 'button',
-}: ButtonProps) {
+function Button({ onClick, children, variant = 'primary', size = 'small', disabled, loading, icon, type = 'button' }: ButtonProps) {
   return (
     <MuiButton
       onClick={onClick}

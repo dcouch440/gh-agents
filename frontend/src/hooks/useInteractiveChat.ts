@@ -3,10 +3,7 @@ import { useStore, executionStore } from '@/stores'
 import type { ExecutionMessage } from '@/types/execution'
 
 const useInteractiveChat = (executionId: string) => {
-  const messages: ExecutionMessage[] = useStore(
-    executionStore.store,
-    executionStore.selectMessages(executionId),
-  )
+  const messages: ExecutionMessage[] = useStore(executionStore.store, executionStore.selectMessages(executionId))
 
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
@@ -41,34 +38,40 @@ const useInteractiveChat = (executionId: string) => {
     })
   }, [executionId])
 
-  const sendMessage = useCallback(async (content: string) => {
-    if (!executionId) return
-    setSending(true)
-    setError(null)
-    try {
-      await executionStore.sendMessage(executionId, content)
-    } catch (e) {
-      if (mountedRef.current) {
-        setError(e instanceof Error ? e.message : 'Failed to send message')
+  const sendMessage = useCallback(
+    async (content: string) => {
+      if (!executionId) return
+      setSending(true)
+      setError(null)
+      try {
+        await executionStore.sendMessage(executionId, content)
+      } catch (e) {
+        if (mountedRef.current) {
+          setError(e instanceof Error ? e.message : 'Failed to send message')
+        }
+      } finally {
+        if (mountedRef.current) setSending(false)
       }
-    } finally {
-      if (mountedRef.current) setSending(false)
-    }
-  }, [executionId])
+    },
+    [executionId],
+  )
 
-  const approve = useCallback(async (structuredOutput?: Record<string, unknown>) => {
-    if (!executionId) return
-    setSending(true)
-    try {
-      await executionStore.approve(executionId, structuredOutput)
-    } catch (e) {
-      if (mountedRef.current) {
-        setError(e instanceof Error ? e.message : 'Failed to approve execution')
+  const approve = useCallback(
+    async (structuredOutput?: Record<string, unknown>) => {
+      if (!executionId) return
+      setSending(true)
+      try {
+        await executionStore.approve(executionId, structuredOutput)
+      } catch (e) {
+        if (mountedRef.current) {
+          setError(e instanceof Error ? e.message : 'Failed to approve execution')
+        }
+      } finally {
+        if (mountedRef.current) setSending(false)
       }
-    } finally {
-      if (mountedRef.current) setSending(false)
-    }
-  }, [executionId])
+    },
+    [executionId],
+  )
 
   const abort = useCallback(() => {
     executionStore.stopStream(executionId)

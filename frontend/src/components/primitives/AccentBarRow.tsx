@@ -29,7 +29,7 @@ function AccentBarRow({
         display: 'flex',
         alignItems: 'stretch',
         borderBottom: (theme) => `1px solid ${theme.palette.custom.separatorSubtle}`,
-        backgroundColor: (theme) => highlight ? theme.palette.custom.activeTint : 'transparent',
+        backgroundColor: (theme) => (highlight ? theme.palette.custom.activeTint : 'transparent'),
         cursor: onClick !== null ? 'pointer' : 'default',
         transition: 'background-color 100ms ease',
         '&:hover': { backgroundColor: (theme) => theme.palette.custom.hoverOverlay },
@@ -78,11 +78,7 @@ function AccentBarRow({
             ) : null}
           </Box>
         )}
-        {actions !== null ? (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 1, flexShrink: 0 }}>
-            {actions}
-          </Box>
-        ) : null}
+        {actions !== null ? <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 1, flexShrink: 0 }}>{actions}</Box> : null}
       </Box>
     </Box>
   )

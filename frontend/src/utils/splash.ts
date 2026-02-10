@@ -7,11 +7,7 @@ const dismissSplash = (): void => {
   if (!splash || splash.classList.contains(EXIT_CLASS)) return
 
   splash.classList.add(EXIT_CLASS)
-  splash.addEventListener(
-    'transitionend',
-    () => splash.classList.add(HIDDEN_CLASS),
-    { once: true },
-  )
+  splash.addEventListener('transitionend', () => splash.classList.add(HIDDEN_CLASS), { once: true })
 
   // Safety fallback if transitionend never fires (e.g. reduced motion)
   setTimeout(() => splash.classList.add(HIDDEN_CLASS), 700)

@@ -1,14 +1,14 @@
-import {describe, it, expect, vi} from 'vitest'
-import {render} from '@testing-library/react'
-import {JsonEditor} from './JsonEditor'
-import {formatJson, validateJsonObject} from '@/utils/json'
+import { describe, it, expect, vi } from 'vitest'
+import { render } from '@testing-library/react'
+import { JsonEditor } from './JsonEditor'
+import { formatJson, validateJsonObject } from '@/utils/json'
 
 describe('JsonEditor', () => {
   it('renders without crashing', () => {
     const onChange = vi.fn()
     const initialValue = '{"name": "test"}'
 
-    const {container} = render(<JsonEditor value={initialValue} onChange={onChange} />)
+    const { container } = render(<JsonEditor value={initialValue} onChange={onChange} />)
 
     expect(container).toBeDefined()
   })
@@ -17,7 +17,7 @@ describe('JsonEditor', () => {
     const onChange = vi.fn()
     const placeholder = 'Enter JSON here'
 
-    const {container} = render(<JsonEditor value="" onChange={onChange} placeholder={placeholder} />)
+    const { container } = render(<JsonEditor value="" onChange={onChange} placeholder={placeholder} />)
 
     expect(container).toBeDefined()
   })
@@ -25,7 +25,7 @@ describe('JsonEditor', () => {
   it('renders with readOnly mode', () => {
     const onChange = vi.fn()
 
-    const {container} = render(<JsonEditor value='{"test": true}' onChange={onChange} readOnly />)
+    const { container } = render(<JsonEditor value='{"test": true}' onChange={onChange} readOnly />)
 
     expect(container).toBeDefined()
   })
@@ -61,7 +61,7 @@ describe('validateJsonObject', () => {
     const result = validateJsonObject(input)
 
     expect(result.valid).toBe(true)
-    expect(result.parsed).toEqual({name: 'test', value: 123})
+    expect(result.parsed).toEqual({ name: 'test', value: 123 })
     expect(result.error).toBeUndefined()
   })
 
@@ -111,6 +111,6 @@ describe('validateJsonObject', () => {
     const result = validateJsonObject(nested)
 
     expect(result.valid).toBe(true)
-    expect(result.parsed).toEqual({a: {b: {c: 1}}})
+    expect(result.parsed).toEqual({ a: { b: { c: 1 } } })
   })
 })

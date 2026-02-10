@@ -25,15 +25,16 @@ const store = createStore<ResultState>(() => ({
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const extractError = (e: unknown): string =>
-  e instanceof Error ? e.message : 'results: unknown error'
+const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'results: unknown error')
 
 // ── Selectors ────────────────────────────────────────────────────────────────
 
 const selectAll = (s: ResultState): Result[] => toArray(s.items)
 
-const selectById = (id: string) => (s: ResultState): Result | undefined =>
-  nmGet(s.items, id)
+const selectById =
+  (id: string) =>
+  (s: ResultState): Result | undefined =>
+    nmGet(s.items, id)
 
 const selectLoading = (s: ResultState): boolean => s.loading
 

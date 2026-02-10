@@ -15,16 +15,10 @@ function PromptsBrowserPanel() {
     void promptTemplateStore.fetchIfStale()
   }, [])
 
-  const firstStepId = useMemo(
-    () => selectedStepIds.values().next().value ?? null,
-    [selectedStepIds],
-  )
+  const firstStepId = useMemo(() => selectedStepIds.values().next().value ?? null, [selectedStepIds])
   const selectedStep = useStore(workflowStore.store, workflowStore.selectStepById(firstStepId))
 
-  const filtered = useMemo(
-    () => templates.filter((t) => t.name.toLowerCase().includes(query.toLowerCase())),
-    [templates, query],
-  )
+  const filtered = useMemo(() => templates.filter((t) => t.name.toLowerCase().includes(query.toLowerCase())), [templates, query])
 
   const handleAssign = useCallback(
     (templateId: string) => {
@@ -43,10 +37,7 @@ function PromptsBrowserPanel() {
       {loading ? <LoadingSpinner label="Loading templates..." /> : null}
 
       {!loading && filtered.length === 0 ? (
-        <EmptyState
-          icon={<EditNoteOutlined />}
-          message={query ? `No templates matching "${query}"` : 'No templates found'}
-        />
+        <EmptyState icon={<EditNoteOutlined />} message={query ? `No templates matching "${query}"` : 'No templates found'} />
       ) : null}
 
       {filtered.map((template) => (
@@ -56,7 +47,13 @@ function PromptsBrowserPanel() {
           primary={template.name}
           secondary={`${template.variables?.length ?? 0} variable(s)`}
           highlight={template.id === selectedStep?.prompt_template_id}
-          onClick={selectedStep ? () => { handleAssign(template.id) } : null}
+          onClick={
+            selectedStep
+              ? () => {
+                  handleAssign(template.id)
+                }
+              : null
+          }
         />
       ))}
     </Box>

@@ -12,9 +12,7 @@ function InputsTab({ upstreamStepNames }: InputsTabProps) {
   if (upstreamStepNames.length === 0) {
     return (
       <Box sx={{ p: 1.5, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Typography sx={{ fontSize: 12, color: 'text.disabled' }}>
-          No upstream connections
-        </Typography>
+        <Typography sx={{ fontSize: 12, color: 'text.disabled' }}>No upstream connections</Typography>
       </Box>
     )
   }

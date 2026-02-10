@@ -27,15 +27,16 @@ const store = createStore<SessionState>(() => ({
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const extractError = (e: unknown): string =>
-  e instanceof Error ? e.message : 'sessions: unknown error'
+const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'sessions: unknown error')
 
 // ── Selectors ────────────────────────────────────────────────────────────────
 
 const selectAll = (s: SessionState): Session[] => toArray(s.items)
 
-const selectById = (id: string) => (s: SessionState): Session | undefined =>
-  nmGet(s.items, id)
+const selectById =
+  (id: string) =>
+  (s: SessionState): Session | undefined =>
+    nmGet(s.items, id)
 
 const selectLoading = (s: SessionState): boolean => s.loading
 

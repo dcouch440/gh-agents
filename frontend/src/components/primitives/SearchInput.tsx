@@ -11,13 +11,7 @@ type SearchInputProps = {
   autoFocus?: boolean
 }
 
-function SearchInput({
-  value,
-  onChange,
-  placeholder = 'Search...',
-  debounceMs = 300,
-  autoFocus,
-}: SearchInputProps) {
+function SearchInput({ value, onChange, placeholder = 'Search...', debounceMs = 300, autoFocus }: SearchInputProps) {
   const [localValue, setLocalValue] = useState(value)
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(null)
 

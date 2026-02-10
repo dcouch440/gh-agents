@@ -26,18 +26,14 @@ describe('SettingsPage', () => {
 
     const overviewTab = screen.getByRole('tab', { name: /overview/i })
     expect(overviewTab).toHaveAttribute('aria-selected', 'true')
-    expect(
-      screen.getByText(/general settings and configuration options/i)
-    ).toBeInTheDocument()
+    expect(screen.getByText(/general settings and configuration options/i)).toBeInTheDocument()
   })
 
   it('shows two tabs', () => {
     renderPage()
 
     expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument()
-    expect(
-      screen.getByRole('tab', { name: /router modes/i })
-    ).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /router modes/i })).toBeInTheDocument()
   })
 
   it('switches to router modes tab when clicked', async () => {
@@ -63,8 +59,6 @@ describe('SettingsPage', () => {
 
     await user.click(overviewTab)
     expect(overviewTab).toHaveAttribute('aria-selected', 'true')
-    expect(
-      screen.getByText(/general settings and configuration options/i)
-    ).toBeInTheDocument()
+    expect(screen.getByText(/general settings and configuration options/i)).toBeInTheDocument()
   })
 })

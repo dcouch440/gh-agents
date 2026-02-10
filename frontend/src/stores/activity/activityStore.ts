@@ -49,22 +49,24 @@ const store = createStore<ActivityState>(() => ({ ...initialState }))
 
 const selectAll = (s: ActivityState): ActivityEntry[] => s.entries
 
-const selectByRunId = (runId: string) => (s: ActivityState): ActivityEntry[] =>
-  s.entries.filter((e) => e.runId === runId)
+const selectByRunId =
+  (runId: string) =>
+  (s: ActivityState): ActivityEntry[] =>
+    s.entries.filter((e) => e.runId === runId)
 
-const selectByTopic = (topic: ActivityTopic) => (s: ActivityState): ActivityEntry[] =>
-  s.entries.filter((e) => e.event.type.startsWith(`${topic}:`))
+const selectByTopic =
+  (topic: ActivityTopic) =>
+  (s: ActivityState): ActivityEntry[] =>
+    s.entries.filter((e) => e.event.type.startsWith(`${topic}:`))
 
-const ERROR_TYPES = new Set<ActivityEvent['type']>([
-  ACTIVITY.WORKFLOW_STEP_FAILED,
-  ACTIVITY.WORKFLOW_FAILED,
-])
+const ERROR_TYPES = new Set<ActivityEvent['type']>([ACTIVITY.WORKFLOW_STEP_FAILED, ACTIVITY.WORKFLOW_FAILED])
 
-const selectErrors = (s: ActivityState): ActivityEntry[] =>
-  s.entries.filter((e) => ERROR_TYPES.has(e.event.type))
+const selectErrors = (s: ActivityState): ActivityEntry[] => s.entries.filter((e) => ERROR_TYPES.has(e.event.type))
 
-const selectLatest = (n: number) => (s: ActivityState): ActivityEntry[] =>
-  s.entries.slice(-n)
+const selectLatest =
+  (n: number) =>
+  (s: ActivityState): ActivityEntry[] =>
+    s.entries.slice(-n)
 
 const selectCount = (s: ActivityState): number => s.entries.length
 
@@ -127,7 +129,7 @@ const forRun = (runId: string): ActivityEntry[] => selectByRunId(runId)(store.ge
 // ── Dev Tools Exposure ───────────────────────────────────────────────────────
 
 if (import.meta.env.DEV) {
-  (window as Record<string, unknown>).__activityStore = { dump, entries, errors, forRun, reset }
+  ;(window as Record<string, unknown>).__activityStore = { dump, entries, errors, forRun, reset }
 }
 
 // ── Export ────────────────────────────────────────────────────────────────────
