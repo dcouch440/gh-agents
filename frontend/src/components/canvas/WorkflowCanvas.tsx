@@ -20,6 +20,7 @@ import Box from "@mui/material/Box";
 import {useTheme} from "@mui/material/styles";
 import {
   useStore,
+  batch,
   workflowStore,
   canvasStore,
   layoutStore,
@@ -66,11 +67,15 @@ function WorkflowCanvasInner() {
   const {onNodeDragStop} = usePositionPersist();
   const [contextMenu, setContextMenu] = useState<MenuPosition>(null);
   const initialFitDone = useRef(false);
+  const fetchedToolAgentIds = useRef(new Set<string>());
 
-  // Fetch tools for all agents when they load + protocol types
+  // Fetch tools for agents not yet fetched
   useEffect(() => {
     agents.forEach((agent) => {
-      void agentStore.fetchTools(agent.id);
+      if (!fetchedToolAgentIds.current.has(agent.id)) {
+        fetchedToolAgentIds.current.add(agent.id);
+        void agentStore.fetchTools(agent.id);
+      }
     });
   }, [agents]);
 
@@ -92,6 +97,7 @@ function WorkflowCanvasInner() {
     () => Collections.toLookupMap(steps, (s) => s.id, (s) => s.name ?? s.execution_mode),
     [steps],
   );
+  // todo: why use map here?
   const toolsByAgentLookup = useMemo(
     () => Collections.toLookupMap(agents, (a) => a.id, (a) => {
       const tools = toolsByAgent[a.id] ?? [];
@@ -130,8 +136,8 @@ function WorkflowCanvasInner() {
   // Push store updates into RF — only touch data + position, never clobber selection
   useEffect(() => {
     setNodes((current) => {
-      const currentIds = new Set(current.map((n) => n.id));
-      const newIds = new Set(rfNodes.map((n) => n.id));
+      const currentIds = Collections.toSetBy(current, (n) => n.id);
+      const newIds = Collections.toSetBy(rfNodes, (n) => n.id);
 
       const hasStructuralChange =
         rfNodes.some((n) => !currentIds.has(n.id)) ||
@@ -139,7 +145,7 @@ function WorkflowCanvasInner() {
 
       if (hasStructuralChange) {
         // Nodes added/removed — full replacement, preserve selection
-        const selMap = new Map(current.map((n) => [n.id, n.selected ?? false]));
+        const selMap = Collections.toLookupMap(current, (n) => n.id, (n) => n.selected ?? false);
         return rfNodes.map((n) => ({
           ...n,
           selected: selMap.get(n.id) ?? false,
@@ -150,7 +156,7 @@ function WorkflowCanvasInner() {
       // NEVER overwrite position here: RF owns position state (updated via drag),
       // and the store catches up via onNodeDragStop. Overwriting mid-drag causes
       // nodes to snap back to stale store positions.
-      const newDataMap = new Map(rfNodes.map((n) => [n.id, n]));
+      const newDataMap = Collections.keyBy(rfNodes, (n) => n.id);
       let anyChanged = false;
       const result: typeof current = [];
       for (let i = 0; i < current.length; i++) {
@@ -179,21 +185,21 @@ function WorkflowCanvasInner() {
 
   useEffect(() => {
     setEdges((current) => {
-      const currentIds = new Set(current.map((e) => e.id));
-      const newIds = new Set(rfEdges.map((e) => e.id));
+      const currentIds = Collections.toSetBy(current, (e) => e.id);
+      const newIds = Collections.toSetBy(rfEdges, (e) => e.id);
       const hasStructuralChange =
         rfEdges.some((e) => !currentIds.has(e.id)) ||
         current.some((e) => !newIds.has(e.id));
 
       if (hasStructuralChange) {
-        const selMap = new Map(current.map((e) => [e.id, e.selected ?? false]));
+        const selMap = Collections.toLookupMap(current, (e) => e.id, (e) => e.selected ?? false);
         return rfEdges.map((e) => ({
           ...e,
           selected: selMap.get(e.id) ?? false,
         }));
       }
 
-      const newEdgeMap = new Map(rfEdges.map((e) => [e.id, e]));
+      const newEdgeMap = Collections.keyBy(rfEdges, (e) => e.id);
       let anyChanged = false;
       const result: typeof current = [];
       for (let i = 0; i < current.length; i++) {
@@ -223,15 +229,13 @@ function WorkflowCanvasInner() {
 
   // Selection sync: RF → canvasStore (read-only mirror for sidebar panels)
   const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
-    queueMicrotask(() => {
+    batch(() => {
       canvasStore.selectSteps(params.nodes.map((n) => n.id));
       canvasStore.selectEdges(params.edges.map((e) => e.id));
-    });
-    if (params.nodes.length > 0 || params.edges.length > 0) {
-      requestAnimationFrame(() => {
+      if (params.nodes.length > 0 || params.edges.length > 0) {
         layoutStore.openRightPanelIfClosed("properties");
-      });
-    }
+      }
+    });
   }, []);
 
   // Edge creation
