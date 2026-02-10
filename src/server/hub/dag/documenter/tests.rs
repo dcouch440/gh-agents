@@ -3,7 +3,8 @@ mod tests {
     use serde_json::json;
 
     use crate::server::hub::dag::documenter::{
-        build_context_block, build_documents_output, extract_json_content, ContextDocument,
+        build_context_block, build_documents_output, compose_research_prompt, compose_write_prompt,
+        determine_persist_action, extract_json_content, ContextDocument, DocumentPersistAction,
     };
     use crate::server::hub::dag::utils::StepOutput;
     use crate::server::ws::events::WorkflowEventKind;
@@ -262,5 +263,116 @@ This plan covers the main topics."#;
         assert!(result.contains("Included"));
         assert!(!result.contains("<document_up000002"));
         assert!(!result.contains("Excluded"));
+    }
+
+    // ── determine_persist_action tests ──────────────────────────────────
+
+    #[test]
+    fn persist_action_update_when_document_exists() {
+        let doc_id = uuid::Uuid::new_v4();
+        let def_id = uuid::Uuid::new_v4();
+        let action = determine_persist_action(Some(doc_id), Some(def_id));
+        assert_eq!(action, DocumentPersistAction::Update(doc_id));
+    }
+
+    #[test]
+    fn persist_action_update_even_without_def() {
+        let doc_id = uuid::Uuid::new_v4();
+        let action = determine_persist_action(Some(doc_id), None);
+        assert_eq!(action, DocumentPersistAction::Update(doc_id));
+    }
+
+    #[test]
+    fn persist_action_create_when_no_document_but_def_exists() {
+        let def_id = uuid::Uuid::new_v4();
+        let action = determine_persist_action(None, Some(def_id));
+        assert_eq!(action, DocumentPersistAction::CreateAndLink(def_id));
+    }
+
+    #[test]
+    fn persist_action_skip_when_nothing_available() {
+        let action = determine_persist_action(None, None);
+        assert_eq!(action, DocumentPersistAction::Skip);
+    }
+
+    // ── compose_write_prompt tests ──────────────────────────────────────
+
+    #[test]
+    fn write_prompt_without_context() {
+        let prompt = compose_write_prompt(
+            "Write a Bitcoin analysis report.",
+            "",
+            "BTC is trading at $95,000 with strong support.",
+        );
+        assert!(prompt.starts_with("Write a Bitcoin analysis report."));
+        assert!(prompt.contains("---\n\nResearch findings:"));
+        assert!(prompt.contains("BTC is trading at $95,000"));
+        assert!(!prompt.contains("<context>"));
+    }
+
+    #[test]
+    fn write_prompt_with_context() {
+        let ctx = build_context_block(
+            &[],
+            &[ContextDocument {
+                short_id: "abc12345".into(),
+                title: "Market Data".into(),
+                content: "Current price: $95,000".into(),
+            }],
+        );
+        let prompt = compose_write_prompt(
+            "Write a projection report.",
+            &ctx,
+            "Research indicates bullish trend.",
+        );
+        assert!(prompt.starts_with("Write a projection report."));
+        assert!(prompt.contains("<context>"));
+        assert!(prompt.contains("<document_abc12345"));
+        assert!(prompt.contains("Market Data"));
+        assert!(prompt.contains("---\n\nResearch findings:"));
+        assert!(prompt.contains("Research indicates bullish trend."));
+    }
+
+    #[test]
+    fn write_prompt_context_appears_between_instructions_and_research() {
+        let ctx = "<context>\n<document_test>data</document_test>\n</context>";
+        let prompt = compose_write_prompt("Instructions here.", ctx, "Findings here.");
+        let ctx_pos = prompt.find("<context>").unwrap();
+        let instr_pos = prompt.find("Instructions here.").unwrap();
+        let findings_pos = prompt.find("Research findings:").unwrap();
+        assert!(instr_pos < ctx_pos, "instructions should come before context");
+        assert!(ctx_pos < findings_pos, "context should come before findings");
+    }
+
+    // ── compose_research_prompt tests ───────────────────────────────────
+
+    #[test]
+    fn research_prompt_without_context() {
+        let prompt = compose_research_prompt("Analyze Bitcoin price movements.", "");
+        assert_eq!(prompt, "Analyze Bitcoin price movements.");
+    }
+
+    #[test]
+    fn research_prompt_with_context() {
+        let ctx = build_context_block(
+            &[],
+            &[ContextDocument {
+                short_id: "def67890".into(),
+                title: "Price History".into(),
+                content: "Historical data from 2024.".into(),
+            }],
+        );
+        let prompt = compose_research_prompt("Analyze price trends.", &ctx);
+        assert!(prompt.starts_with("Analyze price trends."));
+        assert!(prompt.contains("<context>"));
+        assert!(prompt.contains("<document_def67890"));
+        assert!(prompt.contains("Price History"));
+    }
+
+    #[test]
+    fn research_prompt_preserves_multiline_strategy() {
+        let strategy = "Step 1: Gather data\nStep 2: Analyze trends\nStep 3: Summarize";
+        let prompt = compose_research_prompt(strategy, "");
+        assert_eq!(prompt, strategy);
     }
 }
