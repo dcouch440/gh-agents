@@ -146,37 +146,67 @@ function WorkflowCanvasInner() {
         }));
       }
 
-      // Data-only change — value-compare and reuse old references when unchanged
+      // Data-only change — value-compare, return current when nothing changed
       const newDataMap = new Map(rfNodes.map((n) => [n.id, n]));
-      return current.map((n) => {
+      let anyChanged = false;
+      const result: typeof current = [];
+      for (let i = 0; i < current.length; i++) {
+        const n = current[i]!;
         const updated = newDataMap.get(n.id);
-        if (!updated) return n;
+        if (!updated) { result.push(n); continue; }
 
         const dEq = nodeDataEqual(n.data, updated.data);
         const pEq = n.position.x === updated.position.x && n.position.y === updated.position.y;
         const tEq = n.type === updated.type;
         const sEq = stylesEqual(n.style, updated.style);
 
-        if (dEq && pEq && tEq && sEq) return n;
+        if (dEq && pEq && tEq && sEq) { result.push(n); continue; }
 
-        return {
+        anyChanged = true;
+        result.push({
           ...n,
           data: dEq ? n.data : updated.data,
           position: pEq ? n.position : updated.position,
           type: updated.type,
           style: sEq ? n.style : updated.style,
-        };
-      });
+        });
+      }
+
+      return anyChanged ? result : current;
     });
   }, [rfNodes, setNodes]);
 
   useEffect(() => {
     setEdges((current) => {
-      const selMap = new Map(current.map((e) => [e.id, e.selected ?? false]));
-      return rfEdges.map((e) => ({
-        ...e,
-        selected: selMap.get(e.id) ?? false,
-      }));
+      const currentIds = new Set(current.map((e) => e.id));
+      const newIds = new Set(rfEdges.map((e) => e.id));
+      const hasStructuralChange =
+        rfEdges.some((e) => !currentIds.has(e.id)) ||
+        current.some((e) => !newIds.has(e.id));
+
+      if (hasStructuralChange) {
+        const selMap = new Map(current.map((e) => [e.id, e.selected ?? false]));
+        return rfEdges.map((e) => ({
+          ...e,
+          selected: selMap.get(e.id) ?? false,
+        }));
+      }
+
+      const newEdgeMap = new Map(rfEdges.map((e) => [e.id, e]));
+      let anyChanged = false;
+      const result: typeof current = [];
+      for (let i = 0; i < current.length; i++) {
+        const e = current[i]!;
+        const updated = newEdgeMap.get(e.id);
+        if (!updated) { result.push(e); continue; }
+        if (e.source === updated.source && e.target === updated.target && e.type === updated.type) {
+          result.push(e); continue;
+        }
+        anyChanged = true;
+        result.push({...e, source: updated.source, target: updated.target, type: updated.type});
+      }
+
+      return anyChanged ? result : current;
     });
   }, [rfEdges, setEdges]);
 
@@ -192,8 +222,10 @@ function WorkflowCanvasInner() {
 
   // Selection sync: RF → canvasStore (read-only mirror for sidebar panels)
   const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
-    canvasStore.selectSteps(params.nodes.map((n) => n.id));
-    canvasStore.selectEdges(params.edges.map((e) => e.id));
+    queueMicrotask(() => {
+      canvasStore.selectSteps(params.nodes.map((n) => n.id));
+      canvasStore.selectEdges(params.edges.map((e) => e.id));
+    });
     if (params.nodes.length > 0 || params.edges.length > 0) {
       requestAnimationFrame(() => {
         layoutStore.openRightPanelIfClosed("properties");
