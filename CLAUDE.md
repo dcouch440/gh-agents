@@ -46,6 +46,16 @@ npx vite build                              # Production build
 - Think enterprise quality always.
 - No co authored on commits.
 
+## Reusability Requirements
+
+**Every feature touches two layers — both must prioritize reusable, composable building blocks.**
+
+**Frontend:** Extract primitives first. Before building a feature component, identify the atomic UI elements it needs (buttons, inputs, cards, badges, layout containers) and implement them as standalone, prop-driven primitives in the shared component library. Feature components compose primitives — they never hard-code styles or markup that could be reused elsewhere.
+
+**Backend:** Extract utility functions and shared abstractions. Common logic — validation, transformation, formatting, error mapping, query helpers — must live in dedicated utility modules, not be inlined in handlers or services. If two endpoints share similar logic, that logic gets extracted. Prefer small, well-tested pure functions that compose into larger operations.
+
+**The rule:** If you're writing it for the second time, it should already be a shared primitive or utility. If you're writing it for the first time, ask whether it *will* be needed again — and if so, build it reusable from the start.
+
 ## Module Organization
 
 **Always use folder-based modules with separate test files:**
