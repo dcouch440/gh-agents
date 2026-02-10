@@ -570,8 +570,9 @@ pub async fn compose_prompt(
                     context_opened = true;
                 }
                 for doc in &agent_docs {
+                    let short_id = &doc.id.to_string()[..8];
                     full_prompt.push_str(&format!(
-                        "\n<document title=\"{}\" source=\"agent\">\n{}\n</document>",
+                        "\n<document_{short_id} title=\"{}\" source=\"agent\">\n{}\n</document_{short_id}>",
                         doc.title, doc.content
                     ));
                 }
@@ -594,8 +595,9 @@ pub async fn compose_prompt(
                     context_opened = true;
                 }
                 for doc in &step_doc_contents {
+                    let short_id = &doc.id.to_string()[..8];
                     full_prompt.push_str(&format!(
-                        "\n<document title=\"{}\" source=\"step\">\n{}\n</document>",
+                        "\n<document_{short_id} title=\"{}\" source=\"step\">\n{}\n</document_{short_id}>",
                         doc.title, doc.content
                     ));
                 }
