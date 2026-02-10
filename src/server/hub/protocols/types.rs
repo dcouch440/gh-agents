@@ -10,7 +10,7 @@ use uuid::Uuid;
 /// A fully-loaded protocol with its port assignments, ready for expansion.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProtocolConfig {
-    /// The protocol type: "decomp", "transform", "review", "route".
+    /// The protocol type, e.g. "documenter".
     pub protocol_type: String,
     /// Type-specific configuration (content schema shape, review options, etc.).
     pub config: serde_json::Value,

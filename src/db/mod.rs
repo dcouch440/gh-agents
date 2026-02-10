@@ -582,7 +582,7 @@ pub struct ProtocolRow {
     pub id: Uuid,
     pub name: String,
     pub description: String,
-    pub protocol_type: String, // "decomp", "transform", "review", "route", "default"
+    pub protocol_type: String, // e.g. "documenter"
     pub config: serde_json::Value,
     pub version: i32,
     pub created_at: DateTime<Utc>,

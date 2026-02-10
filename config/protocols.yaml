@@ -1,289 +1,17 @@
 # ============================================================================
 # Protocol Definitions
 # ============================================================================
-# Defines the 5 builtin protocol types with their dedicated agents, output
-# schemas, and prompt templates. Each protocol is a reusable execution recipe
-# that the ProtocolEngine expands into workflow primitives (steps, edges, ports).
+# Defines builtin protocol types with their dedicated agents, output schemas,
+# and prompt templates. Each protocol is a reusable execution recipe that the
+# ProtocolEngine compiles into workflow primitives (schema, prompt, steps, edges).
 #
 # Prompt templates use {{.Protocol.field}} syntax for dynamic sections that
-# get resolved at expansion time:
-#   - {{.Protocol.available_agents}} — formatted port listing (decomp, route)
-#   - {{.Protocol.decisions}} — decision option list (review)
-#   - {{.Protocol.schema_context}} — optional schema description (transform)
+# get resolved at compile time.
 #
 # Sync to database: cargo run -- sync-config (or make sync)
 # ============================================================================
 
 protocols:
-
-  # ==========================================================================
-  # DECOMPOSITION — fan-out to specialist agents
-  # ==========================================================================
-
-  - name: Decomposition
-    description: >
-      Decompose a task into subtasks and fan out to specialist agents.
-      Configure ports to define which agents receive subtasks. The orchestrator
-      analyzes the input and assigns work to each port's agent based on expertise.
-    protocol_type: decomp
-    config: {}
-
-    agent:
-      name: Decomposition Orchestrator
-      model_provider: anthropic
-      model_id: claude-sonnet-4-20250514
-      model_max_tokens: 8192
-      model_temperature: 0.3
-      system_prompt: |
-        You are the Decomposition Orchestrator, a specialized coordinator for the Nexor workflow system. Your role is to analyze incoming tasks and break them down into well-scoped subtasks for specialist agents.
-
-        You excel at understanding complex requirements, identifying natural boundaries between concerns, and writing clear, actionable briefs that give each specialist enough context to work independently. You always consider the minimal set of subtasks needed and avoid unnecessary fragmentation.
-
-        You produce structured JSON output as directed by your task instructions.
-
-    output_schema:
-      name: Decomposition Output
-      schema:
-        type: array
-        items:
-          type: object
-          required:
-            - port
-            - content
-          properties:
-            port:
-              type: string
-              description: The target agent port for this task
-            content:
-              type: object
-              description: The task content to pass to the assigned agent
-          additionalProperties: false
-
-    prompt_template:
-      name: Decomposition Prompt
-      content: |
-        Analyze the task above and break it down into subtasks for the specialist agents below.
-
-        Guidelines:
-        - Decompose into the fewest subtasks needed. Each should be a self-contained unit of work.
-        - Provide each agent with enough context to execute independently — they cannot see each other's work.
-        - You may assign multiple subtasks to the same agent when the work covers distinct concerns within their expertise.
-        - If subtasks have ordering dependencies, note them in the content field.
-
-        {{.Protocol.available_agents}}
-
-        Respond with a JSON array. Each element has a "port" field matching an agent identifier above, and a "content" field with the task details for that agent.
-
-  # ==========================================================================
-  # ROUTE — route to best-fit specialist
-  # ==========================================================================
-
-  - name: Route
-    description: >
-      Analyze input and route to exactly one specialist agent.
-      Configure ports to define routing targets. The orchestrator evaluates
-      the input and selects the single best-fit agent based on the request's
-      intent and each agent's capabilities.
-    protocol_type: route
-    config: {}
-
-    agent:
-      name: Router Agent
-      model_provider: anthropic
-      model_id: claude-sonnet-4-20250514
-      model_max_tokens: 8192
-      model_temperature: 0.2
-      system_prompt: |
-        You are the Routing Orchestrator, a specialized classifier for the Nexor workflow system. Your role is to analyze incoming requests and route each one to the single most appropriate specialist agent.
-
-        You excel at reading intent, matching requirements to agent capabilities, and making decisive routing choices. When multiple agents could handle a request, you select the one whose expertise most directly addresses the primary need. You never split work across agents — you always choose exactly one.
-
-        You produce structured JSON output as directed by your task instructions.
-
-    output_schema:
-      name: Route Output
-      schema:
-        type: object
-        required:
-          - port
-          - content
-        properties:
-          port:
-            type: string
-            description: The single target agent port to route to
-          content:
-            type: object
-            description: The content to pass to the selected agent
-        additionalProperties: false
-
-    prompt_template:
-      name: Route Prompt
-      content: |
-        Analyze the input above to determine which specialist agent is the best fit, then route it to exactly one agent.
-
-        Routing criteria:
-        - Identify the core intent and requirements of the input.
-        - Match those requirements against each agent's expertise and available tools.
-        - Select the single best match. If multiple agents could handle the input, choose the one whose expertise most directly addresses the primary need.
-
-        {{.Protocol.available_agents}}
-
-        Respond with a JSON object containing a "port" field matching an agent identifier above, and a "content" field with the task details for that agent.
-
-  # ==========================================================================
-  # REVIEW — structured decision with feedback
-  # ==========================================================================
-
-  - name: Review
-    description: >
-      Evaluate input against quality criteria and produce a structured
-      decision with feedback. Configure decisions in the config to define the
-      available outcomes (e.g. approve, reject, revise). Downstream routing
-      can be conditioned on the decision.
-    protocol_type: review
-    config:
-      decisions:
-        - approve
-        - reject
-        - revise
-
-    agent:
-      name: Review Evaluator
-      model_provider: anthropic
-      model_id: claude-sonnet-4-20250514
-      model_max_tokens: 8192
-      model_temperature: 0.3
-      system_prompt: |
-        You are the Review Evaluator, a quality assessment specialist for the Nexor workflow system. Your role is to critically evaluate work products against requirements and produce structured decisions with actionable feedback.
-
-        You form independent assessments without bias toward approval. You verify claims, check for gaps, and cite concrete details in your feedback rather than offering generic praise or criticism. Your decisions are consistent, well-reasoned, and backed by evidence from the input.
-
-        You produce structured JSON output as directed by your task instructions.
-
-    output_schema:
-      name: Review Output
-      schema:
-        type: object
-        required:
-          - decision
-          - feedback
-        properties:
-          decision:
-            type: string
-            description: Your review decision
-          feedback:
-            type: string
-            description: Detailed feedback explaining your decision
-        additionalProperties: false
-
-    prompt_template:
-      name: Review Prompt
-      content: |
-        Evaluate the input above and provide your assessment.
-
-        Evaluation criteria:
-        - Correctness: Does the content accurately fulfill the original requirements?
-        - Completeness: Are all expected elements present, or is anything missing?
-        - Quality: Is the output well-structured, clear, and free of obvious errors?
-
-        Form your own independent assessment. Do not assume the input is correct — verify claims and check for gaps.
-
-        Your decision must be one of: {{.Protocol.decisions}}
-
-        Respond with a JSON object containing:
-        - "decision": one of the valid decisions listed above
-        - "feedback": a specific explanation citing what works, what does not, and what to change. Reference concrete details rather than giving generic praise or criticism.
-
-  # ==========================================================================
-  # TRANSFORM — process input to structured output
-  # ==========================================================================
-
-  - name: Transform
-    description: >
-      Process input and produce structured output matching a schema.
-      The agent transforms the input data into the format defined by the
-      output schema. Useful for data extraction, reformatting, and
-      normalization steps.
-    protocol_type: transform
-    config: {}
-
-    agent:
-      name: Transform Processor
-      model_provider: anthropic
-      model_id: claude-sonnet-4-20250514
-      model_max_tokens: 8192
-      model_temperature: 0.2
-      system_prompt: |
-        You are the Transform Processor, a data extraction and structuring specialist for the Nexor workflow system. Your role is to take unstructured or semi-structured input and produce clean, schema-conformant structured output.
-
-        You carefully identify relevant data, map it to the correct schema fields, ensure type correctness, and populate all required fields. You output only valid JSON that matches the provided schema — no commentary, no markdown, no extra text.
-
-        You produce structured JSON output as directed by your task instructions.
-
-    output_schema:
-      name: Transform Output
-      schema:
-        type: object
-        description: Structured output from the transform step
-
-    prompt_template:
-      name: Transform Prompt
-      content: |
-        Transform the input above into the structured format defined by the output schema.
-
-        Steps:
-        1. Identify the relevant data from the input.
-        2. Map each piece of data to the corresponding field in the schema.
-        3. Ensure all required fields are populated and values match the expected types.
-
-        Your response is parsed directly by a JSON parser — output only the JSON object.
-
-        {{.Protocol.schema_context}}
-
-  # ==========================================================================
-  # DEFAULT — standard structured output
-  # ==========================================================================
-
-  - name: Default
-    description: >
-      Standard structured output with a response field.
-      The simplest protocol — produces a JSON object with a single
-      response string. Use when no specialized routing or decomposition
-      is needed.
-    protocol_type: default
-    config:
-      output_schema:
-        type: object
-        required:
-          - response
-        properties:
-          response:
-            type: string
-        additionalProperties: false
-
-    agent:
-      name: Default Processor
-      model_provider: anthropic
-      model_id: claude-sonnet-4-20250514
-      model_max_tokens: 8192
-      model_temperature: 0.7
-      system_prompt: |
-        You are a general-purpose AI agent in the Nexor workflow system. You process tasks as instructed and produce structured JSON output matching the provided schema.
-
-        You are versatile, thoughtful, and thorough. You follow the instructions in your task prompt precisely and structure your response according to the output schema.
-
-    output_schema:
-      name: Default Output
-      schema:
-        type: object
-        required:
-          - response
-        properties:
-          response:
-            type: string
-        additionalProperties: false
-
-    # No prompt_template — the default protocol has no prompt injection.
 
   # ==========================================================================
   # DOCUMENTER — document generation strategy planner
@@ -388,16 +116,16 @@ protocols:
 #
 # name:             Display name (must match existing protocol or will create new)
 # description:      What this protocol does
-# protocol_type:    Expander key: decomp, route, review, transform, default
-# config:           Type-specific config (e.g., review decisions)
+# protocol_type:    Compiler key (e.g. "documenter")
+# config:           Type-specific config (e.g., document_defs)
 # agent:            Dedicated agent for this protocol type
 #   name:           Agent display name
 #   system_prompt:  Agent persona and behavioral instructions
 #   model_*:        LLM configuration
-# output_schema:    Base output schema (enriched with port data at expansion time)
+# output_schema:    Base output schema (enriched at compile time)
 #   name:           Schema display name
 #   schema:         JSON Schema object
-# prompt_template:  Task instruction template (optional, null for default)
+# prompt_template:  Task instruction template (optional)
 #   name:           Template display name
 #   content:        Template text with {{.Protocol.field}} placeholders
 #
