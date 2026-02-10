@@ -121,12 +121,7 @@ pub struct PreviewResponse {
 }
 
 #[derive(Deserialize, Default)]
-pub struct ApplyProtocolRequest {
-    /// For review protocols: maps decision value → existing step_id to route to.
-    /// E.g. `{"approve": "<uuid>", "reject": "<uuid>"}`.
-    #[serde(default)]
-    pub decision_routing: Option<HashMap<String, Uuid>>,
-}
+pub struct ApplyProtocolRequest {}
 
 #[derive(Serialize)]
 pub struct ApplyResponse {
@@ -538,7 +533,7 @@ pub async fn apply_protocol(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path((protocol_id, step_id)): Path<(Uuid, Uuid)>,
-    Json(request): Json<ApplyProtocolRequest>,
+    Json(_request): Json<ApplyProtocolRequest>,
 ) -> Result<(StatusCode, Json<ApplyResponse>), AppError> {
     let proto_repo = &state.repos().protocols;
     let wf_repo = &state.repos().workflows;
@@ -782,85 +777,20 @@ pub async fn apply_protocol(
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    if protocol.protocol_type == "review" {
-        // Review protocols wire edges to EXISTING steps via decision_routing.
-        let decision_routing = request.decision_routing.ok_or_else(|| {
-            AppError::bad_request(
-                "Review protocols require decision_routing: a map of decision → step_id"
-                    .to_string(),
-            )
-        })?;
-
-        // Validate all decisions from the expansion have a mapping
-        let expected_decisions: Vec<&str> = expansion
-            .edges
-            .iter()
-            .map(|e| e.target_port_name.as_str())
-            .collect();
-        for decision in &expected_decisions {
-            if !decision_routing.contains_key(*decision) {
-                return Err(AppError::bad_request(format!(
-                    "Missing decision_routing for decision \"{}\". Required: {:?}",
-                    decision, expected_decisions
-                )));
-            }
-        }
-
-        // Validate all target step_ids exist in the same workflow
-        let workflow_steps = wf_repo
-            .list_steps(anchor_step.workflow_id)
-            .await
-            .map_err(|e| AppError::Internal(e.to_string()))?;
-        let workflow_step_ids: std::collections::HashSet<Uuid> =
-            workflow_steps.iter().map(|s| s.id).collect();
-
-        for (decision, target_step_id) in &decision_routing {
-            if *target_step_id == step_id {
-                return Err(AppError::bad_request(format!(
-                    "Decision \"{}\" cannot route to the anchor step itself",
-                    decision
-                )));
-            }
-            if !workflow_step_ids.contains(target_step_id) {
-                return Err(AppError::bad_request(format!(
-                    "Decision \"{}\" targets step {} which does not exist in workflow {}",
-                    decision, target_step_id, anchor_step.workflow_id
-                )));
-            }
-        }
-
-        // Create conditional edges: anchor → target_step per decision
-        for edge_def in &expansion.edges {
-            let target_step_id = decision_routing[&edge_def.target_port_name];
-            all_edges.push(crate::db::WorkflowStepEdgeRow {
-                id: Uuid::new_v4(),
-                from_step_id: step_id,
-                to_step_id: target_step_id,
-                from_output_port: Some(edge_def.from_output_port.clone()),
-                to_input_port: Some(edge_def.to_input_port.clone()),
-                transform_jsonpath: None,
-                condition_type: edge_def.condition_type.clone(),
-                condition_value: edge_def.condition_value.clone(),
-                edge_label: Some(edge_def.target_port_name.clone()),
-                workflow_id: anchor_step.workflow_id,
-            });
-        }
-    } else {
-        // Other protocols (decomp, route, transform): wire to newly created steps.
-        for (edge_def, created) in expansion.edges.iter().zip(created_steps.iter()) {
-            all_edges.push(crate::db::WorkflowStepEdgeRow {
-                id: Uuid::new_v4(),
-                from_step_id: step_id,
-                to_step_id: created.step_id,
-                from_output_port: Some(edge_def.from_output_port.clone()),
-                to_input_port: Some(edge_def.to_input_port.clone()),
-                transform_jsonpath: None,
-                condition_type: edge_def.condition_type.clone(),
-                condition_value: edge_def.condition_value.clone(),
-                edge_label: Some(edge_def.target_port_name.clone()),
-                workflow_id: anchor_step.workflow_id,
-            });
-        }
+    // Wire edges from anchor → newly created downstream steps (if any).
+    for (edge_def, created) in expansion.edges.iter().zip(created_steps.iter()) {
+        all_edges.push(crate::db::WorkflowStepEdgeRow {
+            id: Uuid::new_v4(),
+            from_step_id: step_id,
+            to_step_id: created.step_id,
+            from_output_port: Some(edge_def.from_output_port.clone()),
+            to_input_port: Some(edge_def.to_input_port.clone()),
+            transform_jsonpath: None,
+            condition_type: edge_def.condition_type.clone(),
+            condition_value: edge_def.condition_value.clone(),
+            edge_label: Some(edge_def.target_port_name.clone()),
+            workflow_id: anchor_step.workflow_id,
+        });
     }
 
     wf_repo

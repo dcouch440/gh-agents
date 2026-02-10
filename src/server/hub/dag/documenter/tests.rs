@@ -6,9 +6,9 @@ mod tests {
         build_documents_output, compose_research_prompt, compose_write_prompt,
         determine_persist_action, DocumentPersistAction,
     };
+    use crate::server::hub::dag::utils::StepOutput;
     use crate::server::hub::protocols::context::{build_context_block, ContextDocument};
     use crate::server::hub::protocols::json_utils::extract_json_from_llm_response;
-    use crate::server::hub::dag::utils::StepOutput;
     use crate::server::ws::events::WorkflowEventKind;
 
     #[test]
@@ -342,8 +342,14 @@ This plan covers the main topics."#;
         let ctx_pos = prompt.find("<context>").unwrap();
         let instr_pos = prompt.find("Instructions here.").unwrap();
         let findings_pos = prompt.find("Research findings:").unwrap();
-        assert!(instr_pos < ctx_pos, "instructions should come before context");
-        assert!(ctx_pos < findings_pos, "context should come before findings");
+        assert!(
+            instr_pos < ctx_pos,
+            "instructions should come before context"
+        );
+        assert!(
+            ctx_pos < findings_pos,
+            "context should come before findings"
+        );
     }
 
     // ── compose_research_prompt tests ───────────────────────────────────

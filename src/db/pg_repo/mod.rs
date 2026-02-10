@@ -3761,7 +3761,7 @@ impl ProtocolRepo for PgRepo {
     async fn seed_builtin_protocols(&self) -> Result<()> {
         for p in crate::server::hub::protocols::builtins::builtin_protocol_definitions() {
             // Upsert protocol row. Agent/schema/template FKs are NULL for builtins —
-            // the expanders generate schemas and prompts dynamically from port config.
+            // the compilers generate schemas and prompts dynamically from port config.
             sqlx::query(
                 r#"
                 INSERT INTO protocols (id, name, description, protocol_type, config)

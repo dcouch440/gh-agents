@@ -1,23 +1,22 @@
 //! Protocol Layer — the workflow primitive compiler.
 //!
-//! Protocols are reusable, user-configurable execution recipes that expand
+//! Protocols are reusable, user-configurable execution recipes that compile
 //! into standard workflow primitives (steps, edges, ports, schemas). The
-//! Protocol Engine manages registered expanders and orchestrates expansion.
+//! Protocol Engine manages registered compilers and orchestrates compilation.
 //!
 //! ```text
-//! UI → Protocol Layer (expand) → Workflow Primitives → DAG Executor (unchanged)
+//! UI → Protocol Layer (compile) → Workflow Primitives → DAG Executor (unchanged)
 //! ```
 
 pub mod builtins;
+pub mod compiler;
+pub mod compilers;
 pub mod context;
 pub mod error;
 pub mod execution_recorder;
-pub mod expander;
-pub mod expanders;
 pub mod json_utils;
-pub mod prompt_gen;
-pub mod schema_gen;
 pub mod template_resolve;
+pub mod text_utils;
 pub mod types;
 
 mod tests;
@@ -27,44 +26,44 @@ use std::sync::Arc;
 
 use crate::db::ProtocolPortRow;
 
+use compiler::ProtocolCompiler;
 use error::ProtocolError;
-use expander::ProtocolExpander;
 use types::{PortConfig, ProtocolConfig, ProtocolExpansion};
 
-/// The Protocol Engine — holds registered expanders and orchestrates expansion.
+/// The Protocol Engine — holds registered compilers and orchestrates compilation.
 ///
 /// Analogous to `ExecutionEngine`, but for compile-time workflow construction
 /// rather than runtime execution.
 pub struct ProtocolEngine {
-    expanders: HashMap<String, Arc<dyn ProtocolExpander>>,
+    compilers: HashMap<String, Arc<dyn ProtocolCompiler>>,
 }
 
 impl ProtocolEngine {
-    /// Create a new engine with all built-in expanders registered.
+    /// Create a new engine with all built-in compilers registered.
     pub fn new() -> Self {
         let mut engine = Self {
-            expanders: HashMap::new(),
+            compilers: HashMap::new(),
         };
         engine.register_builtins();
         engine
     }
 
-    /// Register a custom expander.
-    pub fn register(&mut self, expander: Arc<dyn ProtocolExpander>) {
-        self.expanders
-            .insert(expander.protocol_type().to_string(), expander);
+    /// Register a custom compiler.
+    pub fn register(&mut self, compiler: Arc<dyn ProtocolCompiler>) {
+        self.compilers
+            .insert(compiler.protocol_type().to_string(), compiler);
     }
 
     /// List all registered protocol types with their descriptions.
     pub fn list_types(&self) -> Vec<(&str, &str)> {
-        self.expanders
+        self.compilers
             .values()
-            .map(|e| (e.protocol_type(), e.description()))
+            .map(|c| (c.protocol_type(), c.description()))
             .collect()
     }
 
     /// Build a `ProtocolConfig` from DB rows and agent names.
-    /// This bridges the DB layer to the pure expansion layer.
+    /// This bridges the DB layer to the pure compilation layer.
     pub fn build_config(
         &self,
         protocol_type: &str,
@@ -97,37 +96,29 @@ impl ProtocolEngine {
         }
     }
 
-    /// Expand a protocol configuration into workflow primitives.
+    /// Compile a protocol configuration into workflow primitives.
     /// This is a pure function — no DB, no side effects.
     pub fn expand(&self, config: &ProtocolConfig) -> Result<ProtocolExpansion, ProtocolError> {
-        let expander = self
-            .expanders
+        let compiler = self
+            .compilers
             .get(&config.protocol_type)
             .ok_or_else(|| ProtocolError::UnknownType(config.protocol_type.clone()))?;
 
-        expander.validate(config)?;
-        expander.expand(config)
+        compiler.validate(config)?;
+        compiler.compile(config)
     }
 
-    /// Preview what an expansion would produce (same as expand, but named
+    /// Preview what a compilation would produce (same as expand, but named
     /// for clarity in the API layer).
     pub fn preview(&self, config: &ProtocolConfig) -> Result<ProtocolExpansion, ProtocolError> {
         self.expand(config)
     }
 
-    /// Register all built-in protocol expanders.
+    /// Register all built-in protocol compilers.
     fn register_builtins(&mut self) {
-        use expanders::{
-            DecompExpander, DefaultExpander, DocumenterExpander, ReviewExpander, RouteExpander,
-            TransformExpander,
-        };
+        use compilers::DocumenterCompiler;
 
-        self.register(Arc::new(DecompExpander));
-        self.register(Arc::new(TransformExpander));
-        self.register(Arc::new(ReviewExpander));
-        self.register(Arc::new(RouteExpander));
-        self.register(Arc::new(DefaultExpander));
-        self.register(Arc::new(DocumenterExpander));
+        self.register(Arc::new(DocumenterCompiler));
     }
 }
 

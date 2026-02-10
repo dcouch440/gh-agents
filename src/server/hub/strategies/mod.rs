@@ -30,7 +30,11 @@ pub async fn log_token_usage(
     model_id: &str,
     usage: &TokenUsage,
 ) {
-    let cost = compute_cost(model_id, usage.input_tokens as i64, usage.output_tokens as i64);
+    let cost = compute_cost(
+        model_id,
+        usage.input_tokens as i64,
+        usage.output_tokens as i64,
+    );
     let _ = state
         .repos()
         .token_ledger

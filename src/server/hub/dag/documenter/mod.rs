@@ -101,11 +101,8 @@ impl<'a> DocumenterExecutor<'a> {
         cancel: Option<&'a CancellationToken>,
         upstream_context: &'a [ContextDocument],
     ) -> Self {
-        let recorder = ProtocolExecutionRecorder::new(
-            &*state.repos().protocols,
-            step.id,
-            ctx.run_id,
-        );
+        let recorder =
+            ProtocolExecutionRecorder::new(&*state.repos().protocols, step.id, ctx.run_id);
         Self {
             engine,
             state,
@@ -279,7 +276,8 @@ impl<'a> DocumenterExecutor<'a> {
 
         // Create protocol execution record
         let exec_row = self
-            .recorder.create_phase("strategy", None, Some(self.prompt))
+            .recorder
+            .create_phase("strategy", None, Some(self.prompt))
             .await?;
 
         let strategy = DocumenterCoordinatorStrategy::new(DocumenterCoordinatorConfig {
@@ -319,17 +317,18 @@ impl<'a> DocumenterExecutor<'a> {
                             }
                         }
 
-                        self.recorder.update_phase(
-                            exec_row.id,
-                            "complete",
-                            Some(&exec_result.content),
-                            None,
-                            exec_result.input_tokens as i64,
-                            exec_result.output_tokens as i64,
-                            cost,
-                            Some(model_id),
-                        )
-                        .await;
+                        self.recorder
+                            .update_phase(
+                                exec_row.id,
+                                "complete",
+                                Some(&exec_result.content),
+                                None,
+                                exec_result.input_tokens as i64,
+                                exec_result.output_tokens as i64,
+                                cost,
+                                Some(model_id),
+                            )
+                            .await;
 
                         self.broadcast_phase_progress("strategy", 1, 1, None);
 
@@ -343,17 +342,18 @@ impl<'a> DocumenterExecutor<'a> {
                     Err(parse_err) => {
                         let err_msg = format!("Failed to parse strategy output: {}", parse_err);
                         error!(step_id = %self.step.id, %err_msg);
-                        self.recorder.update_phase(
-                            exec_row.id,
-                            "failed",
-                            Some(&exec_result.content),
-                            Some(&err_msg),
-                            exec_result.input_tokens as i64,
-                            exec_result.output_tokens as i64,
-                            cost,
-                            Some(model_id),
-                        )
-                        .await;
+                        self.recorder
+                            .update_phase(
+                                exec_row.id,
+                                "failed",
+                                Some(&exec_result.content),
+                                Some(&err_msg),
+                                exec_result.input_tokens as i64,
+                                exec_result.output_tokens as i64,
+                                cost,
+                                Some(model_id),
+                            )
+                            .await;
                         Err(HubError::Internal(anyhow!(err_msg)))
                     }
                 }
@@ -361,17 +361,9 @@ impl<'a> DocumenterExecutor<'a> {
             Err(e) => {
                 let err_msg = format!("Strategy phase LLM call failed: {}", e);
                 error!(step_id = %self.step.id, %err_msg);
-                self.recorder.update_phase(
-                    exec_row.id,
-                    "failed",
-                    None,
-                    Some(&err_msg),
-                    0,
-                    0,
-                    0.0,
-                    None,
-                )
-                .await;
+                self.recorder
+                    .update_phase(exec_row.id, "failed", None, Some(&err_msg), 0, 0, 0.0, None)
+                    .await;
                 Err(HubError::Internal(anyhow!(err_msg)))
             }
         }
@@ -401,7 +393,8 @@ impl<'a> DocumenterExecutor<'a> {
 
             // Create execution row before spawning
             let exec_row = match self
-                .recorder.create_phase("research", doc_def_id, Some(&plan.research_strategy))
+                .recorder
+                .create_phase("research", doc_def_id, Some(&plan.research_strategy))
                 .await
             {
                 Ok(row) => row,
@@ -412,8 +405,7 @@ impl<'a> DocumenterExecutor<'a> {
             };
 
             // Build context block for this plan's assigned documents
-            let context_block =
-                build_context_block(&plan.context_document_ids, context_docs);
+            let context_block = build_context_block(&plan.context_document_ids, context_docs);
 
             // Clone everything needed for the spawned task
             let engine = self.engine.clone_with_provider();
@@ -422,8 +414,7 @@ impl<'a> DocumenterExecutor<'a> {
             let execution_context = self.ctx.execution_context.clone();
             let model = model_id.to_string();
             let doc_name = plan.document_name.clone();
-            let research_prompt =
-                compose_research_prompt(&plan.research_strategy, &context_block);
+            let research_prompt = compose_research_prompt(&plan.research_strategy, &context_block);
             let capabilities = plan.required_capabilities.clone();
             let exec_id = exec_row.id;
 
@@ -509,17 +500,18 @@ impl<'a> DocumenterExecutor<'a> {
                     } else {
                         "failed"
                     };
-                    self.recorder.update_phase(
-                        task_result.exec_id,
-                        status,
-                        Some(&task_result.content),
-                        task_result.error.as_deref(),
-                        task_result.input_tokens,
-                        task_result.output_tokens,
-                        task_result.cost_usd,
-                        Some(&task_result.model),
-                    )
-                    .await;
+                    self.recorder
+                        .update_phase(
+                            task_result.exec_id,
+                            status,
+                            Some(&task_result.content),
+                            task_result.error.as_deref(),
+                            task_result.input_tokens,
+                            task_result.output_tokens,
+                            task_result.cost_usd,
+                            Some(&task_result.model),
+                        )
+                        .await;
                     self.broadcast_phase_progress(
                         "research",
                         completed_count,
@@ -601,7 +593,8 @@ impl<'a> DocumenterExecutor<'a> {
             let input_prompt =
                 compose_write_prompt(writer_prompt_prefix, &context_block, &research.content);
             let exec_row = match self
-                .recorder.create_phase("write", doc_def_id, Some(&input_prompt))
+                .recorder
+                .create_phase("write", doc_def_id, Some(&input_prompt))
                 .await
             {
                 Ok(row) => row,
@@ -739,17 +732,18 @@ impl<'a> DocumenterExecutor<'a> {
                     } else {
                         "failed"
                     };
-                    self.recorder.update_phase(
-                        task_result.exec_id,
-                        status,
-                        Some(&task_result.content),
-                        task_result.error.as_deref(),
-                        task_result.input_tokens,
-                        task_result.output_tokens,
-                        task_result.cost_usd,
-                        Some(&task_result.model),
-                    )
-                    .await;
+                    self.recorder
+                        .update_phase(
+                            task_result.exec_id,
+                            status,
+                            Some(&task_result.content),
+                            task_result.error.as_deref(),
+                            task_result.input_tokens,
+                            task_result.output_tokens,
+                            task_result.cost_usd,
+                            Some(&task_result.model),
+                        )
+                        .await;
                     self.broadcast_phase_progress(
                         "write",
                         completed_count,
@@ -820,7 +814,13 @@ impl<'a> DocumenterExecutor<'a> {
             })
             .collect();
 
-        Ok(crate::server::hub::protocols::prompt_gen::documenter_prompt(&doc_values, &[], true))
+        Ok(
+            crate::server::hub::protocols::compilers::documenter::prompt::documenter_prompt(
+                &doc_values,
+                &[],
+                true,
+            ),
+        )
     }
 
     /// Load context documents from agent context and step documents.
@@ -897,7 +897,6 @@ impl<'a> DocumenterExecutor<'a> {
             },
         );
     }
-
 }
 
 /// Build a structured output JSON summarising document results.
@@ -962,10 +961,7 @@ pub(crate) fn compose_write_prompt(
 ///
 /// Combines the research strategy (from strategy LLM) with optional context
 /// documents.
-pub(crate) fn compose_research_prompt(
-    research_strategy: &str,
-    context_block: &str,
-) -> String {
+pub(crate) fn compose_research_prompt(research_strategy: &str, context_block: &str) -> String {
     if context_block.is_empty() {
         research_strategy.to_string()
     } else {
