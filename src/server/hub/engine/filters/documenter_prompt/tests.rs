@@ -15,12 +15,14 @@ mod tests {
     fn make_def(name: &str, target_length: i32, description: &str) -> ProtocolDocumentDefRow {
         ProtocolDocumentDefRow {
             id: Uuid::new_v4(),
-            step_id: Uuid::new_v4(),
+            step_id: Some(Uuid::new_v4()),
             name: name.to_string(),
             description: description.to_string(),
             target_length,
             display_order: 0,
             created_at: Utc::now(),
+            protocol_id: None,
+            document_id: None,
         }
     }
 

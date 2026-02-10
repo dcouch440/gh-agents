@@ -20,7 +20,7 @@ mod tests {
         WorkflowStepRow {
             id,
             workflow_id: Uuid::new_v4(),
-            agent_id: Uuid::new_v4(),
+            agent_id: Some(Uuid::new_v4()),
             execution_mode: "single".to_string(),
             agent_execution_mode: None,
             for_each_ref: None,
@@ -41,6 +41,7 @@ mod tests {
             position_y: None,
             name: None,
             system_prompt_suffix: None,
+            visible: true,
         }
     }
 

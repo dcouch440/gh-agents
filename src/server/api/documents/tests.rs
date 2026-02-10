@@ -36,6 +36,10 @@ mod tests {
             tags: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            workflow_id: None,
+            target_length: None,
+            is_static: None,
+            source_protocol_step_id: None,
         }
     }
 

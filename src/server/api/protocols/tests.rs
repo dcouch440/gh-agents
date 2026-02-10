@@ -194,7 +194,7 @@ mod tests {
             created_steps: vec![CreatedStepResponse {
                 port_name: "frontend".to_string(),
                 step_id: uuid::Uuid::nil(),
-                agent_id: uuid::Uuid::nil(),
+                agent_id: Some(uuid::Uuid::nil()),
             }],
         };
         let json = serde_json::to_value(&resp).unwrap();

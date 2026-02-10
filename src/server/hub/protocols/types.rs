@@ -66,8 +66,8 @@ pub struct ProtocolExpansion {
 pub struct StepDefinition {
     /// Which protocol port this step fulfills.
     pub port_name: String,
-    /// Assigned agent ID (fallback agent for label-routed steps).
-    pub agent_id: Uuid,
+    /// Assigned agent ID (fallback agent for label-routed steps). None for agent-less steps.
+    pub agent_id: Option<Uuid>,
     /// Step execution mode ("single", "for_each", etc.).
     pub execution_mode: String,
     /// Optional prompt template for the step.

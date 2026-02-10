@@ -15,7 +15,7 @@ fn make_step(
     WorkflowStepRow {
         id,
         workflow_id: Uuid::new_v4(),
-        agent_id: Uuid::new_v4(),
+        agent_id: Some(Uuid::new_v4()),
         execution_mode: "single".into(),
         agent_execution_mode: None,
         for_each_ref: None,
@@ -36,6 +36,7 @@ fn make_step(
         position_y: None,
         name: None,
         system_prompt_suffix: None,
+        visible: true,
     }
 }
 
@@ -144,7 +145,7 @@ fn make_for_each_step(id: Uuid, var_name: Option<&str>, display_order: i32) -> W
     WorkflowStepRow {
         id,
         workflow_id: Uuid::new_v4(),
-        agent_id: Uuid::new_v4(),
+        agent_id: Some(Uuid::new_v4()),
         execution_mode: "for_each".into(),
         agent_execution_mode: Some("parallel".into()),
         for_each_ref: Some("items".into()),
@@ -165,6 +166,7 @@ fn make_for_each_step(id: Uuid, var_name: Option<&str>, display_order: i32) -> W
         position_y: None,
         name: None,
         system_prompt_suffix: None,
+        visible: true,
     }
 }
 
@@ -774,7 +776,7 @@ fn make_integration_step(
     WorkflowStepRow {
         id,
         workflow_id: Uuid::new_v4(),
-        agent_id,
+        agent_id: Some(agent_id),
         execution_mode: "single".into(),
         agent_execution_mode: None,
         for_each_ref: None,
@@ -795,6 +797,7 @@ fn make_integration_step(
         position_y: None,
         name: None,
         system_prompt_suffix: None,
+        visible: true,
     }
 }
 
@@ -808,7 +811,7 @@ fn make_for_each_integration_step(
     WorkflowStepRow {
         id,
         workflow_id: Uuid::new_v4(),
-        agent_id,
+        agent_id: Some(agent_id),
         execution_mode: "for_each".into(),
         agent_execution_mode: Some("parallel".into()),
         for_each_ref: Some(for_each_ref.into()),
@@ -829,6 +832,7 @@ fn make_for_each_integration_step(
         position_y: None,
         name: None,
         system_prompt_suffix: None,
+        visible: true,
     }
 }
 

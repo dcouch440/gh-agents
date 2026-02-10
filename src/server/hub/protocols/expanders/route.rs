@@ -59,7 +59,7 @@ impl ProtocolExpander for RouteExpander {
             .iter()
             .map(|port| StepDefinition {
                 port_name: port.port_name.clone(),
-                agent_id: port.agent_id,
+                agent_id: Some(port.agent_id),
                 execution_mode: "single".to_string(),
                 prompt_template: None,
                 output_schema: None,
