@@ -4,8 +4,6 @@ const OPTION_TRAY = {
   TOGGLE_BOTTOM: 16,
   PANEL_BOTTOM: 52,
   PANEL_BORDER_RADIUS: 16,
-  ANIMATION_DURATION: 0.25,
-  EASING: [0.4, 0, 0.2, 1] as const,
 } as const
 
 export { OPTION_TRAY }

@@ -11,19 +11,13 @@ import { useStore, workflowStore } from '@/stores'
 function SaveDiscardGroup() {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
-  const chromeBg = theme.palette.custom.chromeBg
   const dirty = useStore(workflowStore.store, workflowStore.selectDirty)
   const [saving, setSaving] = useState(false)
-  const [justSaved, setJustSaved] = useState(false)
 
   const handleSave = useCallback(async () => {
     setSaving(true)
     try {
       await workflowStore.saveAllDirtySteps()
-      setJustSaved(true)
-      setTimeout(() => {
-        setJustSaved(false)
-      }, 2000)
     } finally {
       setSaving(false)
     }
@@ -48,36 +42,7 @@ function SaveDiscardGroup() {
     }
   }, [dirty, saving, handleSave])
 
-  const chromeButtonSx = {
-    fontSize: 13,
-    fontWeight: 600,
-    textTransform: 'none' as const,
-    px: 2.5,
-    py: 0.75,
-    minWidth: 100,
-    color: '#fff',
-    background: isDark
-      ? `linear-gradient(135deg, ${chromeBg} 0%, ${chromeBg} 100%)`
-      : `linear-gradient(135deg, ${chromeBg}dd 0%, ${chromeBg} 100%)`,
-    boxShadow: `0 2px 8px ${chromeBg}33`,
-    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-    '&:hover': {
-      background: chromeBg,
-      boxShadow: `0 4px 14px ${chromeBg}4d`,
-      transform: 'translateY(-1px)',
-    },
-    '&:active': {
-      transform: 'translateY(0) scale(0.98)',
-      boxShadow: `0 2px 8px ${chromeBg}33`,
-    },
-    '&.Mui-disabled': {
-      background: isDark
-        ? 'linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%)'
-        : 'linear-gradient(135deg, #c0c0c0 0%, #a0a0a0 100%)',
-      color: isDark ? 'rgba(255, 255, 255, 0.35)' : 'rgba(255, 255, 255, 0.7)',
-      boxShadow: 'none',
-    },
-  }
+  const chromeBg = theme.palette.custom.chromeBg
 
   return (
     <>
@@ -86,14 +51,7 @@ function SaveDiscardGroup() {
           <MuiButton
             size="small"
             variant="outlined"
-            startIcon={
-              <UndoOutlined
-                sx={{
-                  fontSize: 16,
-                  transition: 'transform 0.2s ease',
-                }}
-              />
-            }
+            startIcon={<UndoOutlined sx={{ fontSize: 16 }} />}
             onClick={handleDiscard}
             disabled={!dirty || saving}
             sx={{
@@ -105,16 +63,9 @@ function SaveDiscardGroup() {
               px: 2,
               py: 0.75,
               minWidth: 100,
-              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
               '&:hover': {
                 borderColor: theme.palette.custom.borderHover,
                 backgroundColor: theme.palette.custom.activeTintStrong,
-                '& .MuiSvgIcon-root': {
-                  transform: 'rotate(-30deg)',
-                },
-              },
-              '&:active': {
-                transform: 'scale(0.98)',
               },
               '&.Mui-disabled': {
                 borderColor: theme.palette.divider,
@@ -128,7 +79,7 @@ function SaveDiscardGroup() {
       </Tooltip>
 
       <Tooltip
-        title={!dirty && !saving ? 'All changes saved' : justSaved ? 'Saved!' : 'Save changes (\u2318S)'}
+        title={saving ? 'Saving...' : dirty ? 'Save changes (\u2318S)' : 'All changes saved'}
         TransitionComponent={Fade}
         enterDelay={500}
         placement="top"
@@ -141,10 +92,30 @@ function SaveDiscardGroup() {
             onClick={() => {
               void handleSave()
             }}
-            disabled={!dirty || saving || justSaved}
-            sx={chromeButtonSx}
+            disabled={!dirty || saving}
+            sx={{
+              fontSize: 13,
+              fontWeight: 600,
+              textTransform: 'none',
+              px: 2.5,
+              py: 0.75,
+              minWidth: 100,
+              color: '#fff',
+              backgroundColor: chromeBg,
+              boxShadow: 'none',
+              '&:hover': {
+                backgroundColor: chromeBg,
+                opacity: 0.9,
+                boxShadow: 'none',
+              },
+              '&.Mui-disabled': {
+                backgroundColor: isDark ? '#2a2a2a' : '#b0b0b0',
+                color: isDark ? 'rgba(255, 255, 255, 0.35)' : 'rgba(255, 255, 255, 0.7)',
+                boxShadow: 'none',
+              },
+            }}
           >
-            {saving ? 'Saving...' : !dirty ? 'Saved' : justSaved ? 'Saved' : 'Save'}
+            {saving ? 'Saving' : dirty ? 'Save' : 'Saved'}
           </MuiButton>
         </span>
       </Tooltip>
