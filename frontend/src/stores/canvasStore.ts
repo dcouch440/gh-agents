@@ -29,6 +29,7 @@ type CanvasState = {
   selectedEdgeIds: ReadonlySet<string>
   hoveredStepId: string | null
   hoveredEdgeId: string | null
+  highlightedProtocolStepIds: ReadonlySet<string>
   panel: PanelKind
   panelTargetId: string | null
   interactionMode: InteractionMode
@@ -52,6 +53,7 @@ const store = logger(
     selectedEdgeIds: EMPTY_SET,
     hoveredStepId: null,
     hoveredEdgeId: null,
+    highlightedProtocolStepIds: EMPTY_SET,
     panel: 'closed',
     panelTargetId: null,
     interactionMode: 'select',
@@ -119,6 +121,12 @@ const setHoveredStep = (id: string | null): void => {
   store.setState({ hoveredStepId: id })
 }
 
+const setHighlightedProtocols = (ids: ReadonlySet<string>): void => {
+  const current = store.getState().highlightedProtocolStepIds
+  if (ids.size === current.size && [...ids].every((id) => current.has(id))) return
+  store.setState({ highlightedProtocolStepIds: ids })
+}
+
 const setHoveredEdge = (id: string | null): void => {
   store.setState({ hoveredEdgeId: id })
 }
@@ -173,6 +181,7 @@ const reset = (): void => {
     selectedEdgeIds: EMPTY_SET,
     hoveredStepId: null,
     hoveredEdgeId: null,
+    highlightedProtocolStepIds: EMPTY_SET,
     panel: 'closed',
     panelTargetId: null,
     interactionMode: 'select',
@@ -202,6 +211,7 @@ export const canvasStore = {
   clearSelection,
   setHoveredStep,
   setHoveredEdge,
+  setHighlightedProtocols,
   openPanel,
   closePanel,
   setInteractionMode,

@@ -62,4 +62,20 @@ describe('useProtocolHighlight', () => {
     })
     expect(result.current).toBe('none')
   })
+
+  it('returns select when protocol step is in highlightedProtocolStepIds', () => {
+    const { result } = renderHook(() => useProtocolHighlight('proto-1'))
+    act(() => {
+      canvasStore.setHighlightedProtocols(new Set(['proto-1']))
+    })
+    expect(result.current).toBe('select')
+  })
+
+  it('returns none when a different protocol is highlighted', () => {
+    const { result } = renderHook(() => useProtocolHighlight('proto-1'))
+    act(() => {
+      canvasStore.setHighlightedProtocols(new Set(['proto-2']))
+    })
+    expect(result.current).toBe('none')
+  })
 })
