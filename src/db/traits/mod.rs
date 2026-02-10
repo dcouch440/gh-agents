@@ -1336,7 +1336,7 @@ pub trait ProtocolRepo: Send + Sync {
     /// Get a protocol by ID.
     async fn get_protocol(&self, id: Uuid) -> Result<Option<ProtocolRow>>;
 
-    /// Get a protocol by its protocol_type (e.g., "documenter", "decomp").
+    /// Get a protocol by its protocol_type (e.g., "documenter").
     async fn get_protocol_by_type(&self, protocol_type: &str) -> Result<Option<ProtocolRow>>;
 
     /// List all protocols.

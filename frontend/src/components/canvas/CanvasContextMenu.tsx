@@ -128,9 +128,6 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
     onClose()
   }
 
-  // Filter out 'default' — it's not a user-facing protocol type
-  const visibleProtocolTypes = protocolTypes.filter((t) => t.name !== 'default')
-
   return (
     <Box
       ref={menuRef}
@@ -212,7 +209,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
               <Typography sx={{ fontSize: 12, color: 'text.primary' }}>{st.label}</Typography>
             </Box>
           ))}
-          {visibleProtocolTypes.length > 0 && (
+          {protocolTypes.length > 0 && (
             <>
               <Box sx={{ mx: 1.5, my: 0.5, borderTop: 1, borderColor: 'divider' }} />
               <Typography
@@ -228,7 +225,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
               >
                 Protocol
               </Typography>
-              {visibleProtocolTypes.map((pt) => (
+              {protocolTypes.map((pt) => (
                 <Box
                   key={pt.name}
                   onClick={(event) => {
