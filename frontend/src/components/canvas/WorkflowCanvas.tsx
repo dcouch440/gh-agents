@@ -236,9 +236,6 @@ function WorkflowCanvasInner() {
     batch(() => {
       canvasStore.selectSteps(Collections.mapBy(params.nodes, (n: { id: string }) => n.id))
       canvasStore.selectEdges(Collections.mapBy(params.edges, (e: { id: string }) => e.id))
-      if (params.nodes.length > 0 || params.edges.length > 0) {
-        layoutStore.openRightPanelIfClosed('properties')
-      }
     })
   }, [])
 
