@@ -11,12 +11,12 @@ import { ContextNodeHeader } from './ContextNodeHeader'
 import { ContextNodeContent } from './ContextNodeContent'
 import type { ContextNodeData } from './types'
 import { nodeDataEqual } from '../mappers'
-import { useProtocolHighlight } from '../useProtocolHighlight'
+import { useProtocolHighlight, CanvasNodeKind, HighlightMode } from '../useProtocolHighlight'
 
 function ContextNodeComponent({ id, data, selected }: NodeProps) {
   const theme = useTheme()
   const nodeData = data as ContextNodeData
-  const highlightMode = useProtocolHighlight(nodeData.protocolStepId)
+  const highlightMode = useProtocolHighlight(CanvasNodeKind.CONTEXT, id, nodeData.protocolStepId)
   const hasProtocol = nodeData.protocolColor !== null
   const accentColor = nodeData.protocolColor ?? GREYSCALE_ACCENT
   const [hovered, setHovered] = useState(false)
@@ -46,9 +46,9 @@ function ContextNodeComponent({ id, data, selected }: NodeProps) {
         borderColor: selected
           ? accentColor
           : hasProtocol
-            ? highlightMode === 'select'
+            ? highlightMode === HighlightMode.SELECT
               ? accentColor
-              : highlightMode === 'hover'
+              : highlightMode === HighlightMode.HOVER
                 ? `${accentColor}80`
                 : `${accentColor}50`
             : 'divider',
@@ -56,9 +56,9 @@ function ContextNodeComponent({ id, data, selected }: NodeProps) {
           ? theme.palette.mode === 'dark'
             ? `0 0 0 1px ${accentColor}40, 0 8px 32px ${accentColor}22, 0 2px 8px rgba(0, 0, 0, 0.3)`
             : `0 0 0 1px ${accentColor}30, 0 12px 40px rgba(45, 27, 14, 0.18), 0 4px 12px ${accentColor}18`
-          : highlightMode === 'select'
+          : highlightMode === HighlightMode.SELECT
             ? `0 0 0 1px ${accentColor}40, 0 8px 32px ${accentColor}22`
-            : highlightMode === 'hover'
+            : highlightMode === HighlightMode.HOVER
               ? `0 0 0 1px ${accentColor}20, 0 6px 24px ${accentColor}14`
               : theme.palette.mode === 'dark'
                 ? '0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)'

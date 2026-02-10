@@ -12,7 +12,7 @@ import type { StepNodeData } from './mappers'
 import { nodeDataEqual } from './mappers'
 import { CanvasHandle } from './CanvasHandle'
 import { CANVAS, DEFAULT_STEP_TYPE_COLOR, PROTOCOL_TYPE_COLORS, GREYSCALE_ACCENT } from './constants'
-import { useProtocolHighlight } from './useProtocolHighlight'
+import { useProtocolHighlight, CanvasNodeKind, HighlightMode } from './useProtocolHighlight'
 
 const STEP_TYPE_ICONS: Record<string, typeof SettingsOutlined> = {
   single: SmartToyOutlined,
@@ -21,10 +21,10 @@ const STEP_TYPE_ICONS: Record<string, typeof SettingsOutlined> = {
 }
 const DEFAULT_STEP_TYPE_ICON = SettingsOutlined
 
-function StepNodeComponent({ data, selected }: NodeProps) {
+function StepNodeComponent({ id, data, selected }: NodeProps) {
   const theme = useTheme()
   const nodeData = data as StepNodeData
-  const highlightMode = useProtocolHighlight(nodeData.protocolStepId)
+  const highlightMode = useProtocolHighlight(CanvasNodeKind.STEP, id, nodeData.protocolStepId)
   const hasProtocol = nodeData.protocolColor !== null
   const accentColor = nodeData.protocolColor ?? GREYSCALE_ACCENT
   const IconComponent = STEP_TYPE_ICONS[nodeData.stepType] ?? DEFAULT_STEP_TYPE_ICON
@@ -48,17 +48,17 @@ function StepNodeComponent({ data, selected }: NodeProps) {
         borderColor: selected
           ? hasProtocol ? accentColor : 'primary.main'
           : hasProtocol
-            ? highlightMode === 'select'
+            ? highlightMode === HighlightMode.SELECT
               ? accentColor
-              : highlightMode === 'hover'
+              : highlightMode === HighlightMode.HOVER
                 ? `${accentColor}80`
                 : `${accentColor}50`
             : 'divider',
         boxShadow: selected
           ? `0 8px 32px ${theme.palette.mode === 'dark' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 150, 79, 0.16)'}`
-          : highlightMode === 'select'
+          : highlightMode === HighlightMode.SELECT
             ? `0 0 0 1px ${accentColor}40, 0 8px 32px ${accentColor}22`
-            : highlightMode === 'hover'
+            : highlightMode === HighlightMode.HOVER
               ? `0 0 0 1px ${accentColor}20, 0 6px 24px ${accentColor}14`
               : `0 4px 24px ${theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.4)' : 'rgba(45, 27, 14, 0.12)'}`,
         transition: 'border-color 150ms ease, box-shadow 150ms ease, border-style 150ms ease',

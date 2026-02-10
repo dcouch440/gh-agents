@@ -4,6 +4,7 @@ import Box from '@mui/material/Box'
 import Tooltip from '@mui/material/Tooltip'
 import { useTheme } from '@mui/material/styles'
 import { CanvasHandle } from '../CanvasHandle'
+import { HighlightMode } from '../useProtocolHighlight'
 import { FORM_NODE } from './constants'
 import type { CanvasFormNodeProps } from './types'
 
@@ -15,7 +16,7 @@ function CanvasFormNodeComponent({
   onTabChange,
   selected,
   accentColor,
-  highlightMode = 'none',
+  highlightMode = HighlightMode.NONE,
   extraHandles,
 }: CanvasFormNodeProps) {
   const theme = useTheme()
@@ -39,18 +40,18 @@ function CanvasFormNodeComponent({
         border: 2,
         borderColor: selected
           ? resolvedAccent
-          : highlightMode === 'select'
+          : highlightMode === HighlightMode.SELECT
             ? resolvedAccent
-            : highlightMode === 'hover'
+            : highlightMode === HighlightMode.HOVER
               ? `${resolvedAccent}80`
               : 'divider',
         boxShadow: selected
           ? theme.palette.mode === 'dark'
             ? `0 0 0 1px ${resolvedAccent}40, 0 8px 32px ${resolvedAccent}2E, 0 2px 8px rgba(0, 0, 0, 0.3)`
             : `0 0 0 1px ${resolvedAccent}30, 0 12px 40px rgba(45, 27, 14, 0.18), 0 4px 12px ${resolvedAccent}1E`
-          : highlightMode === 'select'
+          : highlightMode === HighlightMode.SELECT
             ? `0 0 0 1px ${resolvedAccent}40, 0 8px 32px ${resolvedAccent}22`
-            : highlightMode === 'hover'
+            : highlightMode === HighlightMode.HOVER
               ? `0 0 0 1px ${resolvedAccent}20, 0 6px 24px ${resolvedAccent}14`
               : theme.palette.mode === 'dark'
                 ? '0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)'

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type SettingsOutlined from '@mui/icons-material/SettingsOutlined'
+import type { HighlightMode } from '../useProtocolHighlight'
 
 /**
  * Configuration for a single tab in the horizontal icon tab strip.
@@ -20,7 +21,7 @@ type CanvasFormNodeProps = {
   onTabChange: (tabId: string) => void
   selected: boolean
   accentColor?: string
-  highlightMode?: 'none' | 'hover' | 'select'
+  highlightMode?: HighlightMode
   extraHandles?: ReactNode
 }
 

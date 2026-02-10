@@ -325,4 +325,77 @@ describe('computeProtocolGroups', () => {
     const result = computeProtocolGroups(steps, edges, new Map())
     expect(result.get('s1')?.protocolStepId).toBe('proto')
   })
+
+  it('does not traverse through a second protocol into its neighbors', () => {
+    // Context → Documenter A → Documenter B
+    // Context should belong to A only, not B
+    const steps = [
+      makeStep('context-1', 'context'),
+      makeStep('documenter-A', 'documenter'),
+      makeStep('documenter-B', 'documenter'),
+    ]
+    const edges = [
+      { from_step_id: 'context-1', to_step_id: 'documenter-A' },
+      { from_step_id: 'documenter-A', to_step_id: 'documenter-B' },
+    ]
+    const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
+      ['documenter-A', { protocol_type: 'documenter', name: 'Doc A', portNames: [] }],
+      ['documenter-B', { protocol_type: 'documenter', name: 'Doc B', portNames: [] }],
+    ])
+    const result = computeProtocolGroups(steps, edges, protocols)
+
+    expect(result.get('context-1')?.protocolStepId).toBe('documenter-A')
+  })
+
+  it('isolates groups when two protocols share a connected component', () => {
+    // Context → Documenter A ← Step → Documenter B ← External
+    // Context belongs to A, External belongs to B, Step belongs to whichever BFS finds it first
+    const steps = [
+      makeStep('context-1', 'context'),
+      makeStep('documenter-A', 'documenter'),
+      makeStep('step-mid', 'single'),
+      makeStep('documenter-B', 'documenter'),
+      makeStep('external', 'single'),
+    ]
+    const edges = [
+      { from_step_id: 'context-1', to_step_id: 'documenter-A' },
+      { from_step_id: 'step-mid', to_step_id: 'documenter-A' },
+      { from_step_id: 'step-mid', to_step_id: 'documenter-B' },
+      { from_step_id: 'external', to_step_id: 'documenter-B' },
+    ]
+    const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
+      ['documenter-A', { protocol_type: 'documenter', name: 'Doc A', portNames: [] }],
+      ['documenter-B', { protocol_type: 'documenter', name: 'Doc B', portNames: [] }],
+    ])
+    const result = computeProtocolGroups(steps, edges, protocols)
+
+    expect(result.get('context-1')?.protocolStepId).toBe('documenter-A')
+    expect(result.get('external')?.protocolStepId).toBe('documenter-B')
+  })
+
+  it('does not let BFS from protocol B overwrite nodes belonging to protocol A', () => {
+    // Context → Documenter A → Step → Documenter B
+    // Without boundary fix, BFS from B would walk through A and claim Context
+    const steps = [
+      makeStep('context-1', 'context'),
+      makeStep('documenter-A', 'documenter'),
+      makeStep('step-between', 'single'),
+      makeStep('documenter-B', 'documenter'),
+    ]
+    const edges = [
+      { from_step_id: 'context-1', to_step_id: 'documenter-A' },
+      { from_step_id: 'documenter-A', to_step_id: 'step-between' },
+      { from_step_id: 'step-between', to_step_id: 'documenter-B' },
+    ]
+    const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
+      ['documenter-A', { protocol_type: 'documenter', name: 'Doc A', portNames: [] }],
+      ['documenter-B', { protocol_type: 'documenter', name: 'Doc B', portNames: [] }],
+    ])
+    const result = computeProtocolGroups(steps, edges, protocols)
+
+    expect(result.get('context-1')?.protocolStepId).toBe('documenter-A')
+    expect(result.get('step-between')?.protocolStepId).not.toBe(undefined)
+    expect(result.has('documenter-A')).toBe(false)
+    expect(result.has('documenter-B')).toBe(false)
+  })
 })

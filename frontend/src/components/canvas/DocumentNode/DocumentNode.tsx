@@ -9,12 +9,12 @@ import { DocumentNodeHeader } from './DocumentNodeHeader'
 import { DocumentNodeContent } from './DocumentNodeContent'
 import type { DocumentNodeData } from './types'
 import { nodeDataEqual } from '../mappers'
-import { useProtocolHighlight } from '../useProtocolHighlight'
+import { useProtocolHighlight, CanvasNodeKind, HighlightMode } from '../useProtocolHighlight'
 
-function DocumentNodeComponent({ data, selected }: NodeProps) {
+function DocumentNodeComponent({ id, data, selected }: NodeProps) {
   const theme = useTheme()
   const nodeData = data as DocumentNodeData
-  const highlightMode = useProtocolHighlight(nodeData.protocolStepId)
+  const highlightMode = useProtocolHighlight(CanvasNodeKind.DOCUMENT, id, nodeData.protocolStepId)
   const accentColor = DOCUMENT_NODE.ACCENT_COLOR
   const [hovered, setHovered] = useState(false)
 
@@ -34,9 +34,9 @@ function DocumentNodeComponent({ data, selected }: NodeProps) {
         border: 3,
         borderColor: selected
           ? accentColor
-          : highlightMode === 'select'
+          : highlightMode === HighlightMode.SELECT
             ? accentColor
-            : highlightMode === 'hover'
+            : highlightMode === HighlightMode.HOVER
               ? `${accentColor}80`
               : 'divider',
         borderStyle: 'dashed',
@@ -44,9 +44,9 @@ function DocumentNodeComponent({ data, selected }: NodeProps) {
           ? theme.palette.mode === 'dark'
             ? `0 0 0 1px ${accentColor}40, 0 8px 32px ${accentColor}22, 0 2px 8px rgba(0, 0, 0, 0.3)`
             : `0 0 0 1px ${accentColor}30, 0 12px 40px rgba(45, 27, 14, 0.18), 0 4px 12px ${accentColor}18`
-          : highlightMode === 'select'
+          : highlightMode === HighlightMode.SELECT
             ? `0 0 0 1px ${accentColor}40, 0 8px 32px ${accentColor}22`
-            : highlightMode === 'hover'
+            : highlightMode === HighlightMode.HOVER
               ? `0 0 0 1px ${accentColor}20, 0 6px 24px ${accentColor}14`
               : theme.palette.mode === 'dark'
                 ? '0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)'
