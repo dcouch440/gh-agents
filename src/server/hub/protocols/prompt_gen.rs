@@ -4,6 +4,7 @@
 //! `<task>` tags at runtime. The output schema is enforced separately via
 //! `<schema>` in the system prompt, so these provide semantic guidance rather
 //! than hard format constraints.
+// todo instigate if the prompts in here for documenter are up to par. It seems the agents went off the quality of the prompt below. They should be much more robust. Read: /Users/davidcouch/Dev/gh-agents/docs/PROMPT_RESEARCH.md
 
 use super::types::PortConfig;
 
