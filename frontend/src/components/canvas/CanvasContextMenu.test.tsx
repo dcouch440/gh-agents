@@ -3,15 +3,26 @@ import { render, screen } from '@/test/render'
 import userEvent from '@testing-library/user-event'
 import { CanvasContextMenu } from './CanvasContextMenu'
 
-const { mockCreateStep, mockDeleteStep, mockSelectSteps } = vi.hoisted(() => ({
+const { mockCreateStep, mockDeleteStep, mockLinkStepProtocol } = vi.hoisted(() => ({
   mockCreateStep: vi.fn(),
   mockDeleteStep: vi.fn(),
-  mockSelectSteps: vi.fn((): unknown[] => []),
+  mockLinkStepProtocol: vi.fn(),
 }))
+
+const mockDocumenterProtocol = {
+  id: 'proto-1',
+  name: 'Documenter',
+  protocol_type: 'documenter',
+  agent: { id: 'agent-1' },
+  output_schema: { id: 'schema-1' },
+  prompt_template: { id: 'template-1', content: 'doc prompt' },
+  ports: [{ port_name: 'output' }],
+}
+
+const mockProtocolTypes = [{ name: 'documenter' }]
 
 vi.mock('@/stores', () => ({
   useStore: vi.fn((_store: unknown, selector: unknown) => {
-    if (selector === mockSelectSteps) return mockSelectSteps()
     if (typeof selector === 'function') return (selector as (s: unknown) => unknown)(null)
     return undefined
   }),
@@ -19,17 +30,14 @@ vi.mock('@/stores', () => ({
     store: 'workflow',
     createStep: mockCreateStep,
     deleteStep: mockDeleteStep,
-    selectSteps: mockSelectSteps,
   },
   protocolStore: {
     store: 'protocol',
-    selectTypes: () => [],
-    selectAll: () => [],
-    fetchAll: vi.fn(),
-    fetchTypes: vi.fn(),
+    selectTypes: () => mockProtocolTypes,
+    selectAll: () => [mockDocumenterProtocol],
   },
   canvasStore: {
-    linkStepProtocol: vi.fn(),
+    linkStepProtocol: mockLinkStepProtocol,
   },
 }))
 
@@ -45,45 +53,57 @@ describe('CanvasContextMenu', () => {
     expect(container.firstChild).toBeNull()
   })
 
-  it('renders menu with step type options', () => {
+  it('renders Protocols section header', () => {
     render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
-    expect(screen.getByText('Add Step')).toBeInTheDocument()
-    expect(screen.getByText('LLM Step')).toBeInTheDocument()
-    expect(screen.getByText('For-Each Step')).toBeInTheDocument()
-    expect(screen.getByText('Room Step')).toBeInTheDocument()
+    expect(screen.getByText('Protocols')).toBeInTheDocument()
   })
 
-  it('calls createStep with correct execution_mode and rounded position on click', async () => {
+  it('renders Utilities section header', () => {
+    render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
+    expect(screen.getByText('Utilities')).toBeInTheDocument()
+  })
+
+  it('renders Documenter under Protocols', () => {
+    render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
+    expect(screen.getByTestId('ctx-add-documenter')).toBeInTheDocument()
+    expect(screen.getByText('Documenter')).toBeInTheDocument()
+  })
+
+  it('renders Context under Utilities', () => {
+    render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
+    expect(screen.getByTestId('ctx-add-context')).toBeInTheDocument()
+    expect(screen.getByText('Context')).toBeInTheDocument()
+  })
+
+  it('does not render old step types', () => {
+    render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
+    expect(screen.queryByText('LLM Step')).not.toBeInTheDocument()
+    expect(screen.queryByText('For-Each Step')).not.toBeInTheDocument()
+    expect(screen.queryByText('Room Step')).not.toBeInTheDocument()
+    expect(screen.queryByText('Add Step')).not.toBeInTheDocument()
+  })
+
+  it('calls onClose after adding context', async () => {
     const onClose = vi.fn()
     const user = userEvent.setup()
     render(<CanvasContextMenu position={defaultPosition} onClose={onClose} />)
 
-    await user.click(screen.getByText('LLM Step'))
-
-    expect(mockCreateStep).toHaveBeenCalledWith({
-      name: 'New LLM Step',
-      execution_mode: 'single',
-      position_x: 151,
-      position_y: 251,
-    })
-  })
-
-  it('calls onClose after adding a step', async () => {
-    const onClose = vi.fn()
-    const user = userEvent.setup()
-    render(<CanvasContextMenu position={defaultPosition} onClose={onClose} />)
-
-    await user.click(screen.getByText('For-Each Step'))
+    await user.click(screen.getByText('Context'))
     expect(onClose).toHaveBeenCalledOnce()
   })
 
-  it('creates for_each execution_mode correctly', async () => {
+  it('creates context step with rounded position', async () => {
     const user = userEvent.setup()
     render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
 
-    await user.click(screen.getByText('For-Each Step'))
+    await user.click(screen.getByText('Context'))
 
-    expect(mockCreateStep).toHaveBeenCalledWith(expect.objectContaining({ execution_mode: 'for_each' }))
+    expect(mockCreateStep).toHaveBeenCalledWith({
+      name: 'Context',
+      execution_mode: 'context',
+      position_x: 151,
+      position_y: 251,
+    })
   })
 
   describe('node context menu', () => {
@@ -94,10 +114,10 @@ describe('CanvasContextMenu', () => {
       expect(screen.getByText('Delete Step')).toBeInTheDocument()
     })
 
-    it('does not render Add Step options when nodeId is present', () => {
+    it('does not render Protocols or Utilities when nodeId is present', () => {
       render(<CanvasContextMenu position={nodePosition} onClose={vi.fn()} />)
-      expect(screen.queryByText('Add Step')).not.toBeInTheDocument()
-      expect(screen.queryByText('LLM Step')).not.toBeInTheDocument()
+      expect(screen.queryByText('Protocols')).not.toBeInTheDocument()
+      expect(screen.queryByText('Utilities')).not.toBeInTheDocument()
     })
 
     it('calls deleteStep with correct node ID on click', async () => {
