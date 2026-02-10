@@ -150,15 +150,23 @@ function WorkflowCanvasInner() {
       const hasStructuralChange = rfNodes.some((n) => !currentIds.has(n.id)) || current.some((n) => !newIds.has(n.id))
 
       if (hasStructuralChange) {
-        // Nodes added/removed — full replacement, preserve selection
+        // Nodes added/removed — full replacement, preserve selection + positions.
+        // RF owns position state (drag), so keep existing positions for nodes that
+        // were already on the canvas. Only truly new nodes get computed defaults.
         const selMap = Collections.toLookupMap(
           current,
           (n) => n.id,
           (n) => n.selected ?? false,
         )
+        const posMap = Collections.toLookupMap(
+          current,
+          (n) => n.id,
+          (n) => n.position,
+        )
         return Collections.mapBy(rfNodes, (n) => ({
           ...n,
           selected: selMap.get(n.id) ?? false,
+          position: posMap.get(n.id) ?? n.position,
         }))
       }
 
