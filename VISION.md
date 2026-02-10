@@ -40,6 +40,8 @@ There will be all different kinds of nodes that are not nessesary made to (go in
 
 - change context to workflow based item (Not step documents).
 
+- We need a way to Indentify incoming context to present to the agent if the context is filled during runtime.
+
 - We need to make is so ports have a unqique key on them.
 
 - Call order, the steps display the call order on the header. 1, ..., 5a, 5b
