@@ -258,12 +258,21 @@ function WorkflowCanvasInner() {
   }, [steps, fitView])
 
   // Selection sync: RF → canvasStore (read-only mirror for sidebar panels)
+  // Also resolve protocol group membership so selecting any group member highlights the group
   const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
+    const nodeIds = Collections.mapBy(params.nodes, (n: { id: string }) => n.id)
+    const protocolIds = new Set<string>()
+    for (const id of nodeIds) {
+      const group = protocolGroups.get(id)
+      if (group) protocolIds.add(group.protocolStepId)
+      if (protocolsByStepLookup.has(id)) protocolIds.add(id)
+    }
     batch(() => {
-      canvasStore.selectSteps(Collections.mapBy(params.nodes, (n: { id: string }) => n.id))
+      canvasStore.selectSteps(nodeIds)
       canvasStore.selectEdges(Collections.mapBy(params.edges, (e: { id: string }) => e.id))
+      canvasStore.setHighlightedProtocols(protocolIds)
     })
-  }, [])
+  }, [protocolGroups, protocolsByStepLookup])
 
   // Edge validation — context nodes are source-only, no self-loops
   const isValidConnection = useCallback(
@@ -357,9 +366,11 @@ function WorkflowCanvasInner() {
   }, [])
 
   // Protocol hover tracking for group highlighting
+  // Resolve group members to their protocol step so hovering any member highlights the group
   const onNodeMouseEnter = useCallback((_event: React.MouseEvent, node: { id: string }) => {
-    canvasStore.setHoveredStep(node.id)
-  }, [])
+    const group = protocolGroups.get(node.id)
+    canvasStore.setHoveredStep(group?.protocolStepId ?? node.id)
+  }, [protocolGroups])
 
   const onNodeMouseLeave = useCallback(() => {
     canvasStore.setHoveredStep(null)
