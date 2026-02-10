@@ -284,6 +284,14 @@ function WorkflowCanvasInner() {
         height: "100%",
         position: "relative",
         outline: "none",
+        "&::after": {
+          content: '""',
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          zIndex: 0,
+          background: `radial-gradient(ellipse at 50% 50%, transparent 60%, ${theme.palette.custom.canvasVignette})`,
+        },
         "& .react-flow": {
           "--xy-background-color": "transparent",
           "--xy-node-background-color": "transparent",
@@ -318,9 +326,17 @@ function WorkflowCanvasInner() {
         proOptions={{hideAttribution: true}}
       >
         <Background
+          id="stitch-lines"
+          variant={BackgroundVariant.Lines}
+          gap={CANVAS.GRID_SIZE}
+          lineWidth={1}
+          color={theme.palette.custom.gridLineColor}
+        />
+        <Background
+          id="stitch-dots"
           variant={BackgroundVariant.Dots}
           gap={CANVAS.GRID_SIZE}
-          size={1}
+          size={1.5}
           color={theme.palette.custom.gridDotColor}
         />
         {minimapVisible && (
