@@ -5,6 +5,7 @@
 //! parameterized by an `ExecutionStrategy`. Different strategies handle chat
 //! sessions, DAG workflow steps, and tool routing.
 
+pub mod capability_resolver;
 pub mod dag;
 pub mod engine;
 pub mod error;

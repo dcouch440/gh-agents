@@ -3422,7 +3422,7 @@ impl ToolCapabilityRepo for PgRepo {
 
     async fn get_tools_by_capability(&self, capability_key: &str) -> Result<Vec<ToolRow>> {
         let rows = sqlx::query_as::<_, ToolRow>(
-            "SELECT t.id, t.name, t.description, t.input_schema, t.created_at, t.updated_at
+            "SELECT t.id, t.name, t.display_name, t.description, t.parameters, t.created_at, t.version
              FROM tools t
              JOIN tool_capability_assignments tca ON t.id = tca.tool_id
              JOIN tool_capabilities tc ON tc.id = tca.capability_id
@@ -3430,6 +3430,21 @@ impl ToolCapabilityRepo for PgRepo {
              ORDER BY t.name",
         )
         .bind(capability_key)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn get_tools_by_capabilities(&self, capability_keys: &[String]) -> Result<Vec<ToolRow>> {
+        let rows = sqlx::query_as::<_, ToolRow>(
+            "SELECT DISTINCT t.id, t.name, t.display_name, t.description, t.parameters, t.created_at, t.version
+             FROM tools t
+             JOIN tool_capability_assignments tca ON t.id = tca.tool_id
+             JOIN tool_capabilities tc ON tc.id = tca.capability_id
+             WHERE tc.capability_key = ANY($1)
+             ORDER BY t.name",
+        )
+        .bind(capability_keys)
         .fetch_all(&self.pool)
         .await?;
         Ok(rows)
