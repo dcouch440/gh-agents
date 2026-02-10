@@ -30,9 +30,9 @@ use crate::types::{
 
 use super::construct_agent_defaults;
 use super::engine::filters::{
-    AgentGuidanceFilter, DebateVerificationFilter, ExecutionFilter, FewShotFilter, FilterContext,
-    PartialJsonRecoveryFilter, ReasoningTraceFilter, SchemaEnhancementFilter,
-    SchemaValidationRetryFilter,
+    AgentGuidanceFilter, DebateVerificationFilter, DocumenterPromptFilter, ExecutionFilter,
+    FewShotFilter, FilterContext, PartialJsonRecoveryFilter, ReasoningTraceFilter,
+    SchemaEnhancementFilter, SchemaValidationRetryFilter,
 };
 use super::engine::ExecutionEngine;
 use super::error::HubError;
@@ -1755,6 +1755,13 @@ async fn run_step_via_engine(
 
     if let Some(ae_repo) = state.agent_execution_repo() {
         filters.push(Arc::new(FewShotFilter::new(ae_repo)));
+    }
+
+    // Documenter: inject document definitions into system prompt
+    if step.execution_mode == "documenter" {
+        filters.push(Arc::new(DocumenterPromptFilter::new(
+            state.repos().workflows.clone(),
+        )));
     }
 
     if let Some(schema_val) = output_schema_value {

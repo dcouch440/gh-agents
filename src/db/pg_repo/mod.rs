@@ -15,13 +15,13 @@ use crate::db::traits::{
 use crate::db::{
     AgentExecutionRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow,
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
-    DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow, ProtocolPortRow,
-    ProtocolRow, ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow,
-    RoomTranscriptEntry, RouterRequestRow, SessionRow, StepDocumentRow, StepInputRow,
-    StepOutputRow, StepRoutingRuleRow, SystemConfigRow, TokenLedgerRow, ToolCapabilityRow,
-    ToolRouterModeRow, ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow,
-    WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepProtocolRow,
-    WorkflowStepRow,
+    DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow,
+    ProtocolDocumentDefRow, ProtocolPortRow, ProtocolRow, ResultRow, RoomExecutionOutputRow,
+    RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry, RouterRequestRow, SessionRow,
+    StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow,
+    TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow, ToolRow,
+    WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
+    WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -427,7 +427,7 @@ impl ServerRepo for PgRepo {
 
     async fn list_persisted_agents(&self, user_id: UserId) -> Result<Vec<AgentRow>> {
         let rows = sqlx::query_as::<_, PgAgentRow>(
-            "SELECT id, user_id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, router_id, output_schema_id, version FROM agents WHERE user_id = $1 OR user_id IS NULL",
+            "SELECT id, user_id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, router_id, output_schema_id, version, default_reasoning_trace FROM agents WHERE user_id = $1 OR user_id IS NULL",
         )
         .bind(user_id.0)
         .fetch_all(&self.pool)
@@ -438,7 +438,7 @@ impl ServerRepo for PgRepo {
 
     async fn get_persisted_agent(&self, agent_id: Uuid) -> Result<Option<AgentRow>> {
         let row = sqlx::query_as::<_, PgAgentRow>(
-            "SELECT id, user_id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, router_id, output_schema_id, version FROM agents WHERE id = $1",
+            "SELECT id, user_id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, router_id, output_schema_id, version, default_reasoning_trace FROM agents WHERE id = $1",
         )
         .bind(agent_id)
         .fetch_optional(&self.pool)
@@ -450,8 +450,8 @@ impl ServerRepo for PgRepo {
     async fn upsert_agent(&self, agent: AgentRow) -> Result<()> {
         sqlx::query(
             r#"
-            INSERT INTO agents (id, user_id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, output_schema_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            INSERT INTO agents (id, user_id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, output_schema_id, default_reasoning_trace)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
                 system_prompt = EXCLUDED.system_prompt,
@@ -463,6 +463,7 @@ impl ServerRepo for PgRepo {
                 status = EXCLUDED.status,
                 router_mode = EXCLUDED.router_mode,
                 output_schema_id = EXCLUDED.output_schema_id,
+                default_reasoning_trace = EXCLUDED.default_reasoning_trace,
                 version = agents.version + 1
         "#,
         )
@@ -478,6 +479,7 @@ impl ServerRepo for PgRepo {
         .bind(&agent.status)
         .bind(agent.router_mode)
         .bind(agent.output_schema_id)
+        .bind(agent.default_reasoning_trace)
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -787,6 +789,7 @@ struct PgAgentRow {
     router_id: Option<Uuid>,
     output_schema_id: Option<Uuid>,
     version: i32,
+    default_reasoning_trace: Option<bool>,
 }
 
 fn agent_row_from_pg(r: PgAgentRow) -> AgentRow {
@@ -806,6 +809,7 @@ fn agent_row_from_pg(r: PgAgentRow) -> AgentRow {
         router_id: r.router_id,
         output_schema_id: r.output_schema_id,
         version: r.version,
+        default_reasoning_trace: r.default_reasoning_trace,
     }
 }
 
@@ -1555,6 +1559,63 @@ impl WorkflowRepo for PgRepo {
         sqlx::query("DELETE FROM step_documents WHERE step_id = $1 AND document_id = $2")
             .bind(step_id)
             .bind(document_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    // --- Protocol Document Definitions ---
+
+    async fn list_document_defs(&self, step_id: Uuid) -> Result<Vec<ProtocolDocumentDefRow>> {
+        let rows = sqlx::query_as::<_, ProtocolDocumentDefRow>(
+            "SELECT id, step_id, name, description, target_length, display_order, created_at FROM protocol_document_defs WHERE step_id = $1 ORDER BY display_order, created_at",
+        )
+        .bind(step_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn create_document_def(
+        &self,
+        def: ProtocolDocumentDefRow,
+    ) -> Result<ProtocolDocumentDefRow> {
+        let row = sqlx::query_as::<_, ProtocolDocumentDefRow>(
+            "INSERT INTO protocol_document_defs (id, step_id, name, description, target_length, display_order) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, step_id, name, description, target_length, display_order, created_at",
+        )
+        .bind(def.id)
+        .bind(def.step_id)
+        .bind(&def.name)
+        .bind(&def.description)
+        .bind(def.target_length)
+        .bind(def.display_order)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn update_document_def(
+        &self,
+        id: Uuid,
+        name: String,
+        description: String,
+        target_length: i32,
+    ) -> Result<ProtocolDocumentDefRow> {
+        let row = sqlx::query_as::<_, ProtocolDocumentDefRow>(
+            "UPDATE protocol_document_defs SET name = $2, description = $3, target_length = $4 WHERE id = $1 RETURNING id, step_id, name, description, target_length, display_order, created_at",
+        )
+        .bind(id)
+        .bind(&name)
+        .bind(&description)
+        .bind(target_length)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn delete_document_def(&self, id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM protocol_document_defs WHERE id = $1")
+            .bind(id)
             .execute(&self.pool)
             .await?;
         Ok(())
@@ -3615,6 +3676,17 @@ impl ProtocolRepo for PgRepo {
              FROM protocols WHERE id = $1",
         )
         .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn get_protocol_by_type(&self, protocol_type: &str) -> Result<Option<ProtocolRow>> {
+        let row = sqlx::query_as::<_, ProtocolRow>(
+            "SELECT id, name, description, protocol_type, config, version, created_at, updated_at, agent_id, output_schema_id, prompt_template_id
+             FROM protocols WHERE protocol_type = $1 LIMIT 1",
+        )
+        .bind(protocol_type)
         .fetch_optional(&self.pool)
         .await?;
         Ok(row)

@@ -332,6 +332,10 @@ pub mod routes {
     pub const STEP_OUTPUTS: &str = "/workflows/:wid/steps/:sid/outputs";
     pub const STEP_OUTPUT: &str = "/workflows/:wid/steps/:sid/outputs/:pid";
 
+    // Document Definitions
+    pub const STEP_DOCUMENT_DEFS: &str = "/workflows/:wid/steps/:sid/document-defs";
+    pub const STEP_DOCUMENT_DEF: &str = "/workflows/:wid/steps/:sid/document-defs/:did";
+
     // Routing Rules
     pub const STEP_ROUTING_RULES: &str = "/workflows/:wid/steps/:sid/routing-rules";
     pub const STEP_ROUTING_RULE: &str = "/workflows/:wid/steps/:sid/routing-rules/:rid";

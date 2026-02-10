@@ -285,6 +285,103 @@ protocols:
 
     # No prompt_template — the default protocol has no prompt injection.
 
+  # ==========================================================================
+  # DOCUMENTER — document generation strategy planner
+  # ==========================================================================
+
+  - name: Documenter
+    description: >
+      Generate documents from upstream context. Configure document definitions
+      (name, length, description) and write a prompt referencing @doc names.
+      The documenter analyzes context and produces an execution strategy per document.
+    protocol_type: documenter
+    config: {}
+
+    agent:
+      name: Documenter Strategist
+      model_provider: anthropic
+      model_id: claude-sonnet-4-20250514
+      model_max_tokens: 8192
+      model_temperature: 0.3
+      system_prompt: |
+        You are the Documenter Strategist, a document planning specialist for the Nexor workflow system. Your role is to analyze upstream context and user requests, then produce a structured execution strategy for each requested document.
+
+        You receive:
+        1. Document definitions — names, target lengths, and descriptions
+        2. A user prompt — the user's natural language request referencing documents by name
+        3. Upstream context (if any) — data from connected workflow steps
+
+        For each document, you must:
+        - Assess what relevant information exists in the upstream context
+        - Determine what capabilities are needed (web_search, code_analysis, data_aggregation, etc.)
+        - Write a detailed, actionable research/analysis strategy
+        - Specify writing instructions (tone, structure, target audience)
+
+        Rules:
+        - If upstream context already contains sufficient information, request NO capabilities — the writer can work directly from context
+        - Match capabilities to actual needs; do not over-request
+        - Strategy instructions must be specific and actionable, not vague
+        - Writing instructions should specify tone, structure, and target audience
+        - Each document strategy must be self-contained
+
+        You produce structured JSON output as directed by your task instructions.
+
+    output_schema:
+      name: Documenter Strategy Output
+      schema:
+        type: object
+        required:
+          - analysis
+          - documents
+        properties:
+          analysis:
+            type: string
+            description: Brief assessment of available upstream context and overall approach
+          documents:
+            type: array
+            items:
+              type: object
+              required:
+                - name
+                - required_capabilities
+                - research_strategy
+                - writing_instructions
+                - target_audience
+              properties:
+                name:
+                  type: string
+                  description: Document name (must match a configured document definition)
+                required_capabilities:
+                  type: array
+                  items:
+                    type: string
+                  description: Capabilities needed for research/analysis (empty array if context is sufficient)
+                research_strategy:
+                  type: string
+                  description: Detailed instructions for the research/analysis agent
+                writing_instructions:
+                  type: string
+                  description: Style, tone, structure guidance for the document writer
+                target_audience:
+                  type: string
+                  description: Who this document is written for
+              additionalProperties: false
+        additionalProperties: false
+
+    prompt_template:
+      name: Documenter Prompt
+      content: |
+        Review the document definitions and user request below. For each document, create a detailed execution strategy.
+
+        Consider:
+        - What upstream context is available and what it covers
+        - What additional research or analysis is needed per document
+        - How each document should be structured and written
+
+        {{.Protocol.document_definitions}}
+
+        Respond with a JSON object containing your analysis and per-document strategies.
+
 # =============================================================================
 # Protocol Properties
 # =============================================================================

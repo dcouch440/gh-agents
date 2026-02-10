@@ -295,6 +295,30 @@ async fn test_variable_resolution() {
         ) -> Result<Option<crate::db::WorkflowStepRow>> {
             unimplemented!()
         }
+        async fn list_document_defs(
+            &self,
+            _: Uuid,
+        ) -> Result<Vec<crate::db::ProtocolDocumentDefRow>> {
+            unimplemented!()
+        }
+        async fn create_document_def(
+            &self,
+            _: crate::db::ProtocolDocumentDefRow,
+        ) -> Result<crate::db::ProtocolDocumentDefRow> {
+            unimplemented!()
+        }
+        async fn update_document_def(
+            &self,
+            _: Uuid,
+            _: String,
+            _: String,
+            _: i32,
+        ) -> Result<crate::db::ProtocolDocumentDefRow> {
+            unimplemented!()
+        }
+        async fn delete_document_def(&self, _: Uuid) -> Result<()> {
+            unimplemented!()
+        }
     }
 
     // Create test data

@@ -157,6 +157,10 @@ export const API = {
     `/workflows/${wid}/steps/${sid}/documents`,
   STEP_DOCUMENT: (wid: string, sid: string, did: string) =>
     `/workflows/${wid}/steps/${sid}/documents/${did}`,
+  STEP_DOCUMENT_DEFS: (wid: string, sid: string) =>
+    `/workflows/${wid}/steps/${sid}/document-defs`,
+  STEP_DOCUMENT_DEF: (wid: string, sid: string, did: string) =>
+    `/workflows/${wid}/steps/${sid}/document-defs/${did}`,
   WORKFLOW_RUN: (id: string) => `/workflows/${id}/run`,
   WORKFLOW_EXECUTIONS: (id: string) => `/workflows/${id}/executions`,
 

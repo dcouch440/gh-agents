@@ -16,6 +16,7 @@ fn test_agent_response() -> AgentResponse {
         output_schema_id: None,
         router_id: None,
         version: 1,
+        default_reasoning_trace: false,
     }
 }
 
@@ -83,6 +84,7 @@ mod ownership_tests {
             router_id: None,
             output_schema_id: None,
             version: 1,
+            default_reasoning_trace: None,
         }
     }
 
@@ -161,6 +163,7 @@ mod ownership_tests {
             router_id: None,
             output_schema_id: None,
             version: 1,
+            default_reasoning_trace: None,
         };
 
         let mut repo = MockServerRepo::new();

@@ -760,6 +760,7 @@ pub async fn save_session_agent(
         router_id: None,
         output_schema_id: None,
         version: 1,
+        default_reasoning_trace: None,
     };
 
     state.repo().upsert_agent(agent).await?;

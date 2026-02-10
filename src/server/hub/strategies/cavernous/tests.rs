@@ -52,6 +52,7 @@ fn make_agent() -> AgentRow {
         router_id: None,
         output_schema_id: None,
         version: 1,
+        default_reasoning_trace: None,
     }
 }
 

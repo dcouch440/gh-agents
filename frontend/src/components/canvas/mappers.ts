@@ -79,8 +79,8 @@ const toRFNodes = (
             label: step.name ?? "Documenter Protocol",
             documentNames: [],
             upstreamStepNames,
-            promptValue: "",
-            documents: [],
+            promptValue: step.prompt_template,
+            documents: [], // Document defs loaded dynamically when node is selected
             modelId: agent?.model_id ?? null,
             agentName: agent?.name ?? null,
           }
