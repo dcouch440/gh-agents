@@ -25,6 +25,7 @@ How do we solve this? Well, I think we should creaete a some detailed tickets to
 - Typing into the text box with language that describes what you want, automatically converts to ordered visually appealing markdown. Each agent gets context from the incoming context and converts the prompt to make more sense to the agent who is receiving it. This could be a dedicated feature actually, maybe the documenter does not even need the context himself. Maybe it is rather, a single layer of the prompt creator themsealves writing the prompt for the documentor. This would open the documentor up to searching for agents and specialist for the job. So the new flow could be: "Context resolver, "documentor" who is the agent searcher, agent action with context, documents created. We need to ensure that the 
 
 ## Next ideas
+- We need to make is so ports have a unqique key on them.
 - Call order, the steps display the call order on the header. 1, ..., 5a, 5b
 
 - Output schema examples on the steps.
