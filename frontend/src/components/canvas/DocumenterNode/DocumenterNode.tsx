@@ -18,7 +18,7 @@ import { PromptTab } from './tabs/PromptTab'
 import { DocumentsTab } from './tabs/DocumentsTab'
 import { InputsTab } from './tabs/InputsTab'
 import { SettingsTab } from './tabs/SettingsTab'
-import type { HighlightMode } from '../useProtocolHighlight'
+import { HighlightMode } from '../useProtocolHighlight'
 
 type DocumenterNodeData = {
   label: string
@@ -84,8 +84,8 @@ function DocumenterNodeComponent({ id, data, selected }: NodeProps) {
 
   // Protocol self-hover: when this protocol is hovered, show a subtle glow
   const selfHighlight = useStore(canvasStore.store, (s): HighlightMode => {
-    if (s.hoveredStepId === id) return 'hover'
-    return 'none'
+    if (s.hoveredStepId === id) return HighlightMode.HOVER
+    return HighlightMode.NONE
   })
 
   const tabs: CanvasFormTab[] = [

@@ -98,9 +98,8 @@ const computeProtocolGroups = (
       for (const neighbor of neighbors) {
         if (visited.has(neighbor)) continue
         visited.add(neighbor)
-        if (!protocolStepIds.has(neighbor)) {
-          result.set(neighbor, { protocolColor: color, protocolStepId: protocolId })
-        }
+        if (protocolStepIds.has(neighbor)) continue
+        result.set(neighbor, { protocolColor: color, protocolStepId: protocolId })
         queue.push(neighbor)
       }
     }
