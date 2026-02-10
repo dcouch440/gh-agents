@@ -1645,6 +1645,15 @@ impl WorkflowRepo for PgRepo {
         Ok(row)
     }
 
+    async fn link_document_to_def(&self, def_id: Uuid, document_id: Uuid) -> Result<()> {
+        sqlx::query("UPDATE protocol_document_defs SET document_id = $1 WHERE id = $2")
+            .bind(document_id)
+            .bind(def_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     async fn delete_document_def(&self, id: Uuid) -> Result<()> {
         sqlx::query("DELETE FROM protocol_document_defs WHERE id = $1")
             .bind(id)

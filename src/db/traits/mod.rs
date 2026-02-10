@@ -548,6 +548,9 @@ pub trait WorkflowRepo: Send + Sync {
         target_length: i32,
     ) -> Result<ProtocolDocumentDefRow>;
 
+    /// Link a document entity to a document definition.
+    async fn link_document_to_def(&self, def_id: Uuid, document_id: Uuid) -> Result<()>;
+
     /// Delete a document definition.
     async fn delete_document_def(&self, id: Uuid) -> Result<()>;
 

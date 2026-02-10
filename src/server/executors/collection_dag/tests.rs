@@ -316,6 +316,9 @@ async fn test_variable_resolution() {
         ) -> Result<crate::db::ProtocolDocumentDefRow> {
             unimplemented!()
         }
+        async fn link_document_to_def(&self, _: Uuid, _: Uuid) -> Result<()> {
+            unimplemented!()
+        }
         async fn delete_document_def(&self, _: Uuid) -> Result<()> {
             unimplemented!()
         }

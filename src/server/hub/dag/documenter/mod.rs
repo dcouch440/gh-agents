@@ -69,11 +69,13 @@ pub(crate) struct DocumenterExecutor<'a> {
 
 /// Internal result from a single research or write task.
 struct PhaseTaskResult {
+    exec_id: Uuid,
     document_name: String,
     content: String,
     input_tokens: i64,
     output_tokens: i64,
     cost_usd: f32,
+    model: String,
     error: Option<String>,
 }
 
@@ -490,13 +492,10 @@ impl<'a> DocumenterExecutor<'a> {
             let execution_context = self.ctx.execution_context.clone();
             let model = model_id.to_string();
             let doc_name = plan.document_name.clone();
-            let research_prompt = if context_block.is_empty() {
-                plan.research_strategy.clone()
-            } else {
-                format!("{}\n\n{}", plan.research_strategy, context_block)
-            };
+            let research_prompt =
+                compose_research_prompt(&plan.research_strategy, &context_block);
             let capabilities = plan.required_capabilities.clone();
-            let _exec_id = exec_row.id;
+            let exec_id = exec_row.id;
 
             join_set.spawn(async move {
                 // Resolve capabilities to tools
@@ -543,20 +542,24 @@ impl<'a> DocumenterExecutor<'a> {
                             exec_result.output_tokens as i64,
                         );
                         PhaseTaskResult {
+                            exec_id,
                             document_name: doc_name,
                             content: exec_result.content,
                             input_tokens: exec_result.input_tokens as i64,
                             output_tokens: exec_result.output_tokens as i64,
                             cost_usd: cost,
+                            model,
                             error: None,
                         }
                     }
                     Err(e) => PhaseTaskResult {
+                        exec_id,
                         document_name: doc_name,
                         content: String::new(),
                         input_tokens: 0,
                         output_tokens: 0,
                         cost_usd: 0.0,
+                        model,
                         error: Some(format!("{}", e)),
                     },
                 }
@@ -576,8 +579,17 @@ impl<'a> DocumenterExecutor<'a> {
                     } else {
                         "failed"
                     };
-                    // We can't easily map back to exec_id here without storing it,
-                    // so we broadcast progress only
+                    self.update_execution_row(
+                        task_result.exec_id,
+                        status,
+                        Some(&task_result.content),
+                        task_result.error.as_deref(),
+                        task_result.input_tokens,
+                        task_result.output_tokens,
+                        task_result.cost_usd,
+                        Some(&task_result.model),
+                    )
+                    .await;
                     self.broadcast_phase_progress(
                         "research",
                         completed_count,
@@ -656,17 +668,8 @@ impl<'a> DocumenterExecutor<'a> {
             let context_block = build_context_block(context_ids, context_docs);
 
             // Create execution row
-            let input_prompt = if context_block.is_empty() {
-                format!(
-                    "{}\n\n---\n\nResearch findings:\n{}",
-                    writer_prompt_prefix, research.content
-                )
-            } else {
-                format!(
-                    "{}\n\n{}\n\n---\n\nResearch findings:\n{}",
-                    writer_prompt_prefix, context_block, research.content
-                )
-            };
+            let input_prompt =
+                compose_write_prompt(writer_prompt_prefix, &context_block, &research.content);
             let exec_row = match self
                 .create_execution_row("write", doc_def_id, Some(&input_prompt))
                 .await
@@ -685,8 +688,11 @@ impl<'a> DocumenterExecutor<'a> {
             let model = model_id.to_string();
             let doc_name = research.document_name.clone();
             let prompt = input_prompt;
-            let _exec_id = exec_row.id;
+            let exec_id = exec_row.id;
             let doc_id = document_id;
+            let def_id = doc_def_id;
+            let workflow_id = self.step.workflow_id;
+            let step_id = self.step.id;
 
             join_set.spawn(async move {
                 let system_prompt = format!(
@@ -715,35 +721,75 @@ impl<'a> DocumenterExecutor<'a> {
                             exec_result.output_tokens as i64,
                         );
 
-                        // Update document content if we have a document_id
-                        if let Some(did) = doc_id {
-                            if let Some(doc_repo) = state.doc_repo() {
-                                let _ = doc_repo
-                                    .update_document(
-                                        did,
-                                        Some(exec_result.content.clone()),
-                                        None,
-                                        None,
-                                    )
-                                    .await;
+                        // Persist document content
+                        match determine_persist_action(doc_id, def_id) {
+                            DocumentPersistAction::Update(did) => {
+                                if let Some(doc_repo) = state.doc_repo() {
+                                    let _ = doc_repo
+                                        .update_document(
+                                            did,
+                                            Some(exec_result.content.clone()),
+                                            None,
+                                            None,
+                                        )
+                                        .await;
+                                }
                             }
+                            DocumentPersistAction::CreateAndLink(did) => {
+                                if let Some(doc_repo) = state.doc_repo() {
+                                    match doc_repo
+                                        .create_workflow_document(
+                                            user_id,
+                                            doc_name.clone(),
+                                            workflow_id,
+                                            None,
+                                            Some(step_id),
+                                        )
+                                        .await
+                                    {
+                                        Ok(doc) => {
+                                            let _ = state
+                                                .repos()
+                                                .workflows
+                                                .link_document_to_def(did, doc.id)
+                                                .await;
+                                            let _ = doc_repo
+                                                .update_document(
+                                                    doc.id,
+                                                    Some(exec_result.content.clone()),
+                                                    None,
+                                                    None,
+                                                )
+                                                .await;
+                                        }
+                                        Err(e) => {
+                                            warn!(doc = %doc_name, "Failed to create document: {}", e);
+                                        }
+                                    }
+                                }
+                            }
+                            DocumentPersistAction::Skip => {}
                         }
 
                         PhaseTaskResult {
+                            exec_id,
                             document_name: doc_name,
                             content: exec_result.content,
                             input_tokens: exec_result.input_tokens as i64,
                             output_tokens: exec_result.output_tokens as i64,
                             cost_usd: cost,
+                            model,
                             error: None,
                         }
                     }
                     Err(e) => PhaseTaskResult {
+                        exec_id,
                         document_name: doc_name,
                         content: String::new(),
                         input_tokens: 0,
                         output_tokens: 0,
                         cost_usd: 0.0,
+                        model,
                         error: Some(format!("{}", e)),
                     },
                 }
@@ -758,6 +804,22 @@ impl<'a> DocumenterExecutor<'a> {
             completed_count += 1;
             match join_result {
                 Ok(task_result) => {
+                    let status = if task_result.error.is_none() {
+                        "complete"
+                    } else {
+                        "failed"
+                    };
+                    self.update_execution_row(
+                        task_result.exec_id,
+                        status,
+                        Some(&task_result.content),
+                        task_result.error.as_deref(),
+                        task_result.input_tokens,
+                        task_result.output_tokens,
+                        task_result.cost_usd,
+                        Some(&task_result.model),
+                    )
+                    .await;
                     self.broadcast_phase_progress(
                         "write",
                         completed_count,
@@ -974,4 +1036,70 @@ impl<'a> DocumenterExecutor<'a> {
 /// Used by tests and the executor to create the final `StepOutput`.
 pub fn build_documents_output(statuses: Vec<JsonValue>) -> JsonValue {
     serde_json::json!({ "documents": statuses })
+}
+
+/// What the write phase should do with the generated document content.
+#[derive(Debug, PartialEq)]
+pub(crate) enum DocumentPersistAction {
+    /// A document already exists — update it in place.
+    Update(Uuid),
+    /// No document exists but a def is available — create a new document and link it.
+    CreateAndLink(Uuid),
+    /// Neither document nor def available — content cannot be persisted.
+    Skip,
+}
+
+/// Determine how to persist a write phase result based on the current state
+/// of the document definition.
+///
+/// - `document_id` — the existing linked document (from `protocol_document_defs.document_id`)
+/// - `def_id` — the document definition row id (for linking a newly created document)
+pub(crate) fn determine_persist_action(
+    document_id: Option<Uuid>,
+    def_id: Option<Uuid>,
+) -> DocumentPersistAction {
+    if let Some(did) = document_id {
+        DocumentPersistAction::Update(did)
+    } else if let Some(did) = def_id {
+        DocumentPersistAction::CreateAndLink(did)
+    } else {
+        DocumentPersistAction::Skip
+    }
+}
+
+/// Compose the user prompt for a write phase LLM call.
+///
+/// Combines the writer instructions (from strategy LLM), optional context
+/// documents, and research findings into a single prompt.
+pub(crate) fn compose_write_prompt(
+    writer_prompt: &str,
+    context_block: &str,
+    research_content: &str,
+) -> String {
+    if context_block.is_empty() {
+        format!(
+            "{}\n\n---\n\nResearch findings:\n{}",
+            writer_prompt, research_content
+        )
+    } else {
+        format!(
+            "{}\n\n{}\n\n---\n\nResearch findings:\n{}",
+            writer_prompt, context_block, research_content
+        )
+    }
+}
+
+/// Compose the user prompt for a research phase LLM call.
+///
+/// Combines the research strategy (from strategy LLM) with optional context
+/// documents.
+pub(crate) fn compose_research_prompt(
+    research_strategy: &str,
+    context_block: &str,
+) -> String {
+    if context_block.is_empty() {
+        research_strategy.to_string()
+    } else {
+        format!("{}\n\n{}", research_strategy, context_block)
+    }
 }
