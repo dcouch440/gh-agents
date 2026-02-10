@@ -32,7 +32,7 @@ function StepEdgeComponent(props: EdgeProps) {
         path={edgePath}
         style={{
           stroke: selected ? theme.palette.primary.main : theme.palette.text.secondary,
-          strokeWidth: 2,
+          strokeWidth: 2.5,
           opacity: selected ? 0.8 : 0.4,
           transition: 'stroke 150ms ease, opacity 150ms ease',
         }}
