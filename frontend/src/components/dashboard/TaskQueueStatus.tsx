@@ -1,5 +1,6 @@
 import { Box, Typography } from '@mui/material'
 import type { Task, TaskStatus, TaskPriority } from '@/types'
+import { Collections } from '@/utils/collections'
 
 type TaskQueueStatusProps = {
   tasks: Task[]
@@ -60,9 +61,10 @@ const countByStatus = (tasks: Task[]): Record<TaskStatus, number> => {
 
 function TaskQueueStatus({ tasks }: TaskQueueStatusProps) {
   const counts = countByStatus(tasks)
-  const active = tasks
-    .filter((t) => t.status !== 'completed')
-    .sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority])
+  const active = Collections.sortedCopy(
+    tasks.filter((t) => t.status !== 'completed'),
+    (a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority],
+  )
 
   return (
     <Box sx={{ fontSize: '0.75rem', lineHeight: 1.4 }}>

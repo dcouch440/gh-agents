@@ -1,5 +1,6 @@
 import type {Node, Edge} from "@xyflow/react";
 import type {WorkflowStep, WorkflowStepEdge} from "@/types/workflow";
+import {Collections} from "@/utils/collections";
 import {FORM_NODE} from "./CanvasFormNode";
 import {DOCUMENT_NODE} from "./DocumentNode";
 import type {DocumentNodeData} from "./DocumentNode";
@@ -39,12 +40,7 @@ const toRFNodes = (
   steps: WorkflowStep[],
   lookups: StepNodeLookups,
 ): Node[] => {
-  const upstreamMap = new Map<string, string[]>();
-  for (const edge of lookups.edges) {
-    const list = upstreamMap.get(edge.to_step_id) ?? [];
-    list.push(edge.from_step_id);
-    upstreamMap.set(edge.to_step_id, list);
-  }
+  const edgesByTarget = Collections.groupBy(lookups.edges, (e) => e.to_step_id);
 
   return steps.map((step): Node => {
     // Entry / document nodes
@@ -75,9 +71,9 @@ const toRFNodes = (
     const schema = step.output_schema_id
       ? lookups.outputSchemas.get(step.output_schema_id)
       : undefined;
-    const upstreamIds = upstreamMap.get(step.id) ?? [];
-    const upstreamStepNames = upstreamIds.map(
-      (id) => lookups.stepNames.get(id) ?? "Unknown Step",
+    const upstreamEdges = edgesByTarget.get(step.id) ?? [];
+    const upstreamStepNames = upstreamEdges.map(
+      (e) => lookups.stepNames.get(e.from_step_id) ?? "Unknown Step",
     );
     const toolNames = step.agent_id
       ? (lookups.toolsByAgent.get(step.agent_id) ?? [])

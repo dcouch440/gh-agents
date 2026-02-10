@@ -1,7 +1,7 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { CommandPaletteContext } from '@/contexts/CommandPaletteContext';
-import type { CommandItem } from '@/contexts/CommandPaletteContext';
 import { COMMAND_PALETTE } from '@/constants';
+import { Collections } from '@/utils/collections';
 
 const fuzzyMatch = (text: string, query: string): boolean => {
   const lower = text.toLowerCase();
@@ -42,11 +42,12 @@ const useCommandPalette = () => {
 
   const filteredCommands = useMemo(() => {
     if (!query) {
-      const recentSet = new Set(recentIds);
-      const recent = recentIds
-        .map((id) => commands.find((c) => c.id === id))
-        .filter((c): c is CommandItem => c !== undefined)
-        .map((c) => ({ ...c, group: 'recent' as const }));
+      const commandMap = Collections.indexById(commands)
+      const recent = Collections.filterMap(recentIds, (id) => {
+        const cmd = commandMap.get(id)
+        return cmd ? { ...cmd, group: 'recent' as const } : null
+      })
+      const recentSet = Collections.toSetBy(recent, (c) => c.id)
       const rest = commands.filter((c) => !recentSet.has(c.id));
       return [...recent, ...rest].slice(0, COMMAND_PALETTE.MAX_RESULTS);
     }

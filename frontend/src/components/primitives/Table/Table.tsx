@@ -20,6 +20,7 @@ import {TablePagination} from './TablePagination'
 import {TableColumnMenu} from './TableColumnMenu'
 import {TableExportButton} from './TableExportButton'
 import {getDensityPadding, exportToCSV, exportToJSON} from './utils'
+import {Collections} from '@/utils/collections'
 import type {TableProps, TableColumn} from './types'
 
 function Table<T>({
@@ -136,13 +137,10 @@ function Table<T>({
 
   // Sync selection with parent component
   if (enableSelection && onSelectionChange) {
-    const currentSelection = Array.from(selectedRowKeys)
-    const isDifferent =
-      currentSelection.length !== selectedRows.length ||
-      currentSelection.some((key) => !selectedRows.includes(key))
+    const isDifferent = !Collections.setMatchesArray(selectedRowKeys, selectedRows)
 
     if (isDifferent) {
-      onSelectionChange(currentSelection)
+      onSelectionChange(Array.from(selectedRowKeys))
     }
   }
 
