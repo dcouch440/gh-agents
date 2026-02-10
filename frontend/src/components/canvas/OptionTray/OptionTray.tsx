@@ -8,29 +8,34 @@ import { SaveDiscardGroup } from './SaveDiscardGroup'
 function OptionTray() {
   const dirty = useStore(workflowStore.store, workflowStore.selectDirty)
   const activeWorkflowId = useStore(workflowStore.store, workflowStore.selectActiveWorkflowId)
-  const [manualOpen, setManualOpen] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [lockedOpen, setLockedOpen] = useState(false)
   const [prevDirty, setPrevDirty] = useState(dirty)
 
-  // Auto-open tray when dirty, auto-dismiss when dirty clears
+  // Auto-open tray when dirty, auto-close only if user hasn't locked it open
   if (prevDirty !== dirty) {
     setPrevDirty(dirty)
-    if (dirty) setManualOpen(true)
-    else setManualOpen(false)
+    if (dirty) setOpen(true)
+    else if (!lockedOpen) setOpen(false)
   }
 
   const handleToggle = useCallback(() => {
-    setManualOpen((prev) => !prev)
+    setOpen((prev) => {
+      const next = !prev
+      setLockedOpen(next)
+      return next
+    })
   }, [])
 
   if (!activeWorkflowId) return null
 
   return (
     <>
-      <TrayPanel visible={manualOpen} dirty={dirty}>
+      <TrayPanel visible={open} dirty={dirty}>
         <SaveDiscardGroup />
         <RunButton />
       </TrayPanel>
-      <TrayToggle open={manualOpen} onClick={handleToggle} />
+      <TrayToggle open={open} onClick={handleToggle} />
     </>
   )
 }

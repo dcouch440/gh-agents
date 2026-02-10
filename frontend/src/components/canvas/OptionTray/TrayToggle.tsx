@@ -35,26 +35,18 @@ function TrayToggle({ open, onClick }: TrayToggleProps) {
           border: '1px solid',
           borderColor: theme.palette.custom.floatingPanelBorder,
           boxShadow: isDark
-            ? '0 4px 12px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05)'
+            ? '0 4px 12px rgba(0, 0, 0, 0.4)'
             : '0 4px 12px rgba(45, 27, 14, 0.08)',
-          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          '&:hover': {
-            borderColor: theme.palette.custom.borderHover,
-            transform: 'translateY(-1px)',
-            boxShadow: isDark
-              ? '0 6px 16px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08)'
-              : '0 6px 16px rgba(45, 27, 14, 0.12)',
-          },
         }}
       >
         <KeyboardArrowUp
           sx={{
             fontSize: 18,
             color: 'text.secondary',
-            transition: 'transform 200ms cubic-bezier(0.4, 0, 0.2, 1)',
+            transition: 'transform 200ms ease',
             transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
           }}
         />
