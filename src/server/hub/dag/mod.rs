@@ -539,6 +539,47 @@ pub async fn execute_workflow_via_engine(
             continue;
         }
 
+        // Documenter steps — phased pipeline, no agent needed
+        if step.execution_mode == "documenter" {
+            let step_result = execute_documenter_step(
+                engine,
+                state,
+                ctx,
+                step,
+                steps,
+                edges,
+                &mut var_outputs,
+                &mut completed,
+                &mut completed_envelopes,
+                &port_meta,
+                &mut total_input_tokens,
+                &mut total_output_tokens,
+                &mut total_cost_usd,
+                cancel,
+            )
+            .await;
+
+            if let Err(ref e) = step_result {
+                if !matches!(e, HubError::AwaitingUser { .. }) {
+                    broadcast_workflow_event(
+                        state,
+                        ctx,
+                        workflow_id,
+                        WorkflowEventKind::StepFailed {
+                            step_id: step.id,
+                            step_name: step
+                                .output_variable_name
+                                .clone()
+                                .unwrap_or_else(|| step.id.to_string()),
+                            error: format!("{}", e),
+                        },
+                    );
+                }
+            }
+            step_result?;
+            continue;
+        }
+
         // Load agent
         let agent_id = step.agent_id.ok_or_else(|| {
             HubError::Internal(anyhow::anyhow!(
@@ -1020,6 +1061,164 @@ async fn execute_single_step(
             output_tokens: Some(out_tok as u64),
             duration_ms: Some(step_start.elapsed().as_millis() as u64),
         },
+    );
+
+    Ok(())
+}
+
+// ============================================================================
+// Documenter Step Execution
+// ============================================================================
+
+/// Execute a documenter step through the phased pipeline (strategy → research → write).
+///
+/// Unlike other step types, documenter steps have no agent. They dispatch to
+/// `DocumenterExecutor` which runs three LLM phases internally, recording each
+/// as a `protocol_execution` row and broadcasting WebSocket progress events.
+async fn execute_documenter_step(
+    engine: &ExecutionEngine,
+    state: &AppState,
+    ctx: &WorkflowExecutionContext,
+    step: &WorkflowStepRow,
+    _steps: &[WorkflowStepRow],
+    edges: &[WorkflowStepEdgeRow],
+    var_outputs: &mut HashMap<String, JsonValue>,
+    completed: &mut HashMap<Uuid, StepOutput>,
+    completed_envelopes: &mut HashMap<Uuid, StepExecutionEnvelope>,
+    port_meta: &PortMetadata,
+    total_input_tokens: &mut i64,
+    total_output_tokens: &mut i64,
+    total_cost_usd: &mut f32,
+    cancel: Option<&CancellationToken>,
+) -> Result<(), HubError> {
+    let step_start = std::time::Instant::now();
+
+    // Broadcast: step started (no agent)
+    broadcast_workflow_event(
+        state,
+        ctx,
+        step.workflow_id,
+        WorkflowEventKind::StepStarted {
+            step_id: step.id,
+            step_name: step
+                .output_variable_name
+                .clone()
+                .unwrap_or_else(|| step.id.to_string()),
+            agent_id: None,
+            execution_id: None,
+        },
+    );
+
+    // Resolve port inputs
+    let port_inputs = if let Some(inputs) = port_meta.step_inputs.get(&step.id) {
+        match resolve_port_inputs(
+            step.id,
+            edges,
+            inputs,
+            &port_meta.step_outputs,
+            completed_envelopes,
+        ) {
+            Ok(resolved) => {
+                debug!(step_id = %step.id, ports = resolved.len(), "Resolved documenter port inputs");
+                Some(resolved)
+            }
+            Err(e) => {
+                warn!(
+                    "Port resolution failed for documenter step {}: {}",
+                    step.id, e
+                );
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    // Compose prompt
+    let prompt = compose_prompt(
+        step,
+        state.prompt_template_repo().as_deref(),
+        state.doc_repo().as_deref(),
+        state.workflow_repo().as_deref(),
+        &**state.repo(),
+        var_outputs,
+        &ctx.prior_outputs,
+        None,
+        port_inputs.as_ref(),
+    )
+    .await;
+
+    // Execute the documenter pipeline
+    let executor = documenter::DocumenterExecutor::new(engine, state, ctx, step, &prompt, cancel);
+    let result = executor.execute(&port_meta.step_outputs).await?;
+
+    // Accumulate tokens
+    *total_input_tokens += result.input_tokens;
+    *total_output_tokens += result.output_tokens;
+    *total_cost_usd += result.cost_usd;
+
+    // Store output in variable map
+    if !result.output.variable_name.is_empty() {
+        if let Some(ref structured) = result.output.structured_output {
+            var_outputs.insert(result.output.variable_name.clone(), structured.clone());
+        }
+    }
+
+    // Store envelope for downstream port resolution (agent-less)
+    let envelope = StepExecutionEnvelope {
+        status: if result.output.structured_output.is_some() {
+            ExecutionStatus::Success
+        } else {
+            ExecutionStatus::Error
+        },
+        data: result.output.structured_output.clone(),
+        metadata: ExecutionMetadata {
+            execution_id: step.id,
+            execution_time_ms: step_start.elapsed().as_millis() as u64,
+            tokens_in: Some(result.input_tokens as i32),
+            tokens_out: Some(result.output_tokens as i32),
+            cost_usd: Some(result.cost_usd as f64),
+            model: None,
+            agent_id: None,
+            iteration_index: None,
+            iteration_label: None,
+            routing_label: None,
+            selected_routing_document_id: None,
+            upstream_agent_id: None,
+            upstream_routing_label: None,
+            room_session_id: None,
+            room_id: None,
+            total_rounds: None,
+        },
+        error: None,
+    };
+    completed_envelopes.insert(step.id, envelope);
+    completed.insert(step.id, result.output);
+
+    // Broadcast: step completed (no agent)
+    broadcast_workflow_event(
+        state,
+        ctx,
+        step.workflow_id,
+        WorkflowEventKind::StepCompleted {
+            step_id: step.id,
+            step_name: step
+                .output_variable_name
+                .clone()
+                .unwrap_or_else(|| step.id.to_string()),
+            agent_id: None,
+            output: None,
+            input_tokens: Some(result.input_tokens as u64),
+            output_tokens: Some(result.output_tokens as u64),
+            duration_ms: Some(step_start.elapsed().as_millis() as u64),
+        },
+    );
+
+    info!(
+        step_id = %step.id,
+        input_tokens = result.input_tokens,
+        output_tokens = result.output_tokens,
+        "Documenter step completed"
     );
 
     Ok(())
