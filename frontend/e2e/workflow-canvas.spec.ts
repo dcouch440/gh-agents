@@ -123,3 +123,70 @@ test.describe('Workflow Canvas — Node Deletion', () => {
     await expect(page.locator('.react-flow__node')).toHaveCount(0, { timeout: 5000 })
   })
 })
+
+test.describe('Workflow Canvas — Node Selection', () => {
+  let stepAId: string
+  let stepBId: string
+
+  test.beforeEach(async ({ page, request }) => {
+    const workflow = await createTestWorkflow(request, token)
+    workflowId = workflow.id
+
+    // Pre-create two steps at well-separated positions
+    const stepA = await createTestStep(request, token, workflowId, {
+      name: 'Step A',
+      execution_mode: 'single',
+      position_x: 200,
+      position_y: 200,
+    })
+    const stepB = await createTestStep(request, token, workflowId, {
+      name: 'Step B',
+      execution_mode: 'single',
+      position_x: 600,
+      position_y: 200,
+    })
+    stepAId = stepA.id
+    stepBId = stepB.id
+
+    await setupAuth(page, token)
+    await page.goto(`/workflows/${workflowId}`)
+    await waitForCanvas(page)
+
+    // Wait for both nodes to render
+    await expect(page.locator('.react-flow__node')).toHaveCount(2, { timeout: 5000 })
+  })
+
+  test.afterEach(async ({ request }) => {
+    await deleteTestWorkflow(request, token, workflowId)
+  })
+
+  test('clicking between nodes toggles selection correctly', async ({ page }) => {
+    const nodeA = page.locator(`.react-flow__node[data-id="${stepAId}"]`)
+    const nodeB = page.locator(`.react-flow__node[data-id="${stepBId}"]`)
+
+    // Click node A — should be selected, B should not
+    await nodeA.click()
+    await expect(nodeA).toHaveClass(/selected/)
+    await expect(nodeB).not.toHaveClass(/selected/)
+
+    // Click node B — should be selected, A should not
+    await nodeB.click()
+    await expect(nodeB).toHaveClass(/selected/)
+    await expect(nodeA).not.toHaveClass(/selected/)
+
+    // Click node A again
+    await nodeA.click()
+    await expect(nodeA).toHaveClass(/selected/)
+    await expect(nodeB).not.toHaveClass(/selected/)
+
+    // Click node B again
+    await nodeB.click()
+    await expect(nodeB).toHaveClass(/selected/)
+    await expect(nodeA).not.toHaveClass(/selected/)
+
+    // Click node A one more time (5 total switches)
+    await nodeA.click()
+    await expect(nodeA).toHaveClass(/selected/)
+    await expect(nodeB).not.toHaveClass(/selected/)
+  })
+})
