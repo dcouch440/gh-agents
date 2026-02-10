@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Handle, Position } from '@xyflow/react'
+import { Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
@@ -10,6 +10,7 @@ import ForumOutlined from '@mui/icons-material/ForumOutlined'
 import SettingsOutlined from '@mui/icons-material/SettingsOutlined'
 import type { StepNodeData } from './mappers'
 import { nodeDataEqual } from './mappers'
+import { CanvasHandle } from './CanvasHandle'
 import { CANVAS, DEFAULT_STEP_TYPE_COLOR, PROTOCOL_TYPE_COLORS, GREYSCALE_ACCENT } from './constants'
 import { useProtocolHighlight } from './useProtocolHighlight'
 
@@ -324,26 +325,8 @@ function StepNodeComponent({ data, selected }: NodeProps) {
       )}
 
       {/* Handles */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        style={{
-          width: CANVAS.HANDLE_SIZE,
-          height: CANVAS.HANDLE_SIZE,
-          background: accentColor,
-          border: `2px solid ${theme.palette.custom.bgHeader}`,
-        }}
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        style={{
-          width: CANVAS.HANDLE_SIZE,
-          height: CANVAS.HANDLE_SIZE,
-          background: accentColor,
-          border: `2px solid ${theme.palette.custom.bgHeader}`,
-        }}
-      />
+      <CanvasHandle type="target" position={Position.Left} color={accentColor} />
+      <CanvasHandle type="source" position={Position.Right} color={accentColor} />
     </Box>
   )
 }

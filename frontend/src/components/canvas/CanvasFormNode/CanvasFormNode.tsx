@@ -1,9 +1,9 @@
 import { memo, useState } from 'react'
-import { Handle, Position, NodeResizer } from '@xyflow/react'
+import { Position, NodeResizer } from '@xyflow/react'
 import Box from '@mui/material/Box'
 import Tooltip from '@mui/material/Tooltip'
 import { useTheme } from '@mui/material/styles'
-import { CANVAS } from '../constants'
+import { CanvasHandle } from '../CanvasHandle'
 import { FORM_NODE } from './constants'
 import type { CanvasFormNodeProps } from './types'
 
@@ -181,26 +181,8 @@ function CanvasFormNodeComponent({
       </Box>
 
       {/* Handles */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        style={{
-          width: CANVAS.HANDLE_SIZE,
-          height: CANVAS.HANDLE_SIZE,
-          background: resolvedAccent,
-          border: `2px solid ${theme.palette.custom.bgHeader}`,
-        }}
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        style={{
-          width: CANVAS.HANDLE_SIZE,
-          height: CANVAS.HANDLE_SIZE,
-          background: resolvedAccent,
-          border: `2px solid ${theme.palette.custom.bgHeader}`,
-        }}
-      />
+      <CanvasHandle type="target" position={Position.Left} color={resolvedAccent} />
+      <CanvasHandle type="source" position={Position.Right} color={resolvedAccent} />
       {extraHandles}
     </Box>
   )

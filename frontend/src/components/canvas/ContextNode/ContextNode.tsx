@@ -1,10 +1,11 @@
 import { memo, useState, useCallback } from 'react'
-import { Handle, Position, NodeResizer } from '@xyflow/react'
+import { Position, NodeResizer } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
 import { workflowStore } from '@/stores'
-import { CANVAS, GREYSCALE_ACCENT } from '../constants'
+import { CanvasHandle } from '../CanvasHandle'
+import { GREYSCALE_ACCENT } from '../constants'
 import { CONTEXT_NODE } from './constants'
 import { ContextNodeHeader } from './ContextNodeHeader'
 import { ContextNodeContent } from './ContextNodeContent'
@@ -109,16 +110,7 @@ function ContextNodeComponent({ id, data, selected }: NodeProps) {
       </Box>
 
       {/* Source handle only — context nodes are source-only, no target handle */}
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        style={{
-          width: CANVAS.HANDLE_SIZE,
-          height: CANVAS.HANDLE_SIZE,
-          background: accentColor,
-          border: `2px solid ${theme.palette.custom.bgHeader}`,
-        }}
-      />
+      <CanvasHandle type="source" position={Position.Bottom} color={accentColor} />
     </Box>
   )
 }
