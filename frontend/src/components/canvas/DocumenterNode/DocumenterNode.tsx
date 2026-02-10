@@ -4,6 +4,7 @@ import EditOutlined from '@mui/icons-material/EditOutlined'
 import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
 import InputOutlined from '@mui/icons-material/InputOutlined'
 import TimelineOutlined from '@mui/icons-material/TimelineOutlined'
+import { workflowStore } from '@/stores'
 import { CanvasFormNode } from '../CanvasFormNode'
 import type { CanvasFormTab } from '../CanvasFormNode'
 import { PROTOCOL_TYPE_COLORS } from '../constants'
@@ -24,7 +25,7 @@ type DocumenterNodeData = {
   agentName: string | null
 }
 
-function DocumenterNodeComponent({ data, selected }: NodeProps) {
+function DocumenterNodeComponent({ id, data, selected }: NodeProps) {
   const [activeTabId, setActiveTabId] = useState('prompt')
   const nodeData = data as DocumenterNodeData
 
@@ -32,9 +33,9 @@ function DocumenterNodeComponent({ data, selected }: NodeProps) {
   const documents = nodeData.documents
   const upstreamStepNames = nodeData.upstreamStepNames
 
-  const handlePromptChange = useCallback((_value: string) => {
-    // TODO: Wire to workflowStore.patchStepLocal(stepId, { prompt_template: value })
-  }, [])
+  const handlePromptChange = useCallback((value: string) => {
+    workflowStore.patchStepLocal(id, { prompt_template: value })
+  }, [id])
 
   const handleAddDocument = useCallback(() => {
     // TODO: Wire to document def creation dialog

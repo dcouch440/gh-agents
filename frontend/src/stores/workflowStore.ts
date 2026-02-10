@@ -202,9 +202,15 @@ const updateStep = async (stepId: string, body: UpdateStepRequest): Promise<Work
   const wid = getActiveId()
   if (!wid) return null
   const step = await api.workflows.updateStep(wid, stepId, body)
-  store.setState((s) => ({
-    steps: nmSet(s.steps, stepId, step),
-  }))
+  store.setState((s) => {
+    if (s.dirtyStepIds.has(stepId)) {
+      const local = nmGet(s.steps, stepId)
+      if (local) {
+        return { steps: nmSet(s.steps, stepId, { ...step, ...local }) }
+      }
+    }
+    return { steps: nmSet(s.steps, stepId, step) }
+  })
   return step
 }
 
