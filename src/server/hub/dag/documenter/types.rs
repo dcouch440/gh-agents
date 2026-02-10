@@ -3,7 +3,7 @@
 //! These types are deserialized from the Phase 1 structured JSON response
 //! and drive the Research (Phase 2) and Write (Phase 3) stages.
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 
 /// Parsed output from the strategy LLM (Phase 1).
 ///
@@ -23,6 +23,8 @@ pub struct DocumentPlan {
     /// Must match a document definition name from the protocol config.
     pub document_name: String,
     /// Step-by-step plan for gathering the information needed.
+    /// Accepts either a plain string or an array of strings (joined with newlines).
+    #[serde(deserialize_with = "string_or_vec")]
     pub research_strategy: String,
     /// Capability keys the researcher needs (e.g. `["web_search", "code_analysis"]`).
     pub required_capabilities: Vec<String>,
@@ -32,6 +34,25 @@ pub struct DocumentPlan {
     /// Empty means no routing was specified (all available context documents are used).
     #[serde(default)]
     pub context_document_ids: Vec<String>,
+}
+
+/// Deserialize a value that may be a string or an array of strings.
+/// If an array, the elements are joined with newlines.
+fn string_or_vec<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrVec {
+        String(String),
+        Vec(Vec<String>),
+    }
+
+    match StringOrVec::deserialize(deserializer)? {
+        StringOrVec::String(s) => Ok(s),
+        StringOrVec::Vec(v) => Ok(v.join("\n")),
+    }
 }
 
 #[cfg(test)]
@@ -120,6 +141,33 @@ mod tests {
 
         let output: StrategyOutput = serde_json::from_str(json).unwrap();
         assert!(output.document_plans[0].context_document_ids.is_empty());
+    }
+
+    #[test]
+    fn parse_research_strategy_as_array() {
+        let json = r#"{
+            "document_plans": [
+                {
+                    "document_name": "Overview",
+                    "research_strategy": [
+                        "Analyze the codebase structure",
+                        "Review existing documentation",
+                        "Identify key patterns"
+                    ],
+                    "required_capabilities": [],
+                    "writer_prompt": "Write an overview."
+                }
+            ]
+        }"#;
+
+        let output: StrategyOutput = serde_json::from_str(json).unwrap();
+        assert!(output.document_plans[0]
+            .research_strategy
+            .contains("Analyze the codebase structure"));
+        assert!(output.document_plans[0]
+            .research_strategy
+            .contains("Identify key patterns"));
+        assert!(output.document_plans[0].research_strategy.contains('\n'));
     }
 
     #[test]

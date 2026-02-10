@@ -4,9 +4,9 @@
 mod tests {
     use crate::db::{StepInputRow, StepOutputRow, WorkflowStepEdgeRow, WorkflowStepRow};
     use crate::server::hub::dag::utils::{
-        extract_for_each_label, find_entry_steps, get_child_steps, get_parent_steps,
-        resolve_dot_path, resolve_for_each_array, resolve_port_inputs, resolve_variables,
-        topological_sort, DagPaused,
+        collect_upstream_context_data, extract_for_each_label, find_entry_steps, get_child_steps,
+        get_parent_steps, resolve_dot_path, resolve_for_each_array, resolve_port_inputs,
+        resolve_variables, topological_sort, DagPaused,
     };
     use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
     use std::collections::HashMap;
@@ -1720,6 +1720,116 @@ mod tests {
         // The port data is inlined in the task, not in a separate context block
         assert!(!result.contains("<context>"));
         assert!(!result.contains("<input name=\"task_data\">"));
+    }
+
+    // =========================================================================
+    // collect_upstream_context_data Tests
+    // =========================================================================
+
+    #[test]
+    fn collect_upstream_context_bare_edge_from_context_step() {
+        let ctx_id = Uuid::new_v4();
+        let doc_id = Uuid::new_v4();
+
+        let mut ctx_step = make_step(ctx_id, 0);
+        ctx_step.execution_mode = "context".to_string();
+        ctx_step.name = Some("Project Spec".to_string());
+
+        let doc_step = make_step(doc_id, 1);
+        let edges = vec![make_edge(ctx_id, doc_id)];
+        let steps = vec![ctx_step, doc_step];
+
+        let mut envelopes = HashMap::new();
+        envelopes.insert(
+            ctx_id,
+            make_envelope(serde_json::json!("This is the context content")),
+        );
+
+        let result = collect_upstream_context_data(doc_id, &edges, &steps, &envelopes);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].0, "Project Spec");
+        assert_eq!(result[0].1, "This is the context content");
+    }
+
+    #[test]
+    fn collect_upstream_context_skips_non_context_steps() {
+        let agent_id = Uuid::new_v4();
+        let doc_id = Uuid::new_v4();
+
+        // Source step is "single" mode, not "context"
+        let agent_step = make_step(agent_id, 0);
+        let doc_step = make_step(doc_id, 1);
+        let edges = vec![make_edge(agent_id, doc_id)];
+        let steps = vec![agent_step, doc_step];
+
+        let mut envelopes = HashMap::new();
+        envelopes.insert(
+            agent_id,
+            make_envelope(serde_json::json!("Agent output")),
+        );
+
+        let result = collect_upstream_context_data(doc_id, &edges, &steps, &envelopes);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn collect_upstream_context_skips_port_wired_edges() {
+        let ctx_id = Uuid::new_v4();
+        let doc_id = Uuid::new_v4();
+
+        let mut ctx_step = make_step(ctx_id, 0);
+        ctx_step.execution_mode = "context".to_string();
+        ctx_step.name = Some("Spec".to_string());
+
+        let doc_step = make_step(doc_id, 1);
+        // Port-wired edge — should be skipped by collect_upstream_context_data
+        let edges = vec![make_port_edge(ctx_id, doc_id, "output", "input")];
+        let steps = vec![ctx_step, doc_step];
+
+        let mut envelopes = HashMap::new();
+        envelopes.insert(
+            ctx_id,
+            make_envelope(serde_json::json!("Port data")),
+        );
+
+        let result = collect_upstream_context_data(doc_id, &edges, &steps, &envelopes);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn collect_upstream_context_multiple_parents() {
+        let ctx1_id = Uuid::new_v4();
+        let ctx2_id = Uuid::new_v4();
+        let doc_id = Uuid::new_v4();
+
+        let mut ctx1 = make_step(ctx1_id, 0);
+        ctx1.execution_mode = "context".to_string();
+        ctx1.name = Some("Design Spec".to_string());
+
+        let mut ctx2 = make_step(ctx2_id, 1);
+        ctx2.execution_mode = "context".to_string();
+        ctx2.name = Some("API Reference".to_string());
+
+        let doc_step = make_step(doc_id, 2);
+        let edges = vec![make_edge(ctx1_id, doc_id), make_edge(ctx2_id, doc_id)];
+        let steps = vec![ctx1, ctx2, doc_step];
+
+        let mut envelopes = HashMap::new();
+        envelopes.insert(
+            ctx1_id,
+            make_envelope(serde_json::json!("Design content here")),
+        );
+        envelopes.insert(
+            ctx2_id,
+            make_envelope(serde_json::json!("API reference content")),
+        );
+
+        let result = collect_upstream_context_data(doc_id, &edges, &steps, &envelopes);
+        assert_eq!(result.len(), 2);
+
+        let titles: Vec<&str> = result.iter().map(|(t, _)| t.as_str()).collect();
+        assert!(titles.contains(&"Design Spec"));
+        assert!(titles.contains(&"API Reference"));
     }
 
     #[tokio::test]

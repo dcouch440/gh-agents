@@ -2,7 +2,9 @@
 mod tests {
     use serde_json::json;
 
-    use crate::server::hub::dag::documenter::{build_context_block, build_documents_output, ContextDocument};
+    use crate::server::hub::dag::documenter::{
+        build_context_block, build_documents_output, extract_json_content, ContextDocument,
+    };
     use crate::server::hub::dag::utils::StepOutput;
     use crate::server::ws::events::WorkflowEventKind;
 
@@ -156,5 +158,109 @@ mod tests {
         assert!(result.contains("<document_abcd1234 title=\"Test Doc\">"));
         assert!(result.contains("Test content"));
         assert!(result.contains("</document_abcd1234>"));
+    }
+
+    // ── extract_json_content tests ──────────────────────────────────────
+
+    #[test]
+    fn parse_strategy_output_raw_json() {
+        let raw = r#"{"documents": [{"name": "API Ref"}]}"#;
+        let result = extract_json_content(raw);
+        assert_eq!(result, raw);
+    }
+
+    #[test]
+    fn parse_strategy_output_with_json_fence() {
+        let fenced = r#"```json
+{"documents": [{"name": "API Ref"}]}
+```"#;
+        let result = extract_json_content(fenced);
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(parsed["documents"][0]["name"], "API Ref");
+    }
+
+    #[test]
+    fn parse_strategy_output_with_bare_fence() {
+        let fenced = r#"```
+{"documents": [{"name": "Guide"}]}
+```"#;
+        let result = extract_json_content(fenced);
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(parsed["documents"][0]["name"], "Guide");
+    }
+
+    #[test]
+    fn parse_strategy_output_with_surrounding_text() {
+        let messy = r#"Here is the plan:
+{"documents": [{"name": "Overview"}]}
+That's it."#;
+        let result = extract_json_content(messy);
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(parsed["documents"][0]["name"], "Overview");
+    }
+
+    #[test]
+    fn parse_strategy_output_with_json_fence_and_preamble() {
+        let content = r#"I'll create a documentation plan:
+
+```json
+{"documents": [{"name": "Architecture", "capabilities": ["web_search"]}]}
+```
+
+This plan covers the main topics."#;
+        let result = extract_json_content(content);
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(parsed["documents"][0]["name"], "Architecture");
+    }
+
+    // ── build_context_block with upstream context docs ──────────────────
+
+    #[test]
+    fn build_context_block_with_upstream_docs() {
+        let upstream_docs = vec![
+            ContextDocument {
+                short_id: "up000001".into(),
+                title: "Project Requirements".into(),
+                content: "The system must support real-time notifications.".into(),
+            },
+            ContextDocument {
+                short_id: "up000002".into(),
+                title: "API Constraints".into(),
+                content: "Rate limit: 100 req/s per user.".into(),
+            },
+        ];
+
+        // No id filtering — should include all upstream docs
+        let result = build_context_block(&[], &upstream_docs);
+        assert!(result.contains("<context>"));
+        assert!(result.contains("<document_up000001"));
+        assert!(result.contains("Project Requirements"));
+        assert!(result.contains("real-time notifications"));
+        assert!(result.contains("<document_up000002"));
+        assert!(result.contains("API Constraints"));
+        assert!(result.contains("Rate limit"));
+    }
+
+    #[test]
+    fn build_context_block_filters_upstream_by_id() {
+        let docs = vec![
+            ContextDocument {
+                short_id: "up000001".into(),
+                title: "Included".into(),
+                content: "This should appear.".into(),
+            },
+            ContextDocument {
+                short_id: "up000002".into(),
+                title: "Excluded".into(),
+                content: "This should not appear.".into(),
+            },
+        ];
+
+        let ids = vec!["up000001".into()];
+        let result = build_context_block(&ids, &docs);
+        assert!(result.contains("<document_up000001"));
+        assert!(result.contains("Included"));
+        assert!(!result.contains("<document_up000002"));
+        assert!(!result.contains("Excluded"));
     }
 }

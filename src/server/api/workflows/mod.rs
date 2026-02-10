@@ -603,11 +603,17 @@ pub async fn update_workflow_step(
     if existing.workflow_id != p.wid {
         return Err(AppError::not_found("Step"));
     }
+    let execution_mode = req.execution_mode.unwrap_or(existing.execution_mode);
+    let agent_id = if execution_mode == "context" {
+        None
+    } else {
+        req.agent_id.or(existing.agent_id)
+    };
     let step = crate::db::WorkflowStepRow {
         id: p.sid,
         workflow_id: p.wid,
-        agent_id: req.agent_id.or(existing.agent_id),
-        execution_mode: req.execution_mode.unwrap_or(existing.execution_mode),
+        agent_id,
+        execution_mode,
         agent_execution_mode: existing.agent_execution_mode, // Preserve existing value
         for_each_ref: req.for_each_ref.or(existing.for_each_ref),
         prompt_template_id: req.prompt_template_id.or(existing.prompt_template_id),
