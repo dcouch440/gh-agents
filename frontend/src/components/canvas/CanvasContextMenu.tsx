@@ -52,7 +52,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
     const createAndLink = async () => {
       const step = await workflowStore.createStep({
         name: `New ${label}`,
-        execution_mode: 'single',
+        execution_mode: 'documenter',
         agent_id: protocol?.agent?.id,
         output_schema_id: protocol?.output_schema?.id,
         prompt_template_id: protocol?.prompt_template?.id,
