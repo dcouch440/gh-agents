@@ -1,9 +1,7 @@
-type DocumentNodeMode = 'entry' | 'document'
-
 type DocumentNodeData = {
   label: string
-  mode: DocumentNodeMode
+  documenterName: string
   content: string
 }
 
-export type { DocumentNodeData, DocumentNodeMode }
+export type { DocumentNodeData }

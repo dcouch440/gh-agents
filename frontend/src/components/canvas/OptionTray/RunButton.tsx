@@ -22,7 +22,7 @@ function RunButton() {
     if (!activeWorkflowId || runStatus === 'running') return
     setRunStatus('running')
     try {
-      const entryStep = steps.find((s) => s.execution_mode === 'entry')
+      const entryStep = steps.find((s) => s.execution_mode === 'context')
       const input = entryStep?.prompt_template.trim()
       const body = input ? { initial_input: input } : undefined
       await api.workflows.run(activeWorkflowId, body)

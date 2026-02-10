@@ -2,6 +2,8 @@ import type { Node, Edge } from '@xyflow/react'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 import { Collections } from '@/utils/collections'
 import { FORM_NODE } from './CanvasFormNode'
+import { CONTEXT_NODE } from './ContextNode'
+import type { ContextNodeData } from './ContextNode'
 import { DOCUMENT_NODE } from './DocumentNode'
 import type { DocumentNodeData } from './DocumentNode'
 
@@ -27,6 +29,11 @@ type StepNodeData = {
   protocolPortNames: string[]
 }
 
+type DocumentDefInfo = {
+  id: string
+  name: string
+}
+
 type StepNodeLookups = {
   agents: ReadonlyMap<string, { name: string; model_id: string }>
   outputSchemas: ReadonlyMap<string, { name: string }>
@@ -34,30 +41,28 @@ type StepNodeLookups = {
   edges: ReadonlyArray<{ from_step_id: string; to_step_id: string }>
   toolsByAgent: ReadonlyMap<string, string[]>
   protocolsByStep: ReadonlyMap<string, ProtocolStepInfo>
+  documentDefsByStep: Readonly<Record<string, ReadonlyArray<DocumentDefInfo>>>
 }
 
 const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
   const edgesByTarget = Collections.groupBy(lookups.edges, (e) => e.to_step_id)
 
-  return steps.map((step): Node => {
-    // Entry / document nodes
-    const isDocumentNode = step.execution_mode === 'entry' || step.execution_mode === 'document'
-    if (isDocumentNode) {
-      const mode = step.execution_mode === 'entry' ? 'entry' : 'document'
-      const docData: DocumentNodeData = {
-        label: step.name ?? (mode === 'entry' ? 'Port of Entry' : 'Document'),
-        mode,
+  const stepNodes = steps.map((step): Node => {
+    // Context nodes
+    if (step.execution_mode === 'context') {
+      const contextData: ContextNodeData = {
+        label: step.name ?? 'Context',
         content: step.prompt_template,
       }
       return {
         id: step.id,
-        type: 'documentNode',
+        type: 'contextNode',
         position: { x: step.position_x ?? 0, y: step.position_y ?? 0 },
         style: {
-          width: DOCUMENT_NODE.DEFAULT_WIDTH,
-          height: DOCUMENT_NODE.DEFAULT_HEIGHT,
+          width: CONTEXT_NODE.DEFAULT_WIDTH,
+          height: CONTEXT_NODE.DEFAULT_HEIGHT,
         },
-        data: docData,
+        data: contextData,
       }
     }
 
@@ -111,6 +116,40 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
       },
     }
   })
+
+  // Auto-generate document nodes for each documenter's document defs
+  const documentNodes: Node[] = []
+  for (const step of steps) {
+    const isDocumenter = step.execution_mode === 'documenter' || lookups.protocolsByStep.get(step.id)?.protocol_type === 'documenter'
+    if (!isDocumenter) continue
+
+    const defs = lookups.documentDefsByStep[step.id] ?? []
+    for (let i = 0; i < defs.length; i++) {
+      const def = defs[i]!
+      const docData: DocumentNodeData = {
+        label: def.name,
+        documenterName: step.name ?? 'Documenter',
+        content: '',
+      }
+      documentNodes.push({
+        id: `doc-artifact-${def.id}`,
+        type: 'documentNode',
+        position: {
+          x: (step.position_x ?? 0) + DOCUMENT_NODE.DEFAULT_WIDTH + 60,
+          y: (step.position_y ?? 0) + i * (DOCUMENT_NODE.DEFAULT_HEIGHT + 16),
+        },
+        style: {
+          width: DOCUMENT_NODE.DEFAULT_WIDTH,
+          height: DOCUMENT_NODE.DEFAULT_HEIGHT,
+        },
+        draggable: true,
+        connectable: false,
+        data: docData,
+      })
+    }
+  }
+
+  return [...stepNodes, ...documentNodes]
 }
 
 const toRFEdges = (edges: WorkflowStepEdge[]): Edge[] =>
@@ -139,4 +178,4 @@ const nodeDataEqual = (a: Record<string, unknown>, b: Record<string, unknown>): 
 }
 
 export { toRFNodes, toRFEdges, nodeDataEqual }
-export type { StepNodeData, StepNodeLookups, DocumentNodeData }
+export type { StepNodeData, StepNodeLookups, ContextNodeData }

@@ -1,15 +1,14 @@
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import { DocumentNodeIcon } from '../Icons/DocumentNodeIcon'
-import { DOCUMENT_NODE } from './constants'
+import { ContextNodeIcon } from '../Icons/ContextNodeIcon'
+import { CONTEXT_NODE } from './constants'
 
-type DocumentNodeHeaderProps = {
+type ContextNodeHeaderProps = {
   name: string
-  documenterName: string
   accentColor?: string
 }
 
-function DocumentNodeHeader({ name, documenterName, accentColor = DOCUMENT_NODE.ACCENT_COLOR }: DocumentNodeHeaderProps) {
+function ContextNodeHeader({ name, accentColor = CONTEXT_NODE.ACCENT_COLOR }: ContextNodeHeaderProps) {
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, width: '100%' }}>
       <Box
@@ -24,35 +23,23 @@ function DocumentNodeHeader({ name, documenterName, accentColor = DOCUMENT_NODE.
           flexShrink: 0,
         }}
       >
-        <DocumentNodeIcon color={accentColor} size={18} />
+        <ContextNodeIcon color={accentColor} size={18} />
       </Box>
 
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography
-          sx={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: 'text.primary',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {name}
-        </Typography>
-        <Typography
-          sx={{
-            fontSize: 10,
-            color: 'text.disabled',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            lineHeight: 1.2,
-          }}
-        >
-          {documenterName}
-        </Typography>
-      </Box>
+      <Typography
+        sx={{
+          fontSize: 13,
+          fontWeight: 600,
+          color: 'text.primary',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          flex: 1,
+          minWidth: 0,
+        }}
+      >
+        {name}
+      </Typography>
 
       <Box
         sx={{
@@ -78,6 +65,19 @@ function DocumentNodeHeader({ name, documenterName, accentColor = DOCUMENT_NODE.
             backgroundColor: accentColor,
             boxShadow: `0 0 4px ${accentColor}80`,
             flexShrink: 0,
+            position: 'relative',
+            '@keyframes ping': {
+              '0%': { transform: 'scale(1)', opacity: 0.75 },
+              '75%, 100%': { transform: 'scale(2)', opacity: 0 },
+            },
+            '&::after': {
+              content: '""',
+              position: 'absolute',
+              inset: 0,
+              borderRadius: '50%',
+              backgroundColor: accentColor,
+              animation: 'ping 2s cubic-bezier(0, 0, 0.2, 1) infinite',
+            },
           }}
         />
         <Typography
@@ -91,12 +91,12 @@ function DocumentNodeHeader({ name, documenterName, accentColor = DOCUMENT_NODE.
             whiteSpace: 'nowrap',
           }}
         >
-          Document
+          Context
         </Typography>
       </Box>
     </Box>
   )
 }
 
-export { DocumentNodeHeader }
-export type { DocumentNodeHeaderProps }
+export { ContextNodeHeader }
+export type { ContextNodeHeaderProps }

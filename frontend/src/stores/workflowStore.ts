@@ -100,6 +100,9 @@ const selectStepDocumentDefs =
   (s: WorkflowState): DocumentDef[] =>
     s.documentDefsByStep[stepId] ?? EMPTY_DEFS
 
+const selectDocumentDefsByStep = (s: WorkflowState): Record<string, DocumentDef[]> =>
+  s.documentDefsByStep
+
 const selectLoading = (s: WorkflowState): boolean => s.loading
 
 const selectError = (s: WorkflowState): string | null => s.error
@@ -423,6 +426,7 @@ export const workflowStore = {
   selectEdgeById,
   selectStepDocuments,
   selectStepDocumentDefs,
+  selectDocumentDefsByStep,
   selectLoading,
   selectError,
   selectDirty,

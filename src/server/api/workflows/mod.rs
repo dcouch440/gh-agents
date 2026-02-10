@@ -440,18 +440,8 @@ pub async fn create_workflow_step(
     // Auto-wire entry/documenter: resolve agent, schema, and reasoning
     let execution_mode = req.execution_mode.unwrap_or_else(|| "single".to_string());
 
-    // Entry steps: at most one per workflow
-    if execution_mode == "entry" {
-        let existing_steps = repo.list_steps(wid).await?;
-        if existing_steps.iter().any(|s| s.execution_mode == "entry") {
-            return Err(AppError::bad_request(
-                "Only one Port of Entry is allowed per workflow",
-            ));
-        }
-    }
-
     let (resolved_agent_id, resolved_schema_id, resolved_reasoning): (Option<Uuid>, _, _) =
-        if execution_mode == "entry" || execution_mode == "document" {
+        if execution_mode == "context" {
             (None, None, false)
         } else if execution_mode == "documenter" {
             let proto = state
@@ -753,6 +743,17 @@ pub async fn add_workflow_edge(
     if wf.user_id != auth.user_id.0 {
         return Err(AppError::not_found("Workflow"));
     }
+    // Context nodes are source-only (cannot be edge targets)
+    let to_step = repo
+        .get_step(req.to_step_id)
+        .await?
+        .ok_or(AppError::not_found("Target step"))?;
+    if to_step.execution_mode == "context" {
+        return Err(AppError::bad_request(
+            "Context nodes cannot receive incoming edges",
+        ));
+    }
+
     let edge = repo.add_edge(wid, req.from_step_id, req.to_step_id).await?;
     Ok((
         StatusCode::CREATED,
@@ -1030,12 +1031,12 @@ pub async fn run_workflow(
         .clone();
     let engine = ExecutionEngine::new(provider);
 
-    // Resolve initial_input: prefer POST body, fall back to entry step's prompt_template
+    // Resolve initial_input: prefer POST body, fall back to first context step's prompt_template
     let body_input = body.and_then(|b| b.0.initial_input);
     let initial_input = body_input.unwrap_or_else(|| {
         steps
             .iter()
-            .find(|s| s.execution_mode == "entry")
+            .find(|s| s.execution_mode == "context")
             .map(|s| s.prompt_template.clone())
             .unwrap_or_default()
     });
