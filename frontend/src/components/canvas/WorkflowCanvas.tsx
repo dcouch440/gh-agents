@@ -12,7 +12,7 @@ import { Collections } from '@/utils/collections'
 import { nodeTypes } from './nodeTypes'
 import { edgeTypes } from './edgeTypes'
 import { usePositionPersist } from './usePositionPersist'
-import { CanvasToolbar } from './CanvasToolbar'
+import { OptionTray } from './OptionTray'
 import { CanvasContextMenu } from './CanvasContextMenu'
 import type { MenuPosition } from './CanvasContextMenu'
 import { CANVAS } from './constants'
@@ -392,7 +392,7 @@ function WorkflowCanvasInner() {
           />
         )}
       </ReactFlow>
-      <CanvasToolbar />
+      <OptionTray />
       <CanvasContextMenu
         position={contextMenu}
         onClose={() => {
