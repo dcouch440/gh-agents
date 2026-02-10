@@ -101,13 +101,7 @@ const inferActionName = (): string => {
   return 'anonymous'
 }
 
-const logStateChange = <T>(
-  storeName: string,
-  actionName: string,
-  prevState: T,
-  nextState: T,
-  duration: number,
-): void => {
+const logStateChange = <T>(storeName: string, actionName: string, prevState: T, nextState: T, duration: number): void => {
   const timestamp = globalConfig.timestamp ? new Date().toLocaleTimeString() : ''
 
   /* eslint-disable no-console */
@@ -122,11 +116,7 @@ const logStateChange = <T>(
   )
 
   // Previous state
-  console.log(
-    '%cprev state',
-    `color: ${globalConfig.colors.prevState}; font-weight: bold;`,
-    prevState,
-  )
+  console.log('%cprev state', `color: ${globalConfig.colors.prevState}; font-weight: bold;`, prevState)
 
   // Diff (if enabled)
   if (globalConfig.diff) {
@@ -147,17 +137,10 @@ const logStateChange = <T>(
   }
 
   // Next state
-  console.log(
-    '%cnext state',
-    `color: ${globalConfig.colors.nextState}; font-weight: bold;`,
-    nextState,
-  )
+  console.log('%cnext state', `color: ${globalConfig.colors.nextState}; font-weight: bold;`, nextState)
 
   // Performance
-  console.log(
-    `%cduration: ${duration.toFixed(2)}ms`,
-    'color: #6b7280; font-size: 0.9em;',
-  )
+  console.log(`%cduration: ${duration.toFixed(2)}ms`, 'color: #6b7280; font-size: 0.9em;')
 
   console.groupEnd()
   /* eslint-enable no-console */

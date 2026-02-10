@@ -8,7 +8,7 @@ describe('PropertySection', () => {
     render(
       <PropertySection title="Settings">
         <span>Content</span>
-      </PropertySection>
+      </PropertySection>,
     )
     expect(screen.getByText('Settings')).toBeInTheDocument()
     expect(screen.getByText('Content')).toBeInTheDocument()
@@ -18,7 +18,7 @@ describe('PropertySection', () => {
     render(
       <PropertySection title={null}>
         <span>Content</span>
-      </PropertySection>
+      </PropertySection>,
     )
     expect(screen.getByText('Content')).toBeInTheDocument()
     expect(screen.queryByText('Settings')).not.toBeInTheDocument()
@@ -28,7 +28,7 @@ describe('PropertySection', () => {
     const { container } = render(
       <PropertySection title="Config" onToggle={vi.fn()}>
         <span>Content</span>
-      </PropertySection>
+      </PropertySection>,
     )
     expect(container.querySelector('[data-testid="KeyboardArrowDownRoundedIcon"]')).toBeInTheDocument()
   })
@@ -37,7 +37,7 @@ describe('PropertySection', () => {
     const { container } = render(
       <PropertySection title="Config">
         <span>Content</span>
-      </PropertySection>
+      </PropertySection>,
     )
     expect(container.querySelector('[data-testid="KeyboardArrowDownRoundedIcon"]')).not.toBeInTheDocument()
   })
@@ -48,7 +48,7 @@ describe('PropertySection', () => {
     render(
       <PropertySection title="Config" onToggle={onToggle}>
         <span>Content</span>
-      </PropertySection>
+      </PropertySection>,
     )
 
     await user.click(screen.getByText('Config'))
@@ -59,7 +59,7 @@ describe('PropertySection', () => {
     const { container } = render(
       <PropertySection title="Config" open={false} onToggle={vi.fn()}>
         <span>Hidden Content</span>
-      </PropertySection>
+      </PropertySection>,
     )
     const collapse = container.querySelector('.MuiCollapse-root')
     expect(collapse).toBeInTheDocument()

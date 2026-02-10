@@ -16,10 +16,7 @@ type DocumentsTabProps = {
   onRemove: (id: string) => void
 }
 
-function InlineAddForm({ onSubmit, onCancel }: {
-  onSubmit: (body: CreateDocumentDefRequest) => void
-  onCancel: () => void
-}) {
+function InlineAddForm({ onSubmit, onCancel }: { onSubmit: (body: CreateDocumentDefRequest) => void; onCancel: () => void }) {
   const theme = useTheme()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -63,7 +60,9 @@ function InlineAddForm({ onSubmit, onCancel }: {
       <InputBase
         autoFocus
         value={name}
-        onChange={(e) => { setName(e.target.value) }}
+        onChange={(e) => {
+          setName(e.target.value)
+        }}
         onKeyDown={handleKeyDown}
         placeholder="Document name"
         sx={{
@@ -79,7 +78,9 @@ function InlineAddForm({ onSubmit, onCancel }: {
       />
       <InputBase
         value={description}
-        onChange={(e) => { setDescription(e.target.value) }}
+        onChange={(e) => {
+          setDescription(e.target.value)
+        }}
         onKeyDown={handleKeyDown}
         placeholder="Description (optional)"
         multiline
@@ -95,9 +96,7 @@ function InlineAddForm({ onSubmit, onCancel }: {
         }}
       />
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        <Typography sx={{ fontSize: 10, color: 'text.secondary', whiteSpace: 'nowrap' }}>
-          Target length:
-        </Typography>
+        <Typography sx={{ fontSize: 10, color: 'text.secondary', whiteSpace: 'nowrap' }}>Target length:</Typography>
         <InputBase
           value={targetLength}
           onChange={(e) => {
@@ -120,11 +119,7 @@ function InlineAddForm({ onSubmit, onCancel }: {
         />
       </Box>
       <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
-        <Button
-          size="small"
-          onClick={onCancel}
-          sx={{ fontSize: 11, textTransform: 'none', minWidth: 0, px: 1 }}
-        >
+        <Button size="small" onClick={onCancel} sx={{ fontSize: 11, textTransform: 'none', minWidth: 0, px: 1 }}>
           Cancel
         </Button>
         <Button
@@ -146,15 +141,11 @@ function DocumentsTab({ documents, adding, onAdd, onSubmitNew, onCancelAdd, onRe
 
   return (
     <Box sx={{ p: 1.5, display: 'flex', flexDirection: 'column', gap: 1, height: '100%', overflow: 'auto' }}>
-      {adding && (
-        <InlineAddForm onSubmit={onSubmitNew} onCancel={onCancelAdd} />
-      )}
+      {adding && <InlineAddForm onSubmit={onSubmitNew} onCancel={onCancelAdd} />}
 
       {!adding && documents.length === 0 && (
         <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Typography sx={{ fontSize: 12, color: 'text.disabled' }}>
-            No documents configured
-          </Typography>
+          <Typography sx={{ fontSize: 12, color: 'text.disabled' }}>No documents configured</Typography>
         </Box>
       )}
 
@@ -173,16 +164,14 @@ function DocumentsTab({ documents, adding, onAdd, onSubmitNew, onCancelAdd, onRe
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Typography sx={{ fontSize: 12, fontWeight: 600, color: 'text.primary' }}>
-              {doc.name}
-            </Typography>
+            <Typography sx={{ fontSize: 12, fontWeight: 600, color: 'text.primary' }}>{doc.name}</Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography sx={{ fontSize: 10, color: 'text.disabled' }}>
-                {doc.target_length} chars
-              </Typography>
+              <Typography sx={{ fontSize: 10, color: 'text.disabled' }}>{doc.target_length} chars</Typography>
               <Box
                 component="button"
-                onClick={() => { onRemove(doc.id) }}
+                onClick={() => {
+                  onRemove(doc.id)
+                }}
                 sx={{
                   all: 'unset',
                   cursor: 'pointer',
@@ -196,22 +185,12 @@ function DocumentsTab({ documents, adding, onAdd, onSubmitNew, onCancelAdd, onRe
               </Box>
             </Box>
           </Box>
-          {doc.description && (
-            <Typography sx={{ fontSize: 11, color: 'text.secondary', lineHeight: 1.4 }}>
-              {doc.description}
-            </Typography>
-          )}
+          {doc.description && <Typography sx={{ fontSize: 11, color: 'text.secondary', lineHeight: 1.4 }}>{doc.description}</Typography>}
         </Box>
       ))}
 
       {!adding && (
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={<AddOutlined />}
-          onClick={onAdd}
-          sx={{ alignSelf: 'stretch' }}
-        >
+        <Button variant="outlined" size="small" startIcon={<AddOutlined />} onClick={onAdd} sx={{ alignSelf: 'stretch' }}>
           Add Document
         </Button>
       )}

@@ -20,11 +20,15 @@ function TabSelector({ options, value, onChange }: TabSelectorProps) {
         return (
           <Box
             key={option.value}
-            onClick={() => { onChange(option.value) }}
+            onClick={() => {
+              onChange(option.value)
+            }}
             role="tab"
             tabIndex={0}
             aria-selected={isActive}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onChange(option.value) }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') onChange(option.value)
+            }}
             sx={{
               flex: 1,
               display: 'flex',
@@ -35,7 +39,7 @@ function TabSelector({ options, value, onChange }: TabSelectorProps) {
               userSelect: 'none',
               borderBottom: '2px solid',
               borderColor: isActive ? 'primary.main' : 'transparent',
-              backgroundColor: (theme) => isActive ? theme.palette.custom.activeTint : 'transparent',
+              backgroundColor: (theme) => (isActive ? theme.palette.custom.activeTint : 'transparent'),
               transition: 'all 120ms ease',
               '&:hover': isActive
                 ? {}
@@ -51,11 +55,13 @@ function TabSelector({ options, value, onChange }: TabSelectorProps) {
                 color: isActive ? 'primary.main' : 'text.secondary',
                 letterSpacing: '0.02em',
                 transition: 'color 120ms ease',
-                ...(isActive ? {} : {
-                  '&:hover': {
-                    color: 'text.primary',
-                  },
-                }),
+                ...(isActive
+                  ? {}
+                  : {
+                      '&:hover': {
+                        color: 'text.primary',
+                      },
+                    }),
               }}
             >
               {option.label}

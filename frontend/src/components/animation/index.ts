@@ -1,2 +1,2 @@
-export { FadeIn } from './FadeIn';
-export { AnimatedList } from './AnimatedList';
+export { FadeIn } from './FadeIn'
+export { AnimatedList } from './AnimatedList'

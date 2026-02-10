@@ -1,14 +1,7 @@
-import {useState} from 'react'
-import {
-  IconButton,
-  Menu,
-  MenuItem,
-  ListItemIcon,
-  ListItemText,
-  Divider,
-} from '@mui/material'
+import { useState } from 'react'
+import { IconButton, Menu, MenuItem, ListItemIcon, ListItemText, Divider } from '@mui/material'
 import MoreVertIcon from '@mui/icons-material/MoreVert'
-import type {ReactNode} from 'react'
+import type { ReactNode } from 'react'
 
 type MenuAction = {
   key: string
@@ -26,11 +19,7 @@ type ActionMenuProps = {
   size?: 'small' | 'medium'
 }
 
-function ActionMenu({
-  actions,
-  ariaLabel = 'Actions',
-  size = 'small',
-}: ActionMenuProps) {
+function ActionMenu({ actions, ariaLabel = 'Actions', size = 'small' }: ActionMenuProps) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const open = Boolean(anchorEl)
 
@@ -77,7 +66,7 @@ function ActionMenu({
         onClose={handleClose}
         onClick={(e) => e.stopPropagation()}
         PaperProps={{
-          sx: {minWidth: 180},
+          sx: { minWidth: 180 },
         }}
       >
         {actions.map((action, index) => (
@@ -102,5 +91,5 @@ function ActionMenu({
   )
 }
 
-export {ActionMenu}
-export type {ActionMenuProps, MenuAction}
+export { ActionMenu }
+export type { ActionMenuProps, MenuAction }

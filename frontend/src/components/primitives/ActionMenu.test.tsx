@@ -1,7 +1,7 @@
-import {describe, it, expect, vi} from 'vitest'
-import {render, screen} from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import {ActionMenu} from './ActionMenu'
+import { ActionMenu } from './ActionMenu'
 import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
 
@@ -155,13 +155,13 @@ describe('ActionMenu', () => {
       },
     ]
 
-    const {container} = render(<ActionMenu actions={actions} />)
+    const { container } = render(<ActionMenu actions={actions} />)
 
     expect(container.firstChild).toBeNull()
   })
 
   it('returns null when actions array is empty', () => {
-    const {container} = render(<ActionMenu actions={[]} />)
+    const { container } = render(<ActionMenu actions={[]} />)
 
     expect(container.firstChild).toBeNull()
   })

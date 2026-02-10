@@ -1,163 +1,122 @@
-import {useState, useCallback, useEffect, useMemo, useRef} from "react";
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
-import InputBase from "@mui/material/InputBase";
-import {
-  PropertyRow,
-  CodeEditor,
-  PropertySelect,
-  AccentBarRow,
-  TabSelector,
-  EmptyState,
-  VariableChipStrip,
-} from "@/components/primitives";
-import {
-  useStore,
-  agentStore,
-  promptTemplateStore,
-  outputSchemaStore,
-  workflowStore,
-  protocolStore,
-} from "@/stores";
-import {useTheme} from "@mui/material/styles";
-import {DESIGN} from "@/constants";
-import {
-  STEP_TYPE_COLORS,
-  DEFAULT_STEP_TYPE_COLOR,
-  PROTOCOL_TYPE_COLORS,
-} from "@/components/canvas/constants";
-import {buildVariableCompletions} from "@/utils/variableContext";
-import {createVariableAutocomplete} from "@/utils/variableAutocomplete";
-import type {Extension} from "@codemirror/state";
-import type {VariableCompletion} from "@/utils/variableContext";
-import type {WorkflowStep} from "@/types/workflow";
-import type {TabOption} from "@/components/primitives";
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
+import Box from '@mui/material/Box'
+import Typography from '@mui/material/Typography'
+import InputBase from '@mui/material/InputBase'
+import { PropertyRow, CodeEditor, PropertySelect, AccentBarRow, TabSelector, EmptyState, VariableChipStrip } from '@/components/primitives'
+import { useStore, agentStore, promptTemplateStore, outputSchemaStore, workflowStore, protocolStore } from '@/stores'
+import { useTheme } from '@mui/material/styles'
+import { DESIGN } from '@/constants'
+import { STEP_TYPE_COLORS, DEFAULT_STEP_TYPE_COLOR, PROTOCOL_TYPE_COLORS } from '@/components/canvas/constants'
+import { buildVariableCompletions } from '@/utils/variableContext'
+import { createVariableAutocomplete } from '@/utils/variableAutocomplete'
+import type { Extension } from '@codemirror/state'
+import type { VariableCompletion } from '@/utils/variableContext'
+import type { WorkflowStep } from '@/types/workflow'
+import type { TabOption } from '@/components/primitives'
 
 type StepPropertiesProps = {
-  step: WorkflowStep;
-  steps: WorkflowStep[];
-  readOnly?: boolean;
-};
+  step: WorkflowStep
+  steps: WorkflowStep[]
+  readOnly?: boolean
+}
 
-type StepTab = "system" | "template" | "input" | "output" | "protocol";
+type StepTab = 'system' | 'template' | 'input' | 'output' | 'protocol'
 
 const TAB_OPTIONS: TabOption[] = [
-  {value: "system", label: "System"},
-  {value: "template", label: "Template"},
-  {value: "input", label: "Input"},
-  {value: "output", label: "Output"},
-  {value: "protocol", label: "Protocol"},
-];
+  { value: 'system', label: 'System' },
+  { value: 'template', label: 'Template' },
+  { value: 'input', label: 'Input' },
+  { value: 'output', label: 'Output' },
+  { value: 'protocol', label: 'Protocol' },
+]
 
 const EDITOR_CONTAINER_SX = {
   flex: 1,
   borderTop: 1,
-  borderColor: "divider",
+  borderColor: 'divider',
   minHeight: 0,
-  "& > div": {border: "none", borderRadius: 0, height: "100%"},
-  "& .cm-editor": {height: "100%"},
-  "& .cm-scroller": {overflow: "auto"},
-  "& .cm-gutters": {
-    backgroundColor: "transparent",
-    border: "none",
+  '& > div': { border: 'none', borderRadius: 0, height: '100%' },
+  '& .cm-editor': { height: '100%' },
+  '& .cm-scroller': { overflow: 'auto' },
+  '& .cm-gutters': {
+    backgroundColor: 'transparent',
+    border: 'none',
   },
-  "& .cm-lineNumbers .cm-gutterElement": {
-    paddingLeft: "2px",
-    paddingRight: "2px",
-    minWidth: "unset",
+  '& .cm-lineNumbers .cm-gutterElement': {
+    paddingLeft: '2px',
+    paddingRight: '2px',
+    minWidth: 'unset',
     fontSize: 10,
     opacity: 0.35,
   },
-  "& .cm-content": {paddingLeft: "1px"},
-} as const;
+  '& .cm-content': { paddingLeft: '1px' },
+} as const
 
 const MUTED_EDITOR_CONTAINER_SX = {
   ...EDITOR_CONTAINER_SX,
   opacity: 0.5,
-  backgroundColor: "rgba(255,255,255,0.01)",
-} as const;
+  backgroundColor: 'rgba(255,255,255,0.01)',
+} as const
 
 const SECTION_LABEL_SX = {
   fontSize: 9,
   fontWeight: 600,
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-  color: "text.disabled",
-  px: "16px",
-  pt: "10px",
-  pb: "4px",
-} as const;
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase',
+  color: 'text.disabled',
+  px: '16px',
+  pt: '10px',
+  pb: '4px',
+} as const
 
 const SCHEMA_PREVIEW_SX = {
-  mx: "16px",
-  mb: "12px",
-  p: "10px",
-  borderRadius: "6px",
-  backgroundColor: "rgba(255,255,255,0.02)",
+  mx: '16px',
+  mb: '12px',
+  p: '10px',
+  borderRadius: '6px',
+  backgroundColor: 'rgba(255,255,255,0.02)',
   border: 1,
-  borderColor: "divider",
+  borderColor: 'divider',
   fontSize: 11,
-  fontFamily: "monospace",
-  color: "text.secondary",
-  whiteSpace: "pre-wrap",
-  wordBreak: "break-word",
-  overflow: "auto",
+  fontFamily: 'monospace',
+  color: 'text.secondary',
+  whiteSpace: 'pre-wrap',
+  wordBreak: 'break-word',
+  overflow: 'auto',
   maxHeight: 300,
-} as const;
+} as const
 
-function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
-  const theme = useTheme();
-  const [activeTab, setActiveTab] = useState<StepTab>("template");
+function StepProperties({ step, steps, readOnly = false }: StepPropertiesProps) {
+  const theme = useTheme()
+  const [activeTab, setActiveTab] = useState<StepTab>('template')
 
   // ── Store data ──────────────────────────────────────────────────────────────
 
-  const agents = useStore(agentStore.store, agentStore.selectAll);
-  const templates = useStore(
-    promptTemplateStore.store,
-    promptTemplateStore.selectAll,
-  );
-  const schemas = useStore(
-    outputSchemaStore.store,
-    outputSchemaStore.selectAll,
-  );
+  const agents = useStore(agentStore.store, agentStore.selectAll)
+  const templates = useStore(promptTemplateStore.store, promptTemplateStore.selectAll)
+  const schemas = useStore(outputSchemaStore.store, outputSchemaStore.selectAll)
 
-  const agent = useStore(
-    agentStore.store,
-    step.agent_id ? agentStore.selectById(step.agent_id) : () => undefined,
-  );
-  const allProtocols = useStore(protocolStore.store, protocolStore.selectAll);
+  const agent = useStore(agentStore.store, step.agent_id ? agentStore.selectById(step.agent_id) : () => undefined)
+  const allProtocols = useStore(protocolStore.store, protocolStore.selectAll)
 
   useEffect(() => {
-    void agentStore.fetchAll();
-    void promptTemplateStore.fetchIfStale();
-    void outputSchemaStore.fetchIfStale();
-    void protocolStore.fetchAll();
-  }, []);
+    void agentStore.fetchAll()
+    void promptTemplateStore.fetchIfStale()
+    void outputSchemaStore.fetchIfStale()
+    void protocolStore.fetchAll()
+  }, [])
 
   // ── Lookup maps ────────────────────────────────────────────────────────────
 
-  const stepsById = useMemo(
-    () => new Map(steps.map((s) => [s.id, s])),
-    [steps],
-  );
+  const stepsById = useMemo(() => new Map(steps.map((s) => [s.id, s])), [steps])
 
-  const templatesMap = useMemo(
-    () => new Map(templates.map((t) => [t.id, t])),
-    [templates],
-  );
+  const templatesMap = useMemo(() => new Map(templates.map((t) => [t.id, t])), [templates])
 
-  const schemasMap = useMemo(
-    () => new Map(schemas.map((s) => [s.id, s])),
-    [schemas],
-  );
+  const schemasMap = useMemo(() => new Map(schemas.map((s) => [s.id, s])), [schemas])
 
   // ── Dropdown options ────────────────────────────────────────────────────────
 
-  const agentOptions = useMemo(
-    () =>
-      agents.map((a) => ({value: a.id, label: a.name, secondary: a.model_id})),
-    [agents],
-  );
+  const agentOptions = useMemo(() => agents.map((a) => ({ value: a.id, label: a.name, secondary: a.model_id })), [agents])
 
   const templateOptions = useMemo(
     () =>
@@ -167,59 +126,56 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
         secondary: `${t.variables?.length ?? 0} variable(s)`,
       })),
     [templates],
-  );
+  )
 
-  const schemaOptions = useMemo(
-    () => schemas.map((s) => ({value: s.id, label: s.name})),
-    [schemas],
-  );
+  const schemaOptions = useMemo(() => schemas.map((s) => ({ value: s.id, label: s.name })), [schemas])
 
   // ── Field handlers ─────────────────────────────────────────────────────────
   // All edits patch the store only. Nothing hits the API until the user clicks
   // Save on the canvas toolbar.
 
   const handleFieldChange = useCallback(
-    (field: "name" | "prompt_template" | "system_prompt_suffix", value: string) => {
-      const storeValue = field === "prompt_template" ? value : value || null;
-      workflowStore.patchStepLocal(step.id, {[field]: storeValue} as Partial<WorkflowStep>);
+    (field: 'name' | 'prompt_template' | 'system_prompt_suffix', value: string) => {
+      const storeValue = field === 'prompt_template' ? value : value || null
+      workflowStore.patchStepLocal(step.id, { [field]: storeValue } as Partial<WorkflowStep>)
     },
     [step.id],
-  );
+  )
 
   const handleAgentChange = useCallback(
     (agentId: string | null) => {
       if (agentId !== null) {
-        workflowStore.patchStepLocal(step.id, {agent_id: agentId});
+        workflowStore.patchStepLocal(step.id, { agent_id: agentId })
       }
     },
     [step.id],
-  );
+  )
 
   const handleTemplateChange = useCallback(
     (templateId: string | null) => {
-      const tpl = templateId ? templatesMap.get(templateId) : undefined;
+      const tpl = templateId ? templatesMap.get(templateId) : undefined
       workflowStore.patchStepLocal(step.id, {
         prompt_template_id: templateId,
         prompt_template: tpl?.template ?? '',
-      });
+      })
     },
     [step.id, templatesMap],
-  );
+  )
 
   const handleSchemaChange = useCallback(
     (schemaId: string | null) => {
-      workflowStore.patchStepLocal(step.id, {output_schema_id: schemaId});
+      workflowStore.patchStepLocal(step.id, { output_schema_id: schemaId })
     },
     [step.id],
-  );
+  )
 
   const handleCopyVariable = useCallback((label: string) => {
-    void navigator.clipboard.writeText(label);
-  }, []);
+    void navigator.clipboard.writeText(label)
+  }, [])
 
   // ── Graph connections (derived from edges) ──────────────────────────────
 
-  const edges = useStore(workflowStore.store, workflowStore.selectEdges);
+  const edges = useStore(workflowStore.store, workflowStore.selectEdges)
 
   const incomingSteps = useMemo(
     () =>
@@ -228,7 +184,7 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
         .map((e) => stepsById.get(e.from_step_id))
         .filter((s): s is WorkflowStep => s !== undefined),
     [edges, step.id, stepsById],
-  );
+  )
 
   const downstreamSteps = useMemo(
     () =>
@@ -237,12 +193,9 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
         .map((e) => stepsById.get(e.to_step_id))
         .filter((s): s is WorkflowStep => s !== undefined),
     [edges, step.id, stepsById],
-  );
+  )
 
-  const upstreamIds = useMemo(
-    () => incomingSteps.map((s) => s.id),
-    [incomingSteps],
-  );
+  const upstreamIds = useMemo(() => incomingSteps.map((s) => s.id), [incomingSteps])
 
   // ── Variable autocomplete ────────────────────────────────────────────────
   // CodeMirror extensions must be stable (created once), but need access to
@@ -250,25 +203,25 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
   // function that reads completionsRef.current lazily when autocomplete
   // triggers — never during render.
 
-  const completionsRef = useRef<VariableCompletion[]>([]);
+  const completionsRef = useRef<VariableCompletion[]>([])
 
   const variableContext = useMemo(
     () => buildVariableCompletions(upstreamIds, stepsById, schemasMap, step),
     [upstreamIds, stepsById, schemasMap, step],
-  );
+  )
 
   useEffect(() => {
-    completionsRef.current = variableContext.completions;
-  }, [variableContext]);
+    completionsRef.current = variableContext.completions
+  }, [variableContext])
 
   // Auto-set output_variable_name on upstream steps that don't have one,
   // so the backend can resolve variable references at execution time.
   // Uses patchStepSilent to avoid marking the form dirty for auto-derived values.
   useEffect(() => {
     for (const { stepId, derivedName } of variableContext.autoNamed) {
-      workflowStore.patchStepSilent(stepId, { output_variable_name: derivedName });
+      workflowStore.patchStepSilent(stepId, { output_variable_name: derivedName })
     }
-  }, [variableContext.autoNamed]);
+  }, [variableContext.autoNamed])
 
   // The getter reads completionsRef.current lazily at autocomplete-trigger time,
   // not during render. The useMemo just creates the stable extension wrapper.
@@ -276,21 +229,18 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
     // eslint-disable-next-line react-hooks/refs -- lazy getter, ref read at autocomplete time only
     () => createVariableAutocomplete(() => completionsRef.current),
     [],
-  );
+  )
 
   // ── Mode badge color ────────────────────────────────────────────────────────
 
-  const modeColor =
-    STEP_TYPE_COLORS[step.execution_mode] ?? DEFAULT_STEP_TYPE_COLOR;
+  const modeColor = STEP_TYPE_COLORS[step.execution_mode] ?? DEFAULT_STEP_TYPE_COLOR
 
   // ── Resolved output schema for the Output tab ─────────────────────────────
 
-  const selectedSchema = step.output_schema_id
-    ? schemasMap.get(step.output_schema_id)
-    : undefined;
+  const selectedSchema = step.output_schema_id ? schemasMap.get(step.output_schema_id) : undefined
 
   return (
-    <Box sx={{display: "flex", flexDirection: "column", height: "100%"}}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Gradient accent bar */}
       <Box
         sx={{
@@ -302,35 +252,31 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
       />
 
       {/* ── Header: Name + Mode + Agent ──────────────────────────────── */}
-      <Box sx={{borderBottom: 1, borderColor: "divider", flexShrink: 0}}>
-        <Box sx={{px: "16px", pt: "12px", pb: "4px"}}>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
+        <Box sx={{ px: '16px', pt: '12px', pb: '4px' }}>
           {readOnly ? (
-            <Typography
-              sx={{fontSize: 14, fontWeight: 600, color: "text.primary"}}
-            >
-              {step.name ?? "Unnamed"}
-            </Typography>
+            <Typography sx={{ fontSize: 14, fontWeight: 600, color: 'text.primary' }}>{step.name ?? 'Unnamed'}</Typography>
           ) : (
             <InputBase
-              value={step.name ?? ""}
+              value={step.name ?? ''}
               onChange={(e) => {
-                handleFieldChange("name", e.target.value);
+                handleFieldChange('name', e.target.value)
               }}
               placeholder="Unnamed"
               fullWidth
               sx={{
                 fontSize: 14,
                 fontWeight: 600,
-                color: "text.primary",
-                px: "8px",
-                py: "2px",
-                borderRadius: "6px",
+                color: 'text.primary',
+                px: '8px',
+                py: '2px',
+                borderRadius: '6px',
                 border: 1,
-                borderColor: "transparent",
-                transition: "all 150ms ease",
-                "&:hover": {borderColor: "divider"},
-                "&.Mui-focused": {
-                  borderColor: "primary.main",
+                borderColor: 'transparent',
+                transition: 'all 150ms ease',
+                '&:hover': { borderColor: 'divider' },
+                '&.Mui-focused': {
+                  borderColor: 'primary.main',
                   backgroundColor: theme.palette.custom.activeTint,
                 },
               }}
@@ -339,21 +285,21 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
         </Box>
         <Box
           sx={{
-            px: "16px",
-            pb: "8px",
-            display: "flex",
-            alignItems: "center",
+            px: '16px',
+            pb: '8px',
+            display: 'flex',
+            alignItems: 'center',
             gap: 0.75,
           }}
         >
           <Box
             sx={{
-              display: "inline-flex",
-              alignItems: "center",
+              display: 'inline-flex',
+              alignItems: 'center',
               gap: 0.5,
-              px: "6px",
-              py: "1px",
-              borderRadius: "4px",
+              px: '6px',
+              py: '1px',
+              borderRadius: '4px',
               backgroundColor: `${modeColor}15`,
             }}
           >
@@ -361,7 +307,7 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
               sx={{
                 width: 6,
                 height: 6,
-                borderRadius: "50%",
+                borderRadius: '50%',
                 backgroundColor: modeColor,
               }}
             />
@@ -370,8 +316,8 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
                 fontSize: 10,
                 fontWeight: 600,
                 color: modeColor,
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
               }}
             >
               {step.execution_mode}
@@ -381,20 +327,20 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
 
         {/* Agent selector — always visible in header */}
         {readOnly ? (
-          <Box sx={{px: "16px", pb: "10px"}}>
+          <Box sx={{ px: '16px', pb: '10px' }}>
             <PropertyRow label="Agent" value={agent?.name ?? step.agent_id} />
           </Box>
         ) : (
-          <Box sx={{pb: "6px"}}>
+          <Box sx={{ pb: '6px' }}>
             <Typography
               sx={{
                 fontSize: 10,
                 fontWeight: 500,
-                color: "text.secondary",
-                textTransform: "uppercase",
-                letterSpacing: "0.04em",
-                px: "16px",
-                pb: "2px",
+                color: 'text.secondary',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+                px: '16px',
+                pb: '2px',
               }}
             >
               Agent
@@ -411,12 +357,12 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
       </Box>
 
       {/* ── Tab bar ──────────────────────────────────────────────────── */}
-      <Box sx={{flexShrink: 0, borderBottom: 1, borderColor: "divider"}}>
+      <Box sx={{ flexShrink: 0, borderBottom: 1, borderColor: 'divider' }}>
         <TabSelector
           options={TAB_OPTIONS}
           value={activeTab}
           onChange={(v) => {
-            setActiveTab(v as StepTab);
+            setActiveTab(v as StepTab)
           }}
         />
       </Box>
@@ -425,21 +371,21 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
       <Box
         sx={{
           flex: 1,
-          display: "flex",
-          flexDirection: "column",
+          display: 'flex',
+          flexDirection: 'column',
           minHeight: 0,
-          overflow: "hidden",
+          overflow: 'hidden',
         }}
       >
         {/* ── System tab ─────────────────────────────────────────────── */}
-        {activeTab === "system" ? (
+        {activeTab === 'system' ? (
           <Box
             sx={{
               flex: 1,
-              display: "flex",
-              flexDirection: "column",
+              display: 'flex',
+              flexDirection: 'column',
               minHeight: 0,
-              overflow: "auto",
+              overflow: 'auto',
             }}
           >
             {/* Agent base system prompt (read-only, muted) */}
@@ -448,7 +394,7 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
               <Box
                 sx={{
                   ...MUTED_EDITOR_CONTAINER_SX,
-                  flex: "none",
+                  flex: 'none',
                   minHeight: 120,
                   maxHeight: 240,
                 }}
@@ -464,12 +410,12 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
                 />
               </Box>
             ) : (
-              <Box sx={{px: "16px", py: "12px"}}>
+              <Box sx={{ px: '16px', py: '12px' }}>
                 <Typography
                   sx={{
                     fontSize: 11,
-                    color: "text.disabled",
-                    fontStyle: "italic",
+                    color: 'text.disabled',
+                    fontStyle: 'italic',
                   }}
                 >
                   Select an agent to view its system prompt.
@@ -478,19 +424,19 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
             )}
 
             {/* Divider */}
-            <Box sx={{borderTop: 1, borderColor: "divider"}} />
+            <Box sx={{ borderTop: 1, borderColor: 'divider' }} />
 
             {/* Available variables */}
             <VariableChipStrip completions={variableContext.completions} onCopy={handleCopyVariable} />
 
             {/* Step-level extension (editable) */}
             <Typography sx={SECTION_LABEL_SX}>Step Extension</Typography>
-            <Box sx={{...EDITOR_CONTAINER_SX, flex: 1, minHeight: 120}}>
+            <Box sx={{ ...EDITOR_CONTAINER_SX, flex: 1, minHeight: 120 }}>
               <CodeEditor
                 key={`sys-ext-${step.id}`}
-                value={step.system_prompt_suffix ?? ""}
+                value={step.system_prompt_suffix ?? ''}
                 onChange={(v: string) => {
-                  handleFieldChange("system_prompt_suffix", v);
+                  handleFieldChange('system_prompt_suffix', v)
                 }}
                 language="markdown"
                 placeholder="Enter system prompt extension..."
@@ -503,40 +449,34 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
         ) : null}
 
         {/* ── Template tab ───────────────────────────────────────────── */}
-        {activeTab === "template" ? (
+        {activeTab === 'template' ? (
           <Box
             sx={{
               flex: 1,
-              display: "flex",
-              flexDirection: "column",
+              display: 'flex',
+              flexDirection: 'column',
               minHeight: 0,
             }}
           >
             {/* Template selector */}
             {readOnly ? (
               step.prompt_template_id ? (
-                <Box sx={{px: "16px", py: "8px"}}>
-                  <PropertyRow
-                    label="Template"
-                    value={
-                      templatesMap.get(step.prompt_template_id)?.name ??
-                      "Unknown"
-                    }
-                  />
+                <Box sx={{ px: '16px', py: '8px' }}>
+                  <PropertyRow label="Template" value={templatesMap.get(step.prompt_template_id)?.name ?? 'Unknown'} />
                 </Box>
               ) : null
             ) : (
-              <Box sx={{pb: "4px"}}>
+              <Box sx={{ pb: '4px' }}>
                 <Typography
                   sx={{
                     fontSize: 10,
                     fontWeight: 500,
-                    color: "text.secondary",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.04em",
-                    px: "16px",
-                    pt: "8px",
-                    pb: "2px",
+                    color: 'text.secondary',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                    px: '16px',
+                    pt: '8px',
+                    pb: '2px',
                   }}
                 >
                   Template
@@ -561,7 +501,7 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
                 key={`tpl-${step.id}`}
                 value={step.prompt_template}
                 onChange={(v: string) => {
-                  handleFieldChange("prompt_template", v);
+                  handleFieldChange('prompt_template', v)
                 }}
                 language="markdown"
                 placeholder="Enter prompt template..."
@@ -575,26 +515,18 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
         ) : null}
 
         {/* ── Input tab ──────────────────────────────────────────────── */}
-        {activeTab === "input" ? (
-          <Box sx={{flex: 1, overflow: "auto"}}>
+        {activeTab === 'input' ? (
+          <Box sx={{ flex: 1, overflow: 'auto' }}>
             {incomingSteps.length === 0 ? (
               <EmptyState message="No incoming connections" />
             ) : (
               incomingSteps.map((s) => {
-                const upSchema = s.output_schema_id
-                  ? schemasMap.get(s.output_schema_id)
-                  : undefined;
+                const upSchema = s.output_schema_id ? schemasMap.get(s.output_schema_id) : undefined
                 return (
-                  <Box
-                    key={s.id}
-                    sx={{borderBottom: 1, borderColor: "divider"}}
-                  >
+                  <Box key={s.id} sx={{ borderBottom: 1, borderColor: 'divider' }}>
                     <AccentBarRow
-                      barColor={
-                        STEP_TYPE_COLORS[s.execution_mode] ??
-                        DEFAULT_STEP_TYPE_COLOR
-                      }
-                      primary={s.name ?? "Unnamed"}
+                      barColor={STEP_TYPE_COLORS[s.execution_mode] ?? DEFAULT_STEP_TYPE_COLOR}
+                      primary={s.name ?? 'Unnamed'}
                       secondary={s.execution_mode}
                     />
                     {upSchema ? (
@@ -603,9 +535,9 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
                           sx={{
                             fontSize: 10,
                             fontWeight: 500,
-                            color: "text.secondary",
-                            px: "16px",
-                            pb: "4px",
+                            color: 'text.secondary',
+                            px: '16px',
+                            pb: '4px',
                           }}
                         >
                           {upSchema.name}
@@ -618,37 +550,34 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
                       <Typography
                         sx={{
                           fontSize: 10,
-                          color: "text.disabled",
-                          fontStyle: "italic",
-                          px: "16px",
-                          pb: "12px",
+                          color: 'text.disabled',
+                          fontStyle: 'italic',
+                          px: '16px',
+                          pb: '12px',
                         }}
                       >
                         No output schema
                       </Typography>
                     )}
                   </Box>
-                );
+                )
               })
             )}
           </Box>
         ) : null}
 
         {/* ── Output tab ─────────────────────────────────────────────── */}
-        {activeTab === "output" ? (
-          <Box sx={{flex: 1, overflow: "auto"}}>
+        {activeTab === 'output' ? (
+          <Box sx={{ flex: 1, overflow: 'auto' }}>
             {/* Outgoing connections */}
             {downstreamSteps.length > 0 ? (
-              <Box sx={{borderBottom: 1, borderColor: "divider"}}>
+              <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
                 <Typography sx={SECTION_LABEL_SX}>Outgoing</Typography>
                 {downstreamSteps.map((s) => (
                   <AccentBarRow
                     key={s.id}
-                    barColor={
-                      STEP_TYPE_COLORS[s.execution_mode] ??
-                      DEFAULT_STEP_TYPE_COLOR
-                    }
-                    primary={s.name ?? "Unnamed"}
+                    barColor={STEP_TYPE_COLORS[s.execution_mode] ?? DEFAULT_STEP_TYPE_COLOR}
+                    primary={s.name ?? 'Unnamed'}
                     secondary={s.execution_mode}
                   />
                 ))}
@@ -657,24 +586,21 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
 
             {/* Schema selector */}
             {readOnly ? (
-              <Box sx={{px: "16px", py: "10px"}}>
-                <PropertyRow
-                  label="Schema"
-                  value={selectedSchema?.name ?? "None"}
-                />
+              <Box sx={{ px: '16px', py: '10px' }}>
+                <PropertyRow label="Schema" value={selectedSchema?.name ?? 'None'} />
               </Box>
             ) : (
-              <Box sx={{pb: "4px"}}>
+              <Box sx={{ pb: '4px' }}>
                 <Typography
                   sx={{
                     fontSize: 10,
                     fontWeight: 500,
-                    color: "text.secondary",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.04em",
-                    px: "16px",
-                    pt: "10px",
-                    pb: "2px",
+                    color: 'text.secondary',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                    px: '16px',
+                    pt: '10px',
+                    pb: '2px',
                   }}
                 >
                   Output Schema
@@ -699,10 +625,10 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
               <Typography
                 sx={{
                   fontSize: 10,
-                  color: "text.disabled",
-                  fontStyle: "italic",
-                  px: "16px",
-                  pt: "8px",
+                  color: 'text.disabled',
+                  fontStyle: 'italic',
+                  px: '16px',
+                  pt: '8px',
                 }}
               >
                 No output schema selected
@@ -712,30 +638,30 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
         ) : null}
 
         {/* ── Protocol tab ────────────────────────────────────────────── */}
-        {activeTab === "protocol" ? (
-          <Box sx={{flex: 1, overflow: "auto"}}>
+        {activeTab === 'protocol' ? (
+          <Box sx={{ flex: 1, overflow: 'auto' }}>
             <Typography sx={SECTION_LABEL_SX}>Available Protocols</Typography>
             {allProtocols.length === 0 ? (
               <EmptyState message="No protocols available" />
             ) : (
               allProtocols.map((proto) => {
-                const protoColor = PROTOCOL_TYPE_COLORS[proto.protocol_type] ?? DEFAULT_STEP_TYPE_COLOR;
+                const protoColor = PROTOCOL_TYPE_COLORS[proto.protocol_type] ?? DEFAULT_STEP_TYPE_COLOR
                 return (
                   <Box
                     key={proto.id}
                     sx={{
                       borderBottom: 1,
-                      borderColor: "divider",
-                      px: "16px",
-                      py: "10px",
+                      borderColor: 'divider',
+                      px: '16px',
+                      py: '10px',
                     }}
                   >
-                    <Box sx={{display: "flex", alignItems: "center", gap: 1, mb: 0.5}}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                       <Box
                         sx={{
-                          px: "6px",
-                          py: "2px",
-                          borderRadius: "4px",
+                          px: '6px',
+                          py: '2px',
+                          borderRadius: '4px',
                           backgroundColor: `${protoColor}20`,
                         }}
                       >
@@ -743,9 +669,9 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
                           sx={{
                             fontSize: 9,
                             fontWeight: 700,
-                            textTransform: "uppercase",
+                            textTransform: 'uppercase',
                             color: protoColor,
-                            letterSpacing: "0.06em",
+                            letterSpacing: '0.06em',
                             lineHeight: 1,
                           }}
                         >
@@ -756,11 +682,11 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
                         sx={{
                           fontSize: 12,
                           fontWeight: 600,
-                          color: "text.primary",
+                          color: 'text.primary',
                           flex: 1,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
                         }}
                       >
                         {proto.name}
@@ -769,7 +695,7 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
                     <Typography
                       sx={{
                         fontSize: 11,
-                        color: "text.secondary",
+                        color: 'text.secondary',
                         lineHeight: 1.4,
                         mb: proto.ports.length > 0 ? 1 : 0,
                       }}
@@ -782,69 +708,57 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
                           sx={{
                             fontSize: 9,
                             fontWeight: 600,
-                            textTransform: "uppercase",
-                            color: "text.disabled",
-                            letterSpacing: "0.06em",
+                            textTransform: 'uppercase',
+                            color: 'text.disabled',
+                            letterSpacing: '0.06em',
                             mb: 0.5,
                           }}
                         >
                           Ports ({proto.ports.length})
                         </Typography>
-                        <Box sx={{display: "flex", flexWrap: "wrap", gap: 0.5}}>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                           {proto.ports.map((port) => {
-                            const portAgent = agents.find((a) => a.id === port.agent_id);
+                            const portAgent = agents.find((a) => a.id === port.agent_id)
                             return (
                               <Box
                                 key={port.id}
                                 sx={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
                                   gap: 0.5,
-                                  px: "6px",
-                                  py: "2px",
-                                  borderRadius: "4px",
+                                  px: '6px',
+                                  py: '2px',
+                                  borderRadius: '4px',
                                   backgroundColor: `${protoColor}10`,
                                   border: 1,
                                   borderColor: `${protoColor}25`,
                                 }}
                               >
-                                <Typography
-                                  sx={{fontSize: 10, color: "text.secondary", fontWeight: 500}}
-                                >
-                                  {port.port_name}
-                                </Typography>
-                                {portAgent ? (
-                                  <Typography
-                                    sx={{fontSize: 9, color: "text.disabled"}}
-                                  >
-                                    {portAgent.name}
-                                  </Typography>
-                                ) : null}
+                                <Typography sx={{ fontSize: 10, color: 'text.secondary', fontWeight: 500 }}>{port.port_name}</Typography>
+                                {portAgent ? <Typography sx={{ fontSize: 9, color: 'text.disabled' }}>{portAgent.name}</Typography> : null}
                               </Box>
-                            );
+                            )
                           })}
                         </Box>
                       </Box>
                     )}
                     {proto.agent ? (
-                      <Box sx={{mt: 0.75}}>
-                        <Typography
-                          sx={{fontSize: 10, color: "text.disabled"}}
-                        >
+                      <Box sx={{ mt: 0.75 }}>
+                        <Typography sx={{ fontSize: 10, color: 'text.disabled' }}>
                           Agent: {proto.agent.name} ({proto.agent.model_id})
                         </Typography>
                       </Box>
                     ) : null}
                   </Box>
-                );
+                )
               })
             )}
           </Box>
         ) : null}
       </Box>
     </Box>
-  );
+  )
 }
 
-export {StepProperties};
-export type {StepPropertiesProps};
+export { StepProperties }
+export type { StepPropertiesProps }

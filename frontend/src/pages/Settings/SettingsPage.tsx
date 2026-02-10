@@ -15,17 +15,11 @@ function SettingsPage() {
         <PageHeader
           title="Settings"
           description="Configure your application"
-          breadcrumbs={[
-            { label: 'Home', path: '/' },
-            { label: 'Settings' },
-          ]}
+          breadcrumbs={[{ label: 'Home', path: '/' }, { label: 'Settings' }]}
         />
 
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-          <Tabs
-            value={tab}
-            onChange={(_, newValue) => setTab(newValue as SettingsTab)}
-          >
+          <Tabs value={tab} onChange={(_, newValue) => setTab(newValue as SettingsTab)}>
             <Tab label="Overview" value="overview" />
             <Tab label="Router Modes" value="router-modes" />
           </Tabs>

@@ -19,8 +19,26 @@ vi.mock('@/api', () => ({
   },
 }))
 
-const tpl1 = { id: 'pt1', user_id: 'u1', name: 'Summarize', description: null, template: 'Summarize: {text}', variables: ['text'], created_at: '2025-01-01T00:00:00Z', updated_at: '2025-01-01T00:00:00Z' }
-const tpl2 = { id: 'pt2', user_id: 'u1', name: 'Translate', description: 'Translate text', template: 'Translate to {lang}: {text}', variables: ['lang', 'text'], created_at: '2025-01-01T00:00:00Z', updated_at: '2025-01-01T00:00:00Z' }
+const tpl1 = {
+  id: 'pt1',
+  user_id: 'u1',
+  name: 'Summarize',
+  description: null,
+  template: 'Summarize: {text}',
+  variables: ['text'],
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
+}
+const tpl2 = {
+  id: 'pt2',
+  user_id: 'u1',
+  name: 'Translate',
+  description: 'Translate text',
+  template: 'Translate to {lang}: {text}',
+  variables: ['lang', 'text'],
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
+}
 
 beforeEach(() => {
   vi.clearAllMocks()

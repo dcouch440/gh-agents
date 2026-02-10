@@ -39,24 +39,26 @@ type WorkflowState = {
 
 const STALE_THRESHOLD_MS = 60_000
 
-const store = logger('workflowStore', createStore<WorkflowState>(() => ({
-  items: createNormalizedMap<Workflow>(),
-  activeWorkflowId: null,
-  steps: createNormalizedMap<WorkflowStep>(),
-  edges: createNormalizedMap<WorkflowStepEdge>(),
-  documentsByStep: {},
-  documentDefsByStep: {},
-  dirtyStepIds: new Set<string>(),
-  loading: false,
-  error: null,
-  dirty: false,
-  lastFetched: null,
-})))
+const store = logger(
+  'workflowStore',
+  createStore<WorkflowState>(() => ({
+    items: createNormalizedMap<Workflow>(),
+    activeWorkflowId: null,
+    steps: createNormalizedMap<WorkflowStep>(),
+    edges: createNormalizedMap<WorkflowStepEdge>(),
+    documentsByStep: {},
+    documentDefsByStep: {},
+    dirtyStepIds: new Set<string>(),
+    loading: false,
+    error: null,
+    dirty: false,
+    lastFetched: null,
+  })),
+)
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const extractError = (e: unknown): string =>
-  e instanceof Error ? e.message : 'workflows: unknown error'
+const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'workflows: unknown error')
 
 const getActiveId = (): string | null => store.getState().activeWorkflowId
 
@@ -67,8 +69,10 @@ const EMPTY_DEFS: DocumentDef[] = []
 
 const selectAll = (s: WorkflowState): Workflow[] => toArray(s.items)
 
-const selectById = (id: string) => (s: WorkflowState): Workflow | undefined =>
-  nmGet(s.items, id)
+const selectById =
+  (id: string) =>
+  (s: WorkflowState): Workflow | undefined =>
+    nmGet(s.items, id)
 
 const selectActiveWorkflowId = (s: WorkflowState): string | null => s.activeWorkflowId
 
@@ -76,17 +80,25 @@ const selectSteps = (s: WorkflowState): WorkflowStep[] => toArray(s.steps)
 
 const selectEdges = (s: WorkflowState): WorkflowStepEdge[] => toArray(s.edges)
 
-const selectStepById = (id: string | null) => (s: WorkflowState): WorkflowStep | null =>
-  id !== null ? nmGet(s.steps, id) ?? null : null
+const selectStepById =
+  (id: string | null) =>
+  (s: WorkflowState): WorkflowStep | null =>
+    id !== null ? (nmGet(s.steps, id) ?? null) : null
 
-const selectEdgeById = (id: string | null) => (s: WorkflowState): WorkflowStepEdge | null =>
-  id !== null ? nmGet(s.edges, id) ?? null : null
+const selectEdgeById =
+  (id: string | null) =>
+  (s: WorkflowState): WorkflowStepEdge | null =>
+    id !== null ? (nmGet(s.edges, id) ?? null) : null
 
-const selectStepDocuments = (stepId: string) => (s: WorkflowState): Document[] =>
-  s.documentsByStep[stepId] ?? EMPTY_DOCS
+const selectStepDocuments =
+  (stepId: string) =>
+  (s: WorkflowState): Document[] =>
+    s.documentsByStep[stepId] ?? EMPTY_DOCS
 
-const selectStepDocumentDefs = (stepId: string) => (s: WorkflowState): DocumentDef[] =>
-  s.documentDefsByStep[stepId] ?? EMPTY_DEFS
+const selectStepDocumentDefs =
+  (stepId: string) =>
+  (s: WorkflowState): DocumentDef[] =>
+    s.documentDefsByStep[stepId] ?? EMPTY_DEFS
 
 const selectLoading = (s: WorkflowState): boolean => s.loading
 
@@ -96,8 +108,7 @@ const selectDirty = (s: WorkflowState): boolean => s.dirty
 
 const selectDirtyStepIds = (s: WorkflowState): Set<string> => s.dirtyStepIds
 
-const selectIsStale = (s: WorkflowState): boolean =>
-  s.lastFetched === null || Date.now() - s.lastFetched > STALE_THRESHOLD_MS
+const selectIsStale = (s: WorkflowState): boolean => s.lastFetched === null || Date.now() - s.lastFetched > STALE_THRESHOLD_MS
 
 // ── Workflow CRUD ────────────────────────────────────────────────────────────
 
@@ -151,11 +162,7 @@ const remove = async (id: string): Promise<void> => {
 const loadWorkflow = async (id: string): Promise<void> => {
   store.setState({ loading: true, error: null })
   try {
-    const [workflow, steps, edges] = await Promise.all([
-      api.workflows.get(id),
-      api.workflows.listSteps(id),
-      api.workflows.listEdges(id),
-    ])
+    const [workflow, steps, edges] = await Promise.all([api.workflows.get(id), api.workflows.listSteps(id), api.workflows.listEdges(id)])
     store.setState((s) => ({
       items: nmSet(s.items, workflow.id, workflow),
       activeWorkflowId: id,

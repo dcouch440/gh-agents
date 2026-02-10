@@ -1,5 +1,5 @@
-import {useState} from 'react'
-import {IconButton, Menu, MenuItem, ListItemIcon, ListItemText} from '@mui/material'
+import { useState } from 'react'
+import { IconButton, Menu, MenuItem, ListItemIcon, ListItemText } from '@mui/material'
 import DownloadIcon from '@mui/icons-material/Download'
 import TableChartIcon from '@mui/icons-material/TableChart'
 import CodeIcon from '@mui/icons-material/Code'
@@ -10,11 +10,7 @@ type TableExportButtonProps = {
   disabled?: boolean
 }
 
-function TableExportButton({
-  onExportCSV,
-  onExportJSON,
-  disabled = false,
-}: TableExportButtonProps) {
+function TableExportButton({ onExportCSV, onExportJSON, disabled = false }: TableExportButtonProps) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const open = Boolean(anchorEl)
 
@@ -70,5 +66,5 @@ function TableExportButton({
   )
 }
 
-export {TableExportButton}
-export type {TableExportButtonProps}
+export { TableExportButton }
+export type { TableExportButtonProps }

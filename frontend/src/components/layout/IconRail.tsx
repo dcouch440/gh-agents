@@ -1,25 +1,25 @@
-import { type ReactNode } from 'react';
-import Box from '@mui/material/Box';
-import IconButton from '@mui/material/IconButton';
-import { Tooltip } from '@/components/primitives/Tooltip';
-import Badge from '@mui/material/Badge';
-import { useTheme } from '@mui/material/styles';
-import { LAYOUT, ANIMATION } from '@/constants';
-import type { NavBarItem } from './types';
+import { type ReactNode } from 'react'
+import Box from '@mui/material/Box'
+import IconButton from '@mui/material/IconButton'
+import { Tooltip } from '@/components/primitives/Tooltip'
+import Badge from '@mui/material/Badge'
+import { useTheme } from '@mui/material/styles'
+import { LAYOUT, ANIMATION } from '@/constants'
+import type { NavBarItem } from './types'
 
-type RailItem = NavBarItem;
+type RailItem = NavBarItem
 
 type IconRailProps = {
-  side: 'left' | 'right';
-  topItems: RailItem[];
-  bottomItems?: RailItem[];
-  footer?: ReactNode;
-};
+  side: 'left' | 'right'
+  topItems: RailItem[]
+  bottomItems?: RailItem[]
+  footer?: ReactNode
+}
 
 function IconRail({ side, topItems, bottomItems, footer }: IconRailProps) {
-  const theme = useTheme();
-  const isLeft = side === 'left';
-  const tooltipPlacement = isLeft ? 'right' : 'left';
+  const theme = useTheme()
+  const isLeft = side === 'left'
+  const tooltipPlacement = isLeft ? 'right' : 'left'
 
   const renderItem = (item: RailItem) => {
     return (
@@ -54,11 +54,7 @@ function IconRail({ side, topItems, bottomItems, footer }: IconRailProps) {
           }}
         >
           {item.badge && item.badge > 0 ? (
-            <Badge
-              variant="dot"
-              color="warning"
-              sx={{ '& .MuiBadge-badge': { top: 2, right: 2, width: 6, height: 6, minWidth: 6 } }}
-            >
+            <Badge variant="dot" color="warning" sx={{ '& .MuiBadge-badge': { top: 2, right: 2, width: 6, height: 6, minWidth: 6 } }}>
               {item.icon}
             </Badge>
           ) : (
@@ -66,8 +62,8 @@ function IconRail({ side, topItems, bottomItems, footer }: IconRailProps) {
           )}
         </IconButton>
       </Tooltip>
-    );
-  };
+    )
+  }
 
   return (
     <Box
@@ -87,9 +83,7 @@ function IconRail({ side, topItems, bottomItems, footer }: IconRailProps) {
       }}
     >
       {/* Top items */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-        {topItems.map(renderItem)}
-      </Box>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>{topItems.map(renderItem)}</Box>
 
       {/* Bottom items — pushed to bottom */}
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.25, mt: 'auto' }}>
@@ -97,8 +91,8 @@ function IconRail({ side, topItems, bottomItems, footer }: IconRailProps) {
         {footer}
       </Box>
     </Box>
-  );
+  )
 }
 
-export { IconRail };
-export type { RailItem, IconRailProps };
+export { IconRail }
+export type { RailItem, IconRailProps }

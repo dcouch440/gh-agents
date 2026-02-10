@@ -1,53 +1,47 @@
-import {useEffect} from "react";
-import {useParams, useNavigate} from "react-router-dom";
-import Box from "@mui/material/Box";
-import CircularProgress from "@mui/material/CircularProgress";
-import {
-  useStore,
-  workflowStore,
-  agentStore,
-  outputSchemaStore,
-  protocolStore,
-} from "@/stores";
-import {WorkflowCanvas} from "@/components/canvas";
+import { useEffect } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import Box from '@mui/material/Box'
+import CircularProgress from '@mui/material/CircularProgress'
+import { useStore, workflowStore, agentStore, outputSchemaStore, protocolStore } from '@/stores'
+import { WorkflowCanvas } from '@/components/canvas'
 
 function WorkflowEditorPage() {
-  const {id} = useParams<{id: string}>();
-  const navigate = useNavigate();
-  const loading = useStore(workflowStore.store, workflowStore.selectLoading);
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const loading = useStore(workflowStore.store, workflowStore.selectLoading)
 
   useEffect(() => {
     if (!id) {
-      void navigate("/workflows");
-      return;
+      void navigate('/workflows')
+      return
     }
-    void workflowStore.loadWorkflow(id);
-    void agentStore.fetchAll();
-    void outputSchemaStore.fetchIfStale();
-    void protocolStore.fetchAll();
+    void workflowStore.loadWorkflow(id)
+    void agentStore.fetchAll()
+    void outputSchemaStore.fetchIfStale()
+    void protocolStore.fetchAll()
     return () => {
-      workflowStore.clearActive();
-    };
-  }, [id, navigate]);
+      workflowStore.clearActive()
+    }
+  }, [id, navigate])
 
   return (
     <Box
       sx={{
-        width: "100%",
-        height: "100%",
+        width: '100%',
+        height: '100%',
         backgroundColor: (theme) => theme.palette.custom.cavityBg,
-        position: "relative",
+        position: 'relative',
       }}
     >
       <WorkflowCanvas />
       {loading && (
         <Box
           sx={{
-            position: "absolute",
+            position: 'absolute',
             inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             zIndex: 5,
             backgroundColor: (theme) => theme.palette.custom.cavityBg,
           }}
@@ -56,7 +50,7 @@ function WorkflowEditorPage() {
         </Box>
       )}
     </Box>
-  );
+  )
 }
 
-export {WorkflowEditorPage};
+export { WorkflowEditorPage }

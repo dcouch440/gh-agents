@@ -1,37 +1,30 @@
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
-import {useTheme} from "@mui/material/styles";
-import {DocumenterIcon} from "@/components/canvas/Icons/DocumentIcon";
+import Box from '@mui/material/Box'
+import Typography from '@mui/material/Typography'
+import { useTheme } from '@mui/material/styles'
+import { DocumenterIcon } from '@/components/canvas/Icons/DocumentIcon'
 
 type DocumenterHeaderProps = {
-  name: string;
-  documentNames: string[];
-  documentCount: number;
-  modelId: string | null;
-  agentName: string | null;
-};
+  name: string
+  documentNames: string[]
+  documentCount: number
+  modelId: string | null
+  agentName: string | null
+}
 
-function DocumenterHeader({
-  name,
-  documentNames,
-  documentCount,
-  modelId,
-  agentName,
-}: DocumenterHeaderProps) {
-  const theme = useTheme();
-  const docSummary =
-    documentNames.length > 0 ? documentNames.join(" \u00b7 ") : null;
+function DocumenterHeader({ name, documentNames, documentCount, modelId, agentName }: DocumenterHeaderProps) {
+  const theme = useTheme()
+  const docSummary = documentNames.length > 0 ? documentNames.join(' \u00b7 ') : null
 
   return (
     <Box
       sx={{
-        width: "100%",
-        height: "100%",
-        display: "flex",
-        alignItems: "center",
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
         gap: 1.5,
         px: 1.5,
-        overflow: "hidden",
+        overflow: 'hidden',
       }}
     >
       {/* Icon */}
@@ -40,9 +33,9 @@ function DocumenterHeader({
           flexShrink: 0,
           width: 36,
           height: 36,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
         <DocumenterIcon />
@@ -53,8 +46,8 @@ function DocumenterHeader({
         sx={{
           flex: 1,
           minWidth: 0,
-          display: "flex",
-          flexDirection: "column",
+          display: 'flex',
+          flexDirection: 'column',
           gap: 0.25,
         }}
       >
@@ -62,11 +55,11 @@ function DocumenterHeader({
           sx={{
             fontSize: 14,
             fontWeight: 600,
-            color: "text.primary",
+            color: 'text.primary',
             lineHeight: 1.2,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
           }}
         >
           {name}
@@ -74,14 +67,14 @@ function DocumenterHeader({
         <Typography
           sx={{
             fontSize: 11,
-            color: docSummary !== null ? "text.secondary" : "text.disabled",
+            color: docSummary !== null ? 'text.secondary' : 'text.disabled',
             lineHeight: 1.2,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
           }}
         >
-          {docSummary ?? "No documents"}
+          {docSummary ?? 'No documents'}
         </Typography>
       </Box>
 
@@ -89,58 +82,58 @@ function DocumenterHeader({
       <Box
         sx={{
           flexShrink: 0,
-          display: "flex",
-          alignItems: "center",
+          display: 'flex',
+          alignItems: 'center',
           gap: 0.5,
         }}
       >
         {documentCount > 0 && (
           <Box
             sx={{
-              display: "inline-flex",
-              alignItems: "center",
+              display: 'inline-flex',
+              alignItems: 'center',
               px: 0.75,
               py: 0.25,
-              borderRadius: "4px",
+              borderRadius: '4px',
               backgroundColor: theme.palette.custom.hoverOverlay,
               border: 1,
-              borderColor: "divider",
+              borderColor: 'divider',
             }}
           >
             <Typography
               sx={{
                 fontSize: 10,
-                color: "text.secondary",
+                color: 'text.secondary',
                 lineHeight: 1,
-                whiteSpace: "nowrap",
+                whiteSpace: 'nowrap',
               }}
             >
-              {documentCount} {documentCount === 1 ? "doc" : "docs"}
+              {documentCount} {documentCount === 1 ? 'doc' : 'docs'}
             </Typography>
           </Box>
         )}
         {agentName !== null && (
           <Box
             sx={{
-              display: "inline-flex",
-              alignItems: "center",
+              display: 'inline-flex',
+              alignItems: 'center',
               px: 0.75,
               py: 0.25,
-              borderRadius: "4px",
+              borderRadius: '4px',
               backgroundColor: theme.palette.custom.hoverOverlay,
               border: 1,
-              borderColor: "divider",
+              borderColor: 'divider',
             }}
           >
             <Typography
               sx={{
                 fontSize: 10,
-                color: "text.secondary",
+                color: 'text.secondary',
                 lineHeight: 1,
-                whiteSpace: "nowrap",
+                whiteSpace: 'nowrap',
                 maxWidth: 80,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
               }}
             >
               {agentName}
@@ -150,25 +143,25 @@ function DocumenterHeader({
         {modelId !== null && (
           <Box
             sx={{
-              display: "inline-flex",
-              alignItems: "center",
+              display: 'inline-flex',
+              alignItems: 'center',
               px: 0.75,
               py: 0.25,
-              borderRadius: "4px",
+              borderRadius: '4px',
               backgroundColor: theme.palette.custom.hoverOverlay,
               border: 1,
-              borderColor: "divider",
+              borderColor: 'divider',
             }}
           >
             <Typography
               sx={{
                 fontSize: 10,
-                color: "text.secondary",
+                color: 'text.secondary',
                 lineHeight: 1,
-                whiteSpace: "nowrap",
+                whiteSpace: 'nowrap',
                 maxWidth: 80,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
               }}
             >
               {modelId}
@@ -177,8 +170,8 @@ function DocumenterHeader({
         )}
       </Box>
     </Box>
-  );
+  )
 }
 
-export {DocumenterHeader};
-export type {DocumenterHeaderProps};
+export { DocumenterHeader }
+export type { DocumenterHeaderProps }

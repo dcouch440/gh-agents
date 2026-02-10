@@ -9,12 +9,7 @@ type KeyValueProps = {
 function KeyValue({ label, children }: KeyValueProps) {
   return (
     <Box sx={{ mb: 1 }}>
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        component="div"
-        sx={{ mb: 0.5 }}
-      >
+      <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 0.5 }}>
         {label}
       </Typography>
       <Typography variant="body2" component="div">

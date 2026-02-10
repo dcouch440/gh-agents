@@ -1,20 +1,20 @@
-import { type ReactNode } from 'react';
-import Box from '@mui/material/Box';
-import IconButton from '@mui/material/IconButton';
-import { Tooltip } from '@/components/primitives/Tooltip';
-import Badge from '@mui/material/Badge';
-import { useTheme } from '@mui/material/styles';
-import { LAYOUT, ANIMATION } from '@/constants';
-import type { NavBarItem } from './types';
+import { type ReactNode } from 'react'
+import Box from '@mui/material/Box'
+import IconButton from '@mui/material/IconButton'
+import { Tooltip } from '@/components/primitives/Tooltip'
+import Badge from '@mui/material/Badge'
+import { useTheme } from '@mui/material/styles'
+import { LAYOUT, ANIMATION } from '@/constants'
+import type { NavBarItem } from './types'
 
 type TopNavBarProps = {
-  navItems: NavBarItem[];
-  utilityItems: NavBarItem[];
-  trailing?: ReactNode;
-};
+  navItems: NavBarItem[]
+  utilityItems: NavBarItem[]
+  trailing?: ReactNode
+}
 
 function TopNavBar({ navItems, utilityItems, trailing }: TopNavBarProps) {
-  const theme = useTheme();
+  const theme = useTheme()
 
   const renderItem = (item: NavBarItem) => {
     return (
@@ -49,11 +49,7 @@ function TopNavBar({ navItems, utilityItems, trailing }: TopNavBarProps) {
           }}
         >
           {item.badge && item.badge > 0 ? (
-            <Badge
-              variant="dot"
-              color="warning"
-              sx={{ '& .MuiBadge-badge': { top: 2, right: 2, width: 6, height: 6, minWidth: 6 } }}
-            >
+            <Badge variant="dot" color="warning" sx={{ '& .MuiBadge-badge': { top: 2, right: 2, width: 6, height: 6, minWidth: 6 } }}>
               {item.icon}
             </Badge>
           ) : (
@@ -61,8 +57,8 @@ function TopNavBar({ navItems, utilityItems, trailing }: TopNavBarProps) {
           )}
         </IconButton>
       </Tooltip>
-    );
-  };
+    )
+  }
 
   return (
     <Box
@@ -76,18 +72,14 @@ function TopNavBar({ navItems, utilityItems, trailing }: TopNavBarProps) {
         borderBottom: 1,
         borderColor: theme.palette.mode === 'light' ? 'rgba(45, 27, 14, 0.18)' : 'divider',
         backgroundColor: theme.palette.custom.chromeBg,
-        boxShadow: theme.palette.mode === 'light'
-          ? '0 1px 3px rgba(0, 0, 0, 0.15)'
-          : '0 1px 2px rgba(0, 0, 0, 0.2)',
+        boxShadow: theme.palette.mode === 'light' ? '0 1px 3px rgba(0, 0, 0, 0.15)' : '0 1px 2px rgba(0, 0, 0, 0.2)',
         zIndex: 10,
         position: 'relative',
         gap: 0.25,
       }}
     >
       {/* Left: navigation items */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
-        {navItems.map(renderItem)}
-      </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>{navItems.map(renderItem)}</Box>
 
       {/* Spacer */}
       <Box sx={{ flexGrow: 1 }} />
@@ -98,8 +90,8 @@ function TopNavBar({ navItems, utilityItems, trailing }: TopNavBarProps) {
         {trailing}
       </Box>
     </Box>
-  );
+  )
 }
 
-export { TopNavBar };
-export type { TopNavBarProps };
+export { TopNavBar }
+export type { TopNavBarProps }

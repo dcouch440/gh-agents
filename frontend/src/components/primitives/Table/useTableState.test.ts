@@ -1,7 +1,7 @@
-import {describe, it, expect} from 'vitest'
-import {renderHook, act} from '@testing-library/react'
-import {useTableState} from './useTableState'
-import type {TableColumn} from './types'
+import { describe, it, expect } from 'vitest'
+import { renderHook, act } from '@testing-library/react'
+import { useTableState } from './useTableState'
+import type { TableColumn } from './types'
 
 type TestRow = {
   id: string
@@ -11,23 +11,23 @@ type TestRow = {
 }
 
 const mockData: TestRow[] = [
-  {id: '1', name: 'Alice', age: 30, status: 'active'},
-  {id: '2', name: 'Bob', age: 25, status: 'inactive'},
-  {id: '3', name: 'Charlie', age: 35, status: 'active'},
-  {id: '4', name: 'David', age: 28, status: 'active'},
-  {id: '5', name: 'Eve', age: 32, status: 'inactive'},
+  { id: '1', name: 'Alice', age: 30, status: 'active' },
+  { id: '2', name: 'Bob', age: 25, status: 'inactive' },
+  { id: '3', name: 'Charlie', age: 35, status: 'active' },
+  { id: '4', name: 'David', age: 28, status: 'active' },
+  { id: '5', name: 'Eve', age: 32, status: 'inactive' },
 ]
 
 const mockColumns: TableColumn<TestRow>[] = [
-  {key: 'name', header: 'Name', sortable: true},
-  {key: 'age', header: 'Age', sortable: true},
-  {key: 'status', header: 'Status', sortable: true},
+  { key: 'name', header: 'Name', sortable: true },
+  { key: 'age', header: 'Age', sortable: true },
+  { key: 'status', header: 'Status', sortable: true },
 ]
 
 describe('useTableState', () => {
   describe('basic rendering', () => {
     it('returns all data when no features enabled', () => {
-      const {result} = renderHook(() =>
+      const { result } = renderHook(() =>
         useTableState({
           data: mockData,
           columns: mockColumns,
@@ -45,7 +45,7 @@ describe('useTableState', () => {
 
   describe('sorting', () => {
     it('sorts data ascending when sort is clicked first time', () => {
-      const {result} = renderHook(() =>
+      const { result } = renderHook(() =>
         useTableState({
           data: mockData,
           columns: mockColumns,
@@ -64,7 +64,7 @@ describe('useTableState', () => {
     })
 
     it('sorts data descending when sort is clicked second time', () => {
-      const {result} = renderHook(() =>
+      const { result } = renderHook(() =>
         useTableState({
           data: mockData,
           columns: mockColumns,
@@ -87,7 +87,7 @@ describe('useTableState', () => {
     })
 
     it('clears sort when sort is clicked third time', () => {
-      const {result} = renderHook(() =>
+      const { result } = renderHook(() =>
         useTableState({
           data: mockData,
           columns: mockColumns,
@@ -112,7 +112,7 @@ describe('useTableState', () => {
     })
 
     it('sorts numbers correctly', () => {
-      const {result} = renderHook(() =>
+      const { result } = renderHook(() =>
         useTableState({
           data: mockData,
           columns: mockColumns,
@@ -129,7 +129,7 @@ describe('useTableState', () => {
     })
 
     it('uses default sort column', () => {
-      const {result} = renderHook(() =>
+      const { result } = renderHook(() =>
         useTableState({
           data: mockData,
           columns: mockColumns,
@@ -147,7 +147,7 @@ describe('useTableState', () => {
 
   describe('search', () => {
     it('filters data based on search query', () => {
-      const {result} = renderHook(() =>
+      const { result } = renderHook(() =>
         useTableState({
           data: mockData,
           columns: mockColumns,
@@ -166,7 +166,7 @@ describe('useTableState', () => {
     })
 
     it('is case insensitive', () => {
-      const {result} = renderHook(() =>
+      const { result } = renderHook(() =>
         useTableState({
           data: mockData,
           columns: mockColumns,
@@ -184,7 +184,7 @@ describe('useTableState', () => {
     })
 
     it('searches across multiple fields', () => {
-      const {result} = renderHook(() =>
+      const { result } = renderHook(() =>
         useTableState({
           data: mockData,
           columns: mockColumns,
@@ -201,7 +201,7 @@ describe('useTableState', () => {
     })
 
     it('resets page to 0 when search changes', () => {
-      const {result} = renderHook(() =>
+      const { result } = renderHook(() =>
         useTableState({
           data: mockData,
           columns: mockColumns,
@@ -227,7 +227,7 @@ describe('useTableState', () => {
 
   describe('pagination', () => {
     it('paginates data correctly', () => {
-      const {result} = renderHook(() =>
+      const { result } = renderHook(() =>
         useTableState({
           data: mockData,
           columns: mockColumns,
@@ -241,7 +241,7 @@ describe('useTableState', () => {
     })
 
     it('changes page size', () => {
-      const {result} = renderHook(() =>
+      const { result } = renderHook(() =>
         useTableState({
           data: mockData,
           columns: mockColumns,
@@ -259,7 +259,7 @@ describe('useTableState', () => {
     })
 
     it('resets to page 0 when page size changes', () => {
-      const {result} = renderHook(() =>
+      const { result } = renderHook(() =>
         useTableState({
           data: mockData,
           columns: mockColumns,
@@ -282,7 +282,7 @@ describe('useTableState', () => {
     })
 
     it('navigates between pages', () => {
-      const {result} = renderHook(() =>
+      const { result } = renderHook(() =>
         useTableState({
           data: mockData,
           columns: mockColumns,
@@ -303,7 +303,7 @@ describe('useTableState', () => {
 
   describe('selection', () => {
     it('toggles row selection', () => {
-      const {result} = renderHook(() =>
+      const { result } = renderHook(() =>
         useTableState({
           data: mockData,
           columns: mockColumns,
@@ -324,7 +324,7 @@ describe('useTableState', () => {
     })
 
     it('selects all rows', () => {
-      const {result} = renderHook(() =>
+      const { result } = renderHook(() =>
         useTableState({
           data: mockData,
           columns: mockColumns,
@@ -341,7 +341,7 @@ describe('useTableState', () => {
     })
 
     it('deselects all rows when all are selected', () => {
-      const {result} = renderHook(() =>
+      const { result } = renderHook(() =>
         useTableState({
           data: mockData,
           columns: mockColumns,
@@ -362,7 +362,7 @@ describe('useTableState', () => {
     })
 
     it('clears selection', () => {
-      const {result} = renderHook(() =>
+      const { result } = renderHook(() =>
         useTableState({
           data: mockData,
           columns: mockColumns,
@@ -386,7 +386,7 @@ describe('useTableState', () => {
 
   describe('combined features', () => {
     it('sorts and filters data', () => {
-      const {result} = renderHook(() =>
+      const { result } = renderHook(() =>
         useTableState({
           data: mockData,
           columns: mockColumns,
@@ -410,7 +410,7 @@ describe('useTableState', () => {
     })
 
     it('sorts, filters, and paginates data', () => {
-      const {result} = renderHook(() =>
+      const { result } = renderHook(() =>
         useTableState({
           data: mockData,
           columns: mockColumns,

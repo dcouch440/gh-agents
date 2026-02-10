@@ -76,8 +76,23 @@ export const WORKFLOW_EVENT = {
 } as const
 
 export type WorkflowStartedData = { workflow_id: string; total_steps: number }
-export type StepStartedData = { workflow_id: string; step_id: string; step_name: string; agent_id: string | null; execution_id: string | null }
-export type StepCompletedData = { workflow_id: string; step_id: string; step_name: string; agent_id: string | null; output: string | null; input_tokens: number | null; output_tokens: number | null; duration_ms: number | null }
+export type StepStartedData = {
+  workflow_id: string
+  step_id: string
+  step_name: string
+  agent_id: string | null
+  execution_id: string | null
+}
+export type StepCompletedData = {
+  workflow_id: string
+  step_id: string
+  step_name: string
+  agent_id: string | null
+  output: string | null
+  input_tokens: number | null
+  output_tokens: number | null
+  duration_ms: number | null
+}
 export type StepFailedData = { workflow_id: string; step_id: string; step_name: string; error: string }
 export type StepPausedData = { workflow_id: string; step_id: string; step_name: string }
 export type ForEachProgressData = { workflow_id: string; step_id: string; step_name: string; completed: number; total: number }
@@ -98,8 +113,22 @@ export const ROOM_EVENT = {
 } as const
 
 export type SpeakerStartData = { room_session_id: string; agent_id: string; agent_name: string; speaker_order: number; turn_number: number }
-export type SpeakerTokenData = { room_session_id: string; agent_id: string; agent_name: string; content: string; speaker_order: number; turn_number: number }
-export type SpeakerEndData = { room_session_id: string; agent_id: string; agent_name: string; content: string; speaker_order: number; turn_number: number }
+export type SpeakerTokenData = {
+  room_session_id: string
+  agent_id: string
+  agent_name: string
+  content: string
+  speaker_order: number
+  turn_number: number
+}
+export type SpeakerEndData = {
+  room_session_id: string
+  agent_id: string
+  agent_name: string
+  content: string
+  speaker_order: number
+  turn_number: number
+}
 export type TurnCompleteData = { room_session_id: string; turn_number: number }
 export type SessionCompleteData = { room_session_id: string; turn_number: number }
 

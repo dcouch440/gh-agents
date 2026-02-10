@@ -3,12 +3,7 @@ import { render, screen } from '@/test/render'
 import userEvent from '@testing-library/user-event'
 import { CanvasToolbar } from './CanvasToolbar'
 
-const {
-  mockSelectDirty,
-  mockSelectSteps,
-  mockSaveAllDirtySteps,
-  mockRevertSteps,
-} = vi.hoisted(() => ({
+const { mockSelectDirty, mockSelectSteps, mockSaveAllDirtySteps, mockRevertSteps } = vi.hoisted(() => ({
   mockSelectDirty: vi.fn(() => false),
   mockSelectSteps: vi.fn((): unknown[] => []),
   mockSaveAllDirtySteps: vi.fn(() => Promise.resolve()),
@@ -31,10 +26,7 @@ vi.mock('@/stores', () => ({
   },
 }))
 
-const renderToolbar = () =>
-  render(
-    <CanvasToolbar />,
-  )
+const renderToolbar = () => render(<CanvasToolbar />)
 
 beforeEach(() => {
   vi.clearAllMocks()

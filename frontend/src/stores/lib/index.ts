@@ -3,10 +3,7 @@ export { useStore } from './useStore'
 export { shallow } from './shallow'
 export { batch } from './batch'
 export { createResourceStore } from './createResourceStore'
-export {
-  createNormalizedMap, toArray, nmGet, nmHas, nmSize,
-  nmSet, nmDelete, nmFromArray, nmMerge,
-} from './NormalizedMap'
+export { createNormalizedMap, toArray, nmGet, nmHas, nmSize, nmSet, nmDelete, nmFromArray, nmMerge } from './NormalizedMap'
 export { logger, configureLogger, enableLogger, disableLogger } from './devtools'
 
 export type { StoreApi, SetState, GetState, StateCreator, Listener } from './types'

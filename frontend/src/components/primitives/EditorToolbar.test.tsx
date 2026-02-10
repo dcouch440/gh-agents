@@ -4,7 +4,11 @@ import { EditorToolbar } from './EditorToolbar'
 
 describe('EditorToolbar', () => {
   it('renders children', () => {
-    render(<EditorToolbar><span>child content</span></EditorToolbar>)
+    render(
+      <EditorToolbar>
+        <span>child content</span>
+      </EditorToolbar>,
+    )
     expect(screen.getByText('child content')).toBeInTheDocument()
   })
 

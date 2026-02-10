@@ -1,10 +1,10 @@
-import type { Components, Theme } from '@mui/material/styles';
+import type { Components, Theme } from '@mui/material/styles'
 
 const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
-  const isDark = mode === 'dark';
+  const isDark = mode === 'dark'
 
-  const surfaceBg = isDark ? '#15181e' : '#FEFCFA';
-  const elevatedBg = isDark ? '#1a1d25' : '#FEFCFA';
+  const surfaceBg = isDark ? '#15181e' : '#FEFCFA'
+  const elevatedBg = isDark ? '#1a1d25' : '#FEFCFA'
 
   return {
     MuiCssBaseline: {
@@ -111,9 +111,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
             borderColor: theme.palette.divider,
           },
           '&:hover .MuiOutlinedInput-notchedOutline': {
-            borderColor: isDark
-              ? 'rgba(240, 246, 252, 0.15)'
-              : 'rgba(45, 27, 14, 0.18)',
+            borderColor: isDark ? 'rgba(240, 246, 252, 0.15)' : 'rgba(45, 27, 14, 0.18)',
           },
           '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
             borderColor: theme.palette.primary.main,
@@ -181,9 +179,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
           backgroundColor: isDark ? '#1a1d25' : '#2D1B0E',
           border: `1px solid ${isDark ? 'rgba(240, 246, 252, 0.08)' : 'rgba(45, 27, 14, 0.12)'}`,
           backdropFilter: 'blur(8px)',
-          boxShadow: isDark
-            ? '0 4px 12px rgba(0, 0, 0, 0.4)'
-            : '0 4px 12px rgba(0, 0, 0, 0.08)',
+          boxShadow: isDark ? '0 4px 12px rgba(0, 0, 0, 0.4)' : '0 4px 12px rgba(0, 0, 0, 0.08)',
         },
       },
     },
@@ -193,9 +189,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
           backgroundColor: elevatedBg,
           border: `1px solid ${theme.palette.divider}`,
           borderRadius: 10,
-          boxShadow: isDark
-            ? '0 8px 24px rgba(0, 0, 0, 0.4)'
-            : '0 8px 24px rgba(0, 0, 0, 0.08)',
+          boxShadow: isDark ? '0 8px 24px rgba(0, 0, 0, 0.4)' : '0 8px 24px rgba(0, 0, 0, 0.08)',
         }),
       },
     },
@@ -212,9 +206,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
     MuiDivider: {
       styleOverrides: {
         root: {
-          borderColor: isDark
-            ? 'rgba(240, 246, 252, 0.06)'
-            : 'rgba(45, 27, 14, 0.10)',
+          borderColor: isDark ? 'rgba(240, 246, 252, 0.06)' : 'rgba(45, 27, 14, 0.10)',
         },
       },
     },
@@ -225,7 +217,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
         },
       },
     },
-  };
-};
+  }
+}
 
-export { getComponents };
+export { getComponents }

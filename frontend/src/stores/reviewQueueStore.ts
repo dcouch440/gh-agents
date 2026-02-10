@@ -28,8 +28,7 @@ const store = createStore<ReviewQueueState>(() => ({
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const extractError = (e: unknown): string =>
-  e instanceof Error ? e.message : 'reviewQueue: unknown error'
+const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'reviewQueue: unknown error')
 
 // ── Selectors ────────────────────────────────────────────────────────────────
 
@@ -37,8 +36,7 @@ const selectExecutions = (s: ReviewQueueState): AgentExecution[] => s.executions
 
 const selectPendingCount = (s: ReviewQueueState): number => s.executions.length
 
-const selectNotification = (s: ReviewQueueState): ReviewQueueState['notification'] =>
-  s.notification
+const selectNotification = (s: ReviewQueueState): ReviewQueueState['notification'] => s.notification
 
 const selectLoading = (s: ReviewQueueState): boolean => s.loading
 

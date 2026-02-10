@@ -13,7 +13,7 @@ describe('PropertyRow', () => {
     render(
       <PropertyRow label="Toggle">
         <span data-testid="custom">Custom</span>
-      </PropertyRow>
+      </PropertyRow>,
     )
     expect(screen.getByText('Toggle')).toBeInTheDocument()
     expect(screen.getByTestId('custom')).toBeInTheDocument()

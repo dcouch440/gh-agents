@@ -37,11 +37,18 @@ describe('activityStore', () => {
     })
 
     it('preserves wire envelope metadata', () => {
-      activityStore.handleWsEvent(makeMsg('workflow', 'started', { workflow_id: 'wf-1', total_steps: 1 }, {
-        ts: '2025-06-15T12:00:00Z',
-        run_id: 'run-abc',
-        user_id: 'user-xyz',
-      }))
+      activityStore.handleWsEvent(
+        makeMsg(
+          'workflow',
+          'started',
+          { workflow_id: 'wf-1', total_steps: 1 },
+          {
+            ts: '2025-06-15T12:00:00Z',
+            run_id: 'run-abc',
+            user_id: 'user-xyz',
+          },
+        ),
+      )
 
       const entry = activityStore.selectAll(activityStore.store.getState())[0]
       expect(entry.ts).toBe('2025-06-15T12:00:00Z')
@@ -70,10 +77,17 @@ describe('activityStore', () => {
     })
 
     it('handles null run_id and user_id', () => {
-      activityStore.handleWsEvent(makeMsg('workflow', 'started', { workflow_id: 'wf-1', total_steps: 1 }, {
-        run_id: null,
-        user_id: null,
-      }))
+      activityStore.handleWsEvent(
+        makeMsg(
+          'workflow',
+          'started',
+          { workflow_id: 'wf-1', total_steps: 1 },
+          {
+            run_id: null,
+            user_id: null,
+          },
+        ),
+      )
 
       const entry = activityStore.selectAll(activityStore.store.getState())[0]
       expect(entry.runId).toBeNull()
@@ -89,9 +103,13 @@ describe('activityStore', () => {
       activityStore.store.setState({ maxSize: 3 })
 
       for (let i = 0; i < 5; i++) {
-        activityStore.handleWsEvent(makeMsg('session', 'created', {
-          session_id: `sess-${i}`, title: `Session ${i}`, mode_id: 'mode-1',
-        }))
+        activityStore.handleWsEvent(
+          makeMsg('session', 'created', {
+            session_id: `sess-${i}`,
+            title: `Session ${i}`,
+            mode_id: 'mode-1',
+          }),
+        )
       }
 
       const entries = activityStore.selectAll(activityStore.store.getState())
@@ -108,9 +126,25 @@ describe('activityStore', () => {
   describe('selectors', () => {
     const seedEntries = (): void => {
       activityStore.handleWsEvent(makeMsg('workflow', 'started', { workflow_id: 'wf-1', total_steps: 3 }, { run_id: 'run-1' }))
-      activityStore.handleWsEvent(makeMsg('workflow', 'step_failed', { workflow_id: 'wf-1', step_id: 's-1', step_name: 'Analyze', error: 'timeout' }, { run_id: 'run-1' }))
-      activityStore.handleWsEvent(makeMsg('room', 'speaker_start', { room_session_id: 'rs-1', agent_id: 'a-1', agent_name: 'Alice', speaker_order: 1, turn_number: 1 }, { run_id: 'run-2' }))
-      activityStore.handleWsEvent(makeMsg('session', 'created', { session_id: 'sess-1', title: 'Test', mode_id: 'mode-1' }, { run_id: null }))
+      activityStore.handleWsEvent(
+        makeMsg(
+          'workflow',
+          'step_failed',
+          { workflow_id: 'wf-1', step_id: 's-1', step_name: 'Analyze', error: 'timeout' },
+          { run_id: 'run-1' },
+        ),
+      )
+      activityStore.handleWsEvent(
+        makeMsg(
+          'room',
+          'speaker_start',
+          { room_session_id: 'rs-1', agent_id: 'a-1', agent_name: 'Alice', speaker_order: 1, turn_number: 1 },
+          { run_id: 'run-2' },
+        ),
+      )
+      activityStore.handleWsEvent(
+        makeMsg('session', 'created', { session_id: 'sess-1', title: 'Test', mode_id: 'mode-1' }, { run_id: null }),
+      )
       activityStore.handleWsEvent(makeMsg('workflow', 'failed', { workflow_id: 'wf-1', error: 'fatal' }, { run_id: 'run-1' }))
     }
 

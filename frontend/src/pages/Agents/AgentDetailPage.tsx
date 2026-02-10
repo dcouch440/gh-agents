@@ -3,16 +3,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Box, Typography, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material'
 import { useStore, toolStore, documentStore, agentStore, toolRouterStore } from '@/stores'
 import { api } from '@/api'
-import {
-  PageHeader,
-  Card,
-  LoadingSpinner,
-  ErrorMessage,
-  EmptyState,
-  DataTable,
-  Button,
-  type Column,
-} from '@/components/primitives'
+import { PageHeader, Card, LoadingSpinner, ErrorMessage, EmptyState, DataTable, Button, type Column } from '@/components/primitives'
 import {
   NoRouterState,
   RouterInfoCard,
@@ -56,7 +47,10 @@ function AgentDetailPage() {
 
   const allTools = useStore(toolStore.store, toolStore.selectAll)
 
-  useEffect(() => { void toolStore.fetchAll(); void documentStore.fetchAll() }, [])
+  useEffect(() => {
+    void toolStore.fetchAll()
+    void documentStore.fetchAll()
+  }, [])
 
   // Fetch agent
   useEffect(() => {
@@ -69,7 +63,8 @@ function AgentDetailPage() {
     if (!id) return
     setDocsLoading(true)
     setDocsError(null)
-    agentStore.fetchContext(id)
+    agentStore
+      .fetchContext(id)
       .catch((e: unknown) => setDocsError(e instanceof Error ? e.message : 'Failed to load context'))
       .finally(() => setDocsLoading(false))
   }, [id])
@@ -80,7 +75,8 @@ function AgentDetailPage() {
     void toolRouterStore.fetchOne(routerId)
     setModesLoading(true)
     setModesError(null)
-    toolRouterStore.fetchModes(routerId)
+    toolRouterStore
+      .fetchModes(routerId)
       .catch((e: unknown) => setModesError(e instanceof Error ? e.message : 'Failed to load modes'))
       .finally(() => setModesLoading(false))
   }, [routerId])
@@ -90,28 +86,34 @@ function AgentDetailPage() {
     await agentStore.fetchOne(id)
   }, [id])
 
-  const addDocument = useCallback(async (documentId: string) => {
-    if (!id) return
-    const currentIds = agentDocs.map((d) => d.id)
-    if (currentIds.includes(documentId)) return
-    setSaving(true)
-    try {
-      await agentStore.setContext(id, [...currentIds, documentId])
-    } finally {
-      setSaving(false)
-    }
-  }, [id, agentDocs])
+  const addDocument = useCallback(
+    async (documentId: string) => {
+      if (!id) return
+      const currentIds = agentDocs.map((d) => d.id)
+      if (currentIds.includes(documentId)) return
+      setSaving(true)
+      try {
+        await agentStore.setContext(id, [...currentIds, documentId])
+      } finally {
+        setSaving(false)
+      }
+    },
+    [id, agentDocs],
+  )
 
-  const removeDocument = useCallback(async (documentId: string) => {
-    if (!id) return
-    const currentIds = agentDocs.map((d) => d.id).filter((did) => did !== documentId)
-    setSaving(true)
-    try {
-      await agentStore.setContext(id, currentIds)
-    } finally {
-      setSaving(false)
-    }
-  }, [id, agentDocs])
+  const removeDocument = useCallback(
+    async (documentId: string) => {
+      if (!id) return
+      const currentIds = agentDocs.map((d) => d.id).filter((did) => did !== documentId)
+      setSaving(true)
+      try {
+        await agentStore.setContext(id, currentIds)
+      } finally {
+        setSaving(false)
+      }
+    },
+    [id, agentDocs],
+  )
 
   const reloadModes = useCallback(async () => {
     if (!routerId) return
@@ -185,7 +187,14 @@ function AgentDetailPage() {
       key: 'actions',
       header: 'Actions',
       render: (doc) => (
-        <Button variant="danger" size="small" onClick={() => { void handleRemoveDocument(doc.id) }} disabled={saving}>
+        <Button
+          variant="danger"
+          size="small"
+          onClick={() => {
+            void handleRemoveDocument(doc.id)
+          }}
+          disabled={saving}
+        >
           Remove
         </Button>
       ),
@@ -314,14 +323,15 @@ function AgentDetailPage() {
     setShowModeForm(true)
   }
 
-  const routerFormInitialValues = editingRouter && router
-    ? {
-        name: router.name,
-        description: router.description ?? undefined,
-        system_prompt: router.system_prompt,
-        model_id: router.model_id,
-      }
-    : null
+  const routerFormInitialValues =
+    editingRouter && router
+      ? {
+          name: router.name,
+          description: router.description ?? undefined,
+          system_prompt: router.system_prompt,
+          model_id: router.model_id,
+        }
+      : null
 
   const modeFormInitialValues = editingMode
     ? {
@@ -340,7 +350,9 @@ function AgentDetailPage() {
   return (
     <Box>
       <PageHeader title={agent.name}>
-        <Typography variant="body2" color="text.secondary">{agent.model_id}</Typography>
+        <Typography variant="body2" color="text.secondary">
+          {agent.model_id}
+        </Typography>
       </PageHeader>
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -388,12 +400,7 @@ function AgentDetailPage() {
         <Card
           title="Agent Context Documents"
           actions={
-            <Button
-              variant="primary"
-              size="small"
-              onClick={() => setShowAddDialog(true)}
-              disabled={saving || allDocsLoading}
-            >
+            <Button variant="primary" size="small" onClick={() => setShowAddDialog(true)} disabled={saving || allDocsLoading}>
               Add Document
             </Button>
           }
@@ -417,10 +424,7 @@ function AgentDetailPage() {
           }
         >
           {!agent.router_id ? (
-            <NoRouterState
-              onCreateRouter={() => setShowRouterForm(true)}
-              creating={creating}
-            />
+            <NoRouterState onCreateRouter={() => setShowRouterForm(true)} creating={creating} />
           ) : routerLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
               <LoadingSpinner size="md" />
@@ -432,8 +436,12 @@ function AgentDetailPage() {
               <RouterInfoCard
                 router={router}
                 onEdit={handleOpenEditRouter}
-                onDelete={() => { void handleDeleteRouter() }}
-                onManageTools={() => { void handleOpenRouterTools() }}
+                onDelete={() => {
+                  void handleDeleteRouter()
+                }}
+                onManageTools={() => {
+                  void handleOpenRouterTools()
+                }}
               />
               {modesLoading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
@@ -444,9 +452,15 @@ function AgentDetailPage() {
               ) : (
                 <RouterModesList
                   modes={routerModes}
-                  onEditMode={(m) => { void handleOpenEditMode(m) }}
-                  onDeleteMode={(m) => { void handleDeleteMode(m) }}
-                  onManageTools={(m) => { void handleOpenModeTools(m) }}
+                  onEditMode={(m) => {
+                    void handleOpenEditMode(m)
+                  }}
+                  onDeleteMode={(m) => {
+                    void handleDeleteMode(m)
+                  }}
+                  onManageTools={(m) => {
+                    void handleOpenModeTools(m)
+                  }}
                 />
               )}
             </>
@@ -465,7 +479,9 @@ function AgentDetailPage() {
               {availableDocuments.map((doc) => (
                 <Box
                   key={doc.id}
-                  onClick={() => { void handleAddDocument(doc.id) }}
+                  onClick={() => {
+                    void handleAddDocument(doc.id)
+                  }}
                   sx={{
                     p: 1.5,
                     border: 1,
@@ -496,8 +512,13 @@ function AgentDetailPage() {
       {/* Router Form Dialog */}
       <RouterFormDialog
         open={showRouterForm}
-        onClose={() => { setShowRouterForm(false); setEditingRouter(false) }}
-        onSubmit={(data) => { void (editingRouter ? handleUpdateRouter(data) : handleCreateRouter(data)) }}
+        onClose={() => {
+          setShowRouterForm(false)
+          setEditingRouter(false)
+        }}
+        onSubmit={(data) => {
+          void (editingRouter ? handleUpdateRouter(data) : handleCreateRouter(data))
+        }}
         initialValues={routerFormInitialValues}
         saving={creating}
         title={editingRouter ? 'Edit Router' : 'Create Router'}
@@ -506,8 +527,13 @@ function AgentDetailPage() {
       {/* Mode Form Dialog */}
       <ModeFormDialog
         open={showModeForm}
-        onClose={() => { setShowModeForm(false); setEditingMode(null) }}
-        onSubmit={(data, toolIds) => { void (editingMode ? handleUpdateMode(data, toolIds) : handleCreateMode(data, toolIds)) }}
+        onClose={() => {
+          setShowModeForm(false)
+          setEditingMode(null)
+        }}
+        onSubmit={(data, toolIds) => {
+          void (editingMode ? handleUpdateMode(data, toolIds) : handleCreateMode(data, toolIds))
+        }}
         initialValues={modeFormInitialValues}
         allTools={allTools}
         initialToolIds={editingModeToolIds}
@@ -518,8 +544,13 @@ function AgentDetailPage() {
       {/* Tool Assignment Dialog */}
       <ToolAssignmentDialog
         open={showToolAssignment}
-        onClose={() => { setShowToolAssignment(false); setToolAssignmentTarget(null) }}
-        onSave={(toolIds) => { void handleSaveTools(toolIds) }}
+        onClose={() => {
+          setShowToolAssignment(false)
+          setToolAssignmentTarget(null)
+        }}
+        onSave={(toolIds) => {
+          void handleSaveTools(toolIds)
+        }}
         allTools={allTools}
         assignedToolIds={assignedToolIds}
         saving={savingTools}

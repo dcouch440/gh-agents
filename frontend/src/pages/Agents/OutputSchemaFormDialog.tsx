@@ -1,19 +1,9 @@
-import {useReducer} from 'react'
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  TextField,
-  Box,
-  Alert,
-  Typography,
-} from '@mui/material'
-import {outputSchemaStore} from '@/stores'
-import {JsonEditor} from '@/components/primitives'
-import {validateJsonObject} from '@/utils/json'
-import {ApiError} from '@/api'
+import { useReducer } from 'react'
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Box, Alert, Typography } from '@mui/material'
+import { outputSchemaStore } from '@/stores'
+import { JsonEditor } from '@/components/primitives'
+import { validateJsonObject } from '@/utils/json'
+import { ApiError } from '@/api'
 
 type OutputSchemaFormDialogProps = {
   open: boolean
@@ -29,11 +19,11 @@ type FormState = {
 }
 
 type FormAction =
-  | {type: 'SET_NAME'; value: string}
-  | {type: 'SET_JSON_SCHEMA'; value: string}
-  | {type: 'SET_SAVING'; value: boolean}
-  | {type: 'SET_ERROR'; value: string | null}
-  | {type: 'RESET'}
+  | { type: 'SET_NAME'; value: string }
+  | { type: 'SET_JSON_SCHEMA'; value: string }
+  | { type: 'SET_SAVING'; value: boolean }
+  | { type: 'SET_ERROR'; value: string | null }
+  | { type: 'RESET' }
 
 const initialFormState: FormState = {
   name: '',
@@ -45,13 +35,13 @@ const initialFormState: FormState = {
 const formReducer = (state: FormState, action: FormAction): FormState => {
   switch (action.type) {
     case 'SET_NAME':
-      return {...state, name: action.value}
+      return { ...state, name: action.value }
     case 'SET_JSON_SCHEMA':
-      return {...state, jsonSchemaText: action.value}
+      return { ...state, jsonSchemaText: action.value }
     case 'SET_SAVING':
-      return {...state, saving: action.value}
+      return { ...state, saving: action.value }
     case 'SET_ERROR':
-      return {...state, error: action.value}
+      return { ...state, error: action.value }
     case 'RESET':
       return initialFormState
     default:
@@ -69,18 +59,18 @@ const validate = (state: FormState): string | null => {
   return null
 }
 
-function OutputSchemaFormDialog({open, onClose, onSave}: OutputSchemaFormDialogProps) {
+function OutputSchemaFormDialog({ open, onClose, onSave }: OutputSchemaFormDialogProps) {
   const [state, dispatch] = useReducer(formReducer, initialFormState)
 
   const handleSubmit = async () => {
     const error = validate(state)
     if (error) {
-      dispatch({type: 'SET_ERROR', value: error})
+      dispatch({ type: 'SET_ERROR', value: error })
       return
     }
 
-    dispatch({type: 'SET_SAVING', value: true})
-    dispatch({type: 'SET_ERROR', value: null})
+    dispatch({ type: 'SET_SAVING', value: true })
+    dispatch({ type: 'SET_ERROR', value: null })
 
     try {
       const parsed = JSON.parse(state.jsonSchemaText) as Record<string, unknown>
@@ -91,7 +81,7 @@ function OutputSchemaFormDialog({open, onClose, onSave}: OutputSchemaFormDialogP
 
       onSave(schema.id)
       onClose()
-      dispatch({type: 'RESET'})
+      dispatch({ type: 'RESET' })
     } catch (err) {
       let errorMessage = 'Failed to create output schema'
 
@@ -105,16 +95,16 @@ function OutputSchemaFormDialog({open, onClose, onSave}: OutputSchemaFormDialogP
         errorMessage = err.message
       }
 
-      dispatch({type: 'SET_ERROR', value: errorMessage})
+      dispatch({ type: 'SET_ERROR', value: errorMessage })
     } finally {
-      dispatch({type: 'SET_SAVING', value: false})
+      dispatch({ type: 'SET_SAVING', value: false })
     }
   }
 
   const handleClose = () => {
     if (!state.saving) {
       onClose()
-      dispatch({type: 'RESET'})
+      dispatch({ type: 'RESET' })
     }
   }
 
@@ -123,32 +113,32 @@ function OutputSchemaFormDialog({open, onClose, onSave}: OutputSchemaFormDialogP
       <DialogTitle>Create Output Schema</DialogTitle>
       <DialogContent dividers>
         {state.error && (
-          <Alert severity="error" sx={{mb: 2}}>
+          <Alert severity="error" sx={{ mb: 2 }}>
             {state.error}
           </Alert>
         )}
-        <Box sx={{display: 'flex', flexDirection: 'column', gap: 2}}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <TextField
             label="Name"
             value={state.name}
-            onChange={(e) => dispatch({type: 'SET_NAME', value: e.target.value})}
+            onChange={(e) => dispatch({ type: 'SET_NAME', value: e.target.value })}
             disabled={state.saving}
             required
             fullWidth
-            inputProps={{maxLength: 200}}
+            inputProps={{ maxLength: 200 }}
             helperText={`${state.name.length}/200 characters`}
           />
           <Box>
-            <Typography variant="body2" sx={{mb: 1, fontWeight: 500}}>
+            <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
               JSON Schema
             </Typography>
             <JsonEditor
               value={state.jsonSchemaText}
-              onChange={(value) => dispatch({type: 'SET_JSON_SCHEMA', value})}
+              onChange={(value) => dispatch({ type: 'SET_JSON_SCHEMA', value })}
               readOnly={state.saving}
               height="300px"
             />
-            <Typography variant="caption" color="text.secondary" sx={{mt: 1, display: 'block'}}>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
               Define a JSON Schema to structure the agent&apos;s output
             </Typography>
           </Box>
@@ -166,5 +156,5 @@ function OutputSchemaFormDialog({open, onClose, onSave}: OutputSchemaFormDialogP
   )
 }
 
-export {OutputSchemaFormDialog}
-export type {OutputSchemaFormDialogProps}
+export { OutputSchemaFormDialog }
+export type { OutputSchemaFormDialogProps }

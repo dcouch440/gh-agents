@@ -1,7 +1,7 @@
-import {describe, it, expect, vi} from 'vitest'
-import {render, screen} from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import {ConfirmModal} from './ConfirmModal'
+import { ConfirmModal } from './ConfirmModal'
 
 describe('ConfirmModal', () => {
   const defaultProps = {
@@ -20,13 +20,7 @@ describe('ConfirmModal', () => {
   })
 
   it('renders with custom button text', () => {
-    render(
-      <ConfirmModal
-        {...defaultProps}
-        confirmText="Delete"
-        cancelText="Go Back"
-      />,
-    )
+    render(<ConfirmModal {...defaultProps} confirmText="Delete" cancelText="Go Back" />)
 
     expect(screen.getByText('Delete')).toBeInTheDocument()
     expect(screen.getByText('Go Back')).toBeInTheDocument()
@@ -60,8 +54,8 @@ describe('ConfirmModal', () => {
     render(<ConfirmModal {...defaultProps} loading />)
 
     expect(screen.getByText('Processing...')).toBeInTheDocument()
-    expect(screen.getByRole('button', {name: /cancel/i})).toBeDisabled()
-    expect(screen.getByRole('button', {name: /processing/i})).toBeDisabled()
+    expect(screen.getByRole('button', { name: /cancel/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /processing/i })).toBeDisabled()
   })
 
   it('displays error message', () => {
@@ -72,9 +66,7 @@ describe('ConfirmModal', () => {
 
   it('disables close during loading', () => {
     const onClose = vi.fn()
-    const {rerender} = render(
-      <ConfirmModal {...defaultProps} onClose={onClose} loading />,
-    )
+    const { rerender } = render(<ConfirmModal {...defaultProps} onClose={onClose} loading />)
 
     // Modal should not close when loading
     expect(onClose).not.toHaveBeenCalled()
@@ -100,7 +92,7 @@ describe('ConfirmModal', () => {
   it('applies error color to confirm button', () => {
     render(<ConfirmModal {...defaultProps} confirmColor="error" />)
 
-    const confirmButton = screen.getByRole('button', {name: /confirm/i})
+    const confirmButton = screen.getByRole('button', { name: /confirm/i })
     expect(confirmButton).toBeInTheDocument()
   })
 

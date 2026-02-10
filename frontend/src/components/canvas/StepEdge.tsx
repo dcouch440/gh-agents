@@ -6,16 +6,7 @@ import IconButton from '@mui/material/IconButton'
 import { useTheme } from '@mui/material/styles'
 
 function StepEdgeComponent(props: EdgeProps) {
-  const {
-    id,
-    sourceX,
-    sourceY,
-    targetX,
-    targetY,
-    sourcePosition,
-    targetPosition,
-    selected,
-  } = props
+  const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, selected } = props
 
   const theme = useTheme()
   const { deleteElements } = useReactFlow()

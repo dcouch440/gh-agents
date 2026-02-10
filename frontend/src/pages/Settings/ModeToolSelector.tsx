@@ -68,11 +68,7 @@ function ModeToolSelector({
   }, [open, mode.id, loadModeTools])
 
   const handleToggle = (toolId: string) => {
-    setLocalSelectedIds((prev) =>
-      prev.includes(toolId)
-        ? prev.filter((id) => id !== toolId)
-        : [...prev, toolId]
-    )
+    setLocalSelectedIds((prev) => (prev.includes(toolId) ? prev.filter((id) => id !== toolId) : [...prev, toolId]))
   }
 
   const handleSave = async () => {
@@ -98,8 +94,7 @@ function ModeToolSelector({
           Select Tools for {mode.display_name}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          {localSelectedIds.length} tool{localSelectedIds.length === 1 ? '' : 's'}{' '}
-          selected
+          {localSelectedIds.length} tool{localSelectedIds.length === 1 ? '' : 's'} selected
         </Typography>
       </DialogTitle>
 
@@ -123,23 +118,10 @@ function ModeToolSelector({
             {allTools.map((tool) => {
               const isSelected = localSelectedIds.includes(tool.id)
               return (
-                <ListItem
-                  key={tool.id}
-                  disablePadding
-                  sx={{ borderBottom: 1, borderColor: 'divider' }}
-                >
-                  <ListItemButton
-                    onClick={() => handleToggle(tool.id)}
-                    disabled={savingTools}
-                  >
+                <ListItem key={tool.id} disablePadding sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                  <ListItemButton onClick={() => handleToggle(tool.id)} disabled={savingTools}>
                     <ListItemIcon sx={{ minWidth: 36 }}>
-                      <Checkbox
-                        checked={isSelected}
-                        edge="start"
-                        tabIndex={-1}
-                        disableRipple
-                        disabled={savingTools}
-                      />
+                      <Checkbox checked={isSelected} edge="start" tabIndex={-1} disableRipple disabled={savingTools} />
                     </ListItemIcon>
                     <ListItemText
                       primary={

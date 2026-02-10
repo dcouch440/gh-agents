@@ -1,13 +1,10 @@
-import {describe, it, expect, vi} from 'vitest'
-import {render, screen} from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import {VariableChipStrip} from './VariableChipStrip'
-import type {VariableCompletion} from '@/utils/variableContext'
+import { VariableChipStrip } from './VariableChipStrip'
+import type { VariableCompletion } from '@/utils/variableContext'
 
-const makeCompletion = (
-  varName: string,
-  section: string,
-): VariableCompletion => ({
+const makeCompletion = (varName: string, section: string): VariableCompletion => ({
   label: `{${varName}}`,
   displayLabel: varName,
   detail: `string — from ${section}`,
@@ -16,17 +13,12 @@ const makeCompletion = (
 
 describe('VariableChipStrip', () => {
   it('renders nothing when completions array is empty', () => {
-    const {container} = render(
-      <VariableChipStrip completions={[]} onCopy={null} />,
-    )
+    const { container } = render(<VariableChipStrip completions={[]} onCopy={null} />)
     expect(container.firstChild).toBeNull()
   })
 
   it('renders a chip for each completion', () => {
-    const completions = [
-      makeCompletion('result.summary', 'Parse'),
-      makeCompletion('result.title', 'Parse'),
-    ]
+    const completions = [makeCompletion('result.summary', 'Parse'), makeCompletion('result.title', 'Parse')]
     render(<VariableChipStrip completions={completions} onCopy={null} />)
 
     expect(screen.getByText('{result.summary}')).toBeInTheDocument()
@@ -34,10 +26,7 @@ describe('VariableChipStrip', () => {
   })
 
   it('groups chips by section', () => {
-    const completions = [
-      makeCompletion('a.field', 'StepA'),
-      makeCompletion('b.field', 'StepB'),
-    ]
+    const completions = [makeCompletion('a.field', 'StepA'), makeCompletion('b.field', 'StepB')]
     render(<VariableChipStrip completions={completions} onCopy={null} />)
 
     expect(screen.getByText('StepA')).toBeInTheDocument()

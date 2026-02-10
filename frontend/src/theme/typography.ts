@@ -1,6 +1,6 @@
-import type { ThemeOptions } from '@mui/material/styles';
+import type { ThemeOptions } from '@mui/material/styles'
 
-type TypographyConfig = NonNullable<ThemeOptions['typography']>;
+type TypographyConfig = NonNullable<ThemeOptions['typography']>
 
 const typography: TypographyConfig = {
   fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
@@ -68,6 +68,6 @@ const typography: TypographyConfig = {
     fontWeight: 500,
     fontSize: '0.8125rem',
   },
-};
+}
 
-export { typography };
+export { typography }

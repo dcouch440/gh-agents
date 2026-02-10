@@ -15,16 +15,10 @@ function AgentsBrowserPanel() {
     void agentStore.fetchAll()
   }, [])
 
-  const firstStepId = useMemo(
-    () => selectedStepIds.values().next().value ?? null,
-    [selectedStepIds],
-  )
+  const firstStepId = useMemo(() => selectedStepIds.values().next().value ?? null, [selectedStepIds])
   const selectedStep = useStore(workflowStore.store, workflowStore.selectStepById(firstStepId))
 
-  const filtered = useMemo(
-    () => agents.filter((a) => a.name.toLowerCase().includes(query.toLowerCase())),
-    [agents, query],
-  )
+  const filtered = useMemo(() => agents.filter((a) => a.name.toLowerCase().includes(query.toLowerCase())), [agents, query])
 
   const handleAssign = useCallback(
     (agentId: string) => {
@@ -43,10 +37,7 @@ function AgentsBrowserPanel() {
       {loading ? <LoadingSpinner label="Loading agents..." /> : null}
 
       {!loading && filtered.length === 0 ? (
-        <EmptyState
-          icon={<SmartToyOutlined />}
-          message={query ? `No agents matching "${query}"` : 'No agents found'}
-        />
+        <EmptyState icon={<SmartToyOutlined />} message={query ? `No agents matching "${query}"` : 'No agents found'} />
       ) : null}
 
       {filtered.map((agent) => (
@@ -56,7 +47,13 @@ function AgentsBrowserPanel() {
           primary={agent.name}
           secondary={agent.model_id}
           highlight={agent.id === selectedStep?.agent_id}
-          onClick={selectedStep ? () => { handleAssign(agent.id) } : null}
+          onClick={
+            selectedStep
+              ? () => {
+                  handleAssign(agent.id)
+                }
+              : null
+          }
         />
       ))}
     </Box>

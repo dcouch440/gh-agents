@@ -67,10 +67,7 @@ function WebSocketProvider({ children }: { children: ReactNode }) {
 
     const getReconnectDelay = (): number => {
       const attempt = reconnectAttemptRef.current
-      const base = Math.min(
-        WS_RECONNECT_BASE_MS * Math.pow(2, attempt),
-        WS_RECONNECT_MAX_MS,
-      )
+      const base = Math.min(WS_RECONNECT_BASE_MS * Math.pow(2, attempt), WS_RECONNECT_MAX_MS)
       const jitter = base * 0.25 * (Math.random() * 2 - 1)
       return Math.max(0, Math.round(base + jitter))
     }
@@ -108,7 +105,10 @@ function WebSocketProvider({ children }: { children: ReactNode }) {
       socketRef.current = ws
 
       ws.onopen = () => {
-        if (cancelled) { ws.close(); return }
+        if (cancelled) {
+          ws.close()
+          return
+        }
         wsConnectionStore.setState({ status: WS_STATUS.CONNECTED })
         reconnectAttemptRef.current = 0
 
@@ -207,50 +207,52 @@ function WebSocketProvider({ children }: { children: ReactNode }) {
 
   // ── Public API (stable references) ──
 
-  const subscribe = useCallback((topic: WsTopic, handler: WsEventHandler): (() => void) => {
-    if (!handlersRef.current.has(topic)) {
-      handlersRef.current.set(topic, new Set())
-    }
-    const handlers = handlersRef.current.get(topic)!
-    const wasEmpty = handlers.size === 0
-    handlers.add(handler)
-
-    if (wasEmpty) {
-      sendRaw({ type: WS_MSG.SUBSCRIBE, topics: [topic] })
-    }
-
-    return () => {
-      handlers.delete(handler)
-      if (handlers.size === 0) {
-        sendRaw({ type: WS_MSG.UNSUBSCRIBE, topics: [topic] })
+  const subscribe = useCallback(
+    (topic: WsTopic, handler: WsEventHandler): (() => void) => {
+      if (!handlersRef.current.has(topic)) {
+        handlersRef.current.set(topic, new Set())
       }
-    }
-  }, [sendRaw])
+      const handlers = handlersRef.current.get(topic)!
+      const wasEmpty = handlers.size === 0
+      handlers.add(handler)
 
-  const subscribeRun = useCallback((runId: string): (() => void) => {
-    activeRunsRef.current.add(runId)
-    sendRaw({ type: WS_MSG.SUBSCRIBE_RUN, run_id: runId })
+      if (wasEmpty) {
+        sendRaw({ type: WS_MSG.SUBSCRIBE, topics: [topic] })
+      }
 
-    return () => {
-      activeRunsRef.current.delete(runId)
-      sendRaw({ type: WS_MSG.UNSUBSCRIBE_RUN, run_id: runId })
-    }
-  }, [sendRaw])
-
-  const send = useCallback((message: WsClientMessage): void => {
-    sendRaw(message)
-  }, [sendRaw])
-
-  const value = useMemo(
-    () => ({ subscribe, subscribeRun, send }),
-    [subscribe, subscribeRun, send],
+      return () => {
+        handlers.delete(handler)
+        if (handlers.size === 0) {
+          sendRaw({ type: WS_MSG.UNSUBSCRIBE, topics: [topic] })
+        }
+      }
+    },
+    [sendRaw],
   )
 
-  return (
-    <WebSocketContext.Provider value={value}>
-      {children}
-    </WebSocketContext.Provider>
+  const subscribeRun = useCallback(
+    (runId: string): (() => void) => {
+      activeRunsRef.current.add(runId)
+      sendRaw({ type: WS_MSG.SUBSCRIBE_RUN, run_id: runId })
+
+      return () => {
+        activeRunsRef.current.delete(runId)
+        sendRaw({ type: WS_MSG.UNSUBSCRIBE_RUN, run_id: runId })
+      }
+    },
+    [sendRaw],
   )
+
+  const send = useCallback(
+    (message: WsClientMessage): void => {
+      sendRaw(message)
+    },
+    [sendRaw],
+  )
+
+  const value = useMemo(() => ({ subscribe, subscribeRun, send }), [subscribe, subscribeRun, send])
+
+  return <WebSocketContext.Provider value={value}>{children}</WebSocketContext.Provider>
 }
 
 export { WebSocketContext, WebSocketProvider }

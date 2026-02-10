@@ -28,15 +28,17 @@ function DocumentNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <Box
-      onMouseEnter={() => { setHovered(true) }}
-      onMouseLeave={() => { setHovered(false) }}
+      onMouseEnter={() => {
+        setHovered(true)
+      }}
+      onMouseLeave={() => {
+        setHovered(false)
+      }}
       sx={{
         width: '100%',
         height: '100%',
         borderRadius: '12px',
-        backgroundColor: theme.palette.mode === 'light'
-          ? theme.palette.custom.cavityBg
-          : 'background.paper',
+        backgroundColor: theme.palette.mode === 'light' ? theme.palette.custom.cavityBg : 'background.paper',
         border: 2,
         borderColor: selected ? accentColor : 'divider',
         boxShadow: selected
@@ -54,7 +56,7 @@ function DocumentNodeComponent({ id, data, selected }: NodeProps) {
       }}
     >
       <NodeResizer
-        isVisible={hovered || (selected === true)}
+        isVisible={hovered || selected === true}
         minWidth={DOCUMENT_NODE.MIN_WIDTH}
         minHeight={DOCUMENT_NODE.MIN_HEIGHT}
         maxWidth={DOCUMENT_NODE.MAX_WIDTH}
@@ -88,16 +90,8 @@ function DocumentNodeComponent({ id, data, selected }: NodeProps) {
       </Box>
 
       {/* Content area — interactive, no drag */}
-      <Box
-        className="nowheel nodrag nopan"
-        sx={{ flex: 1, overflow: 'hidden', position: 'relative' }}
-      >
-        <DocumentNodeContent
-          content={nodeData.content}
-          mode={nodeData.mode}
-          accentColor={accentColor}
-          onChange={handleContentChange}
-        />
+      <Box className="nowheel nodrag nopan" sx={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+        <DocumentNodeContent content={nodeData.content} mode={nodeData.mode} accentColor={accentColor} onChange={handleContentChange} />
       </Box>
 
       {/* Handles */}
@@ -128,9 +122,7 @@ function DocumentNodeComponent({ id, data, selected }: NodeProps) {
 }
 
 const documentNodeEqual = (prev: NodeProps, next: NodeProps): boolean =>
-  prev.selected === next.selected &&
-  prev.id === next.id &&
-  nodeDataEqual(prev.data, next.data)
+  prev.selected === next.selected && prev.id === next.id && nodeDataEqual(prev.data, next.data)
 
 const DocumentNode = memo(DocumentNodeComponent, documentNodeEqual)
 

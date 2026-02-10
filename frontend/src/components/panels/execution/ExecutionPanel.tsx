@@ -53,19 +53,9 @@ function ExecutionPanel() {
 
   if (!hasLiveRun && !hasHistory && !historyLoading) {
     if (historyError) {
-      return (
-        <EmptyState
-          icon={<ErrorOutline fontSize="large" />}
-          message={`Failed to load history: ${historyError}`}
-        />
-      )
+      return <EmptyState icon={<ErrorOutline fontSize="large" />} message={`Failed to load history: ${historyError}`} />
     }
-    return (
-      <EmptyState
-        icon={<PlayArrowOutlined fontSize="large" />}
-        message="Run a workflow to see execution details"
-      />
-    )
+    return <EmptyState icon={<PlayArrowOutlined fontSize="large" />} message="Run a workflow to see execution details" />
   }
 
   return (
@@ -93,9 +83,7 @@ function ExecutionPanel() {
           <ExecutionTimeline stepIds={stepIds} isWorkflowRunning={isRunning} />
         </>
       )}
-      {viewMode === 'history' && historicalRun && (
-        <HistoricalRunSummary run={historicalRun} />
-      )}
+      {viewMode === 'history' && historicalRun && <HistoricalRunSummary run={historicalRun} />}
     </Box>
   )
 }

@@ -15,16 +15,10 @@ function SchemasBrowserPanel() {
     void outputSchemaStore.fetchIfStale()
   }, [])
 
-  const firstStepId = useMemo(
-    () => selectedStepIds.values().next().value ?? null,
-    [selectedStepIds],
-  )
+  const firstStepId = useMemo(() => selectedStepIds.values().next().value ?? null, [selectedStepIds])
   const selectedStep = useStore(workflowStore.store, workflowStore.selectStepById(firstStepId))
 
-  const filtered = useMemo(
-    () => schemas.filter((s) => s.name.toLowerCase().includes(query.toLowerCase())),
-    [schemas, query],
-  )
+  const filtered = useMemo(() => schemas.filter((s) => s.name.toLowerCase().includes(query.toLowerCase())), [schemas, query])
 
   const handleAssign = useCallback(
     (schemaId: string) => {
@@ -49,10 +43,7 @@ function SchemasBrowserPanel() {
       {loading ? <LoadingSpinner label="Loading schemas..." /> : null}
 
       {!loading && filtered.length === 0 ? (
-        <EmptyState
-          icon={<DataObjectOutlined />}
-          message={query ? `No schemas matching "${query}"` : 'No schemas found'}
-        />
+        <EmptyState icon={<DataObjectOutlined />} message={query ? `No schemas matching "${query}"` : 'No schemas found'} />
       ) : null}
 
       {filtered.map((schema) => (
@@ -62,7 +53,13 @@ function SchemasBrowserPanel() {
           primary={schema.name}
           secondary={`${fieldCount(schema.schema)} field(s)`}
           highlight={schema.id === selectedStep?.output_schema_id}
-          onClick={selectedStep ? () => { handleAssign(schema.id) } : null}
+          onClick={
+            selectedStep
+              ? () => {
+                  handleAssign(schema.id)
+                }
+              : null
+          }
         />
       ))}
     </Box>

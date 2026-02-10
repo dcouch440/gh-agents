@@ -8,8 +8,7 @@ type MarkdownPreviewProps = {
   className?: string
 }
 
-const stripThinkingTags = (text: string): string =>
-  text.replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
+const stripThinkingTags = (text: string): string => text.replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
 
 function MarkdownPreview({ content, className }: MarkdownPreviewProps) {
   const cleaned = stripThinkingTags(content)
@@ -61,9 +60,7 @@ function MarkdownPreview({ content, className }: MarkdownPreviewProps) {
         },
       }}
     >
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
-        {cleaned}
-      </ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{cleaned}</ReactMarkdown>
     </Box>
   )
 }

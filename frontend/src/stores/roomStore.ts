@@ -48,8 +48,7 @@ const store = createStore<RoomState>(() => ({
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const extractError = (e: unknown): string =>
-  e instanceof Error ? e.message : 'rooms: unknown error'
+const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'rooms: unknown error')
 
 const EMPTY_MEMBERS: RoomMember[] = []
 const EMPTY_SESSIONS: RoomSession[] = []
@@ -58,14 +57,20 @@ const EMPTY_SESSIONS: RoomSession[] = []
 
 const selectAll = (s: RoomState): Room[] => toArray(s.rooms)
 
-const selectById = (id: string) => (s: RoomState): Room | undefined =>
-  nmGet(s.rooms, id)
+const selectById =
+  (id: string) =>
+  (s: RoomState): Room | undefined =>
+    nmGet(s.rooms, id)
 
-const selectMembers = (roomId: string) => (s: RoomState): RoomMember[] =>
-  s.membersByRoom[roomId] ?? EMPTY_MEMBERS
+const selectMembers =
+  (roomId: string) =>
+  (s: RoomState): RoomMember[] =>
+    s.membersByRoom[roomId] ?? EMPTY_MEMBERS
 
-const selectSessions = (roomId: string) => (s: RoomState): RoomSession[] =>
-  s.sessionsByRoom[roomId] ?? EMPTY_SESSIONS
+const selectSessions =
+  (roomId: string) =>
+  (s: RoomState): RoomSession[] =>
+    s.sessionsByRoom[roomId] ?? EMPTY_SESSIONS
 
 const selectActiveSessionId = (s: RoomState): string | null => s.activeSessionId
 
@@ -204,10 +209,7 @@ const sendMessage = async (sessionId: string, body: RoomMessageRequest): Promise
 const loadRoom = async (id: string): Promise<void> => {
   store.setState({ loading: true, error: null })
   try {
-    const [room, members] = await Promise.all([
-      api.rooms.get(id),
-      api.rooms.listMembers(id),
-    ])
+    const [room, members] = await Promise.all([api.rooms.get(id), api.rooms.listMembers(id)])
     store.setState((s) => ({
       rooms: nmSet(s.rooms, room.id, room),
       membersByRoom: { ...s.membersByRoom, [id]: members },

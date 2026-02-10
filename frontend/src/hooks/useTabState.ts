@@ -7,7 +7,9 @@ type TabState<T extends string = string> = {
 
 const useTabState = <T extends string>(defaultValue: T): TabState<T> => {
   const [value, setValue] = useState<T>(defaultValue)
-  const onChange = useCallback((next: T) => { setValue(next) }, [])
+  const onChange = useCallback((next: T) => {
+    setValue(next)
+  }, [])
   return { value, onChange }
 }
 

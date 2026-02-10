@@ -75,8 +75,10 @@ const createResourceStore = <T extends Identifiable, TCreate = Partial<T>, TUpda
 
   const selectAll = (state: ResourceState<T>): T[] => toArray(state.items)
 
-  const selectById = (id: string) => (state: ResourceState<T>): T | undefined =>
-    nmGet(state.items, id)
+  const selectById =
+    (id: string) =>
+    (state: ResourceState<T>): T | undefined =>
+      nmGet(state.items, id)
 
   const selectLoading = (state: ResourceState<T>): boolean => state.loading
 
@@ -157,9 +159,20 @@ const createResourceStore = <T extends Identifiable, TCreate = Partial<T>, TUpda
 
   return {
     store,
-    selectAll, selectById, selectLoading, selectError, selectIsStale,
-    fetchAll, fetchIfStale, fetchOne, create, update, remove,
-    upsert, removeById, setAll,
+    selectAll,
+    selectById,
+    selectLoading,
+    selectError,
+    selectIsStale,
+    fetchAll,
+    fetchIfStale,
+    fetchOne,
+    create,
+    update,
+    remove,
+    upsert,
+    removeById,
+    setAll,
   }
 }
 

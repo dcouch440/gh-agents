@@ -19,8 +19,40 @@ vi.mock('@/api', () => ({
   },
 }))
 
-const task1 = { id: 'tk1', slice_id: null, title: 'Fix bug', description: 'Fix the login bug', assigned_agent: null, status: 'pending' as const, priority: 'normal' as const, context_files: [], metadata: null, depends_on: [], retry_count: 0, max_retries: 3, last_error: null, created_at: '2025-01-01T00:00:00Z', updated_at: '2025-01-01T00:00:00Z' }
-const task2 = { id: 'tk2', slice_id: null, title: 'Add feature', description: 'Add dark mode', assigned_agent: 'a1', status: 'in_progress' as const, priority: 'high' as const, context_files: [], metadata: null, depends_on: [], retry_count: 0, max_retries: 3, last_error: null, created_at: '2025-01-01T00:00:00Z', updated_at: '2025-01-01T00:00:00Z' }
+const task1 = {
+  id: 'tk1',
+  slice_id: null,
+  title: 'Fix bug',
+  description: 'Fix the login bug',
+  assigned_agent: null,
+  status: 'pending' as const,
+  priority: 'normal' as const,
+  context_files: [],
+  metadata: null,
+  depends_on: [],
+  retry_count: 0,
+  max_retries: 3,
+  last_error: null,
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
+}
+const task2 = {
+  id: 'tk2',
+  slice_id: null,
+  title: 'Add feature',
+  description: 'Add dark mode',
+  assigned_agent: 'a1',
+  status: 'in_progress' as const,
+  priority: 'high' as const,
+  context_files: [],
+  metadata: null,
+  depends_on: [],
+  retry_count: 0,
+  max_retries: 3,
+  last_error: null,
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
+}
 
 beforeEach(() => {
   vi.clearAllMocks()

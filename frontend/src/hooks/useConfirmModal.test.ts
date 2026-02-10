@@ -1,10 +1,10 @@
-import {describe, it, expect, vi} from 'vitest'
-import {renderHook, act} from '@testing-library/react'
-import {useConfirmModal} from './useConfirmModal'
+import { describe, it, expect, vi } from 'vitest'
+import { renderHook, act } from '@testing-library/react'
+import { useConfirmModal } from './useConfirmModal'
 
 describe('useConfirmModal', () => {
   it('initializes with closed state', () => {
-    const {result} = renderHook(() => useConfirmModal())
+    const { result } = renderHook(() => useConfirmModal())
 
     expect(result.current.open).toBe(false)
     expect(result.current.loading).toBe(false)
@@ -12,7 +12,7 @@ describe('useConfirmModal', () => {
   })
 
   it('opens with correct options', () => {
-    const {result} = renderHook(() => useConfirmModal())
+    const { result } = renderHook(() => useConfirmModal())
 
     act(() => {
       result.current.openConfirm({
@@ -32,7 +32,7 @@ describe('useConfirmModal', () => {
   })
 
   it('uses default values for optional fields', () => {
-    const {result} = renderHook(() => useConfirmModal())
+    const { result } = renderHook(() => useConfirmModal())
 
     act(() => {
       result.current.openConfirm({
@@ -48,7 +48,7 @@ describe('useConfirmModal', () => {
   })
 
   it('closes and resets state', () => {
-    const {result} = renderHook(() => useConfirmModal())
+    const { result } = renderHook(() => useConfirmModal())
 
     act(() => {
       result.current.openConfirm({
@@ -70,7 +70,7 @@ describe('useConfirmModal', () => {
   })
 
   it('handles async confirmation success', async () => {
-    const {result} = renderHook(() => useConfirmModal())
+    const { result } = renderHook(() => useConfirmModal())
     const asyncAction = vi.fn().mockResolvedValue(undefined)
 
     act(() => {
@@ -91,7 +91,7 @@ describe('useConfirmModal', () => {
   })
 
   it('handles async confirmation failure', async () => {
-    const {result} = renderHook(() => useConfirmModal())
+    const { result } = renderHook(() => useConfirmModal())
     const error = new Error('Operation failed')
     const asyncAction = vi.fn().mockRejectedValue(error)
 
@@ -114,7 +114,7 @@ describe('useConfirmModal', () => {
   })
 
   it('sets loading during async operation', async () => {
-    const {result} = renderHook(() => useConfirmModal())
+    const { result } = renderHook(() => useConfirmModal())
     const asyncAction = vi.fn().mockResolvedValue(undefined)
 
     act(() => {
@@ -134,7 +134,7 @@ describe('useConfirmModal', () => {
   })
 
   it('handles non-Error rejection', async () => {
-    const {result} = renderHook(() => useConfirmModal())
+    const { result } = renderHook(() => useConfirmModal())
     const asyncAction = vi.fn().mockRejectedValue('String error')
 
     act(() => {
@@ -153,7 +153,7 @@ describe('useConfirmModal', () => {
   })
 
   it('does nothing if handleConfirm called without pending action', async () => {
-    const {result} = renderHook(() => useConfirmModal())
+    const { result } = renderHook(() => useConfirmModal())
 
     await act(async () => {
       await result.current.handleConfirm()

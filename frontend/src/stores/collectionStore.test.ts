@@ -2,15 +2,7 @@ import { collectionStore } from './collectionStore'
 import { nmSize, nmGet, createNormalizedMap } from './lib'
 import type { Collection, CollectionRun } from '@/types/collection'
 
-const {
-  mockList,
-  mockGet,
-  mockCreate,
-  mockUpdate,
-  mockDelete,
-  mockRun,
-  mockGetRunStatus,
-} = vi.hoisted(() => ({
+const { mockList, mockGet, mockCreate, mockUpdate, mockDelete, mockRun, mockGetRunStatus } = vi.hoisted(() => ({
   mockList: vi.fn(),
   mockGet: vi.fn(),
   mockCreate: vi.fn(),

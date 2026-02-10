@@ -34,8 +34,7 @@ const store = createStore<AuthState>(() => ({
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const extractError = (e: unknown): string =>
-  e instanceof Error ? e.message : 'Unknown error'
+const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'Unknown error')
 
 const saveToken = (token: string): void => {
   localStorage.setItem(LS_AUTH_TOKEN, token)

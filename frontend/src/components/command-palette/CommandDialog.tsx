@@ -1,12 +1,12 @@
-import { type ReactNode } from 'react';
-import Dialog from '@mui/material/Dialog';
+import { type ReactNode } from 'react'
+import Dialog from '@mui/material/Dialog'
 
 type CommandDialogProps = {
-  open: boolean;
-  onClose: () => void;
-  children: ReactNode;
-  maxWidth?: number;
-};
+  open: boolean
+  onClose: () => void
+  children: ReactNode
+  maxWidth?: number
+}
 
 function CommandDialog({ open, onClose, children, maxWidth = 580 }: CommandDialogProps) {
   return (
@@ -32,7 +32,7 @@ function CommandDialog({ open, onClose, children, maxWidth = 580 }: CommandDialo
     >
       {children}
     </Dialog>
-  );
+  )
 }
 
-export { CommandDialog };
+export { CommandDialog }

@@ -1,4 +1,4 @@
-import {useState, useEffect} from "react";
+import { useState, useEffect } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -15,115 +15,112 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
-} from "@mui/material";
-import {useStore, documentStore} from "@/stores";
-import {LoadingSpinner, EmptyState} from "@/components/primitives";
-import {api} from "@/api";
-import type {DocumentListItem, Document} from "@/types/document";
+} from '@mui/material'
+import { useStore, documentStore } from '@/stores'
+import { LoadingSpinner, EmptyState } from '@/components/primitives'
+import { api } from '@/api'
+import type { DocumentListItem, Document } from '@/types/document'
 
 type DocumentSelectorProps = {
-  selectedIds: string[];
-  onSelectionChange: (selectedIds: string[]) => void;
-  open: boolean;
-  onClose: () => void;
-};
+  selectedIds: string[]
+  onSelectionChange: (selectedIds: string[]) => void
+  open: boolean
+  onClose: () => void
+}
 
-function DocumentSelector({
-  selectedIds,
-  onSelectionChange,
-  open,
-  onClose,
-}: DocumentSelectorProps) {
-  const documents = useStore(documentStore.store, documentStore.selectAll);
-  const loading = useStore(documentStore.store, documentStore.selectLoading);
+function DocumentSelector({ selectedIds, onSelectionChange, open, onClose }: DocumentSelectorProps) {
+  const documents = useStore(documentStore.store, documentStore.selectAll)
+  const loading = useStore(documentStore.store, documentStore.selectLoading)
 
-  useEffect(() => { void documentStore.fetchAll() }, []);
-  const [localSelectedIds, setLocalSelectedIds] = useState<Set<string>>(() => new Set(selectedIds));
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [loadedDocs, setLoadedDocs] = useState<Map<string, Document>>(new Map());
-  const [loadingDocId, setLoadingDocId] = useState<string | null>(null);
+  useEffect(() => {
+    void documentStore.fetchAll()
+  }, [])
+  const [localSelectedIds, setLocalSelectedIds] = useState<Set<string>>(() => new Set(selectedIds))
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [loadedDocs, setLoadedDocs] = useState<Map<string, Document>>(new Map())
+  const [loadingDocId, setLoadingDocId] = useState<string | null>(null)
 
-  if (!open) return null;
+  if (!open) return null
 
   const handleToggle = (documentId: string) => {
     setLocalSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(documentId)) next.delete(documentId);
-      else next.add(documentId);
-      return next;
-    });
-  };
+      const next = new Set(prev)
+      if (next.has(documentId)) next.delete(documentId)
+      else next.add(documentId)
+      return next
+    })
+  }
 
   const handleSave = () => {
-    onSelectionChange([...localSelectedIds]);
-    onClose();
-  };
+    onSelectionChange([...localSelectedIds])
+    onClose()
+  }
 
   const handleCancel = () => {
-    setLocalSelectedIds(new Set(selectedIds));
-    onClose();
-  };
+    setLocalSelectedIds(new Set(selectedIds))
+    onClose()
+  }
 
   const toggleExpand = (docId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const newExpandedId = expandedId === docId ? null : docId;
-    setExpandedId(newExpandedId);
+    e.stopPropagation()
+    const newExpandedId = expandedId === docId ? null : docId
+    setExpandedId(newExpandedId)
 
     // Load document content if expanding and not already loaded
     if (newExpandedId && !loadedDocs.has(newExpandedId)) {
-      setLoadingDocId(newExpandedId);
+      setLoadingDocId(newExpandedId)
       void api.documents
         .get(newExpandedId)
         .then((doc) => {
-          setLoadedDocs((prev) => new Map(prev).set(newExpandedId, doc));
+          setLoadedDocs((prev) => new Map(prev).set(newExpandedId, doc))
         })
         .catch((err: unknown) => {
-          console.error("Failed to load document:", err);
+          console.error('Failed to load document:', err)
         })
         .finally(() => {
-          setLoadingDocId(null);
-        });
+          setLoadingDocId(null)
+        })
     }
-  };
+  }
 
   const getDocumentContent = (docId: string): string => {
     if (loadingDocId === docId) {
-      return "Loading document content...";
+      return 'Loading document content...'
     }
-    const fullDoc = loadedDocs.get(docId);
+    const fullDoc = loadedDocs.get(docId)
     if (fullDoc?.content) {
-      return fullDoc.content;
+      return fullDoc.content
     }
-    const listItem = documents.find((d) => d.id === docId);
-    return listItem?.summary ?? "No content available";
-  };
+    const listItem = documents.find((d) => d.id === docId)
+    return listItem?.summary ?? 'No content available'
+  }
 
   const renderDocumentRow = (doc: DocumentListItem) => {
-    const isSelected = localSelectedIds.has(doc.id);
-    const isExpanded = expandedId === doc.id;
+    const isSelected = localSelectedIds.has(doc.id)
+    const isExpanded = expandedId === doc.id
 
     return (
       <ListItem
         key={doc.id}
         disablePadding
         sx={{
-          flexDirection: "column",
-          alignItems: "stretch",
+          flexDirection: 'column',
+          alignItems: 'stretch',
           borderBottom: 1,
-          borderColor: "divider",
+          borderColor: 'divider',
         }}
       >
         <ListItemButton
           selected={isSelected}
           onClick={(e) => {
-            toggleExpand(doc.id, e);
+            toggleExpand(doc.id, e)
           }}
           sx={{
             py: 1.25,
             px: 1.5,
           }}
         >
-          <ListItemIcon sx={{minWidth: 36}}>
+          <ListItemIcon sx={{ minWidth: 36 }}>
             <Checkbox
               checked={isSelected}
               edge="start"
@@ -135,13 +132,11 @@ function DocumentSelector({
           </ListItemIcon>
           <ListItemText
             primary={
-              <Box sx={{display: "flex", alignItems: "center", gap: 1.5}}>
-                <Typography variant="body2" sx={{fontWeight: 500}}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
                   {doc.title}
                 </Typography>
-                {doc.doc_type ? (
-                  <Chip label={doc.doc_type} size="small" variant="outlined" />
-                ) : null}
+                {doc.doc_type ? <Chip label={doc.doc_type} size="small" variant="outlined" /> : null}
                 {doc.ref_tag ? (
                   <Typography variant="caption" color="text.secondary">
                     {doc.ref_tag}
@@ -157,22 +152,22 @@ function DocumentSelector({
               py: 1.5,
               px: 2,
               pl: 6,
-              bgcolor: "background.default",
+              bgcolor: 'background.default',
               borderLeft: 3,
-              borderColor: "divider",
+              borderColor: 'divider',
               ml: 1.5,
               maxHeight: 300,
-              overflowY: "auto",
+              overflowY: 'auto',
             }}
           >
             <Typography
               variant="body2"
               component="pre"
               sx={{
-                fontFamily: "monospace",
-                fontSize: "0.75rem",
-                whiteSpace: "pre-wrap",
-                wordWrap: "break-word",
+                fontFamily: 'monospace',
+                fontSize: '0.75rem',
+                whiteSpace: 'pre-wrap',
+                wordWrap: 'break-word',
                 m: 0,
               }}
             >
@@ -181,8 +176,8 @@ function DocumentSelector({
           </Box>
         </Collapse>
       </ListItem>
-    );
-  };
+    )
+  }
 
   return (
     <Dialog
@@ -192,17 +187,16 @@ function DocumentSelector({
       fullWidth
       PaperProps={{
         sx: {
-          maxHeight: "85vh",
+          maxHeight: '85vh',
         },
       }}
     >
       <DialogTitle>
-        <Typography variant="h6" component="div" sx={{fontWeight: 600}}>
+        <Typography variant="h6" component="div" sx={{ fontWeight: 600 }}>
           Select Documents
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Choose documents to attach as agent context ({localSelectedIds.size}{" "}
-          selected)
+          Choose documents to attach as agent context ({localSelectedIds.size} selected)
         </Typography>
       </DialogTitle>
 
@@ -210,15 +204,15 @@ function DocumentSelector({
         dividers
         sx={{
           p: 0,
-          bgcolor: "background.default",
+          bgcolor: 'background.default',
         }}
       >
         {loading ? (
-          <Box sx={{display: "flex", justifyContent: "center", py: 7.5}}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 7.5 }}>
             <LoadingSpinner size="md" />
           </Box>
         ) : documents.length === 0 ? (
-          <Box sx={{p: 5}}>
+          <Box sx={{ p: 5 }}>
             <EmptyState message="No documents available" />
           </Box>
         ) : (
@@ -226,7 +220,7 @@ function DocumentSelector({
         )}
       </DialogContent>
 
-      <DialogActions sx={{px: 3, py: 2}}>
+      <DialogActions sx={{ px: 3, py: 2 }}>
         <Button onClick={handleCancel} variant="outlined" color="inherit">
           Cancel
         </Button>
@@ -235,8 +229,8 @@ function DocumentSelector({
         </Button>
       </DialogActions>
     </Dialog>
-  );
+  )
 }
 
-export {DocumentSelector};
-export type {DocumentSelectorProps};
+export { DocumentSelector }
+export type { DocumentSelectorProps }

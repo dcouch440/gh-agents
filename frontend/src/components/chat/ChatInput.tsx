@@ -14,16 +14,19 @@ function ChatInput({ onSend, disabled, placeholder = 'Type a message...' }: Chat
     setValue(e.target.value)
   }, [])
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      const trimmed = value.trim()
-      if (trimmed) {
-        onSend(trimmed)
-        setValue('')
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        const trimmed = value.trim()
+        if (trimmed) {
+          onSend(trimmed)
+          setValue('')
+        }
       }
-    }
-  }, [value, onSend])
+    },
+    [value, onSend],
+  )
 
   return (
     <Box sx={{ borderTop: 1, borderColor: 'divider', p: 1.5, bgcolor: 'background.paper' }}>

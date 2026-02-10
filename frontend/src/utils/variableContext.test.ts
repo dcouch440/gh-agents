@@ -106,7 +106,10 @@ describe('buildVariableCompletions', () => {
     const schemas = new Map([['schema-001', schema]])
     const { completions } = buildVariableCompletions(
       ['step-001'],
-      new Map([['step-001', baseStep], ['step-002', currentStep]]),
+      new Map([
+        ['step-001', baseStep],
+        ['step-002', currentStep],
+      ]),
       schemas,
       null,
     )
@@ -142,7 +145,10 @@ describe('buildVariableCompletions', () => {
     const schemas = new Map([['schema-001', schema]])
     const { completions, autoNamed } = buildVariableCompletions(
       ['step-001'],
-      new Map([['step-001', stepNoVar], ['step-002', currentStep]]),
+      new Map([
+        ['step-001', stepNoVar],
+        ['step-002', currentStep],
+      ]),
       schemas,
       null,
     )
@@ -157,7 +163,10 @@ describe('buildVariableCompletions', () => {
     const schemas = new Map([['schema-001', schema]])
     const { completions } = buildVariableCompletions(
       ['step-001'],
-      new Map([['step-001', stepNoSchema], ['step-002', currentStep]]),
+      new Map([
+        ['step-001', stepNoSchema],
+        ['step-002', currentStep],
+      ]),
       schemas,
       null,
     )
@@ -176,7 +185,10 @@ describe('buildVariableCompletions', () => {
     const schemas = new Map([['schema-001', schema]])
     const { completions, autoNamed } = buildVariableCompletions(
       [],
-      new Map([['step-001', baseStep], ['step-002', currentStep]]),
+      new Map([
+        ['step-001', baseStep],
+        ['step-002', currentStep],
+      ]),
       schemas,
       null,
     )
@@ -204,11 +216,18 @@ describe('buildVariableCompletions', () => {
       },
       created_at: '2025-01-01T00:00:00Z',
     }
-    const schemas = new Map([['schema-001', schema], ['schema-002', schema2]])
+    const schemas = new Map([
+      ['schema-001', schema],
+      ['schema-002', schema2],
+    ])
 
     const { completions } = buildVariableCompletions(
       ['step-001', 'step-003'],
-      new Map([['step-001', baseStep], ['step-002', currentStep], ['step-003', step3]]),
+      new Map([
+        ['step-001', baseStep],
+        ['step-002', currentStep],
+        ['step-003', step3],
+      ]),
       schemas,
       null,
     )
@@ -222,7 +241,10 @@ describe('buildVariableCompletions', () => {
     const schemas = new Map([['schema-001', schema]])
     const { completions } = buildVariableCompletions(
       ['step-001'],
-      new Map([['step-001', unnamedStep], ['step-002', currentStep]]),
+      new Map([
+        ['step-001', unnamedStep],
+        ['step-002', currentStep],
+      ]),
       schemas,
       null,
     )
@@ -235,7 +257,10 @@ describe('buildVariableCompletions', () => {
     const schemas = new Map([['schema-001', schema]])
     const { autoNamed } = buildVariableCompletions(
       ['step-001'],
-      new Map([['step-001', baseStep], ['step-002', currentStep]]),
+      new Map([
+        ['step-001', baseStep],
+        ['step-002', currentStep],
+      ]),
       schemas,
       null,
     )
@@ -254,12 +279,7 @@ describe('buildVariableCompletions', () => {
       output_schema_id: 'schema-array',
     }
     const schemas = new Map([['schema-array', nestedArraySchema]])
-    const { completions } = buildVariableCompletions(
-      ['step-arr'],
-      new Map([['step-arr', arrayStep]]),
-      schemas,
-      null,
-    )
+    const { completions } = buildVariableCompletions(['step-arr'], new Map([['step-arr', arrayStep]]), schemas, null)
 
     const labels = completions.map((c) => c.label)
     expect(labels).toContain('{lister.items.$}')
@@ -269,12 +289,7 @@ describe('buildVariableCompletions', () => {
 
   it('does not generate .$ chip for non-array fields', () => {
     const schemas = new Map([['schema-001', schema]])
-    const { completions } = buildVariableCompletions(
-      ['step-001'],
-      new Map([['step-001', baseStep]]),
-      schemas,
-      null,
-    )
+    const { completions } = buildVariableCompletions(['step-001'], new Map([['step-001', baseStep]]), schemas, null)
 
     const labels = completions.map((c) => c.label)
     expect(labels).not.toContain('{parse_output.summary.$}')
@@ -294,7 +309,10 @@ describe('buildVariableCompletions', () => {
     const schemas = new Map([['schema-root-array', rootArraySchema]])
     const { completions } = buildVariableCompletions(
       ['step-decomp'],
-      new Map([['step-decomp', decompStep], ['step-002', currentStep]]),
+      new Map([
+        ['step-decomp', decompStep],
+        ['step-002', currentStep],
+      ]),
       schemas,
       null,
     )
@@ -320,7 +338,10 @@ describe('buildVariableCompletions', () => {
     const schemas = new Map([['schema-root-array', rootArraySchema]])
     const { completions } = buildVariableCompletions(
       ['step-decomp'],
-      new Map([['step-decomp', decompStep], ['step-002', currentStep]]),
+      new Map([
+        ['step-decomp', decompStep],
+        ['step-002', currentStep],
+      ]),
       schemas,
       null,
     )

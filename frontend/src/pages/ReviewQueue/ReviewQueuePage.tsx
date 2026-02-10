@@ -17,9 +17,13 @@ function ReviewQueuePage() {
   const loading = useStore(reviewQueueStore.store, reviewQueueStore.selectLoading)
   const error = useStore(reviewQueueStore.store, reviewQueueStore.selectError)
 
-  useEffect(() => { void reviewQueueStore.fetchPending() }, [])
+  useEffect(() => {
+    void reviewQueueStore.fetchPending()
+  }, [])
 
-  const reload = useCallback(() => { void reviewQueueStore.fetchPending() }, [])
+  const reload = useCallback(() => {
+    void reviewQueueStore.fetchPending()
+  }, [])
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [inputOpen, setInputOpen] = useState(false)
@@ -27,10 +31,7 @@ function ReviewQueuePage() {
 
   const chat = useInteractiveChat(selectedId ?? '')
 
-  const selectedExecution = useMemo(
-    () => executions.find((e) => e.id === selectedId) ?? null,
-    [executions, selectedId],
-  )
+  const selectedExecution = useMemo(() => executions.find((e) => e.id === selectedId) ?? null, [executions, selectedId])
 
   const chatMessages: ChatMessageData[] = useMemo(
     () =>
@@ -114,12 +115,7 @@ function ReviewQueuePage() {
             }}
           >
             {executions.map((execution) => (
-              <ReviewCard
-                key={execution.id}
-                execution={execution}
-                selected={execution.id === selectedId}
-                onSelect={handleSelect}
-              />
+              <ReviewCard key={execution.id} execution={execution} selected={execution.id === selectedId} onSelect={handleSelect} />
             ))}
           </Box>
 
@@ -140,24 +136,13 @@ function ReviewQueuePage() {
               <>
                 {/* Collapsible sections */}
                 <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', overflowY: 'auto', maxHeight: '40%' }}>
-                  <CollapsibleSection
-                    title="Input"
-                    open={inputOpen}
-                    onToggle={() => setInputOpen((v) => !v)}
-                  >
-                    <Typography
-                      variant="body2"
-                      sx={{ fontFamily: 'monospace', fontSize: '0.8125rem', whiteSpace: 'pre-wrap' }}
-                    >
+                  <CollapsibleSection title="Input" open={inputOpen} onToggle={() => setInputOpen((v) => !v)}>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8125rem', whiteSpace: 'pre-wrap' }}>
                       {selectedExecution.input}
                     </Typography>
                   </CollapsibleSection>
 
-                  <CollapsibleSection
-                    title="Output"
-                    open={outputOpen}
-                    onToggle={() => setOutputOpen((v) => !v)}
-                  >
+                  <CollapsibleSection title="Output" open={outputOpen} onToggle={() => setOutputOpen((v) => !v)}>
                     {selectedExecution.output ? (
                       <MarkdownPreview content={selectedExecution.output} />
                     ) : (
@@ -170,12 +155,7 @@ function ReviewQueuePage() {
 
                 {/* Chat area */}
                 <Box sx={{ flex: 1, minHeight: 0 }}>
-                  <ChatPanel
-                    messages={chatMessages}
-                    onSend={handleSend}
-                    streaming={chat.streaming}
-                    disabled={chat.sending}
-                  />
+                  <ChatPanel messages={chatMessages} onSend={handleSend} streaming={chat.streaming} disabled={chat.sending} />
                 </Box>
 
                 {/* Approve bar */}
@@ -195,11 +175,7 @@ function ReviewQueuePage() {
                       {chat.error}
                     </Typography>
                   ) : null}
-                  <ApproveButton
-                    onApprove={handleApprove}
-                    loading={chat.sending}
-                    disabled={chat.streaming}
-                  />
+                  <ApproveButton onApprove={handleApprove} loading={chat.sending} disabled={chat.streaming} />
                 </Box>
               </>
             ) : (

@@ -75,9 +75,15 @@ vi.mock('@/stores', () => ({
     selectHistoricalRun: () => _historicalRun.value,
     selectHistoryLoading: () => _historyLoading.value,
     selectHistoryError: () => _historyError.value,
-    fetchRuns: (...args: unknown[]): void => { _fetchRuns.fn(...args) },
-    viewHistoricalRun: (...args: unknown[]): void => { _viewHistoricalRun.fn(...args) },
-    returnToLive: (): void => { _returnToLive.fn() },
+    fetchRuns: (...args: unknown[]): void => {
+      _fetchRuns.fn(...args)
+    },
+    viewHistoricalRun: (...args: unknown[]): void => {
+      _viewHistoricalRun.fn(...args)
+    },
+    returnToLive: (): void => {
+      _returnToLive.fn()
+    },
   },
 }))
 
@@ -176,7 +182,15 @@ describe('ExecutionPanel', () => {
 
   it('shows run selector when history exists but no live run', () => {
     _runs.value = [
-      { id: 'run-old', workflow_id: 'wf-1', status: 'completed', started_at: '2025-01-01T00:00:00Z', completed_at: '2025-01-01T00:01:00Z', outputs: null, error: null },
+      {
+        id: 'run-old',
+        workflow_id: 'wf-1',
+        status: 'completed',
+        started_at: '2025-01-01T00:00:00Z',
+        completed_at: '2025-01-01T00:01:00Z',
+        outputs: null,
+        error: null,
+      },
     ]
     render(<ExecutionPanel />)
     expect(screen.queryByText('Run a workflow to see execution details')).not.toBeInTheDocument()

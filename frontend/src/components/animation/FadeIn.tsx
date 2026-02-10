@@ -1,36 +1,39 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import Box from '@mui/material/Box';
-import { ANIMATION } from '@/constants';
-import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useEffect, useState, type ReactNode } from 'react'
+import Box from '@mui/material/Box'
+import { ANIMATION } from '@/constants'
+import { useReducedMotion } from '@/hooks/useReducedMotion'
 
 type FadeInProps = {
-  children: ReactNode;
-  delay?: number;
-  duration?: number;
-  direction?: 'up' | 'down' | 'none';
-};
+  children: ReactNode
+  delay?: number
+  duration?: number
+  direction?: 'up' | 'down' | 'none'
+}
 
 const getTranslate = (direction: FadeInProps['direction'], entered: boolean): string => {
-  if (entered) return 'translateY(0)';
+  if (entered) return 'translateY(0)'
   switch (direction) {
-    case 'down': return 'translateY(-8px)';
-    case 'none': return 'none';
+    case 'down':
+      return 'translateY(-8px)'
+    case 'none':
+      return 'none'
     case 'up':
-    default: return 'translateY(8px)';
+    default:
+      return 'translateY(8px)'
   }
-};
+}
 
 function FadeIn({ children, delay = 0, duration = ANIMATION.PAGE_TRANSITION, direction = 'up' }: FadeInProps) {
-  const [entered, setEntered] = useState(false);
-  const reducedMotion = useReducedMotion();
+  const [entered, setEntered] = useState(false)
+  const reducedMotion = useReducedMotion()
 
   useEffect(() => {
-    const timeout = setTimeout(() => setEntered(true), delay);
-    return () => clearTimeout(timeout);
-  }, [delay]);
+    const timeout = setTimeout(() => setEntered(true), delay)
+    return () => clearTimeout(timeout)
+  }, [delay])
 
   if (reducedMotion) {
-    return <>{children}</>;
+    return <>{children}</>
   }
 
   return (
@@ -43,7 +46,7 @@ function FadeIn({ children, delay = 0, duration = ANIMATION.PAGE_TRANSITION, dir
     >
       {children}
     </Box>
-  );
+  )
 }
 
-export { FadeIn };
+export { FadeIn }

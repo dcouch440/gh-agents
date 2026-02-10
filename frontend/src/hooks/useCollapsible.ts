@@ -7,7 +7,9 @@ type CollapsibleState = {
 
 const useCollapsible = (defaultOpen = true): CollapsibleState => {
   const [open, setOpen] = useState(defaultOpen)
-  const onToggle = useCallback(() => { setOpen((prev) => !prev) }, [])
+  const onToggle = useCallback(() => {
+    setOpen((prev) => !prev)
+  }, [])
   return { open, onToggle }
 }
 

@@ -1,6 +1,6 @@
-import {useState, useMemo, useCallback} from 'react'
-import type {SortDirection, TableColumn} from './types'
-import {sortData, filterData, paginateData} from './utils'
+import { useState, useMemo, useCallback } from 'react'
+import type { SortDirection, TableColumn } from './types'
+import { sortData, filterData, paginateData } from './utils'
 
 type UseTableStateProps<T> = {
   data: T[]
@@ -55,12 +55,8 @@ function useTableState<T>({
   enablePagination = false,
 }: UseTableStateProps<T>): UseTableStateReturn<T> {
   // Sort state
-  const [sortColumn, setSortColumn] = useState<string | null>(
-    defaultSortColumn ?? null,
-  )
-  const [sortDirection, setSortDirection] = useState<SortDirection>(
-    defaultSortDirection,
-  )
+  const [sortColumn, setSortColumn] = useState<string | null>(defaultSortColumn ?? null)
+  const [sortDirection, setSortDirection] = useState<SortDirection>(defaultSortDirection)
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('')
@@ -124,19 +120,7 @@ function useTableState<T>({
       totalRows: data.length,
       filteredRows: filteredCount,
     }
-  }, [
-    data,
-    columns,
-    sortColumn,
-    sortDirection,
-    searchQuery,
-    searchFields,
-    page,
-    pageSize,
-    enableSorting,
-    enableSearch,
-    enablePagination,
-  ])
+  }, [data, columns, sortColumn, sortDirection, searchQuery, searchFields, page, pageSize, enableSorting, enableSearch, enablePagination])
 
   // Calculate total pages
   const totalPages = useMemo(() => {
@@ -214,5 +198,5 @@ function useTableState<T>({
   }
 }
 
-export {useTableState}
-export type {UseTableStateProps, UseTableStateReturn}
+export { useTableState }
+export type { UseTableStateProps, UseTableStateReturn }

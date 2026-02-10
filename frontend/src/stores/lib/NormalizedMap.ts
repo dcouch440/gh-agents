@@ -29,14 +29,11 @@ const toArray = <T>(nm: NormalizedMap<T>): T[] => {
   return nm._array
 }
 
-const nmGet = <T>(nm: NormalizedMap<T>, id: string): T | undefined =>
-  nm.byId.get(id)
+const nmGet = <T>(nm: NormalizedMap<T>, id: string): T | undefined => nm.byId.get(id)
 
-const nmHas = <T>(nm: NormalizedMap<T>, id: string): boolean =>
-  nm.byId.has(id)
+const nmHas = <T>(nm: NormalizedMap<T>, id: string): boolean => nm.byId.has(id)
 
-const nmSize = <T>(nm: NormalizedMap<T>): number =>
-  nm.byId.size
+const nmSize = <T>(nm: NormalizedMap<T>): number => nm.byId.size
 
 // ── Write (all return new NormalizedMap) ─────────────────────────────────────
 

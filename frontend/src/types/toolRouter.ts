@@ -31,9 +31,4 @@ type SetRouterToolsRequest = {
   tool_ids: string[]
 }
 
-export type {
-  ToolRouter,
-  CreateToolRouterRequest,
-  UpdateToolRouterRequest,
-  SetRouterToolsRequest,
-}
+export type { ToolRouter, CreateToolRouterRequest, UpdateToolRouterRequest, SetRouterToolsRequest }

@@ -20,12 +20,7 @@ function PromptTab({ value, onChange }: PromptTabProps) {
         },
       }}
     >
-      <CodeEditor
-        value={value}
-        onChange={onChange}
-        placeholder="Enter your prompt..."
-        height="100%"
-      />
+      <CodeEditor value={value} onChange={onChange} placeholder="Enter your prompt..." height="100%" />
     </Box>
   )
 }

@@ -1,6 +1,6 @@
-import {Box, Typography} from '@mui/material'
-import {SearchInput} from '@/components/primitives'
-import type {ReactNode} from 'react'
+import { Box, Typography } from '@mui/material'
+import { SearchInput } from '@/components/primitives'
+import type { ReactNode } from 'react'
 
 type TableToolbarProps = {
   searchQuery: string
@@ -35,15 +35,11 @@ function TableToolbar({
         borderColor: 'divider',
       }}
     >
-      <Box sx={{flex: 1, maxWidth: 400}}>
-        <SearchInput
-          value={searchQuery}
-          onChange={onSearchChange}
-          placeholder={searchPlaceholder}
-        />
+      <Box sx={{ flex: 1, maxWidth: 400 }}>
+        <SearchInput value={searchQuery} onChange={onSearchChange} placeholder={searchPlaceholder} />
       </Box>
 
-      <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         {showResultCount && (
           <Typography variant="body2" color="text.secondary">
             {filteredRows} of {totalRows} results
@@ -56,5 +52,5 @@ function TableToolbar({
   )
 }
 
-export {TableToolbar}
-export type {TableToolbarProps}
+export { TableToolbar }
+export type { TableToolbarProps }

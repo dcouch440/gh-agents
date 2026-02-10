@@ -107,13 +107,7 @@ function LoginPage() {
               sx={{ mb: 3 }}
             />
 
-            <Button
-              onClick={() => {}}
-              type="submit"
-              variant="primary"
-              size="medium"
-              loading={loading}
-            >
+            <Button onClick={() => {}} type="submit" variant="primary" size="medium" loading={loading}>
               {loading ? 'Logging in...' : 'Login'}
             </Button>
           </form>

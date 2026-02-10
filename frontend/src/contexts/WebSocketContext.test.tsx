@@ -11,8 +11,7 @@ const mockWsSetState = vi.hoisted(() => vi.fn())
 // ── Module mocks ─────────────────────────────────────────────────────────────
 
 vi.mock('@/stores/lib', () => ({
-  useStore: (_store: unknown, selector: (s: { token: string | null }) => unknown) =>
-    selector({ token: mockToken.current }),
+  useStore: (_store: unknown, selector: (s: { token: string | null }) => unknown) => selector({ token: mockToken.current }),
 }))
 
 vi.mock('@/stores/authStore', () => ({
@@ -61,12 +60,9 @@ class FakeWebSocket {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const wrapper = ({ children }: { children: ReactNode }) => (
-  <WebSocketProvider>{children}</WebSocketProvider>
-)
+const wrapper = ({ children }: { children: ReactNode }) => <WebSocketProvider>{children}</WebSocketProvider>
 
-const renderProvider = () =>
-  renderHook(() => useContext(WebSocketContext), { wrapper })
+const renderProvider = () => renderHook(() => useContext(WebSocketContext), { wrapper })
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
@@ -150,9 +146,7 @@ describe('WebSocketContext', () => {
     })
 
     expect(handler).toHaveBeenCalledTimes(1)
-    expect(handler).toHaveBeenCalledWith(
-      expect.objectContaining({ topic: 'session', event: 'created' }),
-    )
+    expect(handler).toHaveBeenCalledWith(expect.objectContaining({ topic: 'session', event: 'created' }))
   })
 
   it('does not dispatch to unsubscribed handlers', () => {
@@ -203,9 +197,7 @@ describe('WebSocketContext', () => {
       result.current!.subscribe('session', vi.fn())
     })
 
-    expect(lastWs!.send).toHaveBeenCalledWith(
-      JSON.stringify({ type: 'subscribe', topics: ['session'] }),
-    )
+    expect(lastWs!.send).toHaveBeenCalledWith(JSON.stringify({ type: 'subscribe', topics: ['session'] }))
   })
 
   it('sends UNSUBSCRIBE when last handler for a topic unregisters', () => {
@@ -227,9 +219,7 @@ describe('WebSocketContext', () => {
       unsub()
     })
 
-    expect(lastWs!.send).toHaveBeenCalledWith(
-      JSON.stringify({ type: 'unsubscribe', topics: ['room'] }),
-    )
+    expect(lastWs!.send).toHaveBeenCalledWith(JSON.stringify({ type: 'unsubscribe', topics: ['room'] }))
   })
 
   it('sets status to disconnected and schedules reconnect on close', () => {
@@ -289,9 +279,7 @@ describe('WebSocketContext', () => {
     })
 
     // Should re-subscribe to 'session'
-    expect(lastWs!.send).toHaveBeenCalledWith(
-      JSON.stringify({ type: 'subscribe', topics: ['session'] }),
-    )
+    expect(lastWs!.send).toHaveBeenCalledWith(JSON.stringify({ type: 'subscribe', topics: ['session'] }))
   })
 
   it('handles control messages (pong) and updates latency', () => {
@@ -314,9 +302,7 @@ describe('WebSocketContext', () => {
       lastWs!.onmessage!(new MessageEvent('message', { data: controlMsg }))
     })
 
-    const latencyCall = mockWsSetState.mock.calls.find(
-      (call: unknown[]) => (call[0] as Record<string, unknown>).latency !== undefined,
-    )
+    const latencyCall = mockWsSetState.mock.calls.find((call: unknown[]) => (call[0] as Record<string, unknown>).latency !== undefined)
     expect(latencyCall).toBeDefined()
     expect(typeof (latencyCall![0] as Record<string, unknown>).latency).toBe('number')
   })
@@ -336,9 +322,7 @@ describe('WebSocketContext', () => {
       unsub = result.current!.subscribeRun('run-123')
     })
 
-    expect(lastWs!.send).toHaveBeenCalledWith(
-      JSON.stringify({ type: 'subscribe_run', run_id: 'run-123' }),
-    )
+    expect(lastWs!.send).toHaveBeenCalledWith(JSON.stringify({ type: 'subscribe_run', run_id: 'run-123' }))
 
     lastWs!.send.mockClear()
 
@@ -346,9 +330,7 @@ describe('WebSocketContext', () => {
       unsub()
     })
 
-    expect(lastWs!.send).toHaveBeenCalledWith(
-      JSON.stringify({ type: 'unsubscribe_run', run_id: 'run-123' }),
-    )
+    expect(lastWs!.send).toHaveBeenCalledWith(JSON.stringify({ type: 'unsubscribe_run', run_id: 'run-123' }))
   })
 
   it('ignores non-JSON messages', () => {
@@ -374,7 +356,9 @@ describe('WebSocketContext', () => {
     })
 
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const badHandler = vi.fn(() => { throw new Error('handler boom') })
+    const badHandler = vi.fn(() => {
+      throw new Error('handler boom')
+    })
     const goodHandler = vi.fn()
 
     act(() => {

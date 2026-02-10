@@ -114,9 +114,7 @@ describe('extractSchemaFields', () => {
     }
     const fields = extractSchemaFields(schema)
 
-    expect(fields).toEqual([
-      { path: 'mystery', type: 'unknown', description: 'no type field' },
-    ])
+    expect(fields).toEqual([{ path: 'mystery', type: 'unknown', description: 'no type field' }])
   })
 
   it('preserves descriptions through nesting', () => {

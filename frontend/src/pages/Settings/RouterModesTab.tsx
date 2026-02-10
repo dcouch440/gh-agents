@@ -1,13 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import {
-  Box,
-  Button,
-  Alert,
-  Typography,
-  CircularProgress,
-  IconButton,
-  Chip,
-} from '@mui/material'
+import { Box, Button, Alert, Typography, CircularProgress, IconButton, Chip } from '@mui/material'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import BuildIcon from '@mui/icons-material/Build'
@@ -25,7 +17,9 @@ function RouterModesTab() {
   const routersError = useStore(toolRouterStore.store, toolRouterStore.selectError)
   const [creating, setCreating] = useState(false)
 
-  useEffect(() => { void toolRouterStore.fetchAll() }, [])
+  useEffect(() => {
+    void toolRouterStore.fetchAll()
+  }, [])
 
   const activeRouter = routers.length > 0 ? routers[0] : null
   const activeRouterId = activeRouter?.id ?? null
@@ -53,13 +47,16 @@ function RouterModesTab() {
   const [toolsError, setToolsError] = useState<string | null>(null)
   const tools = useStore(toolStore.store, toolStore.selectAll)
 
-  useEffect(() => { void toolStore.fetchAll() }, [])
+  useEffect(() => {
+    void toolStore.fetchAll()
+  }, [])
 
   useEffect(() => {
     if (!activeRouterId) return
     setLoading(true)
     setError(null)
-    toolRouterStore.fetchModes(activeRouterId)
+    toolRouterStore
+      .fetchModes(activeRouterId)
       .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Failed to load modes'))
       .finally(() => setLoading(false))
   }, [activeRouterId])
@@ -204,17 +201,9 @@ function RouterModesTab() {
       sortable: false,
       render: (row) => (
         <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-          {row.append_to_agent_system_prompt && (
-            <Chip label="Append Prompt" size="small" variant="outlined" />
-          )}
-          {row.append_to_agent_tools && (
-            <Chip label="Append Tools" size="small" variant="outlined" />
-          )}
-          <Chip
-            label={`T: ${row.temperature}`}
-            size="small"
-            variant="outlined"
-          />
+          {row.append_to_agent_system_prompt && <Chip label="Append Prompt" size="small" variant="outlined" />}
+          {row.append_to_agent_tools && <Chip label="Append Tools" size="small" variant="outlined" />}
+          <Chip label={`T: ${row.temperature}`} size="small" variant="outlined" />
         </Box>
       ),
     },
@@ -224,20 +213,10 @@ function RouterModesTab() {
       sortable: false,
       render: (row) => (
         <Box sx={{ display: 'flex', gap: 0.5 }}>
-          <IconButton
-            size="small"
-            onClick={() => handleEdit(row)}
-            disabled={deleting}
-            aria-label="Edit mode"
-          >
+          <IconButton size="small" onClick={() => handleEdit(row)} disabled={deleting} aria-label="Edit mode">
             <EditIcon fontSize="small" />
           </IconButton>
-          <IconButton
-            size="small"
-            onClick={() => handleToolsClick(row)}
-            disabled={deleting}
-            aria-label="Manage tools"
-          >
+          <IconButton size="small" onClick={() => handleToolsClick(row)} disabled={deleting} aria-label="Manage tools">
             <BuildIcon fontSize="small" />
           </IconButton>
           <IconButton
@@ -286,7 +265,9 @@ function RouterModesTab() {
           </Typography>
           <Button
             variant="contained"
-            onClick={() => { void handleCreateRouter() }}
+            onClick={() => {
+              void handleCreateRouter()
+            }}
             disabled={creating}
           >
             {creating ? 'Creating...' : 'Create Default Router'}
@@ -311,11 +292,7 @@ function RouterModesTab() {
       )}
 
       {deleteError && (
-        <Alert
-          severity="error"
-          sx={{ mb: 2 }}
-          onClose={() => setDeleteError(null)}
-        >
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setDeleteError(null)}>
           {deleteError}
         </Alert>
       )}
@@ -331,14 +308,7 @@ function RouterModesTab() {
           </Typography>
         </Box>
       ) : (
-        <DataTable
-          columns={columns}
-          rows={modes}
-          rowKey={(row) => row.id}
-          sortColumn={null}
-          sortDirection="asc"
-          onSort={null}
-        />
+        <DataTable columns={columns} rows={modes} rowKey={(row) => row.id} sortColumn={null} sortDirection="asc" onSort={null} />
       )}
 
       <ModeFormDialog

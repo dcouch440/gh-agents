@@ -40,11 +40,7 @@ class Collections {
    * Eliminates the intermediate tuple array from `new Map(arr.map(x => [k, v]))`.
    * Last-write-wins. O(n), 1 Map allocation.
    */
-  static toLookupMap<T, K, V>(
-    items: readonly T[],
-    keyFn: (item: T) => K,
-    valueFn: (item: T) => V,
-  ): Map<K, V> {
+  static toLookupMap<T, K, V>(items: readonly T[], keyFn: (item: T) => K, valueFn: (item: T) => V): Map<K, V> {
     const map = new Map<K, V>()
     const n = items.length
     for (let i = 0; i < n; i++) {
@@ -137,10 +133,7 @@ class Collections {
    * Replaces `.filter(pred).map(transform)` chains (which allocate 2 arrays).
    * O(n), 1 output array (PACKED via `.push()`).
    */
-  static filterMap<T, U>(
-    items: readonly T[],
-    fn: (item: T, index: number) => U | null,
-  ): U[] {
+  static filterMap<T, U>(items: readonly T[], fn: (item: T, index: number) => U | null): U[] {
     const result: U[] = []
     const n = items.length
     for (let i = 0; i < n; i++) {
@@ -157,10 +150,7 @@ class Collections {
    * Replaces two separate `.filter()` calls with inverted predicates.
    * O(n), 2 output arrays (both PACKED via `.push()`).
    */
-  static partition<T>(
-    items: readonly T[],
-    predicate: (item: T) => boolean,
-  ): [T[], T[]] {
+  static partition<T>(items: readonly T[], predicate: (item: T) => boolean): [T[], T[]] {
     const pass: T[] = []
     const fail: T[] = []
     const n = items.length
@@ -217,10 +207,7 @@ class Collections {
    *
    * O(n * k) where k = number of fields. 1 result object allocation.
    */
-  static aggregate<T, K extends string>(
-    items: readonly T[],
-    fns: Record<K, (item: T) => number>,
-  ): Record<K, number> {
+  static aggregate<T, K extends string>(items: readonly T[], fns: Record<K, (item: T) => number>): Record<K, number> {
     const entries = Object.entries(fns) as [K, (item: T) => number][]
     const k = entries.length
 
@@ -302,10 +289,7 @@ class Collections {
    * `.slice()` creates a PACKED copy. `.sort()` is V8's Timsort (already optimal).
    * O(n log n), 1 array allocation.
    */
-  static sortedCopy<T>(
-    items: readonly T[],
-    compareFn: (a: T, b: T) => number,
-  ): T[] {
+  static sortedCopy<T>(items: readonly T[], compareFn: (a: T, b: T) => number): T[] {
     const copy = items.slice()
     copy.sort(compareFn)
     return copy

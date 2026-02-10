@@ -20,10 +20,7 @@ function SystemHealthStatus({ config, agentStats, wsConnected }: SystemHealthSta
         >
           MODE
         </Typography>
-        <Typography
-          component="span"
-          sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'text.primary' }}
-        >
+        <Typography component="span" sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'text.primary' }}>
           {config.autonomy}
         </Typography>
       </Box>
@@ -34,10 +31,7 @@ function SystemHealthStatus({ config, agentStats, wsConnected }: SystemHealthSta
         >
           GIT
         </Typography>
-        <Typography
-          component="span"
-          sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'text.primary' }}
-        >
+        <Typography component="span" sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'text.primary' }}>
           {config.git_strategy}
         </Typography>
       </Box>
@@ -48,10 +42,7 @@ function SystemHealthStatus({ config, agentStats, wsConnected }: SystemHealthSta
         >
           VERBOSITY
         </Typography>
-        <Typography
-          component="span"
-          sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'text.primary' }}
-        >
+        <Typography component="span" sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'text.primary' }}>
           {config.verbosity}
         </Typography>
       </Box>
@@ -62,10 +53,7 @@ function SystemHealthStatus({ config, agentStats, wsConnected }: SystemHealthSta
         >
           SANDBOX
         </Typography>
-        <Typography
-          component="span"
-          sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'text.primary' }}
-        >
+        <Typography component="span" sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'text.primary' }}>
           {config.sandbox_mode}
         </Typography>
       </Box>
@@ -82,13 +70,15 @@ function SystemHealthStatus({ config, agentStats, wsConnected }: SystemHealthSta
             fontSize: 'inherit',
             lineHeight: 'inherit',
             color: wsConnected ? 'success.main' : 'error.main',
-            ...(wsConnected ? {} : {
-              animation: 'blink 800ms step-end infinite',
-              '@keyframes blink': {
-                '0%, 100%': { opacity: 1 },
-                '50%': { opacity: 0 },
-              },
-            }),
+            ...(wsConnected
+              ? {}
+              : {
+                  animation: 'blink 800ms step-end infinite',
+                  '@keyframes blink': {
+                    '0%, 100%': { opacity: 1 },
+                    '50%': { opacity: 0 },
+                  },
+                }),
           }}
         >
           {wsConnected ? 'connected' : 'disconnected'}
@@ -101,10 +91,7 @@ function SystemHealthStatus({ config, agentStats, wsConnected }: SystemHealthSta
         >
           POOL
         </Typography>
-        <Typography
-          component="span"
-          sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'text.primary' }}
-        >
+        <Typography component="span" sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'text.primary' }}>
           {poolStr}
         </Typography>
       </Box>

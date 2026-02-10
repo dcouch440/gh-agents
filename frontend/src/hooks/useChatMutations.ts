@@ -15,43 +15,41 @@ const useSendSessionMessage = () => {
   const [streaming, setStreaming] = useState(false)
   const abortRef = useRef<(() => void) | null>(null)
 
-  const send = useCallback(async (
-    sessionId: string,
-    body: SendMessageRequest,
-    onEvent?: (event: SSEEvent) => void,
-    onDone?: () => void,
-  ): Promise<string> => {
-    setLoading(true)
-    setError(null)
-    try {
-      const { message_id } = await api.post<SendMessageResponse>(API.SESSION_CHAT(sessionId), body)
+  const send = useCallback(
+    async (sessionId: string, body: SendMessageRequest, onEvent?: (event: SSEEvent) => void, onDone?: () => void): Promise<string> => {
+      setLoading(true)
+      setError(null)
+      try {
+        const { message_id } = await api.post<SendMessageResponse>(API.SESSION_CHAT(sessionId), body)
 
-      if (onEvent) {
-        setStreaming(true)
-        abortRef.current = createSSEStream(API.SESSION_CHAT_STREAM(sessionId, message_id), {
-          onEvent,
-          onDone: () => {
-            setStreaming(false)
-            abortRef.current = null
-            onDone?.()
-          },
-          onError: (e) => {
-            setStreaming(false)
-            abortRef.current = null
-            setError(e.message)
-          },
-        })
+        if (onEvent) {
+          setStreaming(true)
+          abortRef.current = createSSEStream(API.SESSION_CHAT_STREAM(sessionId, message_id), {
+            onEvent,
+            onDone: () => {
+              setStreaming(false)
+              abortRef.current = null
+              onDone?.()
+            },
+            onError: (e) => {
+              setStreaming(false)
+              abortRef.current = null
+              setError(e.message)
+            },
+          })
+        }
+
+        return message_id
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Failed to send message'
+        setError(msg)
+        throw e
+      } finally {
+        setLoading(false)
       }
-
-      return message_id
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to send message'
-      setError(msg)
-      throw e
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+    },
+    [],
+  )
 
   const abort = useCallback(() => {
     abortRef.current?.()

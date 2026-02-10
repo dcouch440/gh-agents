@@ -35,7 +35,7 @@ describe('ModeToolSelector', () => {
           loadingTools={true}
           savingTools={false}
           toolsError={null}
-        />
+        />,
       )
 
       expect(screen.getByRole('progressbar')).toBeInTheDocument()
@@ -54,7 +54,7 @@ describe('ModeToolSelector', () => {
           loadingTools={false}
           savingTools={false}
           toolsError={null}
-        />
+        />,
       )
 
       await waitFor(() => {
@@ -75,7 +75,7 @@ describe('ModeToolSelector', () => {
           loadingTools={false}
           savingTools={false}
           toolsError={null}
-        />
+        />,
       )
 
       await waitFor(() => {
@@ -97,7 +97,7 @@ describe('ModeToolSelector', () => {
           loadingTools={false}
           savingTools={false}
           toolsError={null}
-        />
+        />,
       )
 
       await waitFor(() => {
@@ -120,7 +120,7 @@ describe('ModeToolSelector', () => {
           loadingTools={false}
           savingTools={false}
           toolsError={null}
-        />
+        />,
       )
 
       await waitFor(() => {
@@ -141,20 +141,18 @@ describe('ModeToolSelector', () => {
           loadingTools={false}
           savingTools={false}
           toolsError={null}
-        />
+        />,
       )
 
       await waitFor(
         () => {
           const checkboxes = screen.queryAllByRole('checkbox')
           const toolCheckbox = checkboxes.find(
-            (cb) =>
-              cb.getAttribute('aria-label') === null &&
-              (cb.closest('[role="button"]')?.textContent ?? '').includes(mockTool.name)
+            (cb) => cb.getAttribute('aria-label') === null && (cb.closest('[role="button"]')?.textContent ?? '').includes(mockTool.name),
           )
           expect(toolCheckbox).toBeChecked()
         },
-        { timeout: 3000 }
+        { timeout: 3000 },
       )
     })
 
@@ -171,7 +169,7 @@ describe('ModeToolSelector', () => {
           loadingTools={false}
           savingTools={false}
           toolsError={null}
-        />
+        />,
       )
 
       expect(mockLoadModeTools).not.toHaveBeenCalled()
@@ -193,7 +191,7 @@ describe('ModeToolSelector', () => {
           loadingTools={false}
           savingTools={false}
           toolsError={null}
-        />
+        />,
       )
 
       await waitFor(() => {
@@ -225,7 +223,7 @@ describe('ModeToolSelector', () => {
           loadingTools={false}
           savingTools={false}
           toolsError={null}
-        />
+        />,
       )
 
       await waitFor(() => {
@@ -255,7 +253,7 @@ describe('ModeToolSelector', () => {
           loadingTools={false}
           savingTools={true}
           toolsError={null}
-        />
+        />,
       )
 
       await waitFor(() => {
@@ -284,7 +282,7 @@ describe('ModeToolSelector', () => {
           loadingTools={false}
           savingTools={false}
           toolsError={null}
-        />
+        />,
       )
 
       await waitFor(() => {
@@ -318,7 +316,7 @@ describe('ModeToolSelector', () => {
           loadingTools={false}
           savingTools={false}
           toolsError={null}
-        />
+        />,
       )
 
       await waitFor(() => {
@@ -348,7 +346,7 @@ describe('ModeToolSelector', () => {
           loadingTools={false}
           savingTools={true}
           toolsError={null}
-        />
+        />,
       )
 
       await waitFor(() => {
@@ -371,7 +369,7 @@ describe('ModeToolSelector', () => {
           loadingTools={true}
           savingTools={false}
           toolsError={null}
-        />
+        />,
       )
 
       const saveButton = screen.getByRole('button', { name: /save/i })
@@ -394,7 +392,7 @@ describe('ModeToolSelector', () => {
           loadingTools={false}
           savingTools={false}
           toolsError={null}
-        />
+        />,
       )
 
       await waitFor(() => {
@@ -432,7 +430,7 @@ describe('ModeToolSelector', () => {
           loadingTools={false}
           savingTools={false}
           toolsError="Failed to load tools"
-        />
+        />,
       )
 
       await waitFor(() => {

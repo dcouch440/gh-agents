@@ -50,24 +50,12 @@ describe('ExecutionTimelineEntry', () => {
   })
 
   it('shows error message when step failed', () => {
-    render(
-      <ExecutionTimelineEntry
-        stepId="s1"
-        stepState={makeStep({ status: 'error', error: 'timeout', output: null })}
-        isLast={false}
-      />,
-    )
+    render(<ExecutionTimelineEntry stepId="s1" stepState={makeStep({ status: 'error', error: 'timeout', output: null })} isLast={false} />)
     expect(screen.getByTestId('badge')).toHaveTextContent('Failed')
   })
 
   it('shows for-each progress when present', () => {
-    render(
-      <ExecutionTimelineEntry
-        stepId="s1"
-        stepState={makeStep({ forEachProgress: { completed: 3, total: 10 } })}
-        isLast={false}
-      />,
-    )
+    render(<ExecutionTimelineEntry stepId="s1" stepState={makeStep({ forEachProgress: { completed: 3, total: 10 } })} isLast={false} />)
     expect(screen.getByText('3/10 items')).toBeInTheDocument()
   })
 
@@ -83,13 +71,7 @@ describe('ExecutionTimelineEntry', () => {
   })
 
   it('falls back to stepId when stepName is null', () => {
-    render(
-      <ExecutionTimelineEntry
-        stepId="step-uuid-123"
-        stepState={makeStep({ stepName: null })}
-        isLast={false}
-      />,
-    )
+    render(<ExecutionTimelineEntry stepId="step-uuid-123" stepState={makeStep({ stepName: null })} isLast={false} />)
     expect(screen.getByText('step-uuid-123')).toBeInTheDocument()
   })
 

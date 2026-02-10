@@ -10,13 +10,7 @@ type PropertyRowProps = {
   children?: ReactNode | null
 }
 
-function PropertyRow({
-  label,
-  value = null,
-  mono = false,
-  last = false,
-  children = null,
-}: PropertyRowProps) {
+function PropertyRow({ label, value = null, mono = false, last = false, children = null }: PropertyRowProps) {
   return (
     <Box
       sx={{
@@ -41,9 +35,7 @@ function PropertyRow({
         {label}
       </Typography>
       {children !== null ? (
-        <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
-          {children}
-        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>{children}</Box>
       ) : (
         <Typography
           sx={{

@@ -43,17 +43,21 @@ const useSplitPane = (opts: UseSplitPaneOpts): UseSplitPaneResult => {
         setSplitPercent(clamped)
       }
 
-      const up = () => { cleanup() }
+      const up = () => {
+        cleanup()
+      }
 
       listenersRef.current = { move, up }
       document.addEventListener('mousemove', move)
       document.addEventListener('mouseup', up)
     },
-    [opts.min, opts.max, cleanup]
+    [opts.min, opts.max, cleanup],
   )
 
   useEffect(() => {
-    return () => { cleanup() }
+    return () => {
+      cleanup()
+    }
   }, [cleanup])
 
   return { splitPercent, handleMouseDown }

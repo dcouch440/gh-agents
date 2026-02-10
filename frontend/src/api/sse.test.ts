@@ -125,12 +125,7 @@ describe('createSSEStream', () => {
 
   it('handles multiple events', async () => {
     mockGetItem.mockReturnValue(null)
-    const mockReader = createMockReader([
-      'data: first\n\n',
-      'event: custom\n',
-      'data: second\n\n',
-      'data: third\n\n',
-    ])
+    const mockReader = createMockReader(['data: first\n\n', 'event: custom\n', 'data: second\n\n', 'data: third\n\n'])
     mockFetch.mockResolvedValue({
       ok: true,
       body: { getReader: () => mockReader },
@@ -213,9 +208,7 @@ describe('createSSEStream', () => {
     createSSEStream('/test', callbacks)
 
     await vi.waitFor(() => {
-      expect(callbacks.onError).toHaveBeenCalledWith(
-        new Error('SSE request failed: 500 Internal Server Error'),
-      )
+      expect(callbacks.onError).toHaveBeenCalledWith(new Error('SSE request failed: 500 Internal Server Error'))
     })
   })
 
@@ -229,9 +222,7 @@ describe('createSSEStream', () => {
     createSSEStream('/test', callbacks)
 
     await vi.waitFor(() => {
-      expect(callbacks.onError).toHaveBeenCalledWith(
-        new Error('Response body is not readable'),
-      )
+      expect(callbacks.onError).toHaveBeenCalledWith(new Error('Response body is not readable'))
     })
   })
 
@@ -308,11 +299,7 @@ describe('createSSEStream', () => {
 
   it('resets event type after empty line', async () => {
     mockGetItem.mockReturnValue(null)
-    const mockReader = createMockReader([
-      'event: custom\n',
-      '\n',
-      'data: message\n\n',
-    ])
+    const mockReader = createMockReader(['event: custom\n', '\n', 'data: message\n\n'])
     mockFetch.mockResolvedValue({
       ok: true,
       body: { getReader: () => mockReader },
@@ -335,9 +322,7 @@ describe('createSSEStream', () => {
     createSSEStream('/test', callbacks)
 
     await vi.waitFor(() => {
-      expect(callbacks.onError).toHaveBeenCalledWith(
-        new Error('SSE connection failed'),
-      )
+      expect(callbacks.onError).toHaveBeenCalledWith(new Error('SSE connection failed'))
     })
   })
 })

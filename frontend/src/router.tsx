@@ -1,18 +1,18 @@
-import { createBrowserRouter } from "react-router-dom";
-import { ROUTES } from "./constants";
-import { AppLayout } from "./components/layout/AppLayout";
-import { DashboardPage } from "./pages/Dashboard/DashboardPage";
-import { AgentsPage } from "./pages/Agents/AgentsPage";
-import { AgentDetailPage } from "./pages/Agents/AgentDetailPage";
-import { AgentWorkshopPage } from "./pages/Agents/AgentWorkshopPage";
-import { TasksPage } from "./pages/Tasks/TasksPage";
-import { DocumentsPage } from "./pages/Documents/DocumentsPage";
-import { SettingsPage } from "./pages/Settings/SettingsPage";
-import { LoginPage } from "./pages/Auth/LoginPage";
-import { ChatPage } from "./pages/Chat/ChatPage";
-import { ReviewQueuePage } from "./pages/ReviewQueue";
-import { WorkflowsPage } from "./pages/Workflows/WorkflowsPage";
-import { WorkflowEditorPage } from "./pages/Workflows/WorkflowEditorPage";
+import { createBrowserRouter } from 'react-router-dom'
+import { ROUTES } from './constants'
+import { AppLayout } from './components/layout/AppLayout'
+import { DashboardPage } from './pages/Dashboard/DashboardPage'
+import { AgentsPage } from './pages/Agents/AgentsPage'
+import { AgentDetailPage } from './pages/Agents/AgentDetailPage'
+import { AgentWorkshopPage } from './pages/Agents/AgentWorkshopPage'
+import { TasksPage } from './pages/Tasks/TasksPage'
+import { DocumentsPage } from './pages/Documents/DocumentsPage'
+import { SettingsPage } from './pages/Settings/SettingsPage'
+import { LoginPage } from './pages/Auth/LoginPage'
+import { ChatPage } from './pages/Chat/ChatPage'
+import { ReviewQueuePage } from './pages/ReviewQueue'
+import { WorkflowsPage } from './pages/Workflows/WorkflowsPage'
+import { WorkflowEditorPage } from './pages/Workflows/WorkflowEditorPage'
 
 export const router = createBrowserRouter([
   {
@@ -35,4 +35,4 @@ export const router = createBrowserRouter([
       { path: ROUTES.SETTINGS, element: <SettingsPage /> },
     ],
   },
-]);
+])

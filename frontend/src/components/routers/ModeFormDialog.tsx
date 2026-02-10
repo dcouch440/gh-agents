@@ -54,9 +54,7 @@ function ModeFormContent({
   const [selectedToolIds, setSelectedToolIds] = useState<string[]>([...initialToolIds])
 
   const handleToggleTool = (toolId: string) => {
-    setSelectedToolIds((prev) =>
-      prev.includes(toolId) ? prev.filter((id) => id !== toolId) : [...prev, toolId],
-    )
+    setSelectedToolIds((prev) => (prev.includes(toolId) ? prev.filter((id) => id !== toolId) : [...prev, toolId]))
   }
 
   const handleSubmit = () => {
@@ -76,10 +74,7 @@ function ModeFormContent({
     )
   }
 
-  const isValid =
-    modeKey.trim().length > 0 &&
-    displayName.trim().length > 0 &&
-    description.trim().length > 0
+  const isValid = modeKey.trim().length > 0 && displayName.trim().length > 0 && description.trim().length > 0
 
   return (
     <>
@@ -129,7 +124,9 @@ function ModeFormContent({
             </Typography>
             <Slider
               value={temperature}
-              onChange={(_, v) => { if (typeof v === 'number') setTemperature(v) }}
+              onChange={(_, v) => {
+                if (typeof v === 'number') setTemperature(v)
+              }}
               min={0}
               max={2}
               step={0.1}
@@ -156,16 +153,12 @@ function ModeFormContent({
           />
 
           <FormControlLabel
-            control={
-              <Switch checked={appendPrompt} onChange={(e) => setAppendPrompt(e.target.checked)} />
-            }
+            control={<Switch checked={appendPrompt} onChange={(e) => setAppendPrompt(e.target.checked)} />}
             label="Append to agent system prompt"
           />
 
           <FormControlLabel
-            control={
-              <Switch checked={appendTools} onChange={(e) => setAppendTools(e.target.checked)} />
-            }
+            control={<Switch checked={appendTools} onChange={(e) => setAppendTools(e.target.checked)} />}
             label="Append to agent tools"
           />
 
@@ -181,13 +174,7 @@ function ModeFormContent({
               {allTools.map((tool) => (
                 <FormControlLabel
                   key={tool.id}
-                  control={
-                    <Checkbox
-                      checked={selectedToolIds.includes(tool.id)}
-                      onChange={() => handleToggleTool(tool.id)}
-                      size="small"
-                    />
-                  }
+                  control={<Checkbox checked={selectedToolIds.includes(tool.id)} onChange={() => handleToggleTool(tool.id)} size="small" />}
                   label={
                     <Box>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>

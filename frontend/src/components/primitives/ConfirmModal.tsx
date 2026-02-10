@@ -1,13 +1,6 @@
-import type {ReactNode} from 'react'
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
-  Alert,
-} from '@mui/material'
-import {Button} from '@/components/primitives'
+import type { ReactNode } from 'react'
+import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Alert } from '@mui/material'
+import { Button } from '@/components/primitives'
 
 type ConfirmModalProps = {
   open: boolean
@@ -42,38 +35,24 @@ function ConfirmModal({
   }
 
   return (
-    <Dialog
-      open={open}
-      onClose={loading ? undefined : onClose}
-      maxWidth="sm"
-      fullWidth
-    >
+    <Dialog open={open} onClose={loading ? undefined : onClose} maxWidth="sm" fullWidth>
       <DialogTitle>{title}</DialogTitle>
 
       <DialogContent>
         {error && (
-          <Alert severity="error" sx={{mb: 2}}>
+          <Alert severity="error" sx={{ mb: 2 }}>
             {error}
           </Alert>
         )}
 
-        {typeof message === 'string' ? (
-          <DialogContentText>{message}</DialogContentText>
-        ) : (
-          message
-        )}
+        {typeof message === 'string' ? <DialogContentText>{message}</DialogContentText> : message}
       </DialogContent>
 
-      <DialogActions sx={{px: 3, py: 2}}>
+      <DialogActions sx={{ px: 3, py: 2 }}>
         <Button onClick={onClose} disabled={loading} variant="secondary">
           {cancelText}
         </Button>
-        <Button
-          onClick={handleConfirm}
-          variant={confirmColor === 'error' ? 'danger' : 'primary'}
-          disabled={loading}
-          loading={loading}
-        >
+        <Button onClick={handleConfirm} variant={confirmColor === 'error' ? 'danger' : 'primary'} disabled={loading} loading={loading}>
           {confirmText}
         </Button>
       </DialogActions>
@@ -81,5 +60,5 @@ function ConfirmModal({
   )
 }
 
-export {ConfirmModal}
-export type {ConfirmModalProps}
+export { ConfirmModal }
+export type { ConfirmModalProps }

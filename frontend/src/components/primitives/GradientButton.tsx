@@ -15,15 +15,7 @@ type GradientButtonProps = {
   minWidth?: number
 }
 
-function GradientButton({
-  children,
-  onClick,
-  icon,
-  color = 'primary',
-  disabled,
-  loading,
-  minWidth = 80,
-}: GradientButtonProps) {
+function GradientButton({ children, onClick, icon, color = 'primary', disabled, loading, minWidth = 80 }: GradientButtonProps) {
   const theme = useTheme()
   const palette = theme.palette[color]
   const isDark = theme.palette.mode === 'dark'
@@ -34,12 +26,8 @@ function GradientButton({
   const hoverGradient = isDark
     ? `linear-gradient(135deg, ${palette.dark} 0%, ${palette.dark} 100%)`
     : `linear-gradient(135deg, ${palette.main} 0%, ${palette.main} 100%)`
-  const shadow = isDark
-    ? `0 2px 8px ${palette.main}66`
-    : `0 2px 8px ${palette.main}33`
-  const hoverShadow = isDark
-    ? `0 4px 14px ${palette.main}80`
-    : `0 4px 14px ${palette.main}4d`
+  const shadow = isDark ? `0 2px 8px ${palette.main}66` : `0 2px 8px ${palette.main}33`
+  const hoverShadow = isDark ? `0 4px 14px ${palette.main}80` : `0 4px 14px ${palette.main}4d`
 
   return (
     <MuiButton

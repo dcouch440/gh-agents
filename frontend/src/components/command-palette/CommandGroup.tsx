@@ -1,11 +1,11 @@
-import { type ReactNode } from 'react';
-import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
+import { type ReactNode } from 'react'
+import Box from '@mui/material/Box'
+import Typography from '@mui/material/Typography'
 
 type CommandGroupProps = {
-  label: string;
-  children: ReactNode;
-};
+  label: string
+  children: ReactNode
+}
 
 function CommandGroup({ label, children }: CommandGroupProps) {
   return (
@@ -25,7 +25,7 @@ function CommandGroup({ label, children }: CommandGroupProps) {
       </Typography>
       {children}
     </Box>
-  );
+  )
 }
 
-export { CommandGroup };
+export { CommandGroup }

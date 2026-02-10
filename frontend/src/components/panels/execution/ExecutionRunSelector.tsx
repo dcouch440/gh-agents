@@ -89,17 +89,10 @@ function ExecutionRunSelector({
             }}
           />
         )}
-        <Typography
-          variant="caption"
-          sx={{ color: 'text.secondary', fontFamily: 'monospace', flex: 1 }}
-        >
+        <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace', flex: 1 }}>
           {displayLabel}
         </Typography>
-        {loading ? (
-          <CircularProgress size={12} />
-        ) : (
-          <KeyboardArrowDownOutlined sx={{ fontSize: 16, color: 'text.disabled' }} />
-        )}
+        {loading ? <CircularProgress size={12} /> : <KeyboardArrowDownOutlined sx={{ fontSize: 16, color: 'text.disabled' }} />}
       </Box>
       <Menu
         anchorEl={anchorEl}
@@ -137,9 +130,7 @@ function ExecutionRunSelector({
                 setAnchorEl(null)
               }}
             >
-              <ListItemIcon>
-                {statusIcon(run.status)}
-              </ListItemIcon>
+              <ListItemIcon>{statusIcon(run.status)}</ListItemIcon>
               <ListItemText
                 primary={
                   <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>

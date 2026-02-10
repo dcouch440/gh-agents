@@ -19,22 +19,13 @@ const DEFAULT_MAX_DEPTH = 3
  * Handles `properties` (objects), `items` (arrays), and nested structures.
  * Stops recursing at `maxDepth` to prevent infinite loops on recursive schemas.
  */
-const extractSchemaFields = (
-  schema: Record<string, unknown>,
-  maxDepth: number = DEFAULT_MAX_DEPTH,
-): SchemaField[] => {
+const extractSchemaFields = (schema: Record<string, unknown>, maxDepth: number = DEFAULT_MAX_DEPTH): SchemaField[] => {
   const fields: SchemaField[] = []
   walkSchema(schema, '', fields, 0, maxDepth)
   return fields
 }
 
-const walkSchema = (
-  node: Record<string, unknown>,
-  prefix: string,
-  out: SchemaField[],
-  depth: number,
-  maxDepth: number,
-): void => {
+const walkSchema = (node: Record<string, unknown>, prefix: string, out: SchemaField[], depth: number, maxDepth: number): void => {
   if (depth > maxDepth) return
 
   const nodeType = typeof node.type === 'string' ? node.type : 'object'

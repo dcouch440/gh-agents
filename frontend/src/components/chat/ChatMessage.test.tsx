@@ -3,9 +3,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { ChatMessage } from './ChatMessage'
 
 vi.mock('@/components/primitives/MarkdownPreview', () => ({
-  MarkdownPreview: ({ content }: { content: string }) => (
-    <div data-testid="markdown-preview">{content}</div>
-  ),
+  MarkdownPreview: ({ content }: { content: string }) => <div data-testid="markdown-preview">{content}</div>,
 }))
 
 describe('ChatMessage', () => {
@@ -25,17 +23,13 @@ describe('ChatMessage', () => {
   })
 
   it('shows streaming cursor when streaming=true and role=assistant', () => {
-    const { container } = render(
-      <ChatMessage role="assistant" content="Thinking..." streaming={true} />
-    )
+    const { container } = render(<ChatMessage role="assistant" content="Thinking..." streaming={true} />)
     const cursor = container.querySelector('span[class*="MuiBox"]')
     expect(cursor).toBeInTheDocument()
   })
 
   it('does not show cursor when streaming=false', () => {
-    render(
-      <ChatMessage role="assistant" content="Done." streaming={false} />
-    )
+    render(<ChatMessage role="assistant" content="Done." streaming={false} />)
     expect(screen.getByText('Done.')).toBeInTheDocument()
   })
 })

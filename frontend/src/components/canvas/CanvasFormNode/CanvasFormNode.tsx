@@ -23,15 +23,17 @@ function CanvasFormNodeComponent({
 
   return (
     <Box
-      onMouseEnter={() => { setHovered(true) }}
-      onMouseLeave={() => { setHovered(false) }}
+      onMouseEnter={() => {
+        setHovered(true)
+      }}
+      onMouseLeave={() => {
+        setHovered(false)
+      }}
       sx={{
         width: '100%',
         height: '100%',
         borderRadius: '12px',
-        backgroundColor: theme.palette.mode === 'light'
-          ? theme.palette.custom.cavityBg
-          : 'background.paper',
+        backgroundColor: theme.palette.mode === 'light' ? theme.palette.custom.cavityBg : 'background.paper',
         border: 2,
         borderColor: selected ? resolvedAccent : 'divider',
         boxShadow: selected
@@ -110,7 +112,9 @@ function CanvasFormNodeComponent({
             <Tooltip key={tab.id} title={tab.tooltip} placement="bottom">
               <Box
                 data-testid={`tab-${tab.id}`}
-                onClick={() => { onTabChange(tab.id) }}
+                onClick={() => {
+                  onTabChange(tab.id)
+                }}
                 role="tab"
                 tabIndex={0}
                 aria-selected={isActive}
@@ -127,13 +131,9 @@ function CanvasFormNodeComponent({
                   borderRadius: '4px',
                   cursor: 'pointer',
                   position: 'relative',
-                  backgroundColor: isActive
-                    ? theme.palette.custom.activeTint
-                    : 'transparent',
+                  backgroundColor: isActive ? theme.palette.custom.activeTint : 'transparent',
                   transition: 'background-color 120ms ease',
-                  '&:hover': isActive
-                    ? {}
-                    : { backgroundColor: theme.palette.custom.hoverOverlay },
+                  '&:hover': isActive ? {} : { backgroundColor: theme.palette.custom.hoverOverlay },
                   ...(isActive
                     ? {
                         '&::after': {
@@ -164,10 +164,7 @@ function CanvasFormNodeComponent({
       </Box>
 
       {/* Content area — full-bleed, no padding, interactive */}
-      <Box
-        className="nowheel nodrag nopan"
-        sx={{ flex: 1, overflow: 'auto', position: 'relative', cursor: 'text' }}
-      >
+      <Box className="nowheel nodrag nopan" sx={{ flex: 1, overflow: 'auto', position: 'relative', cursor: 'text' }}>
         {activeTab?.content}
       </Box>
 

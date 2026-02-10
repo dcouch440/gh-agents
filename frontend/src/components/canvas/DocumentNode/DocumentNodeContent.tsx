@@ -15,12 +15,7 @@ type DocumentNodeContentProps = {
   onChange: (value: string) => void
 }
 
-function DocumentNodeContent({
-  content,
-  mode,
-  accentColor = DOCUMENT_NODE.ACCENT_COLOR,
-  onChange,
-}: DocumentNodeContentProps) {
+function DocumentNodeContent({ content, mode, accentColor = DOCUMENT_NODE.ACCENT_COLOR, onChange }: DocumentNodeContentProps) {
   const [viewMode, setViewMode] = useState<ContentViewMode>(mode === 'entry' ? 'raw' : 'md')
 
   const isEditable = mode === 'entry'
@@ -42,7 +37,9 @@ function DocumentNodeContent({
         {(['raw', 'md'] as const).map((vm) => (
           <Box
             key={vm}
-            onClick={() => { setViewMode(vm) }}
+            onClick={() => {
+              setViewMode(vm)
+            }}
             sx={{
               px: 0.75,
               py: 0.25,
@@ -63,10 +60,7 @@ function DocumentNodeContent({
       </Box>
 
       {/* Content area */}
-      <Box
-        className="nowheel nodrag nopan"
-        sx={{ flex: 1, overflow: 'hidden', pt: 0.5, px: 0.5, pb: 0.5 }}
-      >
+      <Box className="nowheel nodrag nopan" sx={{ flex: 1, overflow: 'hidden', pt: 0.5, px: 0.5, pb: 0.5 }}>
         {viewMode === 'raw' ? (
           <CodeEditor
             value={content}

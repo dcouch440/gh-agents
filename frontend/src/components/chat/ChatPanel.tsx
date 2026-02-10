@@ -1,57 +1,52 @@
-import {useRef, useEffect} from "react";
-import {Box, Typography} from "@mui/material";
-import {ChatMessage} from "./ChatMessage";
-import {ChatInput} from "./ChatInput";
+import { useRef, useEffect } from 'react'
+import { Box, Typography } from '@mui/material'
+import { ChatMessage } from './ChatMessage'
+import { ChatInput } from './ChatInput'
 
 export type ChatMessageData = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-};
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+}
 
 export type ChatPanelProps = {
-  messages: ChatMessageData[];
-  onSend: (message: string) => void;
-  streaming?: boolean;
-  disabled?: boolean;
-  className?: string;
-};
+  messages: ChatMessageData[]
+  onSend: (message: string) => void
+  streaming?: boolean
+  disabled?: boolean
+  className?: string
+}
 
-export function ChatPanel({
-  messages,
-  onSend,
-  streaming,
-  disabled,
-}: ChatPanelProps) {
-  const messagesRef = useRef<HTMLDivElement>(null);
+export function ChatPanel({ messages, onSend, streaming, disabled }: ChatPanelProps) {
+  const messagesRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const el = messagesRef.current;
-    if (!el) return;
+    const el = messagesRef.current
+    if (!el) return
 
-    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 50;
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 50
     if (isNearBottom) {
-      el.scrollTop = el.scrollHeight;
+      el.scrollTop = el.scrollHeight
     }
-  }, [messages]);
+  }, [messages])
 
   return (
     <Box
       sx={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        bgcolor: "background.default",
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        bgcolor: 'background.default',
       }}
     >
       <Box
         ref={messagesRef}
         sx={{
           flex: 1,
-          overflowY: "auto",
+          overflowY: 'auto',
           p: 2,
-          display: "flex",
-          flexDirection: "column",
+          display: 'flex',
+          flexDirection: 'column',
           gap: 1,
         }}
       >
@@ -59,9 +54,9 @@ export function ChatPanel({
           <Box
             sx={{
               flex: 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
             <Typography variant="body2" color="text.secondary">
@@ -70,8 +65,7 @@ export function ChatPanel({
           </Box>
         ) : (
           messages.map((message, index) => {
-            const isLastAssistant =
-              message.role === "assistant" && index === messages.length - 1;
+            const isLastAssistant = message.role === 'assistant' && index === messages.length - 1
             return (
               <ChatMessage
                 key={message.id}
@@ -79,11 +73,11 @@ export function ChatPanel({
                 content={message.content}
                 streaming={isLastAssistant ? streaming : undefined}
               />
-            );
+            )
           })
         )}
       </Box>
       <ChatInput onSend={onSend} disabled={disabled} />
     </Box>
-  );
+  )
 }

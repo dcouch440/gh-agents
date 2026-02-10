@@ -3,12 +3,9 @@ import { render, screen } from '@/test/render'
 import { StepNode } from './StepNode'
 
 vi.mock('@xyflow/react', () => ({
-  Handle: ({ type, position }: { type: string; position: string }) => (
-    <div data-testid={`handle-${type}`} data-position={position} />
-  ),
+  Handle: ({ type, position }: { type: string; position: string }) => <div data-testid={`handle-${type}`} data-position={position} />,
   Position: { Left: 'left', Right: 'right' },
 }))
-
 
 const baseProps = {
   id: 'step-001',

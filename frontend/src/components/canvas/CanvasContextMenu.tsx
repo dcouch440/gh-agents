@@ -150,7 +150,9 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
     <Box
       ref={menuRef}
       data-testid="canvas-context-menu"
-      onMouseDown={(e) => { e.stopPropagation() }}
+      onMouseDown={(e) => {
+        e.stopPropagation()
+      }}
       sx={{
         position: 'fixed',
         left: position.x,
@@ -160,9 +162,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
         border: 1,
         borderColor: 'divider',
         borderRadius: '8px',
-        boxShadow: (theme) => theme.palette.mode === 'dark'
-          ? '0 4px 24px rgba(0, 0, 0, 0.4)'
-          : '0 4px 24px rgba(45, 27, 14, 0.14)',
+        boxShadow: (theme) => (theme.palette.mode === 'dark' ? '0 4px 24px rgba(0, 0, 0, 0.4)' : '0 4px 24px rgba(45, 27, 14, 0.14)'),
         minWidth: 160,
         py: 0.5,
       }}
@@ -181,9 +181,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
             '&:hover': { backgroundColor: 'action.hover' },
           }}
         >
-          <Typography sx={{ fontSize: 12, color: 'error.main' }}>
-            Delete Step
-          </Typography>
+          <Typography sx={{ fontSize: 12, color: 'error.main' }}>Delete Step</Typography>
         </Box>
       ) : (
         <>
@@ -226,9 +224,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
                   flexShrink: 0,
                 }}
               />
-              <Typography sx={{ fontSize: 12, color: 'text.primary' }}>
-                {st.label}
-              </Typography>
+              <Typography sx={{ fontSize: 12, color: 'text.primary' }}>{st.label}</Typography>
             </Box>
           ))}
           {visibleProtocolTypes.length > 0 && (
@@ -272,9 +268,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
                       flexShrink: 0,
                     }}
                   />
-                  <Typography sx={{ fontSize: 12, color: 'text.primary' }}>
-                    {PROTOCOL_LABELS[pt.name] ?? pt.name}
-                  </Typography>
+                  <Typography sx={{ fontSize: 12, color: 'text.primary' }}>{PROTOCOL_LABELS[pt.name] ?? pt.name}</Typography>
                 </Box>
               ))}
             </>
@@ -302,9 +296,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
                 flexShrink: 0,
               }}
             />
-            <Typography sx={{ fontSize: 12, color: 'text.primary' }}>
-              Documenter
-            </Typography>
+            <Typography sx={{ fontSize: 12, color: 'text.primary' }}>Documenter</Typography>
           </Box>
           <Box sx={{ mx: 1.5, my: 0.5, borderTop: 1, borderColor: 'divider' }} />
           <Typography
@@ -343,9 +335,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
                 flexShrink: 0,
               }}
             />
-            <Typography sx={{ fontSize: 12, color: 'text.primary' }}>
-              Port of Entry
-            </Typography>
+            <Typography sx={{ fontSize: 12, color: 'text.primary' }}>Port of Entry</Typography>
           </Box>
           <Box
             data-testid="ctx-add-document"
@@ -369,9 +359,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
                 flexShrink: 0,
               }}
             />
-            <Typography sx={{ fontSize: 12, color: 'text.primary' }}>
-              Document
-            </Typography>
+            <Typography sx={{ fontSize: 12, color: 'text.primary' }}>Document</Typography>
           </Box>
         </>
       )}

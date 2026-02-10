@@ -5,7 +5,10 @@ import { Collections } from './collections'
 
 describe('keyBy', () => {
   it('builds Map from array by key function', () => {
-    const items = [{ name: 'a', v: 1 }, { name: 'b', v: 2 }]
+    const items = [
+      { name: 'a', v: 1 },
+      { name: 'b', v: 2 },
+    ]
     const map = Collections.keyBy(items, (i) => i.name)
     expect(map.size).toBe(2)
     expect(map.get('a')).toBe(items[0])
@@ -13,7 +16,10 @@ describe('keyBy', () => {
   })
 
   it('last-write-wins for duplicate keys', () => {
-    const items = [{ k: 1, v: 'first' }, { k: 1, v: 'second' }]
+    const items = [
+      { k: 1, v: 'first' },
+      { k: 1, v: 'second' },
+    ]
     const map = Collections.keyBy(items, (i) => i.k)
     expect(map.get(1)?.v).toBe('second')
   })
@@ -34,20 +40,38 @@ describe('keyBy', () => {
 
 describe('toLookupMap', () => {
   it('builds Map with transformed values', () => {
-    const items = [{ id: 'a', name: 'Alice', age: 30 }, { id: 'b', name: 'Bob', age: 25 }]
-    const map = Collections.toLookupMap(items, (i) => i.id, (i) => i.name)
+    const items = [
+      { id: 'a', name: 'Alice', age: 30 },
+      { id: 'b', name: 'Bob', age: 25 },
+    ]
+    const map = Collections.toLookupMap(
+      items,
+      (i) => i.id,
+      (i) => i.name,
+    )
     expect(map.get('a')).toBe('Alice')
     expect(map.get('b')).toBe('Bob')
   })
 
   it('returns empty Map for empty array', () => {
-    const map = Collections.toLookupMap([], (x) => x, (x) => x)
+    const map = Collections.toLookupMap(
+      [],
+      (x) => x,
+      (x) => x,
+    )
     expect(map.size).toBe(0)
   })
 
   it('last-write-wins for duplicate keys', () => {
-    const items = [{ k: 'x', v: 1 }, { k: 'x', v: 2 }]
-    const map = Collections.toLookupMap(items, (i) => i.k, (i) => i.v)
+    const items = [
+      { k: 'x', v: 1 },
+      { k: 'x', v: 2 },
+    ]
+    const map = Collections.toLookupMap(
+      items,
+      (i) => i.k,
+      (i) => i.v,
+    )
     expect(map.get('x')).toBe(2)
   })
 })
@@ -67,7 +91,11 @@ describe('groupBy', () => {
   })
 
   it('preserves insertion order within groups', () => {
-    const items = [{ g: 1, v: 'a' }, { g: 1, v: 'b' }, { g: 1, v: 'c' }]
+    const items = [
+      { g: 1, v: 'a' },
+      { g: 1, v: 'b' },
+      { g: 1, v: 'c' },
+    ]
     const groups = Collections.groupBy(items, (i) => i.g)
     const group = groups.get(1)
     expect(group?.map((i) => i.v)).toEqual(['a', 'b', 'c'])
@@ -92,7 +120,10 @@ describe('groupBy', () => {
 
 describe('indexById', () => {
   it('builds Map keyed by id property', () => {
-    const items = [{ id: 'x', val: 1 }, { id: 'y', val: 2 }]
+    const items = [
+      { id: 'x', val: 1 },
+      { id: 'y', val: 2 },
+    ]
     const map = Collections.indexById(items)
     expect(map.get('x')).toBe(items[0])
     expect(map.get('y')).toBe(items[1])
@@ -104,7 +135,10 @@ describe('indexById', () => {
   })
 
   it('last-write-wins for duplicate ids', () => {
-    const items = [{ id: 'a', v: 1 }, { id: 'a', v: 2 }]
+    const items = [
+      { id: 'a', v: 1 },
+      { id: 'a', v: 2 },
+    ]
     const map = Collections.indexById(items)
     expect(map.get('a')?.v).toBe(2)
   })
@@ -141,7 +175,10 @@ describe('toSetBy', () => {
   })
 
   it('deduplicates by key', () => {
-    const items = [{ id: 'a', v: 1 }, { id: 'a', v: 2 }]
+    const items = [
+      { id: 'a', v: 1 },
+      { id: 'a', v: 2 },
+    ]
     const set = Collections.toSetBy(items, (i) => i.id)
     expect(set.size).toBe(1)
   })
@@ -171,7 +208,10 @@ describe('mapBy', () => {
   })
 
   it('extracts property from objects', () => {
-    const items = [{ id: 'x', v: 1 }, { id: 'y', v: 2 }]
+    const items = [
+      { id: 'x', v: 1 },
+      { id: 'y', v: 2 },
+    ]
     const result = Collections.mapBy(items, (i) => i.id)
     expect(result).toEqual(['x', 'y'])
   })
@@ -264,13 +304,23 @@ describe('dedup', () => {
   })
 
   it('deduplicates by keyFn when provided', () => {
-    const items = [{ id: 'a', v: 1 }, { id: 'b', v: 2 }, { id: 'a', v: 3 }]
+    const items = [
+      { id: 'a', v: 1 },
+      { id: 'b', v: 2 },
+      { id: 'a', v: 3 },
+    ]
     const result = Collections.dedup(items, (i) => i.id)
-    expect(result).toEqual([{ id: 'a', v: 1 }, { id: 'b', v: 2 }])
+    expect(result).toEqual([
+      { id: 'a', v: 1 },
+      { id: 'b', v: 2 },
+    ])
   })
 
   it('keyFn dedup preserves first occurrence', () => {
-    const items = [{ g: 1, v: 'first' }, { g: 1, v: 'second' }]
+    const items = [
+      { g: 1, v: 'first' },
+      { g: 1, v: 'second' },
+    ]
     const result = Collections.dedup(items, (i) => i.g)
     expect(result.length).toBe(1)
     expect(result[0]?.v).toBe('first')
@@ -336,7 +386,11 @@ describe('aggregate', () => {
 // ── resolveKeys ────────────────────────────────────────────────────────────
 
 describe('resolveKeys', () => {
-  const map = new Map([['a', 1], ['b', 2], ['c', 3]])
+  const map = new Map([
+    ['a', 1],
+    ['b', 2],
+    ['c', 3],
+  ])
 
   it('returns items in key order', () => {
     expect(Collections.resolveKeys(['c', 'a'], map)).toEqual([3, 1])

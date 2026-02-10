@@ -1,13 +1,13 @@
-import { type ReactElement } from 'react';
-import MuiTooltip from '@mui/material/Tooltip';
-import Box from '@mui/material/Box';
+import { type ReactElement } from 'react'
+import MuiTooltip from '@mui/material/Tooltip'
+import Box from '@mui/material/Box'
 
 type TooltipProps = {
-  title: string;
-  shortcut?: string;
-  placement?: 'top' | 'bottom' | 'left' | 'right';
-  children: ReactElement;
-};
+  title: string
+  shortcut?: string
+  placement?: 'top' | 'bottom' | 'left' | 'right'
+  children: ReactElement
+}
 
 function Tooltip({ title, shortcut, placement = 'bottom', children }: TooltipProps) {
   const label = shortcut ? (
@@ -30,14 +30,16 @@ function Tooltip({ title, shortcut, placement = 'bottom', children }: TooltipPro
         {shortcut}
       </Box>
     </Box>
-  ) : title;
+  ) : (
+    title
+  )
 
   return (
     <MuiTooltip title={label} placement={placement}>
       {children}
     </MuiTooltip>
-  );
+  )
 }
 
-export { Tooltip };
-export type { TooltipProps };
+export { Tooltip }
+export type { TooltipProps }

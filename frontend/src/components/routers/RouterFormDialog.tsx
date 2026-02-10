@@ -1,12 +1,5 @@
 import { useState } from 'react'
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Box,
-} from '@mui/material'
+import { Dialog, DialogTitle, DialogContent, DialogActions, TextField, Box } from '@mui/material'
 import { Button } from '@/components/primitives'
 import type { CreateToolRouterRequest } from '@/types'
 
@@ -53,29 +46,9 @@ function RouterFormContent({
     <>
       <DialogContent dividers>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-          <TextField
-            label="Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            fullWidth
-            required
-            size="small"
-          />
-          <TextField
-            label="Description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            fullWidth
-            size="small"
-          />
-          <TextField
-            label="Model ID"
-            value={modelId}
-            onChange={(e) => setModelId(e.target.value)}
-            fullWidth
-            required
-            size="small"
-          />
+          <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} fullWidth required size="small" />
+          <TextField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} fullWidth size="small" />
+          <TextField label="Model ID" value={modelId} onChange={(e) => setModelId(e.target.value)} fullWidth required size="small" />
           <TextField
             label="System Prompt"
             value={systemPrompt}
@@ -103,14 +76,7 @@ function RouterFormDialog({ open, onClose, onSubmit, initialValues, saving, titl
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>{title}</DialogTitle>
-      {open ? (
-        <RouterFormContent
-          onClose={onClose}
-          onSubmit={onSubmit}
-          initialValues={initialValues}
-          saving={saving}
-        />
-      ) : null}
+      {open ? <RouterFormContent onClose={onClose} onSubmit={onSubmit} initialValues={initialValues} saving={saving} /> : null}
     </Dialog>
   )
 }

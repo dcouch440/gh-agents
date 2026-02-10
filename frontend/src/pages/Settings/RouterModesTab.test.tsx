@@ -3,15 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { RouterModesTab } from './RouterModesTab'
 import { mockRouterMode, mockToolRouter } from '@/test/fixtures'
 
-const {
-  mockDeleteMode,
-  mockFetchAll,
-  mockFetchModes,
-  mockCreate,
-  mockFetchModeTools,
-  mockSetModeTools,
-  _mockState,
-} = vi.hoisted(() => ({
+const { mockDeleteMode, mockFetchAll, mockFetchModes, mockCreate, mockFetchModeTools, mockSetModeTools, _mockState } = vi.hoisted(() => ({
   mockDeleteMode: vi.fn(),
   mockFetchAll: vi.fn(),
   mockFetchModes: vi.fn(),
@@ -54,23 +46,13 @@ vi.mock('@/stores/toolStore', () => {
 })
 
 vi.mock('./ModeFormDialog', () => ({
-  ModeFormDialog: ({
-    open,
-    mode,
-  }: {
-    open: boolean
-    mode: typeof mockRouterMode | null
-  }) => (
-    <div data-testid="mode-form-dialog">
-      {open ? `Dialog: ${mode ? 'Edit' : 'Create'}` : null}
-    </div>
+  ModeFormDialog: ({ open, mode }: { open: boolean; mode: typeof mockRouterMode | null }) => (
+    <div data-testid="mode-form-dialog">{open ? `Dialog: ${mode ? 'Edit' : 'Create'}` : null}</div>
   ),
 }))
 
 vi.mock('./ModeToolSelector', () => ({
-  ModeToolSelector: ({ open }: { open: boolean }) => (
-    <div data-testid="mode-tool-selector">{open ? 'Tool Selector' : null}</div>
-  ),
+  ModeToolSelector: ({ open }: { open: boolean }) => <div data-testid="mode-tool-selector">{open ? 'Tool Selector' : null}</div>,
 }))
 
 describe('RouterModesTab', () => {
@@ -93,9 +75,7 @@ describe('RouterModesTab', () => {
       _mockState.modes = []
       render(<RouterModesTab />)
 
-      expect(
-        await screen.findByText(/no router modes configured/i)
-      ).toBeInTheDocument()
+      expect(await screen.findByText(/no router modes configured/i)).toBeInTheDocument()
     })
 
     it('shows DataTable when modes has items', async () => {
@@ -115,9 +95,7 @@ describe('RouterModesTab', () => {
       await user.click(createButton)
 
       await waitFor(() => {
-        expect(screen.getByTestId('mode-form-dialog')).toHaveTextContent(
-          'Dialog: Create'
-        )
+        expect(screen.getByTestId('mode-form-dialog')).toHaveTextContent('Dialog: Create')
       })
     })
   })
@@ -131,9 +109,7 @@ describe('RouterModesTab', () => {
       await user.click(editButton)
 
       await waitFor(() => {
-        expect(screen.getByTestId('mode-form-dialog')).toHaveTextContent(
-          'Dialog: Edit'
-        )
+        expect(screen.getByTestId('mode-form-dialog')).toHaveTextContent('Dialog: Edit')
       })
     })
   })
@@ -188,9 +164,7 @@ describe('RouterModesTab', () => {
       await user.click(toolsButton)
 
       await waitFor(() => {
-        expect(screen.getByTestId('mode-tool-selector')).toHaveTextContent(
-          'Tool Selector'
-        )
+        expect(screen.getByTestId('mode-tool-selector')).toHaveTextContent('Tool Selector')
       })
     })
   })

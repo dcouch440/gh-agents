@@ -37,11 +37,9 @@ const selectCanUndo = (s: HistoryState): boolean => s.past.length > 0
 
 const selectCanRedo = (s: HistoryState): boolean => s.future.length > 0
 
-const selectUndoDescription = (s: HistoryState): string | null =>
-  s.past.length > 0 ? s.past[s.past.length - 1].description : null
+const selectUndoDescription = (s: HistoryState): string | null => (s.past.length > 0 ? s.past[s.past.length - 1].description : null)
 
-const selectRedoDescription = (s: HistoryState): string | null =>
-  s.future.length > 0 ? s.future[s.future.length - 1].description : null
+const selectRedoDescription = (s: HistoryState): string | null => (s.future.length > 0 ? s.future[s.future.length - 1].description : null)
 
 // ── Actions ──────────────────────────────────────────────────────────────────
 

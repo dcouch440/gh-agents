@@ -33,12 +33,7 @@ const edge1: WorkflowStepEdge = {
   to_step_id: 'step-002',
 }
 
-const {
-  _selectedStepIds,
-  _selectedEdgeIds,
-  _steps,
-  _edges,
-} = vi.hoisted(() => ({
+const { _selectedStepIds, _selectedEdgeIds, _steps, _edges } = vi.hoisted(() => ({
   _selectedStepIds: { value: new Set<string>() },
   _selectedEdgeIds: { value: new Set<string>() },
   _steps: { value: [] as WorkflowStep[] },
@@ -59,10 +54,8 @@ vi.mock('@/stores', () => ({
     store: 'workflow',
     selectSteps: () => _steps.value,
     selectEdges: () => _edges.value,
-    selectStepById: (id: string | null) => () =>
-      id ? _steps.value.find((s: WorkflowStep) => s.id === id) ?? null : null,
-    selectEdgeById: (id: string | null) => () =>
-      id ? _edges.value.find((e: WorkflowStepEdge) => e.id === id) ?? null : null,
+    selectStepById: (id: string | null) => () => (id ? (_steps.value.find((s: WorkflowStep) => s.id === id) ?? null) : null),
+    selectEdgeById: (id: string | null) => () => (id ? (_edges.value.find((e: WorkflowStepEdge) => e.id === id) ?? null) : null),
     updateStep: vi.fn(),
   },
   agentStore: {

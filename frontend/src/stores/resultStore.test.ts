@@ -15,8 +15,22 @@ vi.mock('@/api', () => ({
   },
 }))
 
-const result1 = { id: 'res1', agent_execution_id: 'exec1', output_schema_id: null, name: 'Result 1', data: { key: 'value' }, created_at: '2024-01-01T00:00:00Z' }
-const result2 = { id: 'res2', agent_execution_id: 'exec1', output_schema_id: 's1', name: 'Result 2', data: {}, created_at: '2024-01-01T00:00:00Z' }
+const result1 = {
+  id: 'res1',
+  agent_execution_id: 'exec1',
+  output_schema_id: null,
+  name: 'Result 1',
+  data: { key: 'value' },
+  created_at: '2024-01-01T00:00:00Z',
+}
+const result2 = {
+  id: 'res2',
+  agent_execution_id: 'exec1',
+  output_schema_id: 's1',
+  name: 'Result 2',
+  data: {},
+  created_at: '2024-01-01T00:00:00Z',
+}
 
 beforeEach(() => {
   vi.clearAllMocks()

@@ -1,4 +1,4 @@
-import type { PaletteOptions } from '@mui/material/styles';
+import type { PaletteOptions } from '@mui/material/styles'
 
 const lightPalette: PaletteOptions = {
   mode: 'light',
@@ -43,7 +43,7 @@ const lightPalette: PaletteOptions = {
     dark: '#D47830',
   },
   divider: 'rgba(45, 27, 14, 0.10)',
-};
+}
 
 const darkPalette: PaletteOptions = {
   mode: 'dark',
@@ -88,9 +88,8 @@ const darkPalette: PaletteOptions = {
     dark: '#2563eb',
   },
   divider: 'rgba(240, 246, 252, 0.06)',
-};
+}
 
-const getPalette = (mode: 'light' | 'dark'): PaletteOptions =>
-  mode === 'light' ? lightPalette : darkPalette;
+const getPalette = (mode: 'light' | 'dark'): PaletteOptions => (mode === 'light' ? lightPalette : darkPalette)
 
-export { getPalette };
+export { getPalette }

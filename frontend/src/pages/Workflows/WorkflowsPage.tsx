@@ -7,14 +7,7 @@ import EditIcon from '@mui/icons-material/Edit'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import AccountTreeOutlined from '@mui/icons-material/AccountTreeOutlined'
 import { FadeIn } from '@/components/animation'
-import {
-  PageHeader,
-  Table,
-  ConfirmModal,
-  EmptyState,
-  type TableColumn,
-  type MenuAction,
-} from '@/components/primitives'
+import { PageHeader, Table, ConfirmModal, EmptyState, type TableColumn, type MenuAction } from '@/components/primitives'
 import { ActionMenu } from '@/components/primitives'
 import { useConfirmModal } from '@/hooks/useConfirmModal'
 import { useStore, workflowStore } from '@/stores'
@@ -31,7 +24,9 @@ function WorkflowsPage() {
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
 
-  useEffect(() => { void workflowStore.fetchAll() }, [])
+  useEffect(() => {
+    void workflowStore.fetchAll()
+  }, [])
 
   const handleCreate = useCallback(async () => {
     if (!newName.trim()) return
@@ -120,20 +115,26 @@ function WorkflowsPage() {
               key: 'open',
               label: 'Open Editor',
               icon: <OpenInNewIcon fontSize="small" />,
-              onClick: () => { void navigate(`/workflows/${wf.id}`) },
+              onClick: () => {
+                void navigate(`/workflows/${wf.id}`)
+              },
               dividerAfter: true,
             },
             {
               key: 'edit',
               label: 'Edit Details',
               icon: <EditIcon fontSize="small" />,
-              onClick: () => { void navigate(`/workflows/${wf.id}`) },
+              onClick: () => {
+                void navigate(`/workflows/${wf.id}`)
+              },
             },
             {
               key: 'delete',
               label: 'Delete',
               icon: <DeleteIcon fontSize="small" />,
-              onClick: () => { void handleDelete(wf) },
+              onClick: () => {
+                void handleDelete(wf)
+              },
               color: 'error' as const,
             },
           ]
@@ -157,25 +158,46 @@ function WorkflowsPage() {
                 size="small"
                 placeholder="Workflow name..."
                 value={newName}
-                onChange={(e) => { setNewName(e.target.value) }}
-                onKeyDown={(e) => { if (e.key === 'Enter') void handleCreate(); if (e.key === 'Escape') setCreating(false) }}
+                onChange={(e) => {
+                  setNewName(e.target.value)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void handleCreate()
+                  if (e.key === 'Escape') setCreating(false)
+                }}
                 autoFocus
                 sx={{ width: 220 }}
               />
-              <Button variant="contained" size="small" onClick={() => { void handleCreate() }} disabled={!newName.trim()}>
+              <Button
+                variant="contained"
+                size="small"
+                onClick={() => {
+                  void handleCreate()
+                }}
+                disabled={!newName.trim()}
+              >
                 Create
               </Button>
               <Button
                 variant="outlined"
                 size="small"
-                onClick={() => { setCreating(false); setNewName('') }}
+                onClick={() => {
+                  setCreating(false)
+                  setNewName('')
+                }}
                 sx={{ transition: `all ${ANIMATION.FAST}ms ease` }}
               >
                 Cancel
               </Button>
             </Box>
           ) : (
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setCreating(true) }}>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => {
+                setCreating(true)
+              }}
+            >
               New Workflow
             </Button>
           )}
@@ -187,7 +209,13 @@ function WorkflowsPage() {
             title="No workflows yet"
             description="Create your first workflow to start building AI pipelines."
             action={
-              <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setCreating(true) }}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  setCreating(true)
+                }}
+              >
                 New Workflow
               </Button>
             }
@@ -208,7 +236,9 @@ function WorkflowsPage() {
             defaultSortDirection="desc"
             defaultPageSize={25}
             pageSizeOptions={[10, 25, 50]}
-            onRowClick={(wf) => { void navigate(`/workflows/${wf.id}`) }}
+            onRowClick={(wf) => {
+              void navigate(`/workflows/${wf.id}`)
+            }}
             stickyHeader
             density="normal"
           />

@@ -1,14 +1,14 @@
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import {DESIGN} from '@/constants'
-import type {VariableCompletion} from '@/utils/variableContext'
+import { DESIGN } from '@/constants'
+import type { VariableCompletion } from '@/utils/variableContext'
 
 type VariableChipStripProps = {
   completions: VariableCompletion[]
   onCopy: ((label: string) => void) | null
 }
 
-function VariableChipStrip({completions, onCopy}: VariableChipStripProps) {
+function VariableChipStrip({ completions, onCopy }: VariableChipStripProps) {
   if (completions.length === 0) return null
 
   const groups = new Map<string, VariableCompletion[]>()
@@ -34,7 +34,7 @@ function VariableChipStrip({completions, onCopy}: VariableChipStripProps) {
       }}
     >
       {[...groups.entries()].map(([section, items]) => (
-        <Box key={section} sx={{mb: groups.size > 1 ? 0.5 : 0}}>
+        <Box key={section} sx={{ mb: groups.size > 1 ? 0.5 : 0 }}>
           <Typography
             sx={{
               fontSize: 9,
@@ -48,11 +48,17 @@ function VariableChipStrip({completions, onCopy}: VariableChipStripProps) {
           >
             {section}
           </Typography>
-          <Box sx={{display: 'flex', flexWrap: 'wrap', gap: 0.5}}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
             {items.map((c) => (
               <Box
                 key={c.label}
-                onClick={onCopy !== null ? () => { onCopy(c.label) } : undefined}
+                onClick={
+                  onCopy !== null
+                    ? () => {
+                        onCopy(c.label)
+                      }
+                    : undefined
+                }
                 title="Click to copy"
                 sx={{
                   display: 'inline-flex',
@@ -66,12 +72,13 @@ function VariableChipStrip({completions, onCopy}: VariableChipStripProps) {
                   cursor: onCopy !== null ? 'pointer' : 'default',
                   transition: 'all 120ms ease',
                   userSelect: 'none',
-                  '&:hover': onCopy !== null
-                    ? {
-                        backgroundColor: `${DESIGN.SYN_VARIABLE}22`,
-                        borderColor: `${DESIGN.SYN_VARIABLE}50`,
-                      }
-                    : {},
+                  '&:hover':
+                    onCopy !== null
+                      ? {
+                          backgroundColor: `${DESIGN.SYN_VARIABLE}22`,
+                          borderColor: `${DESIGN.SYN_VARIABLE}50`,
+                        }
+                      : {},
                 }}
               >
                 <Typography
@@ -95,5 +102,5 @@ function VariableChipStrip({completions, onCopy}: VariableChipStripProps) {
   )
 }
 
-export {VariableChipStrip}
-export type {VariableChipStripProps}
+export { VariableChipStrip }
+export type { VariableChipStripProps }

@@ -45,14 +45,7 @@ const testStep: WorkflowStep = {
   system_prompt_suffix: null,
 }
 
-const {
-  mockFetchIfStale,
-  mockUpdateStep,
-  _templates,
-  _loading,
-  _selectedStepIds,
-  _steps,
-} = vi.hoisted(() => ({
+const { mockFetchIfStale, mockUpdateStep, _templates, _loading, _selectedStepIds, _steps } = vi.hoisted(() => ({
   mockFetchIfStale: vi.fn(),
   mockUpdateStep: vi.fn(),
   _templates: { value: [] as PromptTemplate[] },
@@ -78,8 +71,7 @@ vi.mock('@/stores', () => ({
   },
   workflowStore: {
     store: 'workflow',
-    selectStepById: (id: string | null) => () =>
-      id ? _steps.value.find((s: WorkflowStep) => s.id === id) ?? null : null,
+    selectStepById: (id: string | null) => () => (id ? (_steps.value.find((s: WorkflowStep) => s.id === id) ?? null) : null),
     updateStep: mockUpdateStep,
   },
 }))

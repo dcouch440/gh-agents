@@ -1,13 +1,7 @@
 import { sessionStore } from './sessionStore'
 import { nmSize, nmGet, nmSet, createNormalizedMap } from './lib'
 
-const {
-  mockList,
-  mockGet,
-  mockCreate,
-  mockUpdate,
-  mockDelete,
-} = vi.hoisted(() => ({
+const { mockList, mockGet, mockCreate, mockUpdate, mockDelete } = vi.hoisted(() => ({
   mockList: vi.fn(),
   mockGet: vi.fn(),
   mockCreate: vi.fn(),
@@ -27,8 +21,24 @@ vi.mock('@/api', () => ({
   },
 }))
 
-const session1 = { id: 's1', mode_id: 'home', agent_id: null, draft_config: null, title: 'Session 1', created_at: '2025-01-01T00:00:00Z', updated_at: '2025-01-01T00:00:00Z' }
-const session2 = { id: 's2', mode_id: 'workshop', agent_id: 'a1', draft_config: null, title: 'Session 2', created_at: '2025-01-02T00:00:00Z', updated_at: '2025-01-02T00:00:00Z' }
+const session1 = {
+  id: 's1',
+  mode_id: 'home',
+  agent_id: null,
+  draft_config: null,
+  title: 'Session 1',
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
+}
+const session2 = {
+  id: 's2',
+  mode_id: 'workshop',
+  agent_id: 'a1',
+  draft_config: null,
+  title: 'Session 2',
+  created_at: '2025-01-02T00:00:00Z',
+  updated_at: '2025-01-02T00:00:00Z',
+}
 
 beforeEach(() => {
   vi.clearAllMocks()

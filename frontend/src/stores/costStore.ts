@@ -30,8 +30,7 @@ const store = createStore<CostState>(() => ({
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const extractError = (e: unknown): string =>
-  e instanceof Error ? e.message : 'costs: unknown error'
+const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'costs: unknown error')
 
 // ── Selectors ────────────────────────────────────────────────────────────────
 
@@ -41,8 +40,7 @@ const selectLoading = (s: CostState): boolean => s.loading
 
 const selectError = (s: CostState): string | null => s.error
 
-const selectIsStale = (s: CostState): boolean =>
-  s.lastFetched === null || Date.now() - s.lastFetched > STALE_THRESHOLD_MS
+const selectIsStale = (s: CostState): boolean => s.lastFetched === null || Date.now() - s.lastFetched > STALE_THRESHOLD_MS
 
 // ── Async Actions ────────────────────────────────────────────────────────────
 

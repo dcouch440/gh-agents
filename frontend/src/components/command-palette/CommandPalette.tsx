@@ -1,87 +1,79 @@
-import { useRef, useEffect, useMemo, useCallback, useContext } from 'react';
-import Box from '@mui/material/Box';
-import InputBase from '@mui/material/InputBase';
-import SearchOutlined from '@mui/icons-material/SearchOutlined';
-import Typography from '@mui/material/Typography';
-import Divider from '@mui/material/Divider';
-import { useCommandPalette } from '@/hooks/useCommandPalette';
-import { CommandPaletteContext } from '@/contexts/CommandPaletteContext';
-import { CommandDialog } from './CommandDialog';
-import { CommandItemRow } from './CommandItem';
-import { CommandGroup } from './CommandGroup';
+import { useRef, useEffect, useMemo, useCallback, useContext } from 'react'
+import Box from '@mui/material/Box'
+import InputBase from '@mui/material/InputBase'
+import SearchOutlined from '@mui/icons-material/SearchOutlined'
+import Typography from '@mui/material/Typography'
+import Divider from '@mui/material/Divider'
+import { useCommandPalette } from '@/hooks/useCommandPalette'
+import { CommandPaletteContext } from '@/contexts/CommandPaletteContext'
+import { CommandDialog } from './CommandDialog'
+import { CommandItemRow } from './CommandItem'
+import { CommandGroup } from './CommandGroup'
 
 function CommandPalette() {
-  const {
-    open,
-    query,
-    setQuery,
-    selectedIndex,
-    filteredCommands,
-    handleKeyDown,
-    closePalette,
-  } = useCommandPalette();
+  const { open, query, setQuery, selectedIndex, filteredCommands, handleKeyDown, closePalette } = useCommandPalette()
 
-  const ctx = useContext(CommandPaletteContext);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
+  const ctx = useContext(CommandPaletteContext)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
 
   // Focus input when palette opens
   useEffect(() => {
     if (open) {
-      const timeout = setTimeout(() => inputRef.current?.focus(), 50);
-      return () => clearTimeout(timeout);
+      const timeout = setTimeout(() => inputRef.current?.focus(), 50)
+      return () => clearTimeout(timeout)
     }
-  }, [open]);
+  }, [open])
 
   // Scroll selected item into view
   useEffect(() => {
-    if (!listRef.current) return;
-    const selected = listRef.current.querySelector('[aria-selected="true"]');
+    if (!listRef.current) return
+    const selected = listRef.current.querySelector('[aria-selected="true"]')
     if (selected) {
-      selected.scrollIntoView({ block: 'nearest' });
+      selected.scrollIntoView({ block: 'nearest' })
     }
-  }, [selectedIndex]);
+  }, [selectedIndex])
 
   const handleItemSelect = useCallback(
     (commandId: string, action: () => void) => {
-      ctx?.addRecent(commandId);
-      closePalette();
-      action();
+      ctx?.addRecent(commandId)
+      closePalette()
+      action()
     },
     [ctx, closePalette],
-  );
+  )
 
   // Group commands by group property
   const grouped = useMemo(() => {
-    const groups = new Map<string, typeof filteredCommands>();
-    let globalIndex = 0;
+    const groups = new Map<string, typeof filteredCommands>()
+    let globalIndex = 0
 
     const groupLabels: Record<string, string> = {
       recent: 'Recent',
       navigation: 'Navigation',
       actions: 'Actions',
-    };
+    }
 
-    const result: Array<{ group: string; label: string; items: Array<{ command: typeof filteredCommands[0]; index: number }> }> = [];
+    const result: Array<{ group: string; label: string; items: Array<{ command: (typeof filteredCommands)[0]; index: number }> }> = []
 
     for (const cmd of filteredCommands) {
-      const group = cmd.group;
+      const group = cmd.group
       if (!groups.has(group)) {
-        groups.set(group, []);
+        groups.set(group, [])
       }
-      groups.get(group)!.push(cmd);
+      groups.get(group)!.push(cmd)
     }
 
     for (const [group, commands] of groups) {
       const items = commands.map((command) => ({
         command,
         index: globalIndex++,
-      }));
-      result.push({ group, label: groupLabels[group] ?? group, items });
+      }))
+      result.push({ group, label: groupLabels[group] ?? group, items })
     }
 
-    return result;
-  }, [filteredCommands]);
+    return result
+  }, [filteredCommands])
 
   return (
     <CommandDialog open={open} onClose={closePalette}>
@@ -141,10 +133,7 @@ function CommandPalette() {
         }}
       >
         {filteredCommands.length === 0 ? (
-          <Typography
-            variant="body2"
-            sx={{ px: 2, py: 3, textAlign: 'center', color: 'text.secondary' }}
-          >
+          <Typography variant="body2" sx={{ px: 2, py: 3, textAlign: 'center', color: 'text.secondary' }}>
             No results found
           </Typography>
         ) : (
@@ -166,7 +155,7 @@ function CommandPalette() {
         )}
       </Box>
     </CommandDialog>
-  );
+  )
 }
 
-export { CommandPalette };
+export { CommandPalette }
