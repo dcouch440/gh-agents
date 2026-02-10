@@ -214,6 +214,22 @@ const patchStepLocal = (stepId: string, partial: Partial<WorkflowStep>): void =>
   })
 }
 
+/** Update step data locally without marking it dirty (for auto-derived values). */
+const patchStepSilent = (stepId: string, partial: Partial<WorkflowStep>): void => {
+  store.setState((s) => {
+    const existing = nmGet(s.steps, stepId)
+    if (!existing) return {}
+
+    const keys = Object.keys(partial) as (keyof WorkflowStep)[]
+    const hasChange = keys.some((k) => !Object.is(existing[k], partial[k]))
+    if (!hasChange) return {}
+
+    return {
+      steps: nmSet(s.steps, stepId, { ...existing, ...partial }),
+    }
+  })
+}
+
 const updateStep = async (stepId: string, body: UpdateStepRequest): Promise<WorkflowStep | null> => {
   const wid = getActiveId()
   if (!wid) return null
@@ -415,6 +431,7 @@ export const workflowStore = {
   clearActive,
   createStep,
   patchStepLocal,
+  patchStepSilent,
   updateStep,
   saveAllDirtySteps,
   revertSteps,

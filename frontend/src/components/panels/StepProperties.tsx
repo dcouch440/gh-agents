@@ -263,9 +263,10 @@ function StepProperties({step, steps, readOnly = false}: StepPropertiesProps) {
 
   // Auto-set output_variable_name on upstream steps that don't have one,
   // so the backend can resolve variable references at execution time.
+  // Uses patchStepSilent to avoid marking the form dirty for auto-derived values.
   useEffect(() => {
     for (const { stepId, derivedName } of variableContext.autoNamed) {
-      workflowStore.patchStepLocal(stepId, { output_variable_name: derivedName });
+      workflowStore.patchStepSilent(stepId, { output_variable_name: derivedName });
     }
   }, [variableContext.autoNamed]);
 

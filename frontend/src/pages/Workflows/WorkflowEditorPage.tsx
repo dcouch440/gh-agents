@@ -1,6 +1,7 @@
 import {useEffect} from "react";
 import {useParams, useNavigate} from "react-router-dom";
 import Box from "@mui/material/Box";
+import CircularProgress from "@mui/material/CircularProgress";
 import {
   useStore,
   workflowStore,
@@ -29,19 +30,31 @@ function WorkflowEditorPage() {
     };
   }, [id, navigate]);
 
-  if (loading) {
-    return null;
-  }
-
   return (
     <Box
       sx={{
         width: "100%",
         height: "100%",
         backgroundColor: (theme) => theme.palette.custom.cavityBg,
+        position: "relative",
       }}
     >
       <WorkflowCanvas />
+      {loading && (
+        <Box
+          sx={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 5,
+            backgroundColor: (theme) => theme.palette.custom.cavityBg,
+          }}
+        >
+          <CircularProgress size={32} />
+        </Box>
+      )}
     </Box>
   );
 }
