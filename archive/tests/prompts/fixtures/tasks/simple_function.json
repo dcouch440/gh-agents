@@ -1,7 +1,0 @@
-{
-  "name": "Email Validation Function",
-  "input": "Create a function to validate email addresses",
-  "additional_context": "Should use regex, return bool, handle edge cases",
-  "expected_output": null,
-  "tags": ["utility", "validation"]
-}
