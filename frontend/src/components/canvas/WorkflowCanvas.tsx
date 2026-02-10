@@ -146,7 +146,10 @@ function WorkflowCanvasInner() {
         }));
       }
 
-      // Data-only change — value-compare, return current when nothing changed
+      // Data-only change — value-compare, return current when nothing changed.
+      // NEVER overwrite position here: RF owns position state (updated via drag),
+      // and the store catches up via onNodeDragStop. Overwriting mid-drag causes
+      // nodes to snap back to stale store positions.
       const newDataMap = new Map(rfNodes.map((n) => [n.id, n]));
       let anyChanged = false;
       const result: typeof current = [];
@@ -156,17 +159,15 @@ function WorkflowCanvasInner() {
         if (!updated) { result.push(n); continue; }
 
         const dEq = nodeDataEqual(n.data, updated.data);
-        const pEq = n.position.x === updated.position.x && n.position.y === updated.position.y;
         const tEq = n.type === updated.type;
         const sEq = stylesEqual(n.style, updated.style);
 
-        if (dEq && pEq && tEq && sEq) { result.push(n); continue; }
+        if (dEq && tEq && sEq) { result.push(n); continue; }
 
         anyChanged = true;
         result.push({
           ...n,
           data: dEq ? n.data : updated.data,
-          position: pEq ? n.position : updated.position,
           type: updated.type,
           style: sEq ? n.style : updated.style,
         });
