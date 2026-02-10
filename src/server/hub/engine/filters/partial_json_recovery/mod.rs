@@ -119,4 +119,5 @@ fn recover_truncated_json(input: &str) -> Option<String> {
     }
 }
 
+#[cfg(test)]
 mod tests;

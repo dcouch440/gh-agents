@@ -492,4 +492,5 @@ fn extract_json_from_response(content: &str) -> Result<CritiqueResponse, serde_j
     serde_json::from_str(content)
 }
 
+#[cfg(test)]
 mod tests;

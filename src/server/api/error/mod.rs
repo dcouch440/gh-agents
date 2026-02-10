@@ -94,4 +94,5 @@ impl From<anyhow::Error> for AppError {
     }
 }
 
+#[cfg(test)]
 mod tests;

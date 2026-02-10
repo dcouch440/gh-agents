@@ -12,4 +12,5 @@ pub use coordinator::{DocumenterCoordinatorConfig, DocumenterCoordinatorStrategy
 pub use research::{DocumenterResearchConfig, DocumenterResearchStrategy};
 pub use writer::{DocumenterWriterConfig, DocumenterWriterStrategy};
 
+#[cfg(test)]
 mod tests;

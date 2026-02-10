@@ -103,4 +103,5 @@ fn json_type_name(value: &serde_json::Value) -> &'static str {
     }
 }
 
+#[cfg(test)]
 mod tests;

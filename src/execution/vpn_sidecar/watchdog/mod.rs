@@ -11,6 +11,7 @@ use tracing::{debug, warn};
 
 use super::super::vpn::VpnError;
 
+#[cfg(test)]
 mod tests;
 
 /// Monitor a VPN sidecar's WireGuard tunnel, returning only when the tunnel

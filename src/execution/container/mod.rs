@@ -17,6 +17,7 @@ use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 pub mod retry;
+#[cfg(test)]
 mod tests;
 
 // ── Docker CLI Abstraction ───────────────────────────────────────────────

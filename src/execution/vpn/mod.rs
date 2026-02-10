@@ -14,6 +14,7 @@ use super::container::RedactedString;
 #[cfg(test)]
 mod integration_tests;
 pub mod retry;
+#[cfg(test)]
 mod tests;
 
 // ── Errors ─────────────────────────────────────────────────────────────────

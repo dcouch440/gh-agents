@@ -49,4 +49,5 @@ impl ExecutionFilter for SchemaEnhancementFilter {
     }
 }
 
+#[cfg(test)]
 mod tests;

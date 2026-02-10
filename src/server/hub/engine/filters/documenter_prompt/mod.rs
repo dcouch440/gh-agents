@@ -87,4 +87,5 @@ impl ExecutionFilter for DocumenterPromptFilter {
     }
 }
 
+#[cfg(test)]
 mod tests;

@@ -12,6 +12,7 @@ use uuid::Uuid;
 
 use super::vpn::VpnError;
 
+#[cfg(test)]
 mod tests;
 pub mod watchdog;
 

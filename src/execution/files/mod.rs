@@ -168,4 +168,5 @@ impl FileOps {
     }
 }
 
+#[cfg(test)]
 mod tests;

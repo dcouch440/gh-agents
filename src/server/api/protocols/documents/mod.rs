@@ -14,6 +14,7 @@ use uuid::Uuid;
 use crate::server::api::AppError;
 use crate::server::state::AppState;
 
+#[cfg(test)]
 mod tests;
 
 // ============================================================================

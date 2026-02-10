@@ -9,6 +9,7 @@
 pub mod prompt;
 pub mod schema;
 
+#[cfg(test)]
 mod tests;
 
 use crate::server::hub::protocols::compiler::ProtocolCompiler;

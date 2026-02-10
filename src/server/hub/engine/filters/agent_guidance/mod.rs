@@ -76,4 +76,5 @@ impl ExecutionFilter for AgentGuidanceFilter {
     }
 }
 
+#[cfg(test)]
 mod tests;

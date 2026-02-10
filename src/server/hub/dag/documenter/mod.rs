@@ -39,6 +39,7 @@ use crate::types::UserId;
 use super::utils::{StepOutput, WorkflowExecutionContext};
 use super::{broadcast_workflow_event, resolve_output_key};
 
+#[cfg(test)]
 mod tests;
 pub mod types;
 
