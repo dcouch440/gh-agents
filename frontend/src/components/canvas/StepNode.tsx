@@ -10,7 +10,8 @@ import ForumOutlined from '@mui/icons-material/ForumOutlined'
 import SettingsOutlined from '@mui/icons-material/SettingsOutlined'
 import type { StepNodeData } from './mappers'
 import { nodeDataEqual } from './mappers'
-import { CANVAS, STEP_TYPE_COLORS, DEFAULT_STEP_TYPE_COLOR, PROTOCOL_TYPE_COLORS } from './constants'
+import { CANVAS, DEFAULT_STEP_TYPE_COLOR, PROTOCOL_TYPE_COLORS, GREYSCALE_ACCENT } from './constants'
+import { useProtocolHighlight } from './useProtocolHighlight'
 
 const STEP_TYPE_ICONS: Record<string, typeof SettingsOutlined> = {
   single: SmartToyOutlined,
@@ -22,7 +23,9 @@ const DEFAULT_STEP_TYPE_ICON = SettingsOutlined
 function StepNodeComponent({ data, selected }: NodeProps) {
   const theme = useTheme()
   const nodeData = data as StepNodeData
-  const accentColor = STEP_TYPE_COLORS[nodeData.stepType] ?? DEFAULT_STEP_TYPE_COLOR
+  const highlightMode = useProtocolHighlight(nodeData.protocolStepId)
+  const hasProtocol = nodeData.protocolColor !== null
+  const accentColor = nodeData.protocolColor ?? GREYSCALE_ACCENT
   const IconComponent = STEP_TYPE_ICONS[nodeData.stepType] ?? DEFAULT_STEP_TYPE_ICON
 
   const hasInputs = nodeData.upstreamStepNames.length > 0
@@ -40,11 +43,24 @@ function StepNodeComponent({ data, selected }: NodeProps) {
         borderRadius: '12px',
         backgroundColor: 'background.paper',
         border: 2,
-        borderColor: selected ? 'primary.main' : 'divider',
+        borderStyle: hasProtocol ? 'dashed' : 'solid',
+        borderColor: selected
+          ? hasProtocol ? accentColor : 'primary.main'
+          : hasProtocol
+            ? highlightMode === 'select'
+              ? accentColor
+              : highlightMode === 'hover'
+                ? `${accentColor}80`
+                : `${accentColor}50`
+            : 'divider',
         boxShadow: selected
           ? `0 8px 32px ${theme.palette.mode === 'dark' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 150, 79, 0.16)'}`
-          : `0 4px 24px ${theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.4)' : 'rgba(45, 27, 14, 0.12)'}`,
-        transition: 'border-color 150ms ease, box-shadow 150ms ease',
+          : highlightMode === 'select'
+            ? `0 0 0 1px ${accentColor}40, 0 8px 32px ${accentColor}22`
+            : highlightMode === 'hover'
+              ? `0 0 0 1px ${accentColor}20, 0 6px 24px ${accentColor}14`
+              : `0 4px 24px ${theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.4)' : 'rgba(45, 27, 14, 0.12)'}`,
+        transition: 'border-color 150ms ease, box-shadow 150ms ease, border-style 150ms ease',
         overflow: 'hidden',
       }}
     >
@@ -314,7 +330,7 @@ function StepNodeComponent({ data, selected }: NodeProps) {
         style={{
           width: CANVAS.HANDLE_SIZE,
           height: CANVAS.HANDLE_SIZE,
-          background: DEFAULT_STEP_TYPE_COLOR,
+          background: accentColor,
           border: `2px solid ${theme.palette.custom.bgHeader}`,
         }}
       />
@@ -324,7 +340,7 @@ function StepNodeComponent({ data, selected }: NodeProps) {
         style={{
           width: CANVAS.HANDLE_SIZE,
           height: CANVAS.HANDLE_SIZE,
-          background: DEFAULT_STEP_TYPE_COLOR,
+          background: accentColor,
           border: `2px solid ${theme.palette.custom.bgHeader}`,
         }}
       />
