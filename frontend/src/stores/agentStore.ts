@@ -55,6 +55,8 @@ const selectLoading = (s: AgentState): boolean => s.loading
 
 const selectError = (s: AgentState): string | null => s.error
 
+const selectToolsByAgent = (s: AgentState): Record<string, Tool[]> => s.toolsByAgent
+
 // ── Async Actions ────────────────────────────────────────────────────────────
 
 const fetchAll = async (): Promise<void> => {
@@ -137,6 +139,7 @@ export const agentStore = {
   selectContext,
   selectLoading,
   selectError,
+  selectToolsByAgent,
   fetchAll,
   fetchOne,
   create,

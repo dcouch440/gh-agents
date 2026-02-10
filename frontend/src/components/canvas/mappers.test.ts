@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toRFNodes, toRFEdges } from './mappers'
+import { toRFNodes, toRFEdges, nodeDataEqual } from './mappers'
 import type { StepNodeLookups } from './mappers'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 
@@ -147,5 +147,73 @@ describe('toRFEdges', () => {
 
   it('returns empty array for empty input', () => {
     expect(toRFEdges([])).toEqual([])
+  })
+})
+
+describe('nodeDataEqual', () => {
+  it('returns true for identical primitive-only objects', () => {
+    const a = { label: 'Step', agentId: 'a1', modelId: null }
+    const b = { label: 'Step', agentId: 'a1', modelId: null }
+    expect(nodeDataEqual(a, b)).toBe(true)
+  })
+
+  it('returns false when a primitive value differs', () => {
+    const a = { label: 'Step', agentId: 'a1' }
+    const b = { label: 'Step', agentId: 'a2' }
+    expect(nodeDataEqual(a, b)).toBe(false)
+  })
+
+  it('returns false when key count differs', () => {
+    const a = { label: 'Step' }
+    const b = { label: 'Step', extra: true }
+    expect(nodeDataEqual(a, b)).toBe(false)
+  })
+
+  it('compares array values element-wise', () => {
+    const a = { names: ['x', 'y'] }
+    const b = { names: ['x', 'y'] }
+    expect(nodeDataEqual(a, b)).toBe(true)
+  })
+
+  it('returns false when array values differ', () => {
+    const a = { names: ['x', 'y'] }
+    const b = { names: ['x', 'z'] }
+    expect(nodeDataEqual(a, b)).toBe(false)
+  })
+
+  it('returns false when one value is array and other is not', () => {
+    const a = { v: ['x'] }
+    const b = { v: 'x' }
+    expect(nodeDataEqual(a, b)).toBe(false)
+  })
+
+  it('compares empty objects as equal', () => {
+    expect(nodeDataEqual({}, {})).toBe(true)
+  })
+
+  it('compares empty arrays as equal', () => {
+    const a = { items: [] as unknown[] }
+    const b = { items: [] as unknown[] }
+    expect(nodeDataEqual(a, b)).toBe(true)
+  })
+
+  it('handles StepNodeData shape', () => {
+    const data = {
+      label: 'Review',
+      stepType: 'single',
+      agentId: 'a1',
+      promptTemplateId: null,
+      outputSchemaId: null,
+      agentName: 'Bot',
+      modelId: 'claude-sonnet-4',
+      outputSchemaName: null,
+      upstreamStepNames: ['Plan'],
+      toolNames: ['grep', 'read'],
+      protocolType: null,
+      protocolName: null,
+      protocolPortNames: [],
+    }
+    const clone = { ...data, upstreamStepNames: ['Plan'], toolNames: ['grep', 'read'], protocolPortNames: [] }
+    expect(nodeDataEqual(data, clone)).toBe(true)
   })
 })

@@ -9,6 +9,7 @@ import RepeatOutlined from '@mui/icons-material/RepeatOutlined'
 import ForumOutlined from '@mui/icons-material/ForumOutlined'
 import SettingsOutlined from '@mui/icons-material/SettingsOutlined'
 import type { StepNodeData } from './mappers'
+import { nodeDataEqual } from './mappers'
 import { CANVAS, STEP_TYPE_COLORS, DEFAULT_STEP_TYPE_COLOR, PROTOCOL_TYPE_COLORS } from './constants'
 
 const STEP_TYPE_ICONS: Record<string, typeof SettingsOutlined> = {
@@ -335,6 +336,10 @@ function StepNodeComponent({ data, selected }: NodeProps) {
   )
 }
 
-const StepNode = memo(StepNodeComponent)
+const stepNodeEqual = (prev: NodeProps, next: NodeProps): boolean =>
+  prev.selected === next.selected &&
+  nodeDataEqual(prev.data, next.data)
+
+const StepNode = memo(StepNodeComponent, stepNodeEqual)
 
 export { StepNode }

@@ -1,3 +1,4 @@
+import type {CSSProperties} from "react";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {
   ReactFlow,
@@ -26,7 +27,7 @@ import {
   outputSchemaStore,
   protocolStore,
 } from "@/stores";
-import {toRFNodes, toRFEdges} from "./mappers";
+import {toRFNodes, toRFEdges, nodeDataEqual} from "./mappers";
 import type {StepNodeLookups} from "./mappers";
 import {Collections} from "@/utils/collections";
 import {nodeTypes} from "./nodeTypes";
@@ -36,6 +37,15 @@ import {CanvasToolbar} from "./CanvasToolbar";
 import {CanvasContextMenu} from "./CanvasContextMenu";
 import type {MenuPosition} from "./CanvasContextMenu";
 import {CANVAS} from "./constants";
+
+const stylesEqual = (
+  a: CSSProperties | undefined,
+  b: CSSProperties | undefined,
+): boolean => {
+  if (a === b) return true
+  if (a === undefined || b === undefined) return false
+  return a.width === b.width && a.height === b.height
+}
 
 function WorkflowCanvasInner() {
   const theme = useTheme();
@@ -51,11 +61,7 @@ function WorkflowCanvasInner() {
     canvasStore.store,
     canvasStore.selectMinimapVisible,
   );
-  // Subscribe to tools state to trigger re-renders when tools are loaded
-  const toolsByAgent = useStore(
-    agentStore.store,
-    (s) => s.toolsByAgent,
-  );
+  const toolsByAgent = useStore(agentStore.store, agentStore.selectToolsByAgent);
   const stepProtocols = useStore(canvasStore.store, canvasStore.selectStepProtocols);
   const {onNodeDragStop} = usePositionPersist();
   const [contextMenu, setContextMenu] = useState<MenuPosition>(null);
@@ -140,24 +146,25 @@ function WorkflowCanvasInner() {
         }));
       }
 
-      // Data-only change — update data, position, type, style; never touch selection
+      // Data-only change — value-compare and reuse old references when unchanged
       const newDataMap = new Map(rfNodes.map((n) => [n.id, n]));
       return current.map((n) => {
         const updated = newDataMap.get(n.id);
         if (!updated) return n;
-        if (
-          n.data === updated.data &&
-          n.position === updated.position &&
-          n.type === updated.type &&
-          n.style === updated.style
-        )
-          return n;
+
+        const dEq = nodeDataEqual(n.data, updated.data);
+        const pEq = n.position.x === updated.position.x && n.position.y === updated.position.y;
+        const tEq = n.type === updated.type;
+        const sEq = stylesEqual(n.style, updated.style);
+
+        if (dEq && pEq && tEq && sEq) return n;
+
         return {
           ...n,
-          data: updated.data,
-          position: updated.position,
+          data: dEq ? n.data : updated.data,
+          position: pEq ? n.position : updated.position,
           type: updated.type,
-          style: updated.style,
+          style: sEq ? n.style : updated.style,
         };
       });
     });
@@ -188,7 +195,9 @@ function WorkflowCanvasInner() {
     canvasStore.selectSteps(params.nodes.map((n) => n.id));
     canvasStore.selectEdges(params.edges.map((e) => e.id));
     if (params.nodes.length > 0 || params.edges.length > 0) {
-      layoutStore.openRightPanelIfClosed("properties");
+      requestAnimationFrame(() => {
+        layoutStore.openRightPanelIfClosed("properties");
+      });
     }
   }, []);
 
@@ -277,8 +286,13 @@ function WorkflowCanvasInner() {
     setContextMenu(null);
   }, []);
 
+  const onCanvasMouseDown = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
   return (
     <Box
+      onMouseDown={onCanvasMouseDown}
       sx={{
         width: "100%",
         height: "100%",
