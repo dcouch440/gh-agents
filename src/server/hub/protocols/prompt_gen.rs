@@ -4,227 +4,234 @@
 //! `<task>` tags at runtime. The output schema is enforced separately via
 //! `<schema>` in the system prompt, so these provide semantic guidance rather
 //! than hard format constraints.
-// todo instigate if the prompts in here for documenter are up to par. It seems the agents went off the quality of the prompt below. They should be much more robust. Read: /Users/davidcouch/Dev/gh-agents/docs/PROMPT_RESEARCH.md
+//!
+//! Each protocol prompt is defined as a readable `const` template with
+//! `{{.Protocol.field}}` placeholders, resolved at expansion time via
+//! [`super::template_resolve::resolve_template`].
 
+use std::collections::HashMap;
+
+use super::template_resolve::resolve_template;
 use super::types::PortConfig;
+
+// ============================================================================
+// Template constants
+// ============================================================================
+
+const DECOMP_TEMPLATE: &str = "\
+Analyze the task above and break it down into subtasks \
+for the specialist agents below.
+
+Guidelines:
+- Decompose into the fewest subtasks needed. \
+Each should be a self-contained unit of work.
+- Provide each agent with enough context to execute independently \
+\u{2014} they cannot see each other's work.
+- You may assign multiple subtasks to the same agent \
+when the work covers distinct concerns within their expertise.
+- If subtasks have ordering dependencies, \
+note them in the content field.
+
+Available Agents:
+{{.Protocol.available_agents}}
+
+Respond with a JSON array. Each element has a \"port\" field \
+matching an agent identifier above, and a \"content\" field \
+with the task details for that agent.";
+
+const ROUTE_TEMPLATE: &str = "\
+Analyze the input above to determine which specialist agent \
+is the best fit, then route it to exactly one agent.
+
+Routing criteria:
+- Identify the core intent and requirements of the input.
+- Match those requirements against each agent's \
+expertise and available tools.
+- Select the single best match. If multiple agents could handle \
+the input, choose the one whose expertise most directly \
+addresses the primary need.
+
+Available Agents:
+{{.Protocol.available_agents}}
+
+Respond with a JSON object containing a \"port\" field \
+matching an agent identifier above, and a \"content\" field \
+with the task details for that agent.";
+
+const REVIEW_TEMPLATE: &str = "\
+Evaluate the input above and provide your assessment.
+
+Evaluation criteria:
+- Correctness: Does the content accurately fulfill \
+the original requirements?
+- Completeness: Are all expected elements present, \
+or is anything missing?
+- Quality: Is the output well-structured, clear, \
+and free of obvious errors?
+
+Form your own independent assessment. Do not assume the input \
+is correct \u{2014} verify claims and check for gaps.
+
+Your decision must be one of: \"{{.Protocol.decisions}}\"
+
+Respond with a JSON object containing:
+- \"decision\": one of the valid decisions listed above
+- \"feedback\": a specific explanation citing what works, \
+what does not, and what to change. Reference concrete details \
+rather than giving generic praise or criticism.";
+
+const TRANSFORM_TEMPLATE: &str = "\
+Transform the input above into the structured format \
+defined by the output schema.
+
+Steps:
+1. Identify the relevant data from the input.
+2. Map each piece of data to the corresponding field \
+in the schema.
+3. Ensure all required fields are populated \
+and values match the expected types.
+
+Your response is parsed directly by a JSON parser \
+\u{2014} output only the JSON object.
+{{.Protocol.schema_context}}";
+
+const DOCUMENTER_TEMPLATE: &str = "\
+You are a Document Strategist. Your job is to plan how each \
+requested document should be researched and written.
+
+Requested Documents:
+{{.Protocol.requested_documents}}
+
+{{.Protocol.available_capabilities}}
+
+For each document, provide:
+- document_name: must match one of the document names listed above exactly
+- research_strategy: a step-by-step plan for gathering the information \
+needed to write this document
+- required_capabilities: which capabilities the researcher needs \
+from the list above (empty array if no research tools are needed)
+- writer_prompt: detailed instructions for the writer, including \
+tone, structure, target audience, and focus areas
+
+Respond with a JSON object containing a \"document_plans\" array \
+with one entry per document.";
+
+// ============================================================================
+// Public prompt generators
+// ============================================================================
 
 /// Generate the decomp prompt injection: instructs the orchestrator to analyze
 /// the task, break it into subtasks, and assign each to a specialist agent.
 pub fn decomp_prompt(ports: &[PortConfig]) -> String {
-    let mut lines = Vec::new();
-
-    lines.push(
-        "Analyze the task above and break it down into subtasks \
-         for the specialist agents below."
-            .to_string(),
+    let mut vars = HashMap::new();
+    vars.insert(
+        "Protocol.available_agents".to_string(),
+        format_agents_block(ports),
     );
-    lines.push(String::new());
-    lines.push("Guidelines:".to_string());
-    lines.push(
-        "- Decompose into the fewest subtasks needed. \
-         Each should be a self-contained unit of work."
-            .to_string(),
-    );
-    lines.push(
-        "- Provide each agent with enough context to execute independently \
-         — they cannot see each other's work."
-            .to_string(),
-    );
-    lines.push(
-        "- You may assign multiple subtasks to the same agent \
-         when the work covers distinct concerns within their expertise."
-            .to_string(),
-    );
-    lines.push(
-        "- If subtasks have ordering dependencies, \
-         note them in the content field."
-            .to_string(),
-    );
-    lines.push(String::new());
-    lines.push("Available Agents:".to_string());
-
-    for port in ports {
-        lines.push(String::new());
-        lines.push(format!("Port \"{}\" — {}", port.port_name, port.agent_name));
-        lines.push(format!("  {}", port.description));
-        if !port.agent_tools.is_empty() {
-            lines.push(format!("  Tools: {}", port.agent_tools.join(", ")));
-        }
-    }
-
-    lines.push(String::new());
-    lines.push(
-        "Respond with a JSON array. Each element has a \"port\" field \
-         matching an agent identifier above, and a \"content\" field \
-         with the task details for that agent."
-            .to_string(),
-    );
-
-    lines.join("\n")
+    collapse_blank_lines(&resolve_template(DECOMP_TEMPLATE, &vars))
 }
 
 /// Generate the route prompt injection: instructs the orchestrator to analyze
 /// the input and route it to exactly one specialist agent.
 pub fn route_prompt(ports: &[PortConfig]) -> String {
-    let mut lines = Vec::new();
-
-    lines.push(
-        "Analyze the input above to determine which specialist agent \
-         is the best fit, then route it to exactly one agent."
-            .to_string(),
+    let mut vars = HashMap::new();
+    vars.insert(
+        "Protocol.available_agents".to_string(),
+        format_agents_block(ports),
     );
-    lines.push(String::new());
-    lines.push("Routing criteria:".to_string());
-    lines.push("- Identify the core intent and requirements of the input.".to_string());
-    lines.push(
-        "- Match those requirements against each agent's \
-         expertise and available tools."
-            .to_string(),
-    );
-    lines.push(
-        "- Select the single best match. If multiple agents could handle \
-         the input, choose the one whose expertise most directly \
-         addresses the primary need."
-            .to_string(),
-    );
-    lines.push(String::new());
-    lines.push("Available Agents:".to_string());
-
-    for port in ports {
-        lines.push(String::new());
-        lines.push(format!("Port \"{}\" — {}", port.port_name, port.agent_name));
-        lines.push(format!("  {}", port.description));
-        if !port.agent_tools.is_empty() {
-            lines.push(format!("  Tools: {}", port.agent_tools.join(", ")));
-        }
-    }
-
-    lines.push(String::new());
-    lines.push(
-        "Respond with a JSON object containing a \"port\" field \
-         matching an agent identifier above, and a \"content\" field \
-         with the task details for that agent."
-            .to_string(),
-    );
-
-    lines.join("\n")
+    collapse_blank_lines(&resolve_template(ROUTE_TEMPLATE, &vars))
 }
 
 /// Generate the review prompt injection: instructs the agent to evaluate input
 /// against quality criteria and provide a structured decision with feedback.
 pub fn review_prompt(decisions: &[String]) -> String {
-    let decision_list = decisions.join("\", \"");
-    let mut lines = Vec::new();
-
-    lines.push("Evaluate the input above and provide your assessment.".to_string());
-    lines.push(String::new());
-    lines.push("Evaluation criteria:".to_string());
-    lines.push(
-        "- Correctness: Does the content accurately fulfill \
-         the original requirements?"
-            .to_string(),
+    let mut vars = HashMap::new();
+    vars.insert(
+        "Protocol.decisions".to_string(),
+        format_decisions(decisions),
     );
-    lines.push(
-        "- Completeness: Are all expected elements present, \
-         or is anything missing?"
-            .to_string(),
-    );
-    lines.push(
-        "- Quality: Is the output well-structured, clear, \
-         and free of obvious errors?"
-            .to_string(),
-    );
-    lines.push(String::new());
-    lines.push(
-        "Form your own independent assessment. Do not assume the input \
-         is correct — verify claims and check for gaps."
-            .to_string(),
-    );
-    lines.push(String::new());
-    lines.push(format!(
-        "Your decision must be one of: \"{}\"",
-        decision_list
-    ));
-    lines.push(String::new());
-    lines.push("Respond with a JSON object containing:".to_string());
-    lines.push("- \"decision\": one of the valid decisions listed above".to_string());
-    lines.push(
-        "- \"feedback\": a specific explanation citing what works, \
-         what does not, and what to change. Reference concrete details \
-         rather than giving generic praise or criticism."
-            .to_string(),
-    );
-
-    lines.join("\n")
+    collapse_blank_lines(&resolve_template(REVIEW_TEMPLATE, &vars))
 }
 
 /// Generate the transform prompt injection: instructs the agent to transform
 /// the input into a structured format matching the output schema.
 pub fn transform_prompt(schema_description: Option<&str>) -> String {
-    let mut lines = Vec::new();
-
-    lines.push(
-        "Transform the input above into the structured format \
-         defined by the output schema."
-            .to_string(),
+    let mut vars = HashMap::new();
+    vars.insert(
+        "Protocol.schema_context".to_string(),
+        format_schema_context(schema_description),
     );
-    lines.push(String::new());
-    lines.push("Steps:".to_string());
-    lines.push("1. Identify the relevant data from the input.".to_string());
-    lines.push(
-        "2. Map each piece of data to the corresponding field \
-         in the schema."
-            .to_string(),
-    );
-    lines.push(
-        "3. Ensure all required fields are populated \
-         and values match the expected types."
-            .to_string(),
-    );
-    lines.push(String::new());
-    lines.push(
-        "Your response is parsed directly by a JSON parser \
-         — output only the JSON object."
-            .to_string(),
-    );
-
-    if let Some(desc) = schema_description {
-        lines.push(String::new());
-        lines.push(format!("Schema context: {}", desc));
-    }
-
-    lines.join("\n")
+    collapse_blank_lines(&resolve_template(TRANSFORM_TEMPLATE, &vars))
 }
 
 /// Generate the documenter prompt injection: instructs the strategist to plan
 /// research and writing for each requested document.
 pub fn documenter_prompt(doc_defs: &[serde_json::Value], capabilities: &[String]) -> String {
-    let mut lines = Vec::new();
-
-    lines.push(
-        "You are a Document Strategist. Your job is to plan how each \
-         requested document should be researched and written."
-            .to_string(),
+    let mut vars = HashMap::new();
+    vars.insert(
+        "Protocol.requested_documents".to_string(),
+        format_documents_block(doc_defs),
     );
-    lines.push(String::new());
-    lines.push("Requested Documents:".to_string());
+    vars.insert(
+        "Protocol.available_capabilities".to_string(),
+        format_capabilities_block(capabilities),
+    );
+    collapse_blank_lines(&resolve_template(DOCUMENTER_TEMPLATE, &vars))
+}
 
+// ============================================================================
+// Formatter helpers — build substitution values for template placeholders
+// ============================================================================
+
+/// Format the agent/port listing used by decomp and route templates.
+fn format_agents_block(ports: &[PortConfig]) -> String {
+    let mut parts = Vec::new();
+    for port in ports {
+        parts.push(String::new());
+        parts.push(format!(
+            "Port \"{}\" \u{2014} {}",
+            port.port_name, port.agent_name
+        ));
+        parts.push(format!("  {}", port.description));
+        if !port.agent_tools.is_empty() {
+            parts.push(format!("  Tools: {}", port.agent_tools.join(", ")));
+        }
+    }
+    parts.join("\n")
+}
+
+/// Format the decision list for the review template.
+fn format_decisions(decisions: &[String]) -> String {
+    decisions.join("\", \"")
+}
+
+/// Format the optional schema context block for the transform template.
+fn format_schema_context(desc: Option<&str>) -> String {
+    match desc {
+        Some(d) => format!("\nSchema context: {}", d),
+        None => String::new(),
+    }
+}
+
+/// Format the numbered document listing for the documenter template.
+fn format_documents_block(doc_defs: &[serde_json::Value]) -> String {
+    let mut parts = Vec::new();
     for (i, def) in doc_defs.iter().enumerate() {
         let name = def["name"].as_str().unwrap_or("Unnamed");
         let description = def["description"].as_str().unwrap_or("");
         let target_length = def["target_length"].as_i64().unwrap_or(2000);
 
-        lines.push(String::new());
+        parts.push(String::new());
         if description.is_empty() {
-            lines.push(format!(
+            parts.push(format!(
                 "{}. \"{}\" (target: ~{} characters)",
                 i + 1,
                 name,
                 target_length
             ));
         } else {
-            lines.push(format!(
-                "{}. \"{}\" — {} (target: ~{} characters)",
+            parts.push(format!(
+                "{}. \"{}\" \u{2014} {} (target: ~{} characters)",
                 i + 1,
                 name,
                 description,
@@ -232,44 +239,48 @@ pub fn documenter_prompt(doc_defs: &[serde_json::Value], capabilities: &[String]
             ));
         }
     }
-
-    if !capabilities.is_empty() {
-        lines.push(String::new());
-        lines.push("Available Research Capabilities:".to_string());
-        for cap in capabilities {
-            lines.push(format!("- {}", cap));
-        }
-    }
-
-    lines.push(String::new());
-    lines.push("For each document, provide:".to_string());
-    lines.push(
-        "- document_name: must match one of the document names listed above exactly".to_string(),
-    );
-    lines.push(
-        "- research_strategy: a step-by-step plan for gathering the information \
-         needed to write this document"
-            .to_string(),
-    );
-    lines.push(
-        "- required_capabilities: which capabilities the researcher needs \
-         from the list above (empty array if no research tools are needed)"
-            .to_string(),
-    );
-    lines.push(
-        "- writer_prompt: detailed instructions for the writer, including \
-         tone, structure, target audience, and focus areas"
-            .to_string(),
-    );
-    lines.push(String::new());
-    lines.push(
-        "Respond with a JSON object containing a \"document_plans\" array \
-         with one entry per document."
-            .to_string(),
-    );
-
-    lines.join("\n")
+    parts.join("\n")
 }
+
+/// Format the capabilities block for the documenter template.
+/// Returns empty string when no capabilities are available.
+fn format_capabilities_block(capabilities: &[String]) -> String {
+    if capabilities.is_empty() {
+        return String::new();
+    }
+    let mut parts = vec!["Available Research Capabilities:".to_string()];
+    for cap in capabilities {
+        parts.push(format!("- {}", cap));
+    }
+    parts.join("\n")
+}
+
+// ============================================================================
+// Whitespace utility
+// ============================================================================
+
+/// Collapse consecutive blank lines into a single blank line
+/// and trim trailing blank lines.
+fn collapse_blank_lines(s: &str) -> String {
+    let mut result = Vec::new();
+    let mut prev_blank = false;
+    for line in s.lines() {
+        let is_blank = line.trim().is_empty();
+        if is_blank && prev_blank {
+            continue;
+        }
+        result.push(line);
+        prev_blank = is_blank;
+    }
+    while result.last().is_some_and(|l| l.trim().is_empty()) {
+        result.pop();
+    }
+    result.join("\n")
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
 
 #[cfg(test)]
 mod tests {
@@ -495,6 +506,82 @@ mod tests {
         assert!(prompt.contains("\"Readme\""));
         assert!(prompt.contains("~1000 characters"));
         // Should not have an em dash for empty description
-        assert!(!prompt.contains("\"Readme\" —"));
+        assert!(!prompt.contains("\"Readme\" \u{2014}"));
+    }
+
+    // --- collapse_blank_lines tests ---
+
+    #[test]
+    fn collapse_blank_lines_removes_consecutive_blanks() {
+        let input = "a\n\n\nb";
+        assert_eq!(collapse_blank_lines(input), "a\n\nb");
+    }
+
+    #[test]
+    fn collapse_blank_lines_preserves_single_blanks() {
+        let input = "a\n\nb";
+        assert_eq!(collapse_blank_lines(input), "a\n\nb");
+    }
+
+    #[test]
+    fn collapse_blank_lines_trims_trailing_blanks() {
+        let input = "a\n\n";
+        assert_eq!(collapse_blank_lines(input), "a");
+    }
+
+    #[test]
+    fn collapse_blank_lines_empty_input() {
+        assert_eq!(collapse_blank_lines(""), "");
+    }
+
+    // --- formatter tests ---
+
+    #[test]
+    fn format_agents_block_includes_tools() {
+        let ports = make_ports();
+        let block = format_agents_block(&ports);
+        assert!(block.contains("Port \"frontend\" \u{2014} FE Agent"));
+        assert!(block.contains("Tools: read_file, write_file"));
+    }
+
+    #[test]
+    fn format_agents_block_omits_empty_tools() {
+        let ports = vec![PortConfig {
+            port_name: "worker".to_string(),
+            description: "General worker".to_string(),
+            agent_id: Uuid::new_v4(),
+            agent_name: "Worker".to_string(),
+            agent_tools: vec![],
+            display_order: 0,
+            content_schema: None,
+        }];
+        let block = format_agents_block(&ports);
+        assert!(!block.contains("Tools:"));
+        assert!(block.contains("Port \"worker\" \u{2014} Worker"));
+    }
+
+    #[test]
+    fn format_capabilities_block_empty_returns_empty() {
+        assert_eq!(format_capabilities_block(&[]), "");
+    }
+
+    #[test]
+    fn format_capabilities_block_with_caps() {
+        let caps = vec!["search".to_string(), "code".to_string()];
+        let block = format_capabilities_block(&caps);
+        assert!(block.contains("Available Research Capabilities:"));
+        assert!(block.contains("- search"));
+        assert!(block.contains("- code"));
+    }
+
+    #[test]
+    fn format_schema_context_none_returns_empty() {
+        assert_eq!(format_schema_context(None), "");
+    }
+
+    #[test]
+    fn format_schema_context_some_includes_prefix() {
+        let ctx = format_schema_context(Some("User profile"));
+        assert!(ctx.contains("Schema context: User profile"));
     }
 }
