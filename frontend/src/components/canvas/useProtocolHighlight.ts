@@ -13,7 +13,7 @@ type HighlightMode = (typeof HighlightMode)[keyof typeof HighlightMode]
 const CanvasNodeKind = {
   CONTEXT: 'context',
   DOCUMENT: 'document',
-  DOCUMENTER: 'documenter',
+  PROTOCOL: 'protocol',
   STEP: 'step',
 } as const
 
