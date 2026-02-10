@@ -57,13 +57,14 @@ pub struct DocumenterResult {
 /// Runs three phases sequentially (strategy), then parallel per document
 /// (research, write). Records each phase as a `protocol_execution` row
 /// and broadcasts WebSocket progress events.
-pub struct DocumenterExecutor<'a> {
+pub(crate) struct DocumenterExecutor<'a> {
     engine: &'a ExecutionEngine,
     state: &'a AppState,
     ctx: &'a WorkflowExecutionContext,
     step: &'a WorkflowStepRow,
     prompt: &'a str,
     cancel: Option<&'a CancellationToken>,
+    upstream_context: &'a [ContextDocument],
 }
 
 /// Internal result from a single research or write task.
@@ -90,9 +91,44 @@ struct StrategyPhaseResult {
 /// into research and write phase prompts based on strategy LLM assignments.
 #[derive(Debug, Clone)]
 pub(crate) struct ContextDocument {
-    short_id: String,
-    title: String,
-    content: String,
+    pub(crate) short_id: String,
+    pub(crate) title: String,
+    pub(crate) content: String,
+}
+
+/// Extract JSON content from an LLM response, stripping markdown code fences if present.
+///
+/// Tries in order: raw JSON, `` ```json `` fences, bare `` ``` `` fences, then `{…}` extraction.
+pub(crate) fn extract_json_content(content: &str) -> String {
+    let trimmed = content.trim();
+
+    // Try raw parse first
+    if serde_json::from_str::<serde_json::Value>(trimmed).is_ok() {
+        return trimmed.to_string();
+    }
+
+    // Try ```json fence
+    if let Some(start) = trimmed.find("```json") {
+        if let Some(end) = trimmed[start + 7..].find("```") {
+            return trimmed[start + 7..start + 7 + end].trim().to_string();
+        }
+    }
+
+    // Try bare ``` fence
+    if let Some(start) = trimmed.find("```") {
+        if let Some(end) = trimmed[start + 3..].find("```") {
+            return trimmed[start + 3..start + 3 + end].trim().to_string();
+        }
+    }
+
+    // Try extracting { ... }
+    if let Some(start) = trimmed.find('{') {
+        if let Some(end) = trimmed.rfind('}') {
+            return trimmed[start..=end].to_string();
+        }
+    }
+
+    trimmed.to_string()
 }
 
 /// Build a `<context>` block from assigned document IDs.
@@ -137,6 +173,7 @@ impl<'a> DocumenterExecutor<'a> {
         step: &'a WorkflowStepRow,
         prompt: &'a str,
         cancel: Option<&'a CancellationToken>,
+        upstream_context: &'a [ContextDocument],
     ) -> Self {
         Self {
             engine,
@@ -145,6 +182,7 @@ impl<'a> DocumenterExecutor<'a> {
             step,
             prompt,
             cancel,
+            upstream_context,
         }
     }
 
@@ -333,8 +371,9 @@ impl<'a> DocumenterExecutor<'a> {
                     exec_result.output_tokens as i64,
                 );
 
-                // Parse strategy output
-                match serde_json::from_str::<types::StrategyOutput>(&exec_result.content) {
+                // Parse strategy output (strip markdown code fences if present)
+                let json_str = extract_json_content(&exec_result.content);
+                match serde_json::from_str::<types::StrategyOutput>(&json_str) {
                     Ok(strategy_output) => {
                         // Validate: every plan should reference a known doc def
                         let def_names: Vec<&str> =
@@ -834,6 +873,10 @@ impl<'a> DocumenterExecutor<'a> {
                 }
             }
         }
+
+        // Upstream context from completed context-mode steps connected by bare edges
+        // (pre-built with stable short_ids by the caller)
+        docs.extend(self.upstream_context.iter().cloned());
 
         docs
     }

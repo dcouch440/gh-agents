@@ -938,5 +938,49 @@ pub fn resolve_port_inputs(
     Ok(resolved)
 }
 
+/// Collect data from upstream context-mode steps connected by bare (portless) edges.
+///
+/// Context steps store their `prompt_template` as a `JsonValue::String` in the
+/// envelope's `data` field. This function finds all incoming bare edges (no port
+/// names) from completed context steps and returns their data as `(title, content)`.
+///
+/// Complements `resolve_port_inputs()` which handles port-wired edges.
+pub fn collect_upstream_context_data(
+    step_id: Uuid,
+    edges: &[WorkflowStepEdgeRow],
+    steps: &[WorkflowStepRow],
+    completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
+) -> Vec<(String, String)> {
+    let step_map: HashMap<Uuid, &WorkflowStepRow> = steps.iter().map(|s| (s.id, s)).collect();
+    let mut results = Vec::new();
+
+    for edge in edges {
+        if edge.to_step_id != step_id {
+            continue;
+        }
+        // Skip port-wired edges — those are handled by resolve_port_inputs
+        if edge.from_output_port.is_some() || edge.to_input_port.is_some() {
+            continue;
+        }
+        // Only collect from context-mode steps
+        let source_step = match step_map.get(&edge.from_step_id) {
+            Some(s) if s.execution_mode == "context" => s,
+            _ => continue,
+        };
+        // Extract string data from the completed envelope
+        if let Some(envelope) = completed_envelopes.get(&edge.from_step_id) {
+            if let Some(JsonValue::String(content)) = &envelope.data {
+                let title = source_step
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| "Upstream Context".to_string());
+                results.push((title, content.clone()));
+            }
+        }
+    }
+
+    results
+}
+
 #[cfg(test)]
 mod tests;

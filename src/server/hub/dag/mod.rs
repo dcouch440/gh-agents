@@ -68,6 +68,7 @@ pub use utils::{
     build_routing_instruction_block, check_step_readiness, compose_prompt, evaluate_edge_condition,
     extract_for_each_label, find_entry_steps, get_child_steps, get_parent_steps, resolve_dot_path,
     resolve_for_each_array, resolve_port_inputs, resolve_variables, topological_sort,
+    collect_upstream_context_data,
     ContainerExecutionConfig, DagPaused, PortResolutionError, StepOutput, StepReadiness,
     WorkflowExecutionContext, WorkflowExecutionResult,
 };
@@ -1080,7 +1081,7 @@ async fn execute_documenter_step(
     state: &AppState,
     ctx: &WorkflowExecutionContext,
     step: &WorkflowStepRow,
-    _steps: &[WorkflowStepRow],
+    steps: &[WorkflowStepRow],
     edges: &[WorkflowStepEdgeRow],
     var_outputs: &mut HashMap<String, JsonValue>,
     completed: &mut HashMap<Uuid, StepOutput>,
@@ -1134,8 +1135,12 @@ async fn execute_documenter_step(
         None
     };
 
+    // Collect upstream context data from bare (portless) edges connecting context steps
+    let upstream_context =
+        collect_upstream_context_data(step.id, edges, steps, completed_envelopes);
+
     // Compose prompt
-    let prompt = compose_prompt(
+    let mut prompt = compose_prompt(
         step,
         state.prompt_template_repo().as_deref(),
         state.doc_repo().as_deref(),
@@ -1148,8 +1153,41 @@ async fn execute_documenter_step(
     )
     .await;
 
+    // Build ContextDocument objects from upstream context (stable short_ids via title hash)
+    let upstream_docs: Vec<documenter::ContextDocument> = upstream_context
+        .iter()
+        .map(|(title, content)| {
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+            let mut hasher = DefaultHasher::new();
+            title.hash(&mut hasher);
+            let short_id = format!("{:08x}", hasher.finish() & 0xFFFF_FFFF);
+            documenter::ContextDocument {
+                short_id,
+                title: title.clone(),
+                content: content.clone(),
+            }
+        })
+        .collect();
+
+    // Append upstream context using the same <document_XXXXXXXX> format
+    // so the strategy LLM sees the short_ids it needs for context_document_ids routing
+    let context_block = documenter::build_context_block(&[], &upstream_docs);
+    if !context_block.is_empty() {
+        prompt.push_str("\n\n");
+        prompt.push_str(&context_block);
+    }
+
     // Execute the documenter pipeline
-    let executor = documenter::DocumenterExecutor::new(engine, state, ctx, step, &prompt, cancel);
+    let executor = documenter::DocumenterExecutor::new(
+        engine,
+        state,
+        ctx,
+        step,
+        &prompt,
+        cancel,
+        &upstream_docs,
+    );
     let result = executor.execute(&port_meta.step_outputs).await?;
 
     // Accumulate tokens
