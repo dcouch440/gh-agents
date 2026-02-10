@@ -47,3 +47,13 @@ There will be all different kinds of nodes that are not nessesary made to (go in
 - Call order, the steps display the call order on the header. 1, ..., 5a, 5b
 
 - Output schema examples on the steps.
+
+
+Protocols:
+- Documenter
+- Work
+- Work Team
+- Research
+- Research Team
+- Verifier
+- Verifier Team

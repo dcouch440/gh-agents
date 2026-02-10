@@ -13,6 +13,34 @@ Production multi-agent frameworks (OpenAI Agents SDK, LangGraph, AG-UI protocol)
 - **No changes to ExecutionFilter or ExecutionEngine.** Milestones are emitted at the DAG orchestrator level. Tool names captured via a lightweight `StreamSink` implementation.
 - **Events only reach clients subscribed to the `workflow` topic.** Users not on the workflow page receive nothing — zero wasted bandwidth.
 - **Persisted for historical replay.** Only 2-4 rows per step, so storage is negligible.
+- **Canvas shows last run.** Each node on the canvas displays its last run's activity and results. Active run clears the board and shows live milestones. Otherwise you're viewing the last completed run. Users can also select a historical run to view.
+
+---
+
+## Canvas Display Model
+
+The canvas is always showing something useful:
+
+| State | What nodes show |
+|-------|----------------|
+| **No runs yet** | Empty — nodes show their config (prompts, doc defs, etc.) |
+| **Active run** | Live milestones streaming in — "Thinking...", "Running tool: github_search" |
+| **Run completed** | Last run's final milestone + summary (tokens, duration). Results viewable. |
+| **User selects historical run** | That run's milestones and results loaded from API |
+
+**Lifecycle:**
+1. User clicks "Run Workflow"
+2. All nodes clear their last-run display → show "Waiting..." or empty
+3. As steps execute, milestones appear on each node in real time
+4. Run completes → nodes show final state (completed/failed + summary)
+5. User can browse results, switch tabs, come back — last run still displayed
+6. User clicks "Run" again → clears and starts fresh
+
+This is the **shared pattern** across all node types:
+- **StepNode:** Shows latest milestone during execution, completion summary after
+- **DocumenterNode:** Same, plus the documenter protocol phases (strategy → research → write)
+- **DocumentNode:** Shows generated document content from the last run (populated into the read-only viewer)
+- **ContextNode:** Static — context doesn't change during execution
 
 ---
 
@@ -121,7 +149,9 @@ Wire format on the WebSocket:
 
 ### 1B. Database migration
 
-**File:** `migrations/0020_step_activity_log.sql`
+**File:** `migrations/0023_step_activity_log.sql`
+
+(0022 reserved for documenter assistant migration — see `tickets/documenter-assistant/`)
 
 ```sql
 CREATE TABLE step_activity_log (
@@ -212,7 +242,7 @@ Add `pub mod activity;` to `src/server/hub/dag/mod.rs`.
 
 ### 2A. Emit milestones in `execute_single_step`
 
-**File:** `src/server/hub/dag/mod.rs` — `execute_single_step()` (line 881)
+**File:** `src/server/hub/dag/mod.rs` — `execute_single_step()`
 
 Insert milestone emit calls at natural boundaries:
 
@@ -336,6 +366,21 @@ preparing  → "Entering room discussion with {N} agents"
 
 Room-internal events (`SpeakerStart`, `SpeakerToken`, `SpeakerEnd`) already flow through `RoomEvent` on the WebSocket. No duplication needed.
 
+### 2F. Documenter protocol milestones
+
+**File:** `src/server/hub/dag/mod.rs` — documenter step execution
+
+When the documenter protocol runs its 3-phase pipeline, emit milestones at each phase boundary:
+
+```
+preparing  → "Resolving inputs from {upstream_names}"
+thinking   → "Running strategy phase for {N} documents"
+acting     → "Writing: {document_name}"          // emitted per-document as write phase starts
+acting     → "Writing: {document_name}"          // next document
+```
+
+This gives users visibility into the documenter's multi-phase execution at the canvas level. The `acting` milestone fires once per document being written, which is bounded by the number of document definitions (typically 2-6).
+
 ### Tests
 
 - Integration test: Run a mock single step through `execute_single_step`, verify 2 milestones emitted (`preparing` + `thinking`)
@@ -345,7 +390,7 @@ Room-internal events (`SpeakerStart`, `SpeakerToken`, `SpeakerEnd`) already flow
 
 ---
 
-## Part 3: Frontend Store + Inline Display
+## Part 3: Frontend — Canvas Node Activity Display
 
 > **Risk:** LOW — Additive UI change, no existing behavior modified.
 > **Effort:** Medium
@@ -373,14 +418,15 @@ type StepActivityData = {
 
 Add `STEP_ACTIVITY = 'step_activity'` to the workflow event constants.
 
-### 3B. Execution store update
+### 3B. Execution store — per-node activity state
 
 **File:** `frontend/src/stores/workflowExecutionStore.ts`
 
-Extend `StepExecutionState` with one field:
+Extend `StepExecutionState` with:
 
 ```typescript
-latestActivity: string | null  // Most recent milestone message
+latestActivity: string | null      // Most recent milestone message for this step
+completionSummary: string | null   // "890 tokens, 3.1s" — set on step_completed
 ```
 
 Handle `step_activity` in the event handler:
@@ -396,29 +442,96 @@ case WORKFLOW_EVENT.STEP_ACTIVITY: {
 }
 ```
 
-Clear `latestActivity` when `step_completed` or `step_failed` arrives (the completion message replaces it).
+**Last-run display lifecycle:**
 
-On `WORKFLOW_EVENT.STARTED`, reset all `latestActivity` to `null`.
+```typescript
+// On WORKFLOW_EVENT.STARTED:
+//   - Store the run_id as activeRunId
+//   - Clear ALL latestActivity and completionSummary for all steps
+//   - Clear activityStream
+//   → Canvas shows empty state on all nodes
 
-### 3C. Timeline entry inline display
+// On WORKFLOW_EVENT.STEP_ACTIVITY:
+//   - Update latestActivity for the step
+//   → Canvas node shows live milestone
 
-**File:** `frontend/src/components/panels/execution/ExecutionTimelineEntry.tsx`
+// On WORKFLOW_EVENT.STEP_COMPLETED:
+//   - Clear latestActivity (no longer "in progress")
+//   - Set completionSummary from the event data (tokens, duration)
+//   → Canvas node shows completion summary
 
-When a step is in `running` status and `latestActivity` is non-null, show it as a subtle secondary line:
-
+// On WORKFLOW_EVENT.COMPLETED (whole workflow):
+//   - Set activeRunId to null
+//   - latestActivity/completionSummary remain for all steps
+//   → Canvas nodes keep showing last run's results until next run
 ```
-[blue pulse] Code Reviewer
-             Running tool: github_search     ← latestActivity
+
+### 3C. Canvas node activity display
+
+**Files:**
+- `frontend/src/components/canvas/StepNode.tsx`
+- `frontend/src/components/canvas/DocumenterNode/DocumenterNode.tsx`
+- `frontend/src/components/canvas/DocumentNode/DocumentNode.tsx`
+
+Each node type reads from the execution store and renders activity inline:
+
+**StepNode:**
+```
++---------------------------+
+| Code Reviewer             |
+| Running tool: github_search |  ← latestActivity (during run)
++---------------------------+
+
++---------------------------+
+| Code Reviewer             |
+| 2,100 tokens · 5.2s      |  ← completionSummary (after run)
++---------------------------+
 ```
 
-Style: smaller font, muted color, single line with text-overflow ellipsis. Disappears when step completes.
+**DocumenterNode:**
+```
++---------------------------+
+| API Documenter            |
+| Writing: API Reference    |  ← latestActivity showing current phase
++---------------------------+
+```
+
+**DocumentNode:**
+```
++---------------------------+
+| API Reference             |
+| [generated content here]  |  ← content populated from last run output
++---------------------------+
+```
+
+DocumentNodes are a special case — when the documenter protocol completes, it writes generated content to the `documents` table. The DocumentNode should display this content in its read-only viewer. This connects to the existing `DocumentNodeContent` component which already has raw/md toggle for viewing content.
+
+**Style:**
+- Activity text: smaller font, muted color, single line with text-overflow ellipsis
+- During active run: subtle pulse/animation on the activity line
+- After completion: static, slightly dimmed
+- No activity (fresh workflow, never run): nothing shown — node displays its config as usual
+
+### 3D. Last-run persistence across page navigation
+
+When the user navigates away from the canvas and comes back, the last run should still be visible. Options:
+
+1. **Store in memory** — execution store retains state as long as the app is mounted. Lost on page refresh.
+2. **Fetch on mount** — when canvas mounts, check if a latest execution exists and load its activity from the API (Part 5).
+
+Recommend option 2 for robustness. On canvas mount:
+1. Fetch latest execution for this workflow
+2. If it exists and is completed, load its activity and step results
+3. Populate the store so nodes display last-run data immediately
 
 ### Tests
 
 - Store test: `step_activity` event updates `latestActivity` for the correct step
-- Store test: `step_completed` clears `latestActivity`
+- Store test: `step_completed` clears `latestActivity`, sets `completionSummary`
+- Store test: `workflow_started` clears all activity and summaries
 - Store test: Multiple rapid `step_activity` events — only latest message retained
 - Store test: `step_activity` for unknown `step_id` is silently ignored
+- Store test: After workflow completes, `latestActivity` and `completionSummary` persist
 
 ---
 
@@ -537,16 +650,23 @@ getExecutionActivity: (executionId: string, config?: RequestConfig) =>
 
 Add the URL constant to the API constants.
 
-### 5C. Historical activity loading
+### 5C. Historical activity loading + last-run fetch
 
 **File:** `frontend/src/stores/workflowExecutionStore.ts`
 
-When viewing a historical run (user selects a past execution from the history panel):
+**Viewing a historical run** (user selects a past execution from the history panel):
 1. Fetch activity from the API
 2. Populate `activityStream` with the response data
-3. The `ActivityStream` component renders identically for live and historical data
+3. Populate per-step `completionSummary` from execution results
+4. The `ActivityStream` component and canvas nodes render identically for live and historical data
 
-When a client reconnects mid-execution:
+**Last-run on canvas mount** (supports the "always showing something" pattern):
+1. On canvas mount, fetch latest execution for this workflow
+2. If it exists and is completed, fetch its activity
+3. Populate store → canvas nodes immediately show last run's results
+4. If a run is currently active, subscribe to WS and show live data instead
+
+**Client reconnects mid-execution:**
 1. Detect the active `run_id` from the store
 2. Fetch activity from the API to backfill missed milestones
 3. New WS events append from there — no duplicates because milestones have unique `(step_id, milestone)` pairs
@@ -557,7 +677,26 @@ When a client reconnects mid-execution:
 - API test: Endpoint returns 404 for non-existent execution
 - API test: Endpoint returns empty array for execution with no activity
 - Integration test: Historical load populates `activityStream` correctly
+- Integration test: Last-run fetch on canvas mount populates per-step state
 - Integration test: Reconnect backfill doesn't duplicate entries
+
+---
+
+## Cross-References
+
+### Documenter Assistant (`tickets/documenter-assistant/`)
+
+The documenter assistant feature adds a chat-based agent to DocumenterNodes. These are two separate concerns:
+- **Activity stream** = runtime visibility during workflow execution
+- **Documenter assistant** = design-time chat for defining document targets
+
+They share WS infrastructure but different event types. Key integration points:
+
+1. **Part 2F** adds documenter protocol milestones (strategy → research → write phases)
+2. **Part 3C** includes DocumentNode content display from last run — connects to the documenter's generated output
+3. **Migration numbering:** Documenter assistant uses `0022`, activity stream uses `0023`
+
+The documenter assistant's Phase 5 (reactive canvas) uses `doc_def_changed` WS events for design-time reactivity. The activity stream uses `step_activity` WS events for runtime milestones. Different events, same topic, no conflicts.
 
 ---
 
@@ -567,6 +706,7 @@ When a client reconnects mid-execution:
 |------|----------|
 | **User not on workflow page** | No `workflow` topic subscription. WS handler drops events at the topic filter. Zero wasted compute or bandwidth. |
 | **Client reconnects mid-run** | Frontend calls activity API for current `run_id` to backfill. New WS events append. Deduplicate by `(step_id, milestone, created_at)`. |
+| **User navigates away and back** | Canvas mount fetches latest execution and loads last-run data. Nodes display results immediately. |
 | **Concurrent for-each iterations** | `iteration_progress` field tracks `(completed, total)`. Updates throttled to ~5 per for-each step, not per-item. |
 | **Chained for-each pipelines** | Chain-level milestones only. Individual pipeline stages within `execute_pipeline_item()` do not emit — chain progress is sufficient. |
 | **Room steps (multi-speaker)** | One `preparing` milestone at DAG level. Room-internal events flow through existing `RoomEvent` channel. No duplication. |
@@ -578,6 +718,7 @@ When a client reconnects mid-execution:
 | **Broadcast channel lag** | At 3 milestones/step, a 20-step workflow produces ~60 events. Well within the 256-message broadcast buffer. |
 | **Step fails before any milestone** | `StepFailed` event already handled. No activity to clean up. Partial milestones (e.g., `preparing` emitted but step fails during LLM call) remain in the log — useful for debugging. |
 | **Multiple browser tabs** | Each tab has its own WS connection and topic subscriptions. Each receives events independently. No interference. |
+| **New run starts while viewing last run** | `WORKFLOW_EVENT.STARTED` clears all per-step activity and the stream. Canvas switches to live mode. |
 
 ---
 
@@ -587,9 +728,9 @@ When a client reconnects mid-execution:
 |------|---------------------|--------------|
 | **Part 1** | Yes | Backend emits milestones + persists. Nothing visible yet but foundation is solid. |
 | **Part 2** | Yes (with Part 1) | DAG steps emit real milestones during execution. Visible in server logs. |
-| **Part 3** | Yes (with Parts 1-2) | **Inline status on existing timeline entries.** Immediate UX improvement — users see what each step is doing. |
+| **Part 3** | Yes (with Parts 1-2) | **Per-node activity on canvas.** Immediate UX improvement — users see what each step is doing, and last run results persist on nodes. |
 | **Part 4** | Yes (with Parts 1-3) | **Full activity stream panel.** The "full screen stream" view across all agents. |
-| **Part 5** | Yes (with Parts 1-4) | **Historical replay.** View activity for past runs. Reconnect backfill. Feature complete. |
+| **Part 5** | Yes (with Parts 1-4) | **Historical replay + last-run fetch.** View activity for past runs. Reconnect backfill. Canvas loads last run on mount. Feature complete. |
 
 After Part 3, users already have a meaningful improvement. Parts 4 and 5 add polish and completeness.
 
@@ -598,14 +739,16 @@ After Part 3, users already have a meaningful improvement. Parts 4 and 5 add pol
 ## Files Changed (Summary)
 
 **Backend — New:**
-- `migrations/0020_step_activity_log.sql`
+- `migrations/0023_step_activity_log.sql`
 - `src/server/hub/dag/activity.rs` (ActivityEmitter + ActivitySink)
 - `src/server/hub/dag/activity/tests.rs`
 
 **Backend — Modified:**
 - `src/server/ws/events.rs` (StepMilestone enum, StepActivity variant)
-- `src/db/` (StepActivityRow, repo trait + impl)
-- `src/server/hub/dag/mod.rs` (emit calls in execute_single_step, execute_for_each_step, execute_for_each_chain, room step execution; replace NullSink with ActivitySink)
+- `src/db/mod.rs` (StepActivityRow)
+- `src/db/traits/mod.rs` (repo trait methods)
+- `src/db/pg/` (repo implementation)
+- `src/server/hub/dag/mod.rs` (emit calls in execute_single_step, execute_for_each_step, execute_for_each_chain, room step execution, documenter protocol phases; replace NullSink with ActivitySink)
 - `src/server/api/workflows/mod.rs` (GET activity endpoint)
 
 **Frontend — New:**
@@ -613,8 +756,10 @@ After Part 3, users already have a meaningful improvement. Parts 4 and 5 add pol
 
 **Frontend — Modified:**
 - `frontend/src/types/ws.ts` (StepActivityData, StepMilestone)
-- `frontend/src/stores/workflowExecutionStore.ts` (latestActivity, activityStream, event handler)
-- `frontend/src/components/panels/execution/ExecutionTimelineEntry.tsx` (inline activity display)
+- `frontend/src/stores/workflowExecutionStore.ts` (latestActivity, completionSummary, activityStream, last-run lifecycle, event handlers)
+- `frontend/src/components/canvas/StepNode.tsx` (inline activity display)
+- `frontend/src/components/canvas/DocumenterNode/DocumenterNode.tsx` (inline activity display)
+- `frontend/src/components/canvas/DocumentNode/DocumentNode.tsx` (last-run content display)
 - `frontend/src/components/panels/execution/ExecutionPanel.tsx` (Activity tab)
 - `frontend/src/api/api.ts` (getExecutionActivity method)
 - `frontend/src/constants.ts` (API URL constant)
