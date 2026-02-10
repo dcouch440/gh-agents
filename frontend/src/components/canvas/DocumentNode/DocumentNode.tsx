@@ -47,7 +47,8 @@ function DocumentNodeComponent({ data, selected }: NodeProps) {
     >
       <Handle
         type="target"
-        position={Position.Left}
+        position={Position.Bottom}
+        id="document-input"
         style={{
           width: 8,
           height: 8,

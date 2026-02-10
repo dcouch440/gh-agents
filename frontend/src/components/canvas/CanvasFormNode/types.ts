@@ -20,6 +20,7 @@ type CanvasFormNodeProps = {
   onTabChange: (tabId: string) => void
   selected: boolean
   accentColor?: string
+  extraHandles?: ReactNode
 }
 
 export type { CanvasFormTab, CanvasFormNodeProps }

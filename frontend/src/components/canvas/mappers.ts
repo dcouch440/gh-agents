@@ -135,8 +135,8 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
         id: `doc-artifact-${def.id}`,
         type: 'documentNode',
         position: {
-          x: (step.position_x ?? 0) + FORM_NODE.DEFAULT_WIDTH + 60,
-          y: (step.position_y ?? 0) + i * (DOCUMENT_NODE.DEFAULT_HEIGHT + 20),
+          x: (step.position_x ?? 0) + i * (DOCUMENT_NODE.DEFAULT_WIDTH + 20),
+          y: (step.position_y ?? 0) - DOCUMENT_NODE.DEFAULT_HEIGHT - 40,
         },
         style: {
           width: DOCUMENT_NODE.DEFAULT_WIDTH,
@@ -172,7 +172,9 @@ const toDocumentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[
         id: `doc-edge-${def.id}`,
         type: 'documentEdge',
         source: step.id,
+        sourceHandle: 'documents',
         target: `doc-artifact-${def.id}`,
+        targetHandle: 'document-input',
         selectable: false,
         deletable: false,
       })

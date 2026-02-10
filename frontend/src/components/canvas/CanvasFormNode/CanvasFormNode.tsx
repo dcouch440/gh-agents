@@ -15,6 +15,7 @@ function CanvasFormNodeComponent({
   onTabChange,
   selected,
   accentColor,
+  extraHandles,
 }: CanvasFormNodeProps) {
   const theme = useTheme()
   const resolvedAccent = accentColor ?? theme.palette.primary.main
@@ -189,6 +190,7 @@ function CanvasFormNodeComponent({
           border: `2px solid ${theme.palette.custom.bgHeader}`,
         }}
       />
+      {extraHandles}
     </Box>
   )
 }
