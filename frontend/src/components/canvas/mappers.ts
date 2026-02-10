@@ -6,11 +6,17 @@ import { CONTEXT_NODE } from './ContextNode'
 import type { ContextNodeData } from './ContextNode'
 import { DOCUMENT_NODE } from './DocumentNode'
 import type { DocumentNodeData } from './DocumentNode'
+import { PROTOCOL_TYPE_COLORS, GREYSCALE_ACCENT } from './constants'
 
 type ProtocolStepInfo = {
   protocol_type: string
   name: string
   portNames: string[]
+}
+
+type ProtocolGroupEntry = {
+  protocolColor: string
+  protocolStepId: string
 }
 
 type StepNodeData = {
@@ -27,6 +33,9 @@ type StepNodeData = {
   protocolType: string | null
   protocolName: string | null
   protocolPortNames: string[]
+  protocolColor: string | null
+  protocolStepId: string | null
+  isProtocol: boolean
 }
 
 type DocumentDefInfo = {
@@ -42,6 +51,62 @@ type StepNodeLookups = {
   toolsByAgent: ReadonlyMap<string, string[]>
   protocolsByStep: ReadonlyMap<string, ProtocolStepInfo>
   documentDefsByStep: Readonly<Record<string, ReadonlyArray<DocumentDefInfo>>>
+  protocolGroups: ReadonlyMap<string, ProtocolGroupEntry>
+}
+
+/**
+ * BFS from each protocol step to find all connected non-protocol nodes.
+ * Returns a map: stepId -> { protocolColor, protocolStepId }
+ */
+const computeProtocolGroups = (
+  steps: WorkflowStep[],
+  edges: ReadonlyArray<{ from_step_id: string; to_step_id: string }>,
+  protocolsByStep: ReadonlyMap<string, ProtocolStepInfo>,
+): ReadonlyMap<string, ProtocolGroupEntry> => {
+  // Identify all protocol step IDs (from stepProtocols map or execution_mode)
+  const protocolStepIds = new Set<string>()
+  for (const step of steps) {
+    if (protocolsByStep.has(step.id) || step.execution_mode === 'documenter') {
+      protocolStepIds.add(step.id)
+    }
+  }
+
+  // Build bidirectional adjacency list
+  const adjacency = new Map<string, Set<string>>()
+  for (const edge of edges) {
+    if (!adjacency.has(edge.from_step_id)) adjacency.set(edge.from_step_id, new Set())
+    if (!adjacency.has(edge.to_step_id)) adjacency.set(edge.to_step_id, new Set())
+    adjacency.get(edge.from_step_id)!.add(edge.to_step_id)
+    adjacency.get(edge.to_step_id)!.add(edge.from_step_id)
+  }
+
+  const result = new Map<string, ProtocolGroupEntry>()
+
+  for (const protocolId of protocolStepIds) {
+    const step = steps.find((s) => s.id === protocolId)
+    const protocolInfo = protocolsByStep.get(protocolId)
+    const protocolType = protocolInfo?.protocol_type ?? step?.execution_mode ?? 'default'
+    const color = PROTOCOL_TYPE_COLORS[protocolType] ?? GREYSCALE_ACCENT
+
+    // BFS from protocol step
+    const visited = new Set<string>([protocolId])
+    const queue = [protocolId]
+    while (queue.length > 0) {
+      const current = queue.shift()!
+      const neighbors = adjacency.get(current)
+      if (!neighbors) continue
+      for (const neighbor of neighbors) {
+        if (visited.has(neighbor)) continue
+        visited.add(neighbor)
+        if (!protocolStepIds.has(neighbor)) {
+          result.set(neighbor, { protocolColor: color, protocolStepId: protocolId })
+        }
+        queue.push(neighbor)
+      }
+    }
+  }
+
+  return result
 }
 
 const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
@@ -50,9 +115,12 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
   const stepNodes = steps.map((step): Node => {
     // Context nodes
     if (step.execution_mode === 'context') {
+      const groupEntry = lookups.protocolGroups.get(step.id)
       const contextData: ContextNodeData = {
         label: step.name ?? 'Context',
         content: step.prompt_template,
+        protocolColor: groupEntry?.protocolColor ?? null,
+        protocolStepId: groupEntry?.protocolStepId ?? null,
       }
       return {
         id: step.id,
@@ -91,10 +159,12 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
           promptValue: step.prompt_template,
           modelId: agent?.model_id ?? null,
           agentName: agent?.name ?? null,
+          isProtocol: true,
         },
       }
     }
 
+    const groupEntry = lookups.protocolGroups.get(step.id)
     return {
       id: step.id,
       type: 'stepNode',
@@ -113,6 +183,9 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
         protocolType: protocolInfo?.protocol_type ?? null,
         protocolName: protocolInfo?.name ?? null,
         protocolPortNames: protocolInfo?.portNames ?? [],
+        protocolColor: groupEntry?.protocolColor ?? null,
+        protocolStepId: groupEntry?.protocolStepId ?? null,
+        isProtocol: false,
       },
     }
   })
@@ -130,6 +203,7 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
         label: def.name,
         documenterName: step.name ?? 'Documenter',
         content: '',
+        protocolStepId: step.id,
       }
       documentNodes.push({
         id: `doc-artifact-${def.id}`,
@@ -152,13 +226,44 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
   return [...stepNodes, ...documentNodes]
 }
 
-const toRFEdges = (edges: WorkflowStepEdge[]): Edge[] =>
-  edges.map((edge) => ({
-    id: edge.id,
-    type: 'stepEdge',
-    source: edge.from_step_id,
-    target: edge.to_step_id,
-  }))
+type StepEdgeData = {
+  protocolColor: string | null
+}
+
+const toRFEdges = (
+  edges: WorkflowStepEdge[],
+  protocolGroups: ReadonlyMap<string, ProtocolGroupEntry>,
+  protocolsByStep: ReadonlyMap<string, ProtocolStepInfo>,
+): Edge[] =>
+  edges.map((edge) => {
+    // Edge is protocol-connected if either end is a protocol step or in a protocol group
+    const sourceIsProtocol = protocolsByStep.has(edge.from_step_id)
+    const targetIsProtocol = protocolsByStep.has(edge.to_step_id)
+    const sourceGroup = protocolGroups.get(edge.from_step_id)
+    const targetGroup = protocolGroups.get(edge.to_step_id)
+
+    let protocolColor: string | null = null
+    if (sourceIsProtocol) {
+      const info = protocolsByStep.get(edge.from_step_id)!
+      protocolColor = PROTOCOL_TYPE_COLORS[info.protocol_type] ?? null
+    } else if (targetIsProtocol) {
+      const info = protocolsByStep.get(edge.to_step_id)!
+      protocolColor = PROTOCOL_TYPE_COLORS[info.protocol_type] ?? null
+    } else if (sourceGroup) {
+      protocolColor = sourceGroup.protocolColor
+    } else if (targetGroup) {
+      protocolColor = targetGroup.protocolColor
+    }
+
+    const data: StepEdgeData = { protocolColor }
+    return {
+      id: edge.id,
+      type: 'stepEdge',
+      source: edge.from_step_id,
+      target: edge.to_step_id,
+      data,
+    }
+  })
 
 const toDocumentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] => {
   const edges: Edge[] = []
@@ -200,5 +305,5 @@ const nodeDataEqual = (a: Record<string, unknown>, b: Record<string, unknown>): 
   return true
 }
 
-export { toRFNodes, toRFEdges, toDocumentEdges, nodeDataEqual }
-export type { StepNodeData, StepNodeLookups, ContextNodeData }
+export { toRFNodes, toRFEdges, toDocumentEdges, nodeDataEqual, computeProtocolGroups }
+export type { StepNodeData, StepNodeLookups, StepEdgeData, ContextNodeData, ProtocolGroupEntry, ProtocolStepInfo }

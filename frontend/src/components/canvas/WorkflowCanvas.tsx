@@ -6,7 +6,7 @@ import '@xyflow/react/dist/style.css'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
 import { useStore, batch, workflowStore, canvasStore, agentStore, outputSchemaStore, protocolStore } from '@/stores'
-import { toRFNodes, toRFEdges, toDocumentEdges, nodeDataEqual } from './mappers'
+import { toRFNodes, toRFEdges, toDocumentEdges, nodeDataEqual, computeProtocolGroups } from './mappers'
 import type { StepNodeLookups } from './mappers'
 import { Collections } from '@/utils/collections'
 import { nodeTypes } from './nodeTypes'
@@ -119,6 +119,10 @@ function WorkflowCanvasInner() {
       ),
     [stepProtocols],
   )
+  const protocolGroups = useMemo(
+    () => computeProtocolGroups(steps, edges, protocolsByStepLookup),
+    [steps, edges, protocolsByStepLookup],
+  )
   const lookups = useMemo(
     (): StepNodeLookups => ({
       agents: agentLookup,
@@ -128,13 +132,14 @@ function WorkflowCanvasInner() {
       toolsByAgent: toolsByAgentLookup,
       protocolsByStep: protocolsByStepLookup,
       documentDefsByStep,
+      protocolGroups,
     }),
-    [agentLookup, schemaLookup, stepNameLookup, edges, toolsByAgentLookup, protocolsByStepLookup, documentDefsByStep],
+    [agentLookup, schemaLookup, stepNameLookup, edges, toolsByAgentLookup, protocolsByStepLookup, documentDefsByStep, protocolGroups],
   )
 
   // Map store data to RF format
   const rfNodes = useMemo(() => toRFNodes(steps, lookups), [steps, lookups])
-  const rfEdges = useMemo(() => [...toRFEdges(edges), ...toDocumentEdges(steps, lookups)], [edges, steps, lookups])
+  const rfEdges = useMemo(() => [...toRFEdges(edges, protocolGroups, protocolsByStepLookup), ...toDocumentEdges(steps, lookups)], [edges, protocolGroups, protocolsByStepLookup, steps, lookups])
 
   // Push store updates into RF — only touch data + position, never clobber selection
   useEffect(() => {
@@ -343,6 +348,15 @@ function WorkflowCanvasInner() {
     setContextMenu(null)
   }, [])
 
+  // Protocol hover tracking for group highlighting
+  const onNodeMouseEnter = useCallback((_event: React.MouseEvent, node: { id: string }) => {
+    canvasStore.setHoveredStep(node.id)
+  }, [])
+
+  const onNodeMouseLeave = useCallback(() => {
+    canvasStore.setHoveredStep(null)
+  }, [])
+
   const onCanvasMouseDown = useCallback(() => {
     setContextMenu(null)
   }, [])
@@ -390,6 +404,8 @@ function WorkflowCanvasInner() {
         onNodeContextMenu={onNodeContextMenu}
         onPaneClick={onPaneClick}
         onNodeClick={onNodeClick}
+        onNodeMouseEnter={onNodeMouseEnter}
+        onNodeMouseLeave={onNodeMouseLeave}
         deleteKeyCode={['Backspace', 'Delete']}
         multiSelectionKeyCode="Shift"
         reconnectRadius={20}

@@ -15,6 +15,7 @@ function CanvasFormNodeComponent({
   onTabChange,
   selected,
   accentColor,
+  highlightMode = 'none',
   extraHandles,
 }: CanvasFormNodeProps) {
   const theme = useTheme()
@@ -36,14 +37,24 @@ function CanvasFormNodeComponent({
         borderRadius: '12px',
         backgroundColor: theme.palette.mode === 'light' ? theme.palette.custom.cavityBg : 'background.paper',
         border: 2,
-        borderColor: selected ? resolvedAccent : 'divider',
+        borderColor: selected
+          ? resolvedAccent
+          : highlightMode === 'select'
+            ? resolvedAccent
+            : highlightMode === 'hover'
+              ? `${resolvedAccent}80`
+              : 'divider',
         boxShadow: selected
           ? theme.palette.mode === 'dark'
-            ? `0 0 0 1px ${resolvedAccent}40, 0 8px 32px rgba(59, 130, 246, 0.18), 0 2px 8px rgba(0, 0, 0, 0.3)`
-            : `0 0 0 1px ${resolvedAccent}30, 0 12px 40px rgba(45, 27, 14, 0.18), 0 4px 12px rgba(255, 150, 79, 0.12)`
-          : theme.palette.mode === 'dark'
-            ? '0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)'
-            : '0 8px 32px rgba(45, 27, 14, 0.14), 0 2px 8px rgba(45, 27, 14, 0.08)',
+            ? `0 0 0 1px ${resolvedAccent}40, 0 8px 32px ${resolvedAccent}2E, 0 2px 8px rgba(0, 0, 0, 0.3)`
+            : `0 0 0 1px ${resolvedAccent}30, 0 12px 40px rgba(45, 27, 14, 0.18), 0 4px 12px ${resolvedAccent}1E`
+          : highlightMode === 'select'
+            ? `0 0 0 1px ${resolvedAccent}40, 0 8px 32px ${resolvedAccent}22`
+            : highlightMode === 'hover'
+              ? `0 0 0 1px ${resolvedAccent}20, 0 6px 24px ${resolvedAccent}14`
+              : theme.palette.mode === 'dark'
+                ? '0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)'
+                : '0 8px 32px rgba(45, 27, 14, 0.14), 0 2px 8px rgba(45, 27, 14, 0.08)',
         transition: 'border-color 150ms ease, box-shadow 150ms ease',
         overflow: 'hidden',
         display: 'flex',

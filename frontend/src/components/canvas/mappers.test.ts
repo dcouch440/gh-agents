@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { toRFNodes, toRFEdges, nodeDataEqual } from './mappers'
-import type { StepNodeLookups } from './mappers'
+import { toRFNodes, toRFEdges, nodeDataEqual, computeProtocolGroups } from './mappers'
+import type { StepNodeLookups, ProtocolStepInfo } from './mappers'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 
 const step1: WorkflowStep = {
@@ -48,6 +48,8 @@ const emptyLookups: StepNodeLookups = {
   edges: [],
   toolsByAgent: new Map(),
   protocolsByStep: new Map(),
+  documentDefsByStep: {},
+  protocolGroups: new Map(),
 }
 
 describe('toRFNodes', () => {
@@ -80,6 +82,9 @@ describe('toRFNodes', () => {
         protocolType: null,
         protocolName: null,
         protocolPortNames: [],
+        protocolColor: null,
+        protocolStepId: null,
+        isProtocol: false,
       },
     })
   })
@@ -139,8 +144,11 @@ describe('toRFNodes', () => {
 })
 
 describe('toRFEdges', () => {
+  const emptyGroups = new Map()
+  const emptyProtocols: ReadonlyMap<string, ProtocolStepInfo> = new Map()
+
   it('maps WorkflowStepEdge array to React Flow edges', () => {
-    const edges = toRFEdges([edge1])
+    const edges = toRFEdges([edge1], emptyGroups, emptyProtocols)
 
     expect(edges).toHaveLength(1)
     expect(edges[0]).toEqual({
@@ -148,11 +156,36 @@ describe('toRFEdges', () => {
       type: 'stepEdge',
       source: 'step-001',
       target: 'step-002',
+      data: { protocolColor: null },
     })
   })
 
   it('returns empty array for empty input', () => {
-    expect(toRFEdges([])).toEqual([])
+    expect(toRFEdges([], emptyGroups, emptyProtocols)).toEqual([])
+  })
+
+  it('sets protocolColor when source is a protocol step', () => {
+    const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
+      ['step-001', { protocol_type: 'documenter', name: 'Doc', portNames: [] }],
+    ])
+    const edges = toRFEdges([edge1], emptyGroups, protocols)
+    expect(edges[0]?.data?.protocolColor).toBe('#D4793E')
+  })
+
+  it('sets protocolColor when target is a protocol step', () => {
+    const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
+      ['step-002', { protocol_type: 'documenter', name: 'Doc', portNames: [] }],
+    ])
+    const edges = toRFEdges([edge1], emptyGroups, protocols)
+    expect(edges[0]?.data?.protocolColor).toBe('#D4793E')
+  })
+
+  it('sets protocolColor from protocol group membership', () => {
+    const groups = new Map([
+      ['step-001', { protocolColor: '#D4793E', protocolStepId: 'proto-1' }],
+    ])
+    const edges = toRFEdges([edge1], groups, emptyProtocols)
+    expect(edges[0]?.data?.protocolColor).toBe('#D4793E')
   })
 })
 
@@ -218,8 +251,78 @@ describe('nodeDataEqual', () => {
       protocolType: null,
       protocolName: null,
       protocolPortNames: [],
+      protocolColor: null,
+      protocolStepId: null,
+      isProtocol: false,
     }
     const clone = { ...data, upstreamStepNames: ['Plan'], toolNames: ['grep', 'read'], protocolPortNames: [] }
     expect(nodeDataEqual(data, clone)).toBe(true)
+  })
+})
+
+describe('computeProtocolGroups', () => {
+  const makeStep = (id: string, mode = 'single'): WorkflowStep => ({
+    ...step1,
+    id,
+    execution_mode: mode,
+  })
+
+  it('returns empty map when no protocols exist', () => {
+    const steps = [makeStep('s1'), makeStep('s2')]
+    const edges = [{ from_step_id: 's1', to_step_id: 's2' }]
+    const result = computeProtocolGroups(steps, edges, new Map())
+    expect(result.size).toBe(0)
+  })
+
+  it('assigns protocol color to directly connected nodes', () => {
+    const steps = [makeStep('proto', 'documenter'), makeStep('s1')]
+    const edges = [{ from_step_id: 's1', to_step_id: 'proto' }]
+    const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
+      ['proto', { protocol_type: 'documenter', name: 'Doc', portNames: [] }],
+    ])
+    const result = computeProtocolGroups(steps, edges, protocols)
+    expect(result.get('s1')).toEqual({ protocolColor: '#D4793E', protocolStepId: 'proto' })
+  })
+
+  it('does not include the protocol step itself in the group', () => {
+    const steps = [makeStep('proto', 'documenter'), makeStep('s1')]
+    const edges = [{ from_step_id: 's1', to_step_id: 'proto' }]
+    const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
+      ['proto', { protocol_type: 'documenter', name: 'Doc', portNames: [] }],
+    ])
+    const result = computeProtocolGroups(steps, edges, protocols)
+    expect(result.has('proto')).toBe(false)
+  })
+
+  it('colors nodes reachable through intermediate nodes', () => {
+    const steps = [makeStep('proto', 'documenter'), makeStep('s1'), makeStep('s2')]
+    const edges = [
+      { from_step_id: 's1', to_step_id: 'proto' },
+      { from_step_id: 's2', to_step_id: 's1' },
+    ]
+    const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
+      ['proto', { protocol_type: 'documenter', name: 'Doc', portNames: [] }],
+    ])
+    const result = computeProtocolGroups(steps, edges, protocols)
+    expect(result.get('s1')?.protocolStepId).toBe('proto')
+    expect(result.get('s2')?.protocolStepId).toBe('proto')
+  })
+
+  it('leaves disconnected nodes out of the group', () => {
+    const steps = [makeStep('proto', 'documenter'), makeStep('s1'), makeStep('s2')]
+    const edges = [{ from_step_id: 's1', to_step_id: 'proto' }]
+    const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
+      ['proto', { protocol_type: 'documenter', name: 'Doc', portNames: [] }],
+    ])
+    const result = computeProtocolGroups(steps, edges, protocols)
+    expect(result.has('s1')).toBe(true)
+    expect(result.has('s2')).toBe(false)
+  })
+
+  it('detects protocol by execution_mode even without stepProtocols entry', () => {
+    const steps = [makeStep('proto', 'documenter'), makeStep('s1')]
+    const edges = [{ from_step_id: 's1', to_step_id: 'proto' }]
+    const result = computeProtocolGroups(steps, edges, new Map())
+    expect(result.get('s1')?.protocolStepId).toBe('proto')
   })
 })

@@ -8,10 +8,12 @@ import { DocumentNodeHeader } from './DocumentNodeHeader'
 import { DocumentNodeContent } from './DocumentNodeContent'
 import type { DocumentNodeData } from './types'
 import { nodeDataEqual } from '../mappers'
+import { useProtocolHighlight } from '../useProtocolHighlight'
 
 function DocumentNodeComponent({ data, selected }: NodeProps) {
   const theme = useTheme()
   const nodeData = data as DocumentNodeData
+  const highlightMode = useProtocolHighlight(nodeData.protocolStepId)
   const accentColor = DOCUMENT_NODE.ACCENT_COLOR
   const [hovered, setHovered] = useState(false)
 
@@ -29,15 +31,25 @@ function DocumentNodeComponent({ data, selected }: NodeProps) {
         borderRadius: '12px',
         backgroundColor: theme.palette.mode === 'light' ? theme.palette.custom.cavityBg : 'background.paper',
         border: 3,
-        borderColor: selected ? accentColor : 'divider',
+        borderColor: selected
+          ? accentColor
+          : highlightMode === 'select'
+            ? accentColor
+            : highlightMode === 'hover'
+              ? `${accentColor}80`
+              : 'divider',
         borderStyle: 'dashed',
         boxShadow: selected
           ? theme.palette.mode === 'dark'
-            ? `0 0 0 1px ${accentColor}40, 0 8px 32px rgba(212, 121, 62, 0.14), 0 2px 8px rgba(0, 0, 0, 0.3)`
-            : `0 0 0 1px ${accentColor}30, 0 12px 40px rgba(45, 27, 14, 0.18), 0 4px 12px rgba(212, 121, 62, 0.10)`
-          : theme.palette.mode === 'dark'
-            ? '0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)'
-            : '0 8px 32px rgba(45, 27, 14, 0.14), 0 2px 8px rgba(45, 27, 14, 0.08)',
+            ? `0 0 0 1px ${accentColor}40, 0 8px 32px ${accentColor}22, 0 2px 8px rgba(0, 0, 0, 0.3)`
+            : `0 0 0 1px ${accentColor}30, 0 12px 40px rgba(45, 27, 14, 0.18), 0 4px 12px ${accentColor}18`
+          : highlightMode === 'select'
+            ? `0 0 0 1px ${accentColor}40, 0 8px 32px ${accentColor}22`
+            : highlightMode === 'hover'
+              ? `0 0 0 1px ${accentColor}20, 0 6px 24px ${accentColor}14`
+              : theme.palette.mode === 'dark'
+                ? '0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)'
+                : '0 8px 32px rgba(45, 27, 14, 0.14), 0 2px 8px rgba(45, 27, 14, 0.08)',
         transition: 'border-color 150ms ease, box-shadow 150ms ease',
         overflow: 'hidden',
         display: 'flex',

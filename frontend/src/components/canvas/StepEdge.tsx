@@ -5,8 +5,14 @@ import CloseIcon from '@mui/icons-material/Close'
 import IconButton from '@mui/material/IconButton'
 import { useTheme } from '@mui/material/styles'
 
+type StepEdgeNodeData = {
+  protocolColor: string | null
+}
+
 function StepEdgeComponent(props: EdgeProps) {
-  const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, selected } = props
+  const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, selected, data } = props
+  const rawData = data as Partial<StepEdgeNodeData> | undefined
+  const protocolColor = rawData?.protocolColor ?? null
 
   const theme = useTheme()
   const { deleteElements } = useReactFlow()
@@ -31,9 +37,12 @@ function StepEdgeComponent(props: EdgeProps) {
       <BaseEdge
         path={edgePath}
         style={{
-          stroke: selected ? theme.palette.primary.main : theme.palette.text.secondary,
+          stroke: selected
+            ? theme.palette.primary.main
+            : protocolColor ?? theme.palette.text.secondary,
           strokeWidth: 2.5,
-          opacity: selected ? 0.8 : 0.4,
+          strokeDasharray: protocolColor !== null ? '6 4' : undefined,
+          opacity: selected ? 0.8 : protocolColor !== null ? 0.6 : 0.4,
           transition: 'stroke 150ms ease, opacity 150ms ease',
         }}
       />

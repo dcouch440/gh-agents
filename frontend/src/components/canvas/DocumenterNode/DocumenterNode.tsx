@@ -6,7 +6,7 @@ import EditOutlined from '@mui/icons-material/EditOutlined'
 import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
 import InputOutlined from '@mui/icons-material/InputOutlined'
 import SettingsOutlined from '@mui/icons-material/SettingsOutlined'
-import { useStore, workflowStore } from '@/stores'
+import { useStore, workflowStore, canvasStore } from '@/stores'
 import type { CreateDocumentDefRequest } from '@/types/workflow'
 import { CanvasFormNode } from '../CanvasFormNode'
 import type { CanvasFormTab } from '../CanvasFormNode'
@@ -17,6 +17,7 @@ import { PromptTab } from './tabs/PromptTab'
 import { DocumentsTab } from './tabs/DocumentsTab'
 import { InputsTab } from './tabs/InputsTab'
 import { SettingsTab } from './tabs/SettingsTab'
+import type { HighlightMode } from '../useProtocolHighlight'
 
 type DocumenterNodeData = {
   label: string
@@ -81,6 +82,12 @@ function DocumenterNodeComponent({ id, data, selected }: NodeProps) {
 
   const accentColor = PROTOCOL_TYPE_COLORS['documenter']
 
+  // Protocol self-hover: when this protocol is hovered, show a subtle glow
+  const selfHighlight = useStore(canvasStore.store, (s): HighlightMode => {
+    if (s.hoveredStepId === id) return 'hover'
+    return 'none'
+  })
+
   const tabs: CanvasFormTab[] = [
     {
       id: 'prompt',
@@ -130,6 +137,7 @@ function DocumenterNodeComponent({ id, data, selected }: NodeProps) {
       onTabChange={setActiveTabId}
       selected={selected === true}
       accentColor={accentColor}
+      highlightMode={selfHighlight}
       extraHandles={
         <Handle
           type="source"
