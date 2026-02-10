@@ -19,7 +19,7 @@ function DocumentEdgeComponent(props: EdgeProps) {
       path={edgePath}
       style={{
         stroke: '#D4793E',
-        strokeWidth: 1.5,
+        strokeWidth: 2,
         strokeDasharray: '6 4',
         opacity: 0.5,
       }}

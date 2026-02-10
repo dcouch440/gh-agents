@@ -28,7 +28,7 @@ function DocumentNodeComponent({ data, selected }: NodeProps) {
         height: '100%',
         borderRadius: '12px',
         backgroundColor: theme.palette.mode === 'light' ? theme.palette.custom.cavityBg : 'background.paper',
-        border: 2,
+        border: 3,
         borderColor: selected ? accentColor : 'divider',
         borderStyle: 'dashed',
         boxShadow: selected
