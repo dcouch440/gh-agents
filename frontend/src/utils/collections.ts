@@ -1,16 +1,18 @@
 // ============================================================================
-// Collections — Static Utility Class for Memory-Optimal Array Operations
+// Collections — Static Utility Class for Maximum V8 Performance
 // ============================================================================
 
 /**
- * Pure, single-pass collection algorithms with zero intermediate allocations.
+ * Pure, single-pass collection algorithms optimized for V8 internals.
  * Every method accepts `readonly T[]` and never mutates its input.
  *
- * Design constraints:
- * - `noUncheckedIndexedAccess: true` → use `for...of` (or `!` with bounds guard)
- * - `erasableSyntaxOnly: true` → `private constructor` is erasable, allowed
- * - `no-explicit-any` → every generic fully typed
- * - `null` over `undefined` for intentional absence
+ * V8 optimization strategy:
+ * - Indexed `for (let i = 0; i < n; i++)` with cached length — no iterator
+ *   protocol overhead, consistently fastest across all V8 scenarios
+ * - `[]` + `.push()` for output arrays — creates PACKED element kinds
+ *   (V8 skips hole checks per element vs HOLEY from `new Array(n)`)
+ * - `items[i]!` — non-null assertion for `noUncheckedIndexedAccess`,
+ *   erased at compile time, zero runtime cost
  */
 class Collections {
   private constructor() {
@@ -25,7 +27,9 @@ class Collections {
    */
   static keyBy<T, K>(items: readonly T[], keyFn: (item: T) => K): Map<K, T> {
     const map = new Map<K, T>()
-    for (const item of items) {
+    const n = items.length
+    for (let i = 0; i < n; i++) {
+      const item = items[i]!
       map.set(keyFn(item), item)
     }
     return map
@@ -42,7 +46,9 @@ class Collections {
     valueFn: (item: T) => V,
   ): Map<K, V> {
     const map = new Map<K, V>()
-    for (const item of items) {
+    const n = items.length
+    for (let i = 0; i < n; i++) {
+      const item = items[i]!
       map.set(keyFn(item), valueFn(item))
     }
     return map
@@ -50,12 +56,14 @@ class Collections {
 
   /**
    * Group items into `Map<K, T[]>` by key extractor.
-   * Group arrays are reused via `map.get()` reference — no spreading.
+   * Group arrays are PACKED (created via `[item]` literal + `.push()`).
    * Insertion order preserved within each group. O(n).
    */
   static groupBy<T, K>(items: readonly T[], keyFn: (item: T) => K): Map<K, T[]> {
     const map = new Map<K, T[]>()
-    for (const item of items) {
+    const n = items.length
+    for (let i = 0; i < n; i++) {
+      const item = items[i]!
       const key = keyFn(item)
       const group = map.get(key)
       if (group) {
@@ -70,11 +78,13 @@ class Collections {
   /**
    * Shorthand for `keyBy(items, item => item.id)`.
    * Constrained to objects with a string `id` property.
-   * O(n), 1 Map allocation.
+   * O(n), 1 Map allocation. No closure allocation (direct `.id` access).
    */
   static indexById<T extends { id: string }>(items: readonly T[]): Map<string, T> {
     const map = new Map<string, T>()
-    for (const item of items) {
+    const n = items.length
+    for (let i = 0; i < n; i++) {
+      const item = items[i]!
       map.set(item.id, item)
     }
     return map
@@ -84,7 +94,7 @@ class Collections {
 
   /**
    * Build a `Set<T>` from an array. O(n).
-   * Uses the native Set constructor for optimal iteration.
+   * Uses the native Set constructor for optimal V8 internal iteration.
    */
   static toSet<T>(items: readonly T[]): Set<T> {
     return new Set(items)
@@ -97,8 +107,9 @@ class Collections {
    */
   static toSetBy<T, K>(items: readonly T[], keyFn: (item: T) => K): Set<K> {
     const set = new Set<K>()
-    for (const item of items) {
-      set.add(keyFn(item))
+    const n = items.length
+    for (let i = 0; i < n; i++) {
+      set.add(keyFn(items[i]!))
     }
     return set
   }
@@ -109,14 +120,15 @@ class Collections {
    * Combined filter + map in a single pass.
    * Return `null` to skip an item, or a transformed value to include it.
    * Replaces `.filter(pred).map(transform)` chains (which allocate 2 arrays).
-   * O(n), 1 output array.
+   * O(n), 1 output array (PACKED via `.push()`).
    */
   static filterMap<T, U>(
     items: readonly T[],
     fn: (item: T, index: number) => U | null,
   ): U[] {
     const result: U[] = []
-    for (let i = 0; i < items.length; i++) {
+    const n = items.length
+    for (let i = 0; i < n; i++) {
       const mapped = fn(items[i]!, i)
       if (mapped !== null) {
         result.push(mapped)
@@ -128,7 +140,7 @@ class Collections {
   /**
    * Split an array into `[pass, fail]` by predicate in a single pass.
    * Replaces two separate `.filter()` calls with inverted predicates.
-   * O(n), 2 output arrays.
+   * O(n), 2 output arrays (both PACKED via `.push()`).
    */
   static partition<T>(
     items: readonly T[],
@@ -136,7 +148,9 @@ class Collections {
   ): [T[], T[]] {
     const pass: T[] = []
     const fail: T[] = []
-    for (const item of items) {
+    const n = items.length
+    for (let i = 0; i < n; i++) {
+      const item = items[i]!
       if (predicate(item)) {
         pass.push(item)
       } else {
@@ -154,7 +168,9 @@ class Collections {
   static dedup<T>(items: readonly T[], keyFn?: (item: T) => unknown): T[] {
     const seen = new Set<unknown>()
     const result: T[] = []
-    for (const item of items) {
+    const n = items.length
+    for (let i = 0; i < n; i++) {
+      const item = items[i]!
       const key = keyFn ? keyFn(item) : item
       if (!seen.has(key)) {
         seen.add(key)
@@ -172,18 +188,17 @@ class Collections {
    */
   static sumBy<T>(items: readonly T[], valueFn: (item: T) => number): number {
     let sum = 0
-    for (const item of items) {
-      sum += valueFn(item)
+    const n = items.length
+    for (let i = 0; i < n; i++) {
+      sum += valueFn(items[i]!)
     }
     return sum
   }
 
   /**
    * Compute multiple numeric aggregates in a single pass.
-   * `fns` maps names to extractor functions. Returns an object with matching keys.
-   *
-   * Example: `Collections.aggregate(rows, { input: r => r.in, output: r => r.out })`
-   * → `{ input: 150, output: 300 }`
+   * Uses a PACKED_SMI numeric accumulator array for fastest V8 numeric indexing
+   * in the hot inner loop, then builds the result object in a cold post-pass.
    *
    * O(n * k) where k = number of fields. 1 result object allocation.
    */
@@ -191,16 +206,26 @@ class Collections {
     items: readonly T[],
     fns: Record<K, (item: T) => number>,
   ): Record<K, number> {
-    const keys = Object.keys(fns) as K[]
-    const extractors = keys.map((k) => fns[k])
-    const result = {} as Record<K, number>
-    for (const key of keys) {
-      result[key] = 0
-    }
-    for (const item of items) {
-      for (let ki = 0; ki < keys.length; ki++) {
-        result[keys[ki]!] += extractors[ki]!(item)
+    const entries = Object.entries(fns) as [K, (item: T) => number][]
+    const k = entries.length
+
+    // Build PACKED_SMI numeric accumulator (fastest for numeric indexing)
+    const sums: number[] = []
+    for (let j = 0; j < k; j++) sums.push(0)
+
+    // Hot loop — accumulate into numeric array (faster than string-keyed object)
+    const n = items.length
+    for (let i = 0; i < n; i++) {
+      const item = items[i]!
+      for (let j = 0; j < k; j++) {
+        sums[j] = sums[j]! + entries[j]![1](item)
       }
+    }
+
+    // Cold path — build result object once
+    const result = {} as Record<K, number>
+    for (let j = 0; j < k; j++) {
+      result[entries[j]![0]] = sums[j]!
     }
     return result
   }
@@ -211,12 +236,13 @@ class Collections {
    * Resolve an ordered list of keys against a Map.
    * Returns only items that exist, in the order of `keys`.
    * Replaces `keys.map(id => map.find(x => x.id === id)).filter(Boolean)`.
-   * O(n), 1 output array.
+   * O(n), 1 output array (PACKED via `.push()`).
    */
   static resolveKeys<K, V>(keys: readonly K[], map: ReadonlyMap<K, V>): V[] {
     const result: V[] = []
-    for (const key of keys) {
-      const value = map.get(key)
+    const n = keys.length
+    for (let i = 0; i < n; i++) {
+      const value = map.get(keys[i]!)
       if (value !== undefined) {
         result.push(value)
       }
@@ -233,8 +259,9 @@ class Collections {
    */
   static setMatchesArray<T>(set: ReadonlySet<T>, array: readonly T[]): boolean {
     if (set.size !== array.length) return false
-    for (const item of array) {
-      if (!set.has(item)) return false
+    const n = array.length
+    for (let i = 0; i < n; i++) {
+      if (!set.has(array[i]!)) return false
     }
     return true
   }
@@ -243,7 +270,8 @@ class Collections {
 
   /**
    * Return a sorted shallow copy without mutating the input.
-   * O(n log n), 1 array allocation via `.slice()`.
+   * `.slice()` creates a PACKED copy. `.sort()` is V8's Timsort (already optimal).
+   * O(n log n), 1 array allocation.
    */
   static sortedCopy<T>(
     items: readonly T[],
