@@ -137,4 +137,5 @@ pub trait ExecutionFilter: Send + Sync {
 /// Type alias for a shared filter reference.
 pub type SharedFilter = Arc<dyn ExecutionFilter>;
 
+#[cfg(test)]
 mod tests;

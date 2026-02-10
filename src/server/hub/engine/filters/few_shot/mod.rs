@@ -88,4 +88,5 @@ impl ExecutionFilter for FewShotFilter {
     }
 }
 
+#[cfg(test)]
 mod tests;

@@ -11,6 +11,7 @@ use crate::llm::Tool;
 use crate::server::hub::error::HubError;
 use crate::tools::registry;
 
+#[cfg(test)]
 mod tests;
 
 /// Resolve a list of capability keys to concrete Tool definitions.

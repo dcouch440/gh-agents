@@ -12,6 +12,7 @@ use super::AppError;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
 
+#[cfg(test)]
 mod tests;
 
 // ============================================================================

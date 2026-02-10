@@ -19,6 +19,7 @@ pub mod template_resolve;
 pub mod text_utils;
 pub mod types;
 
+#[cfg(test)]
 mod tests;
 
 use std::collections::HashMap;

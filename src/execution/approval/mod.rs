@@ -490,4 +490,5 @@ impl AutoApprovalGate {
     }
 }
 
+#[cfg(test)]
 mod tests;

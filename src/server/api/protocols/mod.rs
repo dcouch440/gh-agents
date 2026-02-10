@@ -26,6 +26,7 @@ const MAX_PORT_NAME_LEN: usize = 50;
 pub mod documents;
 pub mod executions;
 
+#[cfg(test)]
 mod tests;
 
 // ============================================================================

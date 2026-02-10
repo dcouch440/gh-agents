@@ -12,6 +12,7 @@ use crate::llm::{BackoffConfig, ExponentialBackoff};
 
 use super::VpnError;
 
+#[cfg(test)]
 mod tests;
 
 /// Classify whether a [`VpnError`] is worth retrying.

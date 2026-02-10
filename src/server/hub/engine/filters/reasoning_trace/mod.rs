@@ -85,4 +85,5 @@ impl ExecutionFilter for ReasoningTraceFilter {
     }
 }
 
+#[cfg(test)]
 mod tests;

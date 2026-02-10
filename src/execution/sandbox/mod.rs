@@ -393,4 +393,5 @@ impl Sandbox {
     }
 }
 
+#[cfg(test)]
 mod tests;

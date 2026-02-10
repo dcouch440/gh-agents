@@ -12,6 +12,7 @@ use crate::llm::{BackoffConfig, ExponentialBackoff};
 
 use super::ContainerError;
 
+#[cfg(test)]
 mod tests;
 
 /// Classify whether a [`ContainerError`] is worth retrying.
