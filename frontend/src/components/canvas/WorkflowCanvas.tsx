@@ -258,21 +258,22 @@ function WorkflowCanvasInner() {
   }, [steps, fitView])
 
   // Selection sync: RF → canvasStore (read-only mirror for sidebar panels)
-  // Also resolve protocol group membership so selecting any group member highlights the group
+  // Read protocolStepId / isProtocol directly from node data so there are no stale closures
   const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
     const nodeIds = Collections.mapBy(params.nodes, (n: { id: string }) => n.id)
     const protocolIds = new Set<string>()
-    for (const id of nodeIds) {
-      const group = protocolGroups.get(id)
-      if (group) protocolIds.add(group.protocolStepId)
-      if (protocolsByStepLookup.has(id)) protocolIds.add(id)
+    for (const n of params.nodes) {
+      const data = n.data
+      const protocolStepId = data.protocolStepId as string | undefined
+      if (protocolStepId) protocolIds.add(protocolStepId)
+      if (data.isProtocol === true) protocolIds.add(n.id)
     }
     batch(() => {
       canvasStore.selectSteps(nodeIds)
       canvasStore.selectEdges(Collections.mapBy(params.edges, (e: { id: string }) => e.id))
       canvasStore.setHighlightedProtocols(protocolIds)
     })
-  }, [protocolGroups, protocolsByStepLookup])
+  }, [])
 
   // Edge validation — context nodes are source-only, no self-loops
   const isValidConnection = useCallback(
@@ -366,11 +367,11 @@ function WorkflowCanvasInner() {
   }, [])
 
   // Protocol hover tracking for group highlighting
-  // Resolve group members to their protocol step so hovering any member highlights the group
-  const onNodeMouseEnter = useCallback((_event: React.MouseEvent, node: { id: string }) => {
-    const group = protocolGroups.get(node.id)
-    canvasStore.setHoveredStep(group?.protocolStepId ?? node.id)
-  }, [protocolGroups])
+  // Read protocolStepId from node data so the callback never closes over stale maps
+  const onNodeMouseEnter = useCallback((_event: React.MouseEvent, node: { id: string; data: Record<string, unknown> }) => {
+    const protocolStepId = node.data.protocolStepId as string | undefined
+    canvasStore.setHoveredStep(protocolStepId ?? node.id)
+  }, [])
 
   const onNodeMouseLeave = useCallback(() => {
     canvasStore.setHoveredStep(null)
