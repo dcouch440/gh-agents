@@ -69,6 +69,7 @@ describe('toRFNodes', () => {
       type: 'stepNode',
       position: { x: 100, y: 200 },
       data: {
+        kind: 'step',
         label: 'First Step',
         stepType: 'single',
         agentId: 'agent-001',

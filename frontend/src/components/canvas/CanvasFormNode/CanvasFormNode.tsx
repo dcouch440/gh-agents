@@ -4,7 +4,7 @@ import Box from '@mui/material/Box'
 import Tooltip from '@mui/material/Tooltip'
 import { useTheme } from '@mui/material/styles'
 import { CanvasHandle } from '../CanvasHandle'
-import { HighlightMode } from '../useProtocolHighlight'
+import { HighlightMode } from '../canvasKinds'
 import { FORM_NODE } from './constants'
 import type { CanvasFormNodeProps } from './types'
 

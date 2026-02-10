@@ -18,9 +18,11 @@ import { PromptTab } from './tabs/PromptTab'
 import { DocumentsTab } from './tabs/DocumentsTab'
 import { InputsTab } from './tabs/InputsTab'
 import { SettingsTab } from './tabs/SettingsTab'
-import { HighlightMode } from '../useProtocolHighlight'
+import { HighlightMode } from '../canvasKinds'
+import type { CanvasNodeKind } from '../canvasKinds'
 
 type DocumenterNodeData = {
+  kind: CanvasNodeKind
   label: string
   documentNames: string[]
   upstreamStepNames: string[]

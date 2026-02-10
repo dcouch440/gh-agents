@@ -11,7 +11,7 @@ import type { StepNodeLookups } from './mappers'
 import { Collections } from '@/utils/collections'
 import { nodeTypes } from './nodeTypes'
 import { edgeTypes } from './edgeTypes'
-import { usePositionPersist } from './usePositionPersist'
+import { usePackDrag } from './usePackDrag'
 import { OptionTray } from './OptionTray'
 import { CanvasContextMenu } from './CanvasContextMenu'
 import type { MenuPosition } from './CanvasContextMenu'
@@ -25,7 +25,7 @@ const stylesEqual = (a: CSSProperties | undefined, b: CSSProperties | undefined)
 
 function WorkflowCanvasInner() {
   const theme = useTheme()
-  const { setNodes, setEdges, fitView, screenToFlowPosition } = useReactFlow()
+  const { getNodes, setNodes, setEdges, fitView, screenToFlowPosition } = useReactFlow()
   const steps = useStore(workflowStore.store, workflowStore.selectSteps)
   const edges = useStore(workflowStore.store, workflowStore.selectEdges)
   const agents = useStore(agentStore.store, agentStore.selectAll)
@@ -34,7 +34,7 @@ function WorkflowCanvasInner() {
   const toolsByAgent = useStore(agentStore.store, agentStore.selectToolsByAgent)
   const stepProtocols = useStore(canvasStore.store, canvasStore.selectStepProtocols)
   const documentDefsByStep = useStore(workflowStore.store, workflowStore.selectDocumentDefsByStep)
-  const { onNodeDragStop } = usePositionPersist()
+  const { onNodeDragStart, onNodeDrag, onNodeDragStop } = usePackDrag(getNodes, setNodes)
   const [contextMenu, setContextMenu] = useState<MenuPosition>(null)
   const initialFitDone = useRef(false)
   const fetchedToolAgentIds = useRef(new Set<string>())
@@ -415,6 +415,8 @@ function WorkflowCanvasInner() {
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onSelectionChange={onSelectionChange}
+        onNodeDragStart={onNodeDragStart}
+        onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
         isValidConnection={isValidConnection}
         onConnect={onConnect}

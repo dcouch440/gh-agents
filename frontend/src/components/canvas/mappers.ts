@@ -7,6 +7,7 @@ import type { ContextNodeData } from './ContextNode'
 import { DOCUMENT_NODE } from './DocumentNode'
 import type { DocumentNodeData } from './DocumentNode'
 import { PROTOCOL_TYPE_COLORS, GREYSCALE_ACCENT } from './constants'
+import { CanvasNodeKind } from './canvasKinds'
 
 type ProtocolStepInfo = {
   protocol_type: string
@@ -20,6 +21,7 @@ type ProtocolGroupEntry = {
 }
 
 type StepNodeData = {
+  kind: CanvasNodeKind
   label: string
   stepType: string
   agentId: string | null
@@ -116,6 +118,7 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
     if (step.execution_mode === 'context') {
       const groupEntry = lookups.protocolGroups.get(step.id)
       const contextData: ContextNodeData = {
+        kind: CanvasNodeKind.CONTEXT,
         label: step.name ?? 'Context',
         content: step.prompt_template,
         protocolColor: groupEntry?.protocolColor ?? null,
@@ -152,6 +155,7 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
           height: FORM_NODE.DEFAULT_HEIGHT,
         },
         data: {
+          kind: CanvasNodeKind.PROTOCOL,
           label: step.name ?? 'Documenter Protocol',
           documentNames: [],
           upstreamStepNames,
@@ -169,6 +173,7 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
       type: 'stepNode',
       position: { x: step.position_x ?? 0, y: step.position_y ?? 0 },
       data: {
+        kind: CanvasNodeKind.STEP,
         label: step.name ?? step.execution_mode,
         stepType: step.execution_mode,
         agentId: step.agent_id,
@@ -199,6 +204,7 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
     for (let i = 0; i < defs.length; i++) {
       const def = defs[i]!
       const docData: DocumentNodeData = {
+        kind: CanvasNodeKind.DOCUMENT,
         label: def.name,
         documenterName: step.name ?? 'Documenter',
         content: '',

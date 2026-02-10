@@ -9,7 +9,8 @@ import { DocumentNodeHeader } from './DocumentNodeHeader'
 import { DocumentNodeContent } from './DocumentNodeContent'
 import type { DocumentNodeData } from './types'
 import { nodeDataEqual } from '../mappers'
-import { useProtocolHighlight, CanvasNodeKind, HighlightMode } from '../useProtocolHighlight'
+import { CanvasNodeKind, HighlightMode } from '../canvasKinds'
+import { useProtocolHighlight } from '../useProtocolHighlight'
 
 function DocumentNodeComponent({ id, data, selected }: NodeProps) {
   const theme = useTheme()
