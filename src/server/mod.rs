@@ -24,7 +24,7 @@ use axum::{
     http::{header::CACHE_CONTROL, HeaderName, HeaderValue, Request, StatusCode},
     middleware::{self, Next},
     response::Response,
-    routing::{delete, get, post, put},
+    routing::{delete, get, patch, post, put},
     Router,
 };
 use sqlx::PgPool;
@@ -416,6 +416,15 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             get(api::list_step_outputs).post(api::create_step_output),
         )
         .route(routes::STEP_OUTPUT, delete(api::delete_step_output))
+        // Document Definitions
+        .route(
+            routes::STEP_DOCUMENT_DEFS,
+            get(api::list_document_defs).post(api::create_document_def),
+        )
+        .route(
+            routes::STEP_DOCUMENT_DEF,
+            patch(api::update_document_def).delete(api::delete_document_def),
+        )
         // Routing Rules
         .route(
             routes::STEP_ROUTING_RULES,

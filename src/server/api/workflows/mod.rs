@@ -434,16 +434,44 @@ pub async fn create_workflow_step(
     if wf.user_id != auth.user_id.0 {
         return Err(AppError::not_found("Workflow"));
     }
+
+    // Auto-wire documenter: resolve agent, schema, and reasoning from the protocol record
+    let execution_mode = req.execution_mode.unwrap_or_else(|| "single".to_string());
+    let (resolved_agent_id, resolved_schema_id, resolved_reasoning) =
+        if execution_mode == "documenter" {
+            let proto = state
+                .repos()
+                .protocols
+                .get_protocol_by_type("documenter")
+                .await
+                .ok()
+                .flatten();
+            match proto {
+                Some(p) => (
+                    p.agent_id.unwrap_or(crate::constants::DEFAULT_AGENT_ID),
+                    p.output_schema_id,
+                    true, // documenter always reasons
+                ),
+                None => (crate::constants::DEFAULT_AGENT_ID, None, false),
+            }
+        } else {
+            (
+                req.agent_id.unwrap_or(crate::constants::DEFAULT_AGENT_ID),
+                req.output_schema_id,
+                req.reasoning_trace.unwrap_or(false),
+            )
+        };
+
     let step = crate::db::WorkflowStepRow {
         id: Uuid::new_v4(),
         workflow_id: wid,
-        agent_id: req.agent_id.unwrap_or(crate::constants::DEFAULT_AGENT_ID),
-        execution_mode: req.execution_mode.unwrap_or_else(|| "single".to_string()),
+        agent_id: resolved_agent_id,
+        execution_mode,
         agent_execution_mode: None, // NULL = inherit from workflow
         for_each_ref: req.for_each_ref,
         prompt_template_id: req.prompt_template_id,
         prompt_template: req.prompt_template.unwrap_or_default(),
-        output_schema_id: req.output_schema_id,
+        output_schema_id: resolved_schema_id,
         output_variable_name: req.output_variable_name,
         interactive_agent_id: req.interactive_agent_id,
         for_each_label_field: req.for_each_label_field,
@@ -452,7 +480,7 @@ pub async fn create_workflow_step(
         routing_field: None,
         display_order: req.display_order.unwrap_or(0),
         version: 1,
-        reasoning_trace: req.reasoning_trace.unwrap_or(false),
+        reasoning_trace: resolved_reasoning,
         verification_agent_ids: req
             .verification_agent_ids
             .map(|ids| serde_json::to_value(ids).unwrap()),

@@ -27,6 +27,7 @@ pub struct AgentResponse {
     pub output_schema_id: Option<String>,
     pub router_id: Option<String>,
     pub version: i32,
+    pub default_reasoning_trace: bool,
 }
 
 impl AgentResponse {
@@ -44,6 +45,7 @@ impl AgentResponse {
             output_schema_id: row.output_schema_id.map(|id| id.to_string()),
             router_id: row.router_id.map(|id| id.to_string()),
             version: row.version,
+            default_reasoning_trace: row.default_reasoning_trace.unwrap_or(false),
         }
     }
 }
@@ -179,6 +181,7 @@ pub async fn create_agent(
         router_id: None,
         output_schema_id: request.output_schema_id,
         version: 1,
+        default_reasoning_trace: None,
     };
 
     state.repo().upsert_agent(row.clone()).await?;
@@ -253,6 +256,7 @@ pub async fn update_agent(
         router_id: request.router_id.or(existing.router_id),
         output_schema_id: request.output_schema_id.or(existing.output_schema_id),
         version: existing.version,
+        default_reasoning_trace: existing.default_reasoning_trace,
     };
 
     state.repo().upsert_agent(updated.clone()).await?;

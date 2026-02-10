@@ -31,6 +31,19 @@ pub struct AgentRow {
     pub router_id: Option<Uuid>,
     pub output_schema_id: Option<Uuid>,
     pub version: i32,
+    pub default_reasoning_trace: Option<bool>,
+}
+
+/// Row type for protocol document definitions (documenter step config).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct ProtocolDocumentDefRow {
+    pub id: Uuid,
+    pub step_id: Uuid,
+    pub name: String,
+    pub description: String,
+    pub target_length: i32,
+    pub display_order: i32,
+    pub created_at: DateTime<Utc>,
 }
 
 /// Row type for agent guidance (distilled feedback / learned instructions).

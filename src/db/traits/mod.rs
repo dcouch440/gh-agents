@@ -11,13 +11,13 @@ use uuid::Uuid;
 use crate::db::{
     AgentExecutionRow, AgentGuidanceRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow,
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
-    DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow, ProtocolPortRow,
-    ProtocolRow, ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow,
-    RoomTranscriptEntry, RouterRequestRow, SessionRow, StepDocumentRow, StepInputRow,
-    StepOutputRow, StepRoutingRuleRow, SystemConfigRow, TokenLedgerRow, ToolCapabilityRow,
-    ToolRouterModeRow, ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow,
-    WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepProtocolRow,
-    WorkflowStepRow,
+    DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow,
+    ProtocolDocumentDefRow, ProtocolPortRow, ProtocolRow, ResultRow, RoomExecutionOutputRow,
+    RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry, RouterRequestRow, SessionRow,
+    StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow,
+    TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow, ToolRow,
+    WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
+    WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -514,6 +514,29 @@ pub trait WorkflowRepo: Send + Sync {
     async fn list_step_documents(&self, step_id: Uuid) -> Result<Vec<StepDocumentRow>>;
     async fn add_step_document(&self, step_id: Uuid, document_id: Uuid) -> Result<()>;
     async fn remove_step_document(&self, step_id: Uuid, document_id: Uuid) -> Result<()>;
+
+    // --- Protocol Document Definitions ---
+
+    /// List all document definitions for a documenter step.
+    async fn list_document_defs(&self, step_id: Uuid) -> Result<Vec<ProtocolDocumentDefRow>>;
+
+    /// Create a new document definition on a step.
+    async fn create_document_def(
+        &self,
+        def: ProtocolDocumentDefRow,
+    ) -> Result<ProtocolDocumentDefRow>;
+
+    /// Update a document definition's name, description, and target length.
+    async fn update_document_def(
+        &self,
+        id: Uuid,
+        name: String,
+        description: String,
+        target_length: i32,
+    ) -> Result<ProtocolDocumentDefRow>;
+
+    /// Delete a document definition.
+    async fn delete_document_def(&self, id: Uuid) -> Result<()>;
 
     // --- Port Management (Phase 3) ---
 
@@ -1293,6 +1316,9 @@ pub trait ProtocolRepo: Send + Sync {
 
     /// Get a protocol by ID.
     async fn get_protocol(&self, id: Uuid) -> Result<Option<ProtocolRow>>;
+
+    /// Get a protocol by its protocol_type (e.g., "documenter", "decomp").
+    async fn get_protocol_by_type(&self, protocol_type: &str) -> Result<Option<ProtocolRow>>;
 
     /// List all protocols.
     async fn list_protocols(&self) -> Result<Vec<ProtocolRow>>;

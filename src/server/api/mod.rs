@@ -161,6 +161,13 @@ pub use step_ports::{
     StepOutputResponse,
 };
 
+// Re-export document definition handlers and types
+pub mod document_defs;
+pub use document_defs::{
+    create_document_def, delete_document_def, list_document_defs, update_document_def,
+    CreateDocumentDefRequest, DocumentDefResponse, UpdateDocumentDefRequest,
+};
+
 // Re-export routing rule handlers and types
 pub mod routing_rules;
 pub use routing_rules::{

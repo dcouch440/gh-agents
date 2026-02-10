@@ -36,6 +36,7 @@ async fn create_test_agent(repo: &PgRepo, user_id: Uuid) -> AgentRow {
         router_id: None,
         output_schema_id: None,
         version: 1,
+        default_reasoning_trace: None,
     };
     repo.upsert_agent(agent.clone()).await.unwrap();
     agent

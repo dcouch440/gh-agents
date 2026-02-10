@@ -760,6 +760,7 @@ fn make_test_agent(id: Uuid) -> AgentRow {
         router_id: None,
         output_schema_id: None,
         version: 1,
+        default_reasoning_trace: None,
     }
 }
 

@@ -33,15 +33,15 @@ function DocumenterNodeComponent({ data, selected }: NodeProps) {
   const upstreamStepNames = nodeData.upstreamStepNames
 
   const handlePromptChange = useCallback((_value: string) => {
-    // Will be wired to state management in a future step
+    // TODO: Wire to workflowStore.patchStepLocal(stepId, { prompt_template: value })
   }, [])
 
   const handleAddDocument = useCallback(() => {
-    // Will be wired to state management in a future step
+    // TODO: Wire to document def creation dialog
   }, [])
 
   const handleRemoveDocument = useCallback((_id: string) => {
-    // Will be wired to state management in a future step
+    // TODO: Wire to document def deletion
   }, [])
 
   const accentColor = PROTOCOL_TYPE_COLORS['documenter']
