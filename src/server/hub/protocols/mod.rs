@@ -115,7 +115,8 @@ impl ProtocolEngine {
     /// Register all built-in protocol expanders.
     fn register_builtins(&mut self) {
         use expanders::{
-            DecompExpander, DefaultExpander, ReviewExpander, RouteExpander, TransformExpander,
+            DecompExpander, DefaultExpander, DocumenterExpander, ReviewExpander, RouteExpander,
+            TransformExpander,
         };
 
         self.register(Arc::new(DecompExpander));
@@ -123,6 +124,7 @@ impl ProtocolEngine {
         self.register(Arc::new(ReviewExpander));
         self.register(Arc::new(RouteExpander));
         self.register(Arc::new(DefaultExpander));
+        self.register(Arc::new(DocumenterExpander));
     }
 }
 

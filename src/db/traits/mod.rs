@@ -347,6 +347,19 @@ pub trait DocumentRepo: Send + Sync {
         tags: Vec<String>,
     ) -> Result<DocumentRow>;
 
+    /// Create a blank document linked to a workflow for protocol-generated content.
+    ///
+    /// Sets `workflow_id`, `target_length`, `source_protocol_step_id`, and `is_static = false`.
+    /// Content starts empty and is populated by the DocumenterExecutor at runtime.
+    async fn create_workflow_document(
+        &self,
+        user_id: Uuid,
+        title: String,
+        workflow_id: Uuid,
+        target_length: Option<i32>,
+        source_protocol_step_id: Option<Uuid>,
+    ) -> Result<DocumentRow>;
+
     /// Update a document's content, title, and tags.
     async fn update_document(
         &self,

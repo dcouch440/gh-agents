@@ -997,6 +997,34 @@ impl DocumentRepo for PgRepo {
         Ok(row)
     }
 
+    async fn create_workflow_document(
+        &self,
+        user_id: Uuid,
+        title: String,
+        workflow_id: Uuid,
+        target_length: Option<i32>,
+        source_protocol_step_id: Option<Uuid>,
+    ) -> Result<DocumentRow> {
+        let id = Uuid::new_v4();
+        let row: DocumentRow = sqlx::query_as(
+            r#"
+            INSERT INTO documents (id, user_id, title, content, doc_type, workflow_id, target_length, is_static, source_protocol_step_id)
+            VALUES ($1, $2, $3, '', 'protocol', $4, $5, false, $6)
+            RETURNING id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at, workflow_id, target_length, is_static, source_protocol_step_id
+            "#,
+        )
+        .bind(id)
+        .bind(user_id)
+        .bind(&title)
+        .bind(workflow_id)
+        .bind(target_length)
+        .bind(source_protocol_step_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(row)
+    }
+
     async fn update_document(
         &self,
         doc_id: Uuid,
