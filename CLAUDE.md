@@ -123,6 +123,7 @@ docker exec -it gh-agents-postgres-1 psql -U nexor -d nexor              # Inter
 - **Early returns** for empty/loading/error states before the main render.
 - **Constants file for app-wide values:** API base URL, WS URL, app name, route paths, WS channel names, polling intervals, localStorage keys. No magic strings or numbers scattered in components. All in `src/constants.ts`.
 
+- **Always use `Collections` (`@/utils/collections`)** for array operations: `keyBy`, `toLookupMap`, `groupBy`, `indexById`, `toSet`, `toSetBy`, `filterMap`, `partition`, `dedup`, `sumBy`, `aggregate`, `resolveKeys`, `setMatchesArray`, `sortedCopy`. Never use raw `.filter().map()` chains, `.find()` inside loops, `.includes()` inside loops, or `new Map(arr.map(x => [k, v]))`. These produce intermediate allocations and can hide O(n^2) complexity.
 - **ESLint rules are strict (React 19):** No setState directly in effect bodies, no ref access during render, no mixing component and non-component exports in the same file (react-refresh). Fix the code, don't suppress with eslint-disable.
 
 ## Frontend API Client (frontend/src/api/)
