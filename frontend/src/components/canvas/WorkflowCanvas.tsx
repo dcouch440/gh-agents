@@ -6,7 +6,7 @@ import '@xyflow/react/dist/style.css'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
 import { useStore, batch, workflowStore, canvasStore, agentStore, outputSchemaStore, protocolStore } from '@/stores'
-import { toRFNodes, toRFEdges, nodeDataEqual } from './mappers'
+import { toRFNodes, toRFEdges, toDocumentEdges, nodeDataEqual } from './mappers'
 import type { StepNodeLookups } from './mappers'
 import { Collections } from '@/utils/collections'
 import { nodeTypes } from './nodeTypes'
@@ -134,7 +134,7 @@ function WorkflowCanvasInner() {
 
   // Map store data to RF format
   const rfNodes = useMemo(() => toRFNodes(steps, lookups), [steps, lookups])
-  const rfEdges = useMemo(() => toRFEdges(edges), [edges])
+  const rfEdges = useMemo(() => [...toRFEdges(edges), ...toDocumentEdges(steps, lookups)], [edges, steps, lookups])
 
   // Push store updates into RF — only touch data + position, never clobber selection
   useEffect(() => {
@@ -290,6 +290,7 @@ function WorkflowCanvasInner() {
   // Node deletion
   const onNodesDelete: OnNodesDelete = useCallback((deleted) => {
     for (const node of deleted) {
+      if (node.id.startsWith('doc-artifact-')) continue
       void workflowStore.deleteStep(node.id)
     }
   }, [])
@@ -297,6 +298,7 @@ function WorkflowCanvasInner() {
   // Edge deletion
   const onEdgesDelete: OnEdgesDelete = useCallback((deleted) => {
     for (const edge of deleted) {
+      if (edge.id.startsWith('doc-edge-')) continue
       void workflowStore.removeEdge(edge.id)
     }
   }, [])

@@ -3,7 +3,7 @@ import type { NodeProps } from '@xyflow/react'
 import EditOutlined from '@mui/icons-material/EditOutlined'
 import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
 import InputOutlined from '@mui/icons-material/InputOutlined'
-import TimelineOutlined from '@mui/icons-material/TimelineOutlined'
+import SettingsOutlined from '@mui/icons-material/SettingsOutlined'
 import { useStore, workflowStore } from '@/stores'
 import type { CreateDocumentDefRequest } from '@/types/workflow'
 import { CanvasFormNode } from '../CanvasFormNode'
@@ -14,7 +14,7 @@ import { DocumenterHeader } from './DocumenterHeader'
 import { PromptTab } from './tabs/PromptTab'
 import { DocumentsTab } from './tabs/DocumentsTab'
 import { InputsTab } from './tabs/InputsTab'
-import { ActivityTab } from './tabs/SettingsTab'
+import { SettingsTab } from './tabs/SettingsTab'
 
 type DocumenterNodeData = {
   label: string
@@ -69,6 +69,13 @@ function DocumenterNodeComponent({ id, data, selected }: NodeProps) {
     [id],
   )
 
+  const handleNameChange = useCallback(
+    (value: string) => {
+      workflowStore.patchStepLocal(id, { name: value })
+    },
+    [id],
+  )
+
   const accentColor = PROTOCOL_TYPE_COLORS['documenter']
 
   const tabs: CanvasFormTab[] = [
@@ -100,10 +107,10 @@ function DocumenterNodeComponent({ id, data, selected }: NodeProps) {
       content: <InputsTab upstreamStepNames={upstreamStepNames} />,
     },
     {
-      id: 'activity',
-      icon: TimelineOutlined,
-      tooltip: 'Activity',
-      content: <ActivityTab />,
+      id: 'settings',
+      icon: SettingsOutlined,
+      tooltip: 'Settings',
+      content: <SettingsTab name={nodeData.label} onNameChange={handleNameChange} />,
     },
   ]
 

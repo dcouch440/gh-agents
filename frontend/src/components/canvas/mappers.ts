@@ -135,8 +135,8 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
         id: `doc-artifact-${def.id}`,
         type: 'documentNode',
         position: {
-          x: (step.position_x ?? 0) + DOCUMENT_NODE.DEFAULT_WIDTH + 60,
-          y: (step.position_y ?? 0) + i * (DOCUMENT_NODE.DEFAULT_HEIGHT + 16),
+          x: (step.position_x ?? 0) + FORM_NODE.DEFAULT_WIDTH + 60,
+          y: (step.position_y ?? 0) + i * (DOCUMENT_NODE.DEFAULT_HEIGHT + 20),
         },
         style: {
           width: DOCUMENT_NODE.DEFAULT_WIDTH,
@@ -160,6 +160,27 @@ const toRFEdges = (edges: WorkflowStepEdge[]): Edge[] =>
     target: edge.to_step_id,
   }))
 
+const toDocumentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] => {
+  const edges: Edge[] = []
+  for (const step of steps) {
+    const isDocumenter = step.execution_mode === 'documenter' || lookups.protocolsByStep.get(step.id)?.protocol_type === 'documenter'
+    if (!isDocumenter) continue
+
+    const defs = lookups.documentDefsByStep[step.id] ?? []
+    for (const def of defs) {
+      edges.push({
+        id: `doc-edge-${def.id}`,
+        type: 'documentEdge',
+        source: step.id,
+        target: `doc-artifact-${def.id}`,
+        selectable: false,
+        deletable: false,
+      })
+    }
+  }
+  return edges
+}
+
 const nodeDataEqual = (a: Record<string, unknown>, b: Record<string, unknown>): boolean => {
   const keysA = Object.keys(a)
   if (keysA.length !== Object.keys(b).length) return false
@@ -177,5 +198,5 @@ const nodeDataEqual = (a: Record<string, unknown>, b: Record<string, unknown>): 
   return true
 }
 
-export { toRFNodes, toRFEdges, nodeDataEqual }
+export { toRFNodes, toRFEdges, toDocumentEdges, nodeDataEqual }
 export type { StepNodeData, StepNodeLookups, ContextNodeData }
