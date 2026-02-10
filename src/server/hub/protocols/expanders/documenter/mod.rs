@@ -98,7 +98,9 @@ impl ProtocolExpander for DocumenterExpander {
     fn generate_prompt_injection(&self, config: &ProtocolConfig) -> Result<String, ProtocolError> {
         let defs = extract_doc_defs(config)?;
         let capabilities = extract_capabilities(config);
-        Ok(prompt_gen::documenter_prompt(&defs, &capabilities))
+        // Context documents may or may not be present at runtime; always enable the
+        // instruction so the strategy LLM knows the field exists.
+        Ok(prompt_gen::documenter_prompt(&defs, &capabilities, true))
     }
 
     fn expand(&self, config: &ProtocolConfig) -> Result<ProtocolExpansion, ProtocolError> {

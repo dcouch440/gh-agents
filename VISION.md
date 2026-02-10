@@ -36,6 +36,10 @@ This way when they are routing things they can assign the context to the agents.
 
 This is because the protocol is going to be the main hub that routes the jobs to the sub agents. So the naming protocol section can be important context for them to feed to the sub agents.
 
+There will be all different kinds of nodes that are not nessesary made to (go into another). Some might have a port only on the bottom and they are made to review and finalize certain steps. "Crew" can be another one.. Thats the workhorse. Its the large set of agents that works to get a job done. It could be sequancial, parallel.
+
+- change context to workflow based item (Not step documents).
+
 - We need to make is so ports have a unqique key on them.
 
 - Call order, the steps display the call order on the header. 1, ..., 5a, 5b

@@ -203,6 +203,11 @@ pub fn documenter_schema(doc_defs: &[serde_json::Value]) -> serde_json::Value {
                         "writer_prompt": {
                             "type": "string",
                             "description": "Detailed instructions for the writer including tone, structure, and focus areas"
+                        },
+                        "context_document_ids": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Short IDs of context documents from the <context> block relevant to this document. Use the 8-character ID from each <document_XXXXXXXX> tag. Omit or leave empty if no context documents are needed."
                         }
                     },
                     "additionalProperties": false
@@ -469,5 +474,22 @@ mod tests {
             schema["properties"]["document_plans"]["items"]["additionalProperties"],
             false
         );
+    }
+
+    #[test]
+    fn documenter_schema_includes_optional_context_document_ids() {
+        let defs = make_doc_defs();
+        let schema = documenter_schema(&defs);
+
+        let ctx_field =
+            &schema["properties"]["document_plans"]["items"]["properties"]["context_document_ids"];
+        assert_eq!(ctx_field["type"], "array");
+        assert_eq!(ctx_field["items"]["type"], "string");
+
+        // context_document_ids is NOT required
+        let required = schema["properties"]["document_plans"]["items"]["required"]
+            .as_array()
+            .unwrap();
+        assert!(!required.contains(&json!("context_document_ids")));
     }
 }

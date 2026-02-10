@@ -84,6 +84,51 @@ struct StrategyPhaseResult {
     cost_usd: f32,
 }
 
+/// A context document available to the documenter pipeline.
+///
+/// Loaded from agent context and step documents, then selectively injected
+/// into research and write phase prompts based on strategy LLM assignments.
+#[derive(Debug, Clone)]
+pub(crate) struct ContextDocument {
+    short_id: String,
+    title: String,
+    content: String,
+}
+
+/// Build a `<context>` block from assigned document IDs.
+///
+/// - If `all_docs` is empty, returns empty string (no context exists).
+/// - If `assigned_ids` is empty, includes ALL docs (backward compat).
+/// - If `assigned_ids` is non-empty, filters to only matching docs.
+pub(crate) fn build_context_block(assigned_ids: &[String], all_docs: &[ContextDocument]) -> String {
+    if all_docs.is_empty() {
+        return String::new();
+    }
+
+    let relevant_docs: Vec<&ContextDocument> = if assigned_ids.is_empty() {
+        all_docs.iter().collect()
+    } else {
+        all_docs
+            .iter()
+            .filter(|d| assigned_ids.contains(&d.short_id))
+            .collect()
+    };
+
+    if relevant_docs.is_empty() {
+        return String::new();
+    }
+
+    let mut block = String::from("<context>");
+    for doc in relevant_docs {
+        block.push_str(&format!(
+            "\n<document_{} title=\"{}\">\n{}\n</document_{}>",
+            doc.short_id, doc.title, doc.content, doc.short_id
+        ));
+    }
+    block.push_str("\n</context>");
+    block
+}
+
 impl<'a> DocumenterExecutor<'a> {
     pub fn new(
         engine: &'a ExecutionEngine,
@@ -149,9 +194,12 @@ impl<'a> DocumenterExecutor<'a> {
             )));
         }
 
+        // Load context documents for selective injection into research/write phases
+        let context_docs = self.load_context_documents().await;
+
         // ── Phase 2: Research (parallel per document) ────────────────────
         let research_results = self
-            .execute_research_phase(&strategy_output.plans, &doc_defs, &model_id)
+            .execute_research_phase(&strategy_output.plans, &doc_defs, &model_id, &context_docs)
             .await;
 
         for r in &research_results {
@@ -180,7 +228,12 @@ impl<'a> DocumenterExecutor<'a> {
 
         // ── Phase 3: Write (parallel per successful research) ────────────
         let write_results = self
-            .execute_write_phase(&strategy_output.plans, &successful_research, &model_id)
+            .execute_write_phase(
+                &strategy_output.plans,
+                &successful_research,
+                &model_id,
+                &context_docs,
+            )
             .await;
 
         for r in &write_results {
@@ -360,6 +413,7 @@ impl<'a> DocumenterExecutor<'a> {
         plans: &[types::DocumentPlan],
         doc_defs: &[ProtocolDocumentDefRow],
         model_id: &str,
+        context_docs: &[ContextDocument],
     ) -> Vec<PhaseTaskResult> {
         info!(
             step_id = %self.step.id,
@@ -386,6 +440,10 @@ impl<'a> DocumenterExecutor<'a> {
                 }
             };
 
+            // Build context block for this plan's assigned documents
+            let context_block =
+                build_context_block(&plan.context_document_ids, context_docs);
+
             // Clone everything needed for the spawned task
             let engine = self.engine.clone_with_provider();
             let state = self.state.clone();
@@ -393,7 +451,11 @@ impl<'a> DocumenterExecutor<'a> {
             let execution_context = self.ctx.execution_context.clone();
             let model = model_id.to_string();
             let doc_name = plan.document_name.clone();
-            let research_prompt = plan.research_strategy.clone();
+            let research_prompt = if context_block.is_empty() {
+                plan.research_strategy.clone()
+            } else {
+                format!("{}\n\n{}", plan.research_strategy, context_block)
+            };
             let capabilities = plan.required_capabilities.clone();
             let _exec_id = exec_row.id;
 
@@ -516,6 +578,7 @@ impl<'a> DocumenterExecutor<'a> {
         plans: &[types::DocumentPlan],
         successful_research: &[&PhaseTaskResult],
         model_id: &str,
+        context_docs: &[ContextDocument],
     ) -> Vec<PhaseTaskResult> {
         info!(
             step_id = %self.step.id,
@@ -547,11 +610,24 @@ impl<'a> DocumenterExecutor<'a> {
             let doc_def_id = doc_def.map(|d| d.id);
             let document_id = doc_def.and_then(|d| d.document_id);
 
+            // Build context block for this plan's assigned documents
+            let context_ids = plan
+                .map(|p| p.context_document_ids.as_slice())
+                .unwrap_or(&[]);
+            let context_block = build_context_block(context_ids, context_docs);
+
             // Create execution row
-            let input_prompt = format!(
-                "{}\n\n---\n\nResearch findings:\n{}",
-                writer_prompt_prefix, research.content
-            );
+            let input_prompt = if context_block.is_empty() {
+                format!(
+                    "{}\n\n---\n\nResearch findings:\n{}",
+                    writer_prompt_prefix, research.content
+                )
+            } else {
+                format!(
+                    "{}\n\n{}\n\n---\n\nResearch findings:\n{}",
+                    writer_prompt_prefix, context_block, research.content
+                )
+            };
             let exec_row = match self
                 .create_execution_row("write", doc_def_id, Some(&input_prompt))
                 .await
@@ -713,7 +789,53 @@ impl<'a> DocumenterExecutor<'a> {
             })
             .collect();
 
-        Ok(crate::server::hub::protocols::prompt_gen::documenter_prompt(&doc_values, &[]))
+        Ok(crate::server::hub::protocols::prompt_gen::documenter_prompt(&doc_values, &[], true))
+    }
+
+    /// Load context documents from agent context and step documents.
+    ///
+    /// Mirrors the document fetching in `compose_prompt()`, returning structured
+    /// data that can be selectively injected into research and write phase prompts.
+    async fn load_context_documents(&self) -> Vec<ContextDocument> {
+        let mut docs = Vec::new();
+
+        // Agent context documents
+        if let Some(agent_id) = self.step.agent_id {
+            if let Ok(agent_docs) = self.state.repo().get_agent_context(agent_id).await {
+                for doc in agent_docs {
+                    let short_id = doc.id.to_string()[..8].to_string();
+                    docs.push(ContextDocument {
+                        short_id,
+                        title: doc.title,
+                        content: doc.content,
+                    });
+                }
+            }
+        }
+
+        // Step documents
+        if let Ok(step_docs) = self
+            .state
+            .repos()
+            .workflows
+            .list_step_documents(self.step.id)
+            .await
+        {
+            if let Some(d_repo) = self.state.doc_repo() {
+                for sd in &step_docs {
+                    if let Ok(Some(doc)) = d_repo.get_document(sd.document_id).await {
+                        let short_id = doc.id.to_string()[..8].to_string();
+                        docs.push(ContextDocument {
+                            short_id,
+                            title: doc.title,
+                            content: doc.content,
+                        });
+                    }
+                }
+            }
+        }
+
+        docs
     }
 
     fn is_cancelled(&self) -> bool {

@@ -28,6 +28,10 @@ pub struct DocumentPlan {
     pub required_capabilities: Vec<String>,
     /// Detailed instructions for the writer: tone, structure, focus areas.
     pub writer_prompt: String,
+    /// Short IDs (first 8 chars of UUID) of context documents assigned to this plan.
+    /// Empty means no routing was specified (all available context documents are used).
+    #[serde(default)]
+    pub context_document_ids: Vec<String>,
 }
 
 #[cfg(test)]
@@ -80,6 +84,42 @@ mod tests {
         let output: StrategyOutput = serde_json::from_str(json).unwrap();
         assert_eq!(output.document_plans.len(), 1);
         assert!(output.document_plans[0].required_capabilities.is_empty());
+    }
+
+    #[test]
+    fn parse_with_context_document_ids() {
+        let json = r#"{
+            "document_plans": [
+                {
+                    "document_name": "API Reference",
+                    "research_strategy": "Analyze the API routes.",
+                    "required_capabilities": ["code_analysis"],
+                    "writer_prompt": "Write API docs.",
+                    "context_document_ids": ["550e8400", "a1b2c3d4"]
+                }
+            ]
+        }"#;
+
+        let output: StrategyOutput = serde_json::from_str(json).unwrap();
+        assert_eq!(output.document_plans[0].context_document_ids.len(), 2);
+        assert_eq!(output.document_plans[0].context_document_ids[0], "550e8400");
+    }
+
+    #[test]
+    fn parse_without_context_document_ids_defaults_to_empty() {
+        let json = r#"{
+            "document_plans": [
+                {
+                    "document_name": "README",
+                    "research_strategy": "Use context.",
+                    "required_capabilities": [],
+                    "writer_prompt": "Write a README."
+                }
+            ]
+        }"#;
+
+        let output: StrategyOutput = serde_json::from_str(json).unwrap();
+        assert!(output.document_plans[0].context_document_ids.is_empty());
     }
 
     #[test]
