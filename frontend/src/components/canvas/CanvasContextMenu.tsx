@@ -33,6 +33,8 @@ const PROTOCOL_LABELS: Record<string, string> = {
 function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
   const protocolTypes = useStore(protocolStore.store, protocolStore.selectTypes)
   const allProtocols = useStore(protocolStore.store, protocolStore.selectAll)
+  const steps = useStore(workflowStore.store, workflowStore.selectSteps)
+  const hasEntry = steps.some((s) => s.execution_mode === 'entry')
 
   if (!position) return null
 
@@ -75,6 +77,31 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
       }
     }
     void createAndLink()
+    onClose()
+  }
+
+  const handleAddEntry = (event: React.MouseEvent) => {
+    event.stopPropagation()
+    event.preventDefault()
+    if (hasEntry) return
+    void workflowStore.createStep({
+      name: 'Port of Entry',
+      execution_mode: 'entry',
+      position_x: Math.round(position.flowX),
+      position_y: Math.round(position.flowY),
+    })
+    onClose()
+  }
+
+  const handleAddDocument = (event: React.MouseEvent) => {
+    event.stopPropagation()
+    event.preventDefault()
+    void workflowStore.createStep({
+      name: 'Document',
+      execution_mode: 'document',
+      position_x: Math.round(position.flowX),
+      position_y: Math.round(position.flowY),
+    })
     onClose()
   }
 
@@ -254,6 +281,71 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
             />
             <Typography sx={{ fontSize: 12, color: 'text.primary' }}>
               Documenter
+            </Typography>
+          </Box>
+          <Box sx={{ mx: 1.5, my: 0.5, borderTop: 1, borderColor: 'divider' }} />
+          <Typography
+            sx={{
+              px: 1.5,
+              py: 0.75,
+              fontSize: 10,
+              textTransform: 'uppercase',
+              color: 'text.disabled',
+              letterSpacing: '0.05em',
+              fontWeight: 600,
+            }}
+          >
+            Document
+          </Typography>
+          <Box
+            onClick={handleAddEntry}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              px: 1.5,
+              py: 0.75,
+              cursor: hasEntry ? 'default' : 'pointer',
+              opacity: hasEntry ? 0.4 : 1,
+              '&:hover': hasEntry ? {} : { backgroundColor: 'action.hover' },
+            }}
+          >
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                backgroundColor: STEP_TYPE_COLORS['entry'] ?? DEFAULT_STEP_TYPE_COLOR,
+                flexShrink: 0,
+              }}
+            />
+            <Typography sx={{ fontSize: 12, color: 'text.primary' }}>
+              Port of Entry
+            </Typography>
+          </Box>
+          <Box
+            onClick={handleAddDocument}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              px: 1.5,
+              py: 0.75,
+              cursor: 'pointer',
+              '&:hover': { backgroundColor: 'action.hover' },
+            }}
+          >
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                backgroundColor: STEP_TYPE_COLORS['document'] ?? DEFAULT_STEP_TYPE_COLOR,
+                flexShrink: 0,
+              }}
+            />
+            <Typography sx={{ fontSize: 12, color: 'text.primary' }}>
+              Document
             </Typography>
           </Box>
         </>
