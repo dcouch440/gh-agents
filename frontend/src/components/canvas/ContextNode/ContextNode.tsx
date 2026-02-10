@@ -95,7 +95,7 @@ function ContextNodeComponent({ id, data, selected }: NodeProps) {
       {/* Source handle only — context nodes are source-only, no target handle */}
       <Handle
         type="source"
-        position={Position.Right}
+        position={Position.Bottom}
         style={{
           width: CANVAS.HANDLE_SIZE,
           height: CANVAS.HANDLE_SIZE,
