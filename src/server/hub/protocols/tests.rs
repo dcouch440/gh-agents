@@ -4,79 +4,55 @@ mod tests {
 
     use uuid::Uuid;
 
-    use crate::server::hub::protocols::types::PortConfig;
+    use crate::server::hub::protocols::types::ProtocolConfig;
     use crate::server::hub::protocols::ProtocolEngine;
 
-    fn make_decomp_config() -> super::super::types::ProtocolConfig {
-        super::super::types::ProtocolConfig {
-            protocol_type: "decomp".to_string(),
-            config: serde_json::json!({}),
-            ports: vec![
-                PortConfig {
-                    port_name: "frontend".to_string(),
-                    description: "Handles UI/UX tasks".to_string(),
-                    agent_id: Uuid::new_v4(),
-                    agent_name: "Frontend Dev".to_string(),
-                    agent_tools: vec![],
-                    display_order: 0,
-                    content_schema: None,
-                },
-                PortConfig {
-                    port_name: "backend".to_string(),
-                    description: "Handles API and server tasks".to_string(),
-                    agent_id: Uuid::new_v4(),
-                    agent_name: "Backend Dev".to_string(),
-                    agent_tools: vec![],
-                    display_order: 1,
-                    content_schema: None,
-                },
-            ],
+    fn make_documenter_config() -> ProtocolConfig {
+        ProtocolConfig {
+            protocol_type: "documenter".to_string(),
+            config: serde_json::json!({
+                "document_defs": [
+                    {"name": "API Reference", "description": "REST API docs", "target_length": 5000},
+                    {"name": "Architecture Guide", "description": "System overview", "target_length": 3000},
+                ]
+            }),
+            ports: vec![],
         }
     }
 
     #[test]
-    fn engine_registers_all_builtins() {
+    fn engine_registers_documenter() {
         let engine = ProtocolEngine::new();
         let types = engine.list_types();
         let type_names: Vec<&str> = types.iter().map(|(t, _)| *t).collect();
-        assert!(type_names.contains(&"decomp"));
-        assert!(type_names.contains(&"transform"));
-        assert!(type_names.contains(&"review"));
-        assert!(type_names.contains(&"route"));
-        assert!(type_names.contains(&"default"));
+        assert!(type_names.contains(&"documenter"));
+        assert_eq!(type_names.len(), 1);
     }
 
     #[test]
-    fn engine_expands_decomp() {
+    fn engine_expands_documenter() {
         let engine = ProtocolEngine::new();
-        let config = make_decomp_config();
+        let config = make_documenter_config();
         let expansion = engine.expand(&config).unwrap();
 
-        // Should create 1 dispatch step with label routing
-        assert_eq!(expansion.steps.len(), 1);
-        assert_eq!(expansion.steps[0].port_name, "dispatch");
-        assert_eq!(expansion.steps[0].execution_mode, "for_each");
-        assert_eq!(expansion.steps[0].routing_mode.as_deref(), Some("label"));
-        assert_eq!(expansion.steps[0].routing_rules.len(), 2);
+        // Documenter produces no downstream steps or edges
+        assert!(expansion.steps.is_empty());
+        assert!(expansion.edges.is_empty());
 
-        // Should create 1 edge
-        assert_eq!(expansion.edges.len(), 1);
+        // Output schema should have document_plans
+        assert_eq!(expansion.output_schema["type"], "object");
+        assert!(expansion.output_schema["properties"]["document_plans"].is_object());
 
-        // Output schema should have port enum
-        let port_enum = &expansion.output_schema["items"]["properties"]["port"]["enum"];
-        assert_eq!(port_enum[0], "frontend");
-        assert_eq!(port_enum[1], "backend");
-
-        // Prompt injection should mention agents
-        assert!(expansion.prompt_injection.contains("frontend"));
-        assert!(expansion.prompt_injection.contains("backend"));
-        assert!(expansion.prompt_injection.contains("Frontend Dev"));
+        // Prompt injection should mention documents
+        assert!(expansion.prompt_injection.contains("API Reference"));
+        assert!(expansion.prompt_injection.contains("Architecture Guide"));
+        assert!(expansion.prompt_injection.contains("Document Strategist"));
     }
 
     #[test]
     fn engine_rejects_unknown_type() {
         let engine = ProtocolEngine::new();
-        let config = super::super::types::ProtocolConfig {
+        let config = ProtocolConfig {
             protocol_type: "nonexistent".to_string(),
             config: serde_json::json!({}),
             ports: vec![],
@@ -117,7 +93,7 @@ mod tests {
         let agent_tools = HashMap::new();
         let agent_schemas = HashMap::new();
         let config = engine.build_config(
-            "decomp",
+            "documenter",
             serde_json::json!({}),
             &ports,
             &agent_names,
@@ -169,7 +145,7 @@ mod tests {
         // agent_id_2 intentionally has no schema
 
         let config = engine.build_config(
-            "decomp",
+            "documenter",
             serde_json::json!({}),
             &ports,
             &agent_names,

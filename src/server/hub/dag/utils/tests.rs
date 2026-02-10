@@ -1763,10 +1763,7 @@ mod tests {
         let steps = vec![agent_step, doc_step];
 
         let mut envelopes = HashMap::new();
-        envelopes.insert(
-            agent_id,
-            make_envelope(serde_json::json!("Agent output")),
-        );
+        envelopes.insert(agent_id, make_envelope(serde_json::json!("Agent output")));
 
         let result = collect_upstream_context_data(doc_id, &edges, &steps, &envelopes);
         assert!(result.is_empty());
@@ -1787,10 +1784,7 @@ mod tests {
         let steps = vec![ctx_step, doc_step];
 
         let mut envelopes = HashMap::new();
-        envelopes.insert(
-            ctx_id,
-            make_envelope(serde_json::json!("Port data")),
-        );
+        envelopes.insert(ctx_id, make_envelope(serde_json::json!("Port data")));
 
         let result = collect_upstream_context_data(doc_id, &edges, &steps, &envelopes);
         assert!(result.is_empty());

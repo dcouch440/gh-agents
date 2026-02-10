@@ -4,10 +4,10 @@ mod tests {
 
     #[test]
     fn create_protocol_request_deserializes_required_fields() {
-        let json = r#"{"name": "Frontend/Backend Decomp", "protocol_type": "decomp"}"#;
+        let json = r#"{"name": "Doc Generator", "protocol_type": "documenter"}"#;
         let req: CreateProtocolRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(req.name, "Frontend/Backend Decomp");
-        assert_eq!(req.protocol_type, "decomp");
+        assert_eq!(req.name, "Doc Generator");
+        assert_eq!(req.protocol_type, "documenter");
         assert!(req.description.is_none());
         assert!(req.config.is_none());
         assert!(req.agent_id.is_none());
@@ -18,21 +18,21 @@ mod tests {
     #[test]
     fn create_protocol_request_deserializes_all_fields() {
         let json = r#"{
-            "name": "Code Review Gate",
-            "description": "Quality review before merge",
-            "protocol_type": "review",
-            "config": {"decisions": ["approve", "reject", "revise"]},
+            "name": "Project Documenter",
+            "description": "Generate project documentation",
+            "protocol_type": "documenter",
+            "config": {},
             "agent_id": "00000000-0000-0000-0000-000000000001",
             "output_schema_id": "00000000-0000-0000-0000-000000000002",
             "prompt_template_id": "00000000-0000-0000-0000-000000000003"
         }"#;
         let req: CreateProtocolRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(req.name, "Code Review Gate");
+        assert_eq!(req.name, "Project Documenter");
         assert_eq!(
             req.description.as_deref(),
-            Some("Quality review before merge")
+            Some("Generate project documentation")
         );
-        assert_eq!(req.protocol_type, "review");
+        assert_eq!(req.protocol_type, "documenter");
         assert!(req.config.is_some());
         assert!(req.agent_id.is_some());
         assert!(req.output_schema_id.is_some());
@@ -112,7 +112,7 @@ mod tests {
             id: uuid::Uuid::nil(),
             name: "Test Protocol".to_string(),
             description: "A test".to_string(),
-            protocol_type: "decomp".to_string(),
+            protocol_type: "documenter".to_string(),
             config: serde_json::json!({}),
             version: 1,
             ports: vec![ProtocolPortResponse {
@@ -138,7 +138,7 @@ mod tests {
         };
         let json = serde_json::to_value(&resp).unwrap();
         assert_eq!(json["name"], "Test Protocol");
-        assert_eq!(json["protocol_type"], "decomp");
+        assert_eq!(json["protocol_type"], "documenter");
         assert_eq!(json["version"], 1);
         assert_eq!(json["ports"][0]["port_name"], "frontend");
         assert!(json["agent"].is_object());
@@ -154,7 +154,7 @@ mod tests {
             id: uuid::Uuid::nil(),
             name: "Minimal".to_string(),
             description: String::new(),
-            protocol_type: "default".to_string(),
+            protocol_type: "documenter".to_string(),
             config: serde_json::json!({}),
             version: 1,
             ports: vec![],
@@ -171,20 +171,14 @@ mod tests {
     #[test]
     fn protocol_types_response_serializes() {
         let resp = ProtocolTypesResponse {
-            types: vec![
-                ProtocolTypeInfo {
-                    name: "decomp".to_string(),
-                    description: "Fan-out decomposition".to_string(),
-                },
-                ProtocolTypeInfo {
-                    name: "transform".to_string(),
-                    description: "1:1 transform".to_string(),
-                },
-            ],
+            types: vec![ProtocolTypeInfo {
+                name: "documenter".to_string(),
+                description: "Document generation pipeline".to_string(),
+            }],
         };
         let json = serde_json::to_value(&resp).unwrap();
-        assert_eq!(json["types"].as_array().unwrap().len(), 2);
-        assert_eq!(json["types"][0]["name"], "decomp");
+        assert_eq!(json["types"].as_array().unwrap().len(), 1);
+        assert_eq!(json["types"][0]["name"], "documenter");
     }
 
     #[test]
@@ -223,47 +217,24 @@ mod tests {
     #[test]
     fn apply_request_empty_body_deserializes() {
         let json = r#"{}"#;
-        let req: ApplyProtocolRequest = serde_json::from_str(json).unwrap();
-        assert!(req.decision_routing.is_none());
-    }
-
-    #[test]
-    fn apply_request_with_decision_routing() {
-        let json = r#"{
-            "decision_routing": {
-                "approve": "00000000-0000-0000-0000-000000000001",
-                "reject": "00000000-0000-0000-0000-000000000002"
-            }
-        }"#;
-        let req: ApplyProtocolRequest = serde_json::from_str(json).unwrap();
-        let routing = req.decision_routing.unwrap();
-        assert_eq!(routing.len(), 2);
-        assert!(routing.contains_key("approve"));
-        assert!(routing.contains_key("reject"));
-    }
-
-    #[test]
-    fn apply_request_null_decision_routing() {
-        let json = r#"{"decision_routing": null}"#;
-        let req: ApplyProtocolRequest = serde_json::from_str(json).unwrap();
-        assert!(req.decision_routing.is_none());
+        let _req: ApplyProtocolRequest = serde_json::from_str(json).unwrap();
     }
 
     // =========================================================================
-    // New Association Response Types
+    // Association Response Types
     // =========================================================================
 
     #[test]
     fn protocol_agent_response_serializes() {
         let resp = ProtocolAgentResponse {
             id: uuid::Uuid::nil(),
-            name: "Decomp Agent".to_string(),
-            system_prompt: "You decompose tasks".to_string(),
+            name: "Documenter Agent".to_string(),
+            system_prompt: "You generate documents".to_string(),
             model_provider: "anthropic".to_string(),
             model_id: "claude-sonnet-4-20250514".to_string(),
         };
         let json = serde_json::to_value(&resp).unwrap();
-        assert_eq!(json["name"], "Decomp Agent");
+        assert_eq!(json["name"], "Documenter Agent");
         assert_eq!(json["model_provider"], "anthropic");
     }
 
@@ -271,11 +242,11 @@ mod tests {
     fn protocol_schema_response_serializes() {
         let resp = ProtocolSchemaResponse {
             id: uuid::Uuid::nil(),
-            name: "Decomp Output".to_string(),
-            schema: serde_json::json!({"type": "object", "required": ["subtasks"]}),
+            name: "Documenter Output".to_string(),
+            schema: serde_json::json!({"type": "object", "required": ["document_plans"]}),
         };
         let json = serde_json::to_value(&resp).unwrap();
-        assert_eq!(json["name"], "Decomp Output");
+        assert_eq!(json["name"], "Documenter Output");
         assert_eq!(json["schema"]["type"], "object");
     }
 
@@ -283,11 +254,11 @@ mod tests {
     fn protocol_template_response_serializes() {
         let resp = ProtocolTemplateResponse {
             id: uuid::Uuid::nil(),
-            name: "Decomp Prompt".to_string(),
-            content: "Decompose the input into subtasks.".to_string(),
+            name: "Documenter Prompt".to_string(),
+            content: "Plan research and writing for each document.".to_string(),
         };
         let json = serde_json::to_value(&resp).unwrap();
-        assert_eq!(json["name"], "Decomp Prompt");
+        assert_eq!(json["name"], "Documenter Prompt");
         assert!(!json["content"].as_str().unwrap().is_empty());
     }
 }

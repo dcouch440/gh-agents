@@ -1,20 +1,22 @@
-//! Documenter protocol expander — structured document generation pipeline.
+//! Documenter protocol compiler — structured document generation pipeline.
 //!
-//! Unlike other protocols that create downstream workflow steps and edges,
+//! Unlike protocols that create downstream workflow steps and edges,
 //! the documenter creates NO downstream primitives. Instead, the phased
 //! pipeline (strategy → research → write) executes at runtime via
-//! `DocumenterExecutor`. This expander handles only schema and prompt
-//! generation for the strategy phase.
+//! `DocumenterExecutor`. This compiler handles only validation, schema,
+//! and prompt generation for the strategy phase.
 
-use crate::server::hub::protocols::error::ProtocolError;
-use crate::server::hub::protocols::expander::ProtocolExpander;
-use crate::server::hub::protocols::types::{ProtocolConfig, ProtocolExpansion};
-use crate::server::hub::protocols::{prompt_gen, schema_gen};
+pub mod prompt;
+pub mod schema;
 
 mod tests;
 
-/// Expander for the "documenter" (document generation) protocol.
-pub struct DocumenterExpander;
+use crate::server::hub::protocols::compiler::ProtocolCompiler;
+use crate::server::hub::protocols::error::ProtocolError;
+use crate::server::hub::protocols::types::{ProtocolConfig, ProtocolExpansion};
+
+/// Compiler for the "documenter" (document generation) protocol.
+pub struct DocumenterCompiler;
 
 /// Extract document definitions from the protocol config.
 ///
@@ -48,7 +50,7 @@ fn extract_capabilities(config: &ProtocolConfig) -> Vec<String> {
         .unwrap_or_default()
 }
 
-impl ProtocolExpander for DocumenterExpander {
+impl ProtocolCompiler for DocumenterCompiler {
     fn protocol_type(&self) -> &str {
         "documenter"
     }
@@ -92,7 +94,7 @@ impl ProtocolExpander for DocumenterExpander {
 
     fn generate_schema(&self, config: &ProtocolConfig) -> Result<serde_json::Value, ProtocolError> {
         let defs = extract_doc_defs(config)?;
-        Ok(schema_gen::documenter_schema(&defs))
+        Ok(schema::documenter_schema(&defs))
     }
 
     fn generate_prompt_injection(&self, config: &ProtocolConfig) -> Result<String, ProtocolError> {
@@ -100,10 +102,10 @@ impl ProtocolExpander for DocumenterExpander {
         let capabilities = extract_capabilities(config);
         // Context documents may or may not be present at runtime; always enable the
         // instruction so the strategy LLM knows the field exists.
-        Ok(prompt_gen::documenter_prompt(&defs, &capabilities, true))
+        Ok(prompt::documenter_prompt(&defs, &capabilities, true))
     }
 
-    fn expand(&self, config: &ProtocolConfig) -> Result<ProtocolExpansion, ProtocolError> {
+    fn compile(&self, config: &ProtocolConfig) -> Result<ProtocolExpansion, ProtocolError> {
         self.validate(config)?;
 
         let output_schema = self.generate_schema(config)?;
