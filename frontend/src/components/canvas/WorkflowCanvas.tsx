@@ -5,7 +5,7 @@ import type { OnSelectionChangeParams, Connection, OnNodesDelete, OnEdgesDelete,
 import '@xyflow/react/dist/style.css'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
-import { useStore, batch, workflowStore, canvasStore, layoutStore, agentStore, outputSchemaStore, protocolStore } from '@/stores'
+import { useStore, batch, workflowStore, canvasStore, agentStore, outputSchemaStore, protocolStore } from '@/stores'
 import { toRFNodes, toRFEdges, nodeDataEqual } from './mappers'
 import type { StepNodeLookups } from './mappers'
 import { Collections } from '@/utils/collections'
