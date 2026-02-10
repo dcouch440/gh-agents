@@ -1,18 +1,16 @@
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import { useTheme } from '@mui/material/styles'
 import { DocumenterIcon } from '@/components/canvas/Icons/DocumentIcon'
+import { PROTOCOL_TYPE_COLORS } from '@/components/canvas/constants'
 
 type DocumenterHeaderProps = {
   name: string
   documentNames: string[]
-  documentCount: number
-  modelId: string | null
-  agentName: string | null
 }
 
-function DocumenterHeader({ name, documentNames, documentCount, modelId, agentName }: DocumenterHeaderProps) {
-  const theme = useTheme()
+const ACCENT = PROTOCOL_TYPE_COLORS.documenter
+
+function DocumenterHeader({ name, documentNames }: DocumenterHeaderProps) {
   const docSummary = documentNames.length > 0 ? documentNames.join(' \u00b7 ') : null
 
   return (
@@ -78,96 +76,58 @@ function DocumenterHeader({ name, documentNames, documentCount, modelId, agentNa
         </Typography>
       </Box>
 
-      {/* Metadata badges */}
+      {/* Protocol badge */}
       <Box
         sx={{
           flexShrink: 0,
-          display: 'flex',
+          display: 'inline-flex',
           alignItems: 'center',
-          gap: 0.5,
+          gap: 0.75,
+          px: 1.25,
+          py: 0.5,
+          borderRadius: '100px',
+          background: `linear-gradient(135deg, ${ACCENT}14, ${ACCENT}22)`,
+          border: 1,
+          borderColor: `${ACCENT}35`,
+          boxShadow: `0 0 8px ${ACCENT}18, inset 0 1px 0 ${ACCENT}10`,
         }}
       >
-        {documentCount > 0 && (
-          <Box
-            sx={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              px: 0.75,
-              py: 0.25,
-              borderRadius: '4px',
-              backgroundColor: theme.palette.custom.hoverOverlay,
-              border: 1,
-              borderColor: 'divider',
-            }}
-          >
-            <Typography
-              sx={{
-                fontSize: 10,
-                color: 'text.secondary',
-                lineHeight: 1,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {documentCount} {documentCount === 1 ? 'doc' : 'docs'}
-            </Typography>
-          </Box>
-        )}
-        {agentName !== null && (
-          <Box
-            sx={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              px: 0.75,
-              py: 0.25,
-              borderRadius: '4px',
-              backgroundColor: theme.palette.custom.hoverOverlay,
-              border: 1,
-              borderColor: 'divider',
-            }}
-          >
-            <Typography
-              sx={{
-                fontSize: 10,
-                color: 'text.secondary',
-                lineHeight: 1,
-                whiteSpace: 'nowrap',
-                maxWidth: 80,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {agentName}
-            </Typography>
-          </Box>
-        )}
-        {modelId !== null && (
-          <Box
-            sx={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              px: 0.75,
-              py: 0.25,
-              borderRadius: '4px',
-              backgroundColor: theme.palette.custom.hoverOverlay,
-              border: 1,
-              borderColor: 'divider',
-            }}
-          >
-            <Typography
-              sx={{
-                fontSize: 10,
-                color: 'text.secondary',
-                lineHeight: 1,
-                whiteSpace: 'nowrap',
-                maxWidth: 80,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {modelId}
-            </Typography>
-          </Box>
-        )}
+        <Box
+          sx={{
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            backgroundColor: ACCENT,
+            boxShadow: `0 0 4px ${ACCENT}80`,
+            flexShrink: 0,
+            position: 'relative',
+            '@keyframes ping': {
+              '0%': { transform: 'scale(1)', opacity: 0.75 },
+              '75%, 100%': { transform: 'scale(2)', opacity: 0 },
+            },
+            '&::after': {
+              content: '""',
+              position: 'absolute',
+              inset: 0,
+              borderRadius: '50%',
+              backgroundColor: ACCENT,
+              animation: 'ping 2s cubic-bezier(0, 0, 0.2, 1) infinite',
+            },
+          }}
+        />
+        <Typography
+          sx={{
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            color: ACCENT,
+            lineHeight: 1,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Protocol
+        </Typography>
       </Box>
     </Box>
   )
