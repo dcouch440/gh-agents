@@ -17,6 +17,7 @@ type ConfirmOptions = {
   confirmText?: string
   cancelText?: string
   confirmColor?: 'primary' | 'error' | 'warning' | 'success'
+  onConfirm: () => Promise<void>
 }
 
 type UseConfirmModalReturn = {
@@ -33,8 +34,7 @@ type UseConfirmModalReturn = {
   // Actions
   openConfirm: (options: ConfirmOptions) => void
   closeConfirm: () => void
-  onConfirm: () => Promise<void>
-  confirmAsync: (action: () => Promise<void>) => Promise<boolean>
+  handleConfirm: () => Promise<void>
 }
 
 const useConfirmModal = (): UseConfirmModalReturn => {
@@ -50,9 +50,9 @@ const useConfirmModal = (): UseConfirmModalReturn => {
   })
 
   const pendingActionRef = useRef<(() => Promise<void>) | null>(null)
-  const resolveRef = useRef<((value: boolean) => void) | null>(null)
 
   const openConfirm = useCallback((options: ConfirmOptions) => {
+    pendingActionRef.current = options.onConfirm
     setState({
       open: true,
       title: options.title,
@@ -68,38 +68,21 @@ const useConfirmModal = (): UseConfirmModalReturn => {
   const closeConfirm = useCallback(() => {
     setState((prev) => ({...prev, open: false, loading: false, error: null}))
     pendingActionRef.current = null
-    resolveRef.current = null
   }, [])
 
-  const onConfirm = useCallback(async () => {
+  const handleConfirm = useCallback(async () => {
     const action = pendingActionRef.current
-    const resolve = resolveRef.current
-
-    if (!action || !resolve) {
-      return
-    }
+    if (!action) return
 
     setState((prev) => ({...prev, loading: true, error: null}))
     try {
       await action()
       setState((prev) => ({...prev, open: false, loading: false}))
-      resolve(true)
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Operation failed'
       setState((prev) => ({...prev, loading: false, error: errorMsg}))
-      resolve(false)
     }
   }, [])
-
-  const confirmAsync = useCallback(
-    async (action: () => Promise<void>): Promise<boolean> => {
-      return new Promise((resolve) => {
-        pendingActionRef.current = action
-        resolveRef.current = resolve
-      })
-    },
-    [],
-  )
 
   return {
     open: state.open,
@@ -112,8 +95,7 @@ const useConfirmModal = (): UseConfirmModalReturn => {
     error: state.error,
     openConfirm,
     closeConfirm,
-    onConfirm,
-    confirmAsync,
+    handleConfirm,
   }
 }
 

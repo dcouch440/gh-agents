@@ -26,7 +26,8 @@ function AgentsPage() {
   const agentsError = useStore(agentStore.store, agentStore.selectError)
   const sessions = useStore(sessionStore.store, sessionStore.selectAll)
   const sessionsLoading = useStore(sessionStore.store, sessionStore.selectLoading)
-  const confirm = useConfirmModal()
+  const confirmModal = useConfirmModal()
+  const { openConfirm } = confirmModal
 
   useEffect(() => { void agentStore.fetchAll(); void sessionStore.fetchAll() }, [])
   const [creatingSession, setCreatingSession] = useState<string | null>(null)
@@ -72,23 +73,18 @@ function AgentsPage() {
   }, [navigate])
 
   const handleDeleteAgent = useCallback(
-    async (agent: Agent) => {
-      confirm.openConfirm({
+    (agent: Agent) => {
+      openConfirm({
         title: 'Delete Agent',
         message: `Are you sure you want to delete "${agent.name}"? This action cannot be undone.`,
         confirmText: 'Delete',
         confirmColor: 'error',
+        onConfirm: async () => {
+          await agentStore.remove(agent.id)
+        },
       })
-
-      const confirmed = await confirm.confirmAsync(async () => {
-        await agentStore.remove(agent.id)
-      })
-
-      if (confirmed) {
-        // Agent deleted successfully
-      }
     },
-    [confirm],
+    [openConfirm],
   )
 
   const loading = agentsLoading || sessionsLoading
@@ -245,16 +241,16 @@ function AgentsPage() {
         />
 
         <ConfirmModal
-          open={confirm.open}
-          onClose={confirm.closeConfirm}
-          onConfirm={confirm.onConfirm}
-          title={confirm.title}
-          message={confirm.message}
-          confirmText={confirm.confirmText}
-          cancelText={confirm.cancelText}
-          confirmColor={confirm.confirmColor}
-          loading={confirm.loading}
-          error={confirm.error}
+          open={confirmModal.open}
+          onClose={confirmModal.closeConfirm}
+          onConfirm={confirmModal.handleConfirm}
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmText={confirmModal.confirmText}
+          cancelText={confirmModal.cancelText}
+          confirmColor={confirmModal.confirmColor}
+          loading={confirmModal.loading}
+          error={confirmModal.error}
         />
       </Box>
     </FadeIn>

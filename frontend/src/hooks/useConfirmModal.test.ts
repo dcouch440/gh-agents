@@ -20,6 +20,7 @@ describe('useConfirmModal', () => {
         message: 'Are you sure?',
         confirmText: 'Delete',
         confirmColor: 'error',
+        onConfirm: vi.fn().mockResolvedValue(undefined),
       })
     })
 
@@ -37,6 +38,7 @@ describe('useConfirmModal', () => {
       result.current.openConfirm({
         title: 'Confirm',
         message: 'Proceed?',
+        onConfirm: vi.fn().mockResolvedValue(undefined),
       })
     })
 
@@ -52,6 +54,7 @@ describe('useConfirmModal', () => {
       result.current.openConfirm({
         title: 'Test',
         message: 'Test message',
+        onConfirm: vi.fn().mockResolvedValue(undefined),
       })
     })
 
@@ -74,21 +77,15 @@ describe('useConfirmModal', () => {
       result.current.openConfirm({
         title: 'Delete',
         message: 'Delete this?',
+        onConfirm: asyncAction,
       })
     })
 
-    // Start async confirmation
-    const confirmPromise = result.current.confirmAsync(asyncAction)
-
-    // Execute the action
     await act(async () => {
-      await result.current.onConfirm()
+      await result.current.handleConfirm()
     })
 
-    const confirmed = await confirmPromise
-
     expect(asyncAction).toHaveBeenCalledTimes(1)
-    expect(confirmed).toBe(true)
     expect(result.current.open).toBe(false)
     expect(result.current.loading).toBe(false)
   })
@@ -102,21 +99,15 @@ describe('useConfirmModal', () => {
       result.current.openConfirm({
         title: 'Delete',
         message: 'Delete this?',
+        onConfirm: asyncAction,
       })
     })
 
-    // Start async confirmation
-    const confirmPromise = result.current.confirmAsync(asyncAction)
-
-    // Execute the action
     await act(async () => {
-      await result.current.onConfirm()
+      await result.current.handleConfirm()
     })
 
-    const confirmed = await confirmPromise
-
     expect(asyncAction).toHaveBeenCalledTimes(1)
-    expect(confirmed).toBe(false)
     expect(result.current.open).toBe(true) // Should stay open on error
     expect(result.current.loading).toBe(false)
     expect(result.current.error).toBe('Operation failed')
@@ -126,28 +117,18 @@ describe('useConfirmModal', () => {
     const {result} = renderHook(() => useConfirmModal())
     const asyncAction = vi.fn().mockResolvedValue(undefined)
 
-    // Open the confirm modal
     act(() => {
       result.current.openConfirm({
         title: 'Delete',
         message: 'Delete this?',
+        onConfirm: asyncAction,
       })
     })
 
-    // Start async confirmation
-    const confirmPromise = result.current.confirmAsync(asyncAction)
-
-    // Execute the confirmation
-    const onConfirmPromise = result.current.onConfirm()
-
-    // Loading should become false after completion
     await act(async () => {
-      await onConfirmPromise
+      await result.current.handleConfirm()
     })
 
-    await confirmPromise
-
-    // Verify loading is false after completion
     expect(result.current.loading).toBe(false)
     expect(asyncAction).toHaveBeenCalledTimes(1)
   })
@@ -156,26 +137,29 @@ describe('useConfirmModal', () => {
     const {result} = renderHook(() => useConfirmModal())
     const asyncAction = vi.fn().mockRejectedValue('String error')
 
-    // Open the confirm modal
     act(() => {
       result.current.openConfirm({
         title: 'Delete',
         message: 'Delete this?',
+        onConfirm: asyncAction,
       })
     })
 
-    // Start async confirmation
-    const confirmPromise = result.current.confirmAsync(asyncAction)
-
-    // Execute the confirmation
     await act(async () => {
-      await result.current.onConfirm()
+      await result.current.handleConfirm()
     })
 
-    // Wait for the promise to resolve
-    const confirmed = await confirmPromise
-
-    expect(confirmed).toBe(false)
     expect(result.current.error).toBe('Operation failed')
+  })
+
+  it('does nothing if handleConfirm called without pending action', async () => {
+    const {result} = renderHook(() => useConfirmModal())
+
+    await act(async () => {
+      await result.current.handleConfirm()
+    })
+
+    expect(result.current.open).toBe(false)
+    expect(result.current.loading).toBe(false)
   })
 })

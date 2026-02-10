@@ -131,6 +131,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
 
   return (
     <Box
+      onMouseDown={(e) => { e.stopPropagation() }}
       sx={{
         position: 'fixed',
         left: position.x,
