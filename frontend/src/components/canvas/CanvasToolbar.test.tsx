@@ -5,10 +5,12 @@ import { CanvasToolbar } from './CanvasToolbar'
 
 const {
   mockSelectDirty,
+  mockSelectSteps,
   mockSaveAllDirtySteps,
   mockRevertSteps,
 } = vi.hoisted(() => ({
   mockSelectDirty: vi.fn(() => false),
+  mockSelectSteps: vi.fn((): unknown[] => []),
   mockSaveAllDirtySteps: vi.fn(() => Promise.resolve()),
   mockRevertSteps: vi.fn(() => Promise.resolve()),
 }))
@@ -16,11 +18,14 @@ const {
 vi.mock('@/stores', () => ({
   useStore: vi.fn((_store: unknown, selector: unknown) => {
     if (selector === mockSelectDirty) return mockSelectDirty()
+    if (selector === mockSelectSteps) return mockSelectSteps()
     return undefined
   }),
   workflowStore: {
     store: { getState: vi.fn(), subscribe: vi.fn() },
     selectDirty: mockSelectDirty,
+    selectSteps: mockSelectSteps,
+    selectActiveWorkflowId: vi.fn(),
     saveAllDirtySteps: mockSaveAllDirtySteps,
     revertSteps: mockRevertSteps,
   },

@@ -471,6 +471,73 @@ pub async fn execute_workflow_via_engine(
             continue;
         }
 
+        // Entry / document steps pass through their prompt_template as output — no LLM call
+        if step.execution_mode == "entry" || step.execution_mode == "document" {
+            let step_start = std::time::Instant::now();
+            let output_key = resolve_output_key(step, &port_meta.step_outputs);
+            let content = if step.prompt_template.is_empty() {
+                ctx.initial_input.clone()
+            } else {
+                step.prompt_template.clone()
+            };
+            let value = JsonValue::String(content.clone());
+
+            var_outputs.insert(output_key.clone(), value.clone());
+
+            let output = StepOutput {
+                variable_name: output_key,
+                structured_output: Some(value.clone()),
+                raw_output: content,
+            };
+
+            let envelope = StepExecutionEnvelope {
+                status: ExecutionStatus::Success,
+                data: Some(value),
+                metadata: ExecutionMetadata {
+                    execution_id: step.id,
+                    execution_time_ms: 0,
+                    tokens_in: Some(0),
+                    tokens_out: Some(0),
+                    cost_usd: Some(0.0),
+                    model: None,
+                    agent_id: None,
+                    iteration_index: None,
+                    iteration_label: None,
+                    routing_label: None,
+                    selected_routing_document_id: None,
+                    upstream_agent_id: None,
+                    upstream_routing_label: None,
+                    room_session_id: None,
+                    room_id: None,
+                    total_rounds: None,
+                },
+                error: None,
+            };
+            completed_envelopes.insert(step.id, envelope);
+            completed.insert(step.id, output);
+
+            broadcast_workflow_event(
+                state,
+                ctx,
+                step.workflow_id,
+                WorkflowEventKind::StepCompleted {
+                    step_id: step.id,
+                    step_name: step
+                        .output_variable_name
+                        .clone()
+                        .unwrap_or_else(|| step.id.to_string()),
+                    agent_id: None,
+                    output: None,
+                    input_tokens: Some(0),
+                    output_tokens: Some(0),
+                    duration_ms: Some(step_start.elapsed().as_millis() as u64),
+                },
+            );
+
+            info!(step_id = %step.id, "Entry step pass-through completed");
+            continue;
+        }
+
         // Load agent
         let agent = state
             .repo()

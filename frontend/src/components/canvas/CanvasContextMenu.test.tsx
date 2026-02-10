@@ -3,19 +3,23 @@ import { render, screen } from '@/test/render'
 import userEvent from '@testing-library/user-event'
 import { CanvasContextMenu } from './CanvasContextMenu'
 
-const { mockCreateStep, mockDeleteStep } = vi.hoisted(() => ({
+const { mockCreateStep, mockDeleteStep, mockSelectSteps } = vi.hoisted(() => ({
   mockCreateStep: vi.fn(),
   mockDeleteStep: vi.fn(),
+  mockSelectSteps: vi.fn((): unknown[] => []),
 }))
 
 vi.mock('@/stores', () => ({
   useStore: vi.fn((_store: unknown, selector: unknown) => {
+    if (selector === mockSelectSteps) return mockSelectSteps()
     if (typeof selector === 'function') return (selector as (s: unknown) => unknown)(null)
     return undefined
   }),
   workflowStore: {
+    store: 'workflow',
     createStep: mockCreateStep,
     deleteStep: mockDeleteStep,
+    selectSteps: mockSelectSteps,
   },
   protocolStore: {
     store: 'protocol',

@@ -10,6 +10,8 @@ export const STEP_TYPE_COLORS: Record<string, string> = {
   for_each: '#2dd4bf',
   room: '#a78bfa',
   cavernous: '#f59e0b',
+  entry: '#10b981',
+  document: '#10b981',
 }
 
 export const DEFAULT_STEP_TYPE_COLOR = '#7d8590'
