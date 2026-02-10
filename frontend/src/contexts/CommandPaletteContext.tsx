@@ -1,5 +1,6 @@
 import { createContext, useCallback, useMemo, useState, type ReactNode } from 'react';
 import { LS_RECENT_COMMANDS, COMMAND_PALETTE } from '@/constants';
+import { Collections } from '@/utils/collections';
 
 type CommandItem = {
   id: string;
@@ -53,7 +54,7 @@ function CommandPaletteProvider({ children }: { children: ReactNode }) {
 
   const registerCommands = useCallback((newCommands: CommandItem[]) => {
     setCommands((prev) => {
-      const ids = new Set(newCommands.map((c) => c.id));
+      const ids = Collections.toSetBy(newCommands, (c) => c.id);
       const filtered = prev.filter((c) => !ids.has(c.id));
       return [...filtered, ...newCommands];
     });

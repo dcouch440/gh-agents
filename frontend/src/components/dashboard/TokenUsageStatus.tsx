@@ -1,5 +1,6 @@
 import { Box, Typography } from '@mui/material'
 import type { UsageSummary } from '@/types'
+import { Collections } from '@/utils/collections'
 
 type TokenUsageStatusProps = {
   usage: UsageSummary[]
@@ -12,9 +13,11 @@ const fmtTokens = (n: number): string => {
 }
 
 function TokenUsageStatus({ usage }: TokenUsageStatusProps) {
-  const totalInput = usage.reduce((s, r) => s + r.total_input, 0)
-  const totalOutput = usage.reduce((s, r) => s + r.total_output, 0)
-  const totalCalls = usage.reduce((s, r) => s + r.call_count, 0)
+  const totals = Collections.aggregate(usage, {
+    input: (r) => r.total_input,
+    output: (r) => r.total_output,
+    calls: (r) => r.call_count,
+  })
 
   return (
     <Box sx={{ fontSize: '0.75rem', lineHeight: 1.4 }}>
@@ -182,7 +185,7 @@ function TokenUsageStatus({ usage }: TokenUsageStatusProps) {
             fontVariantNumeric: 'tabular-nums',
           }}
         >
-          {totalCalls}
+          {totals.calls}
         </Typography>
         <Typography
           component="span"
@@ -195,7 +198,7 @@ function TokenUsageStatus({ usage }: TokenUsageStatusProps) {
             fontVariantNumeric: 'tabular-nums',
           }}
         >
-          {fmtTokens(totalInput)}
+          {fmtTokens(totals.input)}
         </Typography>
         <Typography
           component="span"
@@ -208,7 +211,7 @@ function TokenUsageStatus({ usage }: TokenUsageStatusProps) {
             fontVariantNumeric: 'tabular-nums',
           }}
         >
-          {fmtTokens(totalOutput)}
+          {fmtTokens(totals.output)}
         </Typography>
       </Box>
     </Box>
