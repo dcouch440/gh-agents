@@ -1,7 +1,7 @@
 import { memo, useState, useCallback, useEffect } from 'react'
-import { Handle, Position } from '@xyflow/react'
+import { Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
-import { useTheme } from '@mui/material/styles'
+
 import EditOutlined from '@mui/icons-material/EditOutlined'
 import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
 import InputOutlined from '@mui/icons-material/InputOutlined'
@@ -10,7 +10,8 @@ import { useStore, workflowStore, canvasStore } from '@/stores'
 import type { CreateDocumentDefRequest } from '@/types/workflow'
 import { CanvasFormNode } from '../CanvasFormNode'
 import type { CanvasFormTab } from '../CanvasFormNode'
-import { CANVAS, PROTOCOL_TYPE_COLORS } from '../constants'
+import { CanvasHandle } from '../CanvasHandle'
+import { PROTOCOL_TYPE_COLORS } from '../constants'
 import { nodeDataEqual } from '../mappers'
 import { DocumenterHeader } from './DocumenterHeader'
 import { PromptTab } from './tabs/PromptTab'
@@ -29,7 +30,6 @@ type DocumenterNodeData = {
 }
 
 function DocumenterNodeComponent({ id, data, selected }: NodeProps) {
-  const theme = useTheme()
   const [activeTabId, setActiveTabId] = useState('prompt')
   const [adding, setAdding] = useState(false)
   const nodeData = data as DocumenterNodeData
@@ -139,17 +139,7 @@ function DocumenterNodeComponent({ id, data, selected }: NodeProps) {
       accentColor={accentColor}
       highlightMode={selfHighlight}
       extraHandles={
-        <Handle
-          type="source"
-          position={Position.Top}
-          id="documents"
-          style={{
-            width: CANVAS.HANDLE_SIZE,
-            height: CANVAS.HANDLE_SIZE,
-            background: accentColor,
-            border: `2px solid ${theme.palette.custom.bgHeader}`,
-          }}
-        />
+        <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />
       }
     />
   )

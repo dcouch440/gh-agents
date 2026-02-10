@@ -1,0 +1,8 @@
+@keyframes edgeFlow {
+  from {
+    stroke-dashoffset: 10;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}

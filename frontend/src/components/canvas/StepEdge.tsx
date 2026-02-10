@@ -4,6 +4,8 @@ import type { EdgeProps } from '@xyflow/react'
 import CloseIcon from '@mui/icons-material/Close'
 import IconButton from '@mui/material/IconButton'
 import { useTheme } from '@mui/material/styles'
+import { CANVAS } from './constants'
+import './edgeFlow.css'
 
 type StepEdgeNodeData = {
   protocolColor: string | null
@@ -40,9 +42,10 @@ function StepEdgeComponent(props: EdgeProps) {
           stroke: selected
             ? theme.palette.primary.main
             : protocolColor ?? theme.palette.text.secondary,
-          strokeWidth: 2.5,
-          strokeDasharray: protocolColor !== null ? '6 4' : undefined,
-          opacity: selected ? 0.8 : protocolColor !== null ? 0.6 : 0.4,
+          strokeWidth: CANVAS.EDGE_STROKE_WIDTH,
+          strokeDasharray: protocolColor !== null ? CANVAS.EDGE_DASH_PATTERN : undefined,
+          opacity: selected ? CANVAS.EDGE_OPACITY_SELECTED : protocolColor !== null ? CANVAS.EDGE_OPACITY_PROTOCOL : CANVAS.EDGE_OPACITY_DEFAULT,
+          animation: protocolColor !== null ? `edgeFlow ${CANVAS.EDGE_FLOW_DURATION} linear infinite` : undefined,
           transition: 'stroke 150ms ease, opacity 150ms ease',
         }}
       />

@@ -1,8 +1,9 @@
 import { memo, useState } from 'react'
-import { Handle, Position, NodeResizer } from '@xyflow/react'
+import { Position, NodeResizer } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
+import { CanvasHandle } from '../CanvasHandle'
 import { DOCUMENT_NODE } from './constants'
 import { DocumentNodeHeader } from './DocumentNodeHeader'
 import { DocumentNodeContent } from './DocumentNodeContent'
@@ -57,18 +58,7 @@ function DocumentNodeComponent({ data, selected }: NodeProps) {
         cursor: 'default',
       }}
     >
-      <Handle
-        type="target"
-        position={Position.Bottom}
-        id="document-input"
-        style={{
-          width: 8,
-          height: 8,
-          background: accentColor,
-          border: `2px solid ${theme.palette.custom.bgHeader}`,
-          pointerEvents: 'none',
-        }}
-      />
+      <CanvasHandle type="target" position={Position.Bottom} id="document-input" color={accentColor} variant="passive" />
 
       <NodeResizer
         isVisible={hovered || selected === true}
