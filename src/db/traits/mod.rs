@@ -1226,6 +1226,9 @@ pub trait ToolCapabilityRepo: Send + Sync {
     /// Get all tools that provide a capability
     async fn get_tools_by_capability(&self, capability_key: &str) -> Result<Vec<ToolRow>>;
 
+    /// Get all tools that provide ANY of the given capabilities (union, deduplicated)
+    async fn get_tools_by_capabilities(&self, capability_keys: &[String]) -> Result<Vec<ToolRow>>;
+
     /// Assign a capability to a tool
     async fn assign_capability_to_tool(&self, tool_id: Uuid, capability_id: Uuid) -> Result<()>;
 
