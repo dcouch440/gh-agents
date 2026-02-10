@@ -9,6 +9,7 @@ import { DOCUMENT_NODE } from './constants'
 import { DocumentNodeHeader } from './DocumentNodeHeader'
 import { DocumentNodeContent } from './DocumentNodeContent'
 import type { DocumentNodeData } from './types'
+import { nodeDataEqual } from '../mappers'
 
 function DocumentNodeComponent({ id, data, selected }: NodeProps) {
   const theme = useTheme()
@@ -126,6 +127,11 @@ function DocumentNodeComponent({ id, data, selected }: NodeProps) {
   )
 }
 
-const DocumentNode = memo(DocumentNodeComponent)
+const documentNodeEqual = (prev: NodeProps, next: NodeProps): boolean =>
+  prev.selected === next.selected &&
+  prev.id === next.id &&
+  nodeDataEqual(prev.data, next.data)
+
+const DocumentNode = memo(DocumentNodeComponent, documentNodeEqual)
 
 export { DocumentNode }

@@ -8,6 +8,7 @@ import { workflowStore } from '@/stores'
 import { CanvasFormNode } from '../CanvasFormNode'
 import type { CanvasFormTab } from '../CanvasFormNode'
 import { PROTOCOL_TYPE_COLORS } from '../constants'
+import { nodeDataEqual } from '../mappers'
 import { DocumenterHeader } from './DocumenterHeader'
 import { PromptTab } from './tabs/PromptTab'
 import { DocumentsTab } from './tabs/DocumentsTab'
@@ -100,7 +101,12 @@ function DocumenterNodeComponent({ id, data, selected }: NodeProps) {
   )
 }
 
-const DocumenterNode = memo(DocumenterNodeComponent)
+const documenterNodeEqual = (prev: NodeProps, next: NodeProps): boolean =>
+  prev.selected === next.selected &&
+  prev.id === next.id &&
+  nodeDataEqual(prev.data, next.data)
+
+const DocumenterNode = memo(DocumenterNodeComponent, documenterNodeEqual)
 
 export { DocumenterNode }
 export type { DocumenterNodeData }

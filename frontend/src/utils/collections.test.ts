@@ -358,6 +358,49 @@ describe('setMatchesArray', () => {
   })
 })
 
+// ── arraysEqual ───────────────────────────────────────────────────────
+
+describe('arraysEqual', () => {
+  it('returns true for same reference', () => {
+    const arr = [1, 2, 3]
+    expect(Collections.arraysEqual(arr, arr)).toBe(true)
+  })
+
+  it('returns true for equal primitive arrays', () => {
+    expect(Collections.arraysEqual([1, 2, 3], [1, 2, 3])).toBe(true)
+  })
+
+  it('returns false for different lengths', () => {
+    expect(Collections.arraysEqual([1, 2], [1, 2, 3])).toBe(false)
+  })
+
+  it('returns false for different elements', () => {
+    expect(Collections.arraysEqual([1, 2, 3], [1, 9, 3])).toBe(false)
+  })
+
+  it('returns true for both empty', () => {
+    expect(Collections.arraysEqual([], [])).toBe(true)
+  })
+
+  it('uses Object.is semantics (NaN === NaN)', () => {
+    expect(Collections.arraysEqual([NaN], [NaN])).toBe(true)
+  })
+
+  it('distinguishes +0 and -0', () => {
+    expect(Collections.arraysEqual([0], [-0])).toBe(false)
+  })
+
+  it('works with string arrays', () => {
+    expect(Collections.arraysEqual(['a', 'b'], ['a', 'b'])).toBe(true)
+    expect(Collections.arraysEqual(['a', 'b'], ['a', 'c'])).toBe(false)
+  })
+
+  it('works with null/undefined elements', () => {
+    expect(Collections.arraysEqual([null, undefined], [null, undefined])).toBe(true)
+    expect(Collections.arraysEqual([null], [undefined])).toBe(false)
+  })
+})
+
 // ── sortedCopy ─────────────────────────────────────────────────────────────
 
 describe('sortedCopy', () => {
