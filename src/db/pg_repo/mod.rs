@@ -16,10 +16,10 @@ use crate::db::{
     AgentExecutionRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow,
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
     DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow,
-    ProtocolDocumentDefRow, ProtocolPortRow, ProtocolRow, ResultRow, RoomExecutionOutputRow,
-    RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry, RouterRequestRow, SessionRow,
-    StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow,
-    TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow, ToolRow,
+    ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow, ResultRow,
+    RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry,
+    RouterRequestRow, SessionRow, StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow,
+    SystemConfigRow, TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow, ToolRow,
     WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
     WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
 };
@@ -3903,6 +3903,167 @@ impl ProtocolRepo for PgRepo {
             .execute(&self.pool)
             .await?;
         Ok(())
+    }
+
+    // --- Protocol-scoped Document Definitions ---
+
+    async fn list_protocol_document_defs(
+        &self,
+        protocol_id: Uuid,
+    ) -> Result<Vec<ProtocolDocumentDefRow>> {
+        let rows = sqlx::query_as::<_, ProtocolDocumentDefRow>(
+            "SELECT id, step_id, name, description, target_length, display_order, created_at, protocol_id, document_id \
+             FROM protocol_document_defs WHERE protocol_id = $1 ORDER BY display_order, created_at",
+        )
+        .bind(protocol_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn create_protocol_document_def(
+        &self,
+        def: ProtocolDocumentDefRow,
+    ) -> Result<ProtocolDocumentDefRow> {
+        let row = sqlx::query_as::<_, ProtocolDocumentDefRow>(
+            "INSERT INTO protocol_document_defs (id, step_id, name, description, target_length, display_order, protocol_id, document_id) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
+             RETURNING id, step_id, name, description, target_length, display_order, created_at, protocol_id, document_id",
+        )
+        .bind(def.id)
+        .bind(def.step_id)
+        .bind(&def.name)
+        .bind(&def.description)
+        .bind(def.target_length)
+        .bind(def.display_order)
+        .bind(def.protocol_id)
+        .bind(def.document_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn update_protocol_document_def(
+        &self,
+        id: Uuid,
+        name: String,
+        description: String,
+        target_length: i32,
+    ) -> Result<ProtocolDocumentDefRow> {
+        let row = sqlx::query_as::<_, ProtocolDocumentDefRow>(
+            "UPDATE protocol_document_defs SET name = $2, description = $3, target_length = $4 \
+             WHERE id = $1 \
+             RETURNING id, step_id, name, description, target_length, display_order, created_at, protocol_id, document_id",
+        )
+        .bind(id)
+        .bind(&name)
+        .bind(&description)
+        .bind(target_length)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn delete_protocol_document_def(&self, id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM protocol_document_defs WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    // --- Protocol Executions ---
+
+    async fn create_protocol_execution(
+        &self,
+        row: ProtocolExecutionRow,
+    ) -> Result<ProtocolExecutionRow> {
+        let result = sqlx::query_as::<_, ProtocolExecutionRow>(
+            "INSERT INTO protocol_executions \
+             (id, protocol_step_id, workflow_run_id, phase, document_def_id, agent_id, \
+              input_prompt, output_content, status, error_message, \
+              tokens_in, tokens_out, cost_usd, model, capabilities_used, created_at, completed_at) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) \
+             RETURNING *",
+        )
+        .bind(row.id)
+        .bind(row.protocol_step_id)
+        .bind(row.workflow_run_id)
+        .bind(&row.phase)
+        .bind(row.document_def_id)
+        .bind(row.agent_id)
+        .bind(&row.input_prompt)
+        .bind(&row.output_content)
+        .bind(&row.status)
+        .bind(&row.error_message)
+        .bind(row.tokens_in)
+        .bind(row.tokens_out)
+        .bind(row.cost_usd)
+        .bind(&row.model)
+        .bind(&row.capabilities_used)
+        .bind(row.created_at)
+        .bind(row.completed_at)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(result)
+    }
+
+    async fn update_protocol_execution_status(
+        &self,
+        id: Uuid,
+        status: String,
+        output_content: Option<String>,
+        error_message: Option<String>,
+        tokens_in: Option<i32>,
+        tokens_out: Option<i32>,
+        cost_usd: Option<f64>,
+        model: Option<String>,
+    ) -> Result<ProtocolExecutionRow> {
+        let row = sqlx::query_as::<_, ProtocolExecutionRow>(
+            "UPDATE protocol_executions \
+             SET status = $2, output_content = $3, error_message = $4, \
+                 tokens_in = $5, tokens_out = $6, cost_usd = $7, model = $8, \
+                 completed_at = CASE WHEN $2 IN ('complete', 'failed') THEN now() ELSE completed_at END \
+             WHERE id = $1 \
+             RETURNING *",
+        )
+        .bind(id)
+        .bind(&status)
+        .bind(&output_content)
+        .bind(&error_message)
+        .bind(tokens_in)
+        .bind(tokens_out)
+        .bind(cost_usd)
+        .bind(&model)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn list_protocol_executions_by_step(
+        &self,
+        step_id: Uuid,
+    ) -> Result<Vec<ProtocolExecutionRow>> {
+        let rows = sqlx::query_as::<_, ProtocolExecutionRow>(
+            "SELECT * FROM protocol_executions WHERE protocol_step_id = $1 ORDER BY created_at",
+        )
+        .bind(step_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn list_protocol_executions_by_run(
+        &self,
+        run_id: Uuid,
+    ) -> Result<Vec<ProtocolExecutionRow>> {
+        let rows = sqlx::query_as::<_, ProtocolExecutionRow>(
+            "SELECT * FROM protocol_executions WHERE workflow_run_id = $1 ORDER BY created_at",
+        )
+        .bind(run_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
     }
 }
 

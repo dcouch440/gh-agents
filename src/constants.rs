@@ -353,6 +353,9 @@ pub mod routes {
     pub const PROTOCOL_PREVIEW: &str = "/protocols/:id/preview";
     pub const PROTOCOL_APPLY: &str = "/protocols/:id/apply/:step_id";
     pub const PROTOCOL_UNAPPLY: &str = "/protocols/:protocol_id/unapply/:step_id";
+    pub const PROTOCOL_DOCUMENT_DEFS: &str = "/protocols/:id/document-defs";
+    pub const PROTOCOL_DOCUMENT_DEF: &str = "/protocols/:pid/document-defs/:did";
+    pub const PROTOCOL_EXECUTIONS: &str = "/protocols/:id/executions";
 
     // WebSocket
     pub const WS: &str = "/ws";
