@@ -3,12 +3,11 @@ import { WsStoreRouter } from './WsStoreRouter'
 import { sessionStore } from '@/stores/sessionStore'
 import { roomStore } from '@/stores/roomStore'
 import { workflowExecutionStore } from '@/stores/workflowExecutionStore'
+import { activityStore } from '@/stores/activity'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-const mockUnsubSession = vi.hoisted(() => vi.fn())
-const mockUnsubRoom = vi.hoisted(() => vi.fn())
-const mockUnsubWorkflow = vi.hoisted(() => vi.fn())
+const mockUnsubs = vi.hoisted(() => Array.from({ length: 6 }, () => vi.fn()))
 const mockSubscribe = vi.hoisted(() => vi.fn())
 
 vi.mock('@/hooks/useWebSocket', () => ({
@@ -28,29 +27,37 @@ vi.mock('@/api', () => ({ api: {} }))
 describe('WsStoreRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockSubscribe
-      .mockReturnValueOnce(mockUnsubSession)
-      .mockReturnValueOnce(mockUnsubRoom)
-      .mockReturnValueOnce(mockUnsubWorkflow)
+    mockUnsubs.forEach((fn) => fn.mockClear())
+    mockSubscribe.mockReset()
+    for (let i = 0; i < 6; i++) {
+      mockSubscribe.mockReturnValueOnce(mockUnsubs[i])
+    }
   })
 
-  it('subscribes to session, room, and workflow topics on mount', () => {
+  it('subscribes to all 3 topics for domain stores + flight recorder (6 total)', () => {
     render(<WsStoreRouter />)
 
-    expect(mockSubscribe).toHaveBeenCalledTimes(3)
+    expect(mockSubscribe).toHaveBeenCalledTimes(6)
+
+    // Domain store handlers
     expect(mockSubscribe).toHaveBeenCalledWith('session', sessionStore.handleWsEvent)
     expect(mockSubscribe).toHaveBeenCalledWith('room', roomStore.handleWsEvent)
     expect(mockSubscribe).toHaveBeenCalledWith('workflow', workflowExecutionStore.handleWsEvent)
+
+    // Flight recorder handlers
+    expect(mockSubscribe).toHaveBeenCalledWith('session', activityStore.handleWsEvent)
+    expect(mockSubscribe).toHaveBeenCalledWith('room', activityStore.handleWsEvent)
+    expect(mockSubscribe).toHaveBeenCalledWith('workflow', activityStore.handleWsEvent)
   })
 
-  it('unsubscribes on unmount', () => {
+  it('unsubscribes all 6 handlers on unmount', () => {
     const { unmount } = render(<WsStoreRouter />)
 
     unmount()
 
-    expect(mockUnsubSession).toHaveBeenCalledTimes(1)
-    expect(mockUnsubRoom).toHaveBeenCalledTimes(1)
-    expect(mockUnsubWorkflow).toHaveBeenCalledTimes(1)
+    mockUnsubs.forEach((fn) => {
+      expect(fn).toHaveBeenCalledTimes(1)
+    })
   })
 
   it('renders nothing', () => {
