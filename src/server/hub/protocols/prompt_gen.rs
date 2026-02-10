@@ -195,6 +195,81 @@ pub fn transform_prompt(schema_description: Option<&str>) -> String {
     lines.join("\n")
 }
 
+/// Generate the documenter prompt injection: instructs the strategist to plan
+/// research and writing for each requested document.
+pub fn documenter_prompt(doc_defs: &[serde_json::Value], capabilities: &[String]) -> String {
+    let mut lines = Vec::new();
+
+    lines.push(
+        "You are a Document Strategist. Your job is to plan how each \
+         requested document should be researched and written."
+            .to_string(),
+    );
+    lines.push(String::new());
+    lines.push("Requested Documents:".to_string());
+
+    for (i, def) in doc_defs.iter().enumerate() {
+        let name = def["name"].as_str().unwrap_or("Unnamed");
+        let description = def["description"].as_str().unwrap_or("");
+        let target_length = def["target_length"].as_i64().unwrap_or(2000);
+
+        lines.push(String::new());
+        if description.is_empty() {
+            lines.push(format!(
+                "{}. \"{}\" (target: ~{} characters)",
+                i + 1,
+                name,
+                target_length
+            ));
+        } else {
+            lines.push(format!(
+                "{}. \"{}\" — {} (target: ~{} characters)",
+                i + 1,
+                name,
+                description,
+                target_length
+            ));
+        }
+    }
+
+    if !capabilities.is_empty() {
+        lines.push(String::new());
+        lines.push("Available Research Capabilities:".to_string());
+        for cap in capabilities {
+            lines.push(format!("- {}", cap));
+        }
+    }
+
+    lines.push(String::new());
+    lines.push("For each document, provide:".to_string());
+    lines.push(
+        "- document_name: must match one of the document names listed above exactly".to_string(),
+    );
+    lines.push(
+        "- research_strategy: a step-by-step plan for gathering the information \
+         needed to write this document"
+            .to_string(),
+    );
+    lines.push(
+        "- required_capabilities: which capabilities the researcher needs \
+         from the list above (empty array if no research tools are needed)"
+            .to_string(),
+    );
+    lines.push(
+        "- writer_prompt: detailed instructions for the writer, including \
+         tone, structure, target audience, and focus areas"
+            .to_string(),
+    );
+    lines.push(String::new());
+    lines.push(
+        "Respond with a JSON object containing a \"document_plans\" array \
+         with one entry per document."
+            .to_string(),
+    );
+
+    lines.join("\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -353,5 +428,72 @@ mod tests {
     fn transform_prompt_omits_schema_context_when_none() {
         let prompt = transform_prompt(None);
         assert!(!prompt.contains("Schema context"));
+    }
+
+    // --- documenter_prompt tests ---
+
+    fn make_doc_defs() -> Vec<serde_json::Value> {
+        vec![
+            serde_json::json!({"name": "API Reference", "description": "REST API docs", "target_length": 5000}),
+            serde_json::json!({"name": "Architecture Guide", "description": "System overview", "target_length": 3000}),
+        ]
+    }
+
+    #[test]
+    fn documenter_prompt_includes_all_documents() {
+        let defs = make_doc_defs();
+        let prompt = documenter_prompt(&defs, &[]);
+        assert!(prompt.contains("\"API Reference\""));
+        assert!(prompt.contains("\"Architecture Guide\""));
+        assert!(prompt.contains("~5000 characters"));
+        assert!(prompt.contains("~3000 characters"));
+        assert!(prompt.contains("REST API docs"));
+        assert!(prompt.contains("System overview"));
+    }
+
+    #[test]
+    fn documenter_prompt_includes_strategist_role() {
+        let defs = make_doc_defs();
+        let prompt = documenter_prompt(&defs, &[]);
+        assert!(prompt.contains("Document Strategist"));
+    }
+
+    #[test]
+    fn documenter_prompt_includes_capabilities() {
+        let defs = make_doc_defs();
+        let caps = vec!["web_search".to_string(), "code_analysis".to_string()];
+        let prompt = documenter_prompt(&defs, &caps);
+        assert!(prompt.contains("Available Research Capabilities:"));
+        assert!(prompt.contains("- web_search"));
+        assert!(prompt.contains("- code_analysis"));
+    }
+
+    #[test]
+    fn documenter_prompt_omits_capabilities_when_empty() {
+        let defs = make_doc_defs();
+        let prompt = documenter_prompt(&defs, &[]);
+        assert!(!prompt.contains("Available Research Capabilities:"));
+    }
+
+    #[test]
+    fn documenter_prompt_includes_response_format() {
+        let defs = make_doc_defs();
+        let prompt = documenter_prompt(&defs, &[]);
+        assert!(prompt.contains("document_name"));
+        assert!(prompt.contains("research_strategy"));
+        assert!(prompt.contains("required_capabilities"));
+        assert!(prompt.contains("writer_prompt"));
+        assert!(prompt.contains("document_plans"));
+    }
+
+    #[test]
+    fn documenter_prompt_handles_empty_description() {
+        let defs =
+            vec![serde_json::json!({"name": "Readme", "description": "", "target_length": 1000})];
+        let prompt = documenter_prompt(&defs, &[]);
+        assert!(prompt.contains("\"Readme\""));
+        assert!(prompt.contains("~1000 characters"));
+        // Should not have an em dash for empty description
+        assert!(!prompt.contains("\"Readme\" —"));
     }
 }

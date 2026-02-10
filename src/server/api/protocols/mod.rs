@@ -568,11 +568,54 @@ pub async fn apply_protocol(
     let agent_tools = resolve_agent_tools(&state, &ports).await?;
     let agent_schemas = resolve_agent_schemas(&state, &ports).await?;
 
+    // For documenter protocols, inject document definitions and capabilities into config
+    let protocol_config_json = if protocol.protocol_type == "documenter" {
+        let doc_defs = proto_repo
+            .list_protocol_document_defs(protocol_id)
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+
+        if doc_defs.is_empty() {
+            return Err(AppError::bad_request(
+                "Documenter protocol requires at least one document definition".to_string(),
+            ));
+        }
+
+        let defs_json: Vec<serde_json::Value> = doc_defs
+            .iter()
+            .map(|d| {
+                serde_json::json!({
+                    "name": d.name,
+                    "description": d.description,
+                    "target_length": d.target_length,
+                })
+            })
+            .collect();
+
+        let capabilities = state
+            .repos()
+            .tool_capabilities
+            .get_tool_capabilities()
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let cap_keys: Vec<String> = capabilities
+            .iter()
+            .map(|c| c.capability_key.clone())
+            .collect();
+
+        let mut config_json = protocol.config.clone();
+        config_json["document_defs"] = serde_json::json!(defs_json);
+        config_json["available_capabilities"] = serde_json::json!(cap_keys);
+        config_json
+    } else {
+        protocol.config.clone()
+    };
+
     // Expand
     let engine = state.protocol_engine();
     let config = engine.build_config(
         &protocol.protocol_type,
-        protocol.config.clone(),
+        protocol_config_json,
         &ports,
         &agent_names,
         &agent_tools,
@@ -608,10 +651,62 @@ pub async fn apply_protocol(
             anchor_step.prompt_template, expansion.prompt_injection
         );
     }
+    // For documenter protocols, also set execution_mode so the DAG executor
+    // dispatches to DocumenterExecutor at runtime.
+    if protocol.protocol_type == "documenter" {
+        updated_step.execution_mode = "documenter".to_string();
+    }
     wf_repo
         .update_step(updated_step)
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    // 2b. Documenter-specific: scaffold blank documents and step-scoped doc defs.
+    if protocol.protocol_type == "documenter" {
+        let doc_defs = proto_repo
+            .list_protocol_document_defs(protocol_id)
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+
+        let doc_repo = &state.repos().documents;
+
+        for def in &doc_defs {
+            // Create blank document linked to the workflow
+            let doc = doc_repo
+                .create_workflow_document(
+                    auth.user_id.0,
+                    def.name.clone(),
+                    anchor_step.workflow_id,
+                    Some(def.target_length),
+                    Some(step_id),
+                )
+                .await
+                .map_err(|e| AppError::Internal(e.to_string()))?;
+
+            // Link document to the anchor step
+            wf_repo
+                .add_step_document(step_id, doc.id)
+                .await
+                .map_err(|e| AppError::Internal(e.to_string()))?;
+
+            // Create step-scoped copy of the doc def (step_id set, protocol_id null)
+            let step_scoped_def = crate::db::ProtocolDocumentDefRow {
+                id: Uuid::new_v4(),
+                step_id: Some(step_id),
+                name: def.name.clone(),
+                description: def.description.clone(),
+                target_length: def.target_length,
+                display_order: def.display_order,
+                created_at: chrono::Utc::now(),
+                protocol_id: None,
+                document_id: Some(doc.id),
+            };
+            wf_repo
+                .create_document_def(step_scoped_def)
+                .await
+                .map_err(|e| AppError::Internal(e.to_string()))?;
+        }
+    }
 
     // 3. Create downstream steps, routing rules, and edges
     let mut created_steps = Vec::new();

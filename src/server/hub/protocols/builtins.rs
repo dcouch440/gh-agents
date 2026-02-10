@@ -25,7 +25,7 @@ const PROTOCOLS_NS: Uuid = Uuid::from_bytes([
     0x70, 0x72, 0x6f, 0x74, 0x6f, 0x63, 0x6f, 0x6c, 0x73, 0x2d, 0x6e, 0x65, 0x78, 0x6f, 0x72, 0x21,
 ]);
 
-/// Returns the 5 built-in protocol definitions.
+/// Returns the 6 built-in protocol definitions.
 ///
 /// Each protocol type has a corresponding expander in `hub::protocols::expanders`
 /// that generates schemas, prompts, steps, and edges dynamically based on port
@@ -112,6 +112,21 @@ pub fn builtin_protocol_definitions() -> Vec<BuiltinProtocol> {
                 }
             }),
         },
+        // =====================================================================
+        // 6. Documenter — structured document generation pipeline
+        // =====================================================================
+        BuiltinProtocol {
+            id: Uuid::new_v5(&PROTOCOLS_NS, b"Documenter"),
+            name: "Documenter".into(),
+            description: "Generate structured documents from upstream context. \
+                Define document templates with names, descriptions, and target lengths. \
+                At runtime, an LLM strategist plans research for each document, \
+                capability-resolved tools gather information, then specialist writers \
+                produce the final content."
+                .into(),
+            protocol_type: "documenter".into(),
+            config: serde_json::json!({}),
+        },
     ]
 }
 
@@ -121,16 +136,16 @@ mod tests {
     use std::collections::HashSet;
 
     #[test]
-    fn returns_five_definitions() {
+    fn returns_six_definitions() {
         let defs = builtin_protocol_definitions();
-        assert_eq!(defs.len(), 5);
+        assert_eq!(defs.len(), 6);
     }
 
     #[test]
     fn all_names_unique() {
         let defs = builtin_protocol_definitions();
         let names: HashSet<&str> = defs.iter().map(|d| d.name.as_str()).collect();
-        assert_eq!(names.len(), 5);
+        assert_eq!(names.len(), 6);
     }
 
     #[test]
@@ -141,13 +156,20 @@ mod tests {
             assert_eq!(a.id, b.id);
         }
         let ids: HashSet<Uuid> = defs1.iter().map(|d| d.id).collect();
-        assert_eq!(ids.len(), 5);
+        assert_eq!(ids.len(), 6);
     }
 
     #[test]
     fn all_protocol_types_match_expander_keys() {
         let defs = builtin_protocol_definitions();
-        let expected_types = ["decomp", "route", "review", "transform", "default"];
+        let expected_types = [
+            "decomp",
+            "route",
+            "review",
+            "transform",
+            "default",
+            "documenter",
+        ];
         let actual_types: Vec<&str> = defs.iter().map(|d| d.protocol_type.as_str()).collect();
         assert_eq!(actual_types, expected_types);
     }
