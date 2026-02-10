@@ -19,3 +19,5 @@ export type { ToolRouter, CreateToolRouterRequest, UpdateToolRouterRequest, SetR
 export type { Room, RoomMember, RoomSession, RoomTranscriptEntry, RoomOutput, CreateRoomRequest, UpdateRoomRequest, AddRoomMemberRequest, SetRoomMembersRequest, RoomMessageRequest } from './room'
 export type { Collection, CollectionRun, CreateCollectionRequest, UpdateCollectionRequest } from './collection'
 export type { Protocol, ProtocolPort, ProtocolAgent, ProtocolSchema, ProtocolTemplate, ProtocolTypeInfo, CreateProtocolRequest, UpdateProtocolRequest, CreatePortRequest } from './protocol'
+export { ACTIVITY } from './activity'
+export type { ActivityEvent, ActivityEventOf, ActivityTopic, WorkflowStartedEvent, WorkflowStepStartedEvent, WorkflowStepCompletedEvent, WorkflowStepFailedEvent, WorkflowStepPausedEvent, WorkflowForEachProgressEvent, WorkflowCompletedEvent, WorkflowFailedEvent, WorkflowResumedEvent, RoomSpeakerStartEvent, RoomSpeakerTokenEvent, RoomSpeakerEndEvent, RoomTurnCompleteEvent, RoomSessionCompleteEvent, SessionCreatedEvent, SessionUpdatedEvent, SessionDeletedEvent } from './activity'
