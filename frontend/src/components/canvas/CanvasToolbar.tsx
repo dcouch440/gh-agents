@@ -252,22 +252,16 @@ function SaveDiscardBar() {
             <GradientButton
               onClick={() => { void handleSave(); }}
               loading={saving}
-              disabled={saving}
-              color={justSaved ? "success" : "primary"}
+              disabled={saving || justSaved}
+              color="primary"
               icon={
-                justSaved ? (
-                  <Zoom in timeout={200}>
-                    <CheckCircleOutline sx={{fontSize: 16}} />
-                  </Zoom>
-                ) : (
-                  <SaveOutlined
-                    sx={{ fontSize: 16, transition: "transform 0.2s ease" }}
-                  />
-                )
+                <SaveOutlined
+                  sx={{ fontSize: 16, transition: "transform 0.2s ease" }}
+                />
               }
               minWidth={100}
             >
-              {saving ? "Saving..." : justSaved ? "Saved!" : "Save"}
+              {saving ? "Saving..." : justSaved ? "Saved" : "Save"}
             </GradientButton>
           </span>
         </Tooltip>
