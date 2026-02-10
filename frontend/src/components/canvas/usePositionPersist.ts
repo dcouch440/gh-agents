@@ -17,6 +17,8 @@ const usePositionPersist = () => {
 
   const onNodeDragStop = useCallback(
     (_event: React.MouseEvent, node: Node) => {
+      // Virtual nodes (document artifacts) have no backing workflow step — skip persistence
+      if (node.id.startsWith('doc-artifact-')) return
       pendingRef.current.set(node.id, {
         position_x: Math.round(node.position.x),
         position_y: Math.round(node.position.y),
