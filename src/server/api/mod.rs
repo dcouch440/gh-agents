@@ -190,6 +190,11 @@ pub use cancellation::cancel_agent_execution;
 
 // Re-export protocol handlers and types
 pub mod protocols;
+pub use protocols::documents::{
+    create_protocol_document_def, delete_protocol_document_def, list_protocol_document_defs,
+    update_protocol_document_def,
+};
+pub use protocols::executions::list_protocol_executions;
 pub use protocols::{
     apply_protocol, create_port, create_protocol, delete_port, delete_protocol, get_protocol,
     list_protocol_types, list_protocols, preview_expansion, unapply_protocol, update_port,

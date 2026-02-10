@@ -12,10 +12,10 @@ use crate::db::{
     AgentExecutionRow, AgentGuidanceRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow,
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
     DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow,
-    ProtocolDocumentDefRow, ProtocolPortRow, ProtocolRow, ResultRow, RoomExecutionOutputRow,
-    RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry, RouterRequestRow, SessionRow,
-    StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow,
-    TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow, ToolRow,
+    ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow, ResultRow,
+    RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry,
+    RouterRequestRow, SessionRow, StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow,
+    SystemConfigRow, TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow, ToolRow,
     WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
     WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
 };
@@ -1391,4 +1391,63 @@ pub trait ProtocolRepo: Send + Sync {
 
     /// Remove a protocol linkage from a workflow step.
     async fn delete_step_protocol(&self, workflow_step_id: Uuid) -> Result<()>;
+
+    // --- Protocol-scoped Document Definitions ---
+
+    /// List document definitions scoped to a protocol (template defs).
+    async fn list_protocol_document_defs(
+        &self,
+        protocol_id: Uuid,
+    ) -> Result<Vec<ProtocolDocumentDefRow>>;
+
+    /// Create a protocol-scoped document definition.
+    async fn create_protocol_document_def(
+        &self,
+        def: ProtocolDocumentDefRow,
+    ) -> Result<ProtocolDocumentDefRow>;
+
+    /// Update a protocol-scoped document definition.
+    async fn update_protocol_document_def(
+        &self,
+        id: Uuid,
+        name: String,
+        description: String,
+        target_length: i32,
+    ) -> Result<ProtocolDocumentDefRow>;
+
+    /// Delete a protocol-scoped document definition.
+    async fn delete_protocol_document_def(&self, id: Uuid) -> Result<()>;
+
+    // --- Protocol Executions ---
+
+    /// Create a new protocol execution record.
+    async fn create_protocol_execution(
+        &self,
+        row: ProtocolExecutionRow,
+    ) -> Result<ProtocolExecutionRow>;
+
+    /// Update a protocol execution's status and output fields.
+    async fn update_protocol_execution_status(
+        &self,
+        id: Uuid,
+        status: String,
+        output_content: Option<String>,
+        error_message: Option<String>,
+        tokens_in: Option<i32>,
+        tokens_out: Option<i32>,
+        cost_usd: Option<f64>,
+        model: Option<String>,
+    ) -> Result<ProtocolExecutionRow>;
+
+    /// List all protocol executions for a given step.
+    async fn list_protocol_executions_by_step(
+        &self,
+        step_id: Uuid,
+    ) -> Result<Vec<ProtocolExecutionRow>>;
+
+    /// List all protocol executions for a given workflow run.
+    async fn list_protocol_executions_by_run(
+        &self,
+        run_id: Uuid,
+    ) -> Result<Vec<ProtocolExecutionRow>>;
 }

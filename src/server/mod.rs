@@ -460,6 +460,18 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         .route(routes::PROTOCOL_PREVIEW, post(api::preview_expansion))
         .route(routes::PROTOCOL_APPLY, post(api::apply_protocol))
         .route(routes::PROTOCOL_UNAPPLY, delete(api::unapply_protocol))
+        .route(
+            routes::PROTOCOL_DOCUMENT_DEFS,
+            get(api::list_protocol_document_defs).post(api::create_protocol_document_def),
+        )
+        .route(
+            routes::PROTOCOL_DOCUMENT_DEF,
+            put(api::update_protocol_document_def).delete(api::delete_protocol_document_def),
+        )
+        .route(
+            routes::PROTOCOL_EXECUTIONS,
+            get(api::list_protocol_executions),
+        )
         .layer(middleware::from_fn_with_state(state.clone(), require_auth))
 }
 

@@ -23,6 +23,9 @@ static PORT_NAME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[a-z][a-z0-9_]*
 /// Maximum allowed port name length.
 const MAX_PORT_NAME_LEN: usize = 50;
 
+pub mod documents;
+pub mod executions;
+
 mod tests;
 
 // ============================================================================
