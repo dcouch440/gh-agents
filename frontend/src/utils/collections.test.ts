@@ -152,6 +152,35 @@ describe('toSetBy', () => {
   })
 })
 
+// ── mapBy ─────────────────────────────────────────────────────────────────
+
+describe('mapBy', () => {
+  it('transforms each element via fn', () => {
+    const result = Collections.mapBy([1, 2, 3], (n) => n * 10)
+    expect(result).toEqual([10, 20, 30])
+  })
+
+  it('returns empty array for empty input', () => {
+    const result = Collections.mapBy([], (x) => x)
+    expect(result).toEqual([])
+  })
+
+  it('preserves order', () => {
+    const result = Collections.mapBy(['c', 'a', 'b'], (s) => s.toUpperCase())
+    expect(result).toEqual(['C', 'A', 'B'])
+  })
+
+  it('extracts property from objects', () => {
+    const items = [{ id: 'x', v: 1 }, { id: 'y', v: 2 }]
+    const result = Collections.mapBy(items, (i) => i.id)
+    expect(result).toEqual(['x', 'y'])
+  })
+
+  it('handles single-element arrays', () => {
+    expect(Collections.mapBy([42], (n) => n + 1)).toEqual([43])
+  })
+})
+
 // ── filterMap ──────────────────────────────────────────────────────────────
 
 describe('filterMap', () => {
