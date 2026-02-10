@@ -22,7 +22,7 @@ function ContextNodeContent({ content, accentColor = CONTEXT_NODE.ACCENT_COLOR, 
         sx={{
           position: 'absolute',
           top: 6,
-          right: 8,
+          right: 24,
           display: 'flex',
           gap: 0.25,
           zIndex: 1,

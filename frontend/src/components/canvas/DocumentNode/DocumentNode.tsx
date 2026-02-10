@@ -1,5 +1,5 @@
 import { memo, useState } from 'react'
-import { NodeResizer } from '@xyflow/react'
+import { Handle, Position, NodeResizer } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
@@ -45,6 +45,18 @@ function DocumentNodeComponent({ data, selected }: NodeProps) {
         cursor: 'default',
       }}
     >
+      <Handle
+        type="target"
+        position={Position.Left}
+        style={{
+          width: 8,
+          height: 8,
+          background: accentColor,
+          border: `2px solid ${theme.palette.custom.bgHeader}`,
+          pointerEvents: 'none',
+        }}
+      />
+
       <NodeResizer
         isVisible={hovered || selected === true}
         minWidth={DOCUMENT_NODE.MIN_WIDTH}
