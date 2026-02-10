@@ -6,7 +6,7 @@ const useProtocolHighlight = (protocolStepId: string | null): HighlightMode => {
   const mode = useStore(canvasStore.store, (s): HighlightMode => {
     if (protocolStepId === null) return 'none'
     if (s.selectedStepIds.has(protocolStepId) || s.highlightedProtocolStepIds.has(protocolStepId)) return 'select'
-    if (s.hoveredStepId === protocolStepId) return 'hover'
+    if (s.hoveredProtocolId === protocolStepId) return 'hover'
     return 'none'
   })
   return mode

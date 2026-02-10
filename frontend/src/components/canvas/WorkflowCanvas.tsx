@@ -369,8 +369,9 @@ function WorkflowCanvasInner() {
   // Protocol hover tracking for group highlighting
   // Read protocolStepId from node data so the callback never closes over stale maps
   const onNodeMouseEnter = useCallback((_event: React.MouseEvent, node: { id: string; data: Record<string, unknown> }) => {
+    const isProtocol = node.data.isProtocol === true
     const protocolStepId = node.data.protocolStepId as string | undefined
-    canvasStore.setHoveredStep(protocolStepId ?? node.id)
+    canvasStore.setHoveredStep(node.id, isProtocol ? node.id : (protocolStepId ?? null))
   }, [])
 
   const onNodeMouseLeave = useCallback(() => {
