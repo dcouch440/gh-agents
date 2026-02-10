@@ -24,27 +24,18 @@ const HOVER_ELIGIBLE_KINDS = Collections.toSet<CanvasNodeKind>(['context', 'docu
 const hoverStateManager = (nodeKind: CanvasNodeKind, nodeId: string, protocolStepId: string | null) =>
   (s: CanvasState): HighlightMode => {
     switch (true) {
-      case protocolStepId === null: {
+      case protocolStepId === null:
         return HighlightMode.NONE
-      }
-      case s.selectedStepIds.has(protocolStepId!) || s.highlightedProtocolStepIds.has(protocolStepId!): {
+      case s.selectedStepIds.has(protocolStepId!) || s.highlightedProtocolStepIds.has(protocolStepId!):
         return HighlightMode.SELECT
-      }
-      case s.hoveredProtocolId === protocolStepId: {
-        if (HOVER_ELIGIBLE_KINDS.has(nodeKind)) {
-          return HighlightMode.HOVER
-        }
+      case s.hoveredProtocolId === protocolStepId:
+        if (HOVER_ELIGIBLE_KINDS.has(nodeKind)) return HighlightMode.HOVER
         return HighlightMode.NONE
-      }
-      case s.hoveredStepId === nodeId: {
-        if (HOVER_ELIGIBLE_KINDS.has(nodeKind)) {
-          return HighlightMode.HOVER
-        }
+      case s.hoveredStepId === nodeId:
+        if (HOVER_ELIGIBLE_KINDS.has(nodeKind)) return HighlightMode.HOVER
         return HighlightMode.NONE
-      }
-      default: {
+      default:
         return HighlightMode.NONE
-      }
     }
   }
 
