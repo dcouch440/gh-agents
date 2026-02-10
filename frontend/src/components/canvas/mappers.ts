@@ -98,7 +98,6 @@ const toRFNodes = (
           documentNames: [],
           upstreamStepNames,
           promptValue: step.prompt_template,
-          documents: [],
           modelId: agent?.model_id ?? null,
           agentName: agent?.name ?? null,
         },

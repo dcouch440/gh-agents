@@ -325,6 +325,7 @@ function WorkflowCanvasInner() {
 
   return (
     <Box
+      data-testid="workflow-canvas"
       onMouseDown={onCanvasMouseDown}
       sx={{
         width: "100%",

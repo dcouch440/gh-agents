@@ -102,7 +102,7 @@ function RunButton() {
           enterDelay={500}
           placement="left"
         >
-          <span>
+          <span data-testid="toolbar-run-button">
             <GradientButton
               onClick={() => { void handleRun(); }}
               icon={runIcon}
@@ -164,6 +164,7 @@ function SaveDiscardBar() {
   return (
     <Zoom in={dirty} timeout={300}>
       <Box
+        data-testid="save-discard-bar"
         sx={{
           position: "absolute",
           bottom: 24,
@@ -197,7 +198,7 @@ function SaveDiscardBar() {
           enterDelay={500}
           placement="top"
         >
-          <span>
+          <span data-testid="toolbar-discard-button">
             <Button
               size="small"
               variant="outlined"
@@ -248,7 +249,7 @@ function SaveDiscardBar() {
           enterDelay={500}
           placement="top"
         >
-          <span>
+          <span data-testid="toolbar-save-button">
             <GradientButton
               onClick={() => { void handleSave(); }}
               loading={saving}
