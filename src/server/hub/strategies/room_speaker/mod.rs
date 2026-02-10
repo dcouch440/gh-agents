@@ -112,24 +112,27 @@ impl ExecutionStrategy for RoomSpeakerStrategy {
         }
     }
 
+    fn state(&self) -> Option<&AppState> {
+        Some(&self.state)
+    }
+
+    fn user_id(&self) -> Option<Uuid> {
+        Some(self.config.user_id)
+    }
+
+    fn agent_execution_id(&self) -> Option<Uuid> {
+        Some(self.config.agent_execution_id)
+    }
+
     async fn on_complete(&self, response: &str, usage: &TokenUsage) -> Result<(), HubError> {
-        // Record token usage
-        let tl_repo = &self.state.repos().token_ledger;
-        let cost = super::compute_cost(
+        super::log_token_usage(
+            &self.state,
+            self.config.user_id,
+            Some(self.config.agent_execution_id),
             &self.config.agent.model_id,
-            usage.input_tokens as i64,
-            usage.output_tokens as i64,
-        );
-        let _ = tl_repo
-            .insert_ledger_entry(
-                self.config.user_id,
-                Some(self.config.agent_execution_id),
-                &self.config.agent.model_id,
-                usage.input_tokens as i64,
-                usage.output_tokens as i64,
-                cost,
-            )
-            .await;
+            usage,
+        )
+        .await;
 
         // Update agent_execution with final status
         let ae_repo = &self.state.repos().agent_executions;

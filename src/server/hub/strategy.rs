@@ -2,13 +2,21 @@
 //!
 //! Each strategy defines how to build messages, which tools to use,
 //! how to execute tool calls, and what to do after completion.
+//!
+//! The default `on_complete` logs token usage to the ledger via
+//! `strategies::log_token_usage`. Strategies that need custom
+//! post-processing override `on_complete` and call `log_token_usage`
+//! directly for the shared ledger logic.
 
 use async_trait::async_trait;
 use serde_json::Value;
+use uuid::Uuid;
 
 use crate::llm::{Message, TokenUsage, Tool};
+use crate::server::state::AppState;
 
 use super::error::HubError;
+use super::strategies;
 
 /// A strategy that parameterizes the execution engine loop.
 ///
@@ -38,6 +46,21 @@ pub trait ExecutionStrategy: Send + Sync {
     /// Sampling temperature.
     fn temperature(&self) -> f32;
 
+    /// App state for token ledger and DB access. Return `None` to skip ledger logging.
+    fn state(&self) -> Option<&AppState> {
+        None
+    }
+
+    /// User ID for token attribution. Return `None` to skip ledger logging.
+    fn user_id(&self) -> Option<Uuid> {
+        None
+    }
+
+    /// Agent execution ID for ledger correlation. Most strategies return `None`.
+    fn agent_execution_id(&self) -> Option<Uuid> {
+        None
+    }
+
     /// Build the initial message list (history + current input).
     async fn build_messages(&self, input: &str) -> Result<Vec<Message>, HubError>;
 
@@ -45,5 +68,21 @@ pub trait ExecutionStrategy: Send + Sync {
     async fn execute_tool(&self, name: &str, input: &Value) -> Value;
 
     /// Post-processing after the final LLM response.
-    async fn on_complete(&self, response: &str, usage: &TokenUsage) -> Result<(), HubError>;
+    ///
+    /// The default implementation logs token usage to the ledger.
+    /// Override to add custom behavior (agent execution updates, message saving, etc.)
+    /// and call [`strategies::log_token_usage`] for the shared ledger logic.
+    async fn on_complete(&self, _response: &str, usage: &TokenUsage) -> Result<(), HubError> {
+        if let (Some(state), Some(uid)) = (self.state(), self.user_id()) {
+            strategies::log_token_usage(
+                state,
+                uid,
+                self.agent_execution_id(),
+                self.model_id(),
+                usage,
+            )
+            .await;
+        }
+        Ok(())
+    }
 }
