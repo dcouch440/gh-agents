@@ -3,6 +3,7 @@
 mod credentials;
 mod global;
 mod project;
+pub mod protocols;
 pub mod sync;
 mod validation;
 

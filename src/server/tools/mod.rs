@@ -3,6 +3,8 @@
 //! Provides tool schemas for codebase exploration, document management,
 //! and structured output validation.
 
+pub mod documenter;
+
 use serde_json::{json, Value};
 
 use std::sync::Arc;

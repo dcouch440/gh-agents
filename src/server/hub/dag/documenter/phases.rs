@@ -10,6 +10,7 @@ use tokio::task::JoinSet;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
+use crate::config::protocols::DOCUMENTER;
 use crate::db::ProtocolDocumentDefRow;
 use crate::server::hub::capability_resolver::resolve_capabilities_to_tools;
 use crate::server::hub::error::HubError;
@@ -28,11 +29,9 @@ use crate::server::hub::strategies::documenter::writer::{
 use crate::server::hub::streaming::NullSink;
 use crate::types::UserId;
 
+use crate::config::protocols::{roles, vars};
+
 use super::persistence::{persist_document_content, DocumentPersistContext};
-use super::prompts::{
-    build_research_system_prompt, build_writer_system_prompt, compose_research_prompt,
-    compose_write_prompt,
-};
 use super::types;
 use super::{ContextDocument, DocumenterExecutor};
 
@@ -76,9 +75,13 @@ impl<'a> DocumenterExecutor<'a> {
             .create_phase("strategy", None, Some(self.prompt))
             .await?;
 
+        let agent_cfg = DOCUMENTER.agent("strategist");
         let strategy = DocumenterCoordinatorStrategy::new(DocumenterCoordinatorConfig {
             system_prompt: system_prompt.to_string(),
             model_id: model_id.to_string(),
+            temperature: agent_cfg.temperature,
+            max_rounds: agent_cfg.max_rounds,
+            context_budget: agent_cfg.context_budget,
             state: Some(self.state.clone()),
             user_id: Some(UserId(self.ctx.user_id)),
         });
@@ -203,13 +206,25 @@ impl<'a> DocumenterExecutor<'a> {
             let context_block =
                 super::build_context_block(&plan.context_document_ids, context_docs);
 
+            let role_ctx = {
+                let mut v = HashMap::new();
+                v.insert(vars::system::DOC_NAME.into(), plan.document_name.clone());
+                v.insert(
+                    vars::agent::RESEARCH_STRATEGY.into(),
+                    plan.research_strategy.clone(),
+                );
+                v.insert(vars::system::SELECTED_CONTEXT.into(), context_block);
+                roles::DOCUMENTER_RESEARCHER.resolve(&v)
+            };
+
             let engine = self.engine.clone_with_provider();
             let state = self.state.clone();
             let user_id = self.ctx.user_id;
             let execution_context = self.ctx.execution_context.clone();
             let model = model_id.to_string();
             let doc_name = plan.document_name.clone();
-            let research_prompt = compose_research_prompt(&plan.research_strategy, &context_block);
+            let research_prompt = role_ctx.user_prompt;
+            let system_prompt = role_ctx.system_prompt;
             let capabilities = plan.required_capabilities.clone();
             let exec_id = exec_row.id;
 
@@ -227,11 +242,13 @@ impl<'a> DocumenterExecutor<'a> {
                     }
                 };
 
-                let system_prompt = build_research_system_prompt(&doc_name);
-
+                let agent_cfg = DOCUMENTER.agent("researcher");
                 let strategy = DocumenterResearchStrategy::new(DocumenterResearchConfig {
                     system_prompt,
                     model_id: model.clone(),
+                    temperature: agent_cfg.temperature,
+                    max_rounds: agent_cfg.max_rounds,
+                    context_budget: agent_cfg.context_budget,
                     tools,
                     tool_names,
                     execution_context,
@@ -321,11 +338,27 @@ impl<'a> DocumenterExecutor<'a> {
                 .unwrap_or(&[]);
             let context_block = super::build_context_block(context_ids, context_docs);
 
-            let input_prompt =
-                compose_write_prompt(writer_prompt_prefix, &context_block, &research.content);
+            let role_ctx = {
+                let mut v = HashMap::new();
+                v.insert(
+                    vars::system::DOC_NAME.into(),
+                    research.document_name.clone(),
+                );
+                v.insert(
+                    vars::agent::WRITER_PROMPT.into(),
+                    writer_prompt_prefix.to_string(),
+                );
+                v.insert(vars::system::SELECTED_CONTEXT.into(), context_block);
+                v.insert(
+                    vars::agent::RESEARCH_CONTENT.into(),
+                    research.content.clone(),
+                );
+                roles::DOCUMENTER_WRITER.resolve(&v)
+            };
+
             let exec_row = match self
                 .recorder
-                .create_phase("write", doc_def_id, Some(&input_prompt))
+                .create_phase("write", doc_def_id, Some(&role_ctx.user_prompt))
                 .await
             {
                 Ok(row) => row,
@@ -340,7 +373,8 @@ impl<'a> DocumenterExecutor<'a> {
             let user_id = self.ctx.user_id;
             let model = model_id.to_string();
             let doc_name = research.document_name.clone();
-            let prompt = input_prompt;
+            let prompt = role_ctx.user_prompt;
+            let system_prompt = role_ctx.system_prompt;
             let exec_id = exec_row.id;
             let doc_id = document_id;
             let def_id = doc_def_id;
@@ -348,11 +382,13 @@ impl<'a> DocumenterExecutor<'a> {
             let step_id = self.step.id;
 
             join_set.spawn(async move {
-                let system_prompt = build_writer_system_prompt(&doc_name);
-
+                let agent_cfg = DOCUMENTER.agent("writer");
                 let strategy = DocumenterWriterStrategy::new(DocumenterWriterConfig {
                     system_prompt,
                     model_id: model.clone(),
+                    temperature: agent_cfg.temperature,
+                    max_rounds: agent_cfg.max_rounds,
+                    context_budget: agent_cfg.context_budget,
                     state: Some(state.clone()),
                     user_id: Some(UserId(user_id)),
                 });

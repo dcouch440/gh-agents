@@ -93,9 +93,11 @@ impl ProtocolCompiler for DocumenterCompiler {
         Ok(())
     }
 
-    fn generate_schema(&self, config: &ProtocolConfig) -> Result<serde_json::Value, ProtocolError> {
-        let defs = extract_doc_defs(config)?;
-        Ok(schema::documenter_schema(&defs))
+    fn generate_schema(
+        &self,
+        _config: &ProtocolConfig,
+    ) -> Result<serde_json::Value, ProtocolError> {
+        Ok(schema::documenter_schema())
     }
 
     fn generate_prompt_injection(&self, config: &ProtocolConfig) -> Result<String, ProtocolError> {

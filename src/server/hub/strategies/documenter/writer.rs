@@ -20,6 +20,12 @@ pub struct DocumenterWriterConfig {
     pub system_prompt: String,
     /// Model to use.
     pub model_id: String,
+    /// LLM temperature.
+    pub temperature: f32,
+    /// Maximum execution rounds.
+    pub max_rounds: u32,
+    /// Maximum context size in characters.
+    pub context_budget: usize,
     /// Optional state for token ledger writes.
     pub state: Option<AppState>,
     /// Optional user ID for token ledger attribution.
@@ -52,11 +58,11 @@ impl ExecutionStrategy for DocumenterWriterStrategy {
     }
 
     fn max_rounds(&self) -> u32 {
-        1
+        self.config.max_rounds
     }
 
     fn context_budget(&self) -> usize {
-        480_000
+        self.config.context_budget
     }
 
     fn streaming(&self) -> bool {
@@ -64,7 +70,7 @@ impl ExecutionStrategy for DocumenterWriterStrategy {
     }
 
     fn temperature(&self) -> f32 {
-        0.5
+        self.config.temperature
     }
 
     async fn build_messages(&self, input: &str) -> Result<Vec<Message>, HubError> {

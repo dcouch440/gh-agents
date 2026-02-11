@@ -1,7 +1,7 @@
 //! Prompt injection generation for the documenter protocol.
 //!
 //! The prompt is defined as a readable `const` template with
-//! `{{.Protocol.field}}` placeholders, resolved at expansion time via
+//! `{{.System.field}}` placeholders, resolved at expansion time via
 //! [`crate::server::hub::protocols::template_resolve::resolve_template`].
 
 use std::collections::HashMap;
@@ -10,28 +10,7 @@ use crate::db::ProtocolDocumentDefRow;
 use crate::server::hub::protocols::template_resolve::resolve_template;
 use crate::server::hub::protocols::text_utils::collapse_blank_lines;
 
-const DOCUMENTER_TEMPLATE: &str = "\
-You are a Document Strategist. Your job is to plan how each \
-requested document should be researched and written.
-
-Requested Documents:
-{{.Protocol.requested_documents}}
-
-{{.Protocol.available_capabilities}}
-{{.Protocol.context_documents_instruction}}
-For each document, provide:
-- document_name: must match one of the document names listed above exactly
-- research_strategy: a step-by-step plan for gathering the information \
-needed to write this document
-- required_capabilities: which capabilities the researcher needs \
-from the list above (empty array if no research tools are needed)
-- writer_prompt: detailed instructions for the writer, including \
-tone, structure, target audience, and focus areas
-- context_document_ids: short IDs of context documents the researcher \
-and writer need (omit or leave empty if none are needed)
-
-Respond with a JSON object containing a \"document_plans\" array \
-with one entry per document.";
+use crate::config::protocols::{roles, vars};
 
 /// Generate the documenter prompt injection: instructs the strategist to plan
 /// research and writing for each requested document.
@@ -43,20 +22,23 @@ pub fn documenter_prompt(
     capabilities: &[String],
     has_context_documents: bool,
 ) -> String {
-    let mut vars = HashMap::new();
-    vars.insert(
-        "Protocol.requested_documents".to_string(),
+    let mut template_vars = HashMap::new();
+    template_vars.insert(
+        vars::system::REQUESTED_DOCUMENTS.to_string(),
         format_documents_block(doc_defs),
     );
-    vars.insert(
-        "Protocol.available_capabilities".to_string(),
+    template_vars.insert(
+        vars::system::AVAILABLE_CAPABILITIES.to_string(),
         format_capabilities_block(capabilities),
     );
-    vars.insert(
-        "Protocol.context_documents_instruction".to_string(),
+    template_vars.insert(
+        vars::system::CONTEXT_DOCUMENTS_INSTRUCTION.to_string(),
         format_context_documents_instruction(has_context_documents),
     );
-    collapse_blank_lines(&resolve_template(DOCUMENTER_TEMPLATE, &vars))
+    collapse_blank_lines(&resolve_template(
+        roles::DOCUMENTER_STRATEGIST.system,
+        &template_vars,
+    ))
 }
 
 /// Format the numbered document listing for the documenter template.

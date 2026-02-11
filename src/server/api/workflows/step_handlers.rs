@@ -73,6 +73,8 @@ pub async fn create_workflow_step(
             )
         };
 
+    let description = req.description.unwrap_or_default();
+
     let step = crate::db::WorkflowStepRow {
         id: Uuid::new_v4(),
         workflow_id: wid,
@@ -100,6 +102,7 @@ pub async fn create_workflow_step(
         name: req.name,
         system_prompt_suffix: req.system_prompt_suffix,
         visible: true,
+        description,
     };
     let row = repo.create_step(step).await?;
     Ok((StatusCode::CREATED, Json(step_response(row))))
@@ -243,6 +246,7 @@ pub async fn update_workflow_step(
         name: req.name.or(existing.name),
         system_prompt_suffix: req.system_prompt_suffix.or(existing.system_prompt_suffix),
         visible: existing.visible,
+        description: req.description.unwrap_or(existing.description),
     };
     let row = repo.update_step(step).await?;
     Ok(Json(step_response(row)))

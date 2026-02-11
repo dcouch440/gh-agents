@@ -1,0 +1,26 @@
+{
+  "type": "object",
+  "required": ["speakers"],
+  "properties": {
+    "speakers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["agent_id", "followup_context"],
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID of the agent to speak"
+          },
+          "followup_context": {
+            "type": "string",
+            "description": "Directed prompt steering this speaker toward a productive response"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

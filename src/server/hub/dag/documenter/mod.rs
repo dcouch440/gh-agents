@@ -34,11 +34,10 @@ pub(crate) mod types;
 // Re-exports for external consumers and tests
 pub(crate) use persistence::{determine_persist_action, DocumentPersistAction};
 pub use prompts::build_documents_output;
-pub(crate) use prompts::{compose_research_prompt, compose_write_prompt};
 
 pub(crate) use crate::server::hub::protocols::context::{build_context_block, ContextDocument};
 
-use prompts::DEFAULT_MODEL;
+use crate::config::protocols::DOCUMENTER;
 
 /// Result from a complete documenter pipeline execution.
 pub struct DocumenterResult {
@@ -116,8 +115,8 @@ impl<'a> DocumenterExecutor<'a> {
         // Load system prompt from step protocol expansion
         let system_prompt = self.load_strategy_system_prompt().await?;
 
-        // Determine model
-        let model_id = DEFAULT_MODEL.to_string();
+        // Determine model from protocol config
+        let model_id = DOCUMENTER.agent("strategist").model_id.clone();
 
         // ── Phase 1: Strategy ────────────────────────────────────────────
         let strategy_output = self

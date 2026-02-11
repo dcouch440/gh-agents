@@ -66,6 +66,7 @@ pub struct WorkflowStepResponse {
     pub name: Option<String>,
     pub system_prompt_suffix: Option<String>,
     pub visible: bool,
+    pub description: String,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -86,6 +87,7 @@ pub struct CreateStepRequest {
     pub position_y: Option<f64>,
     pub name: Option<String>,
     pub system_prompt_suffix: Option<String>,
+    pub description: Option<String>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -106,6 +108,7 @@ pub struct UpdateStepRequest {
     pub position_y: Option<f64>,
     pub name: Option<String>,
     pub system_prompt_suffix: Option<String>,
+    pub description: Option<String>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -206,5 +209,6 @@ pub fn step_response(r: crate::db::WorkflowStepRow) -> WorkflowStepResponse {
         name: r.name,
         system_prompt_suffix: r.system_prompt_suffix,
         visible: r.visible,
+        description: r.description,
     }
 }

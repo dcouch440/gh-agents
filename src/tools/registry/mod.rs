@@ -45,6 +45,12 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "submit_prd" => Some(submit_prd_tool()),
         "submit_ticket" => Some(submit_ticket_tool()),
 
+        // Documenter assistant tools (4)
+        "create_doc_def" => Some(create_doc_def_tool()),
+        "update_doc_def" => Some(update_doc_def_tool()),
+        "delete_doc_def" => Some(delete_doc_def_tool()),
+        "update_config" => Some(update_config_tool()),
+
         _ => None,
     }
 }
@@ -451,6 +457,108 @@ fn submit_ticket_tool() -> Tool {
                 }
             },
             "required": ["title", "description", "acceptance_criteria"]
+        }),
+    }
+}
+
+// ============================================================================
+// Documenter Assistant Tool Definitions
+// ============================================================================
+
+fn create_doc_def_tool() -> Tool {
+    Tool {
+        name: "create_doc_def".into(),
+        description: "Create a new document definition on the documenter step. The document will appear as a node on the workflow canvas.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Document name (e.g., 'API Reference', 'Migration Guide')"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "What this document should contain and its purpose"
+                },
+                "target_length": {
+                    "type": "integer",
+                    "description": "Target word count. Short: 500-1000, Medium: 1500-3000, Long: 3000-6000"
+                }
+            },
+            "required": ["name"]
+        }),
+    }
+}
+
+fn update_doc_def_tool() -> Tool {
+    Tool {
+        name: "update_doc_def".into(),
+        description: "Update an existing document definition. Use read_context first to see current definitions.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "doc_def_id": {
+                    "type": "string",
+                    "description": "ID of the document definition to update"
+                },
+                "name": {
+                    "type": "string",
+                    "description": "New document name"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "New document description"
+                },
+                "target_length": {
+                    "type": "integer",
+                    "description": "New target word count"
+                }
+            },
+            "required": ["doc_def_id"]
+        }),
+    }
+}
+
+fn delete_doc_def_tool() -> Tool {
+    Tool {
+        name: "delete_doc_def".into(),
+        description:
+            "Delete a document definition. The corresponding node will be removed from the canvas."
+                .into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "doc_def_id": {
+                    "type": "string",
+                    "description": "ID of the document definition to delete"
+                }
+            },
+            "required": ["doc_def_id"]
+        }),
+    }
+}
+
+fn update_config_tool() -> Tool {
+    Tool {
+        name: "update_config".into(),
+        description: "Update the documenter step's configuration. All fields are optional — only provided fields are changed.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Step name displayed on the canvas"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "What this step does and what it provides"
+                },
+                "prompt_template": {
+                    "type": "string",
+                    "description": "Instruction prompt that controls how the documenter generates documents"
+                }
+            },
+            "required": []
         }),
     }
 }

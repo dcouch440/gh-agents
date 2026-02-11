@@ -23,6 +23,12 @@ pub struct DocumenterResearchConfig {
     pub system_prompt: String,
     /// Model to use.
     pub model_id: String,
+    /// LLM temperature.
+    pub temperature: f32,
+    /// Maximum execution rounds.
+    pub max_rounds: u32,
+    /// Maximum context size in characters.
+    pub context_budget: usize,
     /// Resolved tools from capability resolution.
     pub tools: Vec<Tool>,
     /// Allow-list for tool execution filtering.
@@ -61,11 +67,11 @@ impl ExecutionStrategy for DocumenterResearchStrategy {
     }
 
     fn max_rounds(&self) -> u32 {
-        15
+        self.config.max_rounds
     }
 
     fn context_budget(&self) -> usize {
-        480_000
+        self.config.context_budget
     }
 
     fn streaming(&self) -> bool {
@@ -73,7 +79,7 @@ impl ExecutionStrategy for DocumenterResearchStrategy {
     }
 
     fn temperature(&self) -> f32 {
-        0.2
+        self.config.temperature
     }
 
     async fn build_messages(&self, input: &str) -> Result<Vec<Message>, HubError> {

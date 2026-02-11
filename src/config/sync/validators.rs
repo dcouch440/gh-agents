@@ -123,32 +123,6 @@ pub fn validate_constraint(constraint: &ConstraintConfig) -> Result<()> {
     Ok(())
 }
 
-/// Validate system agent configuration
-pub fn validate_system_agent(agent: &SystemAgent) -> Result<()> {
-    // Validate role format (snake_case)
-    let role_regex = Regex::new(r"^[a-z][a-z0-9_]*$").unwrap();
-    if !role_regex.is_match(&agent.role) {
-        bail!(
-            "Invalid agent role '{}': must match ^[a-z][a-z0-9_]*$",
-            agent.role
-        );
-    }
-
-    // Validate safety level
-    validate_safety_level(&agent.safety_level)
-        .with_context(|| format!("agent '{}'", agent.name))?;
-
-    // Validate system agent flag
-    if !agent.is_system {
-        bail!(
-            "Agent '{}' in system_agents.yaml must have is_system: true",
-            agent.name
-        );
-    }
-
-    Ok(())
-}
-
 /// Validate routing strategy configuration
 pub fn validate_routing_strategy(strategy: &RoutingStrategyYaml) -> Result<()> {
     // Validate subtask dependencies form a DAG (no cycles)
