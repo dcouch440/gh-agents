@@ -1,5 +1,5 @@
-import { workflowStore } from './workflowStore'
-import { nmSize, nmGet, nmSet, nmFromArray, createNormalizedMap, toArray } from './lib'
+import { workflowStore } from '.'
+import { nmSize, nmGet, nmSet, nmFromArray, createNormalizedMap, toArray } from '../lib'
 import type { Workflow, WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 import type { Document } from '@/types/document'
 

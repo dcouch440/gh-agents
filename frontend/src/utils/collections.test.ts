@@ -441,6 +441,35 @@ describe('setMatchesArray', () => {
   })
 })
 
+// ── setsEqual ────────────────────────────────────────────────────────
+
+describe('setsEqual', () => {
+  it('returns true for same reference', () => {
+    const set = new Set(['a', 'b'])
+    expect(Collections.setsEqual(set, set)).toBe(true)
+  })
+
+  it('returns true when sets have same elements', () => {
+    expect(Collections.setsEqual(new Set([1, 2, 3]), new Set([1, 2, 3]))).toBe(true)
+  })
+
+  it('returns false when sizes differ', () => {
+    expect(Collections.setsEqual(new Set([1, 2]), new Set([1, 2, 3]))).toBe(false)
+  })
+
+  it('returns false when elements differ', () => {
+    expect(Collections.setsEqual(new Set([1, 2, 3]), new Set([1, 2, 4]))).toBe(false)
+  })
+
+  it('returns true for both empty', () => {
+    expect(Collections.setsEqual(new Set(), new Set())).toBe(true)
+  })
+
+  it('works with string sets', () => {
+    expect(Collections.setsEqual(new Set(['a', 'b']), new Set(['b', 'a']))).toBe(true)
+  })
+})
+
 // ── arraysEqual ───────────────────────────────────────────────────────
 
 describe('arraysEqual', () => {

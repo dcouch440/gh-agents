@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import InputBase from '@mui/material/InputBase'
@@ -8,11 +8,9 @@ import { Collections } from '@/utils/collections'
 import { useTheme } from '@mui/material/styles'
 import { DESIGN } from '@/constants'
 import { STEP_TYPE_COLORS, DEFAULT_STEP_TYPE_COLOR } from '@/components/canvas/constants'
-import { buildVariableCompletions } from '@/utils/variableContext'
-import { createVariableAutocomplete } from '@/utils/variableAutocomplete'
 import { SystemTab, TemplateTab, InputTab, OutputTab, ProtocolTab } from './StepPropertiesTabs'
-import type { Extension } from '@codemirror/state'
-import type { VariableCompletion } from '@/utils/variableContext'
+import { useStepFieldHandlers } from './useStepFieldHandlers'
+import { useStepVariableContext } from './useStepVariableContext'
 import type { WorkflowStep } from '@/types/workflow'
 import type { TabOption } from '@/components/primitives'
 
@@ -55,11 +53,8 @@ function StepProperties({ step, steps, readOnly = false }: StepPropertiesProps) 
   // ── Lookup maps ────────────────────────────────────────────────────────────
 
   const stepsById = useMemo(() => Collections.keyBy(steps, (s) => s.id), [steps])
-
   const templatesMap = useMemo(() => Collections.keyBy(templates, (t) => t.id), [templates])
-
   const schemasMap = useMemo(() => Collections.keyBy(schemas, (s) => s.id), [schemas])
-
   const agentsById = useMemo(() => Collections.keyBy(agents, (a) => a.id), [agents])
 
   // ── Dropdown options ────────────────────────────────────────────────────────
@@ -79,47 +74,9 @@ function StepProperties({ step, steps, readOnly = false }: StepPropertiesProps) 
   const schemaOptions = useMemo(() => schemas.map((s) => ({ value: s.id, label: s.name })), [schemas])
 
   // ── Field handlers ─────────────────────────────────────────────────────────
-  // All edits patch the store only. Nothing hits the API until the user clicks
-  // Save on the canvas toolbar.
 
-  const handleFieldChange = useCallback(
-    (field: 'name' | 'prompt_template' | 'system_prompt_suffix', value: string) => {
-      const storeValue = field === 'prompt_template' ? value : value || null
-      workflowStore.patchStepLocal(step.id, { [field]: storeValue } as Partial<WorkflowStep>)
-    },
-    [step.id],
-  )
-
-  const handleAgentChange = useCallback(
-    (agentId: string | null) => {
-      if (agentId !== null) {
-        workflowStore.patchStepLocal(step.id, { agent_id: agentId })
-      }
-    },
-    [step.id],
-  )
-
-  const handleTemplateChange = useCallback(
-    (templateId: string | null) => {
-      const tpl = templateId ? templatesMap.get(templateId) : undefined
-      workflowStore.patchStepLocal(step.id, {
-        prompt_template_id: templateId,
-        prompt_template: tpl?.template ?? '',
-      })
-    },
-    [step.id, templatesMap],
-  )
-
-  const handleSchemaChange = useCallback(
-    (schemaId: string | null) => {
-      workflowStore.patchStepLocal(step.id, { output_schema_id: schemaId })
-    },
-    [step.id],
-  )
-
-  const handleCopyVariable = useCallback((label: string) => {
-    void navigator.clipboard.writeText(label)
-  }, [])
+  const { handleFieldChange, handleAgentChange, handleTemplateChange, handleSchemaChange, handleCopyVariable } =
+    useStepFieldHandlers({ stepId: step.id, templatesMap })
 
   // ── Graph connections (derived from edges) ──────────────────────────────
 
@@ -146,38 +103,8 @@ function StepProperties({ step, steps, readOnly = false }: StepPropertiesProps) 
   const upstreamIds = useMemo(() => incomingSteps.map((s) => s.id), [incomingSteps])
 
   // ── Variable autocomplete ────────────────────────────────────────────────
-  // CodeMirror extensions must be stable (created once), but need access to
-  // latest completions. We use a ref-based getter: the extension captures a
-  // function that reads completionsRef.current lazily when autocomplete
-  // triggers — never during render.
 
-  const completionsRef = useRef<VariableCompletion[]>([])
-
-  const variableContext = useMemo(
-    () => buildVariableCompletions(upstreamIds, stepsById, schemasMap, step),
-    [upstreamIds, stepsById, schemasMap, step],
-  )
-
-  useEffect(() => {
-    completionsRef.current = variableContext.completions
-  }, [variableContext])
-
-  // Auto-set output_variable_name on upstream steps that don't have one,
-  // so the backend can resolve variable references at execution time.
-  // Uses patchStepSilent to avoid marking the form dirty for auto-derived values.
-  useEffect(() => {
-    for (const { stepId, derivedName } of variableContext.autoNamed) {
-      workflowStore.patchStepSilent(stepId, { output_variable_name: derivedName })
-    }
-  }, [variableContext.autoNamed])
-
-  // The getter reads completionsRef.current lazily at autocomplete-trigger time,
-  // not during render. The useMemo just creates the stable extension wrapper.
-  const autocompleteExtension = useMemo<Extension>(
-    // eslint-disable-next-line react-hooks/refs -- lazy getter, ref read at autocomplete time only
-    () => createVariableAutocomplete(() => completionsRef.current),
-    [],
-  )
+  const { variableContext, autocompleteExtension } = useStepVariableContext({ upstreamIds, stepsById, schemasMap, step })
 
   // ── Mode badge color ────────────────────────────────────────────────────────
 

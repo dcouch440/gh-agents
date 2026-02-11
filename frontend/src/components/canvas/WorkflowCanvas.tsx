@@ -5,8 +5,7 @@ import '@xyflow/react/dist/style.css'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
 import { useStore, batch, workflowStore, canvasStore, agentStore, outputSchemaStore, protocolStore } from '@/stores'
-import { toRFNodes, toRFEdges, toDocumentEdges, computeProtocolGroups } from './mappers'
-import type { StepNodeLookups } from './mappers'
+import { toRFNodes, toRFEdges, toDocumentEdges } from './mappers'
 import { Collections } from '@/utils/collections'
 import { nodeTypes } from './nodeTypes'
 import { edgeTypes } from './edgeTypes'
@@ -18,6 +17,7 @@ import { CANVAS } from './constants'
 import { computeHighlightedProtocolIds } from './computeHighlightedProtocolIds'
 import { useGroupHoverDelay } from './useGroupHoverDelay'
 import { useCanvasSync } from './useCanvasSync'
+import { useCanvasLookups } from './useCanvasLookups'
 
 function WorkflowCanvasInner() {
   const theme = useTheme()
@@ -62,76 +62,15 @@ function WorkflowCanvasInner() {
     void protocolStore.fetchTypes()
   }, [])
 
-  // Build lookup maps for node data enrichment (split to avoid rebuilding stable maps on step changes)
-  const agentLookup = useMemo(
-    () =>
-      Collections.toLookupMap(
-        agents,
-        (a) => a.id,
-        (a) => ({ name: a.name, model_id: a.model_id }),
-      ),
-    [agents],
-  )
-  const schemaLookup = useMemo(
-    () =>
-      Collections.toLookupMap(
-        schemas,
-        (s) => s.id,
-        (s) => ({ name: s.name }),
-      ),
-    [schemas],
-  )
-  const stepNameLookup = useMemo(
-    () =>
-      Collections.toLookupMap(
-        steps,
-        (s) => s.id,
-        (s) => s.name ?? s.execution_mode,
-      ),
-    [steps],
-  )
-  // todo: why use map here?
-  const toolsByAgentLookup = useMemo(
-    () =>
-      Collections.toLookupMap(
-        agents,
-        (a) => a.id,
-        (a) => {
-          const tools = toolsByAgent[a.id] ?? []
-          return Collections.mapBy(tools, (t) => t.name)
-        },
-      ),
-    [agents, toolsByAgent],
-  )
-  const protocolsByStepLookup = useMemo(
-    () =>
-      Collections.toLookupMap(
-        Object.entries(stepProtocols),
-        ([stepId]) => stepId,
-        ([, link]) => ({
-          protocol_type: link.protocolType,
-          name: link.protocolName,
-          portNames: link.portNames,
-        }),
-      ),
-    [stepProtocols],
-  )
-  const protocolGroups = useMemo(
-    () => computeProtocolGroups(steps, edges, protocolsByStepLookup),
-    [steps, edges, protocolsByStepLookup],
-  )
-  const lookups = useMemo(
-    (): StepNodeLookups => ({
-      agents: agentLookup,
-      outputSchemas: schemaLookup,
-      stepNames: stepNameLookup,
-      edges,
-      toolsByAgent: toolsByAgentLookup,
-      protocolsByStep: protocolsByStepLookup,
-      documentDefsByStep,
-      protocolGroups,
-    }),
-    [agentLookup, schemaLookup, stepNameLookup, edges, toolsByAgentLookup, protocolsByStepLookup, documentDefsByStep, protocolGroups],
+  // Build lookup maps for node data enrichment
+  const { lookups, protocolGroups, protocolsByStepLookup } = useCanvasLookups(
+    steps,
+    edges,
+    agents,
+    schemas,
+    toolsByAgent,
+    stepProtocols,
+    documentDefsByStep,
   )
 
   // Map store data to RF format

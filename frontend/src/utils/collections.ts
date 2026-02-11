@@ -282,6 +282,20 @@ class Collections {
     return true
   }
 
+  /**
+   * Check if two Sets contain the same elements.
+   * Short-circuits on size mismatch or first missing element.
+   * O(n), 0 allocations — avoids spreading a Set to an array.
+   */
+  static setsEqual<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {
+    if (a === b) return true
+    if (a.size !== b.size) return false
+    for (const item of a) {
+      if (!b.has(item)) return false
+    }
+    return true
+  }
+
   // ── Sort ─────────────────────────────────────────────────────────────
 
   /**
