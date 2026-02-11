@@ -1,15 +1,9 @@
 #[cfg(test)]
 mod tests {
     use crate::db::ProtocolDocumentDefRow;
-    use crate::server::hub::engine::filters::FilterContext;
+    use crate::server::hub::protocols::compilers::documenter::prompt::format_document_defs_section;
     use chrono::Utc;
     use uuid::Uuid;
-
-    /// Build a minimal FilterContext with a step_id.
-    #[allow(dead_code)]
-    fn make_ctx(step_id: Uuid) -> FilterContext {
-        FilterContext::new("claude-sonnet-4-20250514", Uuid::new_v4()).with_step_id(step_id)
-    }
 
     /// Helper to create a mock document def.
     fn make_def(name: &str, target_length: i32, description: &str) -> ProtocolDocumentDefRow {
@@ -27,44 +21,30 @@ mod tests {
     }
 
     #[test]
-    fn augments_prompt_with_document_definitions() {
+    fn format_section_includes_all_documents() {
         let defs = vec![
             make_def("API Docs", 4000, "REST API reference for the auth service"),
             make_def("Best Practices", 2000, "Modern Rust patterns"),
         ];
 
-        let mut prompt = "You are the Documenter Strategist.".to_string();
-        prompt.push_str("\n\n## Document Definitions\n");
-        prompt.push_str(&format!(
-            "The user has requested {} document(s) to be generated:\n\n",
-            defs.len()
-        ));
+        let section = format_document_defs_section(&defs);
 
-        for (i, def) in defs.iter().enumerate() {
-            prompt.push_str(&format!(
-                "Document {}: \"{}\"\n  Target length: {} characters\n  Description: {}\n\n",
-                i + 1,
-                def.name,
-                def.target_length,
-                &def.description
-            ));
-        }
-
-        assert!(prompt.contains("API Docs"));
-        assert!(prompt.contains("4000 characters"));
-        assert!(prompt.contains("Best Practices"));
-        assert!(prompt.contains("2000 characters"));
-        assert!(prompt.contains("2 document(s)"));
+        assert!(section.contains("API Docs"));
+        assert!(section.contains("4000 characters"));
+        assert!(section.contains("Best Practices"));
+        assert!(section.contains("2000 characters"));
+        assert!(section.contains("2 document(s)"));
+        assert!(section.contains("## Document Definitions"));
     }
 
     #[test]
-    fn empty_description_shows_placeholder() {
-        let def = make_def("Test Doc", 1000, "");
-        let description = if def.description.is_empty() {
-            "(no description provided)"
-        } else {
-            &def.description
-        };
-        assert_eq!(description, "(no description provided)");
+    fn format_section_empty_description_shows_placeholder() {
+        let defs = vec![make_def("Test Doc", 1000, "")];
+
+        let section = format_document_defs_section(&defs);
+
+        assert!(section.contains("(no description provided)"));
+        assert!(section.contains("Test Doc"));
+        assert!(section.contains("1000 characters"));
     }
 }

@@ -11,6 +11,7 @@ use tracing::debug;
 
 use crate::db::traits::WorkflowRepo;
 use crate::llm::Message;
+use crate::server::hub::protocols::compilers::documenter::prompt::format_document_defs_section;
 
 use super::{ExecutionFilter, FilterContext, HubError};
 
@@ -56,25 +57,8 @@ impl ExecutionFilter for DocumenterPromptFilter {
         }
 
         let mut augmented = system_prompt;
-        augmented.push_str("\n\n## Document Definitions\n");
-        augmented.push_str(&format!(
-            "The user has requested {} document(s) to be generated:\n\n",
-            defs.len()
-        ));
-
-        for (i, def) in defs.iter().enumerate() {
-            augmented.push_str(&format!(
-                "Document {}: \"{}\"\n  Target length: {} characters\n  Description: {}\n\n",
-                i + 1,
-                def.name,
-                def.target_length,
-                if def.description.is_empty() {
-                    "(no description provided)"
-                } else {
-                    &def.description
-                }
-            ));
-        }
+        augmented.push_str("\n\n");
+        augmented.push_str(&format_document_defs_section(&defs));
 
         debug!(
             filter = "documenter_prompt",
