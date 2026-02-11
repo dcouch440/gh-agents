@@ -79,6 +79,8 @@ vi.mock('@/stores', () => ({
     store: 'protocol',
     fetchAll: vi.fn(),
     fetchTypes: vi.fn(),
+    selectAll: () => [],
+    selectTypes: () => [],
   },
 }))
 

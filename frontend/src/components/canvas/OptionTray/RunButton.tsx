@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import MuiButton from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import Tooltip from '@mui/material/Tooltip'
@@ -17,12 +17,12 @@ function RunButton() {
   const activeWorkflowId = useStore(workflowStore.store, workflowStore.selectActiveWorkflowId)
   const steps = useStore(workflowStore.store, workflowStore.selectSteps)
   const [runStatus, setRunStatus] = useState<RunStatus>('idle')
+  const entryStep = useMemo(() => steps.find((s) => s.execution_mode === 'context') ?? null, [steps])
 
   const handleRun = useCallback(async () => {
     if (!activeWorkflowId || runStatus === 'running') return
     setRunStatus('running')
     try {
-      const entryStep = steps.find((s) => s.execution_mode === 'context')
       const input = entryStep?.prompt_template.trim()
       const body = input ? { initial_input: input } : undefined
       await api.workflows.run(activeWorkflowId, body)
@@ -36,7 +36,7 @@ function RunButton() {
         setRunStatus('idle')
       }, 3000)
     }
-  }, [activeWorkflowId, runStatus, steps])
+  }, [activeWorkflowId, runStatus, entryStep])
 
   if (!activeWorkflowId) return null
 

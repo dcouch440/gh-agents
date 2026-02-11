@@ -1,7 +1,8 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import { useStore, workflowStore, protocolStore, canvasStore } from '@/stores'
+import { Collections } from '@/utils/collections'
 import { DEFAULT_STEP_TYPE_COLOR, PROTOCOL_TYPE_COLORS, STEP_TYPE_COLORS } from './constants'
 
 const VIEWPORT_PADDING = 8
@@ -26,6 +27,7 @@ const PROTOCOL_LABELS: Record<string, string> = {
 function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
   const protocolTypes = useStore(protocolStore.store, protocolStore.selectTypes)
   const allProtocols = useStore(protocolStore.store, protocolStore.selectAll)
+  const protocolsByType = useMemo(() => Collections.keyBy(allProtocols, (p) => p.protocol_type), [allProtocols])
 
   // Callback ref: clamp menu position to stay within viewport after mount
   const menuRef = useCallback((node: HTMLDivElement | null) => {
@@ -47,8 +49,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
     event.stopPropagation()
     event.preventDefault()
     const label = PROTOCOL_LABELS[protocolType] ?? protocolType
-    // Find the matching protocol to get its agent
-    const protocol = allProtocols.find((p) => p.protocol_type === protocolType)
+    const protocol = protocolsByType.get(protocolType)
     const createAndLink = async () => {
       const step = await workflowStore.createStep({
         name: `New ${label}`,
