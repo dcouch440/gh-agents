@@ -45,6 +45,25 @@ pub mod types;
 
 const DEFAULT_MODEL: &str = "claude-sonnet-4-20250514";
 
+/// Build the system prompt for a research phase LLM call.
+fn build_research_system_prompt(doc_name: &str) -> String {
+    format!(
+        "You are a research assistant gathering information for a document titled \"{}\".\n\
+         Use the available tools to gather comprehensive, accurate information.\n\
+         Summarize your findings clearly — your output will be used by a writer to produce the final document.",
+        doc_name
+    )
+}
+
+/// Build the system prompt for a write phase LLM call.
+fn build_writer_system_prompt(doc_name: &str) -> String {
+    format!(
+        "You are a technical writer. Produce a well-structured, comprehensive document \
+         titled \"{}\". Write in clear, professional prose. Use markdown formatting.",
+        doc_name
+    )
+}
+
 /// Result from a complete documenter pipeline execution.
 pub struct DocumenterResult {
     pub output: StepOutput,
@@ -199,6 +218,7 @@ impl<'a> DocumenterExecutor<'a> {
             .execute_write_phase(
                 &strategy_output.plans,
                 &successful_research,
+                &doc_defs,
                 &model_id,
                 &context_docs,
             )
@@ -434,12 +454,7 @@ impl<'a> DocumenterExecutor<'a> {
                     }
                 };
 
-                let system_prompt = format!(
-                    "You are a research assistant gathering information for a document titled \"{}\".\n\
-                     Use the available tools to gather comprehensive, accurate information.\n\
-                     Summarize your findings clearly — your output will be used by a writer to produce the final document.",
-                    doc_name
-                );
+                let system_prompt = build_research_system_prompt(&doc_name);
 
                 let strategy = DocumenterResearchStrategy::new(DocumenterResearchConfig {
                     system_prompt,
@@ -488,61 +503,8 @@ impl<'a> DocumenterExecutor<'a> {
             });
         }
 
-        // Collect results
-        let mut results = Vec::new();
-        let mut completed_count = 0;
-
-        while let Some(join_result) = join_set.join_next().await {
-            completed_count += 1;
-            match join_result {
-                Ok(task_result) => {
-                    let status = if task_result.error.is_none() {
-                        "complete"
-                    } else {
-                        "failed"
-                    };
-                    self.recorder
-                        .update_phase(
-                            task_result.exec_id,
-                            status,
-                            Some(&task_result.content),
-                            task_result.error.as_deref(),
-                            task_result.input_tokens,
-                            task_result.output_tokens,
-                            task_result.cost_usd,
-                            Some(&task_result.model),
-                        )
-                        .await;
-                    self.broadcast_phase_progress(
-                        "research",
-                        completed_count,
-                        total,
-                        Some(&task_result.document_name),
-                    );
-                    if let Some(ref err) = task_result.error {
-                        warn!(
-                            doc = %task_result.document_name,
-                            %status,
-                            "Research failed: {}", err
-                        );
-                    } else {
-                        info!(
-                            doc = %task_result.document_name,
-                            tokens_in = task_result.input_tokens,
-                            tokens_out = task_result.output_tokens,
-                            "Research completed"
-                        );
-                    }
-                    results.push(task_result);
-                }
-                Err(join_err) => {
-                    error!("Research task panicked: {}", join_err);
-                    completed_count += 0; // already incremented
-                }
-            }
-        }
-
-        results
+        self.collect_phase_results(join_set, "research", total)
+            .await
     }
 
     // ── Phase 3: Write ───────────────────────────────────────────────────
@@ -551,6 +513,7 @@ impl<'a> DocumenterExecutor<'a> {
         &self,
         plans: &[types::DocumentPlan],
         successful_research: &[&PhaseTaskResult],
+        doc_defs: &[ProtocolDocumentDefRow],
         model_id: &str,
         context_docs: &[ContextDocument],
     ) -> Vec<PhaseTaskResult> {
@@ -562,15 +525,6 @@ impl<'a> DocumenterExecutor<'a> {
 
         let total = successful_research.len();
         let mut join_set = JoinSet::new();
-
-        // Load doc defs again to get document_id for each
-        let doc_defs = self
-            .state
-            .repos()
-            .workflows
-            .list_document_defs(self.step.id)
-            .await
-            .unwrap_or_default();
 
         for research in successful_research {
             let plan = plans
@@ -619,11 +573,7 @@ impl<'a> DocumenterExecutor<'a> {
             let step_id = self.step.id;
 
             join_set.spawn(async move {
-                let system_prompt = format!(
-                    "You are a technical writer. Produce a well-structured, comprehensive document \
-                     titled \"{}\". Write in clear, professional prose. Use markdown formatting.",
-                    doc_name
-                );
+                let system_prompt = build_writer_system_prompt(&doc_name);
 
                 let strategy = DocumenterWriterStrategy::new(DocumenterWriterConfig {
                     system_prompt,
@@ -646,54 +596,15 @@ impl<'a> DocumenterExecutor<'a> {
                         );
 
                         // Persist document content
-                        match determine_persist_action(doc_id, def_id) {
-                            DocumentPersistAction::Update(did) => {
-                                if let Some(doc_repo) = state.doc_repo() {
-                                    let _ = doc_repo
-                                        .update_document(
-                                            did,
-                                            Some(exec_result.content.clone()),
-                                            None,
-                                            None,
-                                        )
-                                        .await;
-                                }
-                            }
-                            DocumentPersistAction::CreateAndLink(did) => {
-                                if let Some(doc_repo) = state.doc_repo() {
-                                    match doc_repo
-                                        .create_workflow_document(
-                                            user_id,
-                                            doc_name.clone(),
-                                            workflow_id,
-                                            None,
-                                            Some(step_id),
-                                        )
-                                        .await
-                                    {
-                                        Ok(doc) => {
-                                            let _ = state
-                                                .repos()
-                                                .workflows
-                                                .link_document_to_def(did, doc.id)
-                                                .await;
-                                            let _ = doc_repo
-                                                .update_document(
-                                                    doc.id,
-                                                    Some(exec_result.content.clone()),
-                                                    None,
-                                                    None,
-                                                )
-                                                .await;
-                                        }
-                                        Err(e) => {
-                                            warn!(doc = %doc_name, "Failed to create document: {}", e);
-                                        }
-                                    }
-                                }
-                            }
-                            DocumentPersistAction::Skip => {}
-                        }
+                        let persist_ctx = DocumentPersistContext {
+                            document_id: doc_id,
+                            def_id,
+                            doc_name: doc_name.clone(),
+                            user_id,
+                            workflow_id,
+                            step_id,
+                        };
+                        persist_document_content(&state, &persist_ctx, &exec_result.content).await;
 
                         PhaseTaskResult {
                             exec_id,
@@ -720,56 +631,7 @@ impl<'a> DocumenterExecutor<'a> {
             });
         }
 
-        // Collect results
-        let mut results = Vec::new();
-        let mut completed_count = 0;
-
-        while let Some(join_result) = join_set.join_next().await {
-            completed_count += 1;
-            match join_result {
-                Ok(task_result) => {
-                    let status = if task_result.error.is_none() {
-                        "complete"
-                    } else {
-                        "failed"
-                    };
-                    self.recorder
-                        .update_phase(
-                            task_result.exec_id,
-                            status,
-                            Some(&task_result.content),
-                            task_result.error.as_deref(),
-                            task_result.input_tokens,
-                            task_result.output_tokens,
-                            task_result.cost_usd,
-                            Some(&task_result.model),
-                        )
-                        .await;
-                    self.broadcast_phase_progress(
-                        "write",
-                        completed_count,
-                        total,
-                        Some(&task_result.document_name),
-                    );
-                    if let Some(ref err) = task_result.error {
-                        warn!(doc = %task_result.document_name, "Write failed: {}", err);
-                    } else {
-                        info!(
-                            doc = %task_result.document_name,
-                            tokens_in = task_result.input_tokens,
-                            tokens_out = task_result.output_tokens,
-                            "Write completed"
-                        );
-                    }
-                    results.push(task_result);
-                }
-                Err(join_err) => {
-                    error!("Write task panicked: {}", join_err);
-                }
-            }
-        }
-
-        results
+        self.collect_phase_results(join_set, "write", total).await
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
@@ -874,6 +736,69 @@ impl<'a> DocumenterExecutor<'a> {
         docs
     }
 
+    /// Collect results from a set of spawned phase tasks, recording each result
+    /// and broadcasting progress.
+    async fn collect_phase_results(
+        &self,
+        mut join_set: JoinSet<PhaseTaskResult>,
+        phase: &str,
+        total: usize,
+    ) -> Vec<PhaseTaskResult> {
+        let mut results = Vec::new();
+        let mut completed_count = 0;
+
+        while let Some(join_result) = join_set.join_next().await {
+            completed_count += 1;
+            match join_result {
+                Ok(task_result) => {
+                    let status = if task_result.error.is_none() {
+                        "complete"
+                    } else {
+                        "failed"
+                    };
+                    self.recorder
+                        .update_phase(
+                            task_result.exec_id,
+                            status,
+                            Some(&task_result.content),
+                            task_result.error.as_deref(),
+                            task_result.input_tokens,
+                            task_result.output_tokens,
+                            task_result.cost_usd,
+                            Some(&task_result.model),
+                        )
+                        .await;
+                    self.broadcast_phase_progress(
+                        phase,
+                        completed_count,
+                        total,
+                        Some(&task_result.document_name),
+                    );
+                    if let Some(ref err) = task_result.error {
+                        warn!(
+                            doc = %task_result.document_name,
+                            %status,
+                            "{} failed: {}", phase, err
+                        );
+                    } else {
+                        info!(
+                            doc = %task_result.document_name,
+                            tokens_in = task_result.input_tokens,
+                            tokens_out = task_result.output_tokens,
+                            "{} completed", phase
+                        );
+                    }
+                    results.push(task_result);
+                }
+                Err(join_err) => {
+                    error!("{} task panicked: {}", phase, join_err);
+                }
+            }
+        }
+
+        results
+    }
+
     fn is_cancelled(&self) -> bool {
         self.cancel.is_some_and(|c| c.is_cancelled())
     }
@@ -933,6 +858,62 @@ pub(crate) fn determine_persist_action(
         DocumentPersistAction::CreateAndLink(did)
     } else {
         DocumentPersistAction::Skip
+    }
+}
+
+/// Context needed to persist a generated document to the database.
+struct DocumentPersistContext {
+    document_id: Option<Uuid>,
+    def_id: Option<Uuid>,
+    doc_name: String,
+    user_id: Uuid,
+    workflow_id: Uuid,
+    step_id: Uuid,
+}
+
+/// Persist the generated document content to the database.
+///
+/// Handles three cases based on the current state of the document definition:
+/// update an existing document, create a new one and link it, or skip.
+async fn persist_document_content(state: &AppState, ctx: &DocumentPersistContext, content: &str) {
+    let doc_repo = match state.doc_repo() {
+        Some(repo) => repo,
+        None => return,
+    };
+
+    match determine_persist_action(ctx.document_id, ctx.def_id) {
+        DocumentPersistAction::Update(did) => {
+            let _ = doc_repo
+                .update_document(did, Some(content.to_string()), None, None)
+                .await;
+        }
+        DocumentPersistAction::CreateAndLink(did) => {
+            match doc_repo
+                .create_workflow_document(
+                    ctx.user_id,
+                    ctx.doc_name.clone(),
+                    ctx.workflow_id,
+                    None,
+                    Some(ctx.step_id),
+                )
+                .await
+            {
+                Ok(doc) => {
+                    let _ = state
+                        .repos()
+                        .workflows
+                        .link_document_to_def(did, doc.id)
+                        .await;
+                    let _ = doc_repo
+                        .update_document(doc.id, Some(content.to_string()), None, None)
+                        .await;
+                }
+                Err(e) => {
+                    warn!(doc = %ctx.doc_name, "Failed to create document: {}", e);
+                }
+            }
+        }
+        DocumentPersistAction::Skip => {}
     }
 }
 

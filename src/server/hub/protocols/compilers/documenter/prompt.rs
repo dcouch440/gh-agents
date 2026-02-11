@@ -6,6 +6,7 @@
 
 use std::collections::HashMap;
 
+use crate::db::ProtocolDocumentDefRow;
 use crate::server::hub::protocols::template_resolve::resolve_template;
 use crate::server::hub::protocols::text_utils::collapse_blank_lines;
 
@@ -98,6 +99,44 @@ pub fn format_capabilities_block(capabilities: &[String]) -> String {
         parts.push(format!("- {}", cap));
     }
     parts.join("\n")
+}
+
+/// Format a document definitions section from database rows.
+///
+/// Produces a header ("## Document Definitions") followed by a numbered listing
+/// of each document. Used by the `DocumenterPromptFilter` to augment system prompts
+/// at execution time, sharing the same formatting logic as the compiler.
+pub fn format_document_defs_section(defs: &[ProtocolDocumentDefRow]) -> String {
+    let mut out = format!(
+        "## Document Definitions\nThe user has requested {} document(s) to be generated:\n",
+        defs.len()
+    );
+    for (i, def) in defs.iter().enumerate() {
+        let description = if def.description.is_empty() {
+            "(no description provided)"
+        } else {
+            &def.description
+        };
+        if def.description.is_empty() {
+            out.push_str(&format!(
+                "\n{}. \"{}\" (target: ~{} characters) \u{2014} {}",
+                i + 1,
+                def.name,
+                def.target_length,
+                description,
+            ));
+        } else {
+            out.push_str(&format!(
+                "\n{}. \"{}\" \u{2014} {} (target: ~{} characters)",
+                i + 1,
+                def.name,
+                description,
+                def.target_length,
+            ));
+        }
+    }
+    out.push('\n');
+    out
 }
 
 /// Format the context documents instruction for the documenter template.
