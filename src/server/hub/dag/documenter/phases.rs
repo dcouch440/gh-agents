@@ -5,6 +5,7 @@
 
 use anyhow::anyhow;
 use serde_json::Value as JsonValue;
+use std::collections::HashMap;
 use tokio::task::JoinSet;
 use tracing::{error, info, warn};
 use uuid::Uuid;
@@ -180,8 +181,11 @@ impl<'a> DocumenterExecutor<'a> {
         let total = plans.len();
         let mut join_set = JoinSet::new();
 
+        let doc_def_map: HashMap<&str, &ProtocolDocumentDefRow> =
+            doc_defs.iter().map(|d| (d.name.as_str(), d)).collect();
+
         for plan in plans {
-            let doc_def = doc_defs.iter().find(|d| d.name == plan.document_name);
+            let doc_def = doc_def_map.get(plan.document_name.as_str()).copied();
             let doc_def_id = doc_def.map(|d| d.id);
 
             let exec_row = match self
@@ -295,15 +299,20 @@ impl<'a> DocumenterExecutor<'a> {
         let total = successful_research.len();
         let mut join_set = JoinSet::new();
 
+        let doc_def_map: HashMap<&str, &ProtocolDocumentDefRow> =
+            doc_defs.iter().map(|d| (d.name.as_str(), d)).collect();
+        let plan_map: HashMap<&str, &types::DocumentPlan> = plans
+            .iter()
+            .map(|p| (p.document_name.as_str(), p))
+            .collect();
+
         for research in successful_research {
-            let plan = plans
-                .iter()
-                .find(|p| p.document_name == research.document_name);
+            let plan = plan_map.get(research.document_name.as_str()).copied();
             let writer_prompt_prefix = plan
                 .map(|p| p.writer_prompt.as_str())
                 .unwrap_or("Write the document based on the research findings below.");
 
-            let doc_def = doc_defs.iter().find(|d| d.name == research.document_name);
+            let doc_def = doc_def_map.get(research.document_name.as_str()).copied();
             let doc_def_id = doc_def.map(|d| d.id);
             let document_id = doc_def.and_then(|d| d.document_id);
 
@@ -409,7 +418,7 @@ impl<'a> DocumenterExecutor<'a> {
         phase: &str,
         total: usize,
     ) -> Vec<PhaseTaskResult> {
-        let mut results = Vec::new();
+        let mut results = Vec::with_capacity(join_set.len());
         let mut completed_count = 0;
 
         while let Some(join_result) = join_set.join_next().await {
@@ -521,7 +530,8 @@ impl<'a> DocumenterExecutor<'a> {
         if let Some(agent_id) = self.step.agent_id {
             if let Ok(agent_docs) = self.state.repo().get_agent_context(agent_id).await {
                 for doc in agent_docs {
-                    let short_id = doc.id.to_string()[..8].to_string();
+                    let full_id = doc.id.to_string();
+                    let short_id = full_id[..8].to_owned();
                     docs.push(ContextDocument {
                         short_id,
                         title: doc.title,
@@ -541,7 +551,8 @@ impl<'a> DocumenterExecutor<'a> {
             if let Some(d_repo) = self.state.doc_repo() {
                 for sd in &step_docs {
                     if let Ok(Some(doc)) = d_repo.get_document(sd.document_id).await {
-                        let short_id = doc.id.to_string()[..8].to_string();
+                        let full_id = doc.id.to_string();
+                        let short_id = full_id[..8].to_owned();
                         docs.push(ContextDocument {
                             short_id,
                             title: doc.title,
