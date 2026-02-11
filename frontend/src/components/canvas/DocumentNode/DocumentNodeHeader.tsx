@@ -1,6 +1,7 @@
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import { DocumentNodeIcon } from '../Icons/DocumentNodeIcon'
+import { ProtocolBadge } from '../ProtocolBadge'
 import { DOCUMENT_NODE } from './constants'
 
 type DocumentNodeHeaderProps = {
@@ -54,45 +55,8 @@ function DocumentNodeHeader({ name, documenterName, accentColor = DOCUMENT_NODE.
         </Typography>
       </Box>
 
-      <Box
-        sx={{
-          flexShrink: 0,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 0.75,
-          px: 1.25,
-          py: 0.5,
-          borderRadius: '100px',
-          background: `linear-gradient(135deg, ${accentColor}14, ${accentColor}22)`,
-          border: 1,
-          borderColor: `${accentColor}35`,
-          boxShadow: `0 0 8px ${accentColor}18, inset 0 1px 0 ${accentColor}10`,
-          mr: 0.5,
-        }}
-      >
-        <Box
-          sx={{
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            backgroundColor: accentColor,
-            boxShadow: `0 0 4px ${accentColor}80`,
-            flexShrink: 0,
-          }}
-        />
-        <Typography
-          sx={{
-            fontSize: 9,
-            fontWeight: 700,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            color: accentColor,
-            lineHeight: 1,
-            whiteSpace: 'nowrap',
-          }}
-        >
-          Document
-        </Typography>
+      <Box sx={{ mr: 0.5 }}>
+        <ProtocolBadge color={accentColor} label="Document" />
       </Box>
     </Box>
   )

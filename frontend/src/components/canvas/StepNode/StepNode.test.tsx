@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@/test/render'
-import { StepNode } from './StepNode'
+import { StepNode } from '.'
 
 vi.mock('@xyflow/react', () => ({
   Handle: ({ type, position }: { type: string; position: string }) => <div data-testid={`handle-${type}`} data-position={position} />,
