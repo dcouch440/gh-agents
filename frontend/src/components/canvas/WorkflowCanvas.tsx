@@ -17,6 +17,7 @@ import { CanvasContextMenu } from './CanvasContextMenu'
 import type { MenuPosition } from './CanvasContextMenu'
 import { CANVAS } from './constants'
 import { computeHighlightedProtocolIds } from './computeHighlightedProtocolIds'
+import { useGroupHoverDelay } from './useGroupHoverDelay'
 
 const stylesEqual = (a: CSSProperties | undefined, b: CSSProperties | undefined): boolean => {
   if (a === b) return true
@@ -361,17 +362,9 @@ function WorkflowCanvasInner() {
     setContextMenu(null)
   }, [])
 
-  // Protocol hover tracking for group highlighting
-  // Only propagate hoveredProtocolId when hovering the protocol node itself.
-  // Hovering a group member (document, context) sets hoveredStepId for self-hover only.
-  const onNodeMouseEnter = useCallback((_event: React.MouseEvent, node: { id: string; data: Record<string, unknown> }) => {
-    const isProtocol = node.data.isProtocol === true
-    canvasStore.setHoveredStep(node.id, isProtocol ? node.id : null)
-  }, [])
-
-  const onNodeMouseLeave = useCallback(() => {
-    canvasStore.setHoveredStep(null)
-  }, [])
+  // Protocol hover tracking for group highlighting.
+  // Self-hover is instant; group hover triggers after a 300ms delay.
+  const { onNodeMouseEnter, onNodeMouseLeave } = useGroupHoverDelay()
 
   const onCanvasMouseDown = useCallback(() => {
     setContextMenu(null)
