@@ -239,8 +239,18 @@ const toRFEdges = (
   edges: WorkflowStepEdge[],
   protocolGroups: ReadonlyMap<string, ProtocolGroupEntry>,
   protocolsByStep: ReadonlyMap<string, ProtocolStepInfo>,
-): Edge[] =>
-  edges.map((edge) => {
+  steps: readonly WorkflowStep[],
+): Edge[] => {
+  // Build lookup for documenter steps not in protocolsByStep (execution_mode fallback)
+  const documenterStepIds = new Set<string>()
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i]!
+    if (!protocolsByStep.has(step.id) && step.execution_mode === 'documenter') {
+      documenterStepIds.add(step.id)
+    }
+  }
+
+  return edges.map((edge) => {
     // Edge is protocol-connected if either end is a protocol step or in a protocol group
     const sourceIsProtocol = protocolsByStep.has(edge.from_step_id)
     const targetIsProtocol = protocolsByStep.has(edge.to_step_id)
@@ -254,6 +264,8 @@ const toRFEdges = (
     } else if (targetIsProtocol) {
       const info = protocolsByStep.get(edge.to_step_id)!
       protocolColor = PROTOCOL_TYPE_COLORS[info.protocol_type] ?? null
+    } else if (documenterStepIds.has(edge.from_step_id) || documenterStepIds.has(edge.to_step_id)) {
+      protocolColor = PROTOCOL_TYPE_COLORS['documenter'] ?? null
     } else if (sourceGroup) {
       protocolColor = sourceGroup.protocolColor
     } else if (targetGroup) {
@@ -269,6 +281,7 @@ const toRFEdges = (
       data,
     }
   })
+}
 
 const toDocumentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] => {
   const edges: Edge[] = []

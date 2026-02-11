@@ -149,7 +149,7 @@ describe('toRFEdges', () => {
   const emptyProtocols: ReadonlyMap<string, ProtocolStepInfo> = new Map()
 
   it('maps WorkflowStepEdge array to React Flow edges', () => {
-    const edges = toRFEdges([edge1], emptyGroups, emptyProtocols)
+    const edges = toRFEdges([edge1], emptyGroups, emptyProtocols, [step1, step2])
 
     expect(edges).toHaveLength(1)
     expect(edges[0]).toEqual({
@@ -162,14 +162,14 @@ describe('toRFEdges', () => {
   })
 
   it('returns empty array for empty input', () => {
-    expect(toRFEdges([], emptyGroups, emptyProtocols)).toEqual([])
+    expect(toRFEdges([], emptyGroups, emptyProtocols, [])).toEqual([])
   })
 
   it('sets protocolColor when source is a protocol step', () => {
     const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
       ['step-001', { protocol_type: 'documenter', name: 'Doc', portNames: [] }],
     ])
-    const edges = toRFEdges([edge1], emptyGroups, protocols)
+    const edges = toRFEdges([edge1], emptyGroups, protocols, [step1, step2])
     expect(edges[0]?.data?.protocolColor).toBe('#D4793E')
   })
 
@@ -177,7 +177,7 @@ describe('toRFEdges', () => {
     const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
       ['step-002', { protocol_type: 'documenter', name: 'Doc', portNames: [] }],
     ])
-    const edges = toRFEdges([edge1], emptyGroups, protocols)
+    const edges = toRFEdges([edge1], emptyGroups, protocols, [step1, step2])
     expect(edges[0]?.data?.protocolColor).toBe('#D4793E')
   })
 
@@ -185,7 +185,15 @@ describe('toRFEdges', () => {
     const groups = new Map([
       ['step-001', { protocolColor: '#D4793E', protocolStepId: 'proto-1' }],
     ])
-    const edges = toRFEdges([edge1], groups, emptyProtocols)
+    const edges = toRFEdges([edge1], groups, emptyProtocols, [step1, step2])
+    expect(edges[0]?.data?.protocolColor).toBe('#D4793E')
+  })
+
+  it('sets protocolColor for documenter steps not in protocolsByStep', () => {
+    const documenterA: WorkflowStep = { ...step1, id: 'doc-a', execution_mode: 'documenter' }
+    const documenterB: WorkflowStep = { ...step1, id: 'doc-b', execution_mode: 'documenter' }
+    const edge: WorkflowStepEdge = { id: 'edge-doc', from_step_id: 'doc-a', to_step_id: 'doc-b' }
+    const edges = toRFEdges([edge], emptyGroups, emptyProtocols, [documenterA, documenterB])
     expect(edges[0]?.data?.protocolColor).toBe('#D4793E')
   })
 })
