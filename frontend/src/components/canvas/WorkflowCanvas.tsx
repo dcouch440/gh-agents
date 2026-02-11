@@ -16,6 +16,7 @@ import { OptionTray } from './OptionTray'
 import { CanvasContextMenu } from './CanvasContextMenu'
 import type { MenuPosition } from './CanvasContextMenu'
 import { CANVAS } from './constants'
+import { computeHighlightedProtocolIds } from './computeHighlightedProtocolIds'
 
 const stylesEqual = (a: CSSProperties | undefined, b: CSSProperties | undefined): boolean => {
   if (a === b) return true
@@ -261,13 +262,7 @@ function WorkflowCanvasInner() {
   // Read protocolStepId / isProtocol directly from node data so there are no stale closures
   const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
     const nodeIds = Collections.mapBy(params.nodes, (n: { id: string }) => n.id)
-    const protocolIds = new Set<string>()
-    for (const n of params.nodes) {
-      const data = n.data
-      const protocolStepId = data.protocolStepId as string | undefined
-      if (protocolStepId) protocolIds.add(protocolStepId)
-      if (data.isProtocol === true) protocolIds.add(n.id)
-    }
+    const protocolIds = computeHighlightedProtocolIds(params.nodes)
     batch(() => {
       canvasStore.selectSteps(nodeIds)
       canvasStore.selectEdges(Collections.mapBy(params.edges, (e: { id: string }) => e.id))
