@@ -87,6 +87,7 @@ mod tests {
             output_schema_id: None,
             version: 1,
             default_reasoning_trace: None,
+            is_system: false,
         }
     }
 

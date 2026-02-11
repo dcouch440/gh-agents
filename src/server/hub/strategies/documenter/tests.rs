@@ -11,6 +11,9 @@ mod tests {
             DocumenterCoordinatorStrategy::new(DocumenterCoordinatorConfig {
                 system_prompt: "You are a document strategist.".into(),
                 model_id: "claude-sonnet-4-20250514".into(),
+                temperature: 0.3,
+                max_rounds: 1,
+                context_budget: 100_000,
                 state: None,
                 user_id: None,
             })
@@ -79,6 +82,9 @@ mod tests {
             DocumenterResearchStrategy::new(DocumenterResearchConfig {
                 system_prompt: "You are a research assistant.".into(),
                 model_id: "claude-sonnet-4-20250514".into(),
+                temperature: 0.2,
+                max_rounds: 15,
+                context_budget: 480_000,
                 tools: make_tools(),
                 tool_names: vec!["web_research".into(), "read_file".into()],
                 execution_context: None,
@@ -146,6 +152,9 @@ mod tests {
             DocumenterWriterStrategy::new(DocumenterWriterConfig {
                 system_prompt: "You are a technical writer.".into(),
                 model_id: "claude-sonnet-4-20250514".into(),
+                temperature: 0.5,
+                max_rounds: 1,
+                context_budget: 480_000,
                 state: None,
                 user_id: None,
             })

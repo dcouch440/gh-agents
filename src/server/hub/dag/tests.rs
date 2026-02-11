@@ -45,6 +45,7 @@ mod tests {
             name: None,
             system_prompt_suffix: None,
             visible: true,
+            description: String::new(),
         }
     }
 
@@ -349,6 +350,7 @@ mod tests {
             output_schema_id: None,
             version: 1,
             default_reasoning_trace: None,
+            is_system: false,
         }
     }
 
@@ -384,6 +386,7 @@ mod tests {
             name: None,
             system_prompt_suffix: None,
             visible: true,
+            description: String::new(),
         }
     }
 
@@ -419,6 +422,7 @@ mod tests {
             name: None,
             system_prompt_suffix: None,
             visible: true,
+            description: String::new(),
         }
     }
 

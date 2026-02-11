@@ -42,6 +42,7 @@ mod tests {
             name: None,
             system_prompt_suffix: None,
             visible: true,
+            description: String::new(),
         }
     }
 

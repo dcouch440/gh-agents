@@ -427,7 +427,7 @@ impl ServerRepo for PgRepo {
 
     async fn list_persisted_agents(&self, user_id: UserId) -> Result<Vec<AgentRow>> {
         let rows = sqlx::query_as::<_, PgAgentRow>(
-            "SELECT id, user_id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, router_id, output_schema_id, version, default_reasoning_trace FROM agents WHERE user_id = $1 OR user_id IS NULL",
+            "SELECT id, user_id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, router_id, output_schema_id, version, default_reasoning_trace, is_system FROM agents WHERE user_id = $1 OR user_id IS NULL",
         )
         .bind(user_id.0)
         .fetch_all(&self.pool)
@@ -438,7 +438,7 @@ impl ServerRepo for PgRepo {
 
     async fn get_persisted_agent(&self, agent_id: Uuid) -> Result<Option<AgentRow>> {
         let row = sqlx::query_as::<_, PgAgentRow>(
-            "SELECT id, user_id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, router_id, output_schema_id, version, default_reasoning_trace FROM agents WHERE id = $1",
+            "SELECT id, user_id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, router_id, output_schema_id, version, default_reasoning_trace, is_system FROM agents WHERE id = $1",
         )
         .bind(agent_id)
         .fetch_optional(&self.pool)
@@ -450,8 +450,8 @@ impl ServerRepo for PgRepo {
     async fn upsert_agent(&self, agent: AgentRow) -> Result<()> {
         sqlx::query(
             r#"
-            INSERT INTO agents (id, user_id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, output_schema_id, default_reasoning_trace)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            INSERT INTO agents (id, user_id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, router_mode, output_schema_id, default_reasoning_trace, is_system)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
                 system_prompt = EXCLUDED.system_prompt,
@@ -464,6 +464,7 @@ impl ServerRepo for PgRepo {
                 router_mode = EXCLUDED.router_mode,
                 output_schema_id = EXCLUDED.output_schema_id,
                 default_reasoning_trace = EXCLUDED.default_reasoning_trace,
+                is_system = EXCLUDED.is_system,
                 version = agents.version + 1
         "#,
         )
@@ -480,6 +481,7 @@ impl ServerRepo for PgRepo {
         .bind(agent.router_mode)
         .bind(agent.output_schema_id)
         .bind(agent.default_reasoning_trace)
+        .bind(agent.is_system)
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -790,6 +792,7 @@ struct PgAgentRow {
     output_schema_id: Option<Uuid>,
     version: i32,
     default_reasoning_trace: Option<bool>,
+    is_system: bool,
 }
 
 fn agent_row_from_pg(r: PgAgentRow) -> AgentRow {
@@ -810,6 +813,7 @@ fn agent_row_from_pg(r: PgAgentRow) -> AgentRow {
         output_schema_id: r.output_schema_id,
         version: r.version,
         default_reasoning_trace: r.default_reasoning_trace,
+        is_system: r.is_system,
     }
 }
 
@@ -1404,8 +1408,8 @@ impl WorkflowRepo for PgRepo {
     async fn create_step(&self, step: WorkflowStepRow) -> Result<WorkflowStepRow> {
         let row: WorkflowStepRow = sqlx::query_as(
             r#"
-            INSERT INTO workflow_steps (id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, for_each_label_field, display_order, reasoning_trace, verification_agent_ids, position_x, position_y, name, system_prompt_suffix, visible)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+            INSERT INTO workflow_steps (id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, for_each_label_field, display_order, reasoning_trace, verification_agent_ids, position_x, position_y, name, system_prompt_suffix, visible, description)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
             RETURNING *
             "#,
         )
@@ -1428,6 +1432,7 @@ impl WorkflowRepo for PgRepo {
         .bind(&step.name)
         .bind(&step.system_prompt_suffix)
         .bind(step.visible)
+        .bind(&step.description)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -1459,8 +1464,8 @@ impl WorkflowRepo for PgRepo {
             SET agent_id = $1, execution_mode = $2, for_each_ref = $3, prompt_template_id = $4, prompt_template = $5,
                 output_schema_id = $6, output_variable_name = $7, interactive_agent_id = $8, for_each_label_field = $9, display_order = $10,
                 reasoning_trace = $11, verification_agent_ids = $12, position_x = $13, position_y = $14, name = $15, system_prompt_suffix = $16,
-                visible = $17, version = version + 1
-            WHERE id = $18
+                visible = $17, description = $18, version = version + 1
+            WHERE id = $19
             RETURNING *
             "#,
         )
@@ -1481,6 +1486,7 @@ impl WorkflowRepo for PgRepo {
         .bind(&step.name)
         .bind(&step.system_prompt_suffix)
         .bind(step.visible)
+        .bind(&step.description)
         .bind(step.id)
         .fetch_one(&self.pool)
         .await?;

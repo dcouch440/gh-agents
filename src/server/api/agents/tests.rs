@@ -19,6 +19,7 @@ mod tests {
             router_id: None,
             version: 1,
             default_reasoning_trace: false,
+            is_system: false,
         }
     }
 
@@ -87,6 +88,7 @@ mod tests {
                 output_schema_id: None,
                 version: 1,
                 default_reasoning_trace: None,
+                is_system: false,
             }
         }
 
@@ -166,6 +168,7 @@ mod tests {
                 output_schema_id: None,
                 version: 1,
                 default_reasoning_trace: None,
+                is_system: true,
             };
 
             let mut repo = MockServerRepo::new();

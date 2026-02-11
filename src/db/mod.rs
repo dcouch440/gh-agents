@@ -32,6 +32,7 @@ pub struct AgentRow {
     pub output_schema_id: Option<Uuid>,
     pub version: i32,
     pub default_reasoning_trace: Option<bool>,
+    pub is_system: bool,
 }
 
 /// Row type for protocol document definitions (documenter step config).
@@ -191,6 +192,7 @@ pub struct WorkflowStepRow {
     pub name: Option<String>,
     pub system_prompt_suffix: Option<String>,
     pub visible: bool,
+    pub description: String,
 }
 
 /// Row type for a workflow step edge (DAG edge).

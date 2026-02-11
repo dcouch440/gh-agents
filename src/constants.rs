@@ -33,6 +33,9 @@ pub const MODEL_HAIKU: &str = "claude-3-5-haiku-20241022";
 /// Used when a workflow step is created without an explicit agent_id.
 pub const DEFAULT_AGENT_ID: uuid::Uuid = uuid::Uuid::from_u128(1);
 
+/// Documenter assistant system agent UUID (seeded by migration 0022).
+pub const DOCUMENTER_ASSISTANT_AGENT_ID: uuid::Uuid = uuid::Uuid::from_u128(2);
+
 // ── Defaults ───────────────────────────────────────────────────────────────
 
 /// Default model used when no tier/config is specified.

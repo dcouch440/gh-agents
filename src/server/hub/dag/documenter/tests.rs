@@ -1,10 +1,12 @@
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use serde_json::json;
 
+    use crate::config::protocols::{roles, vars};
     use crate::server::hub::dag::documenter::{
-        build_documents_output, compose_research_prompt, compose_write_prompt,
-        determine_persist_action, DocumentPersistAction,
+        build_documents_output, determine_persist_action, DocumentPersistAction,
     };
     use crate::server::hub::dag::utils::StepOutput;
     use crate::server::hub::protocols::context::{build_context_block, ContextDocument};
@@ -297,24 +299,31 @@ This plan covers the main topics."#;
         assert_eq!(action, DocumentPersistAction::Skip);
     }
 
-    // ── compose_write_prompt tests ──────────────────────────────────────
+    // ── writer role resolve tests ──────────────────────────────────────
 
     #[test]
-    fn write_prompt_without_context() {
-        let prompt = compose_write_prompt(
-            "Write a Bitcoin analysis report.",
-            "",
-            "BTC is trading at $95,000 with strong support.",
+    fn writer_resolve_without_context() {
+        let mut vars = HashMap::new();
+        vars.insert(vars::system::DOC_NAME.into(), "Bitcoin Report".into());
+        vars.insert(
+            vars::agent::WRITER_PROMPT.into(),
+            "Write a Bitcoin analysis report.".into(),
         );
-        assert!(prompt.starts_with("Write a Bitcoin analysis report."));
-        assert!(prompt.contains("---\n\nResearch findings:"));
-        assert!(prompt.contains("BTC is trading at $95,000"));
-        assert!(!prompt.contains("<context>"));
+        vars.insert(vars::system::SELECTED_CONTEXT.into(), String::new());
+        vars.insert(
+            vars::agent::RESEARCH_CONTENT.into(),
+            "BTC is trading at $95,000 with strong support.".into(),
+        );
+        let ctx = roles::DOCUMENTER_WRITER.resolve(&vars);
+        assert!(ctx.user_prompt.contains("Write a Bitcoin analysis report."));
+        assert!(ctx.user_prompt.contains("Research findings:"));
+        assert!(ctx.user_prompt.contains("BTC is trading at $95,000"));
+        assert!(!ctx.user_prompt.contains("<context>"));
     }
 
     #[test]
-    fn write_prompt_with_context() {
-        let ctx = build_context_block(
+    fn writer_resolve_with_context() {
+        let context_block = build_context_block(
             &[],
             &[ContextDocument {
                 short_id: "abc12345".into(),
@@ -322,26 +331,46 @@ This plan covers the main topics."#;
                 content: "Current price: $95,000".into(),
             }],
         );
-        let prompt = compose_write_prompt(
-            "Write a projection report.",
-            &ctx,
-            "Research indicates bullish trend.",
+        let mut vars = HashMap::new();
+        vars.insert(vars::system::DOC_NAME.into(), "Projection".into());
+        vars.insert(
+            vars::agent::WRITER_PROMPT.into(),
+            "Write a projection report.".into(),
         );
-        assert!(prompt.starts_with("Write a projection report."));
-        assert!(prompt.contains("<context>"));
-        assert!(prompt.contains("<document_abc12345"));
-        assert!(prompt.contains("Market Data"));
-        assert!(prompt.contains("---\n\nResearch findings:"));
-        assert!(prompt.contains("Research indicates bullish trend."));
+        vars.insert(vars::system::SELECTED_CONTEXT.into(), context_block);
+        vars.insert(
+            vars::agent::RESEARCH_CONTENT.into(),
+            "Research indicates bullish trend.".into(),
+        );
+        let ctx = roles::DOCUMENTER_WRITER.resolve(&vars);
+        assert!(ctx.user_prompt.contains("Write a projection report."));
+        assert!(ctx.user_prompt.contains("<context>"));
+        assert!(ctx.user_prompt.contains("<document_abc12345"));
+        assert!(ctx.user_prompt.contains("Market Data"));
+        assert!(ctx.user_prompt.contains("Research findings:"));
+        assert!(ctx
+            .user_prompt
+            .contains("Research indicates bullish trend."));
     }
 
     #[test]
-    fn write_prompt_context_appears_between_instructions_and_research() {
-        let ctx = "<context>\n<document_test>data</document_test>\n</context>";
-        let prompt = compose_write_prompt("Instructions here.", ctx, "Findings here.");
-        let ctx_pos = prompt.find("<context>").unwrap();
-        let instr_pos = prompt.find("Instructions here.").unwrap();
-        let findings_pos = prompt.find("Research findings:").unwrap();
+    fn writer_resolve_context_between_instructions_and_research() {
+        let ctx_block = "<context>\n<document_test>data</document_test>\n</context>";
+        let mut vars = HashMap::new();
+        vars.insert(vars::system::DOC_NAME.into(), "Test".into());
+        vars.insert(
+            vars::agent::WRITER_PROMPT.into(),
+            "Instructions here.".into(),
+        );
+        vars.insert(vars::system::SELECTED_CONTEXT.into(), ctx_block.into());
+        vars.insert(
+            vars::agent::RESEARCH_CONTENT.into(),
+            "Findings here.".into(),
+        );
+        let ctx = roles::DOCUMENTER_WRITER.resolve(&vars);
+        let instr_pos = ctx.user_prompt.find("Instructions here.").unwrap();
+        let ctx_pos = ctx.user_prompt.find("<context>").unwrap();
+        let findings_pos = ctx.user_prompt.find("Research findings:").unwrap();
         assert!(
             instr_pos < ctx_pos,
             "instructions should come before context"
@@ -352,17 +381,24 @@ This plan covers the main topics."#;
         );
     }
 
-    // ── compose_research_prompt tests ───────────────────────────────────
+    // ── researcher role resolve tests ───────────────────────────────────
 
     #[test]
-    fn research_prompt_without_context() {
-        let prompt = compose_research_prompt("Analyze Bitcoin price movements.", "");
-        assert_eq!(prompt, "Analyze Bitcoin price movements.");
+    fn researcher_resolve_without_context() {
+        let mut vars = HashMap::new();
+        vars.insert(vars::system::DOC_NAME.into(), "Bitcoin".into());
+        vars.insert(
+            vars::agent::RESEARCH_STRATEGY.into(),
+            "Analyze Bitcoin price movements.".into(),
+        );
+        vars.insert(vars::system::SELECTED_CONTEXT.into(), String::new());
+        let ctx = roles::DOCUMENTER_RESEARCHER.resolve(&vars);
+        assert_eq!(ctx.user_prompt, "Analyze Bitcoin price movements.");
     }
 
     #[test]
-    fn research_prompt_with_context() {
-        let ctx = build_context_block(
+    fn researcher_resolve_with_context() {
+        let context_block = build_context_block(
             &[],
             &[ContextDocument {
                 short_id: "def67890".into(),
@@ -370,17 +406,28 @@ This plan covers the main topics."#;
                 content: "Historical data from 2024.".into(),
             }],
         );
-        let prompt = compose_research_prompt("Analyze price trends.", &ctx);
-        assert!(prompt.starts_with("Analyze price trends."));
-        assert!(prompt.contains("<context>"));
-        assert!(prompt.contains("<document_def67890"));
-        assert!(prompt.contains("Price History"));
+        let mut vars = HashMap::new();
+        vars.insert(vars::system::DOC_NAME.into(), "Bitcoin".into());
+        vars.insert(
+            vars::agent::RESEARCH_STRATEGY.into(),
+            "Analyze price trends.".into(),
+        );
+        vars.insert(vars::system::SELECTED_CONTEXT.into(), context_block);
+        let ctx = roles::DOCUMENTER_RESEARCHER.resolve(&vars);
+        assert!(ctx.user_prompt.starts_with("Analyze price trends."));
+        assert!(ctx.user_prompt.contains("<context>"));
+        assert!(ctx.user_prompt.contains("<document_def67890"));
+        assert!(ctx.user_prompt.contains("Price History"));
     }
 
     #[test]
-    fn research_prompt_preserves_multiline_strategy() {
+    fn researcher_resolve_preserves_multiline_strategy() {
         let strategy = "Step 1: Gather data\nStep 2: Analyze trends\nStep 3: Summarize";
-        let prompt = compose_research_prompt(strategy, "");
-        assert_eq!(prompt, strategy);
+        let mut vars = HashMap::new();
+        vars.insert(vars::system::DOC_NAME.into(), "Test".into());
+        vars.insert(vars::agent::RESEARCH_STRATEGY.into(), strategy.into());
+        vars.insert(vars::system::SELECTED_CONTEXT.into(), String::new());
+        let ctx = roles::DOCUMENTER_RESEARCHER.resolve(&vars);
+        assert_eq!(ctx.user_prompt, strategy);
     }
 }

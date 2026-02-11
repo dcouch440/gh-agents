@@ -70,32 +70,6 @@ pub struct ConstraintConfig {
 }
 
 // ============================================================================
-// System Agents (system_agents.yaml)
-// ============================================================================
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct SystemAgentsYaml {
-    pub system_agents: Vec<SystemAgent>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct SystemAgent {
-    pub name: String,
-    pub role: String,
-    pub description: String,
-    pub system_prompt: String,
-    #[serde(default)]
-    pub capabilities_required: Vec<String>,
-    #[serde(default)]
-    pub default_tools: Vec<String>,
-    pub safety_level: String,
-    #[serde(default)]
-    pub is_system: bool,
-    #[serde(default)]
-    pub is_gatekeeper: bool,
-}
-
-// ============================================================================
 // Routing Strategies (routing_strategies/*.yaml)
 // ============================================================================
 
@@ -133,67 +107,6 @@ pub struct Subtask {
 }
 
 // ============================================================================
-// Protocols (protocols.yaml)
-// ============================================================================
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ProtocolsYaml {
-    pub protocols: Vec<ProtocolDef>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ProtocolDef {
-    pub name: String,
-    pub description: String,
-    pub protocol_type: String,
-    #[serde(default)]
-    pub config: Option<serde_json::Value>,
-    pub agent: ProtocolAgentDef,
-    pub output_schema: ProtocolSchemaDef,
-    #[serde(default)]
-    pub prompt_template: Option<ProtocolTemplateDef>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ProtocolAgentDef {
-    pub name: String,
-    pub system_prompt: String,
-    #[serde(default = "default_model_provider")]
-    pub model_provider: String,
-    #[serde(default = "default_model_id")]
-    pub model_id: String,
-    #[serde(default = "default_max_tokens")]
-    pub model_max_tokens: i32,
-    #[serde(default = "default_temperature")]
-    pub model_temperature: f32,
-}
-
-fn default_model_provider() -> String {
-    "anthropic".to_string()
-}
-fn default_model_id() -> String {
-    "claude-sonnet-4-20250514".to_string()
-}
-fn default_max_tokens() -> i32 {
-    8192
-}
-fn default_temperature() -> f32 {
-    0.7
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ProtocolSchemaDef {
-    pub name: String,
-    pub schema: serde_json::Value,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ProtocolTemplateDef {
-    pub name: String,
-    pub content: String,
-}
-
-// ============================================================================
 // Sync Statistics
 // ============================================================================
 
@@ -204,12 +117,8 @@ pub struct SyncStats {
     pub tool_assignments_updated: usize,
     pub constraints_created: usize,
     pub constraints_updated: usize,
-    pub system_agents_created: usize,
-    pub system_agents_updated: usize,
     pub routing_strategies_created: usize,
     pub routing_strategies_updated: usize,
-    pub protocols_created: usize,
-    pub protocols_updated: usize,
     pub errors: Vec<String>,
 }
 

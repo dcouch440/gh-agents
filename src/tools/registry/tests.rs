@@ -67,8 +67,28 @@ mod tests {
     }
 
     #[test]
+    fn test_all_documenter_assistant_tools_mapped() {
+        let documenter_tools = vec![
+            "create_doc_def",
+            "update_doc_def",
+            "delete_doc_def",
+            "update_config",
+        ];
+
+        for tool_name in documenter_tools {
+            let tool = get_tool_definition(tool_name);
+            assert!(
+                tool.is_some(),
+                "Documenter assistant tool '{}' not found in registry",
+                tool_name
+            );
+            assert_eq!(tool.unwrap().name, tool_name);
+        }
+    }
+
+    #[test]
     fn test_tool_count() {
-        // 19 unique tool names total
+        // 23 unique tool names total (19 + 4 documenter assistant)
         let all_names = vec![
             "read_file",
             "write_file",
@@ -89,9 +109,13 @@ mod tests {
             "search_docs",
             "submit_prd",
             "submit_ticket",
+            "create_doc_def",
+            "update_doc_def",
+            "delete_doc_def",
+            "update_config",
         ];
 
-        assert_eq!(all_names.len(), 19);
+        assert_eq!(all_names.len(), 23);
 
         // Verify all map to tools
         for name in all_names {
@@ -129,6 +153,10 @@ mod tests {
             "search_docs",
             "submit_prd",
             "submit_ticket",
+            "create_doc_def",
+            "update_doc_def",
+            "delete_doc_def",
+            "update_config",
         ];
 
         for tool_name in all_tools {
@@ -255,5 +283,67 @@ mod tests {
 
         let props = tool.input_schema["properties"].as_object().unwrap();
         assert!(props.contains_key("thought"));
+    }
+
+    // ========================================================================
+    // Documenter Assistant Tool Schema Tests
+    // ========================================================================
+
+    #[test]
+    fn test_create_doc_def_schema() {
+        let tool = get_tool_definition("create_doc_def").unwrap();
+        assert_eq!(tool.name, "create_doc_def");
+
+        let props = tool.input_schema["properties"].as_object().unwrap();
+        assert!(props.contains_key("name"));
+        assert!(props.contains_key("description"));
+        assert!(props.contains_key("target_length"));
+
+        let required = tool.input_schema["required"].as_array().unwrap();
+        assert_eq!(required.len(), 1);
+        assert_eq!(required[0], "name");
+    }
+
+    #[test]
+    fn test_update_doc_def_schema() {
+        let tool = get_tool_definition("update_doc_def").unwrap();
+        assert_eq!(tool.name, "update_doc_def");
+
+        let props = tool.input_schema["properties"].as_object().unwrap();
+        assert!(props.contains_key("doc_def_id"));
+        assert!(props.contains_key("name"));
+        assert!(props.contains_key("description"));
+        assert!(props.contains_key("target_length"));
+
+        let required = tool.input_schema["required"].as_array().unwrap();
+        assert_eq!(required.len(), 1);
+        assert_eq!(required[0], "doc_def_id");
+    }
+
+    #[test]
+    fn test_delete_doc_def_schema() {
+        let tool = get_tool_definition("delete_doc_def").unwrap();
+        assert_eq!(tool.name, "delete_doc_def");
+
+        let props = tool.input_schema["properties"].as_object().unwrap();
+        assert!(props.contains_key("doc_def_id"));
+
+        let required = tool.input_schema["required"].as_array().unwrap();
+        assert_eq!(required.len(), 1);
+        assert_eq!(required[0], "doc_def_id");
+    }
+
+    #[test]
+    fn test_update_config_schema() {
+        let tool = get_tool_definition("update_config").unwrap();
+        assert_eq!(tool.name, "update_config");
+
+        let props = tool.input_schema["properties"].as_object().unwrap();
+        assert!(props.contains_key("name"));
+        assert!(props.contains_key("description"));
+        assert!(props.contains_key("prompt_template"));
+
+        let required = tool.input_schema["required"].as_array().unwrap();
+        assert!(required.is_empty());
     }
 }

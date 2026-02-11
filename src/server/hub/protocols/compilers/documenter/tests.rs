@@ -124,14 +124,13 @@ mod tests {
     }
 
     #[test]
-    fn compile_generates_schema_with_doc_names() {
+    fn compile_generates_schema_with_document_name() {
         let config = make_config(sample_defs());
         let expansion = DocumenterCompiler.compile(&config).unwrap();
 
-        let name_enum = &expansion.output_schema["properties"]["document_plans"]["items"]
-            ["properties"]["document_name"]["enum"];
-        assert_eq!(name_enum[0], "API Reference");
-        assert_eq!(name_enum[1], "Architecture Guide");
+        let name_schema = &expansion.output_schema["properties"]["document_plans"]["items"]
+            ["properties"]["document_name"];
+        assert_eq!(name_schema["type"], "string");
     }
 
     #[test]
@@ -179,8 +178,7 @@ mod tests {
 
     #[test]
     fn documenter_schema_has_document_plans_array() {
-        let defs = make_doc_defs();
-        let schema = documenter_schema(&defs);
+        let schema = documenter_schema();
 
         assert_eq!(schema["type"], "object");
         assert!(schema["required"]
@@ -191,20 +189,17 @@ mod tests {
     }
 
     #[test]
-    fn documenter_schema_has_document_name_enum() {
-        let defs = make_doc_defs();
-        let schema = documenter_schema(&defs);
+    fn documenter_schema_document_name_is_string() {
+        let schema = documenter_schema();
 
-        let name_enum =
-            &schema["properties"]["document_plans"]["items"]["properties"]["document_name"]["enum"];
-        assert_eq!(name_enum[0], "API Reference");
-        assert_eq!(name_enum[1], "Architecture Guide");
+        let name_schema =
+            &schema["properties"]["document_plans"]["items"]["properties"]["document_name"];
+        assert_eq!(name_schema["type"], "string");
     }
 
     #[test]
     fn documenter_schema_requires_all_plan_fields() {
-        let defs = make_doc_defs();
-        let schema = documenter_schema(&defs);
+        let schema = documenter_schema();
 
         let required = schema["properties"]["document_plans"]["items"]["required"]
             .as_array()
@@ -216,19 +211,8 @@ mod tests {
     }
 
     #[test]
-    fn documenter_schema_empty_defs_omits_enum() {
-        let schema = documenter_schema(&[]);
-
-        let name_schema =
-            &schema["properties"]["document_plans"]["items"]["properties"]["document_name"];
-        assert_eq!(name_schema["type"], "string");
-        assert!(name_schema["enum"].is_null());
-    }
-
-    #[test]
     fn documenter_schema_disallows_additional_properties() {
-        let defs = make_doc_defs();
-        let schema = documenter_schema(&defs);
+        let schema = documenter_schema();
 
         assert_eq!(schema["additionalProperties"], false);
         assert_eq!(
@@ -239,8 +223,7 @@ mod tests {
 
     #[test]
     fn documenter_schema_includes_optional_context_document_ids() {
-        let defs = make_doc_defs();
-        let schema = documenter_schema(&defs);
+        let schema = documenter_schema();
 
         let ctx_field =
             &schema["properties"]["document_plans"]["items"]["properties"]["context_document_ids"];

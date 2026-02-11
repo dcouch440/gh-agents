@@ -1,7 +1,7 @@
 //! Agent management endpoints
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
@@ -28,6 +28,14 @@ pub struct AgentResponse {
     pub router_id: Option<String>,
     pub version: i32,
     pub default_reasoning_trace: bool,
+    pub is_system: bool,
+}
+
+/// Query parameters for the agent list endpoint.
+#[derive(Deserialize)]
+pub struct ListAgentsQuery {
+    #[serde(default)]
+    pub include_system: bool,
 }
 
 impl AgentResponse {
@@ -46,6 +54,7 @@ impl AgentResponse {
             router_id: row.router_id.map(|id| id.to_string()),
             version: row.version,
             default_reasoning_trace: row.default_reasoning_trace.unwrap_or(false),
+            is_system: row.is_system,
         }
     }
 }
@@ -108,13 +117,18 @@ pub struct UpdateAgentRequest {
 pub async fn list_agents(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
+    Query(query): Query<ListAgentsQuery>,
 ) -> Result<Json<AgentsListResponse>, AppError> {
     let config = state.config().read().await;
     let pool_config = &config.pool;
 
     let rows = state.repo().list_persisted_agents(auth.user_id).await?;
 
-    let agents: Vec<AgentResponse> = rows.into_iter().map(AgentResponse::from_row).collect();
+    let agents: Vec<AgentResponse> = rows
+        .into_iter()
+        .filter(|r| query.include_system || !r.is_system)
+        .map(AgentResponse::from_row)
+        .collect();
 
     let response = AgentsListResponse {
         stats: AgentPoolStats {
@@ -182,6 +196,7 @@ pub async fn create_agent(
         output_schema_id: request.output_schema_id,
         version: 1,
         default_reasoning_trace: None,
+        is_system: false,
     };
 
     state.repo().upsert_agent(row.clone()).await?;
@@ -257,6 +272,7 @@ pub async fn update_agent(
         output_schema_id: request.output_schema_id.or(existing.output_schema_id),
         version: existing.version,
         default_reasoning_trace: existing.default_reasoning_trace,
+        is_system: existing.is_system,
     };
 
     state.repo().upsert_agent(updated.clone()).await?;
@@ -281,7 +297,11 @@ pub async fn delete_agent(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    super::ownership::verify_agent_ownership(state.repo().as_ref(), &auth, id).await?;
+    let agent = super::ownership::verify_agent_ownership(state.repo().as_ref(), &auth, id).await?;
+
+    if agent.is_system {
+        return Err(AppError::bad_request("Cannot delete system agents"));
+    }
 
     state.repo().delete_persisted_agent(id).await?;
 

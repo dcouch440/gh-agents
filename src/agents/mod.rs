@@ -4,4 +4,3 @@
 
 pub mod execution_tools;
 pub mod gatekeeper;
-pub mod tool_router;

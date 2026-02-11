@@ -744,6 +744,7 @@ pub async fn apply_protocol(
             name: None,
             system_prompt_suffix: None,
             visible: true,
+            description: String::new(),
         };
 
         let created = wf_repo
