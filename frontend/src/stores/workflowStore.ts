@@ -196,6 +196,20 @@ const clearActive = (): void => {
 
 // ── Steps ────────────────────────────────────────────────────────────────────
 
+/** Merge a partial update into a step if any values actually changed. Returns null if no change. */
+const _mergeStepPartial = (
+  s: WorkflowState,
+  stepId: string,
+  partial: Partial<WorkflowStep>,
+): { steps: NormalizedMap<WorkflowStep> } | null => {
+  const existing = nmGet(s.steps, stepId)
+  if (!existing) return null
+  const keys = Object.keys(partial) as (keyof WorkflowStep)[]
+  const hasChange = keys.some((k) => !Object.is(existing[k], partial[k]))
+  if (!hasChange) return null
+  return { steps: nmSet(s.steps, stepId, { ...existing, ...partial }) }
+}
+
 const createStep = async (body: CreateStepRequest): Promise<WorkflowStep | null> => {
   const wid = getActiveId()
   if (!wid) return null
@@ -206,38 +220,17 @@ const createStep = async (body: CreateStepRequest): Promise<WorkflowStep | null>
 
 const patchStepLocal = (stepId: string, partial: Partial<WorkflowStep>): void => {
   store.setState((s) => {
-    const existing = nmGet(s.steps, stepId)
-    if (!existing) return {}
-
-    // Skip if all values in partial are already identical
-    const keys = Object.keys(partial) as (keyof WorkflowStep)[]
-    const hasChange = keys.some((k) => !Object.is(existing[k], partial[k]))
-    if (!hasChange) return {}
-
+    const merged = _mergeStepPartial(s, stepId, partial)
+    if (!merged) return {}
     const nextDirty = new Set(s.dirtyStepIds)
     nextDirty.add(stepId)
-    return {
-      steps: nmSet(s.steps, stepId, { ...existing, ...partial }),
-      dirtyStepIds: nextDirty,
-      dirty: true,
-    }
+    return { ...merged, dirtyStepIds: nextDirty, dirty: true }
   })
 }
 
 /** Update step data locally without marking it dirty (for auto-derived values). */
 const patchStepSilent = (stepId: string, partial: Partial<WorkflowStep>): void => {
-  store.setState((s) => {
-    const existing = nmGet(s.steps, stepId)
-    if (!existing) return {}
-
-    const keys = Object.keys(partial) as (keyof WorkflowStep)[]
-    const hasChange = keys.some((k) => !Object.is(existing[k], partial[k]))
-    if (!hasChange) return {}
-
-    return {
-      steps: nmSet(s.steps, stepId, { ...existing, ...partial }),
-    }
-  })
+  store.setState((s) => _mergeStepPartial(s, stepId, partial) ?? {})
 }
 
 const updateStep = async (stepId: string, body: UpdateStepRequest): Promise<WorkflowStep | null> => {

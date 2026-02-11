@@ -31,6 +31,7 @@ function WorkflowCanvasInner() {
   const stepProtocols = useStore(canvasStore.store, canvasStore.selectStepProtocols)
   const documentDefsByStep = useStore(workflowStore.store, workflowStore.selectDocumentDefsByStep)
   const { onNodeDragStart, onNodeDrag, onNodeDragStop } = usePackDrag(getNodes, setNodes)
+  const stepsById = useMemo(() => Collections.keyBy(steps, (s) => s.id), [steps])
   const [contextMenu, setContextMenu] = useState<MenuPosition>(null)
   const initialFitDone = useRef(false)
   const fetchedToolAgentIds = useRef(new Set<string>())
@@ -166,13 +167,13 @@ function WorkflowCanvasInner() {
   const isValidConnection = useCallback(
     (connection: Connection) => {
       if (connection.sourceHandle === 'documents') return false
-      const targetStep = steps.find((s) => s.id === connection.target)
+      const targetStep = connection.target ? stepsById.get(connection.target) : undefined
       if (!targetStep) return false
       if (targetStep.execution_mode === 'context') return false
       if (connection.source === connection.target) return false
       return true
     },
-    [steps],
+    [stepsById],
   )
 
   // Edge creation

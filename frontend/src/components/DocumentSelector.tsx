@@ -18,8 +18,8 @@ import {
 } from '@mui/material'
 import { useStore, documentStore } from '@/stores'
 import { LoadingSpinner, EmptyState } from '@/components/primitives'
-import { api } from '@/api'
-import type { DocumentListItem, Document } from '@/types/document'
+import { useDocumentExpand } from './useDocumentExpand'
+import type { DocumentListItem } from '@/types/document'
 
 type DocumentSelectorProps = {
   selectedIds: string[]
@@ -36,9 +36,7 @@ function DocumentSelector({ selectedIds, onSelectionChange, open, onClose }: Doc
     void documentStore.fetchAll()
   }, [])
   const [localSelectedIds, setLocalSelectedIds] = useState<Set<string>>(() => new Set(selectedIds))
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [loadedDocs, setLoadedDocs] = useState<Map<string, Document>>(new Map())
-  const [loadingDocId, setLoadingDocId] = useState<string | null>(null)
+  const { expandedId, toggleExpand, getDocumentContent } = useDocumentExpand(documents)
 
   if (!open) return null
 
@@ -59,40 +57,6 @@ function DocumentSelector({ selectedIds, onSelectionChange, open, onClose }: Doc
   const handleCancel = () => {
     setLocalSelectedIds(new Set(selectedIds))
     onClose()
-  }
-
-  const toggleExpand = (docId: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    const newExpandedId = expandedId === docId ? null : docId
-    setExpandedId(newExpandedId)
-
-    // Load document content if expanding and not already loaded
-    if (newExpandedId && !loadedDocs.has(newExpandedId)) {
-      setLoadingDocId(newExpandedId)
-      void api.documents
-        .get(newExpandedId)
-        .then((doc) => {
-          setLoadedDocs((prev) => new Map(prev).set(newExpandedId, doc))
-        })
-        .catch((err: unknown) => {
-          console.error('Failed to load document:', err)
-        })
-        .finally(() => {
-          setLoadingDocId(null)
-        })
-    }
-  }
-
-  const getDocumentContent = (docId: string): string => {
-    if (loadingDocId === docId) {
-      return 'Loading document content...'
-    }
-    const fullDoc = loadedDocs.get(docId)
-    if (fullDoc?.content) {
-      return fullDoc.content
-    }
-    const listItem = documents.find((d) => d.id === docId)
-    return listItem?.summary ?? 'No content available'
   }
 
   const renderDocumentRow = (doc: DocumentListItem) => {
