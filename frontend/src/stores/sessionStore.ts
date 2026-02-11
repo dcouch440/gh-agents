@@ -2,7 +2,7 @@
 // sessionStore — Hand-written store for sessions
 // ============================================================================
 
-import { createStore, createNormalizedMap, nmFromArray, nmSet, nmDelete, toArray, nmGet } from './lib'
+import { createStore, createNormalizedMap, nmFromArray, nmSet, nmDelete, toArray, nmGet, extractError } from './lib'
 import type { NormalizedMap } from './lib'
 import { api } from '@/api'
 import type { Session, CreateSessionRequest, UpdateSessionRequest } from '@/types/session'
@@ -25,10 +25,6 @@ const store = createStore<SessionState>(() => ({
   error: null,
 }))
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'sessions: unknown error')
-
 // ── Selectors ────────────────────────────────────────────────────────────────
 
 const selectAll = (s: SessionState): Session[] => toArray(s.items)
@@ -50,7 +46,7 @@ const fetchAll = async (): Promise<void> => {
     const data = await api.sessions.list()
     store.setState({ items: nmFromArray(data as Session[]), loading: false })
   } catch (e) {
-    store.setState({ loading: false, error: extractError(e) })
+    store.setState({ loading: false, error: extractError('sessions', e) })
   }
 }
 
@@ -78,7 +74,7 @@ const remove = async (id: string): Promise<void> => {
   try {
     await api.sessions.delete(id)
   } catch (e) {
-    store.setState({ items: prev.items, error: extractError(e) })
+    store.setState({ items: prev.items, error: extractError('sessions', e) })
     throw e
   }
 }

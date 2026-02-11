@@ -2,7 +2,7 @@
 // costStore — Singleton store for cost/spend data
 // ============================================================================
 
-import { createStore } from './lib'
+import { createStore, extractError } from './lib'
 import { api } from '@/api'
 import type { CostResponse } from '@/types/cost'
 
@@ -28,10 +28,6 @@ const store = createStore<CostState>(() => ({
   lastFetched: null,
 }))
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'costs: unknown error')
-
 // ── Selectors ────────────────────────────────────────────────────────────────
 
 const selectSummary = (s: CostState): CostResponse | null => s.summary
@@ -50,7 +46,7 @@ const fetchSummary = async (): Promise<void> => {
     const data = await api.costs.list()
     store.setState({ summary: data, loading: false, lastFetched: Date.now() })
   } catch (e) {
-    store.setState({ loading: false, error: extractError(e) })
+    store.setState({ loading: false, error: extractError('costs', e) })
   }
 }
 

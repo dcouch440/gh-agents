@@ -1,5 +1,5 @@
-import { roomStore } from './roomStore'
-import { nmSize, nmGet, createNormalizedMap } from './lib'
+import { roomStore } from '.'
+import { nmSize, nmGet, createNormalizedMap } from '../lib'
 import type { Room, RoomMember, RoomSession, RoomTranscriptEntry, RoomOutput } from '@/types/room'
 
 const {

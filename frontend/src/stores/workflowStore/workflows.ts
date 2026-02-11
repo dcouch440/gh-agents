@@ -1,7 +1,8 @@
 import { nmFromArray, nmSet, nmDelete, createNormalizedMap } from '../lib'
 import { api } from '@/api'
 import type { Workflow, CreateWorkflowRequest, UpdateWorkflowRequest, WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
-import { store, extractError, STALE_THRESHOLD_MS } from './_store'
+import { extractError } from '../lib'
+import { store, STALE_THRESHOLD_MS } from './_store'
 
 const fetchAll = async (): Promise<void> => {
   store.setState({ loading: true, error: null })
@@ -9,7 +10,7 @@ const fetchAll = async (): Promise<void> => {
     const data = await api.workflows.list()
     store.setState({ items: nmFromArray(data), loading: false, lastFetched: Date.now() })
   } catch (e) {
-    store.setState({ loading: false, error: extractError(e) })
+    store.setState({ loading: false, error: extractError('workflows', e) })
   }
 }
 
@@ -44,7 +45,7 @@ const remove = async (id: string): Promise<void> => {
   try {
     await api.workflows.delete(id)
   } catch (e) {
-    store.setState({ items: prev.items, error: extractError(e) })
+    store.setState({ items: prev.items, error: extractError('workflows', e) })
     throw e
   }
 }
@@ -65,7 +66,7 @@ const loadWorkflow = async (id: string): Promise<void> => {
       dirty: false,
     }))
   } catch (e) {
-    store.setState({ loading: false, error: extractError(e) })
+    store.setState({ loading: false, error: extractError('workflows', e) })
   }
 }
 

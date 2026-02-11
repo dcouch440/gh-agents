@@ -1,6 +1,7 @@
 import { api } from '@/api'
 import type { DocumentDef, CreateDocumentDefRequest } from '@/types/workflow'
-import { store, extractError, getActiveId } from './_store'
+import { extractError } from '../lib'
+import { store, getActiveId } from './_store'
 
 const fetchStepDocuments = async (stepId: string): Promise<void> => {
   const wid = getActiveId()
@@ -11,7 +12,7 @@ const fetchStepDocuments = async (stepId: string): Promise<void> => {
       documentsByStep: { ...s.documentsByStep, [stepId]: docs },
     }))
   } catch (e) {
-    store.setState({ error: extractError(e) })
+    store.setState({ error: extractError('workflows', e) })
   }
 }
 
@@ -40,7 +41,7 @@ const fetchDocumentDefs = async (stepId: string): Promise<void> => {
       documentDefsByStep: { ...s.documentDefsByStep, [stepId]: defs },
     }))
   } catch (e) {
-    store.setState({ error: extractError(e) })
+    store.setState({ error: extractError('workflows', e) })
   }
 }
 

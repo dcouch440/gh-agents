@@ -2,9 +2,10 @@
 // protocolStore — Hand-written store for protocols + sub-resources
 // ============================================================================
 
-import { createStore, createNormalizedMap, nmFromArray, nmSet, nmDelete, toArray, nmGet, logger } from './lib'
+import { createStore, createNormalizedMap, nmFromArray, nmSet, nmDelete, toArray, nmGet, logger, extractError } from './lib'
 import type { NormalizedMap } from './lib'
 import { api } from '@/api'
+import { Collections } from '@/utils/collections'
 import type { Protocol, ProtocolTypeInfo, CreateProtocolRequest, UpdateProtocolRequest, CreatePortRequest } from '@/types/protocol'
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -28,10 +29,6 @@ const store = logger(
   })),
 )
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'protocols: unknown error')
-
 // ── Selectors ────────────────────────────────────────────────────────────────
 
 const selectAll = (s: ProtocolState): Protocol[] => toArray(s.items)
@@ -46,7 +43,7 @@ const selectTypes = (s: ProtocolState): ProtocolTypeInfo[] => s.types
 const selectByType =
   (protocolType: string) =>
   (s: ProtocolState): Protocol[] =>
-    toArray(s.items).filter((p) => p.protocol_type === protocolType)
+    Collections.filterMap(toArray(s.items), (p) => (p.protocol_type === protocolType ? p : null))
 
 const selectLoading = (s: ProtocolState): boolean => s.loading
 
@@ -60,7 +57,7 @@ const fetchAll = async (): Promise<void> => {
     const data = await api.protocols.list()
     store.setState({ items: nmFromArray(data), loading: false })
   } catch (e) {
-    store.setState({ loading: false, error: extractError(e) })
+    store.setState({ loading: false, error: extractError('protocols', e) })
   }
 }
 
@@ -75,7 +72,7 @@ const fetchTypes = async (): Promise<void> => {
     const data = await api.protocols.listTypes()
     store.setState({ types: data.types })
   } catch (e) {
-    store.setState({ error: extractError(e) })
+    store.setState({ error: extractError('protocols', e) })
   }
 }
 
@@ -97,7 +94,7 @@ const remove = async (id: string): Promise<void> => {
   try {
     await api.protocols.delete(id)
   } catch (e) {
-    store.setState({ items: prev.items, error: extractError(e) })
+    store.setState({ items: prev.items, error: extractError('protocols', e) })
     throw e
   }
 }

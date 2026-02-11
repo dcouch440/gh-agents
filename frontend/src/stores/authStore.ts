@@ -2,7 +2,7 @@
 // authStore — Authentication State
 // ============================================================================
 
-import { createStore } from './lib'
+import { createStore, extractError } from './lib'
 import { api } from '@/api'
 import { LS_AUTH_TOKEN } from '@/constants'
 
@@ -34,8 +34,6 @@ const store = createStore<AuthState>(() => ({
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'Unknown error')
-
 const saveToken = (token: string): void => {
   localStorage.setItem(LS_AUTH_TOKEN, token)
 }
@@ -58,7 +56,7 @@ const login = async (email: string, password: string): Promise<void> => {
       status: 'authenticated',
     })
   } catch (e) {
-    store.setState({ status: 'unauthenticated', error: extractError(e) })
+    store.setState({ status: 'unauthenticated', error: extractError('auth', e) })
     throw e
   }
 }
@@ -74,7 +72,7 @@ const register = async (email: string, password: string): Promise<void> => {
       status: 'authenticated',
     })
   } catch (e) {
-    store.setState({ status: 'unauthenticated', error: extractError(e) })
+    store.setState({ status: 'unauthenticated', error: extractError('auth', e) })
     throw e
   }
 }

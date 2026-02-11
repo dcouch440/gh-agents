@@ -12,6 +12,7 @@ import { ActionMenu } from '@/components/primitives'
 import { useConfirmModal } from '@/hooks/useConfirmModal'
 import { useStore, workflowStore } from '@/stores'
 import { ANIMATION } from '@/constants'
+import { formatRelativeTime } from '@/utils/formatRelativeTime'
 import type { Workflow } from '@/types/workflow'
 
 function WorkflowsPage() {
@@ -55,20 +56,6 @@ function WorkflowsPage() {
     [openConfirm],
   )
 
-  const formatDate = (iso: string): string => {
-    const d = new Date(iso)
-    const now = new Date()
-    const diffMs = now.getTime() - d.getTime()
-    const diffMin = Math.floor(diffMs / 60_000)
-    if (diffMin < 1) return 'just now'
-    if (diffMin < 60) return `${String(diffMin)}m ago`
-    const diffHr = Math.floor(diffMin / 60)
-    if (diffHr < 24) return `${String(diffHr)}h ago`
-    const diffDay = Math.floor(diffHr / 24)
-    if (diffDay < 30) return `${String(diffDay)}d ago`
-    return d.toLocaleDateString()
-  }
-
   const columns: TableColumn<Workflow>[] = useMemo(
     () => [
       {
@@ -100,7 +87,7 @@ function WorkflowsPage() {
         width: 140,
         render: (wf) => (
           <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
-            {formatDate(wf.created_at)}
+            {formatRelativeTime(wf.created_at)}
           </Typography>
         ),
       },

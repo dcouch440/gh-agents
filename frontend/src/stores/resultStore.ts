@@ -2,7 +2,7 @@
 // resultStore — Read-only store for execution results
 // ============================================================================
 
-import { createStore, createNormalizedMap, nmFromArray, nmSet, toArray, nmGet } from './lib'
+import { createStore, createNormalizedMap, nmFromArray, nmSet, toArray, nmGet, extractError } from './lib'
 import type { NormalizedMap } from './lib'
 import { api } from '@/api'
 import type { Result } from '@/types/result'
@@ -22,10 +22,6 @@ const store = createStore<ResultState>(() => ({
   loading: false,
   error: null,
 }))
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'results: unknown error')
 
 // ── Selectors ────────────────────────────────────────────────────────────────
 
@@ -48,7 +44,7 @@ const fetchAll = async (): Promise<void> => {
     const data = await api.results.list()
     store.setState({ items: nmFromArray(data as Result[]), loading: false })
   } catch (e) {
-    store.setState({ loading: false, error: extractError(e) })
+    store.setState({ loading: false, error: extractError('results', e) })
   }
 }
 

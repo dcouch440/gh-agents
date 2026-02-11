@@ -2,7 +2,7 @@
 // executionStore — Hand-written store for agent executions + messages + SSE
 // ============================================================================
 
-import { createStore, createNormalizedMap, nmFromArray, nmSet, nmDelete, toArray, nmGet } from './lib'
+import { createStore, createNormalizedMap, nmFromArray, nmSet, nmDelete, toArray, nmGet, extractError } from './lib'
 import type { NormalizedMap } from './lib'
 import { api } from '@/api'
 import { createSSEStream } from '@/api/sse'
@@ -30,8 +30,6 @@ const store = createStore<ExecutionState>(() => ({
 }))
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'executions: unknown error')
 
 const EMPTY_MESSAGES: ExecutionMessage[] = []
 
@@ -61,7 +59,7 @@ const fetchAll = async (params?: { status?: string }): Promise<void> => {
     const data = await api.agentExecutions.list(params)
     store.setState({ items: nmFromArray(data), loading: false })
   } catch (e) {
-    store.setState({ loading: false, error: extractError(e) })
+    store.setState({ loading: false, error: extractError('executions', e) })
   }
 }
 
@@ -78,7 +76,7 @@ const fetchMessages = async (id: string): Promise<void> => {
       messagesByExecution: { ...s.messagesByExecution, [id]: data.messages },
     }))
   } catch (e) {
-    store.setState({ error: extractError(e) })
+    store.setState({ error: extractError('executions', e) })
   }
 }
 
@@ -159,7 +157,7 @@ const sendMessage = async (executionId: string, content: string): Promise<void> 
       activeStreams: { ...s.activeStreams, [executionId]: abort },
     }))
   } catch (e) {
-    store.setState({ error: extractError(e) })
+    store.setState({ error: extractError('executions', e) })
   }
 }
 

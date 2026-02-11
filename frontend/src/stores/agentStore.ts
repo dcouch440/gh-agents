@@ -2,7 +2,7 @@
 // agentStore — Hand-written store for agents + sub-resources
 // ============================================================================
 
-import { createStore, createNormalizedMap, nmFromArray, nmSet, nmDelete, toArray, nmGet, logger } from './lib'
+import { createStore, createNormalizedMap, nmFromArray, nmSet, nmDelete, toArray, nmGet, logger, extractError } from './lib'
 import type { NormalizedMap } from './lib'
 import { api } from '@/api'
 import type { Agent, AgentPoolStats, CreateAgentRequest, UpdateAgentRequest } from '@/types/agent'
@@ -33,10 +33,6 @@ const store = logger(
     error: null,
   })),
 )
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'agents: unknown error')
 
 // ── Selectors ────────────────────────────────────────────────────────────────
 
@@ -73,7 +69,7 @@ const fetchAll = async (): Promise<void> => {
     const data = await api.agents.list()
     store.setState({ items: nmFromArray(data.agents), stats: data.stats, loading: false })
   } catch (e) {
-    store.setState({ loading: false, error: extractError(e) })
+    store.setState({ loading: false, error: extractError('agents', e) })
   }
 }
 
@@ -101,7 +97,7 @@ const remove = async (id: string): Promise<void> => {
   try {
     await api.agents.delete(id)
   } catch (e) {
-    store.setState({ items: prev.items, error: extractError(e) })
+    store.setState({ items: prev.items, error: extractError('agents', e) })
     throw e
   }
 }

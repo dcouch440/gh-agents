@@ -47,6 +47,4 @@ const updateStep = (
   [stepId]: { ...(states[stepId] ?? makeDefaultStepState()), ...patch },
 })
 
-const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'Unknown error')
-
-export { store, initialState, makeDefaultStepState, updateStep, extractError }
+export { store, initialState, makeDefaultStepState, updateStep }
