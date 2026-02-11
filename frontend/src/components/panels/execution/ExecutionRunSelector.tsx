@@ -12,6 +12,7 @@ import CheckCircleOutlined from '@mui/icons-material/CheckCircleOutlined'
 import ErrorOutlineOutlined from '@mui/icons-material/ErrorOutlineOutlined'
 import PlayArrowOutlined from '@mui/icons-material/PlayArrowOutlined'
 import type { WorkflowExecutionSummary } from '@/types'
+import { formatRelativeTime } from '@/utils/formatRelativeTime'
 
 type ExecutionRunSelectorProps = {
   currentRunId: string | null
@@ -21,18 +22,6 @@ type ExecutionRunSelectorProps = {
   loading: boolean
   onSelectRun: (runId: string) => void
   onReturnToLive: () => void
-}
-
-const formatRelativeTime = (iso: string | null): string => {
-  if (!iso) return ''
-  const diff = Date.now() - new Date(iso).getTime()
-  const minutes = Math.floor(diff / 60_000)
-  if (minutes < 1) return 'just now'
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  return `${days}d ago`
 }
 
 const statusIcon = (status: string) => {

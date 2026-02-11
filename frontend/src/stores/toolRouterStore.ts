@@ -2,7 +2,7 @@
 // toolRouterStore — Hand-written store for tool routers + modes + tools
 // ============================================================================
 
-import { createStore, createNormalizedMap, nmFromArray, nmSet, nmDelete, toArray, nmGet } from './lib'
+import { createStore, createNormalizedMap, nmFromArray, nmSet, nmDelete, toArray, nmGet, extractError } from './lib'
 import type { NormalizedMap } from './lib'
 import { api } from '@/api'
 import type { ToolRouter, CreateToolRouterRequest, UpdateToolRouterRequest, SetRouterToolsRequest } from '@/types/toolRouter'
@@ -30,10 +30,6 @@ const store = createStore<ToolRouterState>(() => ({
   loading: false,
   error: null,
 }))
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'toolRouters: unknown error')
 
 // ── Selectors ────────────────────────────────────────────────────────────────
 
@@ -71,7 +67,7 @@ const fetchAll = async (): Promise<void> => {
     const data = await api.toolRouters.list()
     store.setState({ items: nmFromArray(data), loading: false })
   } catch (e) {
-    store.setState({ loading: false, error: extractError(e) })
+    store.setState({ loading: false, error: extractError('toolRouters', e) })
   }
 }
 
@@ -99,7 +95,7 @@ const remove = async (id: string): Promise<void> => {
   try {
     await api.toolRouters.delete(id)
   } catch (e) {
-    store.setState({ items: prev.items, error: extractError(e) })
+    store.setState({ items: prev.items, error: extractError('toolRouters', e) })
     throw e
   }
 }

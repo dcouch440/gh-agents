@@ -165,9 +165,11 @@ const linkStepProtocol = (stepId: string, link: StepProtocolLink): void => {
 }
 
 const unlinkStepProtocol = (stepId: string): void => {
-  store.setState((s) => ({
-    stepProtocols: Object.fromEntries(Object.entries(s.stepProtocols).filter(([id]) => id !== stepId)),
-  }))
+  store.setState((s) => {
+    const next = { ...s.stepProtocols }
+    delete next[stepId]
+    return { stepProtocols: next }
+  })
 }
 
 // ── Minimap ──────────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
-import { roomStore } from './roomStore'
+import { roomStore } from '.'
 import { ROOM_EVENT } from '@/types/ws'
 import type { WsWireMessage } from '@/types/ws'
-import { createNormalizedMap } from './lib'
+import { createNormalizedMap } from '../lib'
 
 vi.mock('@/api', () => ({
   api: {
@@ -47,7 +47,7 @@ beforeEach(() => {
 })
 
 describe('roomStore integration', () => {
-  describe('speaker sequence → session complete', () => {
+  describe('speaker sequence -> session complete', () => {
     it('accumulates transcript then marks session complete', () => {
       handle(
         makeMsg(ROOM_EVENT.SPEAKER_END, {

@@ -2,7 +2,7 @@
 // configStore — Singleton store for system config + stats
 // ============================================================================
 
-import { createStore } from './lib'
+import { createStore, extractError } from './lib'
 import { api } from '@/api'
 import type { Config, UpdateConfigRequest } from '@/types/config'
 import type { UsageSummary } from '@/types/stats'
@@ -29,10 +29,6 @@ const store = createStore<ConfigState>(() => ({
   lastFetched: null,
 }))
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'config: unknown error')
-
 // ── Selectors ────────────────────────────────────────────────────────────────
 
 const selectConfig = (s: ConfigState): Config | null => s.config
@@ -53,7 +49,7 @@ const fetchConfig = async (): Promise<void> => {
     const config = await api.config.get()
     store.setState({ config, loading: false, lastFetched: Date.now() })
   } catch (e) {
-    store.setState({ loading: false, error: extractError(e) })
+    store.setState({ loading: false, error: extractError('config', e) })
   }
 }
 
@@ -69,7 +65,7 @@ const updateConfig = async (body: UpdateConfigRequest): Promise<void> => {
     const config = await api.config.update(body)
     store.setState({ config, loading: false })
   } catch (e) {
-    store.setState({ loading: false, error: extractError(e) })
+    store.setState({ loading: false, error: extractError('config', e) })
   }
 }
 
@@ -78,7 +74,7 @@ const fetchStats = async (): Promise<void> => {
     const data = await api.stats.get()
     store.setState({ stats: Array.isArray(data) ? data : [data] })
   } catch (e) {
-    store.setState({ error: extractError(e) })
+    store.setState({ error: extractError('config', e) })
   }
 }
 

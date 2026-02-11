@@ -1,5 +1,6 @@
 import { api } from '@/api'
-import { store, initialState, extractError } from './_store'
+import { extractError } from '../lib'
+import { store, initialState } from './_store'
 
 const fetchRuns = async (workflowId: string): Promise<void> => {
   store.setState({ historyLoading: true, historyError: null })
@@ -7,7 +8,7 @@ const fetchRuns = async (workflowId: string): Promise<void> => {
     const data = await api.workflows.listExecutions(workflowId)
     store.setState({ runs: data, historyLoading: false })
   } catch (e) {
-    store.setState({ historyLoading: false, historyError: extractError(e) })
+    store.setState({ historyLoading: false, historyError: extractError('workflowExecution', e) })
   }
 }
 

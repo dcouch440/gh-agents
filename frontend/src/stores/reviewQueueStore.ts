@@ -2,7 +2,7 @@
 // reviewQueueStore — Store for pending review executions + notifications
 // ============================================================================
 
-import { createStore } from './lib'
+import { createStore, extractError } from './lib'
 import { api } from '@/api'
 import type { AgentExecution } from '@/types/execution'
 
@@ -25,10 +25,6 @@ const store = createStore<ReviewQueueState>(() => ({
   loading: false,
   error: null,
 }))
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'reviewQueue: unknown error')
 
 // ── Selectors ────────────────────────────────────────────────────────────────
 
@@ -55,7 +51,7 @@ const fetchPending = async (): Promise<void> => {
       error: null,
     })
   } catch (e) {
-    store.setState({ loading: false, error: extractError(e) })
+    store.setState({ loading: false, error: extractError('reviewQueue', e) })
   }
 }
 

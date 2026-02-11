@@ -21,8 +21,6 @@ const store = logger(
   })),
 )
 
-const extractError = (e: unknown): string => (e instanceof Error ? e.message : 'workflows: unknown error')
-
 const getActiveId = (): string | null => store.getState().activeWorkflowId
 
-export { store, extractError, getActiveId, STALE_THRESHOLD_MS }
+export { store, getActiveId, STALE_THRESHOLD_MS }
