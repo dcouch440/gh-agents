@@ -29,7 +29,7 @@ mod prompts;
 
 #[cfg(test)]
 mod tests;
-pub mod types;
+pub(crate) mod types;
 
 // Re-exports for external consumers and tests
 pub(crate) use persistence::{determine_persist_action, DocumentPersistAction};
