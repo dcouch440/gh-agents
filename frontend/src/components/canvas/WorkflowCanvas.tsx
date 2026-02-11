@@ -141,7 +141,7 @@ function WorkflowCanvasInner() {
 
   // Map store data to RF format
   const rfNodes = useMemo(() => toRFNodes(steps, lookups), [steps, lookups])
-  const rfEdges = useMemo(() => [...toRFEdges(edges, protocolGroups, protocolsByStepLookup), ...toDocumentEdges(steps, lookups)], [edges, protocolGroups, protocolsByStepLookup, steps, lookups])
+  const rfEdges = useMemo(() => [...toRFEdges(edges, protocolGroups, protocolsByStepLookup, steps), ...toDocumentEdges(steps, lookups)], [edges, protocolGroups, protocolsByStepLookup, steps, lookups])
 
   // Push store updates into RF — only touch data + position, never clobber selection
   useEffect(() => {
