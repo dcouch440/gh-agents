@@ -1,6 +1,12 @@
 #[cfg(test)]
 mod tests {
-    //! Tests for DAG module
+    //! Integration tests for the DAG executor.
+    //!
+    //! Unit tests for specific modules live in colocated test files:
+    //! - Chain detection → `for_each/tests.rs`
+    //! - Subtask topo sort + aggregation → `cavernous/tests.rs`
+    //! - Room output extraction → `room_step/tests.rs`
+    //! - resolve_output_key / to_snake_case → `dag_state/tests.rs`
 
     use super::super::{resolve_for_each_array, resolve_variables, topological_sort};
     use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
@@ -57,6 +63,10 @@ mod tests {
         }
     }
 
+    // =========================================================================
+    // Topological Sort
+    // =========================================================================
+
     #[test]
     fn topo_sort_linear() {
         let s1 = Uuid::new_v4();
@@ -81,6 +91,10 @@ mod tests {
 
         assert!(topological_sort(&steps, &edges).is_err());
     }
+
+    // =========================================================================
+    // Variable Resolution
+    // =========================================================================
 
     #[test]
     fn resolve_variables_basic() {
@@ -113,6 +127,10 @@ mod tests {
         assert_eq!(result, "Hello {unknown}!");
     }
 
+    // =========================================================================
+    // For-Each Array Resolution
+    // =========================================================================
+
     #[test]
     fn resolve_for_each_array_basic() {
         let mut outputs = HashMap::new();
@@ -135,444 +153,6 @@ mod tests {
 
         let arr = resolve_for_each_array("result.data.items", &outputs, &HashMap::new()).unwrap();
         assert_eq!(arr.len(), 3);
-    }
-
-    // =========================================================================
-    // Phase 6B: Chain Detection Tests
-    // =========================================================================
-
-    use super::super::detect_for_each_chains;
-
-    fn make_for_each_step(id: Uuid, var_name: Option<&str>, display_order: i32) -> WorkflowStepRow {
-        WorkflowStepRow {
-            id,
-            workflow_id: Uuid::new_v4(),
-            agent_id: Some(Uuid::new_v4()),
-            execution_mode: "for_each".into(),
-            agent_execution_mode: Some("parallel".into()),
-            for_each_ref: Some("items".into()),
-            prompt_template_id: None,
-            prompt_template: "Process item".into(),
-            output_schema_id: None,
-            output_variable_name: var_name.map(|s| s.into()),
-            interactive_agent_id: None,
-            for_each_label_field: None,
-            room_id: None,
-            routing_mode: None,
-            routing_field: None,
-            display_order,
-            version: 1,
-            reasoning_trace: false,
-            verification_agent_ids: None,
-            position_x: None,
-            position_y: None,
-            name: None,
-            system_prompt_suffix: None,
-            visible: true,
-        }
-    }
-
-    #[test]
-    fn detect_chains_two_for_each() {
-        let a = Uuid::new_v4();
-        let b = Uuid::new_v4();
-        let c = Uuid::new_v4();
-
-        let steps = vec![
-            make_for_each_step(a, Some("specialists"), 0),
-            make_for_each_step(b, Some("reviewers"), 1),
-            make_step(c, "Synthesize", Some("final"), 2),
-        ];
-        let edges = vec![make_edge(a, b), make_edge(b, c)];
-
-        let chains = detect_for_each_chains(&steps, &edges);
-        assert_eq!(chains.len(), 1);
-        assert_eq!(chains[0].step_ids, vec![a, b]);
-    }
-
-    #[test]
-    fn detect_chains_three_for_each() {
-        let a = Uuid::new_v4();
-        let b = Uuid::new_v4();
-        let c = Uuid::new_v4();
-        let d = Uuid::new_v4();
-
-        let steps = vec![
-            make_for_each_step(a, Some("stage1"), 0),
-            make_for_each_step(b, Some("stage2"), 1),
-            make_for_each_step(c, Some("stage3"), 2),
-            make_step(d, "Synthesize", Some("final"), 3),
-        ];
-        let edges = vec![make_edge(a, b), make_edge(b, c), make_edge(c, d)];
-
-        let chains = detect_for_each_chains(&steps, &edges);
-        assert_eq!(chains.len(), 1);
-        assert_eq!(chains[0].step_ids, vec![a, b, c]);
-    }
-
-    #[test]
-    fn detect_chains_none_single_for_each() {
-        let a = Uuid::new_v4();
-        let b = Uuid::new_v4();
-
-        let steps = vec![
-            make_for_each_step(a, Some("items"), 0),
-            make_step(b, "Done", Some("result"), 1),
-        ];
-        let edges = vec![make_edge(a, b)];
-
-        let chains = detect_for_each_chains(&steps, &edges);
-        assert!(chains.is_empty());
-    }
-
-    #[test]
-    fn detect_chains_broken_by_single() {
-        let a = Uuid::new_v4();
-        let b = Uuid::new_v4();
-        let c = Uuid::new_v4();
-
-        let steps = vec![
-            make_for_each_step(a, Some("stage1"), 0),
-            make_step(b, "Middle", Some("mid"), 1),
-            make_for_each_step(c, Some("stage2"), 2),
-        ];
-        let edges = vec![make_edge(a, b), make_edge(b, c)];
-
-        let chains = detect_for_each_chains(&steps, &edges);
-        assert!(chains.is_empty());
-    }
-
-    #[test]
-    fn detect_chains_fan_out_breaks() {
-        let a = Uuid::new_v4();
-        let b = Uuid::new_v4();
-        let c = Uuid::new_v4();
-
-        let steps = vec![
-            make_for_each_step(a, Some("source"), 0),
-            make_for_each_step(b, Some("branch1"), 1),
-            make_for_each_step(c, Some("branch2"), 2),
-        ];
-        // a fans out to both b and c
-        let edges = vec![make_edge(a, b), make_edge(a, c)];
-
-        let chains = detect_for_each_chains(&steps, &edges);
-        // a has 2 for-each children, so no chain forms
-        assert!(chains.is_empty());
-    }
-
-    #[test]
-    fn detect_chains_independent() {
-        let a1 = Uuid::new_v4();
-        let a2 = Uuid::new_v4();
-        let b1 = Uuid::new_v4();
-        let b2 = Uuid::new_v4();
-
-        let steps = vec![
-            make_for_each_step(a1, Some("chain1_s1"), 0),
-            make_for_each_step(a2, Some("chain1_s2"), 1),
-            make_for_each_step(b1, Some("chain2_s1"), 2),
-            make_for_each_step(b2, Some("chain2_s2"), 3),
-        ];
-        let edges = vec![make_edge(a1, a2), make_edge(b1, b2)];
-
-        let chains = detect_for_each_chains(&steps, &edges);
-        assert_eq!(chains.len(), 2);
-
-        // Both chains should have length 2
-        for chain in &chains {
-            assert_eq!(chain.step_ids.len(), 2);
-        }
-    }
-
-    #[test]
-    fn detect_chains_fan_in_breaks() {
-        let a = Uuid::new_v4();
-        let b = Uuid::new_v4();
-        let c = Uuid::new_v4();
-
-        let steps = vec![
-            make_for_each_step(a, Some("source1"), 0),
-            make_for_each_step(b, Some("source2"), 1),
-            make_for_each_step(c, Some("merged"), 2),
-        ];
-        // Both a and b feed into c (fan-in)
-        let edges = vec![make_edge(a, c), make_edge(b, c)];
-
-        let chains = detect_for_each_chains(&steps, &edges);
-        // c has 2 parents, so no chain forms with c
-        assert!(chains.is_empty());
-    }
-
-    // =========================================================================
-    // Phase 7: Cavernous Routing Tests
-    // =========================================================================
-
-    use super::super::StepOutput;
-    use super::super::{aggregate_subtask_outputs, topo_sort_subtasks};
-    use crate::types::Subtask;
-
-    fn make_subtask(id: &str, depends_on: Vec<&str>) -> Subtask {
-        Subtask {
-            id: id.into(),
-            task_name: format!("Task {}", id),
-            agent_id: Uuid::new_v4(),
-            tools: vec![],
-            prompt_template: format!("Do {}", id),
-            depends_on: depends_on.into_iter().map(|s| s.into()).collect(),
-            input_mapping: std::collections::HashMap::new(),
-            output_schema: None,
-        }
-    }
-
-    fn make_subtask_output(raw: &str) -> StepOutput {
-        StepOutput {
-            variable_name: String::new(),
-            structured_output: serde_json::from_str(raw).ok(),
-            raw_output: raw.into(),
-        }
-    }
-
-    #[test]
-    fn topo_sort_subtasks_linear() {
-        // A -> B -> C
-        let subtasks = vec![
-            make_subtask("a", vec![]),
-            make_subtask("b", vec!["a"]),
-            make_subtask("c", vec!["b"]),
-        ];
-
-        let layers = topo_sort_subtasks(&subtasks).unwrap();
-        assert_eq!(layers.len(), 3);
-        assert_eq!(layers[0].len(), 1);
-        assert_eq!(layers[0][0].id, "a");
-        assert_eq!(layers[1][0].id, "b");
-        assert_eq!(layers[2][0].id, "c");
-    }
-
-    #[test]
-    fn topo_sort_subtasks_parallel() {
-        // A and B independent, C depends on both
-        let subtasks = vec![
-            make_subtask("a", vec![]),
-            make_subtask("b", vec![]),
-            make_subtask("c", vec!["a", "b"]),
-        ];
-
-        let layers = topo_sort_subtasks(&subtasks).unwrap();
-        assert_eq!(layers.len(), 2);
-        assert_eq!(layers[0].len(), 2); // a and b in parallel
-        let first_layer_ids: Vec<&str> = layers[0].iter().map(|s| s.id.as_str()).collect();
-        assert!(first_layer_ids.contains(&"a"));
-        assert!(first_layer_ids.contains(&"b"));
-        assert_eq!(layers[1].len(), 1);
-        assert_eq!(layers[1][0].id, "c");
-    }
-
-    #[test]
-    fn topo_sort_subtasks_cycle_detected() {
-        // A depends on B, B depends on A
-        let subtasks = vec![make_subtask("a", vec!["b"]), make_subtask("b", vec!["a"])];
-
-        assert!(topo_sort_subtasks(&subtasks).is_err());
-    }
-
-    #[test]
-    fn topo_sort_subtasks_unknown_dep() {
-        let subtasks = vec![make_subtask("a", vec!["nonexistent"])];
-
-        assert!(topo_sort_subtasks(&subtasks).is_err());
-    }
-
-    #[test]
-    fn topo_sort_subtasks_empty() {
-        let layers = topo_sort_subtasks(&[]).unwrap();
-        assert!(layers.is_empty());
-    }
-
-    #[test]
-    fn aggregate_all_outputs_mode() {
-        let mut results = HashMap::new();
-        results.insert(
-            "db_schema".into(),
-            make_subtask_output(r#"{"tables": ["users", "posts"]}"#),
-        );
-        results.insert(
-            "api".into(),
-            make_subtask_output(r#"{"endpoints": ["/users", "/posts"]}"#),
-        );
-
-        let order = vec!["db_schema".into(), "api".into()];
-        let aggregated = aggregate_subtask_outputs(&results, "all_outputs", &order);
-
-        assert!(aggregated.is_object());
-        let obj = aggregated.as_object().unwrap();
-        assert!(obj.contains_key("db_schema"));
-        assert!(obj.contains_key("api"));
-        assert_eq!(obj["db_schema"]["tables"][0].as_str().unwrap(), "users");
-    }
-
-    #[test]
-    fn aggregate_final_output_mode() {
-        let mut results = HashMap::new();
-        results.insert("first".into(), make_subtask_output(r#"{"step": 1}"#));
-        results.insert("last".into(), make_subtask_output(r#"{"step": 2}"#));
-
-        let order = vec!["first".into(), "last".into()];
-        let aggregated = aggregate_subtask_outputs(&results, "final_output", &order);
-
-        assert_eq!(aggregated["step"].as_i64().unwrap(), 2);
-    }
-
-    #[test]
-    fn aggregate_merge_mode() {
-        let mut results = HashMap::new();
-        results.insert(
-            "a".into(),
-            make_subtask_output(r#"{"color": "red", "size": 10}"#),
-        );
-        results.insert(
-            "b".into(),
-            make_subtask_output(r#"{"shape": "circle", "size": 20}"#),
-        );
-
-        let order = vec!["a".into(), "b".into()];
-        let aggregated = aggregate_subtask_outputs(&results, "merge", &order);
-
-        let obj = aggregated.as_object().unwrap();
-        assert_eq!(obj["color"].as_str().unwrap(), "red");
-        assert_eq!(obj["shape"].as_str().unwrap(), "circle");
-        // Later value wins for "size"
-        assert_eq!(obj["size"].as_i64().unwrap(), 20);
-    }
-
-    #[test]
-    fn aggregate_final_output_skips_missing() {
-        let mut results = HashMap::new();
-        results.insert("first".into(), make_subtask_output(r#"{"data": "ok"}"#));
-        // "second" is missing (simulating a failed subtask)
-
-        let order = vec!["first".into(), "second".into()];
-        let aggregated = aggregate_subtask_outputs(&results, "final_output", &order);
-
-        // Falls back to "first" since "second" is missing
-        assert_eq!(aggregated["data"].as_str().unwrap(), "ok");
-    }
-
-    // =========================================================================
-    // Room Composite Envelope Tests
-    // =========================================================================
-
-    use super::super::extract_room_outputs_from_speakers;
-    use super::super::resolve_dot_path;
-    use crate::server::executors::room::SpeakerResult;
-
-    #[test]
-    fn room_composite_envelope_structure() {
-        let agent_a = Uuid::new_v4();
-        let agent_b = Uuid::new_v4();
-
-        let speakers = vec![
-            SpeakerResult {
-                agent_id: agent_a,
-                agent_name: "Architect".into(),
-                content: r#"{"recommendation": "use microservices"}"#.into(),
-                input_tokens: 100,
-                output_tokens: 50,
-                speaker_order: 0,
-            },
-            SpeakerResult {
-                agent_id: agent_b,
-                agent_name: "Reviewer".into(),
-                content: "I agree with the approach.".into(),
-                input_tokens: 80,
-                output_tokens: 30,
-                speaker_order: 1,
-            },
-        ];
-
-        let (envelope_data, output) =
-            extract_room_outputs_from_speakers(&speakers, Some("room_out"));
-
-        // Verify output variable name
-        assert_eq!(output.variable_name, "room_out");
-
-        // Verify composite structure has per-agent keys
-        let key_a = format!("agent:{}", agent_a);
-        let key_b = format!("agent:{}", agent_b);
-
-        // Agent A returned valid JSON — should be parsed as object
-        let val_a = resolve_dot_path(&envelope_data, &key_a).unwrap();
-        assert_eq!(val_a["recommendation"], "use microservices");
-
-        // Agent B returned plain text — should be stored as string
-        let val_b = resolve_dot_path(&envelope_data, &key_b).unwrap();
-        assert_eq!(val_b.as_str().unwrap(), "I agree with the approach.");
-
-        // Nested access works through the port system
-        let nested_path = format!("{}.recommendation", key_a);
-        let nested = resolve_dot_path(&envelope_data, &nested_path).unwrap();
-        assert_eq!(nested, "use microservices");
-    }
-
-    // =========================================================================
-    // resolve_output_key / to_snake_case
-    // =========================================================================
-
-    use super::super::{resolve_output_key, to_snake_case};
-    use crate::db::StepOutputRow;
-
-    #[test]
-    fn to_snake_case_basic() {
-        assert_eq!(to_snake_case("Research Agent"), "research_agent");
-        assert_eq!(
-            to_snake_case("Write a Summery Report"),
-            "write_a_summery_report"
-        );
-        assert_eq!(to_snake_case("single"), "single");
-        assert_eq!(to_snake_case("  Leading Spaces  "), "leading_spaces");
-    }
-
-    #[test]
-    fn resolve_output_key_prefers_port() {
-        let step = make_step(Uuid::new_v4(), "", Some("legacy_var"), 0);
-        let port = StepOutputRow {
-            id: Uuid::new_v4(),
-            workflow_step_id: step.id,
-            port_name: "port_name".into(),
-            port_type: "string".into(),
-            json_path: "$".into(),
-            description: None,
-            json_schema: None,
-            created_at: chrono::Utc::now(),
-        };
-        let mut outputs = HashMap::new();
-        outputs.insert(step.id, vec![port]);
-
-        assert_eq!(resolve_output_key(&step, &outputs), "port_name");
-    }
-
-    #[test]
-    fn resolve_output_key_falls_back_to_variable_name() {
-        let step = make_step(Uuid::new_v4(), "", Some("my_var"), 0);
-        let outputs = HashMap::new();
-        assert_eq!(resolve_output_key(&step, &outputs), "my_var");
-    }
-
-    #[test]
-    fn resolve_output_key_auto_derives_from_step_name() {
-        let mut step = make_step(Uuid::new_v4(), "", None, 0);
-        step.name = Some("Research Agent".into());
-        let outputs = HashMap::new();
-        assert_eq!(resolve_output_key(&step, &outputs), "research_agent");
-    }
-
-    #[test]
-    fn resolve_output_key_auto_derives_from_execution_mode() {
-        let step = make_step(Uuid::new_v4(), "", None, 0);
-        // step.name is None, so falls back to execution_mode ("single")
-        let outputs = HashMap::new();
-        assert_eq!(resolve_output_key(&step, &outputs), "single");
     }
 
     // =========================================================================

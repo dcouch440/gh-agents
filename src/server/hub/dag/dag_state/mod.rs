@@ -1,0 +1,245 @@
+//! Shared state, types, and helpers for DAG execution.
+//!
+//! Contains the mutable execution state accumulated during DAG traversal,
+//! port metadata for step I/O, and helper functions used across all
+//! step execution modules.
+
+use std::collections::HashMap;
+
+use serde_json::Value as JsonValue;
+use tracing::{debug, warn};
+use uuid::Uuid;
+
+use crate::db::{
+    AgentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, WorkflowStepEdgeRow, WorkflowStepRow,
+};
+use crate::server::state::AppState;
+use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
+
+use super::utils::{resolve_port_inputs, StepOutput};
+
+mod tests;
+
+// ── DagExecutionState ────────────────────────────────────────────────────────
+
+/// Mutable execution state accumulated during DAG traversal.
+///
+/// Bundles the six `&mut` arguments that were previously passed individually
+/// to every `execute_*` function, reducing argument counts from 14–15 to ~8–9.
+pub(crate) struct DagExecutionState {
+    pub var_outputs: HashMap<String, JsonValue>,
+    pub completed: HashMap<Uuid, StepOutput>,
+    pub completed_envelopes: HashMap<Uuid, StepExecutionEnvelope>,
+    pub total_input_tokens: i64,
+    pub total_output_tokens: i64,
+    pub total_cost_usd: f32,
+}
+
+impl DagExecutionState {
+    pub fn new() -> Self {
+        Self {
+            var_outputs: HashMap::new(),
+            completed: HashMap::new(),
+            completed_envelopes: HashMap::new(),
+            total_input_tokens: 0,
+            total_output_tokens: 0,
+            total_cost_usd: 0.0,
+        }
+    }
+
+    /// Create from pre-populated state (used by resume path).
+    pub fn with_completed(
+        completed: HashMap<Uuid, StepOutput>,
+        var_outputs: HashMap<String, JsonValue>,
+    ) -> Self {
+        Self {
+            var_outputs,
+            completed,
+            completed_envelopes: HashMap::new(),
+            total_input_tokens: 0,
+            total_output_tokens: 0,
+            total_cost_usd: 0.0,
+        }
+    }
+
+    /// Accumulate token and cost values from a step execution.
+    pub fn accumulate_tokens(&mut self, input: i64, output: i64, cost: f32) {
+        self.total_input_tokens += input;
+        self.total_output_tokens += output;
+        self.total_cost_usd += cost;
+    }
+
+    /// Store a step's output in the variable map, completed map, and envelope map.
+    pub fn record_step_output(
+        &mut self,
+        step_id: Uuid,
+        output: StepOutput,
+        envelope: StepExecutionEnvelope,
+    ) {
+        if !output.variable_name.is_empty() {
+            if let Some(ref structured) = output.structured_output {
+                self.var_outputs
+                    .insert(output.variable_name.clone(), structured.clone());
+            }
+        }
+        self.completed_envelopes.insert(step_id, envelope);
+        self.completed.insert(step_id, output);
+    }
+}
+
+// ── PortMetadata ─────────────────────────────────────────────────────────────
+
+/// Pre-fetched port metadata for all steps in a workflow.
+pub(crate) struct PortMetadata {
+    pub step_inputs: HashMap<Uuid, Vec<StepInputRow>>,
+    pub step_outputs: HashMap<Uuid, Vec<StepOutputRow>>,
+    pub routing_rules: HashMap<Uuid, Vec<StepRoutingRuleRow>>,
+}
+
+/// Pre-fetch port metadata (inputs, outputs, routing rules) for all steps.
+pub(crate) async fn prefetch_port_metadata(
+    state: &AppState,
+    steps: &[WorkflowStepRow],
+) -> PortMetadata {
+    let mut step_inputs: HashMap<Uuid, Vec<StepInputRow>> = HashMap::new();
+    let mut step_outputs: HashMap<Uuid, Vec<StepOutputRow>> = HashMap::new();
+    let mut routing_rules: HashMap<Uuid, Vec<StepRoutingRuleRow>> = HashMap::new();
+
+    if let Some(ref wf_repo) = state.workflow_repo() {
+        for step in steps {
+            if let Ok(inputs) = wf_repo.get_step_inputs(step.id).await {
+                if !inputs.is_empty() {
+                    step_inputs.insert(step.id, inputs);
+                }
+            }
+            if let Ok(outputs) = wf_repo.get_step_outputs(step.id).await {
+                if !outputs.is_empty() {
+                    step_outputs.insert(step.id, outputs);
+                }
+            }
+            if step.routing_mode.as_deref() == Some("label") {
+                if let Ok(rules) = wf_repo.get_step_routing_rules(step.id).await {
+                    if !rules.is_empty() {
+                        routing_rules.insert(step.id, rules);
+                    }
+                }
+            }
+        }
+    }
+
+    PortMetadata {
+        step_inputs,
+        step_outputs,
+        routing_rules,
+    }
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/// Determine the output key for a step: prefer the first output port name,
+/// then `output_variable_name`, then auto-derive from the step name.
+pub(crate) fn resolve_output_key(
+    step: &WorkflowStepRow,
+    step_outputs: &HashMap<Uuid, Vec<StepOutputRow>>,
+) -> String {
+    if let Some(ports) = step_outputs.get(&step.id) {
+        if let Some(first) = ports.first() {
+            if !first.port_name.is_empty() {
+                return first.port_name.clone();
+            }
+        }
+    }
+    if let Some(ref var_name) = step.output_variable_name {
+        if !var_name.is_empty() {
+            return var_name.clone();
+        }
+    }
+    // Auto-derive from step name (snake_case)
+    let source = step.name.as_deref().unwrap_or(&step.execution_mode);
+    to_snake_case(source)
+}
+
+/// Convert a name to snake_case for auto-derived variable names.
+pub(crate) fn to_snake_case(name: &str) -> String {
+    name.trim()
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '_' })
+        .collect::<String>()
+        .split('_')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("_")
+}
+
+/// Wrap a step output into a StepExecutionEnvelope for port-based data flow.
+pub(crate) fn wrap_in_envelope(
+    output: &StepOutput,
+    agent: &AgentRow,
+    execution_id: Uuid,
+    input_tokens: i64,
+    output_tokens: i64,
+    cost_usd: f32,
+) -> StepExecutionEnvelope {
+    StepExecutionEnvelope {
+        status: if output.structured_output.is_some() {
+            ExecutionStatus::Success
+        } else {
+            ExecutionStatus::Error
+        },
+        data: output.structured_output.clone(),
+        metadata: ExecutionMetadata {
+            execution_id,
+            execution_time_ms: 0,
+            tokens_in: Some(input_tokens as i32),
+            tokens_out: Some(output_tokens as i32),
+            cost_usd: Some(cost_usd as f64),
+            model: Some(agent.model_id.clone()),
+            agent_id: Some(agent.id),
+            iteration_index: None,
+            iteration_label: None,
+            routing_label: None,
+            selected_routing_document_id: None,
+            upstream_agent_id: None,
+            upstream_routing_label: None,
+            room_session_id: None,
+            room_id: None,
+            total_rounds: None,
+        },
+        error: None,
+    }
+}
+
+/// Extract a display name for a step (for logging and WebSocket events).
+pub(crate) fn step_display_name(step: &WorkflowStepRow) -> String {
+    step.output_variable_name
+        .clone()
+        .unwrap_or_else(|| step.id.to_string())
+}
+
+/// Resolve port inputs for a step, returning None if no input ports are defined
+/// or if resolution fails.
+pub(crate) fn resolve_step_port_inputs(
+    step: &WorkflowStepRow,
+    edges: &[WorkflowStepEdgeRow],
+    port_meta: &PortMetadata,
+    completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
+) -> Option<HashMap<String, JsonValue>> {
+    let inputs = port_meta.step_inputs.get(&step.id)?;
+    match resolve_port_inputs(
+        step.id,
+        edges,
+        inputs,
+        &port_meta.step_outputs,
+        completed_envelopes,
+    ) {
+        Ok(resolved) => {
+            debug!(step_id = %step.id, ports = resolved.len(), "Resolved port inputs");
+            Some(resolved)
+        }
+        Err(e) => {
+            warn!("Port resolution failed for step {}: {}", step.id, e);
+            None
+        }
+    }
+}
