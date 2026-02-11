@@ -9,8 +9,9 @@ import { DocumentNodeHeader } from './DocumentNodeHeader'
 import { DocumentNodeContent } from './DocumentNodeContent'
 import type { DocumentNodeData } from './types'
 import { nodeDataEqual } from '../mappers'
-import { CanvasNodeKind, HighlightMode } from '../canvasKinds'
+import { CanvasNodeKind } from '../canvasKinds'
 import { useProtocolHighlight } from '../useProtocolHighlight'
+import { getNodeHighlightStyles } from '../nodeHighlightStyles'
 
 function DocumentNodeComponent({ id, data, selected }: NodeProps) {
   const theme = useTheme()
@@ -18,6 +19,14 @@ function DocumentNodeComponent({ id, data, selected }: NodeProps) {
   const highlightMode = useProtocolHighlight(CanvasNodeKind.DOCUMENT, id, nodeData.protocolStepId)
   const accentColor = DOCUMENT_NODE.ACCENT_COLOR
   const [hovered, setHovered] = useState(false)
+  const highlight = getNodeHighlightStyles({
+    selected: selected === true,
+    hasProtocol: true,
+    accentColor,
+    highlightMode,
+    themeMode: theme.palette.mode,
+    variant: 'resizable',
+  })
 
   return (
     <Box
@@ -33,25 +42,9 @@ function DocumentNodeComponent({ id, data, selected }: NodeProps) {
         borderRadius: '12px',
         backgroundColor: theme.palette.mode === 'light' ? theme.palette.custom.cavityBg : 'background.paper',
         border: 3,
-        borderColor: selected
-          ? accentColor
-          : highlightMode === HighlightMode.SELECT
-            ? accentColor
-            : highlightMode === HighlightMode.HOVER
-              ? `${accentColor}80`
-              : 'divider',
+        borderColor: highlight.borderColor,
         borderStyle: 'dashed',
-        boxShadow: selected
-          ? theme.palette.mode === 'dark'
-            ? `0 0 0 1px ${accentColor}40, 0 8px 32px ${accentColor}22, 0 2px 8px rgba(0, 0, 0, 0.3)`
-            : `0 0 0 1px ${accentColor}30, 0 12px 40px rgba(45, 27, 14, 0.18), 0 4px 12px ${accentColor}18`
-          : highlightMode === HighlightMode.SELECT
-            ? `0 0 0 1px ${accentColor}40, 0 8px 32px ${accentColor}22`
-            : highlightMode === HighlightMode.HOVER
-              ? `0 0 0 1px ${accentColor}20, 0 6px 24px ${accentColor}14`
-              : theme.palette.mode === 'dark'
-                ? '0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)'
-                : '0 8px 32px rgba(45, 27, 14, 0.14), 0 2px 8px rgba(45, 27, 14, 0.08)',
+        boxShadow: highlight.boxShadow,
         transition: 'border-color 150ms ease, box-shadow 150ms ease',
         overflow: 'hidden',
         display: 'flex',

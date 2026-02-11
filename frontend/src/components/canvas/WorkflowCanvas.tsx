@@ -1,4 +1,3 @@
-import type { CSSProperties } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ReactFlow, Background, MiniMap, useReactFlow, ReactFlowProvider, BackgroundVariant } from '@xyflow/react'
 import type { OnSelectionChangeParams, Connection, OnNodesDelete, OnEdgesDelete, Edge } from '@xyflow/react'
@@ -6,7 +5,7 @@ import '@xyflow/react/dist/style.css'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
 import { useStore, batch, workflowStore, canvasStore, agentStore, outputSchemaStore, protocolStore } from '@/stores'
-import { toRFNodes, toRFEdges, toDocumentEdges, nodeDataEqual, computeProtocolGroups } from './mappers'
+import { toRFNodes, toRFEdges, toDocumentEdges, computeProtocolGroups } from './mappers'
 import type { StepNodeLookups } from './mappers'
 import { Collections } from '@/utils/collections'
 import { nodeTypes } from './nodeTypes'
@@ -18,12 +17,7 @@ import type { MenuPosition } from './CanvasContextMenu'
 import { CANVAS } from './constants'
 import { computeHighlightedProtocolIds } from './computeHighlightedProtocolIds'
 import { useGroupHoverDelay } from './useGroupHoverDelay'
-
-const stylesEqual = (a: CSSProperties | undefined, b: CSSProperties | undefined): boolean => {
-  if (a === b) return true
-  if (a === undefined || b === undefined) return false
-  return a.width === b.width && a.height === b.height
-}
+import { useCanvasSync } from './useCanvasSync'
 
 function WorkflowCanvasInner() {
   const theme = useTheme()
@@ -144,110 +138,7 @@ function WorkflowCanvasInner() {
   const rfEdges = useMemo(() => [...toRFEdges(edges, protocolGroups, protocolsByStepLookup, steps), ...toDocumentEdges(steps, lookups)], [edges, protocolGroups, protocolsByStepLookup, steps, lookups])
 
   // Push store updates into RF — only touch data + position, never clobber selection
-  useEffect(() => {
-    setNodes((current) => {
-      const currentIds = Collections.toSetBy(current, (n) => n.id)
-      const newIds = Collections.toSetBy(rfNodes, (n) => n.id)
-
-      const hasStructuralChange = rfNodes.some((n) => !currentIds.has(n.id)) || current.some((n) => !newIds.has(n.id))
-
-      if (hasStructuralChange) {
-        // Nodes added/removed — full replacement, preserve selection + positions.
-        // RF owns position state (drag), so keep existing positions for nodes that
-        // were already on the canvas. Only truly new nodes get computed defaults.
-        const selMap = Collections.toLookupMap(
-          current,
-          (n) => n.id,
-          (n) => n.selected ?? false,
-        )
-        const posMap = Collections.toLookupMap(
-          current,
-          (n) => n.id,
-          (n) => n.position,
-        )
-        return Collections.mapBy(rfNodes, (n) => ({
-          ...n,
-          selected: selMap.get(n.id) ?? false,
-          position: posMap.get(n.id) ?? n.position,
-        }))
-      }
-
-      // Data-only change — value-compare, return current when nothing changed.
-      // NEVER overwrite position here: RF owns position state (updated via drag),
-      // and the store catches up via onNodeDragStop. Overwriting mid-drag causes
-      // nodes to snap back to stale store positions.
-      const newDataMap = Collections.keyBy(rfNodes, (n) => n.id)
-      let anyChanged = false
-      const result: typeof current = []
-      for (let i = 0; i < current.length; i++) {
-        const n = current[i]!
-        const updated = newDataMap.get(n.id)
-        if (!updated) {
-          result.push(n)
-          continue
-        }
-
-        const dEq = nodeDataEqual(n.data, updated.data)
-        const tEq = n.type === updated.type
-        const sEq = stylesEqual(n.style, updated.style)
-
-        if (dEq && tEq && sEq) {
-          result.push(n)
-          continue
-        }
-
-        anyChanged = true
-        result.push({
-          ...n,
-          data: dEq ? n.data : updated.data,
-          type: updated.type,
-          style: sEq ? n.style : updated.style,
-        })
-      }
-
-      return anyChanged ? result : current
-    })
-  }, [rfNodes, setNodes])
-
-  useEffect(() => {
-    setEdges((current) => {
-      const currentIds = Collections.toSetBy(current, (e) => e.id)
-      const newIds = Collections.toSetBy(rfEdges, (e) => e.id)
-      const hasStructuralChange = rfEdges.some((e) => !currentIds.has(e.id)) || current.some((e) => !newIds.has(e.id))
-
-      if (hasStructuralChange) {
-        const selMap = Collections.toLookupMap(
-          current,
-          (e) => e.id,
-          (e) => e.selected ?? false,
-        )
-        return Collections.mapBy(rfEdges, (e) => ({
-          ...e,
-          selected: selMap.get(e.id) ?? false,
-        }))
-      }
-
-      const newEdgeMap = Collections.keyBy(rfEdges, (e) => e.id)
-      let anyChanged = false
-      const result: typeof current = []
-      for (let i = 0; i < current.length; i++) {
-        const e = current[i]!
-        const updated = newEdgeMap.get(e.id)
-        if (!updated) {
-          result.push(e)
-          continue
-        }
-        if (e.source === updated.source && e.target === updated.target && e.type === updated.type) {
-          result.push(e)
-          continue
-        }
-        anyChanged = true
-        result.push({ ...e, source: updated.source, target: updated.target, type: updated.type })
-      }
-
-      return anyChanged ? result : current
-    })
-  }, [rfEdges, setEdges])
+  useCanvasSync(rfNodes, rfEdges, setNodes, setEdges)
 
   // Fit to view on initial load
   useEffect(() => {

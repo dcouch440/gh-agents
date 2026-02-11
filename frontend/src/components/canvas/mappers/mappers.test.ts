@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { toRFNodes, toRFEdges, nodeDataEqual, computeProtocolGroups } from './mappers'
-import type { StepNodeLookups, ProtocolStepInfo } from './mappers'
+import { toRFNodes, toRFEdges, nodeDataEqual, computeProtocolGroups } from '.'
+import type { StepNodeLookups, ProtocolStepInfo } from '.'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 
 const step1: WorkflowStep = {
