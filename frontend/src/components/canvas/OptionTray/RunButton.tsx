@@ -17,6 +17,7 @@ function RunButton() {
   const activeWorkflowId = useStore(workflowStore.store, workflowStore.selectActiveWorkflowId)
   const steps = useStore(workflowStore.store, workflowStore.selectSteps)
   const [runStatus, setRunStatus] = useState<RunStatus>('idle')
+  // Single .find() on a small array (<20 steps), not inside a loop — acceptable
   const entryStep = useMemo(() => steps.find((s) => s.execution_mode === 'context') ?? null, [steps])
 
   const handleRun = useCallback(async () => {

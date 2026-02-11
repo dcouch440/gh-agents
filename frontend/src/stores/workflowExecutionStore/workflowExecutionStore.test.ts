@@ -1,4 +1,4 @@
-import { workflowExecutionStore } from './workflowExecutionStore'
+import { workflowExecutionStore } from '.'
 import { WORKFLOW_EVENT } from '@/types/ws'
 import type { WsWireMessage } from '@/types/ws'
 

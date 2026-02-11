@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { createStore, logger } from './lib'
+import { Collections } from '@/utils/collections'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -91,13 +92,13 @@ const selectStepProtocols = (s: CanvasState): Readonly<Record<string, StepProtoc
 
 const selectSteps = (ids: string[]): void => {
   const current = store.getState().selectedStepIds
-  if (ids.length === current.size && ids.every((id) => current.has(id))) return
+  if (Collections.setMatchesArray(current, ids)) return
   store.setState({ selectedStepIds: new Set(ids) })
 }
 
 const selectEdges = (ids: string[]): void => {
   const current = store.getState().selectedEdgeIds
-  if (ids.length === current.size && ids.every((id) => current.has(id))) return
+  if (Collections.setMatchesArray(current, ids)) return
   store.setState({ selectedEdgeIds: new Set(ids) })
 }
 
@@ -125,7 +126,7 @@ const setHoveredStep = (id: string | null, protocolId?: string | null): void => 
 
 const setHighlightedProtocols = (ids: ReadonlySet<string>): void => {
   const current = store.getState().highlightedProtocolStepIds
-  if (ids.size === current.size && [...ids].every((id) => current.has(id))) return
+  if (Collections.setsEqual(current, ids)) return
   store.setState({ highlightedProtocolStepIds: ids })
 }
 

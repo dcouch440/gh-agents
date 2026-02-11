@@ -1,4 +1,5 @@
 import type { WorkflowStep } from '@/types/workflow'
+import { Collections } from '@/utils/collections'
 import { PROTOCOL_TYPE_COLORS, GREYSCALE_ACCENT } from '../constants'
 import type { ProtocolStepInfo, ProtocolGroupEntry } from './types'
 
@@ -35,9 +36,10 @@ const computeProtocolGroups = (
   }
 
   const result = new Map<string, ProtocolGroupEntry>()
+  const stepsById = Collections.keyBy(steps, (s) => s.id)
 
   for (const protocolId of protocolStepIds) {
-    const step = steps.find((s) => s.id === protocolId)
+    const step = stepsById.get(protocolId)
     const protocolInfo = protocolsByStep.get(protocolId)
     const protocolType = protocolInfo?.protocol_type ?? step?.execution_mode ?? 'default'
     const color = PROTOCOL_TYPE_COLORS[protocolType] ?? GREYSCALE_ACCENT
