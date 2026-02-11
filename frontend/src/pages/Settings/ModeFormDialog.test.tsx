@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ModeFormDialog } from './ModeFormDialog'
 import { mockRouterMode } from '@/test/fixtures'
@@ -146,7 +146,7 @@ describe('ModeFormDialog', () => {
       render(<ModeFormDialog open={true} onClose={mockOnClose} onSave={mockOnSave} mode={null} routerId={routerId} />)
 
       const modeKeyInput = screen.getByLabelText(/mode key/i)
-      await user.type(modeKeyInput, 'a'.repeat(51))
+      fireEvent.change(modeKeyInput, { target: { value: 'a'.repeat(51) } })
 
       const createButton = screen.getByRole('button', { name: /create/i })
       await user.click(createButton)

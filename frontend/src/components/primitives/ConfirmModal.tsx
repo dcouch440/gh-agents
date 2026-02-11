@@ -53,7 +53,7 @@ function ConfirmModal({
           {cancelText}
         </Button>
         <Button onClick={handleConfirm} variant={confirmColor === 'error' ? 'danger' : 'primary'} disabled={loading} loading={loading}>
-          {confirmText}
+          {loading ? 'Processing...' : confirmText}
         </Button>
       </DialogActions>
     </Dialog>
