@@ -11,6 +11,7 @@ export const CANVAS = {
   EDGE_OPACITY_PROTOCOL: 0.6,
   EDGE_OPACITY_SELECTED: 0.8,
   EDGE_FLOW_DURATION: '0.6s',
+  GROUP_HOVER_DELAY_MS: 300,
 } as const
 
 export const STEP_TYPE_COLORS: Record<string, string> = {
