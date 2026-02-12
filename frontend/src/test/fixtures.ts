@@ -261,6 +261,7 @@ export const mockWorkflowStep: WorkflowStep = {
   position_x: 0,
   position_y: 0,
   system_prompt_suffix: null,
+  description: '',
 }
 
 export const mockWorkflowStep2: WorkflowStep = {

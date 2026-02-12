@@ -60,6 +60,7 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
           promptValue: step.prompt_template,
           modelId: agent?.model_id ?? null,
           agentName: agent?.name ?? null,
+          description: step.description,
           isProtocol: true,
         },
       }

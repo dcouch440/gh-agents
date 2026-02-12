@@ -23,6 +23,54 @@ pub struct StepChatPath {
     pub sid: Uuid,
 }
 
+/// GET /api/workflows/:wid/steps/:sid/chat/session
+///
+/// Returns the existing step chat session, or 404 if none exists.
+#[utoipa::path(
+    get,
+    path = "/api/workflows/{wid}/steps/{sid}/chat/session",
+    tag = "Step Chat",
+    security(("bearer_auth" = [])),
+    params(
+        ("wid" = Uuid, Path, description = "Workflow ID"),
+        ("sid" = Uuid, Path, description = "Step ID"),
+    ),
+    responses(
+        (status = 200, description = "Step chat session", body = SessionResponse),
+        (status = 404, description = "No session exists for this step")
+    )
+)]
+pub async fn get_step_session(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(p): Path<StepChatPath>,
+) -> Result<Json<SessionResponse>, AppError> {
+    let repo = &state.repos().workflows;
+    let wf = repo
+        .get_workflow(p.wid)
+        .await?
+        .ok_or(AppError::not_found("Workflow"))?;
+    if wf.user_id != auth.user_id.0 {
+        return Err(AppError::not_found("Workflow"));
+    }
+
+    let session = state
+        .repo()
+        .find_session_by_step_id(p.sid)
+        .await?
+        .ok_or(AppError::not_found("Step session"))?;
+
+    Ok(Json(SessionResponse {
+        id: session.id,
+        mode_id: session.mode_id,
+        agent_id: session.agent_id,
+        draft_config: session.draft_config,
+        title: session.title,
+        created_at: session.created_at,
+        updated_at: session.updated_at,
+    }))
+}
+
 /// POST /api/workflows/:wid/steps/:sid/chat/session
 ///
 /// Find-or-create: returns existing step session or creates a new one.

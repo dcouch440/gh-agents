@@ -15,9 +15,10 @@ export type ChatPanelProps = {
   streaming?: boolean
   disabled?: boolean
   className?: string
+  emptyMessage?: string
 }
 
-export function ChatPanel({ messages, onSend, streaming, disabled }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, streaming, disabled, emptyMessage }: ChatPanelProps) {
   const messagesRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -60,7 +61,7 @@ export function ChatPanel({ messages, onSend, streaming, disabled }: ChatPanelPr
             }}
           >
             <Typography variant="body2" color="text.secondary">
-              No messages yet
+              {emptyMessage ?? 'No messages yet'}
             </Typography>
           </Box>
         ) : (

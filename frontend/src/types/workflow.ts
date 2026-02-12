@@ -29,6 +29,7 @@ type WorkflowStep = {
   position_y: number | null
   name: string | null
   system_prompt_suffix: string | null
+  description: string
 }
 
 type WorkflowStepEdge = {
@@ -70,6 +71,7 @@ type CreateStepRequest = {
   reasoning_trace?: boolean
   verification_agent_ids?: string[]
   system_prompt_suffix?: string
+  description?: string
 }
 
 type UpdateStepRequest = Partial<CreateStepRequest>

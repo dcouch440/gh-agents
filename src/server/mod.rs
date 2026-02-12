@@ -298,7 +298,7 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         )
         .route(
             routes::WORKFLOW_STEP_CHAT_SESSION,
-            post(api::get_or_create_step_session),
+            get(api::get_step_session).post(api::get_or_create_step_session),
         )
         .route(
             routes::WORKFLOW_STEP_CHAT_MESSAGES,
