@@ -612,6 +612,35 @@ pub struct WorkflowStepProtocolRow {
     pub created_at: DateTime<Utc>,
 }
 
+// ============================================================================
+// Task Force Row Types
+// ============================================================================
+
+/// Row type for task force mission briefs (one per step).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct TaskMissionBriefRow {
+    pub id: Uuid,
+    pub step_id: Uuid,
+    pub task_description: String,
+    pub available_capabilities: Vec<String>,
+    pub failure_mode: String,
+    pub downstream_context: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Row type for task force agent roster entries.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct TaskAgentRosterRow {
+    pub id: Uuid,
+    pub mission_brief_id: Uuid,
+    pub name: String,
+    pub role_description: String,
+    pub capabilities: Vec<String>,
+    pub execution_order: i32,
+    pub created_at: DateTime<Utc>,
+}
+
 /// Type alias for the database pool
 pub type DbPool = PgPool;
 

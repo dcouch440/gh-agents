@@ -15,9 +15,10 @@ use crate::db::{
     ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow, ResultRow,
     RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry,
     RouterRequestRow, SessionRow, StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow,
-    SystemConfigRow, TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow, ToolRow,
-    WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
-    WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
+    SystemConfigRow, TaskAgentRosterRow, TaskMissionBriefRow, TokenLedgerRow, ToolCapabilityRow,
+    ToolRouterModeRow, ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow,
+    WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepProtocolRow,
+    WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -604,6 +605,46 @@ pub trait WorkflowRepo: Send + Sync {
 
     /// Find a workflow step by its room_id reference.
     async fn find_step_by_room_id(&self, room_id: Uuid) -> Result<Option<WorkflowStepRow>>;
+
+    // --- Task Force (Mission Briefs + Agent Roster) ---
+
+    /// Get the mission brief for a step, if any.
+    async fn get_mission_brief(&self, step_id: Uuid) -> Result<Option<TaskMissionBriefRow>>;
+
+    /// Create or update the mission brief for a step.
+    async fn upsert_mission_brief(
+        &self,
+        step_id: Uuid,
+        task_description: &str,
+        available_capabilities: &[String],
+        failure_mode: &str,
+        downstream_context: Option<String>,
+    ) -> Result<TaskMissionBriefRow>;
+
+    /// List all agents in a mission brief's roster, ordered by execution_order.
+    async fn list_agent_roster(&self, mission_brief_id: Uuid) -> Result<Vec<TaskAgentRosterRow>>;
+
+    /// Add an agent to a mission brief's roster.
+    async fn add_roster_agent(
+        &self,
+        mission_brief_id: Uuid,
+        name: &str,
+        role_description: &str,
+        capabilities: &[String],
+        execution_order: i32,
+    ) -> Result<TaskAgentRosterRow>;
+
+    /// Update a roster agent's fields. Only provided fields are changed.
+    async fn update_roster_agent(
+        &self,
+        agent_id: Uuid,
+        name: Option<String>,
+        role_description: Option<String>,
+        capabilities: Option<Vec<String>>,
+    ) -> Result<TaskAgentRosterRow>;
+
+    /// Remove a roster agent by ID.
+    async fn remove_roster_agent(&self, agent_id: Uuid) -> Result<()>;
 }
 
 // ============================================================================

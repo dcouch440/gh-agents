@@ -211,6 +211,10 @@ pub mod roles {
     /// Documenter archetype block, injected via `{{.System.archetype_block}}`.
     pub const NODE_ASSISTANT_DOCUMENTER_BLOCK: &str =
         include_str!("../../config/protocols/node_assistant/documenter/block.md");
+
+    /// Task force archetype block, injected via `{{.System.archetype_block}}`.
+    pub const NODE_ASSISTANT_TASK_FORCE_BLOCK: &str =
+        include_str!("../../config/protocols/node_assistant/task_force/block.md");
 }
 
 // ---------------------------------------------------------------------------
@@ -359,6 +363,7 @@ mod tests {
         assert!(roles::NODE_ASSISTANT_BASE.response.is_none());
 
         assert!(!roles::NODE_ASSISTANT_DOCUMENTER_BLOCK.is_empty());
+        assert!(!roles::NODE_ASSISTANT_TASK_FORCE_BLOCK.is_empty());
     }
 
     #[test]

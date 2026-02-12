@@ -18,10 +18,10 @@ use crate::db::{
     OutputSchemaRow, PromptTemplateRow, ProtocolDocumentDefRow, ProtocolExecutionRow,
     ProtocolPortRow, ProtocolRow, ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow,
     RoomSessionRow, RoomTranscriptEntry, RouterRequestRow, SessionRow, StepDocumentRow,
-    StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow, TokenLedgerRow,
-    ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow, ToolRow, WorkflowCollectionRow,
-    WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow,
-    WorkflowStepProtocolRow, WorkflowStepRow,
+    StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow, TaskAgentRosterRow,
+    TaskMissionBriefRow, TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow,
+    ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
+    WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -1796,6 +1796,112 @@ impl WorkflowRepo for PgRepo {
         .fetch_optional(&self.pool)
         .await?;
         Ok(row)
+    }
+
+    // --- Task Force (Mission Briefs + Agent Roster) ---
+
+    async fn get_mission_brief(&self, step_id: Uuid) -> Result<Option<TaskMissionBriefRow>> {
+        let row = sqlx::query_as::<_, TaskMissionBriefRow>(
+            "SELECT * FROM task_mission_briefs WHERE step_id = $1",
+        )
+        .bind(step_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn upsert_mission_brief(
+        &self,
+        step_id: Uuid,
+        task_description: &str,
+        available_capabilities: &[String],
+        failure_mode: &str,
+        downstream_context: Option<String>,
+    ) -> Result<TaskMissionBriefRow> {
+        let row = sqlx::query_as::<_, TaskMissionBriefRow>(
+            "INSERT INTO task_mission_briefs (step_id, task_description, available_capabilities, failure_mode, downstream_context)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (step_id) DO UPDATE SET
+                task_description = EXCLUDED.task_description,
+                available_capabilities = EXCLUDED.available_capabilities,
+                failure_mode = EXCLUDED.failure_mode,
+                downstream_context = EXCLUDED.downstream_context,
+                updated_at = now()
+             RETURNING *",
+        )
+        .bind(step_id)
+        .bind(task_description)
+        .bind(available_capabilities)
+        .bind(failure_mode)
+        .bind(downstream_context)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn list_agent_roster(&self, mission_brief_id: Uuid) -> Result<Vec<TaskAgentRosterRow>> {
+        let rows = sqlx::query_as::<_, TaskAgentRosterRow>(
+            "SELECT * FROM task_agent_roster WHERE mission_brief_id = $1 ORDER BY execution_order",
+        )
+        .bind(mission_brief_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn add_roster_agent(
+        &self,
+        mission_brief_id: Uuid,
+        name: &str,
+        role_description: &str,
+        capabilities: &[String],
+        execution_order: i32,
+    ) -> Result<TaskAgentRosterRow> {
+        let row = sqlx::query_as::<_, TaskAgentRosterRow>(
+            "INSERT INTO task_agent_roster (mission_brief_id, name, role_description, capabilities, execution_order)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING *",
+        )
+        .bind(mission_brief_id)
+        .bind(name)
+        .bind(role_description)
+        .bind(capabilities)
+        .bind(execution_order)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn update_roster_agent(
+        &self,
+        agent_id: Uuid,
+        name: Option<String>,
+        role_description: Option<String>,
+        capabilities: Option<Vec<String>>,
+    ) -> Result<TaskAgentRosterRow> {
+        let row = sqlx::query_as::<_, TaskAgentRosterRow>(
+            "UPDATE task_agent_roster SET
+                name = COALESCE($2, name),
+                role_description = COALESCE($3, role_description),
+                capabilities = COALESCE($4, capabilities)
+             WHERE id = $1
+             RETURNING *",
+        )
+        .bind(agent_id)
+        .bind(name)
+        .bind(role_description)
+        .bind(capabilities)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn remove_roster_agent(&self, agent_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM task_agent_roster WHERE id = $1")
+            .bind(agent_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 }
 
