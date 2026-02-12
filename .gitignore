@@ -36,3 +36,4 @@ node_modules/
 Hey
 
 /proto/.venv
+/proto/boca/__pycache__
