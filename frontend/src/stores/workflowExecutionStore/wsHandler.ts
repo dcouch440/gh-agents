@@ -11,8 +11,11 @@ import type {
   WorkflowFailedData,
   WorkflowResumedData,
 } from '@/types/ws'
+import type { StepTimelineEvent } from './types'
 import { store, updateStep } from './_store'
 import { fetchRuns } from './history'
+
+const appendEvent = (log: StepTimelineEvent[], event: StepTimelineEvent): StepTimelineEvent[] => [...log, event]
 
 const handleWsEvent = (msg: WsWireMessage): void => {
   try {
@@ -47,7 +50,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
             executionId: d.execution_id ?? null,
             startedAt: msg.ts,
           }),
-          eventLog: [...s.eventLog, { stepId: d.step_id, stepName: d.step_name, eventType: 'started' as const, ts: msg.ts }],
+          eventLog: appendEvent(s.eventLog, { stepId: d.step_id, stepName: d.step_name, eventType: 'started', ts: msg.ts }),
         }))
         break
       }
@@ -64,7 +67,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
             durationMs: d.duration_ms ?? null,
             completedAt: msg.ts,
           }),
-          eventLog: [...s.eventLog, { stepId: d.step_id, stepName: d.step_name, eventType: 'completed' as const, ts: msg.ts }],
+          eventLog: appendEvent(s.eventLog, { stepId: d.step_id, stepName: d.step_name, eventType: 'completed', ts: msg.ts }),
         }))
         break
       }
@@ -77,7 +80,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
             error: d.error,
             completedAt: msg.ts,
           }),
-          eventLog: [...s.eventLog, { stepId: d.step_id, stepName: d.step_name, eventType: 'failed' as const, ts: msg.ts }],
+          eventLog: appendEvent(s.eventLog, { stepId: d.step_id, stepName: d.step_name, eventType: 'failed', ts: msg.ts }),
         }))
         break
       }
@@ -88,7 +91,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
             status: 'paused',
             stepName: d.step_name,
           }),
-          eventLog: [...s.eventLog, { stepId: d.step_id, stepName: d.step_name, eventType: 'paused' as const, ts: msg.ts }],
+          eventLog: appendEvent(s.eventLog, { stepId: d.step_id, stepName: d.step_name, eventType: 'paused', ts: msg.ts }),
         }))
         break
       }
@@ -131,10 +134,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
             status: 'running',
             startedAt: msg.ts,
           }),
-          eventLog: [
-            ...s.eventLog,
-            { stepId: d.step_id, stepName: s.stepStates[d.step_id]?.stepName ?? null, eventType: 'resumed' as const, ts: msg.ts },
-          ],
+          eventLog: appendEvent(s.eventLog, { stepId: d.step_id, stepName: s.stepStates[d.step_id]?.stepName ?? null, eventType: 'resumed', ts: msg.ts }),
         }))
         break
       }

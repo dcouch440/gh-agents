@@ -1,4 +1,5 @@
 import { api } from '@/api'
+import { Collections } from '@/utils/collections'
 import type { RoomSession } from '@/types/room'
 import { store } from './_store'
 
@@ -18,13 +19,16 @@ const fetchSession = async (sessionId: string): Promise<RoomSession> => {
   const session = await api.roomSessions.get(sessionId)
   store.setState((s) => {
     const sessions = s.sessionsByRoom[session.room_id] ?? []
-    const idx = sessions.findIndex((rs) => rs.id === sessionId)
-    if (idx === -1) {
+    const exists = sessions.some((rs) => rs.id === sessionId)
+    if (!exists) {
       return { sessionsByRoom: { ...s.sessionsByRoom, [session.room_id]: [...sessions, session] } }
     }
-    const updated = sessions.slice()
-    updated[idx] = session
-    return { sessionsByRoom: { ...s.sessionsByRoom, [session.room_id]: updated } }
+    return {
+      sessionsByRoom: {
+        ...s.sessionsByRoom,
+        [session.room_id]: Collections.mapBy(sessions, (rs) => (rs.id === sessionId ? session : rs)),
+      },
+    }
   })
   return session
 }
@@ -37,11 +41,13 @@ const closeSession = async (sessionId: string): Promise<RoomSession> => {
   const session = await api.roomSessions.close(sessionId)
   store.setState((s) => {
     const sessions = s.sessionsByRoom[session.room_id] ?? []
-    const idx = sessions.findIndex((rs) => rs.id === sessionId)
-    if (idx === -1) return s
-    const updated = sessions.slice()
-    updated[idx] = session
-    return { sessionsByRoom: { ...s.sessionsByRoom, [session.room_id]: updated } }
+    if (!sessions.some((rs) => rs.id === sessionId)) return s
+    return {
+      sessionsByRoom: {
+        ...s.sessionsByRoom,
+        [session.room_id]: Collections.mapBy(sessions, (rs) => (rs.id === sessionId ? session : rs)),
+      },
+    }
   })
   return session
 }

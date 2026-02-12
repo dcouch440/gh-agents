@@ -52,9 +52,16 @@ There will be all different kinds of nodes that are not nessesary made to (go in
 Protocols:
 - Documenter
 - Work
-- Work Team
 - Research
-- Research Team
 - Verifier
-- Verifier Team
 - Test Driven Development -> Auto generates tests at scale for a feature.
+
+
+IntermittWQent prompting
+Prompt: Story about animals, first paragraph.
+Thought: Wow, the dogs sound so kind in this story.
+Prompt: first paragraph... second paragraph.
+Context Thought: Wow, the dogs sound so kind in this story.
+Thought: The dogs sure are fast when they run.
+
+The concept relates to building as data streams come in, in small chunks as the input grows.

@@ -320,6 +320,12 @@ const workflows = {
   deleteDocumentDef: (workflowId: string, stepId: string, defId: string, config?: RequestConfig) =>
     baseApi.del<void>(API.STEP_DOCUMENT_DEF(workflowId, stepId, defId), config),
 
+  getOrCreateStepSession: (workflowId: string, stepId: string, config?: RequestConfig) =>
+    baseApi.post<Session>(API.STEP_CHAT_SESSION(workflowId, stepId), undefined, config),
+
+  clearStepMessages: (workflowId: string, stepId: string, config?: RequestConfig) =>
+    baseApi.del<void>(API.STEP_CHAT_MESSAGES(workflowId, stepId), config),
+
   run: (id: string, body?: { initial_input?: string }, config?: RequestConfig) =>
     baseApi.post<WorkflowRunResponse>(API.WORKFLOW_RUN(id), body ?? {}, config),
 
