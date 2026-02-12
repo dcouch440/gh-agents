@@ -118,7 +118,7 @@ mod tests {
                 iteration_index: None,
                 iteration_label: None,
                 routing_label: None,
-                selected_routing_document_id: None,
+
                 upstream_agent_id: None,
                 upstream_routing_label: None,
                 room_session_id: None,
@@ -1169,7 +1169,7 @@ mod tests {
                 iteration_index: None,
                 iteration_label: None,
                 routing_label: None,
-                selected_routing_document_id: None,
+
                 upstream_agent_id: None,
                 upstream_routing_label: None,
                 room_session_id: None,

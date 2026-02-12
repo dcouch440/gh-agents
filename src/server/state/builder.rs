@@ -17,7 +17,7 @@ use crate::db::traits::ServerRepo;
 use crate::llm::{LLMProvider, ProviderRegistry};
 use crate::types::AppConfig;
 
-use crate::server::hub::{ModeResolver, PromptRegistry};
+use crate::server::hub::PromptRegistry;
 
 use super::{AppState, AppStateInner, ConsumerMessage, EventBus, Repos};
 
@@ -56,7 +56,6 @@ pub struct AppStateBuilder {
     config: Option<AppConfig>,
     provider: Option<Arc<dyn LLMProvider + Send + Sync>>,
     provider_registry: Option<ProviderRegistry>,
-    mode_resolver: Option<Arc<ModeResolver>>,
     prompt_registry: Option<Arc<PromptRegistry>>,
     jwt_secret: Option<Vec<u8>>,
     default_agent_id: Option<Uuid>,
@@ -73,7 +72,6 @@ impl AppStateBuilder {
             config: None,
             provider: None,
             provider_registry: None,
-            mode_resolver: None,
             prompt_registry: None,
             jwt_secret: None,
             default_agent_id: None,
@@ -119,12 +117,6 @@ impl AppStateBuilder {
     /// Set the provider registry for multi-provider routing.
     pub fn with_provider_registry(mut self, registry: ProviderRegistry) -> Self {
         self.provider_registry = Some(registry);
-        self
-    }
-
-    /// Set the mode resolver.
-    pub fn with_mode_resolver(mut self, resolver: Arc<ModeResolver>) -> Self {
-        self.mode_resolver = Some(resolver);
         self
     }
 
@@ -179,7 +171,6 @@ impl AppStateBuilder {
             config: Arc::new(RwLock::new(config)),
             provider: self.provider,
             provider_registry,
-            mode_resolver: self.mode_resolver,
             prompt_registry,
             jwt_secret,
             default_agent_id: self.default_agent_id,

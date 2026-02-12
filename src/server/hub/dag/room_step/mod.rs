@@ -118,7 +118,7 @@ pub(super) async fn execute_room_step(
                                         iteration_index: None,
                                         iteration_label: None,
                                         routing_label: None,
-                                        selected_routing_document_id: None,
+
                                         upstream_agent_id: None,
                                         upstream_routing_label: None,
                                         room_session_id: Some(session_id),
@@ -384,7 +384,6 @@ pub(super) async fn execute_room_step(
             iteration_index: None,
             iteration_label: None,
             routing_label: None,
-            selected_routing_document_id: None,
             upstream_agent_id: None,
             upstream_routing_label: None,
             room_session_id: Some(session.id),

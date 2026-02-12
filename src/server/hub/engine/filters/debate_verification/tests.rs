@@ -166,8 +166,6 @@ mod tests {
             status: "pending".to_string(),
             started_at: Utc::now(),
             completed_at: None,
-            routing_analysis: None,
-            selected_routing_document_id: None,
             is_exemplary: false,
         }
     }

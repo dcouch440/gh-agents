@@ -9,19 +9,17 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate }
 })
 
-const { mockSessionCreate, mockSessionSaveAgent, mockSessionUpdateConfig } = vi.hoisted(() => ({
+const { mockSessionCreate, mockAgentCreate, mockAgentSetContext } = vi.hoisted(() => ({
   mockSessionCreate: vi.fn(),
-  mockSessionSaveAgent: vi.fn(),
-  mockSessionUpdateConfig: vi.fn(),
+  mockAgentCreate: vi.fn(),
+  mockAgentSetContext: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
   api: {
-    agents: { create: vi.fn(), update: vi.fn(), get: vi.fn(), getContext: vi.fn(), setContext: vi.fn() },
+    agents: { create: mockAgentCreate, update: vi.fn(), get: vi.fn(), getContext: vi.fn(), setContext: mockAgentSetContext },
     sessions: {
       create: mockSessionCreate,
-      saveAgent: mockSessionSaveAgent,
-      updateConfig: mockSessionUpdateConfig,
       get: vi.fn(),
       getHistory: vi.fn(),
       clearMessages: vi.fn(),
@@ -137,8 +135,8 @@ describe('AgentWorkshopPage', () => {
     expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled()
   })
 
-  it('calls api.sessions.saveAgent on save and navigates', async () => {
-    mockSessionSaveAgent.mockResolvedValueOnce({ agent_id: 'new-agent' })
+  it('calls api.agents.create on save and navigates', async () => {
+    mockAgentCreate.mockResolvedValueOnce({ id: 'new-agent' })
     renderPage()
 
     await waitFor(() => {
@@ -149,7 +147,7 @@ describe('AgentWorkshopPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => {
-      expect(mockSessionSaveAgent).toHaveBeenCalledWith('session-001', expect.objectContaining({ name: 'MyAgent' }))
+      expect(mockAgentCreate).toHaveBeenCalledWith(expect.objectContaining({ name: 'MyAgent' }))
     })
 
     await waitFor(() => {
@@ -158,7 +156,7 @@ describe('AgentWorkshopPage', () => {
   })
 
   it('displays error on save failure', async () => {
-    mockSessionSaveAgent.mockRejectedValueOnce(new Error('Server error'))
+    mockAgentCreate.mockRejectedValueOnce(new Error('Server error'))
     renderPage()
 
     await waitFor(() => {

@@ -300,9 +300,6 @@ pub struct AgentExecutionRow {
     pub status: String,
     pub started_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
-    // Cavernous routing fields
-    pub routing_analysis: Option<serde_json::Value>,
-    pub selected_routing_document_id: Option<Uuid>,
     // Few-shot exemplar flag
     pub is_exemplary: bool,
 }

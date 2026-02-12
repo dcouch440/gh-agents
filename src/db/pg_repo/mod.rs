@@ -13,15 +13,15 @@ use crate::db::traits::{
     ToolRouterRepo, UserRepo, WorkflowCollectionRepo, WorkflowRepo, WorkflowStepAgentRepo,
 };
 use crate::db::{
-    AgentExecutionRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow,
-    CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
-    DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow,
-    ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow, ResultRow,
-    RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry,
-    RouterRequestRow, SessionRow, StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow,
-    SystemConfigRow, TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow, ToolRow,
-    WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
-    WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
+    AgentExecutionRow, AgentRow, ChatMessageRow, CollectionRunRow, CollectionWorkflowEdgeRow,
+    CollectionWorkflowRow, ContextStoreRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow,
+    OutputSchemaRow, PromptTemplateRow, ProtocolDocumentDefRow, ProtocolExecutionRow,
+    ProtocolPortRow, ProtocolRow, ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow,
+    RoomSessionRow, RoomTranscriptEntry, RouterRequestRow, SessionRow, StepDocumentRow,
+    StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow, TokenLedgerRow,
+    ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow, ToolRow, WorkflowCollectionRow,
+    WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow,
+    WorkflowStepProtocolRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -724,32 +724,6 @@ impl ServerRepo for PgRepo {
         crate::db::link_session_agent(&self.pool, session_id, agent_id).await
     }
 
-    // --- Agent modes ---
-
-    async fn get_agent_modes(&self, agent_id: Uuid) -> Result<Vec<AgentModeRow>> {
-        crate::db::list_agent_modes(&self.pool, agent_id).await
-    }
-
-    async fn get_agent_mode(&self, mode_id: Uuid) -> Result<Option<AgentModeRow>> {
-        let row = sqlx::query_as::<_, AgentModeRow>(
-            "SELECT id, agent_id, name, system_prompt_suffix, temperature_override, \
-             model_override, tool_overrides, classifier_hint, created_at, version \
-             FROM agent_modes WHERE id = $1",
-        )
-        .bind(mode_id)
-        .fetch_optional(&self.pool)
-        .await?;
-        Ok(row)
-    }
-
-    async fn create_agent_mode(&self, mode: &AgentModeRow) -> Result<()> {
-        crate::db::create_agent_mode(&self.pool, mode).await
-    }
-
-    async fn delete_agent_mode(&self, mode_id: Uuid) -> Result<()> {
-        crate::db::delete_agent_mode(&self.pool, mode_id).await
-    }
-
     async fn get_agent_guidances(
         &self,
         agent_id: Uuid,
@@ -1131,33 +1105,6 @@ impl DocumentRepo for PgRepo {
             .execute(&self.pool)
             .await?;
         Ok(())
-    }
-
-    async fn search_routing_documents(
-        &self,
-        user_id: Uuid,
-        query: &str,
-        limit: i64,
-    ) -> Result<Vec<DocumentSearchResult>> {
-        let rows: Vec<DocumentSearchResult> = sqlx::query_as(
-            r#"
-            SELECT id, title, summary, ref_tag,
-                   ts_headline('english', content, plainto_tsquery('english', $2),
-                       'StartSel=**, StopSel=**, MaxWords=35, MinWords=15') AS snippet
-            FROM documents
-            WHERE user_id = $1
-              AND title LIKE 'routing:%'
-              AND to_tsvector('english', title || ' ' || content) @@ plainto_tsquery('english', $2)
-            ORDER BY ts_rank(to_tsvector('english', title || ' ' || content), plainto_tsquery('english', $2)) DESC
-            LIMIT $3
-            "#,
-        )
-        .bind(user_id)
-        .bind(query)
-        .bind(limit)
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(rows)
     }
 }
 
@@ -2004,23 +1951,6 @@ impl AgentExecutionRepo for PgRepo {
             .await?
         };
         Ok(rows)
-    }
-
-    async fn update_agent_execution_routing(
-        &self,
-        id: Uuid,
-        routing_analysis: &serde_json::Value,
-        selected_routing_document_id: Option<Uuid>,
-    ) -> Result<()> {
-        sqlx::query(
-            "UPDATE agent_executions SET routing_analysis = $2, selected_routing_document_id = $3 WHERE id = $1",
-        )
-        .bind(id)
-        .bind(routing_analysis)
-        .bind(selected_routing_document_id)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
     }
 
     async fn list_exemplary_executions(

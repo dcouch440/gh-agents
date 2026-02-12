@@ -34,9 +34,6 @@ pub struct ExecutionMetadata {
     // For label-based routing
     pub routing_label: Option<String>,
 
-    // For cavernous routing
-    pub selected_routing_document_id: Option<Uuid>,
-
     // For chained for-each pipeline (Phase 6B)
     pub upstream_agent_id: Option<Uuid>,
     pub upstream_routing_label: Option<String>,
@@ -155,7 +152,6 @@ mod tests {
                 iteration_index: None,
                 iteration_label: None,
                 routing_label: None,
-                selected_routing_document_id: None,
                 upstream_agent_id: None,
                 upstream_routing_label: None,
                 room_session_id: None,

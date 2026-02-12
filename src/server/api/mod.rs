@@ -73,11 +73,9 @@ pub use documents::{
 
 // Re-export session handlers and types
 pub use sessions::{
-    clear_session_messages, create_agent_mode, create_session, delete_agent_mode, delete_session,
-    get_session, get_session_history, list_agent_modes, list_modes, list_sessions,
-    save_session_agent, send_session_chat, update_session, update_session_config,
-    AgentModeResponse, CreateAgentModeRequest, CreateSessionRequest, ModeInfo, SaveAgentRequest,
-    SaveAgentResponse, SessionResponse, UpdateDraftConfigRequest, UpdateSessionRequest,
+    clear_session_messages, create_session, delete_session, get_session, get_session_history,
+    list_modes, list_sessions, send_session_chat, update_session, CreateSessionRequest, ModeInfo,
+    SessionResponse, UpdateSessionRequest,
 };
 
 // Re-export output schema handlers and types
@@ -97,9 +95,8 @@ pub use prompt_templates::{
 // Re-export agent execution handlers and types
 pub use agent_executions::{
     approve_execution, execution_message_stream, get_agent_execution, list_agent_executions,
-    list_execution_messages, send_execution_message, set_exemplary, AgentExecutionResponse,
-    ApproveExecutionRequest, ExecutionMessageResponse, ListExecutionsQuery, SendMessageRequest,
-    SendMessageResponse, SetExemplaryRequest,
+    list_execution_messages, set_exemplary, AgentExecutionResponse, ApproveExecutionRequest,
+    ExecutionMessageResponse, ListExecutionsQuery, SetExemplaryRequest,
 };
 
 // Re-export cost handlers and types

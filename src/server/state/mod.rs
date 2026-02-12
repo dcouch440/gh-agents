@@ -20,7 +20,7 @@ use crate::llm::{LLMProvider, ProviderRegistry};
 use crate::types::{AppConfig, UserId};
 
 use super::hub::protocols::ProtocolEngine;
-use super::hub::{ModeResolver, PromptRegistry};
+use super::hub::PromptRegistry;
 use super::ws::events::{RoomEvent, ServerEvent, SessionEvent, WorkflowEvent};
 
 mod builder;
@@ -88,8 +88,6 @@ pub(crate) struct AppStateInner {
     pub(crate) provider: Option<Arc<dyn LLMProvider + Send + Sync>>,
     /// Multi-provider registry for step-level routing
     pub(crate) provider_registry: ProviderRegistry,
-    /// Mode resolver for router-based mode selection
-    pub(crate) mode_resolver: Option<Arc<ModeResolver>>,
     /// Prompt registry for core system/agent prompts
     pub(crate) prompt_registry: Arc<PromptRegistry>,
     /// JWT secret for token signing
@@ -158,13 +156,8 @@ impl AppState {
         // Load prompt registry from prompts/ directory
         let prompt_registry = Self::load_prompt_registry();
 
-        // Initialize LLM providers and mode resolver
-        let (provider, provider_registry, mode_resolver) = Self::init_providers(
-            server_repo.clone(),
-            repos.tool_routers.clone(),
-            repos.tool_capabilities.clone(),
-        )
-        .await;
+        // Initialize LLM providers
+        let (provider, provider_registry) = Self::init_providers().await;
 
         let mut state = Self(Arc::new(AppStateInner {
             db: Some(db),
@@ -174,7 +167,6 @@ impl AppState {
             config: Arc::new(RwLock::new(config)),
             provider,
             provider_registry,
-            mode_resolver,
             prompt_registry,
             jwt_secret,
             default_agent_id: None,
@@ -228,7 +220,6 @@ impl AppState {
                 config: Arc::new(RwLock::new(config)),
                 provider: None,
                 provider_registry: ProviderRegistry::default(),
-                mode_resolver: None,
                 prompt_registry: Arc::new(PromptRegistry::empty()),
                 jwt_secret,
                 default_agent_id: None,
@@ -298,19 +289,11 @@ impl AppState {
         }
     }
 
-    async fn init_providers(
-        server_repo: Arc<dyn ServerRepo>,
-        tool_router_repo: Arc<dyn crate::db::traits::ToolRouterRepo>,
-        tool_capability_repo: Arc<dyn crate::db::traits::ToolCapabilityRepo>,
-    ) -> (
-        Option<Arc<dyn LLMProvider + Send + Sync>>,
-        ProviderRegistry,
-        Option<Arc<ModeResolver>>,
-    ) {
+    async fn init_providers() -> (Option<Arc<dyn LLMProvider + Send + Sync>>, ProviderRegistry) {
         let mut registry = ProviderRegistry::new("anthropic");
 
         // Initialize Anthropic provider (default)
-        let (provider, mode_resolver) = match crate::llm::AnthropicClient::from_env() {
+        let provider = match crate::llm::AnthropicClient::from_env() {
             Ok(p) => {
                 tracing::info!("Initialized LLM provider: {}", p.model_id().to_string());
                 let provider: Arc<dyn LLMProvider + Send + Sync> =
@@ -322,21 +305,14 @@ impl AppState {
 
                 registry.register("anthropic", provider.clone());
 
-                let mode_resolver = Arc::new(ModeResolver::new(
-                    server_repo,
-                    tool_router_repo,
-                    tool_capability_repo,
-                    provider.clone(),
-                ));
-
-                (Some(provider), Some(mode_resolver))
+                Some(provider)
             }
             Err(e) => {
                 tracing::warn!(
-                    "Failed to initialize LLM provider: {}. ModeResolver will not be available. Set ANTHROPIC_API_KEY.",
+                    "Failed to initialize LLM provider: {}. Set ANTHROPIC_API_KEY.",
                     e
                 );
-                (None, None)
+                None
             }
         };
 
@@ -389,7 +365,7 @@ impl AppState {
             );
         }
 
-        (provider, registry, mode_resolver)
+        (provider, registry)
     }
 
     // =========================================================================
@@ -479,11 +455,6 @@ impl AppState {
         }
 
         enabled
-    }
-
-    /// Access the mode resolver.
-    pub fn mode_resolver(&self) -> Option<&Arc<ModeResolver>> {
-        self.0.mode_resolver.as_ref()
     }
 
     /// Access the prompt registry.
@@ -719,7 +690,6 @@ impl AppStateInner {
             config: self.config.clone(),
             provider: self.provider.clone(),
             provider_registry: self.provider_registry.clone(),
-            mode_resolver: self.mode_resolver.clone(),
             prompt_registry: self.prompt_registry.clone(),
             jwt_secret: self.jwt_secret.clone(),
             default_agent_id: self.default_agent_id,

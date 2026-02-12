@@ -92,7 +92,7 @@ mod tests {
 
     #[test]
     fn classify_non_context_mode_is_pending() {
-        for mode in &["single", "for_each", "documenter", "room", "cavernous"] {
+        for mode in &["single", "for_each", "documenter", "room"] {
             let step = make_step(Uuid::new_v4(), Uuid::new_v4(), mode);
 
             let (status, preview, word_count) = classify_content_status(&step);

@@ -1606,49 +1606,6 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires running Postgres"]
-    async fn agent_execution_routing_update() {
-        let db = TestDb::new().await;
-        let repo = PgRepo::new(db.pool.clone());
-
-        let user = create_test_user(&repo).await;
-        let agent = create_test_agent(&repo, user).await;
-
-        let exec = repo
-            .create_agent_execution(
-                agent.id, None, false, None, "s", "i", None, None, None, None,
-            )
-            .await
-            .unwrap();
-
-        let routing = serde_json::json!({"intent": "decompose", "confidence": 0.95});
-
-        // Create a real document so the FK constraint is satisfied
-        let doc = repo
-            .create_document(
-                user,
-                None,
-                "Routing Doc".to_string(),
-                "Content".to_string(),
-                "note".to_string(),
-                format!("ref-{}", Uuid::new_v4().simple()),
-                vec![],
-            )
-            .await
-            .unwrap();
-
-        repo.update_agent_execution_routing(exec.id, &routing, Some(doc.id))
-            .await
-            .unwrap();
-
-        let fetched = repo.get_agent_execution(exec.id).await.unwrap().unwrap();
-        assert_eq!(fetched.routing_analysis, Some(routing));
-        assert_eq!(fetched.selected_routing_document_id, Some(doc.id));
-
-        db.cleanup().await;
-    }
-
-    #[tokio::test]
-    #[ignore = "requires running Postgres"]
     async fn agent_execution_exemplary_toggle() {
         let db = TestDb::new().await;
         let repo = PgRepo::new(db.pool.clone());
