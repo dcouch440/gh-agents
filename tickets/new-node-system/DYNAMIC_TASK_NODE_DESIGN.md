@@ -89,17 +89,53 @@ blank → configuring (chat active) → configured (ready to run) → executed (
 
 ### Layer 1: Assistant (Design Time)
 
-The assistant is a single workflow-level agent. When the user selects any node on the canvas, the assistant has context about that node AND the full graph.
+One agent handles all node configuration. It runs on a **base prompt + dynamic archetype block** pattern — lean at first, gaining specialist knowledge when an archetype is selected.
 
-**What the assistant sees:**
-- Full workflow graph (all nodes, all edges)
-- Selected node's current configuration
-- Upstream resource nodes and their capabilities
-- Upstream task nodes and their outputs
-- Downstream nodes (what will consume this node's output)
-- Available agent templates and tool registry
+**How it works:**
 
-**What the assistant produces — the Mission Brief:**
+```
+Blank node → user starts chatting → base prompt only (~350 tokens)
+  ↓
+User describes intent → assistant calls set_node_archetype("task_force")
+  ↓
+Backend swaps in task force archetype block (~500 tokens)
+  ↓
+Same agent, same chat history, new tools + specialist context
+  ↓
+User changes mind → assistant calls set_node_archetype("documenter")
+  ↓
+Archetype block swapped again — conversation continues naturally
+```
+
+**Base prompt** (always loaded, ~350 tokens):
+- Identity: workflow configuration assistant
+- Graph context: injected at runtime (all nodes, edges, selected node state, connected resources)
+- Archetype awareness: one-line descriptions of each type — enough to route intent, not enough to configure
+- Behavioral guidelines: configure through tool calls, reference connected resources, keep responses concise
+
+**Archetype blocks** (one loaded at a time, ~400-500 tokens each):
+- Archetype-specific context explaining what the node type does
+- Archetype-specific tools
+- 2 few-shot examples showing tool call patterns (research shows 72% → 90% accuracy with examples)
+
+**Token budget:**
+
+| State | System Prompt Size |
+|-------|-------------------|
+| Blank node (no archetype) | ~350 tokens |
+| + Task Force block | ~850 tokens |
+| + Documenter block | ~800 tokens |
+| + Belief Capture block | ~750 tokens |
+| + Room block | ~800 tokens |
+| All at once (avoided) | ~2,150 tokens |
+
+Graph context adds ~200-400 variable tokens depending on workflow complexity.
+
+**Why one agent, not a handoff:**
+
+An earlier design had a generic "architect" agent that handed off to specialist agents. This breaks because the user doesn't know about the swap — they'll ask the documenter specialist about task forces and it won't understand. One agent with dynamic tooling means the user can always change direction mid-conversation.
+
+**What the assistant produces — the Mission Brief** (task force example):
 
 ```json
 {
@@ -142,15 +178,7 @@ The assistant is a single workflow-level agent. When the user selects any node o
 }
 ```
 
-The assistant creates this through tool calls during the conversation:
-
-```
-set_task(description)
-set_capabilities(capabilities[])
-add_agent(name, role, capabilities[])
-remove_agent(name)
-update_agent(name, changes)
-```
+Full prompt specifications and examples for each archetype are in `NODE_ASSISTANT_PROMPTS.md`.
 
 ### Layer 2: Planner (Runtime)
 
@@ -285,26 +313,30 @@ Resource provisioning happens BEFORE the planner runs. The planner sees the live
 
 ## Editing Configured Nodes
 
-The user can always reopen the chat on a configured node. The assistant sees the current configuration and can modify it:
+The user can always reopen the chat on a configured node. The assistant sees the current configuration and can modify it within the same archetype:
 
 ```
 User: "Actually, also add a security auditor that runs cargo-audit"
 Assistant:
-  → Adds "Auditor" agent with shell capability
-  → Updates mission brief
+  → Calls add_agent("Auditor", "Run cargo-audit...", ["shell"])
   → "Done. Added Auditor agent with shell access.
      It'll run cargo-audit as part of the plan."
 ```
 
-The assistant can also reconfigure the node type entirely:
+The assistant can also switch archetypes entirely. Because it's one agent with dynamic tooling, this is natural — no handoff, no context loss:
 
 ```
 User: "Actually, this should be a belief capture instead"
 Assistant:
-  → Clears task force config
-  → Configures as belief capture protocol
-  → Sets up extraction plan based on upstream context
+  → Calls set_node_archetype("belief_capture")
+  → Backend swaps archetype block + tools
+  → Calls set_extraction_focus(...), set_tag_vocabulary(...)
+  → "Switched to belief capture. It'll extract findings
+     from the upstream security audit. Tagged by topic
+     so the meeting can query specific areas."
 ```
+
+Chat history carries forward. The agent remembers the task force discussion and can use that context to inform the belief capture configuration (e.g., knowing what the upstream node produces).
 
 ---
 
@@ -389,33 +421,61 @@ This summary becomes the artifact that belief capture reads. Each agent's summar
 
 ## Assistant Toolset
 
-The workflow assistant needs tools for all node configurations:
+Tools are loaded dynamically based on the current archetype. The assistant always has universal tools. Archetype-specific tools appear only when that archetype is active.
 
 ```
-// Universal
+// Universal (always available)
+set_node_archetype(type)          // Triggers archetype block swap
 set_node_name(name)
 set_node_description(description)
 
-// Task node
-set_task(description)
-set_capabilities(capabilities[])
-add_agent(name, role, capabilities[])
-remove_agent(name)
-update_agent(name, changes)
-
-// Belief capture (protocol)
-create_extraction_plan(tag_vocabulary, focus_guidance)
-update_extraction_plan(changes)
-
-// Room (protocol)
-configure_room(members, max_turns, tools_enabled)
-add_room_member(agent_id, role)
-
-// Graph operations
+// Graph operations (always available)
 connect_to(upstream_step_id)
 disconnect_from(step_id)
 suggest_downstream(description)
 ```
+
+```
+// Task Force (loaded when archetype = "task_force")
+set_task(description)
+add_agent(name, role, capabilities[])
+update_agent(name, changes)
+remove_agent(name)
+set_capabilities(capabilities[])
+set_failure_mode("fail_fast" | "skip_and_continue" | "retry")
+```
+
+```
+// Documenter (loaded when archetype = "documenter")
+add_document_def(name, description, research_guidance?)
+update_document_def(name, changes)
+remove_document_def(name)
+set_research_scope(guidance)
+set_writing_style(tone, format_notes)
+```
+
+```
+// Belief Capture (loaded when archetype = "belief_capture")
+set_extraction_focus(guidance)
+set_tag_vocabulary(tags[])
+set_contradiction_handling("flag" | "resolve" | "keep_both")
+set_confidence_threshold("low" | "medium" | "high")
+```
+
+```
+// Room (loaded when archetype = "room")
+set_meeting_purpose(description)
+add_member(name, role, perspective)
+update_member(name, changes)
+remove_member(name)
+set_max_turns(count)
+set_interaction_mode("round_robin" | "moderated" | "open_floor")
+```
+
+When `set_node_archetype` is called, the backend:
+1. Swaps the archetype block in the system prompt
+2. Registers the new archetype's tools, deregisters the old ones
+3. Chat history is preserved — the agent sees what was configured before and can reference it
 
 ---
 
