@@ -304,6 +304,7 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::WORKFLOW_STEP_CHAT_MESSAGES,
             delete(api::clear_step_messages),
         )
+        .route(routes::WORKFLOW_STEP_CONFIG, get(api::get_step_config))
         .route(routes::WORKFLOW_RUN, post(api::run_workflow))
         .route(
             routes::WORKFLOW_EXECUTIONS,
@@ -438,6 +439,8 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             get(api::list_system_configs).post(api::upsert_system_config),
         )
         .route(routes::SYSTEM_CONFIG, delete(api::delete_system_config))
+        // Archetypes
+        .route(routes::ARCHETYPES, get(api::list_archetypes))
         // Protocols
         .route(routes::PROTOCOL_TYPES, get(api::list_protocol_types))
         .route(

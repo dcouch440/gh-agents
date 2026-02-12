@@ -252,6 +252,55 @@ pub async fn update_workflow_step(
     Ok(Json(step_response(row)))
 }
 
+/// GET /api/workflows/:wid/steps/:sid/config — unified config readback
+pub async fn get_step_config(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(p): Path<(Uuid, Uuid)>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let repo = &state.repos().workflows;
+    let wf = repo
+        .get_workflow(p.0)
+        .await?
+        .ok_or(AppError::not_found("Workflow"))?;
+    if wf.user_id != auth.user_id.0 {
+        return Err(AppError::not_found("Workflow"));
+    }
+    let step = repo
+        .get_step(p.1)
+        .await?
+        .ok_or(AppError::not_found("Step"))?;
+    if step.workflow_id != p.0 {
+        return Err(AppError::not_found("Step"));
+    }
+
+    let config = match step.execution_mode.as_str() {
+        "documenter" => {
+            let doc_defs = repo.list_document_defs(p.1).await?;
+            let documents: Vec<serde_json::Value> = doc_defs
+                .into_iter()
+                .map(|d| {
+                    serde_json::json!({
+                        "id": d.id.to_string(),
+                        "name": d.name,
+                        "description": d.description,
+                        "target_length": d.target_length,
+                    })
+                })
+                .collect();
+            serde_json::json!({
+                "archetype": "documenter",
+                "documents": documents,
+            })
+        }
+        _ => serde_json::json!({
+            "archetype": serde_json::Value::Null,
+        }),
+    };
+
+    Ok(Json(config))
+}
+
 /// DELETE /api/workflows/:wid/steps/:sid
 #[utoipa::path(
     delete,

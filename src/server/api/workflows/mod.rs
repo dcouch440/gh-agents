@@ -18,8 +18,8 @@ pub use execution_handlers::list_workflow_executions;
 pub use run_handlers::run_workflow;
 pub use step_chat_handlers::{clear_step_messages, get_or_create_step_session, get_step_session};
 pub use step_handlers::{
-    create_workflow_step, delete_workflow_step, get_workflow_step, list_workflow_steps,
-    update_workflow_step,
+    create_workflow_step, delete_workflow_step, get_step_config, get_workflow_step,
+    list_workflow_steps, update_workflow_step,
 };
 pub use types::{
     CreateStepRequest, CreateWorkflowRequest, EdgeRequest, EdgeResponse, RunWorkflowRequest,

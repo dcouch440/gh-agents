@@ -9,6 +9,7 @@ pub mod capability_resolver;
 pub mod dag;
 pub mod engine;
 pub mod error;
+pub mod graph_context;
 pub mod prompt_registry;
 pub mod protocols;
 pub mod recorder;
@@ -185,17 +186,29 @@ pub async fn run_step_chat(
 
 /// Build the system prompt for a step chat session.
 ///
-/// For `documenter` steps, resolves the `DOCUMENTER_ASSISTANT` role definition
-/// from `config/protocols/documenter/assistant/system.md` with the live config
-/// snapshot injected via `{{.System.current_config}}`. For other modes, returns
-/// a generic helpful assistant prompt.
+/// Uses the base+archetype-block architecture: the `NODE_ASSISTANT_BASE` role
+/// definition is resolved with graph context, an archetype-specific block, and
+/// the live config snapshot injected via template variables.
+///
+/// For `documenter` steps, the archetype block is loaded from
+/// `NODE_ASSISTANT_DOCUMENTER_BLOCK` and the config snapshot from
+/// `build_config_snapshot()`. Other modes get an empty archetype block
+/// (skeleton for future phases).
 async fn build_step_system_prompt(
     state: &AppState,
     workflow_id: Uuid,
     step_id: Uuid,
     execution_mode: &str,
 ) -> Result<String, HubError> {
-    match execution_mode {
+    use crate::config::protocols::{roles, vars};
+
+    // 1. Build graph context
+    let graph_context =
+        graph_context::build_graph_context(state.repos().workflows.as_ref(), workflow_id, step_id)
+            .await?;
+
+    // 2. Build archetype block + config snapshot based on execution mode
+    let (archetype_block, config_snapshot) = match execution_mode {
         "documenter" => {
             let ctx = crate::server::tools::documenter::DocumenterToolContext {
                 workflow_id,
@@ -208,17 +221,20 @@ async fn build_step_system_prompt(
             .await
             .map_err(|e| HubError::Internal(anyhow::anyhow!("{}", e)))?;
 
-            let mut vars = std::collections::HashMap::new();
-            vars.insert(
-                crate::config::protocols::vars::system::CURRENT_CONFIG.to_string(),
-                snapshot,
-            );
-            let resolved = crate::config::protocols::roles::DOCUMENTER_ASSISTANT.resolve(&vars);
-
-            Ok(resolved.system_prompt)
+            (roles::NODE_ASSISTANT_DOCUMENTER_BLOCK.to_string(), snapshot)
         }
-        _ => Ok("You are a helpful assistant for configuring workflow steps.".to_string()),
-    }
+        _ => (String::new(), String::new()),
+    };
+
+    // 3. Resolve base template with all variables
+    let mut vars_map = std::collections::HashMap::new();
+    vars_map.insert(vars::system::GRAPH_CONTEXT.to_string(), graph_context);
+    vars_map.insert(vars::system::ARCHETYPE_BLOCK.to_string(), archetype_block);
+    vars_map.insert(vars::system::CURRENT_CONFIG.to_string(), config_snapshot);
+
+    let resolved = roles::NODE_ASSISTANT_BASE.resolve(&vars_map);
+
+    Ok(resolved.system_prompt)
 }
 
 /// Load an output schema and build filter pipeline for schema enforcement.
