@@ -11,6 +11,7 @@ use uuid::Uuid;
 use crate::llm::{Message, Role, TokenUsage, Tool};
 use crate::server::state::AppState;
 use crate::server::tools;
+use crate::server::ws::events::{WorkflowEvent, WorkflowEventKind};
 use crate::types::UserId;
 
 use super::super::error::HubError;
@@ -100,6 +101,74 @@ impl ChatStrategy {
             message_id,
             step_context: Some(step_context),
         }
+    }
+
+    /// Broadcast a workflow event when a documenter tool mutates data.
+    ///
+    /// Only emits if the step context is present and the tool result
+    /// indicates success (no `"error"` key in the JSON).
+    fn broadcast_documenter_event(&self, name: &str, input: &Value, result: &Value) {
+        let Some(ref ctx) = self.step_context else {
+            return;
+        };
+
+        // Skip if the tool returned an error
+        if result.get("error").is_some() {
+            return;
+        }
+
+        let kind = match name {
+            "create_doc_def" => {
+                let doc_def_id = result["id"]
+                    .as_str()
+                    .and_then(|s| Uuid::parse_str(s).ok())
+                    .unwrap_or_else(Uuid::new_v4);
+                let doc_name = result["name"].as_str().unwrap_or("Untitled").to_string();
+                WorkflowEventKind::DocDefCreated {
+                    step_id: ctx.step_id,
+                    doc_def_id,
+                    name: doc_name,
+                }
+            }
+            "update_doc_def" => {
+                let doc_def_id = result["id"]
+                    .as_str()
+                    .and_then(|s| Uuid::parse_str(s).ok())
+                    .or_else(|| {
+                        input["doc_def_id"]
+                            .as_str()
+                            .and_then(|s| Uuid::parse_str(s).ok())
+                    })
+                    .unwrap_or_else(Uuid::new_v4);
+                let doc_name = result["name"].as_str().unwrap_or("Untitled").to_string();
+                WorkflowEventKind::DocDefUpdated {
+                    step_id: ctx.step_id,
+                    doc_def_id,
+                    name: doc_name,
+                }
+            }
+            "delete_doc_def" => {
+                let doc_def_id = input["doc_def_id"]
+                    .as_str()
+                    .and_then(|s| Uuid::parse_str(s).ok())
+                    .unwrap_or_else(Uuid::new_v4);
+                WorkflowEventKind::DocDefDeleted {
+                    step_id: ctx.step_id,
+                    doc_def_id,
+                }
+            }
+            "update_config" => WorkflowEventKind::StepConfigUpdated {
+                step_id: ctx.step_id,
+            },
+            _ => return,
+        };
+
+        self.state.broadcast_workflow(WorkflowEvent {
+            run_id: None,
+            workflow_id: ctx.workflow_id,
+            user_id: Some(self.user_id.0),
+            kind,
+        });
     }
 }
 
@@ -193,6 +262,7 @@ impl ExecutionStrategy for ChatStrategy {
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {
         if let Some(ref ctx) = self.step_context {
             if let Some(value) = dispatch_step_tool(name, input, &self.state, ctx).await {
+                self.broadcast_documenter_event(name, input, &value);
                 return value;
             }
         }

@@ -31,7 +31,7 @@ pub fn broadcast_workflow_event(
     kind: WorkflowEventKind,
 ) {
     state.broadcast_workflow(WorkflowEvent {
-        run_id: ctx.run_id,
+        run_id: Some(ctx.run_id),
         workflow_id,
         user_id: Some(ctx.user_id),
         kind,

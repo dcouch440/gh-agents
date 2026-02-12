@@ -214,7 +214,7 @@ mod tests {
         let run_id = uuid::Uuid::new_v4();
         let wf_id = uuid::Uuid::new_v4();
         let event = WorkflowEvent {
-            run_id,
+            run_id: Some(run_id),
             workflow_id: wf_id,
             user_id: None,
             kind: WorkflowEventKind::Started { total_steps: 5 },
@@ -232,7 +232,7 @@ mod tests {
         let step_id = uuid::Uuid::new_v4();
         let agent_id = uuid::Uuid::new_v4();
         let event = WorkflowEvent {
-            run_id: uuid::Uuid::new_v4(),
+            run_id: Some(uuid::Uuid::new_v4()),
             workflow_id: uuid::Uuid::new_v4(),
             user_id: Some(uuid::Uuid::new_v4()),
             kind: WorkflowEventKind::StepCompleted {
@@ -257,7 +257,7 @@ mod tests {
     #[test]
     fn workflow_failed_wire_message() {
         let event = WorkflowEvent {
-            run_id: uuid::Uuid::new_v4(),
+            run_id: Some(uuid::Uuid::new_v4()),
             workflow_id: uuid::Uuid::new_v4(),
             user_id: None,
             kind: WorkflowEventKind::Failed {
@@ -356,7 +356,7 @@ mod tests {
     #[test]
     fn server_event_topic() {
         let wf = ServerEvent::Workflow(WorkflowEvent {
-            run_id: uuid::Uuid::nil(),
+            run_id: Some(uuid::Uuid::nil()),
             workflow_id: uuid::Uuid::nil(),
             user_id: None,
             kind: WorkflowEventKind::Started { total_steps: 1 },
@@ -383,7 +383,7 @@ mod tests {
     fn server_event_user_id() {
         let uid = uuid::Uuid::new_v4();
         let event = ServerEvent::Workflow(WorkflowEvent {
-            run_id: uuid::Uuid::nil(),
+            run_id: Some(uuid::Uuid::nil()),
             workflow_id: uuid::Uuid::nil(),
             user_id: Some(uid),
             kind: WorkflowEventKind::Completed { duration_ms: None },
@@ -402,7 +402,7 @@ mod tests {
     fn server_event_run_id() {
         let rid = uuid::Uuid::new_v4();
         let event = ServerEvent::Workflow(WorkflowEvent {
-            run_id: rid,
+            run_id: Some(rid),
             workflow_id: uuid::Uuid::nil(),
             user_id: None,
             kind: WorkflowEventKind::Started { total_steps: 1 },
@@ -531,7 +531,7 @@ mod tests {
 
     fn make_workflow_event(user_id: Option<uuid::Uuid>, run_id: uuid::Uuid) -> ServerEvent {
         ServerEvent::Workflow(WorkflowEvent {
-            run_id,
+            run_id: Some(run_id),
             workflow_id: uuid::Uuid::new_v4(),
             user_id,
             kind: WorkflowEventKind::Started { total_steps: 1 },
@@ -753,5 +753,104 @@ mod tests {
         let evt = make_workflow_event(None, uuid::Uuid::new_v4());
         // Empty run subscriptions → all run events pass
         assert!(event_passes_filters(&evt, &topics, None, &HashSet::new()));
+    }
+
+    // ============================================================================
+    // Doc-def / step-config event wire messages
+    // ============================================================================
+
+    #[test]
+    fn workflow_doc_def_created_wire_message() {
+        let step_id = uuid::Uuid::new_v4();
+        let doc_def_id = uuid::Uuid::new_v4();
+        let wf_id = uuid::Uuid::new_v4();
+        let event = WorkflowEvent {
+            run_id: None,
+            workflow_id: wf_id,
+            user_id: Some(uuid::Uuid::new_v4()),
+            kind: WorkflowEventKind::DocDefCreated {
+                step_id,
+                doc_def_id,
+                name: "API Reference".to_string(),
+            },
+        };
+        let wire = ServerEvent::Workflow(event).into_wire_message();
+        assert_eq!(wire.event, "doc_def_created");
+        assert_eq!(wire.run_id, None);
+        assert_eq!(wire.data["workflow_id"], wf_id.to_string());
+        assert_eq!(wire.data["step_id"], step_id.to_string());
+        assert_eq!(wire.data["doc_def_id"], doc_def_id.to_string());
+        assert_eq!(wire.data["name"], "API Reference");
+    }
+
+    #[test]
+    fn workflow_doc_def_deleted_wire_message() {
+        let step_id = uuid::Uuid::new_v4();
+        let doc_def_id = uuid::Uuid::new_v4();
+        let event = WorkflowEvent {
+            run_id: None,
+            workflow_id: uuid::Uuid::new_v4(),
+            user_id: None,
+            kind: WorkflowEventKind::DocDefDeleted {
+                step_id,
+                doc_def_id,
+            },
+        };
+        let wire = ServerEvent::Workflow(event).into_wire_message();
+        assert_eq!(wire.event, "doc_def_deleted");
+        assert_eq!(wire.run_id, None);
+        assert_eq!(wire.data["step_id"], step_id.to_string());
+        assert_eq!(wire.data["doc_def_id"], doc_def_id.to_string());
+    }
+
+    #[test]
+    fn workflow_step_config_updated_wire_message() {
+        let step_id = uuid::Uuid::new_v4();
+        let wf_id = uuid::Uuid::new_v4();
+        let event = WorkflowEvent {
+            run_id: None,
+            workflow_id: wf_id,
+            user_id: Some(uuid::Uuid::new_v4()),
+            kind: WorkflowEventKind::StepConfigUpdated { step_id },
+        };
+        let wire = ServerEvent::Workflow(event).into_wire_message();
+        assert_eq!(wire.event, "step_config_updated");
+        assert_eq!(wire.run_id, None);
+        assert_eq!(wire.data["workflow_id"], wf_id.to_string());
+        assert_eq!(wire.data["step_id"], step_id.to_string());
+    }
+
+    #[test]
+    fn filter_none_run_id_passes_when_no_run_subscriptions() {
+        let topics = HashSet::from([Topic::Workflow]);
+        let evt = ServerEvent::Workflow(WorkflowEvent {
+            run_id: None,
+            workflow_id: uuid::Uuid::new_v4(),
+            user_id: None,
+            kind: WorkflowEventKind::DocDefCreated {
+                step_id: uuid::Uuid::new_v4(),
+                doc_def_id: uuid::Uuid::new_v4(),
+                name: "Test".to_string(),
+            },
+        });
+        assert!(event_passes_filters(&evt, &topics, None, &HashSet::new()));
+    }
+
+    #[test]
+    fn filter_none_run_id_passes_with_run_subscriptions() {
+        let topics = HashSet::from([Topic::Workflow]);
+        let evt = ServerEvent::Workflow(WorkflowEvent {
+            run_id: None,
+            workflow_id: uuid::Uuid::new_v4(),
+            user_id: None,
+            kind: WorkflowEventKind::DocDefCreated {
+                step_id: uuid::Uuid::new_v4(),
+                doc_def_id: uuid::Uuid::new_v4(),
+                name: "Test".to_string(),
+            },
+        });
+        let run_subs = HashSet::from([uuid::Uuid::new_v4()]);
+        // None run_id skips the run filter entirely → passes
+        assert!(event_passes_filters(&evt, &topics, None, &run_subs));
     }
 }
