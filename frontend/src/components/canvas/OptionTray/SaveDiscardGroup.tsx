@@ -7,6 +7,7 @@ import SaveOutlined from '@mui/icons-material/SaveOutlined'
 import UndoOutlined from '@mui/icons-material/UndoOutlined'
 import { useTheme } from '@mui/material/styles'
 import { useStore, workflowStore } from '@/stores'
+import { TRAY_BUTTON_CONTAINED_SX } from './constants'
 
 function SaveDiscardGroup() {
   const theme = useTheme()
@@ -94,20 +95,10 @@ function SaveDiscardGroup() {
             }}
             disabled={!dirty || saving}
             sx={{
-              fontSize: 13,
-              fontWeight: 600,
-              textTransform: 'none',
-              px: 2.5,
-              py: 0.75,
+              ...TRAY_BUTTON_CONTAINED_SX,
               minWidth: 100,
-              color: '#fff',
               backgroundColor: chromeBg,
-              boxShadow: 'none',
-              '&:hover': {
-                backgroundColor: chromeBg,
-                opacity: 0.9,
-                boxShadow: 'none',
-              },
+              '&:hover': { backgroundColor: chromeBg, opacity: 0.9, boxShadow: 'none' },
               '&.Mui-disabled': {
                 backgroundColor: isDark ? '#2a2a2a' : '#b0b0b0',
                 color: isDark ? 'rgba(255, 255, 255, 0.35)' : 'rgba(255, 255, 255, 0.7)',

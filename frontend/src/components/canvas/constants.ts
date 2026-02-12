@@ -33,3 +33,7 @@ export const PROTOCOL_TYPE_COLORS: Record<string, string> = {
   documenter: '#D4793E',
   default: '#7d8590',
 }
+
+export const PROTOCOL_LABELS: Record<string, string> = {
+  documenter: 'Documenter',
+}

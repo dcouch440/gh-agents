@@ -160,6 +160,103 @@ describe('canvasStore', () => {
     })
   })
 
+  describe('step protocols', () => {
+    it('linkStepProtocol adds a protocol link', () => {
+      const link = {
+        protocolId: 'proto-1',
+        protocolType: 'documenter',
+        protocolName: 'Doc Writer',
+        portNames: ['input'],
+      }
+
+      canvasStore.linkStepProtocol('step-1', link)
+
+      expect(getState().stepProtocols['step-1']).toEqual(link)
+    })
+
+    it('linkStepProtocol overwrites existing link for same step', () => {
+      const link1 = { protocolId: 'p1', protocolType: 'documenter', protocolName: 'First', portNames: [] }
+      const link2 = { protocolId: 'p2', protocolType: 'documenter', protocolName: 'Second', portNames: ['a'] }
+
+      canvasStore.linkStepProtocol('step-1', link1)
+      canvasStore.linkStepProtocol('step-1', link2)
+
+      expect(getState().stepProtocols['step-1']).toEqual(link2)
+    })
+
+    it('unlinkStepProtocol removes a protocol link', () => {
+      const link = { protocolId: 'p1', protocolType: 'documenter', protocolName: 'Doc', portNames: [] }
+      canvasStore.linkStepProtocol('step-1', link)
+
+      canvasStore.unlinkStepProtocol('step-1')
+
+      expect(getState().stepProtocols['step-1']).toBeUndefined()
+    })
+
+    it('unlinkStepProtocol is a no-op for missing step', () => {
+      canvasStore.unlinkStepProtocol('nonexistent')
+      expect(Object.keys(getState().stepProtocols)).toHaveLength(0)
+    })
+
+    it('selectStepProtocols returns current protocols', () => {
+      const link = { protocolId: 'p1', protocolType: 'documenter', protocolName: 'Doc', portNames: [] }
+      canvasStore.linkStepProtocol('step-1', link)
+
+      expect(canvasStore.selectStepProtocols(getState())).toEqual({ 'step-1': link })
+    })
+
+    it('reset clears stepProtocols', () => {
+      canvasStore.linkStepProtocol('step-1', {
+        protocolId: 'p1',
+        protocolType: 'documenter',
+        protocolName: 'Doc',
+        portNames: [],
+      })
+
+      canvasStore.reset()
+
+      expect(Object.keys(getState().stepProtocols)).toHaveLength(0)
+    })
+  })
+
+  describe('highlighted protocols', () => {
+    it('setHighlightedProtocols updates the set', () => {
+      const ids = new Set(['s1', 's2'])
+      canvasStore.setHighlightedProtocols(ids)
+
+      expect(getState().highlightedProtocolStepIds).toEqual(ids)
+    })
+
+    it('setHighlightedProtocols skips update when equal', () => {
+      const ids = new Set(['s1'])
+      canvasStore.setHighlightedProtocols(ids)
+      const stateBefore = getState()
+
+      canvasStore.setHighlightedProtocols(new Set(['s1']))
+      const stateAfter = getState()
+
+      // Same reference means no update occurred
+      expect(stateBefore.highlightedProtocolStepIds).toBe(stateAfter.highlightedProtocolStepIds)
+    })
+  })
+
+  describe('hover with protocol', () => {
+    it('setHoveredStep stores protocolId when provided', () => {
+      canvasStore.setHoveredStep('s1', 'proto-1')
+
+      expect(getState().hoveredStepId).toBe('s1')
+      expect(getState().hoveredProtocolId).toBe('proto-1')
+    })
+
+    it('setHoveredStep clears protocolId when not provided', () => {
+      canvasStore.setHoveredStep('s1', 'proto-1')
+      canvasStore.setHoveredStep('s2')
+
+      expect(getState().hoveredStepId).toBe('s2')
+      expect(getState().hoveredProtocolId).toBeNull()
+    })
+  })
+
   describe('selectors', () => {
     it('selectSelectedStepIds returns current set', () => {
       canvasStore.selectSteps(['s1'])

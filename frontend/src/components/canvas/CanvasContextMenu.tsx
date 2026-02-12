@@ -1,9 +1,10 @@
 import { useCallback, useMemo } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
+import type { SxProps, Theme } from '@mui/material/styles'
 import { useStore, workflowStore, protocolStore, canvasStore } from '@/stores'
 import { Collections } from '@/utils/collections'
-import { DEFAULT_STEP_TYPE_COLOR, PROTOCOL_TYPE_COLORS, STEP_TYPE_COLORS } from './constants'
+import { DEFAULT_STEP_TYPE_COLOR, PROTOCOL_TYPE_COLORS, PROTOCOL_LABELS, STEP_TYPE_COLORS } from './constants'
 
 const VIEWPORT_PADDING = 8
 
@@ -20,8 +21,31 @@ type CanvasContextMenuProps = {
   onClose: () => void
 }
 
-const PROTOCOL_LABELS: Record<string, string> = {
-  documenter: 'Documenter',
+const MENU_ITEM_SX: SxProps<Theme> = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 1,
+  px: 1.5,
+  py: 0.75,
+  cursor: 'pointer',
+  '&:hover': { backgroundColor: 'action.hover' },
+}
+
+const SECTION_LABEL_SX: SxProps<Theme> = {
+  px: 1.5,
+  py: 0.75,
+  fontSize: 10,
+  textTransform: 'uppercase',
+  color: 'text.disabled',
+  letterSpacing: '0.05em',
+  fontWeight: 600,
+}
+
+const COLOR_DOT_SX: SxProps<Theme> = {
+  width: 8,
+  height: 8,
+  borderRadius: '50%',
+  flexShrink: 0,
 }
 
 function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
@@ -117,36 +141,12 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
       }}
     >
       {position.nodeId !== undefined ? (
-        <Box
-          data-testid="ctx-delete-step"
-          onClick={handleDelete}
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            px: 1.5,
-            py: 0.75,
-            cursor: 'pointer',
-            '&:hover': { backgroundColor: 'action.hover' },
-          }}
-        >
+        <Box data-testid="ctx-delete-step" onClick={handleDelete} sx={MENU_ITEM_SX}>
           <Typography sx={{ fontSize: 12, color: 'error.main' }}>Delete Step</Typography>
         </Box>
       ) : (
         <>
-          <Typography
-            sx={{
-              px: 1.5,
-              py: 0.75,
-              fontSize: 10,
-              textTransform: 'uppercase',
-              color: 'text.disabled',
-              letterSpacing: '0.05em',
-              fontWeight: 600,
-            }}
-          >
-            Protocols
-          </Typography>
+          <Typography sx={SECTION_LABEL_SX}>Protocols</Typography>
           {protocolTypes
             .filter((pt) => pt.name === 'documenter')
             .map((pt) => (
@@ -156,64 +156,16 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
                 onClick={(event) => {
                   handleAddProtocol(event, pt.name)
                 }}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  px: 1.5,
-                  py: 0.75,
-                  cursor: 'pointer',
-                  '&:hover': { backgroundColor: 'action.hover' },
-                }}
+                sx={MENU_ITEM_SX}
               >
-                <Box
-                  sx={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: '50%',
-                    backgroundColor: PROTOCOL_TYPE_COLORS[pt.name] ?? DEFAULT_STEP_TYPE_COLOR,
-                    flexShrink: 0,
-                  }}
-                />
+                <Box sx={{ ...COLOR_DOT_SX, backgroundColor: PROTOCOL_TYPE_COLORS[pt.name] ?? DEFAULT_STEP_TYPE_COLOR }} />
                 <Typography sx={{ fontSize: 12, color: 'text.primary' }}>{PROTOCOL_LABELS[pt.name] ?? pt.name}</Typography>
               </Box>
             ))}
           <Box sx={{ mx: 1.5, my: 0.5, borderTop: 1, borderColor: 'divider' }} />
-          <Typography
-            sx={{
-              px: 1.5,
-              py: 0.75,
-              fontSize: 10,
-              textTransform: 'uppercase',
-              color: 'text.disabled',
-              letterSpacing: '0.05em',
-              fontWeight: 600,
-            }}
-          >
-            Utilities
-          </Typography>
-          <Box
-            data-testid="ctx-add-context"
-            onClick={handleAddContext}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              px: 1.5,
-              py: 0.75,
-              cursor: 'pointer',
-              '&:hover': { backgroundColor: 'action.hover' },
-            }}
-          >
-            <Box
-              sx={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                backgroundColor: STEP_TYPE_COLORS['context'] ?? DEFAULT_STEP_TYPE_COLOR,
-                flexShrink: 0,
-              }}
-            />
+          <Typography sx={SECTION_LABEL_SX}>Utilities</Typography>
+          <Box data-testid="ctx-add-context" onClick={handleAddContext} sx={MENU_ITEM_SX}>
+            <Box sx={{ ...COLOR_DOT_SX, backgroundColor: STEP_TYPE_COLORS['context'] ?? DEFAULT_STEP_TYPE_COLOR }} />
             <Typography sx={{ fontSize: 12, color: 'text.primary' }}>Context</Typography>
           </Box>
         </>

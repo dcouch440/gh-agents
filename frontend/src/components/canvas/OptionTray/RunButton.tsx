@@ -9,6 +9,7 @@ import ErrorOutline from '@mui/icons-material/ErrorOutline'
 import { useTheme } from '@mui/material/styles'
 import { useStore, workflowStore } from '@/stores'
 import { api } from '@/api'
+import { TRAY_BUTTON_CONTAINED_SX } from './constants'
 
 type RunStatus = 'idle' | 'running' | 'completed' | 'error'
 
@@ -86,25 +87,11 @@ function RunButton() {
           }}
           disabled={runStatus === 'running'}
           sx={{
-            fontSize: 13,
-            fontWeight: 600,
-            textTransform: 'none',
-            px: 2.5,
-            py: 0.75,
+            ...TRAY_BUTTON_CONTAINED_SX,
             minWidth: 80,
-            color: '#fff',
             backgroundColor: statusBg,
-            boxShadow: 'none',
-            '&:hover': {
-              backgroundColor: statusBg,
-              opacity: 0.9,
-              boxShadow: 'none',
-            },
-            '&.Mui-disabled': {
-              backgroundColor: `${statusBg}80`,
-              color: 'rgba(255, 255, 255, 0.5)',
-              boxShadow: 'none',
-            },
+            '&:hover': { backgroundColor: statusBg, opacity: 0.9, boxShadow: 'none' },
+            '&.Mui-disabled': { backgroundColor: `${statusBg}80`, color: 'rgba(255, 255, 255, 0.5)', boxShadow: 'none' },
           }}
         >
           {runLabel}
