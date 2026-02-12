@@ -1,7 +1,11 @@
 export { ChatMessage } from './ChatMessage'
 export { ChatInput } from './ChatInput'
 export { ChatPanel } from './ChatPanel'
+export { ToolIndicator } from './ToolIndicator'
+export { StreamingMessage } from './StreamingMessage'
 
 export type { ChatMessageProps } from './ChatMessage'
 export type { ChatInputProps } from './ChatInput'
 export type { ChatMessageData, ChatPanelProps } from './ChatPanel'
+export type { ToolIndicatorProps } from './ToolIndicator'
+export type { StreamingMessageProps } from './StreamingMessage'

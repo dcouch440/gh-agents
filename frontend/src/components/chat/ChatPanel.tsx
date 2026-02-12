@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, type ReactNode } from 'react'
 import { Box, Typography } from '@mui/material'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
@@ -16,9 +16,10 @@ export type ChatPanelProps = {
   disabled?: boolean
   className?: string
   emptyMessage?: string
+  streamingContent?: ReactNode
 }
 
-export function ChatPanel({ messages, onSend, streaming, disabled, emptyMessage }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, streaming, disabled, emptyMessage, streamingContent }: ChatPanelProps) {
   const messagesRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -29,7 +30,7 @@ export function ChatPanel({ messages, onSend, streaming, disabled, emptyMessage 
     if (isNearBottom) {
       el.scrollTop = el.scrollHeight
     }
-  }, [messages])
+  }, [messages, streamingContent])
 
   return (
     <Box
@@ -51,7 +52,7 @@ export function ChatPanel({ messages, onSend, streaming, disabled, emptyMessage 
           gap: 1,
         }}
       >
-        {messages.length === 0 ? (
+        {messages.length === 0 && !streamingContent ? (
           <Box
             sx={{
               flex: 1,
@@ -65,17 +66,21 @@ export function ChatPanel({ messages, onSend, streaming, disabled, emptyMessage 
             </Typography>
           </Box>
         ) : (
-          messages.map((message, index) => {
-            const isLastAssistant = message.role === 'assistant' && index === messages.length - 1
-            return (
-              <ChatMessage
-                key={message.id}
-                role={message.role}
-                content={message.content}
-                streaming={isLastAssistant ? streaming : undefined}
-              />
-            )
-          })
+          <>
+            {messages.map((message, index) => {
+              const isLastAssistant = message.role === 'assistant' && index === messages.length - 1
+              if (isLastAssistant && streamingContent) return null
+              return (
+                <ChatMessage
+                  key={message.id}
+                  role={message.role}
+                  content={message.content}
+                  streaming={isLastAssistant ? streaming : undefined}
+                />
+              )
+            })}
+            {streamingContent}
+          </>
         )}
       </Box>
       <ChatInput onSend={onSend} disabled={disabled} />
