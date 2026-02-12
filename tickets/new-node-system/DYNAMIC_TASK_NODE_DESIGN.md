@@ -452,6 +452,181 @@ suggest_downstream(description)
 
 ---
 
+## Example Scenarios
+
+The system is domain-agnostic. The assistant designs task forces for any kind of work, not just code. Here are diverse examples showing how different mission briefs produce different agent rosters and execution patterns.
+
+### 1. Startup Pitch Deck
+
+**Resources**: Context node (business idea description, market data)
+**No container needed** — pure document generation.
+
+```json
+{
+  "task": "Create a compelling pitch deck for Series A fundraising",
+  "agent_roster": [
+    { "name": "Researcher", "role": "Analyze market size, competitors, and trends", "capabilities": ["web_search", "file_write"] },
+    { "name": "Financial Modeler", "role": "Build revenue projections and unit economics", "capabilities": ["file_write"] },
+    { "name": "Storyteller", "role": "Craft the narrative arc and key talking points", "capabilities": ["file_write"] },
+    { "name": "Designer", "role": "Structure slides and visual hierarchy", "capabilities": ["file_write"] }
+  ]
+}
+```
+
+Planner creates: Researcher first (market data feeds everything), then Financial Modeler and Storyteller in parallel (different inputs), Designer last (needs all content).
+
+### 2. Due Diligence for Acquisition
+
+**Resources**: S3 (uploaded financial docs), Database (target company data)
+**Container**: Python environment for financial analysis.
+
+```json
+{
+  "task": "Conduct due diligence review on acquisition target",
+  "agent_roster": [
+    { "name": "Financial Analyst", "role": "Review financials, flag anomalies, assess valuation", "capabilities": ["file_read", "shell"] },
+    { "name": "Legal Reviewer", "role": "Identify contractual risks, IP issues, compliance gaps", "capabilities": ["file_read"] },
+    { "name": "Technical Assessor", "role": "Evaluate tech stack, technical debt, scalability", "capabilities": ["file_read"] },
+    { "name": "Risk Analyst", "role": "Synthesize findings into risk matrix with recommendations", "capabilities": ["file_read", "file_write"] }
+  ]
+}
+```
+
+Planner creates: Financial, Legal, Technical assessors run in parallel (independent domains). Risk Analyst runs last — reads all three outputs, produces unified risk matrix.
+
+### 3. Movie Screenplay
+
+**Resources**: Context node (story premise, character sketches, tone references)
+**No container needed** — pure creative writing.
+
+```json
+{
+  "task": "Write a feature-length screenplay from premise to shooting script",
+  "agent_roster": [
+    { "name": "Story Architect", "role": "Build story structure, plot beats, character arcs", "capabilities": ["file_write"] },
+    { "name": "Dialogue Writer", "role": "Write dialogue that reveals character and advances plot", "capabilities": ["file_read", "file_write"] },
+    { "name": "Continuity Editor", "role": "Check timeline consistency, character details, plot holes", "capabilities": ["file_read", "file_write"] },
+    { "name": "Script Formatter", "role": "Format into industry-standard screenplay format", "capabilities": ["file_read", "file_write"] }
+  ]
+}
+```
+
+Planner creates: Story Architect outlines structure → Dialogue Writer fills in scenes → Continuity Editor reviews → Script Formatter finalizes. Strictly sequential — each builds on the last.
+
+### 4. Marketing Campaign Launch
+
+**Resources**: Context node (brand guidelines, product info), API (social media analytics)
+**No container needed**.
+
+```json
+{
+  "task": "Design and plan a multi-channel marketing campaign for product launch",
+  "agent_roster": [
+    { "name": "Audience Researcher", "role": "Define target segments, personas, and messaging angles", "capabilities": ["web_search", "file_write"] },
+    { "name": "Content Strategist", "role": "Plan content calendar, channel mix, and campaign phases", "capabilities": ["file_write"] },
+    { "name": "Copywriter", "role": "Write ad copy, email sequences, and social posts for each segment", "capabilities": ["file_read", "file_write"] },
+    { "name": "Media Planner", "role": "Allocate budget across channels, set KPIs and measurement plan", "capabilities": ["file_write"] }
+  ]
+}
+```
+
+Planner creates: Audience Researcher first → Content Strategist and Media Planner in parallel (strategy + budget) → Copywriter last (needs segments, channels, and budget context).
+
+### 5. Academic Research Paper
+
+**Resources**: Context node (research question, data sets, methodology notes)
+**No container needed**.
+
+```json
+{
+  "task": "Draft a research paper on the effects of remote work on team collaboration",
+  "agent_roster": [
+    { "name": "Literature Reviewer", "role": "Survey existing research, identify gaps, build citation framework", "capabilities": ["web_search", "file_write"] },
+    { "name": "Data Analyst", "role": "Analyze provided datasets, generate tables and statistical summaries", "capabilities": ["file_read", "file_write"] },
+    { "name": "Writer", "role": "Draft all sections following academic conventions", "capabilities": ["file_read", "file_write"] },
+    { "name": "Peer Reviewer", "role": "Critique methodology, arguments, and conclusions. Flag weaknesses.", "capabilities": ["file_read", "file_write"] }
+  ]
+}
+```
+
+Planner creates: Literature Reviewer and Data Analyst in parallel → Writer drafts paper using both → Peer Reviewer critiques and suggests revisions.
+
+### 6. Incident Response (DevOps)
+
+**Resources**: GitHub (production repo), Database (production read-only), API (monitoring/alerting)
+**Container**: Full runtime environment matching production.
+
+```json
+{
+  "task": "Investigate and resolve production memory leak causing OOM crashes",
+  "agent_roster": [
+    { "name": "Log Analyst", "role": "Analyze logs, metrics, and crash dumps to identify leak pattern", "capabilities": ["shell", "file_read"] },
+    { "name": "Code Investigator", "role": "Trace allocation patterns and identify leaking code paths", "capabilities": ["file_read", "grep", "shell"] },
+    { "name": "Fixer", "role": "Implement fix, add memory guards, write regression test", "capabilities": ["file_read", "file_write", "shell"] },
+    { "name": "Comms Writer", "role": "Draft incident report and customer communication", "capabilities": ["file_write"] }
+  ]
+}
+```
+
+Planner creates: Log Analyst and Code Investigator in parallel (different investigation angles) → Fixer implements based on findings → Comms Writer drafts incident report. Real tools, real container, real debugging.
+
+### 7. Event Planning
+
+**Resources**: Context node (event brief, budget, venue constraints)
+**No container needed**.
+
+```json
+{
+  "task": "Plan a 500-person developer conference",
+  "agent_roster": [
+    { "name": "Logistics Coordinator", "role": "Venue layout, vendor coordination, timeline, AV requirements", "capabilities": ["file_write"] },
+    { "name": "Program Designer", "role": "Design track structure, session formats, speaker slots", "capabilities": ["file_write"] },
+    { "name": "Budget Manager", "role": "Allocate budget, identify cost savings, create contingency plan", "capabilities": ["file_write"] },
+    { "name": "Communications Lead", "role": "Write speaker outreach, attendee emails, social media plan", "capabilities": ["file_write"] }
+  ]
+}
+```
+
+Planner creates: Logistics and Program Designer in parallel (venue + content are semi-independent) → Budget Manager allocates across both plans → Communications Lead creates messaging for the finalized event.
+
+### 8. Hiring Pipeline
+
+**Resources**: Context node (role requirements, company culture doc), API (job board integration)
+**No container needed**.
+
+```json
+{
+  "task": "Design and execute hiring pipeline for senior engineering manager",
+  "agent_roster": [
+    { "name": "Role Definer", "role": "Craft job description, competency framework, and scoring rubric", "capabilities": ["file_write"] },
+    { "name": "Sourcer", "role": "Identify sourcing channels, write outreach templates, plan pipeline", "capabilities": ["web_search", "file_write"] },
+    { "name": "Interview Designer", "role": "Design interview stages, questions, and evaluation criteria", "capabilities": ["file_read", "file_write"] },
+    { "name": "Offer Strategist", "role": "Research comp benchmarks, design offer package structure", "capabilities": ["web_search", "file_write"] }
+  ]
+}
+```
+
+Planner creates: Role Definer first (everything depends on role clarity) → Sourcer, Interview Designer, and Offer Strategist all run in parallel (independent workstreams building on the role definition).
+
+---
+
+### Pattern Summary
+
+| Scenario | Resources | Parallel Phases | Sequential Phases | Container |
+|---|---|---|---|---|
+| Pitch Deck | Context | Modeler + Storyteller | Researcher → ... → Designer | No |
+| Due Diligence | S3 + DB | Financial + Legal + Technical | ... → Risk Analyst | Python |
+| Screenplay | Context | None | All sequential | No |
+| Marketing | Context + API | Strategist + Media | Researcher → ... → Copywriter | No |
+| Research Paper | Context | Lit Review + Data Analysis | ... → Writer → Reviewer | No |
+| Incident Response | GitHub + DB + API | Logs + Code Investigation | ... → Fixer → Comms | Production-like |
+| Event Planning | Context | Logistics + Program | ... → Budget → Comms | No |
+| Hiring Pipeline | Context + API | Sourcer + Interview + Offer | Role Definer → ... | No |
+
+The planner discovers these execution patterns at runtime based on data dependencies. The assistant only defines the roster and capabilities — the planner figures out what can be parallelized.
+
+---
+
 ## Implementation Considerations
 
 **Container management**: Need a container orchestration layer. Each task node execution gets a container. Container lifecycle: create → provision resources → run agents → capture outputs → destroy.
