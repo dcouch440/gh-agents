@@ -354,6 +354,96 @@ mod tests {
         assert!(schema["properties"]["speakers"].is_object());
     }
 
+    // ── Assistant resolution with realistic context ────────────────────
+
+    #[test]
+    fn assistant_resolves_with_prd_context() {
+        let config_snapshot = "\
+Name: Technical Spec Generator
+Description: Transforms product requirements into engineering specs and architecture docs
+Prompt: You are generating TECHNICAL SPECIFICATION DOCUMENTS from a product requirements \
+document. Break down high-level product goals into concrete engineering requirements, \
+API contracts, data models, and implementation guidance.
+
+Documents:
+  - API Contract Specification (id: a1b2c3d4-0000-0000-0000-000000000001, target: ~3000 words) \
+— Complete REST API specification with endpoints, request/response schemas, auth flows, \
+and error handling contracts
+  - Data Model & Schema Design (id: a1b2c3d4-0000-0000-0000-000000000002, target: ~2000 words) \
+— Database schema, entity relationships, migration strategy, and indexing requirements
+  - Implementation Roadmap (id: a1b2c3d4-0000-0000-0000-000000000003, target: ~1500 words) \
+— Phased delivery plan with dependencies, risk areas, and milestone criteria
+
+Incoming Context:
+  - Product Requirements Document (context) — populated
+    Description: Q2 2026 product requirements for the notifications platform
+    Preview (820 words): ## Notifications Platform PRD\\n\\n### Problem Statement\\n\\n\
+Users currently miss critical updates because our notification system is fragmented across \
+email, in-app, and push channels with no unified preference management. Support tickets \
+related to missed notifications increased 34% last quarter.\\n\\n### Goals\\n\\n\
+1. Unified notification preferences API — single endpoint for all channel preferences\\n\
+2. Real-time delivery tracking — users can see delivery status per notification\\n\
+3. Digest mode — batch low-priority notifications into daily/weekly summaries\\n\
+4. Template system — product teams self-serve notification content without eng deploys\\n\\n\
+### Non-Goals\\n\\n- SMS channel (deferred to Q3)\\n- Analytics dashboard (separate workstream)\\n\\n\
+### Success Metrics\\n\\n- Reduce missed-notification support tickets by 60%\\n\
+- Notification preference adoption > 40% of MAU within 8 weeks\\n\
+- P95 delivery latency < 500ms for real-time channel
+  - Engineering Constraints (context) — populated
+    Description: Technical constraints and existing system boundaries
+    Preview (210 words): Current stack: Node.js 20, PostgreSQL 15, Redis 7, RabbitMQ. \
+Auth via JWT with 1h expiry. Rate limit: 1000 req/min per user. Existing notification \
+table has 2.3B rows — migration must be zero-downtime. Mobile push via FCM/APNs.
+  - Design Mockups (context) — empty";
+
+        let mut vars = HashMap::new();
+        vars.insert(
+            vars::system::CURRENT_CONFIG.to_string(),
+            config_snapshot.to_string(),
+        );
+        let ctx = roles::DOCUMENTER_ASSISTANT.resolve(&vars);
+
+        // Config file content is present (from system.md)
+        assert!(
+            ctx.system_prompt.contains("document planning assistant"),
+            "should use system.md role definition, not hardcoded prompt"
+        );
+        assert!(
+            ctx.system_prompt
+                .contains("reference material generated for AI agents"),
+            "should explain documents are for agent consumption"
+        );
+        assert!(
+            ctx.system_prompt.contains("populated"),
+            "should explain context status types"
+        );
+        assert!(
+            ctx.system_prompt.contains("pending"),
+            "should explain pending status"
+        );
+        assert!(
+            ctx.system_prompt
+                .contains("actual content generation happens later"),
+            "should include scope boundary from system.md"
+        );
+
+        // Injected config snapshot is present
+        assert!(ctx.system_prompt.contains("Technical Spec Generator"));
+        assert!(ctx.system_prompt.contains("API Contract Specification"));
+        assert!(ctx.system_prompt.contains("Notifications Platform PRD"));
+        assert!(ctx
+            .system_prompt
+            .contains("Engineering Constraints (context)"));
+        assert!(ctx.system_prompt.contains("Design Mockups (context) — empty"));
+
+        // Old hardcoded prompt is NOT present
+        assert!(
+            !ctx.system_prompt
+                .contains("Always explain what you're doing"),
+            "should not contain old hardcoded prompt text"
+        );
+    }
+
     // ── Template variable validation ─────────────────────────────────────
 
     #[test]
