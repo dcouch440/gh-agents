@@ -185,9 +185,10 @@ pub async fn run_step_chat(
 
 /// Build the system prompt for a step chat session.
 ///
-/// For `documenter` steps, includes a role description plus live config
-/// snapshot from `build_config_snapshot()`. For other modes, returns a
-/// generic helpful assistant prompt.
+/// For `documenter` steps, resolves the `DOCUMENTER_ASSISTANT` role definition
+/// from `config/protocols/documenter/assistant/system.md` with the live config
+/// snapshot injected via `{{.System.current_config}}`. For other modes, returns
+/// a generic helpful assistant prompt.
 async fn build_step_system_prompt(
     state: &AppState,
     workflow_id: Uuid,
@@ -207,13 +208,15 @@ async fn build_step_system_prompt(
             .await
             .map_err(|e| HubError::Internal(anyhow::anyhow!("{}", e)))?;
 
-            Ok(format!(
-                "You are a documenter assistant that helps configure documentation workflow steps. \
-                 You can create, update, and delete document definitions, and modify step configuration.\n\n\
-                 Current step configuration:\n{}\n\n\
-                 Use the available tools to modify the step. Always explain what you're doing.",
-                snapshot
-            ))
+            let mut vars = std::collections::HashMap::new();
+            vars.insert(
+                crate::config::protocols::vars::system::CURRENT_CONFIG.to_string(),
+                snapshot,
+            );
+            let resolved =
+                crate::config::protocols::roles::DOCUMENTER_ASSISTANT.resolve(&vars);
+
+            Ok(resolved.system_prompt)
         }
         _ => Ok("You are a helpful assistant for configuring workflow steps.".to_string()),
     }
