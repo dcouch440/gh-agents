@@ -218,24 +218,6 @@ mod tests {
         ) -> anyhow::Result<()> {
             Ok(())
         }
-        async fn get_agent_modes(
-            &self,
-            _agent_id: Uuid,
-        ) -> anyhow::Result<Vec<crate::db::AgentModeRow>> {
-            Ok(vec![])
-        }
-        async fn get_agent_mode(
-            &self,
-            _mode_id: Uuid,
-        ) -> anyhow::Result<Option<crate::db::AgentModeRow>> {
-            Ok(None)
-        }
-        async fn create_agent_mode(&self, _mode: &crate::db::AgentModeRow) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn delete_agent_mode(&self, _mode_id: Uuid) -> anyhow::Result<()> {
-            Ok(())
-        }
         async fn get_agent_guidances(
             &self,
             _agent_id: Uuid,

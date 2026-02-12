@@ -32,8 +32,6 @@ mod tests {
             status: "completed".into(),
             started_at: Utc::now(),
             completed_at: Some(Utc::now()),
-            routing_analysis: None,
-            selected_routing_document_id: None,
             is_exemplary: true,
         }
     }

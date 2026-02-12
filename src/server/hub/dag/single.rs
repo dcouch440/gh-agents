@@ -2,12 +2,11 @@
 //!
 //! Contains `execute_single_step` (the default execution path for non-special
 //! step types) and `run_step_via_engine` (the shared low-level engine call
-//! used by single, for-each, and cavernous steps).
+//! used by single and for-each steps).
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use serde_json::Value as JsonValue;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
@@ -204,21 +203,20 @@ pub(crate) async fn run_step_via_engine(
         .agent_execution_repo()
         .ok_or_else(|| anyhow::anyhow!("agent_execution_repo not configured"))?;
 
-    // Resolve mode (no context hint initially - future: pass step description)
-    let mode = if let Some(resolver) = state.mode_resolver() {
-        resolver
-            .resolve(agent, prompt, None)
-            .await
-            .map_err(|e| HubError::Internal(anyhow!("Mode resolution failed: {}", e)))?
-    } else {
-        // Fallback: construct agent defaults for backward compatibility
-        crate::server::hub::construct_agent_defaults(agent, state.repo())
-            .await
-            .map_err(HubError::Internal)?
-    };
+    // Load agent tools
+    let agent_tool_rows = state
+        .repo()
+        .get_agent_tools(agent.id)
+        .await
+        .unwrap_or_default();
+    let tools: Vec<crate::llm::Tool> = agent_tool_rows
+        .iter()
+        .filter_map(|row| crate::tools::registry::get_tool_definition(&row.name))
+        .collect();
+    let tool_names: Vec<String> = tools.iter().map(|t| t.name.clone()).collect();
 
-    // Build system prompt: mode result + step suffix + schema enforcement
-    let mut system_prompt = mode.system_prompt; // agent + mode already merged
+    // Build system prompt: agent base + step suffix + schema enforcement
+    let mut system_prompt = agent.system_prompt.clone();
     if let Some(ref suffix) = step.system_prompt_suffix {
         if !suffix.trim().is_empty() {
             system_prompt.push_str("\n\n");
@@ -246,7 +244,7 @@ pub(crate) async fn run_step_via_engine(
             None,
             &system_prompt,
             prompt,
-            mode.selected_mode_id, // Track which mode was used
+            None, // selected_mode_id (unused)
             None,
             None,
             Some(ctx.stage_execution_id),
@@ -268,9 +266,9 @@ pub(crate) async fn run_step_via_engine(
         step: step.clone(),
         system_prompt,
         user_prompt: prompt.to_string(),
-        tools: mode.tools,             // Use mode tools
-        tool_names: mode.tool_names,   // Use mode tool names
-        temperature: mode.temperature, // Use mode temperature
+        tools,
+        tool_names,
+        temperature: agent.model_temperature,
         execution_context: ctx.execution_context.clone(),
         container_handle: container_handle.cloned(),
         run_id: ctx.run_id,

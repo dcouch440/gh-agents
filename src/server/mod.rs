@@ -183,11 +183,6 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::AGENT_CONTEXT,
             get(api::get_agent_context).put(api::set_agent_context),
         )
-        .route(
-            routes::AGENT_MODES,
-            get(api::list_agent_modes).post(api::create_agent_mode),
-        )
-        .route(routes::AGENT_MODE, delete(api::delete_agent_mode))
         .route(routes::TOOLS, get(api::list_tools).post(api::create_tool))
         .route(
             routes::TOOL,
@@ -231,14 +226,9 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         .route(routes::SESSION_HISTORY, get(api::get_session_history))
         .route(routes::SESSION_CHAT_STREAM, get(api::session_chat_stream))
         .route(
-            routes::SESSION_CONFIG,
-            axum::routing::patch(api::update_session_config),
-        )
-        .route(
             routes::SESSION_MESSAGES,
             delete(api::clear_session_messages),
         )
-        .route(routes::SESSION_SAVE_AGENT, post(api::save_session_agent))
         .route(
             routes::DOCUMENTS,
             get(api::list_documents).post(api::create_document),
@@ -333,7 +323,7 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         .route(routes::AGENT_EXECUTION, get(api::get_agent_execution))
         .route(
             routes::AGENT_EXECUTION_MESSAGES,
-            get(api::list_execution_messages).post(api::send_execution_message),
+            get(api::list_execution_messages),
         )
         .route(
             routes::AGENT_EXECUTION_MESSAGE_STREAM,
@@ -942,24 +932,6 @@ mod tests {
             _session_id: Uuid,
             _agent_id: Uuid,
         ) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn get_agent_modes(
-            &self,
-            _agent_id: Uuid,
-        ) -> anyhow::Result<Vec<crate::db::AgentModeRow>> {
-            Ok(vec![])
-        }
-        async fn get_agent_mode(
-            &self,
-            _mode_id: Uuid,
-        ) -> anyhow::Result<Option<crate::db::AgentModeRow>> {
-            Ok(None)
-        }
-        async fn create_agent_mode(&self, _mode: &crate::db::AgentModeRow) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn delete_agent_mode(&self, _mode_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
         async fn get_agent_guidances(

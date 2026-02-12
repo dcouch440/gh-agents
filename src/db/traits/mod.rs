@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::db::{
-    AgentExecutionRow, AgentGuidanceRow, AgentModeRow, AgentRow, ChatMessageRow, CollectionRunRow,
+    AgentExecutionRow, AgentGuidanceRow, AgentRow, ChatMessageRow, CollectionRunRow,
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
     DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow,
     ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow, ResultRow,
@@ -268,20 +268,6 @@ pub trait ServerRepo: Send + Sync {
     /// Link an agent to a session (and clear draft_config).
     async fn link_session_agent(&self, session_id: Uuid, agent_id: Uuid) -> Result<()>;
 
-    // --- Agent modes ---
-
-    /// List all modes for an agent.
-    async fn get_agent_modes(&self, agent_id: Uuid) -> Result<Vec<AgentModeRow>>;
-
-    /// Create an agent mode.
-    async fn create_agent_mode(&self, mode: &AgentModeRow) -> Result<()>;
-
-    /// Get a single agent mode by ID.
-    async fn get_agent_mode(&self, mode_id: Uuid) -> Result<Option<AgentModeRow>>;
-
-    /// Delete an agent mode by ID.
-    async fn delete_agent_mode(&self, mode_id: Uuid) -> Result<()>;
-
     // --- Agent guidance ---
 
     /// Load active guidances for an agent, optionally filtered by step.
@@ -393,14 +379,6 @@ pub trait DocumentRepo: Send + Sync {
 
     /// Delete a document by ID.
     async fn delete_document(&self, doc_id: Uuid) -> Result<()>;
-
-    /// Full-text search documents with title prefix "routing:" for cavernous routing.
-    async fn search_routing_documents(
-        &self,
-        user_id: Uuid,
-        query: &str,
-        limit: i64,
-    ) -> Result<Vec<DocumentSearchResult>>;
 }
 
 // ============================================================================
@@ -692,14 +670,6 @@ pub trait AgentExecutionRepo: Send + Sync {
         user_id: Uuid,
         status: Option<String>,
     ) -> Result<Vec<AgentExecutionRow>>;
-
-    /// Update routing analysis and selected routing document for cavernous executions.
-    async fn update_agent_execution_routing(
-        &self,
-        id: Uuid,
-        routing_analysis: &serde_json::Value,
-        selected_routing_document_id: Option<Uuid>,
-    ) -> Result<()>;
 
     /// List completed executions marked as exemplary for few-shot injection.
     /// Returns rows ordered by most recent, limited to `limit`.

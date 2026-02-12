@@ -4,7 +4,6 @@ use std::convert::Infallible;
 
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
     response::sse::{Event, Sse},
     Json,
 };
@@ -84,21 +83,6 @@ impl From<crate::db::ExecutionMessageRow> for ExecutionMessageResponse {
             created_at: r.created_at,
         }
     }
-}
-
-#[derive(Deserialize, utoipa::ToSchema)]
-pub struct SendMessageRequest {
-    pub content: String,
-}
-
-/// Response from sending a message to an interactive execution.
-/// Includes the recorded user message and a stream_id for SSE streaming.
-#[derive(Serialize, utoipa::ToSchema)]
-pub struct SendMessageResponse {
-    pub message: ExecutionMessageResponse,
-    /// Connect to the SSE stream at /api/agent-executions/:id/messages/:stream_id/stream
-    /// to receive the agent's streamed response.
-    pub stream_id: Uuid,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -185,91 +169,6 @@ pub async fn list_execution_messages(
         rows.into_iter()
             .map(ExecutionMessageResponse::from)
             .collect(),
-    ))
-}
-
-/// POST /api/agent-executions/:id/messages — send a user message to an interactive agent execution.
-///
-/// Records the user message, triggers an LLM response in the background, and returns
-/// the recorded message along with a `stream_id` for streaming the agent's response via SSE.
-#[utoipa::path(
-    post,
-    path = "/api/agent-executions/{id}/messages",
-    tag = "Agent Executions",
-    security(("bearer_auth" = [])),
-    params(("id" = Uuid, Path, description = "Agent execution ID")),
-    request_body = SendMessageRequest,
-    responses(
-        (status = 202, description = "Message sent, LLM response streaming", body = SendMessageResponse),
-        (status = 400, description = "Not interactive or not awaiting user"),
-        (status = 404, description = "Not found")
-    )
-)]
-pub async fn send_execution_message(
-    State(state): State<AppState>,
-    auth: auth_utils::AuthUser,
-    Path(id): Path<Uuid>,
-    Json(req): Json<SendMessageRequest>,
-) -> Result<(StatusCode, Json<SendMessageResponse>), AppError> {
-    let repo = &state.repos().agent_executions;
-    let ae = repo
-        .get_agent_execution(id)
-        .await?
-        .ok_or(AppError::not_found("Agent execution"))?;
-
-    if !ae.is_interactive {
-        return Err(AppError::bad_request("Execution is not interactive"));
-    }
-    if ae.status != "awaiting_user" {
-        return Err(AppError::bad_request(
-            "Execution is not awaiting user input",
-        ));
-    }
-
-    // Record the user message
-    let msg = repo
-        .create_execution_message(id, "user", &req.content, None, 0, 0)
-        .await?;
-
-    // Create a stream ID for the agent's response
-    let stream_id = Uuid::new_v4();
-    state.ensure_response_stream(stream_id);
-
-    // Spawn background LLM call
-    let state_clone = state.clone();
-    let content = req.content.clone();
-    let user_id = auth.user_id.0;
-    tokio::spawn(async move {
-        let provider = match state_clone.provider() {
-            Some(p) => p.clone(),
-            None => {
-                state_clone
-                    .send_stream_chunk(stream_id, StreamChunk::Error("No LLM provider".into()));
-                state_clone.send_stream_chunk(stream_id, StreamChunk::Done);
-                return;
-            }
-        };
-        match hub::run_interactive_chat(&state_clone, provider, id, stream_id, &content, user_id)
-            .await
-        {
-            Ok(_) => {
-                state_clone.send_stream_chunk(stream_id, StreamChunk::Done);
-            }
-            Err(e) => {
-                error!("Interactive chat failed: {}", e);
-                state_clone.send_stream_chunk(stream_id, StreamChunk::Error(format!("{}", e)));
-                state_clone.send_stream_chunk(stream_id, StreamChunk::Done);
-            }
-        }
-        hub::schedule_stream_cleanup(&state_clone, stream_id);
-    });
-
-    Ok((
-        StatusCode::ACCEPTED,
-        Json(SendMessageResponse {
-            message: ExecutionMessageResponse::from(msg),
-            stream_id,
-        }),
     ))
 }
 

@@ -45,15 +45,6 @@ type SendMessageRequest = {
   message: string
 }
 
-type SaveAgentRequest = {
-  name: string
-  context_document_ids?: string[]
-}
-
-type SaveAgentResponse = {
-  agent_id: string
-}
-
 export type {
   DraftConfig,
   Session,
@@ -62,6 +53,4 @@ export type {
   CreateSessionRequest,
   UpdateSessionRequest,
   SendMessageRequest,
-  SaveAgentRequest,
-  SaveAgentResponse,
 }

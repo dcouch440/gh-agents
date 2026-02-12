@@ -4,7 +4,6 @@ mod tests {
     //!
     //! Unit tests for specific modules live in colocated test files:
     //! - Chain detection → `for_each/tests.rs`
-    //! - Subtask topo sort + aggregation → `cavernous/tests.rs`
     //! - Room output extraction → `room_step/tests.rs`
     //! - resolve_output_key / to_snake_case → `dag_state/tests.rs`
 
@@ -296,8 +295,6 @@ mod tests {
             status: "running".into(),
             started_at: Utc::now(),
             completed_at: None,
-            routing_analysis: None,
-            selected_routing_document_id: None,
             is_exemplary: false,
         }
     }

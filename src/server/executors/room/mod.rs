@@ -14,8 +14,7 @@ use crate::db::{AgentRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscript
 use crate::llm::{LLMProvider, LLMRequest, Message};
 use crate::server::hub::streaming::StreamSink;
 use crate::server::hub::{
-    construct_agent_defaults, ExecutionEngine, ExecutionRecorder, HubError, RoomSpeakerConfig,
-    RoomSpeakerStrategy,
+    ExecutionEngine, ExecutionRecorder, HubError, RoomSpeakerConfig, RoomSpeakerStrategy,
 };
 use crate::server::state::AppState;
 use crate::server::ws::events::{RoomEvent, RoomEventKind};
@@ -286,22 +285,21 @@ pub async fn execute_room_turn(
             },
         });
 
-        // Resolve mode with transcript as context
-        let mode = if let Some(resolver) = state.mode_resolver() {
-            resolver
-                .resolve(&ma.agent, user_message, Some(&transcript_block))
-                .await
-                .map_err(|e| HubError::Internal(anyhow::anyhow!("Mode resolution failed: {}", e)))?
-        } else {
-            // Fallback: construct agent defaults for backward compatibility
-            construct_agent_defaults(&ma.agent, &state.repo())
-                .await
-                .map_err(HubError::Internal)?
-        };
+        // Load agent tools
+        let agent_tool_rows = state
+            .repo()
+            .get_agent_tools(ma.agent.id)
+            .await
+            .unwrap_or_default();
+        let agent_tools: Vec<crate::llm::Tool> = agent_tool_rows
+            .iter()
+            .filter_map(|row| crate::tools::registry::get_tool_definition(&row.name))
+            .collect();
+        let agent_tool_names: Vec<String> = agent_tools.iter().map(|t| t.name.clone()).collect();
 
-        // Build system prompt: mode result + room context + agent docs
+        // Build system prompt: agent base + room context + agent docs
         let room_context = build_room_context(room, &ma.member, &ma.agent, members);
-        let mut system_prompt = mode.system_prompt; // agent + mode already merged
+        let mut system_prompt = ma.agent.system_prompt.clone();
         system_prompt.push_str("\n\n");
         system_prompt.push_str(&room_context);
 
@@ -321,10 +319,8 @@ pub async fn execute_room_turn(
 
         // Apply room tools_enabled override
         let (tools, tool_names) = if room.tools_enabled {
-            // Use resolved tools from mode (or agent defaults)
-            (mode.tools, mode.tool_names)
+            (agent_tools, agent_tool_names)
         } else {
-            // Room master switch OFF → force disable
             (vec![], vec![])
         };
 
@@ -337,10 +333,10 @@ pub async fn execute_room_turn(
                 None,  // parent_agent_execution_id
                 &system_prompt,
                 &user_prompt,
-                mode.selected_mode_id, // Track which mode was used
-                Some(session.id),      // room_session_id
-                Some(i as i32),        // speaker_order
-                None,                  // workflow_execution_id
+                None,             // selected_mode_id (unused)
+                Some(session.id), // room_session_id
+                Some(i as i32),   // speaker_order
+                None,             // workflow_execution_id
             )
             .await
             .map_err(HubError::Internal)?;
@@ -361,8 +357,8 @@ pub async fn execute_room_turn(
                 user_prompt,
                 tools,
                 tool_names,
-                temperature: mode.temperature, // Use mode temperature
-                execution_context: None,       // TODO: wire up if tools_enabled
+                temperature: ma.agent.model_temperature,
+                execution_context: None, // TODO: wire up if tools_enabled
                 user_id,
                 agent_execution_id: ae_row.id,
             },

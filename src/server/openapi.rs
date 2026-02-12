@@ -132,7 +132,6 @@ use utoipa::OpenApi;
         // Agent Executions
         super::api::agent_executions::get_agent_execution,
         super::api::agent_executions::list_execution_messages,
-        super::api::agent_executions::send_execution_message,
         super::api::agent_executions::approve_execution,
         // Costs
         super::api::costs::get_costs,
@@ -219,7 +218,6 @@ use utoipa::OpenApi;
         super::api::prompt_templates::UpdatePromptTemplateRequest,
         super::api::agent_executions::AgentExecutionResponse,
         super::api::agent_executions::ExecutionMessageResponse,
-        super::api::agent_executions::SendMessageRequest,
         super::api::agent_executions::ApproveExecutionRequest,
         super::api::costs::CostQuery,
         super::api::costs::CostResponse,

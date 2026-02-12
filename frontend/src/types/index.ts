@@ -18,8 +18,6 @@ export type {
   CreateSessionRequest,
   UpdateSessionRequest,
   SendMessageRequest,
-  SaveAgentRequest,
-  SaveAgentResponse,
 } from './session'
 export type { Document, DocumentSearchResult, DocumentListItem, CreateDocumentRequest, UpdateDocumentRequest } from './document'
 export type { FeedItem, FeedItemType, VerbosityLevel } from './feed'

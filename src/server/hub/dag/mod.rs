@@ -40,7 +40,6 @@ pub fn broadcast_workflow_event(
 
 // ── Submodules ──────────────────────────────────────────────────────────────
 
-pub(crate) mod cavernous;
 pub(crate) mod container;
 pub(crate) mod dag_state;
 pub mod documenter;
@@ -67,7 +66,6 @@ pub use utils::{
 pub use resume::{resume_dag_from_approval, resume_workflow_via_engine};
 
 // Internal imports for the main orchestration loop
-use cavernous::execute_cavernous_step;
 use for_each::{detect_for_each_chains, execute_for_each_chain, execute_for_each_step};
 use room_step::execute_room_step;
 use single::execute_single_step;
@@ -288,7 +286,6 @@ pub async fn execute_workflow_via_engine(
                     iteration_index: None,
                     iteration_label: None,
                     routing_label: None,
-                    selected_routing_document_id: None,
                     upstream_agent_id: None,
                     upstream_routing_label: None,
                     room_session_id: None,
@@ -411,25 +408,6 @@ pub async fn execute_workflow_via_engine(
                 state,
                 ctx,
                 step,
-                steps,
-                edges,
-                &mut var_outputs,
-                &mut completed,
-                &mut completed_envelopes,
-                &port_meta,
-                &mut total_input_tokens,
-                &mut total_output_tokens,
-                &mut total_cost_usd,
-                cancel,
-            )
-            .await
-        } else if step.execution_mode == "cavernous" {
-            execute_cavernous_step(
-                effective_engine,
-                state,
-                ctx,
-                step,
-                &agent,
                 steps,
                 edges,
                 &mut var_outputs,
@@ -670,7 +648,6 @@ async fn execute_documenter_step(
             iteration_index: None,
             iteration_label: None,
             routing_label: None,
-            selected_routing_document_id: None,
             upstream_agent_id: None,
             upstream_routing_label: None,
             room_session_id: None,

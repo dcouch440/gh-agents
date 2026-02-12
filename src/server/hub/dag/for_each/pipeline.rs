@@ -409,7 +409,7 @@ async fn execute_pipeline_item(
                         iteration_index: Some(item_index),
                         iteration_label: label.clone(),
                         routing_label: routing_label.clone(),
-                        selected_routing_document_id: None,
+
                         upstream_agent_id,
                         upstream_routing_label: upstream_routing_label.clone(),
                         room_session_id: None,
@@ -451,7 +451,7 @@ async fn execute_pipeline_item(
                         iteration_index: Some(item_index),
                         iteration_label: label.clone(),
                         routing_label: None,
-                        selected_routing_document_id: None,
+
                         upstream_agent_id,
                         upstream_routing_label: upstream_routing_label.clone(),
                         room_session_id: None,

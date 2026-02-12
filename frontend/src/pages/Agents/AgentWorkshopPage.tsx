@@ -402,27 +402,6 @@ function AgentWorkshopPage() {
     }
   }, [urlSessionId])
 
-  // Sync config changes to session's draft_config (debounced)
-  // Only sync for draft sessions (no agentId)
-  useEffect(() => {
-    if (!state.sessionId || state.agentId) return
-
-    const timeoutId = setTimeout(() => {
-      const draftConfig: DraftConfig = {
-        system_prompt: state.systemPrompt,
-        model_id: getFullModelId(state.modelId),
-        model_max_tokens: state.maxTokens,
-        model_temperature: state.temperature,
-        output_schema_id: state.outputSchemaId,
-      }
-      void api.sessions.updateConfig(state.sessionId, draftConfig)
-    }, 500)
-
-    return () => {
-      clearTimeout(timeoutId)
-    }
-  }, [state.sessionId, state.agentId, state.systemPrompt, state.modelId, state.maxTokens, state.temperature, state.outputSchemaId])
-
   // Warn on unsaved navigation
   useEffect(() => {
     if (!state.dirty) return
@@ -526,14 +505,26 @@ function AgentWorkshopPage() {
           dispatch({ type: 'SET_SAVING', value: false })
         })
     } else {
-      // Create new agent from draft session
-      api.sessions
-        .saveAgent(state.sessionId, {
+      // Create new agent, then link context documents
+      api.agents
+        .create({
           name: state.name.trim(),
-          context_document_ids: state.selectedDocumentIds.length > 0 ? state.selectedDocumentIds : undefined,
+          system_prompt: state.systemPrompt || undefined,
+          model_id: getFullModelId(state.modelId),
+          model_max_tokens: state.maxTokens,
+          model_temperature: state.temperature,
+          output_schema_id: state.outputSchemaId ?? undefined,
         })
-        .then((response) => {
-          dispatch({ type: 'SET_AGENT_ID', agentId: response.agent_id })
+        .then((agent) => {
+          const agentId = agent.id
+          dispatch({ type: 'SET_AGENT_ID', agentId })
+          // Set context documents if any selected
+          if (state.selectedDocumentIds.length > 0) {
+            return api.agents.setContext(agentId, state.selectedDocumentIds).then(() => agentId)
+          }
+          return agentId
+        })
+        .then(() => {
           dispatch({ type: 'SET_DIRTY', value: false })
           // Navigate to session URL if not already there
           if (!urlSessionId) {

@@ -18,7 +18,6 @@ export const STEP_TYPE_COLORS: Record<string, string> = {
   single: '#3b82f6',
   for_each: '#2dd4bf',
   room: '#a78bfa',
-  cavernous: '#f59e0b',
   context: '#10b981',
 }
 
