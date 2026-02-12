@@ -3,11 +3,12 @@ import { WsStoreRouter } from './WsStoreRouter'
 import { sessionStore } from '@/stores/sessionStore'
 import { roomStore } from '@/stores/roomStore'
 import { workflowExecutionStore } from '@/stores/workflowExecutionStore'
+import { workflowStore } from '@/stores/workflowStore'
 import { activityStore } from '@/stores/activity'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-const mockUnsubs = vi.hoisted(() => Array.from({ length: 6 }, () => vi.fn()))
+const mockUnsubs = vi.hoisted(() => Array.from({ length: 7 }, () => vi.fn()))
 const mockSubscribe = vi.hoisted(() => vi.fn())
 
 vi.mock('@/hooks/useWebSocket', () => ({
@@ -29,20 +30,21 @@ describe('WsStoreRouter', () => {
     vi.clearAllMocks()
     mockUnsubs.forEach((fn) => fn.mockClear())
     mockSubscribe.mockReset()
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 7; i++) {
       mockSubscribe.mockReturnValueOnce(mockUnsubs[i])
     }
   })
 
-  it('subscribes to all 3 topics for domain stores + flight recorder (6 total)', () => {
+  it('subscribes to all topics for domain stores + flight recorder (7 total)', () => {
     render(<WsStoreRouter />)
 
-    expect(mockSubscribe).toHaveBeenCalledTimes(6)
+    expect(mockSubscribe).toHaveBeenCalledTimes(7)
 
     // Domain store handlers
     expect(mockSubscribe).toHaveBeenCalledWith('session', sessionStore.handleWsEvent)
     expect(mockSubscribe).toHaveBeenCalledWith('room', roomStore.handleWsEvent)
     expect(mockSubscribe).toHaveBeenCalledWith('workflow', workflowExecutionStore.handleWsEvent)
+    expect(mockSubscribe).toHaveBeenCalledWith('workflow', workflowStore.handleWsEvent)
 
     // Flight recorder handlers
     expect(mockSubscribe).toHaveBeenCalledWith('session', activityStore.handleWsEvent)
@@ -50,7 +52,7 @@ describe('WsStoreRouter', () => {
     expect(mockSubscribe).toHaveBeenCalledWith('workflow', activityStore.handleWsEvent)
   })
 
-  it('unsubscribes all 6 handlers on unmount', () => {
+  it('unsubscribes all 7 handlers on unmount', () => {
     const { unmount } = render(<WsStoreRouter />)
 
     unmount()

@@ -213,8 +213,7 @@ async fn build_step_system_prompt(
                 crate::config::protocols::vars::system::CURRENT_CONFIG.to_string(),
                 snapshot,
             );
-            let resolved =
-                crate::config::protocols::roles::DOCUMENTER_ASSISTANT.resolve(&vars);
+            let resolved = crate::config::protocols::roles::DOCUMENTER_ASSISTANT.resolve(&vars);
 
             Ok(resolved.system_prompt)
         }

@@ -27,6 +27,7 @@ import {
   createDocumentDef,
   deleteDocumentDef,
 } from './documents'
+import { handleWsEvent } from './wsHandler'
 
 export const workflowStore = {
   store,
@@ -68,6 +69,7 @@ export const workflowStore = {
   fetchDocumentDefs,
   createDocumentDef,
   deleteDocumentDef,
+  handleWsEvent,
   setDirty,
   upsert,
 }

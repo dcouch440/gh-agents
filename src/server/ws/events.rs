@@ -133,7 +133,7 @@ impl ServerEvent {
     /// The run ID this event belongs to, for run-scoped filtering.
     pub fn run_id(&self) -> Option<Uuid> {
         match self {
-            Self::Workflow(e) => Some(e.run_id),
+            Self::Workflow(e) => e.run_id,
             Self::Room(e) => e.run_id,
             Self::Session(_) => None,
         }
@@ -154,9 +154,13 @@ impl ServerEvent {
 // ============================================================================
 
 /// Workflow execution lifecycle event.
+///
+/// `run_id` is optional: workflow-run events carry `Some(run_id)` for
+/// run-scoped filtering, while tool-mutation events from interactive
+/// chat sessions use `None` to reach all topic subscribers.
 #[derive(Debug, Clone)]
 pub struct WorkflowEvent {
-    pub run_id: Uuid,
+    pub run_id: Option<Uuid>,
     pub workflow_id: Uuid,
     pub user_id: Option<Uuid>,
     pub kind: WorkflowEventKind,
@@ -224,6 +228,27 @@ pub enum WorkflowEventKind {
     Resumed {
         step_id: Uuid,
     },
+    /// A document definition was created on a step.
+    DocDefCreated {
+        step_id: Uuid,
+        doc_def_id: Uuid,
+        name: String,
+    },
+    /// A document definition was updated on a step.
+    DocDefUpdated {
+        step_id: Uuid,
+        doc_def_id: Uuid,
+        name: String,
+    },
+    /// A document definition was deleted from a step.
+    DocDefDeleted {
+        step_id: Uuid,
+        doc_def_id: Uuid,
+    },
+    /// Step configuration was updated (name, description, prompt).
+    StepConfigUpdated {
+        step_id: Uuid,
+    },
 }
 
 impl WorkflowEvent {
@@ -239,6 +264,10 @@ impl WorkflowEvent {
             WorkflowEventKind::Completed { .. } => "completed",
             WorkflowEventKind::Failed { .. } => "failed",
             WorkflowEventKind::Resumed { .. } => "resumed",
+            WorkflowEventKind::DocDefCreated { .. } => "doc_def_created",
+            WorkflowEventKind::DocDefUpdated { .. } => "doc_def_updated",
+            WorkflowEventKind::DocDefDeleted { .. } => "doc_def_deleted",
+            WorkflowEventKind::StepConfigUpdated { .. } => "step_config_updated",
         }
     }
 
@@ -253,7 +282,7 @@ impl WorkflowEvent {
             topic: Topic::Workflow,
             event: event_name,
             ts: Utc::now(),
-            run_id: Some(self.run_id),
+            run_id: self.run_id,
             user_id: self.user_id,
             data,
         }

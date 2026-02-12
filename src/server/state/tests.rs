@@ -88,7 +88,7 @@ mod tests {
     fn broadcast_workflow_no_panic() {
         let state = make_state();
         state.broadcast_workflow(WorkflowEvent {
-            run_id: Uuid::new_v4(),
+            run_id: Some(Uuid::new_v4()),
             workflow_id: Uuid::new_v4(),
             user_id: None,
             kind: WorkflowEventKind::Started { total_steps: 3 },

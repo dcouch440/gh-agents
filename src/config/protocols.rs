@@ -434,7 +434,9 @@ table has 2.3B rows — migration must be zero-downtime. Mobile push via FCM/APN
         assert!(ctx
             .system_prompt
             .contains("Engineering Constraints (context)"));
-        assert!(ctx.system_prompt.contains("Design Mockups (context) — empty"));
+        assert!(ctx
+            .system_prompt
+            .contains("Design Mockups (context) — empty"));
 
         // Old hardcoded prompt is NOT present
         assert!(

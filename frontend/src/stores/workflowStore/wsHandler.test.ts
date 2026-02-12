@@ -1,0 +1,95 @@
+import type { WsWireMessage } from '@/types/ws'
+import { handleWsEvent } from './wsHandler'
+import { store } from './_store'
+
+// ── Mocks ────────────────────────────────────────────────────────────────────
+
+const mockFetchDocumentDefs = vi.hoisted(() => vi.fn())
+vi.mock('./documents', () => ({
+  fetchDocumentDefs: mockFetchDocumentDefs,
+}))
+
+const mockGetStep = vi.hoisted(() => vi.fn())
+vi.mock('@/api', () => ({
+  api: {
+    workflows: {
+      getStep: mockGetStep,
+    },
+  },
+}))
+
+const makeMsg = (event: string, data: Record<string, unknown>): WsWireMessage => ({
+  topic: 'workflow',
+  event,
+  ts: '2025-01-01T00:00:00Z',
+  run_id: null,
+  user_id: null,
+  data,
+})
+
+// ── Tests ────────────────────────────────────────────────────────────────────
+
+describe('workflowStore/wsHandler', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    store.setState({ activeWorkflowId: 'wf-1', dirtyStepIds: new Set<string>() })
+  })
+
+  describe('doc_def_created', () => {
+    it('refetches doc defs for active workflow', () => {
+      handleWsEvent(makeMsg('doc_def_created', { workflow_id: 'wf-1', step_id: 'step-1', doc_def_id: 'def-1', name: 'API Docs' }))
+      expect(mockFetchDocumentDefs).toHaveBeenCalledWith('step-1')
+    })
+
+    it('ignores events for a different workflow', () => {
+      handleWsEvent(makeMsg('doc_def_created', { workflow_id: 'wf-other', step_id: 'step-1', doc_def_id: 'def-1', name: 'X' }))
+      expect(mockFetchDocumentDefs).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('doc_def_updated', () => {
+    it('refetches doc defs for active workflow', () => {
+      handleWsEvent(makeMsg('doc_def_updated', { workflow_id: 'wf-1', step_id: 'step-2', doc_def_id: 'def-2', name: 'Guide' }))
+      expect(mockFetchDocumentDefs).toHaveBeenCalledWith('step-2')
+    })
+  })
+
+  describe('doc_def_deleted', () => {
+    it('refetches doc defs for active workflow', () => {
+      handleWsEvent(makeMsg('doc_def_deleted', { workflow_id: 'wf-1', step_id: 'step-1', doc_def_id: 'def-1' }))
+      expect(mockFetchDocumentDefs).toHaveBeenCalledWith('step-1')
+    })
+  })
+
+  describe('step_config_updated', () => {
+    it('calls getStep for active workflow', () => {
+      const mockStep = { id: 'step-1', name: 'Documenter', prompt_template: 'Write docs' }
+      mockGetStep.mockResolvedValueOnce(mockStep)
+
+      handleWsEvent(makeMsg('step_config_updated', { workflow_id: 'wf-1', step_id: 'step-1' }))
+
+      expect(mockGetStep).toHaveBeenCalledWith('wf-1', 'step-1')
+    })
+
+    it('ignores events for a different workflow', () => {
+      handleWsEvent(makeMsg('step_config_updated', { workflow_id: 'wf-other', step_id: 'step-1' }))
+      expect(mockGetStep).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('unknown events', () => {
+    it('does not crash on unrecognized events', () => {
+      expect(() => handleWsEvent(makeMsg('started', { workflow_id: 'wf-1', total_steps: 5 }))).not.toThrow()
+      expect(mockFetchDocumentDefs).not.toHaveBeenCalled()
+      expect(mockGetStep).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('no active workflow', () => {
+    it('ignores events when no workflow is active', () => {
+      store.setState({ activeWorkflowId: null })
+      handleWsEvent(makeMsg('doc_def_created', { workflow_id: 'wf-1', step_id: 'step-1', doc_def_id: 'def-1', name: 'X' }))
+      expect(mockFetchDocumentDefs).not.toHaveBeenCalled()
+    })
+  })
+})
