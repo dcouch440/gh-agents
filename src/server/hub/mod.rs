@@ -223,6 +223,20 @@ async fn build_step_system_prompt(
 
             (roles::NODE_ASSISTANT_DOCUMENTER_BLOCK.to_string(), snapshot)
         }
+        "task_force" => {
+            let ctx = crate::server::tools::task_force::TaskForceToolContext {
+                workflow_id,
+                step_id,
+            };
+            let snapshot = crate::server::tools::task_force::build_config_snapshot(
+                state.repos().workflows.as_ref(),
+                &ctx,
+            )
+            .await
+            .map_err(|e| HubError::Internal(anyhow::anyhow!("{}", e)))?;
+
+            (roles::NODE_ASSISTANT_TASK_FORCE_BLOCK.to_string(), snapshot)
+        }
         _ => (String::new(), String::new()),
     };
 

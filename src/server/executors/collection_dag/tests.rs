@@ -333,6 +333,51 @@ mod tests {
             async fn delete_document_def(&self, _: Uuid) -> Result<()> {
                 unimplemented!()
             }
+            // Task force stubs
+            async fn get_mission_brief(
+                &self,
+                _: Uuid,
+            ) -> Result<Option<crate::db::TaskMissionBriefRow>> {
+                unimplemented!()
+            }
+            async fn upsert_mission_brief(
+                &self,
+                _: Uuid,
+                _: &str,
+                _: &[String],
+                _: &str,
+                _: Option<String>,
+            ) -> Result<crate::db::TaskMissionBriefRow> {
+                unimplemented!()
+            }
+            async fn list_agent_roster(
+                &self,
+                _: Uuid,
+            ) -> Result<Vec<crate::db::TaskAgentRosterRow>> {
+                unimplemented!()
+            }
+            async fn add_roster_agent(
+                &self,
+                _: Uuid,
+                _: &str,
+                _: &str,
+                _: &[String],
+                _: i32,
+            ) -> Result<crate::db::TaskAgentRosterRow> {
+                unimplemented!()
+            }
+            async fn update_roster_agent(
+                &self,
+                _: Uuid,
+                _: Option<String>,
+                _: Option<String>,
+                _: Option<Vec<String>>,
+            ) -> Result<crate::db::TaskAgentRosterRow> {
+                unimplemented!()
+            }
+            async fn remove_roster_agent(&self, _: Uuid) -> Result<()> {
+                unimplemented!()
+            }
         }
 
         // Create test data

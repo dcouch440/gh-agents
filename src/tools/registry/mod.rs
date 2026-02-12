@@ -56,6 +56,14 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "set_node_name" => Some(set_node_name_tool()),
         "set_node_description" => Some(set_node_description_tool()),
 
+        // Task force archetype tools (6)
+        "set_task" => Some(set_task_tool()),
+        "add_agent" => Some(add_agent_tool()),
+        "update_agent" => Some(update_agent_tool()),
+        "remove_agent" => Some(remove_agent_tool()),
+        "set_capabilities" => Some(set_capabilities_tool()),
+        "set_failure_mode" => Some(set_failure_mode_tool()),
+
         _ => None,
     }
 }
@@ -620,6 +628,138 @@ fn set_node_description_tool() -> Tool {
                 }
             },
             "required": ["description"]
+        }),
+    }
+}
+
+// ============================================================================
+// Task Force Archetype Tool Definitions
+// ============================================================================
+
+fn set_task_tool() -> Tool {
+    Tool {
+        name: "set_task".into(),
+        description: "Set the mission description for this task force node. Describes what the team of agents should accomplish.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "description": "What the task force should accomplish"
+                }
+            },
+            "required": ["description"]
+        }),
+    }
+}
+
+fn add_agent_tool() -> Tool {
+    Tool {
+        name: "add_agent".into(),
+        description: "Add an agent to the task force roster. Each agent has a name, role, and capabilities that determine what tools they can use at runtime.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Agent name (e.g., 'Scanner', 'Developer', 'Tester')"
+                },
+                "role": {
+                    "type": "string",
+                    "description": "What this agent does in the mission"
+                },
+                "capabilities": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Tool capabilities: file_read, file_write, grep, shell, git, github_api, web_search, database_query"
+                }
+            },
+            "required": ["name"]
+        }),
+    }
+}
+
+fn update_agent_tool() -> Tool {
+    Tool {
+        name: "update_agent".into(),
+        description:
+            "Update an existing agent in the task force roster. Only provided fields are changed."
+                .into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "agent_id": {
+                    "type": "string",
+                    "description": "ID of the agent to update"
+                },
+                "name": {
+                    "type": "string",
+                    "description": "New agent name"
+                },
+                "role": {
+                    "type": "string",
+                    "description": "New role description"
+                },
+                "capabilities": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "New capabilities list (replaces existing)"
+                }
+            },
+            "required": ["agent_id"]
+        }),
+    }
+}
+
+fn remove_agent_tool() -> Tool {
+    Tool {
+        name: "remove_agent".into(),
+        description: "Remove an agent from the task force roster.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "agent_id": {
+                    "type": "string",
+                    "description": "ID of the agent to remove"
+                }
+            },
+            "required": ["agent_id"]
+        }),
+    }
+}
+
+fn set_capabilities_tool() -> Tool {
+    Tool {
+        name: "set_capabilities".into(),
+        description: "Set the available capabilities for the task force. These determine what tools agents can be assigned.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "capabilities": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Available capabilities: file_read, file_write, grep, shell, git, github_api, web_search, database_query"
+                }
+            },
+            "required": ["capabilities"]
+        }),
+    }
+}
+
+fn set_failure_mode_tool() -> Tool {
+    Tool {
+        name: "set_failure_mode".into(),
+        description: "Set how the task force handles agent failures during execution.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "type": "string",
+                    "enum": ["fail_fast", "skip_and_continue", "retry"],
+                    "description": "fail_fast: stop on first failure. skip_and_continue: skip failed agent, continue with rest. retry: retry the failed agent."
+                }
+            },
+            "required": ["mode"]
         }),
     }
 }

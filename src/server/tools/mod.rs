@@ -5,6 +5,7 @@
 
 pub mod documenter;
 pub mod node_assistant;
+pub mod task_force;
 
 use serde_json::{json, Value};
 

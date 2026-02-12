@@ -183,6 +183,11 @@ impl ChatStrategy {
             "update_config" => WorkflowEventKind::StepConfigUpdated {
                 step_id: ctx.step_id,
             },
+            // Task force tools — all emit StepConfigUpdated for frontend refetch
+            "set_task" | "add_agent" | "update_agent" | "remove_agent" | "set_capabilities"
+            | "set_failure_mode" => WorkflowEventKind::StepConfigUpdated {
+                step_id: ctx.step_id,
+            },
             _ => return,
         };
 
@@ -436,6 +441,14 @@ fn resolve_step_tools(execution_mode: &str) -> Vec<Tool> {
             "delete_doc_def",
             "update_config",
         ],
+        "task_force" => &[
+            "set_task",
+            "add_agent",
+            "update_agent",
+            "remove_agent",
+            "set_capabilities",
+            "set_failure_mode",
+        ],
         _ => &[],
     };
     UNIVERSAL_TOOLS
@@ -491,6 +504,31 @@ async fn dispatch_step_tool(
                     step_id: ctx.step_id,
                 };
                 let result = crate::server::tools::documenter::execute_documenter_tool(
+                    name,
+                    input,
+                    state.repos().workflows.as_ref(),
+                    &tool_ctx,
+                )
+                .await;
+                return Some(result);
+            }
+            None
+        }
+        "task_force" => {
+            const TASK_FORCE_TOOLS: &[&str] = &[
+                "set_task",
+                "add_agent",
+                "update_agent",
+                "remove_agent",
+                "set_capabilities",
+                "set_failure_mode",
+            ];
+            if TASK_FORCE_TOOLS.contains(&name) {
+                let tool_ctx = crate::server::tools::task_force::TaskForceToolContext {
+                    workflow_id: ctx.workflow_id,
+                    step_id: ctx.step_id,
+                };
+                let result = crate::server::tools::task_force::execute_task_force_tool(
                     name,
                     input,
                     state.repos().workflows.as_ref(),
