@@ -103,11 +103,12 @@ impl ChatStrategy {
         }
     }
 
-    /// Broadcast a workflow event when a documenter tool mutates data.
+    /// Broadcast a workflow event when a step tool mutates data.
     ///
-    /// Only emits if the step context is present and the tool result
-    /// indicates success (no `"error"` key in the JSON).
-    fn broadcast_documenter_event(&self, name: &str, input: &Value, result: &Value) {
+    /// Handles both universal tools (archetype, name, description) and
+    /// archetype-specific tools (doc defs, config). Only emits if the
+    /// step context is present and the tool result indicates success.
+    fn broadcast_step_event(&self, name: &str, input: &Value, result: &Value) {
         let Some(ref ctx) = self.step_context else {
             return;
         };
@@ -118,6 +119,28 @@ impl ChatStrategy {
         }
 
         let kind = match name {
+            // Universal tools
+            "set_node_archetype" => {
+                let archetype = result["archetype"]
+                    .as_str()
+                    .unwrap_or("unknown")
+                    .to_string();
+                WorkflowEventKind::ArchetypeChanged {
+                    step_id: ctx.step_id,
+                    archetype,
+                }
+            }
+            "set_node_name" => {
+                let step_name = result["name"].as_str().unwrap_or("").to_string();
+                WorkflowEventKind::StepNameUpdated {
+                    step_id: ctx.step_id,
+                    name: step_name,
+                }
+            }
+            "set_node_description" => WorkflowEventKind::StepConfigUpdated {
+                step_id: ctx.step_id,
+            },
+            // Documenter-specific tools
             "create_doc_def" => {
                 let doc_def_id = result["id"]
                     .as_str()
@@ -262,7 +285,7 @@ impl ExecutionStrategy for ChatStrategy {
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {
         if let Some(ref ctx) = self.step_context {
             if let Some(value) = dispatch_step_tool(name, input, &self.state, ctx).await {
-                self.broadcast_documenter_event(name, input, &value);
+                self.broadcast_step_event(name, input, &value);
                 return value;
             }
         }
@@ -394,23 +417,40 @@ impl ExecutionStrategy for ChatStrategy {
 
 // ── Step tool helpers ────────────────────────────────────────────────────────
 
+/// Universal tools available to all archetypes.
+const UNIVERSAL_TOOLS: &[&str] = &[
+    "set_node_archetype",
+    "set_node_name",
+    "set_node_description",
+    "think",
+];
+
 /// Resolve tool definitions by step execution mode.
+///
+/// Always includes universal tools alongside archetype-specific ones.
 fn resolve_step_tools(execution_mode: &str) -> Vec<Tool> {
-    let tool_names: &[&str] = match execution_mode {
+    let archetype_specific: &[&str] = match execution_mode {
         "documenter" => &[
             "create_doc_def",
             "update_doc_def",
             "delete_doc_def",
             "update_config",
-            "think",
         ],
-        _ => &["think"],
+        _ => &[],
     };
-    tool_names
+    UNIVERSAL_TOOLS
         .iter()
+        .chain(archetype_specific.iter())
         .filter_map(|name| crate::tools::registry::get_tool_definition(name))
         .collect()
 }
+
+/// Universal tool names handled by node_assistant.
+const NODE_ASSISTANT_TOOLS: &[&str] = &[
+    "set_node_archetype",
+    "set_node_name",
+    "set_node_description",
+];
 
 /// Try to dispatch a tool call to a step-specific handler.
 /// Returns `Some(result)` if handled, `None` to fall through to generic tools.
@@ -420,6 +460,23 @@ async fn dispatch_step_tool(
     state: &AppState,
     ctx: &StepChatContext,
 ) -> Option<Value> {
+    // Universal tools (all archetypes)
+    if NODE_ASSISTANT_TOOLS.contains(&name) {
+        let tool_ctx = crate::server::tools::node_assistant::StepToolContext {
+            workflow_id: ctx.workflow_id,
+            step_id: ctx.step_id,
+        };
+        let result = crate::server::tools::node_assistant::execute_node_assistant_tool(
+            name,
+            input,
+            state.repos().workflows.as_ref(),
+            &tool_ctx,
+        )
+        .await;
+        return Some(result);
+    }
+
+    // Archetype-specific dispatch
     match ctx.execution_mode.as_str() {
         "documenter" => {
             const DOCUMENTER_TOOLS: &[&str] = &[

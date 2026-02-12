@@ -133,6 +133,8 @@ pub mod vars {
         pub const AVAILABLE_CAPABILITIES: &str = "System.available_capabilities";
         pub const CONTEXT_DOCUMENTS_INSTRUCTION: &str = "System.context_documents_instruction";
         pub const CURRENT_CONFIG: &str = "System.current_config";
+        pub const GRAPH_CONTEXT: &str = "System.graph_context";
+        pub const ARCHETYPE_BLOCK: &str = "System.archetype_block";
     }
 }
 
@@ -150,6 +152,13 @@ pub static DOCUMENTER: Lazy<ProtocolConfig> = Lazy::new(|| {
 pub static MEETING: Lazy<ProtocolConfig> = Lazy::new(|| {
     serde_yaml::from_str(include_str!("../../config/protocols/meeting/config.yaml"))
         .expect("Failed to parse config/protocols/meeting/config.yaml")
+});
+
+pub static NODE_ASSISTANT: Lazy<ProtocolConfig> = Lazy::new(|| {
+    serde_yaml::from_str(include_str!(
+        "../../config/protocols/node_assistant/config.yaml"
+    ))
+    .expect("Failed to parse config/protocols/node_assistant/config.yaml")
 });
 
 // ---------------------------------------------------------------------------
@@ -192,6 +201,16 @@ pub mod roles {
             "../../config/protocols/meeting/gatekeeper/response.json"
         )),
     };
+
+    pub static NODE_ASSISTANT_BASE: RoleDefinition = RoleDefinition {
+        system: include_str!("../../config/protocols/node_assistant/base/system.md"),
+        prompt: include_str!("../../config/protocols/node_assistant/base/prompt.md"),
+        response: None,
+    };
+
+    /// Documenter archetype block, injected via `{{.System.archetype_block}}`.
+    pub const NODE_ASSISTANT_DOCUMENTER_BLOCK: &str =
+        include_str!("../../config/protocols/node_assistant/documenter/block.md");
 }
 
 // ---------------------------------------------------------------------------
@@ -334,6 +353,54 @@ mod tests {
         assert!(!roles::MEETING_GATEKEEPER.system.is_empty());
         assert!(!roles::MEETING_GATEKEEPER.prompt.is_empty());
         assert!(roles::MEETING_GATEKEEPER.response.is_some());
+
+        assert!(!roles::NODE_ASSISTANT_BASE.system.is_empty());
+        assert!(!roles::NODE_ASSISTANT_BASE.prompt.is_empty());
+        assert!(roles::NODE_ASSISTANT_BASE.response.is_none());
+
+        assert!(!roles::NODE_ASSISTANT_DOCUMENTER_BLOCK.is_empty());
+    }
+
+    #[test]
+    fn node_assistant_config_parses() {
+        let cfg = &*NODE_ASSISTANT;
+        let assistant = cfg.agent("assistant");
+        assert_eq!(assistant.temperature, 0.4);
+        assert_eq!(assistant.max_rounds, 15);
+        assert_eq!(assistant.context_budget, 480_000);
+    }
+
+    #[test]
+    fn node_assistant_base_resolves_with_archetype_block() {
+        let mut vars = HashMap::new();
+        vars.insert(
+            vars::system::GRAPH_CONTEXT.to_string(),
+            "Nodes: A -> B -> [SELECTED] C".to_string(),
+        );
+        vars.insert(
+            vars::system::ARCHETYPE_BLOCK.to_string(),
+            roles::NODE_ASSISTANT_DOCUMENTER_BLOCK.to_string(),
+        );
+        vars.insert(vars::system::CURRENT_CONFIG.to_string(), String::new());
+
+        let ctx = roles::NODE_ASSISTANT_BASE.resolve(&vars);
+        assert!(
+            ctx.system_prompt
+                .contains("workflow configuration assistant"),
+            "should contain base identity"
+        );
+        assert!(
+            ctx.system_prompt.contains("Nodes: A -> B -> [SELECTED] C"),
+            "should contain graph context"
+        );
+        assert!(
+            ctx.system_prompt.contains("archetype_context"),
+            "should contain documenter block"
+        );
+        assert!(
+            ctx.system_prompt.contains("three-phase pipeline"),
+            "should contain documenter details"
+        );
     }
 
     #[test]
@@ -464,6 +531,8 @@ table has 2.3B rows — migration must be zero-downtime. Mobile push via FCM/APN
             vars::system::AVAILABLE_CAPABILITIES,
             vars::system::CONTEXT_DOCUMENTS_INSTRUCTION,
             vars::system::CURRENT_CONFIG,
+            vars::system::GRAPH_CONTEXT,
+            vars::system::ARCHETYPE_BLOCK,
         ]);
 
         let all_roles: &[(&str, &RoleDefinition)] = &[
@@ -472,6 +541,7 @@ table has 2.3B rows — migration must be zero-downtime. Mobile push via FCM/APN
             ("writer", &roles::DOCUMENTER_WRITER),
             ("assistant", &roles::DOCUMENTER_ASSISTANT),
             ("gatekeeper", &roles::MEETING_GATEKEEPER),
+            ("node_assistant", &roles::NODE_ASSISTANT_BASE),
         ];
 
         let re = regex::Regex::new(r"\{\{\.([^}]+)\}\}").unwrap();

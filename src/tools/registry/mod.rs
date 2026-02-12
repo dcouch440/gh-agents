@@ -51,6 +51,11 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "delete_doc_def" => Some(delete_doc_def_tool()),
         "update_config" => Some(update_config_tool()),
 
+        // Universal node assistant tools (3)
+        "set_node_archetype" => Some(set_node_archetype_tool()),
+        "set_node_name" => Some(set_node_name_tool()),
+        "set_node_description" => Some(set_node_description_tool()),
+
         _ => None,
     }
 }
@@ -559,6 +564,62 @@ fn update_config_tool() -> Tool {
                 }
             },
             "required": []
+        }),
+    }
+}
+
+// ============================================================================
+// Universal Node Assistant Tool Definitions
+// ============================================================================
+
+fn set_node_archetype_tool() -> Tool {
+    Tool {
+        name: "set_node_archetype".into(),
+        description: "Set the archetype (execution mode) for this node. This determines what the node does and which tools are available.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "archetype": {
+                    "type": "string",
+                    "enum": ["documenter", "task_force", "belief_capture", "room"],
+                    "description": "The archetype to apply to this node"
+                }
+            },
+            "required": ["archetype"]
+        }),
+    }
+}
+
+fn set_node_name_tool() -> Tool {
+    Tool {
+        name: "set_node_name".into(),
+        description: "Set the display name for this node on the workflow canvas.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Display name for the node"
+                }
+            },
+            "required": ["name"]
+        }),
+    }
+}
+
+fn set_node_description_tool() -> Tool {
+    Tool {
+        name: "set_node_description".into(),
+        description: "Set the description for this node. Helps other assistants and users understand what the node does.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "description": "What this node does in the workflow"
+                }
+            },
+            "required": ["description"]
         }),
     }
 }

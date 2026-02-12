@@ -4,6 +4,7 @@
 //! and structured output validation.
 
 pub mod documenter;
+pub mod node_assistant;
 
 use serde_json::{json, Value};
 

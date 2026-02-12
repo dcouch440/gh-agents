@@ -62,11 +62,11 @@ mod tests {
     }
 
     // ========================================================================
-    // broadcast_documenter_event
+    // broadcast_step_event
     // ========================================================================
 
     #[test]
-    fn broadcast_documenter_event_emits_on_create_success() {
+    fn broadcast_step_event_emits_on_create_success() {
         let state = make_state();
         let mut rx = state.events().subscribe();
 
@@ -98,7 +98,7 @@ mod tests {
             "target_length": 1500,
         });
 
-        strategy.broadcast_documenter_event("create_doc_def", &input, &result);
+        strategy.broadcast_step_event("create_doc_def", &input, &result);
 
         let event = rx.try_recv().unwrap();
         match event {
@@ -123,7 +123,7 @@ mod tests {
     }
 
     #[test]
-    fn broadcast_documenter_event_skips_on_error() {
+    fn broadcast_step_event_skips_on_error() {
         let state = make_state();
         let mut rx = state.events().subscribe();
 
@@ -147,13 +147,13 @@ mod tests {
         let input = serde_json::json!({});
         let result = serde_json::json!({ "error": "Missing required parameter: name" });
 
-        strategy.broadcast_documenter_event("create_doc_def", &input, &result);
+        strategy.broadcast_step_event("create_doc_def", &input, &result);
 
         assert!(rx.try_recv().is_err());
     }
 
     #[test]
-    fn broadcast_documenter_event_noop_without_step_context() {
+    fn broadcast_step_event_noop_without_step_context() {
         let state = make_state();
         let mut rx = state.events().subscribe();
 
@@ -172,8 +172,142 @@ mod tests {
         let input = serde_json::json!({});
         let result = serde_json::json!({ "id": Uuid::new_v4().to_string() });
 
-        strategy.broadcast_documenter_event("create_doc_def", &input, &result);
+        strategy.broadcast_step_event("create_doc_def", &input, &result);
 
         assert!(rx.try_recv().is_err());
+    }
+
+    // ========================================================================
+    // resolve_step_tools
+    // ========================================================================
+
+    #[test]
+    fn resolve_step_tools_documenter_includes_universal_and_archetype() {
+        let tools = super::super::resolve_step_tools("documenter");
+        let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
+
+        // Universal tools
+        assert!(names.contains(&"set_node_archetype"));
+        assert!(names.contains(&"set_node_name"));
+        assert!(names.contains(&"set_node_description"));
+        assert!(names.contains(&"think"));
+
+        // Documenter-specific tools
+        assert!(names.contains(&"create_doc_def"));
+        assert!(names.contains(&"update_doc_def"));
+        assert!(names.contains(&"delete_doc_def"));
+        assert!(names.contains(&"update_config"));
+    }
+
+    #[test]
+    fn resolve_step_tools_blank_returns_universal_only() {
+        let tools = super::super::resolve_step_tools("");
+        let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
+
+        assert!(names.contains(&"set_node_archetype"));
+        assert!(names.contains(&"set_node_name"));
+        assert!(names.contains(&"set_node_description"));
+        assert!(names.contains(&"think"));
+
+        // No archetype-specific tools
+        assert!(!names.contains(&"create_doc_def"));
+        assert!(!names.contains(&"update_config"));
+    }
+
+    // ========================================================================
+    // broadcast_step_event — universal tools
+    // ========================================================================
+
+    #[test]
+    fn broadcast_step_event_emits_archetype_changed() {
+        let state = make_state();
+        let mut rx = state.events().subscribe();
+
+        let step_id = Uuid::new_v4();
+        let workflow_id = Uuid::new_v4();
+        let strategy = ChatStrategy::with_step_context(
+            ChatConfig {
+                system_prompt: "sys".into(),
+                model_id: "m".into(),
+                ..Default::default()
+            },
+            state,
+            UserId::new(),
+            None,
+            Uuid::new_v4(),
+            StepChatContext {
+                workflow_id,
+                step_id,
+                execution_mode: "single".into(),
+            },
+        );
+
+        let input = serde_json::json!({ "archetype": "documenter" });
+        let result = serde_json::json!({
+            "archetype": "documenter",
+            "step_id": step_id.to_string(),
+        });
+
+        strategy.broadcast_step_event("set_node_archetype", &input, &result);
+
+        let event = rx.try_recv().unwrap();
+        match event {
+            ServerEvent::Workflow(e) => match e.kind {
+                WorkflowEventKind::ArchetypeChanged {
+                    step_id: sid,
+                    archetype,
+                } => {
+                    assert_eq!(sid, step_id);
+                    assert_eq!(archetype, "documenter");
+                }
+                other => panic!("Expected ArchetypeChanged, got {:?}", other),
+            },
+            other => panic!("Expected Workflow event, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn broadcast_step_event_emits_step_name_updated() {
+        let state = make_state();
+        let mut rx = state.events().subscribe();
+
+        let step_id = Uuid::new_v4();
+        let workflow_id = Uuid::new_v4();
+        let strategy = ChatStrategy::with_step_context(
+            ChatConfig {
+                system_prompt: "sys".into(),
+                model_id: "m".into(),
+                ..Default::default()
+            },
+            state,
+            UserId::new(),
+            None,
+            Uuid::new_v4(),
+            StepChatContext {
+                workflow_id,
+                step_id,
+                execution_mode: "single".into(),
+            },
+        );
+
+        let input = serde_json::json!({ "name": "My Node" });
+        let result = serde_json::json!({
+            "name": "My Node",
+            "step_id": step_id.to_string(),
+        });
+
+        strategy.broadcast_step_event("set_node_name", &input, &result);
+
+        let event = rx.try_recv().unwrap();
+        match event {
+            ServerEvent::Workflow(e) => match e.kind {
+                WorkflowEventKind::StepNameUpdated { step_id: sid, name } => {
+                    assert_eq!(sid, step_id);
+                    assert_eq!(name, "My Node");
+                }
+                other => panic!("Expected StepNameUpdated, got {:?}", other),
+            },
+            other => panic!("Expected Workflow event, got {:?}", other),
+        }
     }
 }
