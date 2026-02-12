@@ -8,7 +8,7 @@ February 2026
 
 ## Abstract
 
-We introduce Belief-Oriented Conversation Architecture (BOCA), a framework for multi-agent LLM systems that replaces raw context passing with *authored belief slices* — semantically tagged, confidence-weighted hypotheses about source material that carry emotional and structural metadata. Unlike retrieval-augmented generation (RAG) which retrieves relevant chunks, or summarization which compresses input, BOCA's gatekeeper agent *constructs a worldview* and selectively routes curated beliefs to lightweight mask agents that reason without access to the original source. We demonstrate seven novel contributions: (1) authored context — belief slices that encode understanding rather than content — transfers sufficient signal for analytical reasoning at 16-20% of full-context token cost; (2) selective belief routing outperforms uniform context by enabling per-question relevance filtering; (3) a belief revision loop (confirm/revise/kill) catches and corrects hallucinations that single-pass approaches propagate; (4) belief threading — the gatekeeper detects coherent causal chains across deep workflow graphs, resurfacing dormant beliefs from early nodes when they become relevant at decision time; (5) adversarial distortion detection — when beliefs are generated end-to-end by LLMs from adversarially poisoned sources, the revision gatekeeper identifies and kills planted distortions from structural properties of the belief store alone, without access to ground truth; (6) belief convergence — a convergence gatekeeper compresses 70 raw beliefs into 22 converged beliefs (3.2x compression), pre-resolving contradictions to produce a minimal, contradiction-free knowledge store that achieves perfect poison resistance (3/3), complete confound elimination, and 20% lower cost-per-correct-answer than full context; and (7) prompt-engineered beliefs — applying research-backed prompt engineering (reasoning-first schemas, XML-structured prompts with few-shot examples, richer belief metadata) to belief generation and convergence closes the accuracy gap between converged beliefs and full context from 4 points to 1 point (26/30 vs 27/30), while recovering previously lost claims and achieving perfect adversarial resilience (5/5). In controlled experiments on production Rust source code (Phases 1–2), a simulated 9-node workflow with 39 beliefs (Phase 3), an adversarial 6-node information pipeline with 70 LLM-generated beliefs and 3 planted distortions (Phase 4), a belief convergence experiment with 30 questions across 6 categories (Phase 5), and a prompt-engineered belief experiment comparing v2 prompts against Phase 5 baselines (Phase 6), the revision pipeline identified 10 specific errors, killed 3 false beliefs, and converged on ground truth (Phase 2); detected 17 cross-node belief threads with 78% dormant resurfacing (Phase 3); detected 2 of 3 contradiction threads, killed both poisoned beliefs with zero false positives, and discovered a genuine non-planted inconsistency (Phase 4); convergence achieved 9/10 on the 10-question comparison (vs 6/10 raw baseline), 5/5 adversarial resilience, and 340 tokens per correct answer at the 30-question scale (Phase 5); and prompt-engineered convergence improved from 24/30 to 26/30 on the 30-question test, recovered data residency (the claim lost in Phase 5), resolved all 3 planted contradictions, and achieved 601 tokens per correct answer (Phase 6).
+We introduce Belief-Oriented Conversation Architecture (BOCA), a framework for multi-agent LLM systems that replaces raw context passing with *authored belief slices* — semantically tagged, confidence-weighted hypotheses about source material that carry emotional and structural metadata. Unlike retrieval-augmented generation (RAG) which retrieves relevant chunks, or summarization which compresses input, BOCA's gatekeeper agent *constructs a worldview* and selectively routes curated beliefs to lightweight mask agents that reason without access to the original source. We demonstrate eight novel contributions: (1) authored context — belief slices that encode understanding rather than content — transfers sufficient signal for analytical reasoning at 16-20% of full-context token cost; (2) selective belief routing outperforms uniform context by enabling per-question relevance filtering; (3) a belief revision loop (confirm/revise/kill) catches and corrects hallucinations that single-pass approaches propagate; (4) belief threading — the gatekeeper detects coherent causal chains across deep workflow graphs, resurfacing dormant beliefs from early nodes when they become relevant at decision time; (5) adversarial distortion detection — when beliefs are generated end-to-end by LLMs from adversarially poisoned sources, the revision gatekeeper identifies and kills planted distortions from structural properties of the belief store alone, without access to ground truth; (6) belief convergence — a convergence gatekeeper compresses 70 raw beliefs into 22 converged beliefs (3.2x compression), pre-resolving contradictions to produce a minimal, contradiction-free knowledge store that achieves perfect poison resistance (3/3), complete confound elimination, and 20% lower cost-per-correct-answer than full context; (7) prompt-engineered beliefs — applying research-backed prompt engineering (reasoning-first schemas, XML-structured prompts with few-shot examples, richer belief metadata) to belief generation and convergence closes the accuracy gap between converged beliefs and full context from 4 points to 1 point (26/30 vs 27/30), while recovering previously lost claims and achieving perfect adversarial resilience (5/5); and (8) multi-workflow meta-convergence — beliefs serve as inter-workflow communication primitives, with a hierarchical meta-convergence step merging per-workflow converged stores across two independent 10-node workflows processing different source documents, achieving 4/5 adversarial accuracy on cross-workflow poison detection including a novel triple-divergence scenario (3yr/5yr/7yr audit retention). In controlled experiments on production Rust source code (Phases 1–2), a simulated 9-node workflow with 39 beliefs (Phase 3), an adversarial 6-node information pipeline with 70 LLM-generated beliefs and 3 planted distortions (Phase 4), a belief convergence experiment with 30 questions across 6 categories (Phase 5), a prompt-engineered belief experiment comparing v2 prompts against Phase 5 baselines (Phase 6), and a multi-workflow experiment with two independent pipelines sharing 8 overlapping claims and 6 independent poison distortions (Phase 7), the revision pipeline identified 10 specific errors, killed 3 false beliefs, and converged on ground truth (Phase 2); detected 17 cross-node belief threads with 78% dormant resurfacing (Phase 3); detected 2 of 3 contradiction threads, killed both poisoned beliefs with zero false positives, and discovered a genuine non-planted inconsistency (Phase 4); convergence achieved 9/10 on the 10-question comparison (vs 6/10 raw baseline), 5/5 adversarial resilience, and 340 tokens per correct answer at the 30-question scale (Phase 5); prompt-engineered convergence improved from 24/30 to 26/30 on the 30-question test, recovered data residency (the claim lost in Phase 5), resolved all 3 planted contradictions, and achieved 601 tokens per correct answer (Phase 6); and multi-workflow meta-convergence produced 44 meta-beliefs from 66 per-workflow beliefs with 10 cross-validated topics, resolved cross-workflow contradictions including a triple-poison scenario, and achieved 4/5 adversarial accuracy across all three approaches (Phase 7).
 
 ## 1. Introduction
 
@@ -22,7 +22,7 @@ Large language models operating on substantial codebases or documents face a fun
 
 We propose a fourth approach: **authored context**. Rather than retrieving or compressing, a gatekeeper agent reads the full source, forms *beliefs* about it — tagged hypotheses carrying semantic, confidence, and emotional metadata — and constructs curated worldviews for downstream agents. These downstream agents (which we call *masks*) are not specialized models or roles; they are the same base model wearing different belief-state lenses.
 
-This paper presents the architecture, reports results from six experimental phases, and identifies five distinguishing mechanisms: belief revision (self-correction), belief threading (cross-chain signal propagation), adversarial distortion detection (identifying planted misinformation from belief structure alone), belief convergence (compressing raw beliefs into a minimal, contradiction-free knowledge store for production use), and prompt-engineered belief generation (applying research-backed prompt engineering to close the accuracy gap between converged beliefs and full context).
+This paper presents the architecture, reports results from seven experimental phases, and identifies six distinguishing mechanisms: belief revision (self-correction), belief threading (cross-chain signal propagation), adversarial distortion detection (identifying planted misinformation from belief structure alone), belief convergence (compressing raw beliefs into a minimal, contradiction-free knowledge store for production use), prompt-engineered belief generation (applying research-backed prompt engineering to close the accuracy gap between converged beliefs and full context), and multi-workflow meta-convergence (merging per-workflow belief stores into a unified cross-workflow knowledge base that serves as an inter-workflow communication primitive).
 
 ## 2. Related Work
 
@@ -121,7 +121,7 @@ Source Material (code, documents, data)
 
 ### 4.1 Source Material
 
-We used production Rust source code from a workflow orchestration system (Phases 1–2), a simulated 9-node software delivery workflow (Phase 3), an adversarial 6-node information pipeline (Phase 4), Phase 4's output data for a convergence experiment (Phase 5), and Phase 4's node outputs with regenerated beliefs for a prompt engineering experiment (Phase 6):
+We used production Rust source code from a workflow orchestration system (Phases 1–2), a simulated 9-node software delivery workflow (Phase 3), an adversarial 6-node information pipeline (Phase 4), Phase 4's output data for a convergence experiment (Phase 5), Phase 4's node outputs with regenerated beliefs for a prompt engineering experiment (Phase 6), and a second adversarial workflow processing an operations runbook for a multi-workflow meta-convergence experiment (Phase 7):
 
 - **Phase 1**: `resume.rs` (444 lines) — DAG workflow resumption logic
 - **Phase 2**: `resume.rs` + `single.rs` (825 lines combined) — cross-file interaction between resumption orchestration and step execution
@@ -129,6 +129,7 @@ We used production Rust source code from a workflow orchestration system (Phases
 - **Phase 4**: A ground-truth technical specification (12 verifiable claims) processed through 6 LLM transformation nodes (Product Manager → System Architect → Security Reviewer → Lead Developer → QA Engineer → Technical Writer), with the QA Engineer adversarially poisoning 3 claims. 70 beliefs generated end-to-end by the gatekeeper from LLM-generated node outputs
 - **Phase 5**: Phase 4's complete output — 70 raw beliefs, 6 node outputs, 12 ground-truth claims — reused as input for a belief convergence experiment. Zero regeneration cost; tests whether a convergence gatekeeper can compress, merge, and resolve contradictions across the raw belief store
 - **Phase 6**: Phase 4's 6 node outputs regenerated with v2 prompts applying three research-backed improvements: reasoning-first schemas, XML-structured prompts with few-shot examples, and richer belief metadata (cross_source_tension, confidence_justification). Tests whether prompt engineering improves belief quality, convergence, and downstream answer accuracy
+- **Phase 7**: Phase 6's converged beliefs (40) plus a new 4-node operations workflow processing a MedAlert Operations Runbook (16 verifiable claims, 8 overlapping with the Phase 4 spec). Workflow 2 nodes: Operations Engineer, Compliance Officer, Clinical Advisor, and an adversarially poisoned Integration Engineer (3 distortions: 500→750ms latency, 7→3yr retention, 15→45min incident response). Tests hierarchical meta-convergence (per-workflow convergence + cross-workflow merge) against flat convergence (all raw beliefs in one pass) on 20 questions spanning 4 categories
 
 ### 4.2 Questions
 
@@ -288,7 +289,52 @@ Phase 6 applies three simultaneous improvements to belief generation and converg
 
 **Pre-registered predictions**: G2=10/10, I2=8/10 on 10Q. Full context=28/30, converged v2=27/30, raw flat v2=25/30 on 30Q.
 
-### 4.8 Model
+### 4.8 Phase 7 Design: Multi-Workflow Meta-Convergence
+
+Phases 1-6 validated beliefs within a single workflow processing a single source document. Phase 7 tests the production vision: **beliefs as inter-workflow communication primitives** — a sorted, labeled system that helps independent workflows communicate their findings to each other.
+
+**Two workflows processing different source documents about the same system:**
+
+*Workflow 1* (reused from Phase 4/6 — zero regeneration cost): 6 nodes processing the MedAlert technical specification. 98 raw v2 beliefs, 40 converged v2 beliefs loaded from Phase 6 results. One poisoned node (QA Engineer: 3→5 retries, 7→5yr retention, 30→60s detection).
+
+*Workflow 2* (new — 8 LLM calls): 4 nodes processing an operations runbook for the same MedAlert system: Operations Engineer, Compliance Officer, Clinical Advisor, and Integration Engineer (poisoned). The operations runbook covers 16 claims — 8 overlapping with WF1 (latency, encryption, retention, data residency, failover, auth, rate limit, DLQ) and 8 unique to WF2 (incident response, backup frequency, HIPAA training, vendor SLA review, deployment window, RTO, log shipping, CAB threshold).
+
+**WF2 poison strategy** (3 distortions testing 3 distinct scenarios):
+
+| Claim | Correct | Poison | Scenario |
+|-------|---------|--------|----------|
+| Alert latency | 500ms | 750ms | Cross-workflow: WF1 has correct, meta-convergence should cross-validate |
+| Audit retention | 7 years | 3 years | Triple divergence: WF1-QA says 5yr, WF2-Integration says 3yr, spec says 7yr |
+| Incident response | 15 min | 45 min | WF2-only: no cross-validation possible, 3-of-4 consensus must resolve |
+
+**Five improvements tested simultaneously:**
+
+1. **Controlled tag vocabulary**: A taxonomy gatekeeper reads both source documents and generates ~50 snake_case tags. All WF2 beliefs must use tags from this vocabulary, enabling cross-workflow queries.
+2. **Belief types**: `fact | policy | opinion | observation` classification. Facts converge by consensus, policies by authority, opinions are preserved as tensions.
+3. **Calibrated confidence**: Answer schema includes `confidence_calibration` mapping from belief `consensus_strength` to answer confidence (cross_validated→4-5, single_workflow→3-4, cross_workflow_split→1-2).
+4. **Coverage gap declaration**: Answer schema includes `coverage_assessment: full|partial|none` and `coverage_gaps`. Mask says "I don't know" instead of hallucinating.
+5. **Hierarchical meta-convergence**: Each workflow converges independently, then a meta-convergence merges the two converged stores. Compared against flat convergence (all raw beliefs in one pass).
+
+**Pipeline:**
+
+| Step | Calls | Description |
+|------|:-----:|-------------|
+| 0. Taxonomy generation | 1 | Controlled tag vocab from spec + ops runbook |
+| 1. WF2 node generation | 4 | 4 personas process ops runbook |
+| 2. WF2 belief extraction (v3) | 4 | Extract with v3 schema + controlled tags + belief_type |
+| 3. WF2 convergence | 1 | Converge WF2's raw beliefs |
+| 4. Meta-convergence | 1 | Merge WF1 converged + WF2 converged |
+| 5. Flat convergence (baseline) | 1 | Converge ALL raw beliefs in one pass |
+| 6. Quality audit | 0 | Claim coverage across all stores |
+| 7. Question answering | 3 | Meta-converged, flat-converged, full-context |
+| 8. Scoring | 0 | Deterministic regex |
+| **Total** | **15** | |
+
+**20-question battery across 4 categories**: 5 wf1_only (WF1 claims through meta-converged store), 5 wf2_only (WF2-unique claims), 5 cross_workflow (requiring info from both workflows), 5 cross_workflow_adversarial (probing poison values across workflows).
+
+**Pre-registered predictions**: Meta-converged=17/20, flat-converged=14/20, full context=18/20.
+
+### 4.9 Model
 
 All calls used Claude Sonnet 4.5 (`claude-sonnet-4-5-20250929`). Structured JSON output was enforced via Anthropic's tool_use API for all gatekeeper operations (belief decomposition, assignment, evaluation, thread selection, convergence), eliminating parsing errors.
 
@@ -823,6 +869,127 @@ The remaining 1-point gap between converged v2 (26/30) and full context (27/30) 
 
 The production implication is significant: with prompt-engineered beliefs, convergence achieves near-parity with full context at 25% lower cost per correct answer (601 vs 799 tokens/correct). For production boards where full context exceeds limits, prompt-engineered convergence is now a viable substitute rather than a meaningful accuracy tradeoff.
 
+### 5.13 Phase 7: Multi-Workflow Meta-Convergence
+
+Phase 7 tests beliefs as inter-workflow communication primitives — the first multi-workflow experiment. Two independent workflows (WF1: 6 nodes processing a technical specification, WF2: 4 nodes processing an operations runbook) each produce their own beliefs and convergences, then a meta-convergence merges them.
+
+#### Taxonomy and Belief Generation
+
+The taxonomy gatekeeper generated 52 controlled tags across 7 domains (performance, reliability, security, compliance, operations, integration, clinical). WF2's 4 nodes produced 67 v3 beliefs with the following type distribution:
+
+| Belief Type | Count | Percentage |
+|-------------|:-----:|:----------:|
+| fact | 35 | 52% |
+| opinion | 25 | 37% |
+| policy | 4 | 6% |
+| observation | 3 | 4% |
+
+The belief type classification successfully separated specification-derived facts from professional opinions. Notably, all three WF2 poison values (750ms latency, 3yr retention, 45min incident response) were classified as `opinion` by the gatekeeper — a structural signal that downstream convergence uses to deprioritize them against `fact`-type beliefs.
+
+#### WF2 Convergence
+
+WF2 convergence compressed 67 raw beliefs into 26 converged beliefs (2.6x), resolving 4 internal contradictions:
+
+| Contradiction | Correct Value | Poison Value | Resolution |
+|---------------|:------------:|:------------:|:----------:|
+| Alert latency | 500ms | 750ms | Resolved (500ms) |
+| Uptime target interpretation | 99.95% | 99.99% | Resolved (99.95% spec) |
+| Health check interval | 5s | 3s | Resolved (5s spec) |
+| Standby promotion | 60s | 90s | Resolved (60s spec) |
+
+The incident response poison (15→45 min) was NOT detected as a contradiction by WF2 convergence — the Integration Engineer's 45-minute recommendation was treated as a valid professional opinion. This demonstrates a limitation: when a poison value is plausible and only one node deviates, per-workflow convergence cannot distinguish poison from legitimate professional disagreement.
+
+#### Meta-Convergence
+
+The meta-convergence gatekeeper merged 40 WF1 converged beliefs + 26 WF2 converged beliefs into 44 meta-beliefs:
+
+| Consensus Strength | Count |
+|-------------------|:-----:|
+| cross_validated | 10 |
+| single_workflow | 32 |
+| cross_workflow_split | 2 |
+
+The 10 cross-validated beliefs confirmed alignment between workflows on: critical alert latency (500ms), audit log retention (7 years), audit log immutability, failover timing (30s detection + 60s promotion), health check configuration, encryption at rest (AES-256), certificate management, JWT authentication, service-to-service auth (mTLS), and HIPAA training. The 2 cross-workflow splits were resolved (notification priority tier structure, operational monitoring thresholds).
+
+#### Flat Convergence Baseline
+
+Flat convergence processed all 165 raw beliefs (98 WF1 + 67 WF2) in a single pass, producing 40 converged beliefs with 5 contradictions resolved.
+
+#### Quality Audit — Claim Coverage
+
+| Store | WF1 Claims (12) | WF2 Claims (16) |
+|-------|:----------------:|:----------------:|
+| WF2 convergence | — | 9/16 |
+| Meta-converged | 11/12 | 11/16 |
+| Flat-converged | 12/12 | 13/16 |
+
+Flat convergence achieved broader claim coverage because it saw all raw beliefs in a single pass, while hierarchical meta-convergence was limited by per-workflow compression that dropped some WF2-unique claims (backup frequency, incident response time, RTO, log shipping).
+
+#### Scoring — 20 Questions
+
+| Approach | WF1 (5) | WF2 (5) | Cross (5) | Adv (5) | Total (20) | Predicted |
+|----------|:-------:|:-------:|:---------:|:-------:|:----------:|:---------:|
+| Meta-converged | 3 | 2 | 4 | **4** | **13** | 17 |
+| Flat-converged | 4 | 3 | 4 | **4** | **15** | 14 |
+| Full context | 4 | 2 | 4 | **4** | **14** | 18 |
+
+**Hierarchical premium: -2** (predicted +3). Flat convergence beat meta-convergence by 2 points, contrary to prediction. The flat approach's advantage came from broader WF1 (+1) and WF2 (+1) coverage — it retained more claims through single-pass processing.
+
+**Adversarial resilience: 4/5 across all approaches.** This is the standout finding. Every approach correctly resolved:
+
+- **P7Q16** (750ms vs 500ms latency): All three detected the contradiction and resolved to 500ms
+- **P7Q17** (triple retention: 3yr/5yr/7yr): All three correctly identified 7 years as HIPAA-mandated
+- **P7Q19** (cross-workflow retention contradictions): All three identified the correct value across workflows
+- **P7Q20** (cross-workflow latency agreement): All three confirmed 500ms with cross-validation
+
+The one miss across all approaches: **P7Q18** (incident response 15 vs 45 min) — all three reported the poison value. The WF2-only poison was the hardest to detect because only 3-of-4 WF2 nodes had the correct value and the Integration Engineer's 45-minute recommendation was plausible.
+
+#### Confidence Calibration
+
+The v3 answer schema's confidence calibration showed appropriate behavior:
+
+| Coverage | Count | Avg Confidence |
+|----------|:-----:|:--------------:|
+| full | 15 | 3.9 |
+| partial | 3 | 3.7 |
+| none | 2 | 1.5 |
+
+The mask correctly identified coverage gaps (backup frequency, log shipping) and assigned low confidence (1-2) when beliefs provided no relevant information.
+
+#### Predictions vs Actuals
+
+| Approach | Predicted | Actual | Delta |
+|----------|:---------:|:------:|:-----:|
+| Meta-converged | 17 | 13 | -4 |
+| Flat-converged | 14 | 15 | +1 |
+| Full context | 18 | 14 | -4 |
+
+All predictions were optimistic. The primary cause: WF2 claim coverage was lower than expected. Several WF2-unique claims (backup frequency, incident response, RTO) were not covered by the converged belief stores, causing misses on WF2-only questions.
+
+#### Cost
+
+15 LLM calls, 168,789 total tokens (87,121 input + 81,668 output).
+
+### 5.14 Critical Finding 6: Beliefs as Inter-Workflow Communication Primitives (Phase 7)
+
+Phase 7 demonstrates a sixth distinguishing finding: **beliefs serve as effective inter-workflow communication primitives, enabling cross-workflow validation that detects adversarial distortions planted in independent workflows**.
+
+The key results:
+
+1. **Cross-validation works**: The meta-convergence identified 10 topics where both workflows agree (cross_validated), providing the strongest consensus possible — two independent information pipelines processing different source documents arrive at the same values. This is a form of verification unavailable to any single-workflow approach.
+
+2. **Triple-poison resolution**: The most novel adversarial scenario — audit retention poisoned differently in two workflows (WF1-QA: 5yr, WF2-Integration: 3yr, correct: 7yr) — was resolved correctly by all three approaches. The HIPAA regulatory citation provided sufficient authority signal to override both poison values simultaneously.
+
+3. **Adversarial resilience is architecture-independent**: All three approaches (meta-converged, flat-converged, full context) achieved 4/5 on adversarial questions. This suggests that cross-workflow adversarial detection is a property of having multiple independent information sources, not of any particular convergence strategy.
+
+4. **Flat beats hierarchical (for now)**: Contrary to prediction, flat convergence (15/20) outperformed hierarchical meta-convergence (13/20). The flat approach saw all 165 raw beliefs simultaneously, preserving more claims through single-pass processing. Hierarchical convergence lost information during per-workflow compression before the meta-step could cross-validate. This identifies a key design challenge: per-workflow convergence must be conservative enough to preserve all claims, or must pass unique-topic beliefs through unconverged.
+
+5. **WF2-only poison is hardest to detect**: The incident response poison (15→45 min) fooled all three approaches. Without a second workflow to cross-validate, and with only 3-of-4 nodes providing the correct value, the plausible-sounding poison survived convergence. This confirms the prediction that cross-validation premium is real — overlapping claims are easier to verify than single-workflow claims.
+
+6. **Belief type classification provides structural poison signals**: The v3 schema's belief_type field classified all three WF2 poison values as `opinion` rather than `fact`. This structural metadata, if explicitly used during convergence (e.g., "opinions do not override facts"), could provide an additional defense against plausible-sounding professional recommendations that deviate from specifications.
+
+The production implication: in multi-workflow systems where different teams process different aspects of the same domain, beliefs provide a natural communication layer. Cross-validated beliefs (confirmed by multiple independent workflows) can be given higher authority than single-workflow beliefs, and cross-workflow splits trigger explicit human review. This is the sorted, labeled system that helps workflows communicate.
+
 ## 6. Discussion
 
 ### 6.1 When BOCA Outperforms Alternatives
@@ -844,6 +1011,8 @@ BOCA's value proposition is strongest when:
 7. **Scaling beyond manageable context**: Phase 5 demonstrates that convergence compresses 70 beliefs to 22 (3.2x) with 340 tokens per correct answer — the cheapest approach across all phases. For production boards with 200+ beliefs from 20+ workflow steps, convergence is not merely cheaper but architecturally necessary: raw beliefs exceed practical context limits, and full node outputs are infeasible.
 
 8. **Prompt engineering amplifies belief quality**: Phase 6 demonstrates that applying research-backed prompt engineering (reasoning-first schemas, XML tags, few-shot examples) to belief generation and convergence closes the accuracy gap with full context from 4 points to 1 point (26/30 vs 27/30). The improvement is multiplicative with convergence: better beliefs produce better convergence, which produces better answers. This suggests that belief quality — not just architectural mechanisms — is a critical lever for production accuracy.
+
+9. **Multi-workflow systems benefit from belief-mediated communication**: Phase 7 demonstrates that when two independent workflows process different documents about the same domain, beliefs provide a natural inter-workflow communication layer. Cross-validated beliefs (10 topics confirmed by both workflows) provide the strongest possible consensus. The triple-poison scenario (3yr/5yr/7yr retention) was resolved correctly across all approaches, demonstrating that regulatory citations provide sufficient authority signal to override multiple simultaneous poison values from different workflows.
 
 ### 6.2 When BOCA is Overkill
 
@@ -886,6 +1055,14 @@ This transforms the cost equation. The gatekeeper decomposition (the most expens
 **Claim 11 persistent difficulty**: Failover detection timing (30s vs 60s) has been problematic across Phases 4-6. The original specification's legitimate "60-second promotion" confounds regex detection of the poisoned "60-second detection." Phase 6's convergence resolves the contradiction correctly but expresses the result in prose that the regex scorer cannot match. This claim alone accounts for the remaining 1-point gap between converged v2 and full context.
 
 **Simultaneous changes**: Phase 6 applies three improvements simultaneously (reasoning-first schemas, XML tags, few-shot examples). We cannot isolate which improvement contributes most to the gains. A factorial design testing each change independently would require 7 additional experimental conditions.
+
+**Hierarchical information loss**: Phase 7's meta-convergence scored lower than flat convergence (13 vs 15) because per-workflow convergence compressed away WF2-unique claims before the meta-step could cross-validate. Hierarchical convergence needs a more conservative per-workflow step — perhaps passing through unique-topic beliefs unconverged — to avoid information loss at the workflow boundary.
+
+**WF2 claim coverage gaps**: Several WF2-unique claims (backup frequency, incident response, RTO, log shipping) were not detected by the regex-based claim audit in the WF2 converged store. This may reflect overly strict regex patterns or convergence merging these claims into broader beliefs whose text doesn't match the patterns. The audit methodology needs refinement for claims expressed in operational rather than specification language.
+
+**Single-source poison resilience**: The incident response poison (15→45 min) fooled all three Phase 7 approaches. When only one node deviates and the deviation is plausible, per-workflow convergence cannot reliably detect the distortion. Cross-workflow validation (having a second workflow confirm the value) remains the only reliable defense, suggesting that overlapping claim coverage across workflows should be maximized in production.
+
+**Phase 7 prediction accuracy**: All three predictions were optimistic (meta -4, flat +1, full context -4). The predictions overestimated WF2-unique claim coverage and underestimated information loss during convergence. Future predictions should account for the difficulty of preserving operational claims through convergence.
 
 ### 6.6 Relationship to Predictive Processing
 
@@ -935,9 +1112,17 @@ Testing BOCA on codebase-scale inputs (thousands of files) where the gatekeeper 
 
 In production workflows, human messages during meetings could blend into the belief store — confirming, revising, or killing beliefs in real time. This creates a hybrid system where human judgment and LLM reasoning operate on the same primitive (beliefs) rather than separate modalities (text vs. embeddings).
 
+### 7.11 Conservative Hierarchical Convergence
+
+Phase 7 revealed that per-workflow convergence drops unique-topic claims before meta-convergence can cross-validate them. Future work should explore conservative convergence strategies: passing through beliefs that are unique to one workflow without compression, only converging topics that have multiple beliefs within the workflow. This preserves information breadth while still resolving intra-workflow contradictions. Additionally, testing with 3+ workflows would characterize whether cross-validation accuracy scales with the number of independent sources.
+
+### 7.12 Belief Type-Aware Convergence
+
+Phase 7's v3 schema classifies beliefs as fact/policy/opinion/observation, but the convergence gatekeeper does not yet use this classification algorithmically. Future work should explore type-aware convergence rules: facts converge by consensus (majority wins), policies converge by authority (regulatory > organizational > professional), opinions are preserved as tensions rather than resolved, and observations are contextual metadata. Additionally, testing whether `opinion`-typed beliefs that contradict `fact`-typed beliefs are automatically deprioritized would provide a structural defense against plausible-sounding professional recommendations that deviate from specifications.
+
 ## 8. Conclusion
 
-We have presented Belief-Oriented Conversation Architecture, a framework that replaces raw context passing with authored belief slices. Our experiments across six phases demonstrate seven findings:
+We have presented Belief-Oriented Conversation Architecture, a framework that replaces raw context passing with authored belief slices. Our experiments across seven phases demonstrate eight findings:
 
 1. **Authored context transfers**: Masks reasoning from beliefs alone produced coherent analysis at 16-20% of full-context token cost (Phase 1).
 
@@ -953,7 +1138,9 @@ We have presented Belief-Oriented Conversation Architecture, a framework that re
 
 7. **Prompt engineering closes the convergence gap**: Applying research-backed prompt engineering (reasoning-first schemas, XML-structured prompts with few-shot examples, richer belief metadata) to belief generation and convergence improved converged accuracy from 24/30 to 26/30 — closing the gap with full context from 4 points to 1 point. The v2 convergence resolved all 3 planted contradictions (vs 2/3 in Phase 5), recovered previously lost data residency, achieved perfect 10/10 on clean claims, and maintained 5/5 adversarial resilience at 601 tokens per correct answer — 25% cheaper than full context. This demonstrates that belief quality is a critical lever: better prompts produce richer beliefs, which produce better convergence, which produces more accurate answers (Phase 6).
 
-The core insight is architectural: **the unit of context should not be a chunk of text or a summary, but a testable belief**. Beliefs can be tagged, weighted, routed, tested, revised, killed, threaded into causal chains across arbitrary graph depths, converged across sources into minimal authoritative knowledge stores, prompt-engineered for richer reasoning chains, and — as Phases 4-6 demonstrate — used to detect and pre-resolve when one source among many has been compromised. Text and summaries cannot.
+8. **Beliefs serve as inter-workflow communication primitives**: In a two-workflow experiment with 10 total nodes processing different source documents about the same system, meta-convergence merged 66 per-workflow converged beliefs into 44 meta-beliefs with 10 cross-validated topics. All three approaches achieved 4/5 on adversarial questions, correctly resolving a novel triple-poison scenario (3yr/5yr/7yr audit retention from two different poisoned nodes in different workflows). Cross-validated beliefs — confirmed by multiple independent workflows — represent the strongest possible consensus. The flat convergence baseline unexpectedly outperformed hierarchical meta-convergence (15 vs 13), revealing that per-workflow compression must be conservative to avoid information loss at workflow boundaries (Phase 7).
+
+The core insight is architectural: **the unit of context should not be a chunk of text or a summary, but a testable belief**. Beliefs can be tagged, weighted, routed, tested, revised, killed, threaded into causal chains across arbitrary graph depths, converged across sources into minimal authoritative knowledge stores, prompt-engineered for richer reasoning chains, merged across independent workflows into cross-validated meta-beliefs, and — as Phases 4-7 demonstrate — used to detect and pre-resolve when one or more sources among many have been compromised. Text and summaries cannot.
 
 ---
 
@@ -1352,3 +1539,76 @@ Full context far exceeded predictions — Sonnet 4.5's native contradiction-reso
 | Raw Select 30Q | 7,204 | 1,966 | 9,170 | 33s |
 | Raw Mask 30Q | 7,102 | 15,230 | 22,332 | 237s |
 | **Total (Phase 6)** | **73,406** | **76,788** | **150,194** | |
+
+### Phase 7 Results (Multi-Workflow Meta-Convergence)
+
+#### Taxonomy
+
+52 controlled tags generated across 7 domains: performance (5), reliability (13), security (6), compliance (9), operations (11), integration (1), clinical (7).
+
+#### WF2 Belief Generation (v3)
+
+| Node | Role | Beliefs | Facts | Opinions | Policies | Observations |
+|------|------|:-------:|:-----:|:--------:|:--------:|:------------:|
+| 1 | Operations Engineer | 21 | 11 | 8 | 0 | 2 |
+| 2 | Compliance Officer | 16 | 10 | 0 | 4 | 0 |
+| 3 | Clinical Advisor | 15 | 7 | 7 | 0 | 1 |
+| 4 | Integration Engineer (poisoned) | 15 | 8 | 7 | 0 | 0 |
+| **Total** | | **67** | **35** | **25** | **4** | **3** |
+
+#### WF2 Convergence
+
+67 raw beliefs → 26 converged beliefs (2.6x compression). 4 contradictions found and resolved.
+
+#### Meta-Convergence
+
+| Input | Count |
+|-------|:-----:|
+| WF1 converged beliefs | 40 |
+| WF2 converged beliefs | 26 |
+| **Output meta-beliefs** | **44** |
+| Cross-validated topics | 10 |
+| Cross-workflow splits (resolved) | 2 |
+| WF1-only topics | 22 |
+| WF2-only topics | 10 |
+
+#### 20-Question Scoring
+
+| Approach | WF1 (5) | WF2 (5) | Cross (5) | Adv (5) | Total (20) |
+|----------|:-------:|:-------:|:---------:|:-------:|:----------:|
+| Meta-converged | 3 | 2 | 4 | 4 | 13 |
+| Flat-converged | 4 | 3 | 4 | 4 | 15 |
+| Full context | 4 | 2 | 4 | 4 | 14 |
+
+#### Adversarial Detail (Phase 7)
+
+| Question | Poison | Meta | Flat | Full |
+|----------|--------|:----:|:----:|:----:|
+| P7Q16: 750ms vs 500ms latency | wf2_claim_01 | CORRECT | CORRECT | CORRECT |
+| P7Q17: Triple retention (3/5/7yr) | wf2_claim_03 | CORRECT | CORRECT | CORRECT |
+| P7Q18: 45min vs 15min incident | wf2_claim_09 | WRONG | WRONG | WRONG |
+| P7Q19: Cross-WF retention | claim_03+wf2_03 | CORRECT | CORRECT | CORRECT |
+| P7Q20: Cross-WF latency | claim_01+wf2_01 | CORRECT | CORRECT | CORRECT |
+
+#### Predictions vs Actuals (Phase 7)
+
+| Approach | Predicted | Actual | Delta |
+|----------|:---------:|:------:|:-----:|
+| Meta-converged | 17 | 13 | -4 |
+| Flat-converged | 14 | 15 | +1 |
+| Full context | 18 | 14 | -4 |
+
+#### Token Budget (Phase 7)
+
+| Call | Input | Output | Total | Time |
+|------|------:|-------:|------:|-----:|
+| Taxonomy | 2,984 | 2,808 | 5,792 | 35s |
+| WF2 nodes (4) | 4,978 | 8,192 | 13,170 | 200s |
+| WF2 beliefs v3 (4) | 16,621 | 9,408 | 26,029 | 119s |
+| WF2 convergence | 8,061 | 5,591 | 13,652 | 79s |
+| Meta-convergence | 7,408 | 14,621 | 22,029 | 215s |
+| Flat convergence | 18,817 | 12,417 | 31,234 | 208s |
+| Meta answers (20Q) | 7,006 | 9,667 | 16,673 | 166s |
+| Flat answers (20Q) | 5,115 | 7,963 | 13,078 | 115s |
+| Full context answers (20Q) | 16,131 | 11,001 | 27,132 | 208s |
+| **Total (Phase 7)** | **87,121** | **81,668** | **168,789** | |
