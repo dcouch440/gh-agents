@@ -34,3 +34,5 @@ node_modules/
 *.dylib
 *.dll
 Hey
+
+/proto/.venv

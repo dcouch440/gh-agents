@@ -44,11 +44,12 @@ const computeProtocolGroups = (
     const protocolType = protocolInfo?.protocol_type ?? step?.execution_mode ?? 'default'
     const color = PROTOCOL_TYPE_COLORS[protocolType] ?? GREYSCALE_ACCENT
 
-    // BFS from protocol step
+    // BFS from protocol step (index-based queue for O(1) dequeue)
     const visited = new Set<string>([protocolId])
     const queue = [protocolId]
-    while (queue.length > 0) {
-      const current = queue.shift()!
+    let head = 0
+    while (head < queue.length) {
+      const current = queue[head++]!
       const neighbors = adjacency.get(current)
       if (!neighbors) continue
       for (const neighbor of neighbors) {

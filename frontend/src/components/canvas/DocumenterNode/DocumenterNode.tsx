@@ -1,4 +1,4 @@
-import { memo, useState, useCallback, useEffect } from 'react'
+import { memo, useState, useCallback } from 'react'
 import { Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 
@@ -40,10 +40,6 @@ function DocumenterNodeComponent({ id, data, selected }: NodeProps) {
   const upstreamStepNames = nodeData.upstreamStepNames
 
   const documentDefs = useStore(workflowStore.store, workflowStore.selectStepDocumentDefs(id))
-
-  useEffect(() => {
-    void workflowStore.fetchDocumentDefs(id)
-  }, [id])
 
   const handlePromptChange = useCallback(
     (value: string) => {

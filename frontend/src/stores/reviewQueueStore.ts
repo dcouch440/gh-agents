@@ -4,6 +4,7 @@
 
 import { createStore, extractError } from './lib'
 import { api } from '@/api'
+import { Collections } from '@/utils/collections'
 import type { AgentExecution } from '@/types/execution'
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -46,7 +47,7 @@ const fetchPending = async (): Promise<void> => {
     const executions = await api.agentExecutions.list({ status: 'awaiting_user' })
     store.setState({
       executions,
-      executionIds: new Set(executions.map((e) => e.id)),
+      executionIds: Collections.toSetBy(executions, (e) => e.id),
       loading: false,
       error: null,
     })

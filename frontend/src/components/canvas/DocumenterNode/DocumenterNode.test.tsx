@@ -150,9 +150,9 @@ describe('DocumenterNode', () => {
     expect(screen.getByText('No documents')).toBeInTheDocument()
   })
 
-  it('fetches document defs on mount', () => {
+  it('does not fetch document defs (parent canvas handles this)', () => {
     render(<DocumenterNode {...baseProps} />)
-    expect(mockFetchDocumentDefs).toHaveBeenCalledWith('step-doc-001')
+    expect(mockFetchDocumentDefs).not.toHaveBeenCalled()
   })
 
   describe('tab switching', () => {

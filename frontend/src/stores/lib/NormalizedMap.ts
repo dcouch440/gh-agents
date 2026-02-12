@@ -2,6 +2,8 @@
 // NormalizedMap — Immutable Map with Memoized Array Conversion
 // ============================================================================
 
+import { Collections } from '@/utils/collections'
+
 type NormalizedMap<T> = {
   readonly byId: ReadonlyMap<string, T>
   _array: T[] | null
@@ -17,7 +19,7 @@ const createNormalizedMap = <T>(): NormalizedMap<T> => ({
 })
 
 const nmFromArray = <T extends { id: string }>(items: T[]): NormalizedMap<T> => ({
-  byId: new Map(items.map((item) => [item.id, item])),
+  byId: Collections.indexById(items),
   _array: items,
   _version: 0,
 })
