@@ -83,6 +83,51 @@ async fn handle_message(
     msg: ConsumerMessage,
 ) -> anyhow::Result<()> {
     let message_id = msg.id;
+
+    // Check if this is a step-scoped session — route to run_step_chat
+    if let Some(session_id) = msg.session_id {
+        if let Ok(Some(session)) = state.repo().get_session(session_id).await {
+            if let Some(ref dc) = session.draft_config {
+                if let (Some(step_id_str), Some(wf_id_str)) = (
+                    dc.get("step_id").and_then(|v| v.as_str()),
+                    dc.get("workflow_id").and_then(|v| v.as_str()),
+                ) {
+                    if let (Ok(step_id), Ok(workflow_id)) = (
+                        uuid::Uuid::parse_str(step_id_str),
+                        uuid::Uuid::parse_str(wf_id_str),
+                    ) {
+                        match crate::server::hub::run_step_chat(
+                            state,
+                            provider,
+                            session_id,
+                            workflow_id,
+                            step_id,
+                            message_id,
+                            &msg.content,
+                            msg.user_id,
+                            None,
+                        )
+                        .await
+                        {
+                            Ok(_) => {}
+                            Err(e) => {
+                                warn!("Step chat error for {}: {}", message_id, e);
+                                state.send_stream_chunk(
+                                    message_id,
+                                    StreamChunk::Error(format!("{}", e)),
+                                );
+                                state.send_stream_chunk(message_id, StreamChunk::Done);
+                            }
+                        }
+                        crate::server::hub::schedule_stream_cleanup(state, message_id);
+                        return Ok(());
+                    }
+                }
+            }
+        }
+    }
+
+    // Existing agent chat path
     let agent_id = msg.agent_id.or(state.default_agent_id());
 
     match agent_id {

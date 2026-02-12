@@ -5,7 +5,7 @@ pub mod dag_step;
 pub mod documenter;
 pub mod room_speaker;
 
-pub use chat::{ChatConfig, ChatStrategy};
+pub use chat::{ChatConfig, ChatStrategy, StepChatContext};
 pub use dag_step::DagStepStrategy;
 pub use documenter::{
     DocumenterCoordinatorStrategy, DocumenterResearchStrategy, DocumenterWriterStrategy,

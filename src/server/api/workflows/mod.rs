@@ -6,6 +6,7 @@ pub mod document_handlers;
 pub mod edge_handlers;
 pub mod execution_handlers;
 pub mod run_handlers;
+pub mod step_chat_handlers;
 pub mod step_handlers;
 pub mod workflow_handlers;
 
@@ -15,6 +16,7 @@ pub use edge_handlers::{
 };
 pub use execution_handlers::list_workflow_executions;
 pub use run_handlers::run_workflow;
+pub use step_chat_handlers::{clear_step_messages, get_or_create_step_session};
 pub use step_handlers::{
     create_workflow_step, delete_workflow_step, get_workflow_step, list_workflow_steps,
     update_workflow_step,

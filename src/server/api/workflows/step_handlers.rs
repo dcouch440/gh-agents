@@ -287,6 +287,16 @@ pub async fn delete_workflow_step(
     if existing.workflow_id != p.wid {
         return Err(AppError::not_found("Step"));
     }
+    // Clean up any associated chat session
+    if let Ok(Some(session)) = state.repo().find_session_by_step_id(p.sid).await {
+        let _ = state.repo().delete_session(session.id).await;
+        state.broadcast_session(crate::server::ws::events::SessionEvent {
+            session_id: session.id,
+            user_id: Some(auth.user_id.0),
+            kind: crate::server::ws::events::SessionEventKind::Deleted,
+        });
+    }
+
     repo.delete_step(p.sid).await?;
     Ok(StatusCode::NO_CONTENT)
 }

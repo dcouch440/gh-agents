@@ -41,6 +41,17 @@ impl Default for ChatConfig {
     }
 }
 
+/// Optional context for step-scoped chat sessions.
+///
+/// When present, `execute_tool` routes step-specific tools to the
+/// appropriate dispatcher (e.g., documenter tools) instead of
+/// generic server tools.
+pub struct StepChatContext {
+    pub workflow_id: Uuid,
+    pub step_id: Uuid,
+    pub execution_mode: String,
+}
+
 /// Strategy for interactive chat sessions.
 ///
 /// Loads session history, executes server tools (agent management, docs, etc.),
@@ -51,6 +62,7 @@ pub struct ChatStrategy {
     user_id: UserId,
     session_id: Option<Uuid>,
     message_id: Uuid,
+    step_context: Option<StepChatContext>,
 }
 
 impl ChatStrategy {
@@ -67,6 +79,26 @@ impl ChatStrategy {
             user_id,
             session_id,
             message_id,
+            step_context: None,
+        }
+    }
+
+    /// Create a ChatStrategy with step context for step-scoped chat sessions.
+    pub fn with_step_context(
+        config: ChatConfig,
+        state: AppState,
+        user_id: UserId,
+        session_id: Option<Uuid>,
+        message_id: Uuid,
+        step_context: StepChatContext,
+    ) -> Self {
+        Self {
+            config,
+            state,
+            user_id,
+            session_id,
+            message_id,
+            step_context: Some(step_context),
         }
     }
 }
@@ -78,6 +110,9 @@ impl ExecutionStrategy for ChatStrategy {
     }
 
     fn tools(&self) -> Vec<Tool> {
+        if let Some(ref ctx) = self.step_context {
+            return resolve_step_tools(&ctx.execution_mode);
+        }
         tools::filtered_tools(&self.config.tool_names)
     }
 
@@ -156,6 +191,11 @@ impl ExecutionStrategy for ChatStrategy {
     }
 
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {
+        if let Some(ref ctx) = self.step_context {
+            if let Some(value) = dispatch_step_tool(name, input, &self.state, ctx).await {
+                return value;
+            }
+        }
         tools::execute_tool(name, input, &self.state, self.user_id, self.session_id).await
     }
 
@@ -279,6 +319,62 @@ impl ExecutionStrategy for ChatStrategy {
         }
 
         Ok(())
+    }
+}
+
+// ── Step tool helpers ────────────────────────────────────────────────────────
+
+/// Resolve tool definitions by step execution mode.
+fn resolve_step_tools(execution_mode: &str) -> Vec<Tool> {
+    let tool_names: &[&str] = match execution_mode {
+        "documenter" => &[
+            "create_doc_def",
+            "update_doc_def",
+            "delete_doc_def",
+            "update_config",
+            "think",
+        ],
+        _ => &["think"],
+    };
+    tool_names
+        .iter()
+        .filter_map(|name| crate::tools::registry::get_tool_definition(name))
+        .collect()
+}
+
+/// Try to dispatch a tool call to a step-specific handler.
+/// Returns `Some(result)` if handled, `None` to fall through to generic tools.
+async fn dispatch_step_tool(
+    name: &str,
+    input: &Value,
+    state: &AppState,
+    ctx: &StepChatContext,
+) -> Option<Value> {
+    match ctx.execution_mode.as_str() {
+        "documenter" => {
+            const DOCUMENTER_TOOLS: &[&str] = &[
+                "create_doc_def",
+                "update_doc_def",
+                "delete_doc_def",
+                "update_config",
+            ];
+            if DOCUMENTER_TOOLS.contains(&name) {
+                let tool_ctx = crate::server::tools::documenter::DocumenterToolContext {
+                    workflow_id: ctx.workflow_id,
+                    step_id: ctx.step_id,
+                };
+                let result = crate::server::tools::documenter::execute_documenter_tool(
+                    name,
+                    input,
+                    state.repos().workflows.as_ref(),
+                    &tool_ctx,
+                )
+                .await;
+                return Some(result);
+            }
+            None
+        }
+        _ => None,
     }
 }
 

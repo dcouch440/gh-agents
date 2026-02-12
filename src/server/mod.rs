@@ -296,6 +296,14 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
                 .post(api::add_step_document)
                 .delete(api::remove_step_document),
         )
+        .route(
+            routes::WORKFLOW_STEP_CHAT_SESSION,
+            post(api::get_or_create_step_session),
+        )
+        .route(
+            routes::WORKFLOW_STEP_CHAT_MESSAGES,
+            delete(api::clear_step_messages),
+        )
         .route(routes::WORKFLOW_RUN, post(api::run_workflow))
         .route(
             routes::WORKFLOW_EXECUTIONS,
@@ -926,6 +934,12 @@ mod tests {
         }
         async fn clear_session_messages(&self, _session_id: Uuid) -> anyhow::Result<()> {
             Ok(())
+        }
+        async fn find_session_by_step_id(
+            &self,
+            _step_id: Uuid,
+        ) -> anyhow::Result<Option<crate::db::SessionRow>> {
+            Ok(None)
         }
         async fn link_session_agent(
             &self,

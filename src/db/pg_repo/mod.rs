@@ -720,6 +720,10 @@ impl ServerRepo for PgRepo {
         crate::db::clear_session_messages(&self.pool, session_id).await
     }
 
+    async fn find_session_by_step_id(&self, step_id: Uuid) -> Result<Option<SessionRow>> {
+        crate::db::find_session_by_step_id(&self.pool, step_id).await
+    }
+
     async fn link_session_agent(&self, session_id: Uuid, agent_id: Uuid) -> Result<()> {
         crate::db::link_session_agent(&self.pool, session_id, agent_id).await
     }
