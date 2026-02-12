@@ -1,9 +1,10 @@
 import { useReducer, useEffect, useCallback, useRef } from 'react'
-import { api } from '@/api'
+import { api, createSSEStream } from '@/api'
 import type { SSEEvent } from '@/api'
+import { API } from '@/constants'
 import { useSendSessionMessage } from './useChatMutations'
 import type { ChatMessageData } from '@/components/chat'
-import type { Session, ChatMessage } from '@/types'
+import type { Session, ChatMessage, MessageSegment } from '@/types'
 
 // ---------------------------------------------------------------------------
 // State
@@ -12,6 +13,7 @@ import type { Session, ChatMessage } from '@/types'
 type AssistantState = {
   session: Session | null
   messages: ChatMessageData[]
+  streamingSegments: MessageSegment[]
   isLoading: boolean
   error: string | null
 }
@@ -24,13 +26,19 @@ type AssistantAction =
   | { type: 'SESSION_CREATED'; session: Session }
   | { type: 'APPEND_USER'; message: ChatMessageData }
   | { type: 'APPEND_ASSISTANT'; message: ChatMessageData }
-  | { type: 'UPDATE_LAST_ASSISTANT'; content: string }
+  | { type: 'STREAM_TOKEN'; text: string }
+  | { type: 'STREAM_TOOL_START'; toolId: string; toolName: string }
+  | { type: 'STREAM_TOOL_END'; toolId: string }
+  | { type: 'STREAM_DOC_UPDATE'; docId: string; title: string }
+  | { type: 'STREAM_FINALIZE' }
+  | { type: 'STREAM_ERROR'; error: string }
   | { type: 'CLEAR_MESSAGES' }
   | { type: 'RESET' }
 
 const initialState: AssistantState = {
   session: null,
   messages: [],
+  streamingSegments: [],
   isLoading: true,
   error: null,
 }
@@ -40,9 +48,9 @@ const reducer = (state: AssistantState, action: AssistantAction): AssistantState
     case 'INIT_START':
       return { ...state, isLoading: true, error: null }
     case 'INIT_SESSION':
-      return { session: action.session, messages: action.messages, isLoading: false, error: null }
+      return { session: action.session, messages: action.messages, streamingSegments: [], isLoading: false, error: null }
     case 'INIT_EMPTY':
-      return { session: null, messages: [], isLoading: false, error: null }
+      return { session: null, messages: [], streamingSegments: [], isLoading: false, error: null }
     case 'INIT_ERROR':
       return { ...state, isLoading: false, error: action.error }
     case 'SESSION_CREATED':
@@ -51,16 +59,64 @@ const reducer = (state: AssistantState, action: AssistantAction): AssistantState
       return { ...state, messages: [...state.messages, action.message] }
     case 'APPEND_ASSISTANT':
       return { ...state, messages: [...state.messages, action.message] }
-    case 'UPDATE_LAST_ASSISTANT': {
+
+    case 'STREAM_TOKEN': {
+      // Update segments: append to last text segment or create new one
+      const segments = [...state.streamingSegments]
+      const lastSeg = segments[segments.length - 1]
+      if (lastSeg?.type === 'text') {
+        segments[segments.length - 1] = { ...lastSeg, content: lastSeg.content + action.text }
+      } else {
+        segments.push({ type: 'text', content: action.text })
+      }
+
+      // Update last assistant message content (for scroll tracking + finalization)
       const msgs = [...state.messages]
       const last = msgs[msgs.length - 1]
       if (last?.role === 'assistant') {
-        msgs[msgs.length - 1] = { ...last, content: action.content }
+        msgs[msgs.length - 1] = { ...last, content: last.content + action.text }
       }
-      return { ...state, messages: msgs }
+
+      return { ...state, messages: msgs, streamingSegments: segments }
     }
+
+    case 'STREAM_TOOL_START': {
+      const segments: MessageSegment[] = [
+        ...state.streamingSegments,
+        { type: 'tool', toolId: action.toolId, toolName: action.toolName, status: 'running' },
+      ]
+      return { ...state, streamingSegments: segments }
+    }
+
+    case 'STREAM_TOOL_END': {
+      const segments = state.streamingSegments.map((s) =>
+        s.type === 'tool' && s.toolId === action.toolId ? { ...s, status: 'complete' as const } : s,
+      )
+      return { ...state, streamingSegments: segments }
+    }
+
+    case 'STREAM_DOC_UPDATE': {
+      const segments: MessageSegment[] = [
+        ...state.streamingSegments,
+        { type: 'doc_update', docId: action.docId, title: action.title },
+      ]
+      return { ...state, streamingSegments: segments }
+    }
+
+    case 'STREAM_FINALIZE':
+      return { ...state, streamingSegments: [] }
+
+    case 'STREAM_ERROR': {
+      const msgs = [...state.messages]
+      const last = msgs[msgs.length - 1]
+      if (last?.role === 'assistant') {
+        msgs[msgs.length - 1] = { ...last, content: last.content || `Error: ${action.error}` }
+      }
+      return { ...state, messages: msgs, streamingSegments: [], error: action.error }
+    }
+
     case 'CLEAR_MESSAGES':
-      return { ...state, messages: [] }
+      return { ...state, messages: [], streamingSegments: [] }
     case 'RESET':
       return initialState
     default:
@@ -81,12 +137,23 @@ const mapHistory = (history: ChatMessage[]): ChatMessageData[] =>
     content: m.content,
   }))
 
+const parseTokenText = (data: string): string => {
+  try {
+    const parsed = JSON.parse(data) as unknown
+    if (typeof parsed === 'string') return parsed
+  } catch {
+    // raw text
+  }
+  return data
+}
+
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
 
 type UseAssistantSessionReturn = {
   messages: ChatMessageData[]
+  streamingSegments: MessageSegment[]
   isLoading: boolean
   error: string | null
   streaming: boolean
@@ -100,8 +167,10 @@ const useAssistantSession = (
 ): UseAssistantSessionReturn => {
   const [state, dispatch] = useReducer(reducer, initialState)
   const { send, abort, streaming } = useSendSessionMessage()
-  const contentRef = useRef('')
   const sessionRef = useRef<Session | null>(null)
+  const receivedLengthRef = useRef(0)
+  const retriedRef = useRef(false)
+  const retryAbortRef = useRef<(() => void) | null>(null)
 
   // Keep sessionRef in sync via effect (not during render)
   useEffect(() => {
@@ -147,6 +216,8 @@ const useAssistantSession = (
     return () => {
       cancelledRef.current = true
       abort()
+      retryAbortRef.current?.()
+      retryAbortRef.current = null
       dispatch({ type: 'RESET' })
     }
   }, [workflowId, stepId, abort])
@@ -155,6 +226,12 @@ const useAssistantSession = (
     (content: string) => {
       if (!workflowId) return
 
+      // Reset retry tracking for new message
+      receivedLengthRef.current = 0
+      retriedRef.current = false
+      retryAbortRef.current?.()
+      retryAbortRef.current = null
+
       const userMsg: ChatMessageData = {
         id: crypto.randomUUID(),
         role: 'user',
@@ -162,7 +239,6 @@ const useAssistantSession = (
       }
       dispatch({ type: 'APPEND_USER', message: userMsg })
 
-      contentRef.current = ''
       const assistantMsg: ChatMessageData = {
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -171,19 +247,39 @@ const useAssistantSession = (
       dispatch({ type: 'APPEND_ASSISTANT', message: assistantMsg })
 
       const onEvent = (event: SSEEvent) => {
-        if (event.event === 'token' || event.event === 'message' || event.event === 'content') {
-          let text = event.data
-          try {
-            const parsed = JSON.parse(text) as unknown
-            if (typeof parsed === 'string') {
-              text = parsed
-            }
-          } catch {
-            // raw text
+        switch (event.event) {
+          case 'token':
+          case 'message':
+          case 'content': {
+            const text = parseTokenText(event.data)
+            receivedLengthRef.current += text.length
+            dispatch({ type: 'STREAM_TOKEN', text })
+            break
           }
-          contentRef.current += text
-          dispatch({ type: 'UPDATE_LAST_ASSISTANT', content: contentRef.current })
+          case 'tool_start': {
+            const data = JSON.parse(event.data) as { name: string; id: string }
+            dispatch({ type: 'STREAM_TOOL_START', toolId: data.id, toolName: data.name })
+            break
+          }
+          case 'tool_end': {
+            const data = JSON.parse(event.data) as { name: string; id: string }
+            dispatch({ type: 'STREAM_TOOL_END', toolId: data.id })
+            break
+          }
+          case 'doc_update': {
+            const data = JSON.parse(event.data) as { doc_id: string; title: string }
+            dispatch({ type: 'STREAM_DOC_UPDATE', docId: data.doc_id, title: data.title })
+            break
+          }
+          case 'error': {
+            dispatch({ type: 'STREAM_ERROR', error: event.data })
+            break
+          }
         }
+      }
+
+      const onDone = () => {
+        dispatch({ type: 'STREAM_FINALIZE' })
       }
 
       const doSend = async () => {
@@ -193,11 +289,56 @@ const useAssistantSession = (
             session = await api.workflows.getOrCreateStepSession(workflowId, stepId)
             dispatch({ type: 'SESSION_CREATED', session })
           }
-          await send(session.id, { message: content }, onEvent)
+
+          const messageId = await send(
+            session.id,
+            { message: content },
+            onEvent,
+            onDone,
+            (error: Error) => {
+              // SSE connection error — attempt one retry
+              if (!retriedRef.current) {
+                retriedRef.current = true
+                const dedupeAfter = receivedLengthRef.current
+
+                let replayedLength = 0
+                const deduplicatingHandler = (evt: SSEEvent) => {
+                  if (evt.event === 'token' || evt.event === 'message' || evt.event === 'content') {
+                    const text = parseTokenText(evt.data)
+                    replayedLength += text.length
+                    if (replayedLength <= dedupeAfter) return
+                    const overlap = dedupeAfter - (replayedLength - text.length)
+                    const newText = overlap > 0 ? text.slice(overlap) : text
+                    if (newText) {
+                      receivedLengthRef.current += newText.length
+                      dispatch({ type: 'STREAM_TOKEN', text: newText })
+                    }
+                  } else {
+                    onEvent(evt)
+                  }
+                }
+
+                retryAbortRef.current = createSSEStream(
+                  API.SESSION_CHAT_STREAM(session.id, messageId),
+                  {
+                    onEvent: dedupeAfter > 0 ? deduplicatingHandler : onEvent,
+                    onDone,
+                    onError: () => {
+                      dispatch({ type: 'STREAM_ERROR', error: 'Stream connection lost' })
+                    },
+                  },
+                )
+              } else {
+                dispatch({ type: 'STREAM_ERROR', error: error.message })
+              }
+            },
+          )
+          // messageId is used in the onError closure above
+          void messageId
         } catch (e) {
           dispatch({
-            type: 'UPDATE_LAST_ASSISTANT',
-            content: `Error: ${e instanceof Error ? e.message : 'Failed to send message'}`,
+            type: 'STREAM_ERROR',
+            error: e instanceof Error ? e.message : 'Failed to send message',
           })
         }
       }
@@ -232,6 +373,7 @@ const useAssistantSession = (
 
   return {
     messages: state.messages,
+    streamingSegments: state.streamingSegments,
     isLoading: state.isLoading,
     error: state.error,
     streaming,
@@ -240,5 +382,5 @@ const useAssistantSession = (
   }
 }
 
-export { useAssistantSession }
-export type { UseAssistantSessionReturn }
+export { useAssistantSession, reducer, initialState }
+export type { UseAssistantSessionReturn, AssistantState, AssistantAction }

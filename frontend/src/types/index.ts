@@ -81,6 +81,7 @@ export type {
   UpdateProtocolRequest,
   CreatePortRequest,
 } from './protocol'
+export type { ToolStatus, ToolIndicatorData, MessageSegment, StreamEventType } from './streaming'
 export { ACTIVITY } from './activity'
 export type {
   ActivityEvent,

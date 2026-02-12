@@ -4,7 +4,7 @@ import Typography from '@mui/material/Typography'
 import CircularProgress from '@mui/material/CircularProgress'
 import { useStore, workflowStore } from '@/stores'
 import { useAssistantSession } from '@/hooks/useAssistantSession'
-import { ChatPanel } from '@/components/chat'
+import { ChatPanel, StreamingMessage } from '@/components/chat'
 import { AssistantHeader } from './AssistantHeader'
 
 type AssistantTabProps = {
@@ -13,7 +13,7 @@ type AssistantTabProps = {
 
 function AssistantTab({ stepId }: AssistantTabProps) {
   const workflowId = useStore(workflowStore.store, workflowStore.selectActiveWorkflowId)
-  const { messages, isLoading, error, streaming, sendMessage, clearHistory } = useAssistantSession(workflowId, stepId)
+  const { messages, streamingSegments, isLoading, error, streaming, sendMessage, clearHistory } = useAssistantSession(workflowId, stepId)
 
   const handleClear = useCallback(() => {
     if (window.confirm('Clear assistant chat history?')) {
@@ -31,7 +31,7 @@ function AssistantTab({ stepId }: AssistantTabProps) {
     )
   }
 
-  if (error) {
+  if (error && !streaming && messages.length === 0) {
     return (
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', p: 2 }}>
         <Typography variant="body2" color="error">
@@ -41,6 +41,11 @@ function AssistantTab({ stepId }: AssistantTabProps) {
     )
   }
 
+  const streamingContent =
+    streaming && streamingSegments.length > 0 ? (
+      <StreamingMessage segments={streamingSegments} streaming />
+    ) : undefined
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <AssistantHeader onClear={handleClear} disabled={streaming || messages.length === 0} />
@@ -48,7 +53,8 @@ function AssistantTab({ stepId }: AssistantTabProps) {
         messages={messages}
         onSend={sendMessage}
         streaming={streaming}
-        disabled={isLoading}
+        disabled={streaming}
+        streamingContent={streamingContent}
         emptyMessage="Ask me to help set up documents for this step."
       />
     </Box>

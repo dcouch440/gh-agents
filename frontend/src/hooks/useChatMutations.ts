@@ -16,7 +16,13 @@ const useSendSessionMessage = () => {
   const abortRef = useRef<(() => void) | null>(null)
 
   const send = useCallback(
-    async (sessionId: string, body: SendMessageRequest, onEvent?: (event: SSEEvent) => void, onDone?: () => void): Promise<string> => {
+    async (
+      sessionId: string,
+      body: SendMessageRequest,
+      onEvent?: (event: SSEEvent) => void,
+      onDone?: () => void,
+      onError?: (error: Error) => void,
+    ): Promise<string> => {
       setLoading(true)
       setError(null)
       try {
@@ -34,7 +40,11 @@ const useSendSessionMessage = () => {
             onError: (e) => {
               setStreaming(false)
               abortRef.current = null
-              setError(e.message)
+              if (onError) {
+                onError(e)
+              } else {
+                setError(e.message)
+              }
             },
           })
         }
