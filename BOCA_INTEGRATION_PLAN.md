@@ -1,52 +1,233 @@
-# BOCA in Nexor: Belief Capture + Mask Agent
+# BOCA in Nexor: Belief Capture Protocol + Masked Conversations
 
 ## Context
 
-Seven BOCA experiments validated that structured beliefs outperform raw transcripts for question answering (flat converged 15/20 beat full context 14/20). The product goal: after a workflow executes, users can have a conversation with a **mask agent** that knows everything the workflow learned — contradictions, plans, decisions, findings. Domain-agnostic: code, scripts, business plans, anything.
+Seven BOCA experiments validated that structured beliefs outperform raw transcripts for question answering (flat converged 15/20 beat full context 14/20). The product goal: a **belief capture protocol** distills upstream protocol outputs into a queryable knowledge base, and **masked conversations** (rooms or standalone chat) let agents and users discuss from structured knowledge instead of raw transcripts.
 
-Two layers: **Belief Capture** (how beliefs get into the system) and **Mask Agent** (the conversational interface).
+Domain-agnostic: code reviews, business plans, movie scripts, anything.
 
-## Part 1: Belief Capture
+## Architecture: Protocol Graph
 
-### Approach: Post-Execution Gatekeeper
-
-After each step completes, one LLM call extracts beliefs from the step's assistant messages. No agent behavior changes. Proven in BOCA Phase 6.
+The canvas is a **protocol graph**, not an agent graph. Each node is a self-contained protocol with internal orchestration. The user designs at the protocol level — they don't place individual agents, they place protocols that manage agents internally.
 
 ```
-Step executes normally
-    ↓
-Step completes → execution_messages in DB
-    ↓
-If step.extract_beliefs = true:
-    ↓
-Load assistant-role messages (skip tool results — that's noise)
-    ↓
-One gatekeeper LLM call → structured belief slices
-    ↓
-Beliefs stored in `beliefs` table
+[PRD Protocol] → [Decomposition Protocol] → [Documenter Protocol]
+                                                     ↓
+                                          [Belief Capture Protocol]
+                                                     ↓
+                                          [Worker Protocol (per ticket)]
+                                                     ↓
+                                          [Belief Capture Protocol]
+                                                     ↓
+                                          [Meeting Protocol (masked agents)]
 ```
 
-**Why assistant messages only**: Tool results are file contents, command outputs — bulk noise. The agent's reasoning, decisions, and observations live in its assistant messages. That's where beliefs are.
+**Belief Capture** is a general-purpose context summarizer. It can appear anywhere in the pipeline — after ticket creation (capture requirements), after implementation (capture completeness), before a meeting (prepare the board). Multiple captures in a workflow, each with a different focus.
 
-**Non-fatal**: If gatekeeper fails, log warning and continue. Workflow never breaks due to belief extraction.
+**Masked Conversations** consume the belief store. Room agents get beliefs injected into their system prompts. Users can query beliefs through standalone chat. The quality of the conversation depends on the quality of the beliefs.
 
-**Future enhancement**: Add `report_finding` tool for agents to self-report beliefs inline. Milestone/window system for real-time capture. These are optimizations on top of the base gatekeeper.
+---
+
+## Core Principles
+
+### 1. Protocols talk to each other through beliefs
+
+Protocols are black boxes. They produce work internally — could be one agent, could be twenty. The belief capture node is the **information interface** between protocols. Without it, downstream protocols would need to read raw transcripts from upstream. With it, they get structured, labeled, queryable knowledge.
+
+### 2. Read artifacts, not transcripts
+
+Each protocol already produces a distilled output. The documenter's writer synthesized research into a document. A single step produced a structured output. The belief capture node reads these **artifacts**, not the raw execution transcripts:
+
+| Upstream Protocol | What Belief Capture Reads |
+|---|---|
+| Documenter | Produced documents from `documents` table |
+| Single step | `StepExecutionEnvelope.data` (structured output) |
+| For-each | Each iteration's envelope data |
+| Room | Room transcript |
+| Context node | Pass-through text (PRDs, specs, reference docs) |
+
+This is cheaper, higher signal, and respects the protocol's own summarization. The writer already distilled 15 rounds of research into a 2000-word document — re-processing those 15 rounds would be wasteful and noisy.
+
+**Fallback**: When a step's output is minimal (`"Done"` or `{"status": "success"}`), fall back to the last few assistant messages from the execution transcript.
+
+### 3. Static labeling vocabulary
+
+Beliefs are labeled using values that already exist in the system — not free-generated by the gatekeeper:
+
+| Static Source | Label It Provides |
+|---|---|
+| `workflow_steps.name` | Source label (e.g., "Auth Service") |
+| `protocol_document_defs.name` | Document title (e.g., "Auth Ticket #3") |
+| `protocol_document_defs.description` | Document context |
+| `workflow_steps.execution_mode` | Protocol type → phase labels |
+| Step `description` field | User-authored intent |
+| Extraction plan (from assistant) | Curated tag vocabulary |
+
+The gatekeeper prompt includes the allowed tag vocabulary. The query LLM uses the same vocabulary. Labels always match — no "auth" vs "authentication" vs "authn" mismatch.
+
+### 4. LLM-generated queries for retrieval
+
+Beliefs aren't dumped wholesale into mask context. Per-message retrieval uses a cheap LLM call (Haiku, ~500 tokens, fractions of a cent) to map the user's question to filter criteria:
+
+```
+User: "Was anything missed on the auth ticket?"
+    ↓
+Query LLM (Haiku):
+  Input: question + available labels
+    source_documents: ["Auth Service", "Rate Limiter", "API Gateway"]
+    semantic_tags: ["authentication", "rate-limiting", "api-design"]
+    phases: ["requirements", "implementation"]
+  Output: { source_documents: ["Auth Service"], phases: null }
+    ↓
+SELECT * FROM beliefs
+WHERE workflow_execution_id = $1
+AND source_document_title = ANY($2)
+    ↓
+20 relevant beliefs → injected into mask context
+    ↓
+Mask agent responds with targeted knowledge
+```
+
+This scales to any belief store size. 200 beliefs, 2000 beliefs — the query narrows it down before the agent sees them.
+
+### 5. Assistant-driven configuration
+
+Users don't configure belief capture by filling forms. They chat with an assistant inside the node — same pattern as the documenter's AssistantTab. The assistant creates a **curated extraction plan**:
+
+```
+User: "I need to capture what each ticket requires and any dependencies"
+    → Assistant creates extraction plan:
+      - Per-document extraction from upstream documenter
+      - Tag vocabulary: ["authentication", "authorization", "rate-limiting", ...]
+      - Focus: requirements, dependencies, scope boundaries
+      - Cross-source: flag overlapping scope between tickets
+```
+
+The extraction plan defines the tag vocabulary, focus areas, and labeling strategy. It's stored in the DB like document defs — created by conversation, executed at runtime.
+
+### 6. Documenter quality matters
+
+If belief capture reads the documenter's produced documents, the quality of those documents directly determines the quality of beliefs. The documenter's writer phase needs to produce fact-dense, specific reports — not vague summaries.
+
+When a belief capture node sits downstream, the documenter's coordinator should guide writers toward explicit claims: specific numbers, concrete decisions, clear observations. A vague report produces zero useful beliefs.
+
+---
+
+## Part 1: Belief Capture Protocol
+
+### Protocol Structure (mirrors documenter pattern)
+
+| Phase | Documenter | Belief Capture |
+|---|---|---|
+| **Design time** | Chat with assistant → document defs | Chat with assistant → extraction plan |
+| **Phase 1** | Coordinator plans research per doc | Planner refines extraction per source |
+| **Phase 2** | Researchers gather info (parallel) | Gatekeepers extract beliefs (parallel) |
+| **Phase 3** | Writers produce documents | Beliefs stored with curated labels |
+
+### Extraction Plan (design-time artifact)
+
+Created by the assistant, stored in DB. Defines:
+
+```json
+{
+  "tag_vocabulary": ["authentication", "authorization", "rate-limiting", "caching"],
+  "focus_guidance": "Focus on requirements, dependencies, and scope boundaries",
+  "source_handling": {
+    "documenter": "read_produced_documents",
+    "single": "read_envelope_data",
+    "context": "read_passthrough",
+    "room": "read_transcript"
+  },
+  "cross_source_detection": true,
+  "beliefs_per_source": "5-20"
+}
+```
+
+### Content Normalization Layer
+
+The belief capture executor normalizes upstream content before running gatekeepers:
+
+```rust
+struct ContentBlock {
+    source_label: String,              // "Auth Service" (from step name)
+    source_document_title: Option<String>, // "Auth Ticket #3" (from doc def)
+    source_step_id: Uuid,
+    source_document_def_id: Option<Uuid>,
+    source_phase: String,              // "requirements" | "implementation" | "review"
+    content: String,                   // normalized text
+}
+
+fn collect_upstream_content(
+    step: &WorkflowStepRow,
+    edges: &[WorkflowStepEdgeRow],
+    steps: &[WorkflowStepRow],
+    state: &AppState,
+    ctx: &WorkflowExecutionContext,
+    completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
+) -> Result<Vec<ContentBlock>, HubError> {
+    for each upstream step (from edges):
+        match step.execution_mode:
+            "documenter" → load documents from `documents` table
+            "single"     → load envelope.data from completed_envelopes
+            "for_each"   → load each iteration's envelope.data
+            "room"       → load room transcript
+            "context"    → load pass-through text
+            "belief_capture" → skip (beliefs already in DB)
+}
+```
+
+### Gatekeeper Prompt (constrained by extraction plan)
+
+```
+You are the Belief Gatekeeper. Decompose this content into BELIEF SLICES —
+atomic claims about what was learned, decided, observed, or done.
+
+<content source="{source_label}" document="{document_title}">
+{content}
+</content>
+
+Allowed semantic tags (use ONLY these): {tag_vocabulary}
+Allowed belief types: fact | policy | decision | observation
+
+Rules:
+1. Preserve ALL NUMBERS exactly
+2. Each belief = one atomic claim
+3. Extract 5-20 beliefs covering significant facts, decisions, observations
+4. Fill reasoning FIRST, then content
+5. Tag each belief using ONLY the allowed semantic tags
+6. Note cross-source tensions if this contradicts known information
+
+{focus_guidance}
+```
 
 ### Migration: `0025_beliefs.sql`
 
 ```sql
+CREATE TABLE belief_extraction_plans (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    step_id uuid NOT NULL REFERENCES workflow_steps(id) ON DELETE CASCADE,
+    tag_vocabulary text[] NOT NULL DEFAULT '{}',
+    focus_guidance text NOT NULL DEFAULT '',
+    beliefs_per_source text NOT NULL DEFAULT '5-20',
+    cross_source_detection boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE beliefs (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     workflow_id uuid NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
     workflow_execution_id uuid NOT NULL,
-    workflow_step_id uuid NOT NULL REFERENCES workflow_steps(id) ON DELETE CASCADE,
-    agent_execution_id uuid NOT NULL REFERENCES agent_executions(id) ON DELETE CASCADE,
+    source_step_id uuid NOT NULL REFERENCES workflow_steps(id) ON DELETE CASCADE,
+    source_document_title text,
+    source_document_def_id uuid REFERENCES protocol_document_defs(id) ON DELETE SET NULL,
+    source_phase text NOT NULL DEFAULT 'execution',
     content text NOT NULL,
     reasoning text NOT NULL,
     belief_type text NOT NULL DEFAULT 'fact',
     confidence text NOT NULL DEFAULT 'medium',
     confidence_justification text,
-    semantic_tag text NOT NULL,
+    semantic_tags text[] NOT NULL DEFAULT '{}',
     emotional_tone text,
     cross_source_tension text,
     source_step_name text NOT NULL,
@@ -58,94 +239,301 @@ CREATE TABLE beliefs (
 
 CREATE INDEX idx_beliefs_workflow ON beliefs(workflow_id);
 CREATE INDEX idx_beliefs_workflow_execution ON beliefs(workflow_execution_id);
-CREATE INDEX idx_beliefs_step ON beliefs(workflow_step_id);
-CREATE INDEX idx_beliefs_semantic_tag ON beliefs(semantic_tag);
+CREATE INDEX idx_beliefs_source_step ON beliefs(source_step_id);
+CREATE INDEX idx_beliefs_semantic_tags ON beliefs USING gin(semantic_tags);
 CREATE INDEX idx_beliefs_type ON beliefs(belief_type);
+CREATE INDEX idx_beliefs_source_doc ON beliefs(source_document_title);
+CREATE INDEX idx_beliefs_source_phase ON beliefs(source_phase);
 
-ALTER TABLE workflow_steps ADD COLUMN extract_beliefs boolean NOT NULL DEFAULT false;
+CREATE TABLE mask_session_beliefs (
+    session_id uuid NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    belief_id uuid NOT NULL REFERENCES beliefs(id) ON DELETE CASCADE,
+    loaded_at_turn integer NOT NULL,
+    PRIMARY KEY (session_id, belief_id)
+);
 ```
+
+Key schema changes from earlier draft:
+- `semantic_tag text` → `semantic_tags text[]` (array, GIN indexed for overlap queries)
+- Added `source_document_title`, `source_document_def_id`, `source_phase` (provenance)
+- Added `belief_extraction_plans` table (stores curated plans from assistant)
+- Removed `source_agent_execution_id` (we read artifacts, not transcripts — no single execution to point to)
 
 ### DB Layer
 
-**Row types** in `src/db/mod.rs`: `BeliefRow`, `NewBelief`
+**Row types** in `src/db/mod.rs`:
 
-**Trait** in `src/db/traits/mod.rs`:
 ```rust
-pub trait BeliefRepo: Send + Sync {
-    async fn insert_beliefs(&self, beliefs: &[NewBelief]) -> Result<Vec<BeliefRow>>;
-    async fn list_beliefs_for_workflow(&self, workflow_id: Uuid) -> Result<Vec<BeliefRow>>;
-    async fn list_beliefs_for_execution(&self, workflow_execution_id: Uuid) -> Result<Vec<BeliefRow>>;
-    async fn list_beliefs_for_step(&self, step_id: Uuid) -> Result<Vec<BeliefRow>>;
-    async fn delete_beliefs_for_execution(&self, workflow_execution_id: Uuid) -> Result<u64>;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BeliefRow {
+    pub id: Uuid,
+    pub workflow_id: Uuid,
+    pub workflow_execution_id: Uuid,
+    pub source_step_id: Uuid,
+    pub source_document_title: Option<String>,
+    pub source_document_def_id: Option<Uuid>,
+    pub source_phase: String,
+    pub content: String,
+    pub reasoning: String,
+    pub belief_type: String,
+    pub confidence: String,
+    pub confidence_justification: Option<String>,
+    pub semantic_tags: Vec<String>,
+    pub emotional_tone: Option<String>,
+    pub cross_source_tension: Option<String>,
+    pub source_step_name: String,
+    pub extraction_model: String,
+    pub extraction_tokens_in: i32,
+    pub extraction_tokens_out: i32,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BeliefExtractionPlanRow {
+    pub id: Uuid,
+    pub step_id: Uuid,
+    pub tag_vocabulary: Vec<String>,
+    pub focus_guidance: String,
+    pub beliefs_per_source: String,
+    pub cross_source_detection: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 ```
 
-**Implementation** in `src/db/pg_repo/mod.rs`.
+**Trait** in `src/db/traits/mod.rs`:
 
-### Gatekeeper Module: `src/server/hub/beliefs/`
-
-```
-src/server/hub/beliefs/
-├── mod.rs       # extract_beliefs_from_execution(), format_assistant_messages()
-└── tests.rs     # Unit tests
-```
-
-**Core function**:
 ```rust
-pub async fn extract_beliefs_from_execution(
+pub trait BeliefRepo: Send + Sync {
+    async fn insert_beliefs(&self, beliefs: &[NewBelief]) -> Result<Vec<BeliefRow>>;
+    async fn list_beliefs_for_execution(&self, workflow_execution_id: Uuid) -> Result<Vec<BeliefRow>>;
+    async fn query_beliefs(
+        &self,
+        workflow_execution_id: Uuid,
+        semantic_tags: Option<&[String]>,
+        source_documents: Option<&[String]>,
+        source_phases: Option<&[String]>,
+        belief_types: Option<&[String]>,
+    ) -> Result<Vec<BeliefRow>>;
+    async fn list_belief_labels(&self, workflow_execution_id: Uuid) -> Result<BeliefLabelSummary>;
+    async fn delete_beliefs_for_execution(&self, workflow_execution_id: Uuid) -> Result<u64>;
+
+    async fn get_extraction_plan(&self, step_id: Uuid) -> Result<Option<BeliefExtractionPlanRow>>;
+    async fn upsert_extraction_plan(&self, step_id: Uuid, plan: &NewExtractionPlan) -> Result<BeliefExtractionPlanRow>;
+}
+
+pub struct BeliefLabelSummary {
+    pub semantic_tags: Vec<String>,
+    pub source_documents: Vec<String>,
+    pub source_phases: Vec<String>,
+    pub belief_types: Vec<String>,
+}
+```
+
+The `query_beliefs` method supports the retrieval pattern — filter by any combination of labels. The `list_belief_labels` method returns available filter values for the query LLM.
+
+### DAG Integration: `src/server/hub/dag/mod.rs`
+
+One branch in the execution mode router:
+
+```rust
+} else if step.execution_mode == "belief_capture" {
+    execute_belief_capture_step(
+        engine, state, ctx, step, steps, edges,
+        &mut var_outputs, &mut completed, &mut completed_envelopes,
+        &port_meta, &mut total_input_tokens, &mut total_output_tokens,
+        &mut total_cost_usd, cancel.as_ref(),
+    ).await?;
+    continue;
+}
+```
+
+No modifications to any other executor.
+
+---
+
+## Part 2: Masked Conversations
+
+### Belief Retrieval: Accumulate, Never Remove
+
+A masked conversation builds up context over its lifetime. Each turn retrieves NEW relevant beliefs and **adds them to the pool** — previous beliefs are never dropped. This prevents the agent from losing context it already referenced.
+
+```
+Turn 1: "Tell me about auth"
+  → Retrieve: 15 auth beliefs
+  → Context: 15 beliefs
+  → Agent responds, references [b03], [b07], [b12]
+
+Turn 2: "What about rate limiting?"
+  → Retrieve: 12 rate-limiting beliefs (new)
+  → Context: 15 + 12 = 25 unique beliefs (deduplicated by id)
+  → Agent has full context from both turns
+
+Turn 3: "Do those contradict?"
+  → Retrieve: 5 cross-tension beliefs (new)
+  → Context: 25 + 5 = 28 unique beliefs
+  → Agent can compare across everything discussed
+```
+
+**Why accumulate?** If turn 1 retrieves auth beliefs and the agent references [b03], but turn 2 swaps in different beliefs, [b03] is gone — the agent's own previous response doesn't make sense. Accumulation keeps the conversation coherent.
+
+**Context budget**: Beliefs are short (~one sentence each). 50 beliefs ≈ 2000 tokens. Even at 200 beliefs, under 10k tokens — manageable. If the pool grows too large, prioritize: pinned (referenced in previous responses) > recent retrieval > earliest retrieval.
+
+### Retrieval Function
+
+```rust
+async fn retrieve_beliefs_for_turn(
     state: &AppState,
-    agent_execution_id: Uuid,
-    step: &WorkflowStepRow,
+    provider: &dyn LLMProvider,
     workflow_execution_id: Uuid,
-) -> Result<Vec<BeliefRow>, HubError>
+    user_message: &str,
+    conversation_history: &[ChatMessage],
+    already_loaded_ids: &HashSet<Uuid>,
+) -> Result<Vec<BeliefRow>> {
+    // 1. Get available labels
+    let labels = state.repo().list_belief_labels(workflow_execution_id).await?;
+
+    // 2. Cheap LLM call — sees conversation history + new message
+    //    Knows what's already loaded so it doesn't re-fetch
+    let criteria = generate_belief_query(
+        provider,
+        user_message,
+        conversation_history,
+        &labels,
+        already_loaded_ids.len(),
+    ).await?;
+
+    // 3. Query belief store, exclude already loaded
+    let new_beliefs = state.repo().query_beliefs(
+        workflow_execution_id,
+        criteria.semantic_tags.as_deref(),
+        criteria.source_documents.as_deref(),
+        criteria.source_phases.as_deref(),
+        criteria.belief_types.as_deref(),
+    ).await?;
+
+    // 4. Filter out beliefs already in the pool
+    Ok(new_beliefs.into_iter()
+        .filter(|b| !already_loaded_ids.contains(&b.id))
+        .collect())
+}
 ```
 
-1. `list_execution_messages(agent_execution_id)` — load all messages
-2. Filter to `role = "assistant"` only
-3. Format into transcript string
-4. Call LLM via `provider.send_message()` with tool_use (belief schema)
-5. Parse response into `NewBelief` structs
-6. `insert_beliefs()` to DB
-7. Return inserted rows
+The query LLM sees the full conversation context:
 
-**Gatekeeper prompt** (adapted from BOCA v2 — proven best):
 ```
-You are the Belief Gatekeeper. Decompose this execution transcript into
-BELIEF SLICES — atomic claims about what was learned, decided, observed,
-or done.
+You are selecting beliefs to retrieve for a conversation.
 
-Rules:
-1. Preserve ALL NUMBERS exactly
-2. Each belief = one atomic claim
-3. Extract 5-20 beliefs covering significant facts, decisions, observations
-4. Classify: fact | policy | opinion | observation
-5. Fill reasoning FIRST
+Conversation so far:
+{conversation_history}
+
+Latest message: "{user_message}"
+
+Already loaded: {already_loaded_count} beliefs covering {already_loaded_tags}
+
+Available filters (for NEW beliefs to add):
+  semantic_tags: {labels.semantic_tags}
+  source_documents: {labels.source_documents}
+  source_phases: {labels.source_phases}
+  belief_types: {labels.belief_types}
+
+Return JSON with filters for ADDITIONAL beliefs needed. Use null to skip a filter.
+Return {"none": true} if already loaded beliefs are sufficient.
 ```
 
-### DAG Hook: `src/server/hub/dag/single.rs`
+### Session Belief Tracking
 
-Modify `run_step_via_engine` to return `agent_execution_id` in its tuple.
+The mask session tracks which beliefs are currently in the pool:
 
-After step completion (line ~163), before StepCompleted broadcast:
+```sql
+-- In chat_sessions or a dedicated table
+CREATE TABLE mask_session_beliefs (
+    session_id uuid NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    belief_id uuid NOT NULL REFERENCES beliefs(id) ON DELETE CASCADE,
+    loaded_at_turn integer NOT NULL,
+    PRIMARY KEY (session_id, belief_id)
+);
+```
+
+This persists across reconnects. If the user leaves and comes back, the session still knows which beliefs are loaded.
+
+### Room Mask Injection
+
+In `src/server/executors/room/mod.rs` during system prompt construction:
+
 ```rust
-if step.extract_beliefs {
-    if let Some(provider) = state.provider() {
-        match beliefs::extract_beliefs_from_execution(
-            state, ae_id, step, ctx.stage_execution_id,
-        ).await {
-            Ok(extracted) => debug!(count = extracted.len(), "Beliefs extracted"),
-            Err(e) => warn!("Belief extraction failed: {}", e),
-        }
+// After agent docs are appended...
+if let Some(workflow_execution_id) = workflow_execution_id {
+    // Load accumulated beliefs for this room session
+    let accumulated = load_session_beliefs(state, session.id).await.unwrap_or_default();
+
+    // Retrieve new beliefs for this turn's message
+    let new_beliefs = retrieve_beliefs_for_turn(
+        state, provider, workflow_execution_id, &user_message,
+        &transcript, &accumulated.iter().map(|b| b.id).collect(),
+    ).await.unwrap_or_default();
+
+    // Track newly loaded beliefs
+    track_session_beliefs(state, session.id, &new_beliefs, turn_number).await;
+
+    // Inject full accumulated pool
+    let all_beliefs: Vec<_> = accumulated.into_iter().chain(new_beliefs).collect();
+    if !all_beliefs.is_empty() {
+        system_prompt.push_str("\n\n");
+        system_prompt.push_str(&format_beliefs_for_mask(&all_beliefs));
     }
 }
 ```
 
-### API: `src/server/api/workflows/belief_handlers.rs`
+### Standalone Mask Chat
 
-- `GET /api/workflows/:wid/beliefs` — all beliefs for workflow
-- `GET /api/workflows/:wid/executions/:eid/beliefs` — beliefs from one execution
-- `GET /api/workflows/:wid/steps/:sid/beliefs` — beliefs from one step
+**Endpoint**: `POST /api/workflows/:wid/executions/:eid/mask/chat`
+- Creates or finds a mask chat session
+- Per-message: retrieves NEW beliefs, adds to accumulated pool
+- Full pool injected into agent context every turn
+- Routes to existing `ChatStrategy`
+- Session persists in `chat_sessions` with `mode_id = "mask"`
+- Belief pool persists in `mask_session_beliefs`
+
+### Belief Formatting
+
+```rust
+pub fn format_beliefs_for_mask(beliefs: &[BeliefRow]) -> String {
+    let mut out = String::from("## Belief Store\n\n");
+    out.push_str("<beliefs>\n");
+    for (i, b) in beliefs.iter().enumerate() {
+        let doc = b.source_document_title.as_deref().unwrap_or(&b.source_step_name);
+        let tags = b.semantic_tags.join(", ");
+        out.push_str(&format!(
+            "[b{:02}] (source: {}, {}, {}, tags: [{}]) {}\n",
+            i + 1, doc, b.belief_type, b.confidence, tags, b.content
+        ));
+    }
+    out.push_str("</beliefs>\n\n");
+    out.push_str("Rules:\n");
+    out.push_str("1. Reference beliefs by ID when discussing them.\n");
+    out.push_str("2. If beliefs contradict, note the contradiction and sources.\n");
+    out.push_str("3. Preserve exact numbers from beliefs.\n");
+    out.push_str("4. If asked about something not covered by beliefs, say so.\n");
+    out
+}
+```
+
+---
+
+## Part 3: API & Events
+
+### Belief API: `src/server/api/workflows/belief_handlers.rs`
+
+- `GET /api/workflows/:wid/executions/:eid/beliefs` — all beliefs for execution
+- `GET /api/workflows/:wid/executions/:eid/beliefs?tags=auth,security&phase=implementation` — filtered
+- `GET /api/workflows/:wid/executions/:eid/beliefs/labels` — available label values (for query UI)
 - `DELETE /api/workflows/:wid/executions/:eid/beliefs` — clear execution beliefs
+
+### Extraction Plan API
+
+- `GET /api/workflows/:wid/steps/:sid/extraction-plan` — get plan
+- `PUT /api/workflows/:wid/steps/:sid/extraction-plan` — upsert plan (assistant uses this)
 
 ### WebSocket Event
 
@@ -154,129 +542,134 @@ WorkflowEventKind::BeliefsExtracted {
     step_id: Uuid,
     step_name: String,
     belief_count: usize,
+    source_steps: Vec<String>,
 }
 ```
-
----
-
-## Part 2: Mask Agent
-
-### Concept
-
-A conversational agent that users chat with about a completed workflow. The mask has the workflow's belief store injected into its context. Users ask questions, the mask answers from beliefs.
-
-This uses the **existing chat infrastructure** (ChatStrategy, chat_sessions, chat_messages) — no new execution engine needed.
-
-### How It Works
-
-1. User opens mask conversation for a workflow execution
-2. System loads all beliefs for that execution
-3. Beliefs are formatted and injected into the mask's system prompt
-4. User chats normally — mask answers from beliefs
-5. Conversation persists in `chat_sessions` like any other chat
-
-### Mask System Prompt
-
-```
-You are a Mask agent. You have access to a belief store containing
-everything learned during this workflow execution. Answer questions
-using ONLY the beliefs provided.
-
-<beliefs>
-[b01] (Architect, fact, high) Auth uses JWT with 15-min token expiry
-[b02] (Developer, fact, high) No rate limiting on login endpoint
-[b03] (QA, opinion, medium) Should add rate limiting before launch
-[b04] (Security, fact, high) mTLS between services, cert pinning enabled
-...
-</beliefs>
-
-Rules:
-1. Answer from beliefs only. If beliefs don't cover a topic, say so.
-2. When beliefs contradict, note the contradiction and sources.
-3. Include exact numbers from beliefs.
-4. Cite belief IDs in answers.
-```
-
-### Implementation
-
-**New endpoint**: `POST /api/workflows/:wid/executions/:eid/mask/chat`
-- Creates or finds a mask chat session for this execution
-- Loads beliefs, formats them, builds system prompt
-- Routes to existing `ChatStrategy` with the belief-enriched system prompt
-
-**Session management**: Store mask sessions in `chat_sessions` with `mode_id = "mask"` and `draft_config = {"workflow_execution_id": eid}`.
-
-**Belief refresh**: If new beliefs are added (workflow still running or re-run), the mask's system prompt is rebuilt on next message.
-
-### Frontend
-
-- "Ask about this workflow" button on workflow execution view
-- Opens a chat panel (reuse existing chat components)
-- Chat messages persist across sessions
 
 ---
 
 ## Files to Create/Modify
 
 ### Create:
-1. `migrations/0025_beliefs.sql`
-2. `src/server/hub/beliefs/mod.rs` — gatekeeper extraction
-3. `src/server/hub/beliefs/tests.rs`
-4. `src/server/api/workflows/belief_handlers.rs` — belief CRUD endpoints
-5. `src/server/api/workflows/mask_handlers.rs` — mask chat endpoints
+1. `migrations/0025_beliefs.sql` — beliefs + extraction plans tables
+2. `src/server/hub/dag/belief_capture/mod.rs` — belief capture executor + content normalization
+3. `src/server/hub/dag/belief_capture/tests.rs` — unit tests
+4. `src/server/hub/beliefs/mod.rs` — shared utilities (formatting, gatekeeper prompt, retrieval)
+5. `src/server/hub/beliefs/tests.rs` — formatting + retrieval tests
+6. `src/server/api/workflows/belief_handlers.rs` — belief CRUD + query endpoints
+7. `src/server/api/workflows/mask_handlers.rs` — mask chat endpoint
 
 ### Modify:
-6. `src/db/mod.rs` — BeliefRow, NewBelief, extract_beliefs on WorkflowStepRow
-7. `src/db/traits/mod.rs` — BeliefRepo trait
-8. `src/db/pg_repo/mod.rs` — PgRepo impl for BeliefRepo
-9. `src/server/hub/mod.rs` — `pub mod beliefs;`
-10. `src/server/hub/dag/single.rs` — gatekeeper hook + return ae_id
-11. `src/server/api/workflows/mod.rs` — register belief + mask routes
-12. `src/server/ws/events.rs` — BeliefsExtracted event
+8. `src/db/mod.rs` — BeliefRow, NewBelief, BeliefExtractionPlanRow
+9. `src/db/traits/mod.rs` — BeliefRepo trait with query_beliefs + list_belief_labels
+10. `src/db/pg_repo/mod.rs` — PgRepo impl
+11. `src/server/hub/dag/mod.rs` — add `belief_capture` branch, `pub mod belief_capture`
+12. `src/server/hub/mod.rs` — `pub mod beliefs;`
+13. `src/server/executors/room/mod.rs` — belief retrieval + injection into system prompts
+14. `src/server/hub/dag/room_step/mod.rs` — thread workflow_execution_id to room executor
+15. `src/server/api/workflows/mod.rs` — register routes
+16. `src/server/ws/events.rs` — BeliefsExtracted event
 
 ---
 
 ## Implementation Order
 
-### Phase A: Belief Capture (backend)
+### v1: Foundation + Fixed Gatekeeper
+Proves the pipeline works end-to-end. No assistant, no curated plans. Fixed gatekeeper prompt with basic labels.
+
 1. Migration `0025_beliefs.sql`
-2. DB layer: BeliefRow, NewBelief, BeliefRepo trait, PgRepo impl
-3. Gatekeeper module: `src/server/hub/beliefs/`
-4. DAG hook in `single.rs`
-5. Belief API endpoints
-6. WebSocket event
-7. Tests
+2. DB layer: BeliefRow, BeliefExtractionPlanRow, BeliefRepo trait, PgRepo impl
+3. Content normalization layer (upstream-type-aware artifact loading)
+4. Belief capture executor with fixed gatekeeper
+5. DAG integration (`"belief_capture"` branch)
+6. Belief API endpoints
+7. Room mask injection (dump all beliefs — no retrieval yet)
+8. WebSocket event
+9. Tests
 
-### Phase B: Mask Agent (backend)
-8. Mask chat endpoint (`mask_handlers.rs`)
-9. Belief formatting for mask system prompt
-10. Session management (mode_id = "mask")
-11. Tests
+### v2: Curated Plans + Query Retrieval
+Beliefs get domain-specific labels. Conversations get targeted context.
 
-### Phase C: Frontend
-12. Belief extraction toggle on step config
-13. "Ask about this workflow" button
-14. Mask chat panel (reuse chat components)
-15. Beliefs list view (optional)
+10. Extraction plan assistant (belief capture AssistantTab)
+11. Plan-aware gatekeeper (constrained tag vocabulary, focused extraction)
+12. Query-based retrieval (cheap LLM call per message → filtered beliefs)
+13. `list_belief_labels` endpoint (powers query LLM and frontend filter UI)
+14. Standalone mask chat endpoint
+15. Tests
+
+### v3: Frontend
+16. Belief capture node on canvas (protocol node type)
+17. Extraction plan assistant UI (chat tab on node)
+18. Beliefs panel (view/filter beliefs for an execution)
+19. "Ask about this workflow" button (standalone mask chat)
+20. Room meeting with belief retrieval indicator
 
 ---
 
 ## Verification
 
 1. `cargo check` + `cargo test` — no regressions
-2. Run migration, create workflow with `extract_beliefs=true`
-3. Execute workflow → verify beliefs in DB
-4. `GET /api/workflows/:wid/beliefs` → returns beliefs
-5. Open mask chat → ask questions → mask answers from beliefs
-6. Verify mask cites belief IDs and handles contradictions
+2. Build workflow: [Documenter] → [Belief Capture] → [Room Meeting]
+3. Execute → documenter produces documents → capture extracts beliefs → room agents discuss with masks
+4. Beliefs labeled with document titles and semantic tags
+5. `GET /beliefs?tags=authentication` → returns only auth-related beliefs
+6. Room agents cite belief IDs in discussion
+7. User asks question → retrieval returns relevant subset → agent answers from targeted context
+8. Multiple capture nodes in pipeline work independently
+
+---
+
+## Design Decisions
+
+**Why a protocol node, not a per-step hook?**
+- Zero contamination of upstream protocols — workers never know beliefs exist
+- User-controlled: place it on the canvas or don't
+- Composable: multiple captures in a pipeline, each with different focus
+- Self-contained: no modifications to any other executor
+
+**Why read artifacts, not transcripts?**
+- Protocols already produce distilled outputs (documents, structured data)
+- Re-processing raw transcripts wastes tokens on noise (tool narration, intermediate reasoning)
+- The protocol's own summarization is the first filter; the gatekeeper is the second
+- Much cheaper — a 2000-word document vs 50 execution messages with tool results
+
+**Why static labeling vocabulary?**
+- Step names, document def names, descriptions already exist in the DB
+- Constraining the gatekeeper to known labels prevents label drift
+- Query LLM uses the same labels — perfect alignment
+- The labeling IS the query interface
+
+**Why LLM-generated queries?**
+- Haiku-level call, ~500 tokens, fractions of a cent per query
+- Maps natural language to structured filters using real label values
+- Handles nuanced questions: "what contradictions?" → `WHERE cross_source_tension IS NOT NULL`
+- Scales regardless of belief store size
+
+**Why assistant-driven configuration?**
+- Matches the documenter pattern (proven UX)
+- User describes intent, assistant creates extraction plan
+- No forms, no dials — just conversation
+- Plan defines the tag vocabulary which is the contract between extraction and retrieval
+
+---
+
+## Dependencies & Considerations
+
+**Documenter output quality**: The belief system is only as good as what it reads. Documenter writer phase must produce specific, fact-dense reports. When a belief capture node sits downstream, the coordinator should guide writers toward explicit claims. This is a quality requirement, not a code change.
+
+**Dynamic document creation**: The full pipeline (PRD → decomposition → N dynamic tickets → workers → meeting) requires the documenter to create document definitions at runtime. This is a separate feature tracked outside this plan, but belief capture doesn't depend on it — it works with however many documents the documenter produces.
+
+**Chaining belief captures**: When belief capture B sits downstream of belief capture A, B should skip re-extracting from A's transcript. A's beliefs are already in the DB. B processes its OTHER upstream connections. Both sets of beliefs are queryable by the meeting.
 
 ---
 
 ## Future Enhancements (not in this plan)
 
-- **`report_finding` tool**: Agents self-report beliefs inline (no gatekeeper needed for those)
-- **Milestone + window system**: Real-time belief capture during long executions
-- **Convergence step type**: Automatic belief deduplication and contradiction resolution
-- **Taxonomy management**: Controlled tag vocabulary for cross-workflow queries
+- **`report_finding` tool**: Agents self-report beliefs inline during execution
+- **Convergence protocol**: Separate step type that deduplicates, resolves contradictions, merges belief sets
+- **Per-agent belief filtering**: Architect sees architecture beliefs, developer sees implementation beliefs
 - **Cross-workflow mask**: Query beliefs across multiple workflow executions
 - **Belief-type authority**: Facts override opinions in convergence (BOCA Phase 7 finding)
+- **Extraction model override**: Use cheaper models (Haiku) for gatekeeper calls
+- **Belief versioning**: Track how beliefs evolve across re-runs
+- **Dynamic document creation**: Documenter creates defs at runtime based on upstream content
