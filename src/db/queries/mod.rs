@@ -322,6 +322,16 @@ pub async fn get_session(pool: &PgPool, session_id: Uuid) -> Result<Option<Sessi
     Ok(row)
 }
 
+/// Find a chat session linked to a workflow step via draft_config->>'step_id'.
+pub async fn find_session_by_step_id(pool: &PgPool, step_id: Uuid) -> Result<Option<SessionRow>> {
+    let row: Option<SessionRow> = sqlx::query_as("SELECT id, user_id, mode_id, title, summary, agent_id, draft_config, created_at, updated_at FROM chat_sessions WHERE draft_config->>'step_id' = $1")
+        .bind(step_id.to_string())
+        .fetch_optional(pool)
+        .await
+        .context("Failed to find session by step_id")?;
+    Ok(row)
+}
+
 /// Delete a session and its messages
 pub async fn delete_session(pool: &PgPool, session_id: Uuid) -> Result<()> {
     sqlx::query("DELETE FROM chat_messages WHERE session_id = $1")

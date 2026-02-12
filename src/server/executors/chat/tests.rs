@@ -211,6 +211,12 @@ mod tests {
         async fn clear_session_messages(&self, _session_id: Uuid) -> anyhow::Result<()> {
             Ok(())
         }
+        async fn find_session_by_step_id(
+            &self,
+            _step_id: Uuid,
+        ) -> anyhow::Result<Option<SessionRow>> {
+            Ok(None)
+        }
         async fn link_session_agent(
             &self,
             _session_id: Uuid,

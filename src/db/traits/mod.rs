@@ -265,6 +265,9 @@ pub trait ServerRepo: Send + Sync {
     /// Clear all messages for a session.
     async fn clear_session_messages(&self, session_id: Uuid) -> Result<()>;
 
+    /// Find a chat session linked to a workflow step via draft_config.
+    async fn find_session_by_step_id(&self, step_id: Uuid) -> Result<Option<SessionRow>>;
+
     /// Link an agent to a session (and clear draft_config).
     async fn link_session_agent(&self, session_id: Uuid, agent_id: Uuid) -> Result<()>;
 
