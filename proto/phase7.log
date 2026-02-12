@@ -1,0 +1,430 @@
+[02:44:00.815] [ INFO] 
+[02:44:00.815] [ INFO] ======================================================================
+[02:44:00.816] [ INFO]   BOCA PHASE 7: MULTI-WORKFLOW META-CONVERGENCE
+[02:44:00.816] [ INFO] ======================================================================
+[02:44:00.816] [ INFO] Testing beliefs as inter-workflow communication primitives
+[02:44:00.816] [ INFO] 
+[02:44:00.816] [ INFO] ======================================================================
+[02:44:00.816] [ INFO]   LOADING WF1 DATA (Phase 4/6)
+[02:44:00.816] [ INFO] ======================================================================
+[02:44:00.820] [ INFO] WF1 node outputs: 6
+[02:44:00.820] [ INFO] WF1 raw v2 beliefs: 98
+[02:44:00.820] [ INFO] WF1 converged v2 beliefs: 40
+[02:44:00.821] [ INFO] 
+[02:44:00.821] [ INFO] ======================================================================
+[02:44:00.821] [ INFO]   STEP 0: TAXONOMY GENERATION (1 call)
+[02:44:00.821] [ INFO] ======================================================================
+[02:44:00.821] [ INFO] [LLM] TAXONOMY (json, max_tokens=4096)
+[02:44:35.453] [ INFO]   → 2984 in / 2808 out (34631ms)
+[02:44:35.453] [ INFO] Generated 52 taxonomy tags
+[02:44:35.454] [ INFO]   [ performance] critical_alert_latency_max: Maximum end-to-end latency for critical-priority notificatio
+[02:44:35.454] [ INFO]   [ performance] concurrent_websocket_connections: Minimum concurrent WebSocket connections each relay node mus
+[02:44:35.454] [ INFO]   [ performance] notification_payload_max_size: Maximum payload size per notification (4 kilobytes)
+[02:44:35.454] [ INFO]   [ performance] provider_rate_limit_sustained: Sustained rate limit per notification provider (100 notifica
+[02:44:35.454] [ INFO]   [ performance] provider_rate_limit_burst: Burst rate limit capacity (150 notifications per second for 
+[02:44:35.454] [ INFO]   [ reliability] retry_max_attempts: Maximum number of retry attempts for failed notification del
+[02:44:35.454] [ INFO]   [ reliability] retry_backoff_strategy: Exponential backoff strategy for retries starting at 1 secon
+[02:44:35.454] [ INFO]   [ reliability] retry_backoff_ceiling: Maximum backoff duration for retries (30 seconds)
+[02:44:35.454] [ INFO]   [ reliability] dead_letter_queue_timeout: Time after which undelivered notifications move to DLQ (24 h
+[02:44:35.454] [ INFO]   [ reliability] dlq_deletion_policy: DLQ entries are never auto-deleted and require manual review
+[02:44:35.454] [ INFO]   [ reliability] failover_architecture_type: Active-passive failover architecture pattern
+[02:44:35.454] [ INFO]   [ reliability] failure_detection_window: Time window to detect primary node failure (30 seconds)
+[02:44:35.454] [ INFO]   [ reliability] standby_promotion_time: Time for standby node to assume primary responsibilities (60
+[02:44:35.455] [ INFO]   [ reliability] health_check_interval: Frequency of health probe execution (5 seconds)
+[02:44:35.455] [ INFO]   [ reliability] health_check_failure_threshold: Number of consecutive failed health probes before failover (
+[02:44:35.455] [ INFO]   [ reliability] recovery_time_objective: Maximum time for full service recovery from incident (30 min
+[02:44:35.455] [ INFO]   [ reliability] backup_frequency: Frequency of full database snapshots (every 4 hours)
+[02:44:35.455] [ INFO]   [ reliability] point_in_time_recovery: Continuous WAL archiving for point-in-time recovery capabili
+[02:44:35.455] [ INFO]   [    security] encryption_at_rest_algorithm: Encryption algorithm for data at rest (AES-256)
+[02:44:35.455] [ INFO]   [    security] encryption_key_rotation_period: Frequency of encryption key rotation (every 90 days)
+[02:44:35.455] [ INFO]   [    security] key_management_service: Key management service used for encryption (AWS KMS)
+[02:44:35.455] [ INFO]   [    security] service_authentication_method: Authentication method for service-to-service communication (
+[02:44:35.455] [ INFO]   [    security] client_authentication_method: Authentication method for client API access (JWT tokens)
+[02:44:35.455] [ INFO]   [    security] jwt_token_expiration: Expiration time for JWT tokens (15 minutes)
+[02:44:35.455] [ INFO]   [    security] jwt_refresh_token_rotation: Refresh token rotation policy for JWT authentication
+[02:44:35.455] [ INFO]   [  compliance] audit_log_retention_period: Minimum retention period for notification audit logs (7 year
+[02:44:35.455] [ INFO]   [  compliance] audit_log_regulatory_basis: Regulatory requirement mandating audit log retention (HIPAA 
+[02:44:35.456] [ INFO]   [  compliance] audit_log_immutability: Audit logs are immutable/write-once append-only once written
+[02:44:35.456] [ INFO]   [  compliance] data_residency_requirement: Patient data must not leave originating geographic region
+[02:44:35.456] [ INFO]   [  compliance] cross_region_metadata_policy: Cross-region routing permitted only for de-identified metada
+[02:44:35.456] [ INFO]   [  compliance] hipaa_training_frequency: Required frequency of HIPAA security training for operations
+[02:44:35.456] [ INFO]   [  compliance] training_record_retention: Retention period for HIPAA training records (7 years)
+[02:44:35.456] [ INFO]   [  compliance] vendor_sla_review_frequency: Frequency of third-party notification provider SLA reviews (
+[02:44:35.457] [ INFO]   [  compliance] vendor_remediation_period: Remediation period for non-compliant vendors (30 days)
+[02:44:35.457] [ INFO]   [ reliability] uptime_target_percentage: Target system availability (99.95% per calendar month)
+[02:44:35.457] [ INFO]   [  operations] sla_breach_escalation: Automatic paging of on-call SRE upon SLA breach
+[02:44:35.457] [ INFO]   [  operations] incident_acknowledgment_time: Maximum time for on-call team to acknowledge service-impacti
+[02:44:35.457] [ INFO]   [  operations] post_incident_review_deadline: Deadline for blameless post-mortem after P1/P2 incidents (5 
+[02:44:35.457] [ INFO]   [  operations] deployment_window_schedule: Permitted production deployment time windows (Tuesday-Thursd
+[02:44:35.457] [ INFO]   [  operations] emergency_deployment_approval: Required approval level for off-window emergency deployments
+[02:44:35.457] [ INFO]   [  operations] change_advisory_board_threshold: Change impact threshold requiring CAB review (5% of patient-
+[02:44:35.457] [ INFO]   [  operations] cab_meeting_frequency: Regular Change Advisory Board meeting frequency (weekly)
+[02:44:35.458] [ INFO]   [  operations] emergency_cab_convene_time: Time to convene emergency CAB meeting (within 2 hours)
+[02:44:35.458] [ INFO]   [  operations] horizontal_scaling_threshold: Utilization threshold triggering horizontal scaling (70% sus
+[02:44:35.458] [ INFO]   [  operations] log_shipping_destination: Destination for audit and application log shipping (S3 withi
+[02:44:35.459] [ INFO]   [    clinical] notification_priority_levels: Supported priority levels: critical, high, normal, low with 
+[02:44:35.459] [ INFO]   [    clinical] critical_priority_delivery: Critical priority notifications trigger immediate delivery a
+[02:44:35.459] [ INFO]   [    clinical] high_priority_delivery_window: High priority notifications delivered within 30 seconds
+[02:44:35.459] [ INFO]   [    clinical] normal_priority_delivery_window: Normal priority notifications delivered best-effort within 5
+[02:44:35.459] [ INFO]   [    clinical] low_priority_delivery_window: Low priority notifications batched and delivered within 1 ho
+[02:44:35.459] [ INFO]   [ integration] delivery_channel_types: Supported delivery channels: SMS, push notification, email, 
+[02:44:35.459] [ INFO]   [    clinical] alert_fatigue_threshold_basis: Critical latency threshold based on clinician usability stud
+[02:44:35.460] [ INFO] 
+[02:44:35.460] [ INFO] ======================================================================
+[02:44:35.460] [ INFO]   STEP 1: WF2 NODE GENERATION (4 calls)
+[02:44:35.460] [ INFO] ======================================================================
+[02:44:35.461] [ INFO] [LLM] WF2:Node_1:Operations Engineer (text, max_tokens=2048)
+[02:45:24.393] [ INFO]   → 1206 in / 2048 out (48932ms)
+[02:45:24.394] [ INFO]   Node 1 (Operations Engineer): 6949 chars
+[02:45:24.394] [ INFO] [LLM] WF2:Node_2:Compliance Officer (text, max_tokens=2048)
+[02:46:14.140] [ INFO]   → 1203 in / 2048 out (49746ms)
+[02:46:14.141] [ INFO]   Node 2 (Compliance Officer): 8759 chars
+[02:46:14.142] [ INFO] [LLM] WF2:Node_3:Clinical Advisor (text, max_tokens=2048)
+[02:47:07.864] [ INFO]   → 1219 in / 2048 out (53722ms)
+[02:47:07.866] [ INFO]   Node 3 (Clinical Advisor): 8465 chars
+[02:47:07.866] [ INFO] [LLM] WF2:Node_4:Integration Engineer (text, max_tokens=2048)
+[02:47:55.940] [ INFO]   → 1350 in / 2048 out (48074ms)
+[02:47:55.940] [ INFO]   Node 4 (Integration Engineer): 9022 chars
+[02:47:55.942] [ INFO] 
+[02:47:55.942] [ INFO] ======================================================================
+[02:47:55.942] [ INFO]   STEP 2: WF2 BELIEF EXTRACTION V3 (4 calls)
+[02:47:55.942] [ INFO] ======================================================================
+[02:47:55.942] [ INFO] [LLM] WF2:BELIEFS_V3:Node_1 (json, max_tokens=4096)
+[02:48:32.703] [ INFO]   → 4155 in / 3102 out (36761ms)
+[02:48:32.704] [ INFO]   Node 1 (Operations Engineer): 21 beliefs
+[02:48:32.704] [ INFO]     [w2b01] [fact] critical_alert_latency_max (high) The SLA defines 500ms as the hard target for end-to-end critical alert...
+[02:48:32.704] [ INFO]     [w2b02] [opinion] critical_alert_latency_max (medium) If this is a P99 SLA, alerting should trigger at 400ms P99 (80% of thr...
+[02:48:32.704] [ INFO]     [w2b03] [fact] uptime_target_percentage (high) The uptime target is 99.95% monthly....
+[02:48:32.704] [ INFO]     [w2b04] [fact] uptime_target_percentage (high) The downtime budget is 21.6 minutes per month (4.4 hours/year)....
+[02:48:32.705] [ INFO]     [w2b05] [fact] failure_detection_window (high) The failure detection window is 30 seconds (6 probes × 5s intervals)....
+[02:48:32.705] [ INFO]     [w2b06] [fact] standby_promotion_time (high) Standby promotion time is 60 seconds....
+[02:48:32.705] [ INFO]     [w2b07] [fact] standby_promotion_time, failure_detection_window (high) The total failover window is 90 seconds (30s detection + 60s promotion...
+[02:48:32.705] [ INFO]     [w2b08] [observation] critical_alert_latency_max, standby_promotion_time, failure_detection_window (high) The 90-second total failover window will blow the 500ms latency SLA fo...
+[02:48:32.705] [ INFO]     [w2b09] [fact] uptime_target_percentage, standby_promotion_time, failure_detection_window (high) A single failover consumes 7% of the monthly error budget....
+[02:48:32.705] [ INFO]     [w2b10] [fact] recovery_time_objective (high) The Recovery Time Objective (RTO) is 30 minutes from incident declarat...
+[02:48:32.705] [ INFO]     [w2b11] [observation] recovery_time_objective, incident_acknowledgment_time (high) The runbook doesn't define whether the 30-minute RTO starts when the a...
+[02:48:32.705] [ INFO]     [w2b12] [opinion] uptime_target_percentage (medium) Monthly burn rate alerts should trigger at 50% budget consumed (10.8 m...
+[02:48:32.705] [ INFO]     [w2b13] [opinion] critical_alert_latency_max (medium) WARNING alert should trigger when P99 latency ≥ 400ms for 2 consecutiv...
+[02:48:32.705] [ INFO]     [w2b14] [opinion] critical_alert_latency_max (medium) CRITICAL alert should trigger when P99 latency ≥ 500ms for 5 minutes, ...
+[02:48:32.706] [ INFO]     [w2b15] [fact] deployment_window_schedule (high) Planned maintenance windows are Tue-Thu 02:00-06:00 UTC....
+[02:48:32.706] [ INFO]     [w2b16] [observation] uptime_target_percentage, deployment_window_schedule (high) It is unclear whether the 99.95% availability SLA excludes planned mai...
+[02:48:32.706] [ INFO]     [w2b17] [opinion] concurrent_websocket_connections, horizontal_scaling_threshold (medium) Active WebSocket connections per node should alert at > 7,000/node (70...
+[02:48:32.706] [ INFO]     [w2b18] [opinion] dead_letter_queue_timeout (medium) DLQ depth should trigger warning at > 500 messages and critical alert ...
+[02:48:32.706] [ INFO]     [w2b19] [opinion] critical_alert_latency_max, incident_acknowledgment_time (medium) Incidents should be auto-declared when P99 latency > 500ms for 10 minu...
+[02:48:32.706] [ INFO]     [w2b20] [opinion] uptime_target_percentage, incident_acknowledgment_time (medium) Incidents should be auto-declared when uptime < 99.9% in any 10-minute...
+[02:48:32.706] [ INFO]     [w2b21] [opinion] dead_letter_queue_timeout, incident_acknowledgment_time (medium) Incidents should be auto-declared when DLQ growth > 1000 messages/hour...
+[02:48:32.706] [ INFO] [LLM] WF2:BELIEFS_V3:Node_2 (json, max_tokens=4096)
+[02:49:01.783] [ INFO]   → 4156 in / 2158 out (29076ms)
+[02:49:01.783] [ INFO]   Node 2 (Compliance Officer): 16 beliefs
+[02:49:01.784] [ INFO]     [w2b22] [fact] audit_log_retention_period (high) Audit log retention period is 7 years....
+[02:49:01.784] [ INFO]     [w2b23] [fact] audit_log_regulatory_basis (high) The 7-year audit log retention implements HIPAA § 164.530(j)(2), which...
+[02:49:01.784] [ INFO]     [w2b24] [fact] audit_log_immutability (high) Audit logs must use write-once, append-only storage controls....
+[02:49:01.784] [ INFO]     [w2b25] [policy] audit_log_immutability (high) Quarterly verification is required to confirm that write-once, append-...
+[02:49:01.784] [ INFO]     [w2b26] [fact] hipaa_training_frequency (high) All operations personnel must complete HIPAA security training annuall...
+[02:49:01.784] [ INFO]     [w2b27] [fact] training_record_retention (high) Training records must be retained for 7 years....
+[02:49:01.785] [ INFO]     [w2b28] [policy] audit_log_retention_period (medium) All P1/P2 post-mortem reports, remediation documentation, and incident...
+[02:49:01.785] [ INFO]     [w2b29] [policy] audit_log_retention_period (medium) Change Advisory Board meeting minutes affecting PHI-handling systems m...
+[02:49:01.785] [ INFO]     [w2b30] [fact] vendor_sla_review_frequency (high) Vendor SLA reviews must be conducted quarterly....
+[02:49:01.785] [ INFO]     [w2b31] [policy] audit_log_retention_period (medium) Quarterly vendor review documentation must be retained for 7 years....
+[02:49:01.785] [ INFO]     [w2b32] [fact] encryption_at_rest_algorithm (high) Data at rest must be encrypted using AES-256 encryption....
+[02:49:01.785] [ INFO]     [w2b33] [fact] encryption_key_rotation_period (high) Encryption key rotation occurs every 90 days....
+[02:49:01.785] [ INFO]     [w2b34] [fact] key_management_service (high) Encryption at rest is implemented via AWS KMS....
+[02:49:01.785] [ INFO]     [w2b35] [fact] jwt_token_expiration (high) JWT tokens for external API consumers have 15-minute expiration....
+[02:49:01.785] [ INFO]     [w2b36] [fact] service_authentication_method (high) Service-to-service authentication uses mutual TLS (mTLS) with certific...
+[02:49:01.785] [ INFO]     [w2b37] [opinion] jwt_refresh_token_rotation (medium) JWT tokens must support immediate revocation capability for compromise...
+[02:49:01.785] [ INFO] [LLM] WF2:BELIEFS_V3:Node_3 (json, max_tokens=4096)
+[02:49:30.863] [ INFO]   → 4155 in / 2185 out (29077ms)
+[02:49:30.864] [ INFO]   Node 3 (Clinical Advisor): 15 beliefs
+[02:49:30.864] [ INFO]     [w2b38] [fact] critical_alert_latency_max (high) The critical alert latency SLA is 500 milliseconds....
+[02:49:30.865] [ INFO]     [w2b39] [opinion] critical_alert_latency_max, notification_priority_levels (high) Tier 1 (Immediate life threat) alerts should have 500ms latency SLA fo...
+[02:49:30.865] [ INFO]     [w2b40] [opinion] notification_priority_levels (high) Tier 2 (Urgent clinical) alerts should have 5 seconds latency SLA for ...
+[02:49:30.865] [ INFO]     [w2b41] [opinion] notification_priority_levels (high) Tier 3 (Important non-urgent) alerts should have 30 seconds latency SL...
+[02:49:30.865] [ INFO]     [w2b42] [opinion] notification_priority_levels, low_priority_delivery_window (high) Tier 4 (Administrative) alerts should have 5 minutes latency SLA for s...
+[02:49:30.865] [ INFO]     [w2b43] [fact] uptime_target_percentage (high) The uptime target is 99.95% (4.4 hours per year downtime)....
+[02:49:30.865] [ INFO]     [w2b44] [opinion] uptime_target_percentage (medium) For life-critical alerts, 99.99% uptime (52 minutes per year) should b...
+[02:49:30.865] [ INFO]     [w2b45] [fact] health_check_interval (high) The health check interval is 5 seconds....
+[02:49:30.866] [ INFO]     [w2b46] [fact] failure_detection_window (high) The system requires 30 seconds of consecutive health probe failures be...
+[02:49:30.866] [ INFO]     [w2b47] [opinion] failure_detection_window (medium) 30-second failure detection is marginally acceptable but should be red...
+[02:49:30.866] [ INFO]     [w2b48] [opinion] health_check_interval, failure_detection_window (high) Health probe interval should be reduced to 3 seconds resulting in 18-s...
+[02:49:30.866] [ INFO]     [w2b49] [fact] standby_promotion_time (high) Standby node promotion, connection draining, and state sync requires 6...
+[02:49:30.866] [ INFO]     [w2b50] [fact] recovery_time_objective (high) Total failover recovery time is 90 seconds (30 seconds detection plus ...
+[02:49:30.866] [ INFO]     [w2b51] [opinion] recovery_time_objective (high) The 90-second notification blackout window during failover represents ...
+[02:49:30.866] [ INFO]     [w2b52] [opinion] critical_alert_latency_max, notification_priority_levels (high) P99 latency for Tier 1 alerts should be tracked separately with thresh...
+[02:49:30.866] [ INFO] [LLM] WF2:BELIEFS_V3:Node_4 (json, max_tokens=4096)
+[02:49:53.880] [ INFO]   → 4155 in / 1963 out (23014ms)
+[02:49:53.881] [ INFO]   Node 4 (Integration Engineer): 15 beliefs
+[02:49:53.881] [ INFO]     [w2b53] [fact] critical_alert_latency_max (high) Current specification sets critical alert latency at 500ms end-to-end ...
+[02:49:53.881] [ INFO]     [w2b54] [opinion] critical_alert_latency_max (medium) Realistic end-to-end latency SLA is 750 milliseconds for P95 latency a...
+[02:49:53.881] [ INFO]     [w2b55] [fact] health_check_interval (high) Health check probes are configured at 5-second intervals....
+[02:49:53.881] [ INFO]     [w2b56] [fact] failure_detection_window (high) Failure detection window is set to 30 seconds....
+[02:49:53.881] [ INFO]     [w2b57] [opinion] health_check_interval (high) Vendor API health endpoints should be queried every 30 seconds as a se...
+[02:49:53.881] [ INFO]     [w2b58] [fact] standby_promotion_time (high) Standby promotion time is specified as 60 seconds....
+[02:49:53.882] [ INFO]     [w2b59] [opinion] standby_promotion_time (medium) Promotion time estimate should be extended to 90 seconds to account fo...
+[02:49:53.882] [ INFO]     [w2b60] [fact] recovery_time_objective (high) Recovery Time Objective is set at 30 minutes....
+[02:49:53.882] [ INFO]     [w2b61] [fact] service_authentication_method (high) mTLS with certificate pinning is used for service-to-service integrati...
+[02:49:53.882] [ INFO]     [w2b62] [opinion] encryption_key_rotation_period (high) Certificate rotation cadence should be 90 days, aligned with KMS key r...
+[02:49:53.882] [ INFO]     [w2b63] [fact] jwt_token_expiration (high) JWT tokens have 15-minute expiration for external API consumers....
+[02:49:53.882] [ INFO]     [w2b64] [opinion] jwt_token_expiration (medium) Introduce 60-minute batch tokens with explicit scope restrictions for ...
+[02:49:53.882] [ INFO]     [w2b65] [fact] deployment_window_schedule (high) Production deployments are scheduled Tuesday-Thursday, 02:00-06:00 UTC...
+[02:49:53.882] [ INFO]     [w2b66] [opinion] deployment_window_schedule (high) 24-hour pre-deployment check should verify no vendor maintenance confl...
+[02:49:53.882] [ INFO]     [w2b67] [fact] change_advisory_board_threshold (high) Changes affecting >5% of patient-facing notifications require CAB revi...
+[02:49:53.882] [ INFO] 
+Total WF2 v3 beliefs: 67
+[02:49:53.882] [ INFO] Belief type distribution: {'fact': 35, 'opinion': 25, 'observation': 3, 'policy': 4}
+[02:49:53.885] [ INFO] 
+[02:49:53.885] [ INFO] ======================================================================
+[02:49:53.885] [ INFO]   STEP 3: WF2 CONVERGENCE (1 call)
+[02:49:53.885] [ INFO] ======================================================================
+[02:49:53.885] [ INFO] [LLM] WF2:CONVERGENCE (json, max_tokens=16384)
+[02:51:12.432] [ INFO]   → 8061 in / 5591 out (78546ms)
+[02:51:12.433] [ INFO] WF2 convergence: 67 → 26 beliefs
+[02:51:12.433] [ INFO]   Contradictions found: 4
+[02:51:12.433] [ INFO]   Contradictions resolved: 4
+[02:51:12.433] [ INFO]   cb01: critical_alert_latency_sla (strong) [RESOLVED]
+[02:51:12.433] [ INFO]   cb02: critical_alert_latency_monitoring_thresholds (unanimous)
+[02:51:12.434] [ INFO]   cb03: notification_priority_tier_recommendations (unique)
+[02:51:12.434] [ INFO]   cb04: uptime_target_percentage (strong) [RESOLVED]
+[02:51:12.434] [ INFO]   cb05: uptime_monitoring_thresholds (unanimous)
+[02:51:12.434] [ INFO]   cb06: health_check_interval (strong) [RESOLVED]
+[02:51:12.434] [ INFO]   cb07: failure_detection_window (unanimous)
+[02:51:12.434] [ INFO]   cb08: standby_promotion_time (strong) [RESOLVED]
+[02:51:12.434] [ INFO]   cb09: total_failover_window (unanimous)
+[02:51:12.434] [ INFO]   cb10: failover_latency_sla_conflict (unanimous)
+[02:51:12.434] [ INFO]   cb11: recovery_time_objective (unanimous)
+[02:51:12.434] [ INFO]   cb12: incident_auto_declaration_rules (unanimous)
+[02:51:12.434] [ INFO]   cb13: deployment_windows (unanimous)
+[02:51:12.434] [ INFO]   cb14: websocket_capacity_monitoring (unique)
+[02:51:12.435] [ INFO]   cb15: dead_letter_queue_monitoring (unique)
+[02:51:12.435] [ INFO]   cb16: audit_log_retention_period (unanimous)
+[02:51:12.435] [ INFO]   cb17: audit_log_immutability (unanimous)
+[02:51:12.435] [ INFO]   cb18: hipaa_training_and_record_retention (unanimous)
+[02:51:12.435] [ INFO]   cb19: vendor_sla_review_frequency (unanimous)
+[02:51:12.435] [ INFO]   cb20: encryption_at_rest (unanimous)
+[02:51:12.435] [ INFO]   cb21: jwt_token_expiration (unanimous)
+[02:51:12.435] [ INFO]   cb22: jwt_batch_token_recommendation (unique)
+[02:51:12.435] [ INFO]   cb23: jwt_revocation_capability (unique)
+[02:51:12.435] [ INFO]   cb24: service_authentication_method (unanimous)
+[02:51:12.435] [ INFO]   cb25: vendor_health_monitoring (unique)
+[02:51:12.435] [ INFO]   cb26: change_advisory_board_threshold (unique)
+[02:51:12.439] [ INFO] 
+[02:51:12.439] [ INFO] ======================================================================
+[02:51:12.439] [ INFO]   STEP 4: HIERARCHICAL META-CONVERGENCE (1 call)
+[02:51:12.439] [ INFO] ======================================================================
+[02:51:12.440] [ INFO] [LLM] META_CONVERGENCE (json, max_tokens=16384)
+[02:54:47.527] [ INFO]   → 7408 in / 14621 out (215087ms)
+[02:54:47.527] [ INFO] 
+Meta-convergence results:
+[02:54:47.528] [ INFO]   WF1 input: 40 converged beliefs
+[02:54:47.528] [ INFO]   WF2 input: 26 converged beliefs
+[02:54:47.528] [ INFO]   Output: 44 meta-beliefs
+[02:54:47.528] [ INFO]   Cross-validated: 10
+[02:54:47.528] [ INFO]   Cross-workflow splits: 2
+[02:54:47.528] [ INFO]   WF1-only topics: 22
+[02:54:47.528] [ INFO]   WF2-only topics: 10
+[02:54:47.528] [ INFO]   mb01: Critical Alert End-to-End Latency Requirement (cross_validated)
+[02:54:47.528] [ INFO]   mb02: Critical Alert Latency Performance Thresholds (cross_validated)
+[02:54:47.528] [ INFO]   mb03: Ingestion Processing Time Budget (single_workflow)
+[02:54:47.528] [ INFO]   mb04: Alert Escalation Timeout (single_workflow)
+[02:54:47.528] [ INFO]   mb05: Notification Priority Tier Structure and Delivery Targets (cross_workflow_split) [RESOLVED]
+[02:54:47.529] [ INFO]   mb06: Notification Payload Maximum Size (single_workflow)
+[02:54:47.529] [ INFO]   mb07: Retry Maximum Attempts (single_workflow)
+[02:54:47.529] [ INFO]   mb08: Retry Exponential Backoff Timing (single_workflow)
+[02:54:47.529] [ INFO]   mb09: Dead Letter Queue Timeout and Deletion Policy (single_workflow)
+[02:54:47.529] [ INFO]   mb10: Audit Log Retention Period and Regulatory Basis (cross_validated)
+[02:54:47.529] [ INFO]   mb11: Audit Log Immutability and Integrity Verification (cross_validated)
+[02:54:47.529] [ INFO]   mb12: Critical Alert Persistence and Acknowledgment (single_workflow)
+[02:54:47.529] [ INFO]   mb13: Critical Alert Channel Fallback (single_workflow)
+[02:54:47.529] [ INFO]   mb14: Provider Rate Limiting Parameters (single_workflow)
+[02:54:47.529] [ INFO]   mb15: WebSocket Concurrent Connection Capacity (single_workflow)
+[02:54:47.529] [ INFO]   mb16: Relay Node Deployment Configuration (single_workflow)
+[02:54:47.529] [ INFO]   mb17: Horizontal Autoscaling Threshold (single_workflow)
+[02:54:47.529] [ INFO]   mb18: Priority Processing Capacity Allocation (single_workflow)
+[02:54:47.529] [ INFO]   mb19: Kafka Cluster Configuration (single_workflow)
+[02:54:47.529] [ INFO]   mb20: Active-Passive Failover Timing (cross_validated)
+[02:54:47.530] [ INFO]   mb21: Failover Latency SLA Conflict and Patient Safety Concern (single_workflow)
+[02:54:47.530] [ INFO]   mb22: Health Check Configuration (cross_validated)
+[02:54:47.530] [ INFO]   mb23: WebSocket Client Reconnection Strategy (single_workflow)
+[02:54:47.530] [ INFO]   mb24: Encryption at Rest and Key Rotation (cross_validated)
+[02:54:47.530] [ INFO]   mb25: Encryption in Transit (single_workflow)
+[02:54:47.530] [ INFO]   mb26: Certificate and Key Management (cross_validated)
+[02:54:47.530] [ INFO]   mb27: JWT Token Authentication and Expiration (cross_validated)
+[02:54:47.530] [ INFO]   mb28: Service-to-Service Authentication Method (cross_validated)
+[02:54:47.530] [ INFO]   mb29: RBAC and MFA Requirements Gap (single_workflow)
+[02:54:47.530] [ INFO]   mb30: Data Residency Requirements (single_workflow)
+[02:54:47.530] [ INFO]   mb31: De-identification Procedures (single_workflow)
+[02:54:47.531] [ INFO]   mb32: Business Associate Agreements Requirement (single_workflow)
+[02:54:47.531] [ INFO]   mb33: HIPAA Security Training Requirements (cross_validated)
+[02:54:47.531] [ INFO]   mb34: Production Certification Status and Compliance Gaps (single_workflow)
+[02:54:47.531] [ INFO]   mb35: Circuit Breaker Configuration (single_workflow)
+[02:54:47.531] [ INFO]   mb36: System Throughput and Burst Capacity (single_workflow)
+[02:54:47.531] [ INFO]   mb37: Operational Monitoring Thresholds (cross_validated)
+[02:54:47.531] [ INFO]   mb38: Audit Storage Capacity Estimate (single_workflow)
+[02:54:47.531] [ INFO]   mb39: Uptime Target Percentage and Error Budget (single_workflow)
+[02:54:47.531] [ INFO]   mb40: Recovery Time Objective and Incident Declaration (single_workflow)
+[02:54:47.531] [ INFO]   mb41: Deployment Windows and Maintenance Scheduling (single_workflow)
+[02:54:47.531] [ INFO]   mb42: Vendor SLA Review Frequency and Documentation Retention (single_workflow)
+[02:54:47.531] [ INFO]   mb43: Vendor Health Monitoring (single_workflow)
+[02:54:47.531] [ INFO]   mb44: Change Advisory Board Threshold (single_workflow)
+[02:54:47.536] [ INFO] 
+[02:54:47.536] [ INFO] ======================================================================
+[02:54:47.536] [ INFO]   STEP 5: FLAT CONVERGENCE BASELINE (1 call)
+[02:54:47.536] [ INFO] ======================================================================
+[02:54:47.536] [ INFO] Total raw beliefs for flat convergence: 165
+[02:54:47.537] [ INFO] [LLM] FLAT_CONVERGENCE (json, max_tokens=16384)
+[02:58:15.584] [ INFO]   → 18817 in / 12417 out (208047ms)
+[02:58:15.584] [ INFO] Flat convergence: 165 → 40 beliefs
+[02:58:15.585] [ INFO]   Contradictions found: 5
+[02:58:15.585] [ INFO]   Contradictions resolved: 5
+[02:58:15.590] [ INFO] 
+[02:58:15.590] [ INFO] ======================================================================
+[02:58:15.590] [ INFO]   STEP 6: QUALITY AUDIT (0 calls)
+[02:58:15.590] [ INFO] ======================================================================
+[02:58:15.595] [ INFO] WF2 converged claim coverage: 9/16
+[02:58:15.595] [ INFO]   wf2_claim_01 (Critical alert latency (overlap)): COVERED
+[02:58:15.595] [ INFO]   wf2_claim_02 (Encryption standard (overlap)): COVERED
+[02:58:15.596] [ INFO]   wf2_claim_03 (Audit log retention (overlap — triple poison)): COVERED
+[02:58:15.596] [ INFO]   wf2_claim_04 (Data residency (overlap)): MISSING
+[02:58:15.596] [ INFO]   wf2_claim_05 (Failover detection (overlap)): COVERED
+[02:58:15.596] [ INFO]   wf2_claim_06 (Authentication (overlap)): COVERED
+[02:58:15.596] [ INFO]   wf2_claim_07 (Rate limit (overlap)): MISSING
+[02:58:15.596] [ INFO]   wf2_claim_08 (DLQ threshold (overlap)): MISSING
+[02:58:15.596] [ INFO]   wf2_claim_09 (Incident response time): MISSING
+[02:58:15.596] [ INFO]   wf2_claim_10 (Backup frequency): MISSING
+[02:58:15.596] [ INFO]   wf2_claim_11 (HIPAA training frequency): COVERED
+[02:58:15.597] [ INFO]   wf2_claim_12 (Vendor SLA review frequency): COVERED
+[02:58:15.597] [ INFO]   wf2_claim_13 (Deployment window): COVERED
+[02:58:15.597] [ INFO]   wf2_claim_14 (Recovery Time Objective): MISSING
+[02:58:15.597] [ INFO]   wf2_claim_15 (Log shipping destination): MISSING
+[02:58:15.597] [ INFO]   wf2_claim_16 (CAB threshold): COVERED
+[02:58:15.606] [ INFO] 
+Meta-converged WF1 claim coverage: 11/12
+[02:58:15.606] [ INFO] Meta-converged WF2 claim coverage: 11/16
+[02:58:15.610] [ INFO] 
+Flat-converged WF1 claim coverage: 12/12
+[02:58:15.611] [ INFO] Flat-converged WF2 claim coverage: 13/16
+[02:58:15.616] [ INFO] 
+[02:58:15.616] [ INFO] ======================================================================
+[02:58:15.616] [ INFO]   STEP 7: QUESTION ANSWERING (3 calls)
+[02:58:15.616] [ INFO] ======================================================================
+[02:58:15.616] [ INFO] 
+--- APPROACH A: Meta-Converged Beliefs ---
+[02:58:15.617] [ INFO] [LLM] META:ANSWERS_20Q (json, max_tokens=16384)
+[03:01:01.909] [ INFO]   → 7006 in / 9667 out (166292ms)
+[03:01:01.918] [ INFO] 
+--- APPROACH B: Flat-Converged Beliefs ---
+[03:01:01.918] [ INFO] [LLM] FLAT:ANSWERS_20Q (json, max_tokens=16384)
+[03:02:56.815] [ INFO]   → 5115 in / 7963 out (114897ms)
+[03:02:56.823] [ INFO] 
+--- APPROACH C: Full Context (all node outputs) ---
+[03:02:56.824] [ INFO] [LLM] FULL_CONTEXT:ANSWERS_20Q (json, max_tokens=16384)
+[03:06:24.802] [ INFO]   → 16131 in / 11001 out (207978ms)
+[03:06:24.811] [ INFO] 
+[03:06:24.811] [ INFO] ======================================================================
+[03:06:24.811] [ INFO]   STEP 8: SCORING
+[03:06:24.811] [ INFO] ======================================================================
+[03:06:24.815] [ INFO]   meta_converged: wf1=3/5 wf2=2/5 cross=4/5 adv=4/5 TOTAL=13/20
+[03:06:24.816] [ INFO]   flat_converged: wf1=4/5 wf2=3/5 cross=4/5 adv=4/5 TOTAL=15/20
+[03:06:24.817] [ INFO]   full_context: wf1=4/5 wf2=2/5 cross=4/5 adv=4/5 TOTAL=14/20
+[03:06:24.825] [ INFO] 
+[03:06:24.825] [ INFO] ======================================================================
+[03:06:24.825] [ INFO]   SCOREBOARD — PHASE 7
+[03:06:24.825] [ INFO] ======================================================================
+[03:06:24.826] [ INFO] 
+[03:06:24.826] [ INFO] Approach               WF1   WF2  Cross   Adv   TOTAL   Pred
+[03:06:24.826] [ INFO] ------------------------------------------------------------
+[03:06:24.826] [ INFO] meta_converged        3/5   2/5   4/5    4/5   13/20    17
+[03:06:24.826] [ INFO] flat_converged        4/5   3/5   4/5    4/5   15/20    14
+[03:06:24.826] [ INFO] full_context          4/5   2/5   4/5    4/5   14/20    18
+[03:06:24.826] [ INFO] 
+Hierarchical premium: -2 (predicted: +3)
+[03:06:24.826] [ INFO] Cross-validation premium (adversarial): +0
+[03:06:24.826] [ INFO] 
+[03:06:24.827] [ INFO] ======================================================================
+[03:06:24.827] [ INFO]   PREDICTIONS vs ACTUALS
+[03:06:24.827] [ INFO] ======================================================================
+[03:06:24.827] [ INFO]   meta_converged       predicted=17  actual=13  delta=-4
+[03:06:24.827] [ INFO]   flat_converged       predicted=14  actual=15  delta=+1
+[03:06:24.827] [ INFO]   full_context         predicted=18  actual=14  delta=-4
+[03:06:24.827] [ INFO] 
+[03:06:24.827] [ INFO] ======================================================================
+[03:06:24.827] [ INFO]   ADVERSARIAL QUESTION DETAIL
+[03:06:24.827] [ INFO] ======================================================================
+[03:06:24.827] [ INFO] 
+P7Q16 (The integration team reports that the realistic end-to-end a...):
+[03:06:24.827] [ INFO]   meta_converged       [CORRECT] conf=5 correct_val | poison_val | CONTRADICTION | RESOLVED
+[03:06:24.828] [ INFO]   flat_converged       [CORRECT] conf=5 correct_val | poison_val | CONTRADICTION | RESOLVED
+[03:06:24.828] [ INFO]   full_context         [CORRECT] conf=5 correct_val | poison_val | CONTRADICTION | RESOLVED
+[03:06:24.828] [ INFO] 
+P7Q17 (Different sources report audit log retention periods of 3 ye...):
+[03:06:24.828] [ INFO]   meta_converged       [CORRECT] conf=5 correct_val | poison_val | CONTRADICTION | RESOLVED
+[03:06:24.828] [ INFO]   flat_converged       [CORRECT] conf=5 correct_val | poison_val | CONTRADICTION | RESOLVED
+[03:06:24.828] [ INFO]   full_context         [CORRECT] conf=5 correct_val
+[03:06:24.828] [ INFO] 
+P7Q18 (The integration team uses a 45-minute incident response thre...):
+[03:06:24.828] [ INFO]   meta_converged       [  WRONG] conf=3 poison_val
+[03:06:24.828] [ INFO]   flat_converged       [  WRONG] conf=5 poison_val
+[03:06:24.828] [ INFO]   full_context         [  WRONG] conf=5 poison_val
+[03:06:24.828] [ INFO] 
+P7Q19 (Across all available sources, what audit log retention perio...):
+[03:06:24.828] [ INFO]   meta_converged       [CORRECT] conf=5 
+[03:06:24.829] [ INFO]   flat_converged       [CORRECT] conf=5 poison:claim_03
+[03:06:24.829] [ INFO]   full_context         [CORRECT] conf=5 poison:claim_03
+[03:06:24.829] [ INFO] 
+P7Q20 (What is the critical alert latency SLA, and do all workflows...):
+[03:06:24.829] [ INFO]   meta_converged       [CORRECT] conf=5 poison:wf2_claim_01
+[03:06:24.829] [ INFO]   flat_converged       [CORRECT] conf=5 poison:wf2_claim_01
+[03:06:24.829] [ INFO]   full_context         [CORRECT] conf=5 poison:wf2_claim_01
+[03:06:24.829] [ INFO] 
+[03:06:24.829] [ INFO] ======================================================================
+[03:06:24.829] [ INFO]   CONFIDENCE CALIBRATION (meta-converged)
+[03:06:24.829] [ INFO] ======================================================================
+[03:06:24.829] [ INFO]   P7Q01: conf=4 cov=full
+[03:06:24.830] [ INFO]   P7Q02: conf=2 cov=full
+[03:06:24.830] [ INFO]   P7Q03: conf=4 cov=full
+[03:06:24.830] [ INFO]   P7Q04: conf=4 cov=full
+[03:06:24.830] [ INFO]   P7Q05: conf=3 cov=full
+[03:06:24.830] [ INFO]   P7Q06: conf=2 cov=partial gaps=The beliefs do not contain a specific incident response ackn
+[03:06:24.830] [ INFO]   P7Q07: conf=1 cov=none gaps=The beliefs do not cover database backup procedures, snapsho
+[03:06:24.830] [ INFO]   P7Q08: conf=3 cov=full
+[03:06:24.830] [ INFO]   P7Q09: conf=5 cov=full
+[03:06:24.830] [ INFO]   P7Q10: conf=3 cov=full
+[03:06:24.830] [ INFO]   P7Q11: conf=4 cov=full
+[03:06:24.830] [ INFO]   P7Q12: conf=4 cov=partial gaps=The beliefs do not specify log shipping destinations, log ag
+[03:06:24.830] [ INFO]   P7Q13: conf=4 cov=full
+[03:06:24.830] [ INFO]   P7Q14: conf=4 cov=full
+[03:06:24.831] [ INFO]   P7Q15: conf=4 cov=partial gaps=The beliefs explicitly identify that RBAC requirements and p
+[03:06:24.831] [ INFO]   P7Q16: conf=5 cov=full
+[03:06:24.831] [ INFO]   P7Q17: conf=5 cov=full
+[03:06:24.831] [ INFO]   P7Q18: conf=3 cov=full
+[03:06:24.831] [ INFO]   P7Q19: conf=5 cov=full
+[03:06:24.831] [ INFO]   P7Q20: conf=5 cov=full
+[03:06:24.831] [ INFO] 
+[03:06:24.831] [ INFO] ======================================================================
+[03:06:24.831] [ INFO]   TOKEN BUDGET
+[03:06:24.831] [ INFO] ======================================================================
+[03:06:24.832] [ INFO] Total calls:         15
+[03:06:24.832] [ INFO] Total input tokens:    87,121
+[03:06:24.832] [ INFO] Total output tokens:   81,668
+[03:06:24.832] [ INFO] Total tokens:         168,789
+[03:06:24.832] [ INFO] 
+Per-call breakdown:
+[03:06:24.832] [ INFO]   TAXONOMY                                   2984 in    2808 out  (34631ms)
+[03:06:24.832] [ INFO]   WF2:Node_1:Operations Engineer             1206 in    2048 out  (48932ms)
+[03:06:24.832] [ INFO]   WF2:Node_2:Compliance Officer              1203 in    2048 out  (49746ms)
+[03:06:24.832] [ INFO]   WF2:Node_3:Clinical Advisor                1219 in    2048 out  (53722ms)
+[03:06:24.832] [ INFO]   WF2:Node_4:Integration Engineer            1350 in    2048 out  (48074ms)
+[03:06:24.832] [ INFO]   WF2:BELIEFS_V3:Node_1                      4155 in    3102 out  (36761ms)
+[03:06:24.833] [ INFO]   WF2:BELIEFS_V3:Node_2                      4156 in    2158 out  (29076ms)
+[03:06:24.833] [ INFO]   WF2:BELIEFS_V3:Node_3                      4155 in    2185 out  (29077ms)
+[03:06:24.833] [ INFO]   WF2:BELIEFS_V3:Node_4                      4155 in    1963 out  (23014ms)
+[03:06:24.833] [ INFO]   WF2:CONVERGENCE                            8061 in    5591 out  (78546ms)
+[03:06:24.833] [ INFO]   META_CONVERGENCE                           7408 in   14621 out  (215087ms)
+[03:06:24.833] [ INFO]   FLAT_CONVERGENCE                          18817 in   12417 out  (208047ms)
+[03:06:24.833] [ INFO]   META:ANSWERS_20Q                           7006 in    9667 out  (166292ms)
+[03:06:24.833] [ INFO]   FLAT:ANSWERS_20Q                           5115 in    7963 out  (114897ms)
+[03:06:24.833] [ INFO]   FULL_CONTEXT:ANSWERS_20Q                  16131 in   11001 out  (207978ms)
+[03:06:24.841] [ INFO] 
+[03:06:24.841] [ INFO] ======================================================================
+[03:06:24.841] [ INFO]   PHASE 7 COMPLETE
+[03:06:24.841] [ INFO] ======================================================================
+[03:06:24.842] [ INFO] Results: /Users/davidcouch/Dev/gh-agents/proto/phase7_results.json
