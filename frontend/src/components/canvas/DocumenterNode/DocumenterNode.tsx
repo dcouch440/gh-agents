@@ -6,6 +6,7 @@ import EditOutlined from '@mui/icons-material/EditOutlined'
 import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
 import InputOutlined from '@mui/icons-material/InputOutlined'
 import SettingsOutlined from '@mui/icons-material/SettingsOutlined'
+import AutoAwesomeOutlined from '@mui/icons-material/AutoAwesomeOutlined'
 import { useStore, workflowStore, canvasStore } from '@/stores'
 import type { CreateDocumentDefRequest } from '@/types/workflow'
 import { CanvasFormNode } from '../CanvasFormNode'
@@ -18,6 +19,7 @@ import { PromptTab } from './tabs/PromptTab'
 import { DocumentsTab } from './tabs/DocumentsTab'
 import { InputsTab } from './tabs/InputsTab'
 import { SettingsTab } from './tabs/SettingsTab'
+import { AssistantTab } from './tabs/AssistantTab'
 import { HighlightMode } from '../canvasKinds'
 import type { CanvasNodeKind } from '../canvasKinds'
 
@@ -29,6 +31,7 @@ type DocumenterNodeData = {
   promptValue: string
   modelId: string | null
   agentName: string | null
+  description: string
 }
 
 function DocumenterNodeComponent({ id, data, selected }: NodeProps) {
@@ -78,6 +81,13 @@ function DocumenterNodeComponent({ id, data, selected }: NodeProps) {
     [id],
   )
 
+  const handleDescriptionChange = useCallback(
+    (value: string) => {
+      workflowStore.patchStepLocal(id, { description: value })
+    },
+    [id],
+  )
+
   const accentColor = PROTOCOL_TYPE_COLORS['documenter']
 
   // Protocol self-hover: when this protocol is hovered, show a subtle glow
@@ -118,7 +128,20 @@ function DocumenterNodeComponent({ id, data, selected }: NodeProps) {
       id: 'settings',
       icon: SettingsOutlined,
       tooltip: 'Settings',
-      content: <SettingsTab name={nodeData.label} onNameChange={handleNameChange} />,
+      content: (
+        <SettingsTab
+          name={nodeData.label}
+          onNameChange={handleNameChange}
+          description={nodeData.description}
+          onDescriptionChange={handleDescriptionChange}
+        />
+      ),
+    },
+    {
+      id: 'assistant',
+      icon: AutoAwesomeOutlined,
+      tooltip: 'Assistant',
+      content: <AssistantTab stepId={id} />,
     },
   ]
 

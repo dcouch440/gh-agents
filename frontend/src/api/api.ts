@@ -320,6 +320,9 @@ const workflows = {
   deleteDocumentDef: (workflowId: string, stepId: string, defId: string, config?: RequestConfig) =>
     baseApi.del<void>(API.STEP_DOCUMENT_DEF(workflowId, stepId, defId), config),
 
+  getStepSession: (workflowId: string, stepId: string, config?: RequestConfig) =>
+    baseApi.get<Session>(API.STEP_CHAT_SESSION(workflowId, stepId), config),
+
   getOrCreateStepSession: (workflowId: string, stepId: string, config?: RequestConfig) =>
     baseApi.post<Session>(API.STEP_CHAT_SESSION(workflowId, stepId), undefined, config),
 
