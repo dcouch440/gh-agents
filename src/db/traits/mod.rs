@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::db::{
-    AgentExecutionRow, AgentGuidanceRow, AgentRow, BeliefExtractionPlanRow, ChatMessageRow,
+    AgentExecutionRow, AgentGuidanceRow, AgentRow, BeliefExtractionPlanRow, BeliefRow, ChatMessageRow,
     CollectionRunRow, CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow,
     DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow,
     ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow, ResultRow,
@@ -661,6 +661,17 @@ pub trait WorkflowRepo: Send + Sync {
         contradiction_handling: &str,
         confidence_threshold: &str,
     ) -> Result<BeliefExtractionPlanRow>;
+
+    // --- Belief Capture (Runtime Beliefs) ---
+
+    /// Insert a single extracted belief.
+    async fn insert_belief(&self, belief: &BeliefRow) -> Result<BeliefRow>;
+
+    /// List all beliefs for a specific workflow execution run.
+    async fn list_beliefs_for_execution(
+        &self,
+        workflow_execution_id: Uuid,
+    ) -> Result<Vec<BeliefRow>>;
 
     // --- Room Step Config (Design-Time) ---
 

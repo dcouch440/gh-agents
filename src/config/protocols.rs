@@ -134,6 +134,16 @@ pub mod vars {
         pub const PREVIOUS_OUTPUTS: &str = "TaskForce.previous_outputs";
     }
 
+    /// Variables for belief capture runtime extraction prompts.
+    pub mod belief_capture {
+        pub const EXTRACTION_FOCUS: &str = "BeliefCapture.extraction_focus";
+        pub const TAG_VOCABULARY: &str = "BeliefCapture.tag_vocabulary";
+        pub const CONTRADICTION_HANDLING: &str = "BeliefCapture.contradiction_handling";
+        pub const SOURCE_STEP_NAME: &str = "BeliefCapture.source_step_name";
+        pub const SOURCE_TYPE: &str = "BeliefCapture.source_type";
+        pub const SOURCE_CONTENT: &str = "BeliefCapture.source_content";
+    }
+
     /// Variables assembled by the platform (config, context, runtime state).
     pub mod system {
         pub const DOC_NAME: &str = "System.doc_name";
@@ -175,6 +185,13 @@ pub static TASK_FORCE: Lazy<ProtocolConfig> = Lazy::new(|| {
         "../../config/protocols/task_force/config.yaml"
     ))
     .expect("Failed to parse config/protocols/task_force/config.yaml")
+});
+
+pub static BELIEF_CAPTURE: Lazy<ProtocolConfig> = Lazy::new(|| {
+    serde_yaml::from_str(include_str!(
+        "../../config/protocols/belief_capture/config.yaml"
+    ))
+    .expect("Failed to parse config/protocols/belief_capture/config.yaml")
 });
 
 // ---------------------------------------------------------------------------
@@ -245,6 +262,14 @@ pub mod roles {
         system: include_str!("../../config/protocols/task_force/agent/system.md"),
         prompt: include_str!("../../config/protocols/task_force/agent/prompt.md"),
         response: None,
+    };
+
+    pub static BELIEF_CAPTURE_EXTRACTOR: RoleDefinition = RoleDefinition {
+        system: include_str!("../../config/protocols/belief_capture/extractor/system.md"),
+        prompt: include_str!("../../config/protocols/belief_capture/extractor/prompt.md"),
+        response: Some(include_str!(
+            "../../config/protocols/belief_capture/extractor/response.json"
+        )),
     };
 }
 
@@ -401,6 +426,10 @@ mod tests {
         assert!(!roles::TASK_FORCE_AGENT.system.is_empty());
         assert!(!roles::TASK_FORCE_AGENT.prompt.is_empty());
         assert!(roles::TASK_FORCE_AGENT.response.is_none());
+
+        assert!(!roles::BELIEF_CAPTURE_EXTRACTOR.system.is_empty());
+        assert!(!roles::BELIEF_CAPTURE_EXTRACTOR.prompt.is_empty());
+        assert!(roles::BELIEF_CAPTURE_EXTRACTOR.response.is_some());
     }
 
     #[test]
@@ -419,6 +448,15 @@ mod tests {
         assert_eq!(agent.temperature, 0.3);
         assert_eq!(agent.max_rounds, 15);
         assert_eq!(agent.context_budget, 480_000);
+    }
+
+    #[test]
+    fn belief_capture_config_parses() {
+        let cfg = &*BELIEF_CAPTURE;
+        let extractor = cfg.agent("extractor");
+        assert_eq!(extractor.temperature, 0.2);
+        assert_eq!(extractor.max_rounds, 1);
+        assert_eq!(extractor.context_budget, 200_000);
     }
 
     #[test]
@@ -589,6 +627,12 @@ table has 2.3B rows — migration must be zero-downtime. Mobile push via FCM/APN
             vars::task_force::TASK_DESCRIPTION,
             vars::task_force::TEAM_ROSTER,
             vars::task_force::PREVIOUS_OUTPUTS,
+            vars::belief_capture::EXTRACTION_FOCUS,
+            vars::belief_capture::TAG_VOCABULARY,
+            vars::belief_capture::CONTRADICTION_HANDLING,
+            vars::belief_capture::SOURCE_STEP_NAME,
+            vars::belief_capture::SOURCE_TYPE,
+            vars::belief_capture::SOURCE_CONTENT,
         ]);
 
         let all_roles: &[(&str, &RoleDefinition)] = &[
@@ -599,6 +643,10 @@ table has 2.3B rows — migration must be zero-downtime. Mobile push via FCM/APN
             ("gatekeeper", &roles::MEETING_GATEKEEPER),
             ("node_assistant", &roles::NODE_ASSISTANT_BASE),
             ("task_force_agent", &roles::TASK_FORCE_AGENT),
+            (
+                "belief_capture_extractor",
+                &roles::BELIEF_CAPTURE_EXTRACTOR,
+            ),
         ];
 
         let re = regex::Regex::new(r"\{\{\.([^}]+)\}\}").unwrap();
