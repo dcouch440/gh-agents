@@ -641,6 +641,76 @@ pub struct TaskAgentRosterRow {
     pub created_at: DateTime<Utc>,
 }
 
+// ============================================================================
+// Belief Capture Row Types
+// ============================================================================
+
+/// Row type for belief extraction plans (one per step, design-time config).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct BeliefExtractionPlanRow {
+    pub id: Uuid,
+    pub step_id: Uuid,
+    pub extraction_focus: String,
+    pub tag_vocabulary: Vec<String>,
+    pub contradiction_handling: String,
+    pub confidence_threshold: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Row type for extracted beliefs (populated at runtime by the gatekeeper).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct BeliefRow {
+    pub id: Uuid,
+    pub workflow_id: Uuid,
+    pub workflow_execution_id: Uuid,
+    pub source_step_id: Uuid,
+    pub source_document_title: Option<String>,
+    pub source_document_def_id: Option<Uuid>,
+    pub source_phase: String,
+    pub content: String,
+    pub reasoning: String,
+    pub belief_type: String,
+    pub confidence: String,
+    pub confidence_justification: Option<String>,
+    pub semantic_tags: Vec<String>,
+    pub emotional_tone: Option<String>,
+    pub cross_source_tension: Option<String>,
+    pub source_step_name: String,
+    pub extraction_model: String,
+    pub extraction_tokens_in: i32,
+    pub extraction_tokens_out: i32,
+    pub created_at: DateTime<Utc>,
+}
+
+// ============================================================================
+// Room Step Config Row Types (Design-Time)
+// ============================================================================
+
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct RoomStepConfigRow {
+    pub id: Uuid,
+    pub step_id: Uuid,
+    pub meeting_purpose: String,
+    pub max_turns: i32,
+    pub interaction_mode: String,
+    pub gatekeeper_enabled: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct RoomStepMemberRow {
+    pub id: Uuid,
+    pub step_id: Uuid,
+    pub name: String,
+    pub role: String,
+    pub perspective: String,
+    pub display_order: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 /// Type alias for the database pool
 pub type DbPool = PgPool;
 

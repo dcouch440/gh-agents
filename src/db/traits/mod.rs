@@ -9,12 +9,13 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::db::{
-    AgentExecutionRow, AgentGuidanceRow, AgentRow, ChatMessageRow, CollectionRunRow,
-    CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
-    DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow,
+    AgentExecutionRow, AgentGuidanceRow, AgentRow, BeliefExtractionPlanRow, ChatMessageRow,
+    CollectionRunRow, CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow,
+    DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow,
     ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow, ResultRow,
-    RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry,
-    RouterRequestRow, SessionRow, StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow,
+    RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomStepConfigRow,
+    RoomStepMemberRow, RoomTranscriptEntry, RouterRequestRow, SessionRow, StepDocumentRow,
+    StepInputRow, StepOutputRow, StepRoutingRuleRow,
     SystemConfigRow, TaskAgentRosterRow, TaskMissionBriefRow, TokenLedgerRow, ToolCapabilityRow,
     ToolRouterModeRow, ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow,
     WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepProtocolRow,
@@ -645,6 +646,55 @@ pub trait WorkflowRepo: Send + Sync {
 
     /// Remove a roster agent by ID.
     async fn remove_roster_agent(&self, agent_id: Uuid) -> Result<()>;
+
+    // --- Belief Capture (Extraction Plans) ---
+
+    /// Get the extraction plan for a step, if any.
+    async fn get_extraction_plan(&self, step_id: Uuid) -> Result<Option<BeliefExtractionPlanRow>>;
+
+    /// Create or update the extraction plan for a step.
+    async fn upsert_extraction_plan(
+        &self,
+        step_id: Uuid,
+        extraction_focus: &str,
+        tag_vocabulary: &[String],
+        contradiction_handling: &str,
+        confidence_threshold: &str,
+    ) -> Result<BeliefExtractionPlanRow>;
+
+    // --- Room Step Config (Design-Time) ---
+
+    async fn get_room_step_config(&self, step_id: Uuid) -> Result<Option<RoomStepConfigRow>>;
+
+    async fn upsert_room_step_config(
+        &self,
+        step_id: Uuid,
+        meeting_purpose: &str,
+        max_turns: i32,
+        interaction_mode: &str,
+        gatekeeper_enabled: bool,
+    ) -> Result<RoomStepConfigRow>;
+
+    async fn list_room_step_members(&self, step_id: Uuid) -> Result<Vec<RoomStepMemberRow>>;
+
+    async fn add_room_step_member(
+        &self,
+        step_id: Uuid,
+        name: &str,
+        role: &str,
+        perspective: &str,
+        display_order: i32,
+    ) -> Result<RoomStepMemberRow>;
+
+    async fn update_room_step_member(
+        &self,
+        member_id: Uuid,
+        name: Option<String>,
+        role: Option<String>,
+        perspective: Option<String>,
+    ) -> Result<RoomStepMemberRow>;
+
+    async fn remove_room_step_member(&self, member_id: Uuid) -> Result<()>;
 }
 
 // ============================================================================

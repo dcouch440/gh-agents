@@ -237,6 +237,37 @@ async fn build_step_system_prompt(
 
             (roles::NODE_ASSISTANT_TASK_FORCE_BLOCK.to_string(), snapshot)
         }
+        "belief_capture" => {
+            let ctx = crate::server::tools::belief_capture::BeliefCaptureToolContext {
+                workflow_id,
+                step_id,
+            };
+            let snapshot = crate::server::tools::belief_capture::build_config_snapshot(
+                state.repos().workflows.as_ref(),
+                &ctx,
+            )
+            .await
+            .map_err(|e| HubError::Internal(anyhow::anyhow!("{}", e)))?;
+
+            (
+                roles::NODE_ASSISTANT_BELIEF_CAPTURE_BLOCK.to_string(),
+                snapshot,
+            )
+        }
+        "room" => {
+            let ctx = crate::server::tools::room_config::RoomConfigToolContext {
+                workflow_id,
+                step_id,
+            };
+            let snapshot = crate::server::tools::room_config::build_config_snapshot(
+                state.repos().workflows.as_ref(),
+                &ctx,
+            )
+            .await
+            .map_err(|e| HubError::Internal(anyhow::anyhow!("{}", e)))?;
+
+            (roles::NODE_ASSISTANT_ROOM_BLOCK.to_string(), snapshot)
+        }
         _ => (String::new(), String::new()),
     };
 

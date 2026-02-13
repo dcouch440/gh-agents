@@ -64,6 +64,20 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "set_capabilities" => Some(set_capabilities_tool()),
         "set_failure_mode" => Some(set_failure_mode_tool()),
 
+        // Belief capture archetype tools (4)
+        "set_extraction_focus" => Some(set_extraction_focus_tool()),
+        "set_tag_vocabulary" => Some(set_tag_vocabulary_tool()),
+        "set_contradiction_handling" => Some(set_contradiction_handling_tool()),
+        "set_confidence_threshold" => Some(set_confidence_threshold_tool()),
+
+        // Room archetype tools (6)
+        "set_meeting_purpose" => Some(set_meeting_purpose_tool()),
+        "add_member" => Some(add_member_tool()),
+        "update_member" => Some(update_member_tool()),
+        "remove_member" => Some(remove_member_tool()),
+        "set_max_turns" => Some(set_max_turns_tool()),
+        "set_interaction_mode" => Some(set_interaction_mode_tool()),
+
         _ => None,
     }
 }
@@ -757,6 +771,204 @@ fn set_failure_mode_tool() -> Tool {
                     "type": "string",
                     "enum": ["fail_fast", "skip_and_continue", "retry"],
                     "description": "fail_fast: stop on first failure. skip_and_continue: skip failed agent, continue with rest. retry: retry the failed agent."
+                }
+            },
+            "required": ["mode"]
+        }),
+    }
+}
+
+// ============================================================================
+// Belief Capture Archetype Tool Definitions
+// ============================================================================
+
+fn set_extraction_focus_tool() -> Tool {
+    Tool {
+        name: "set_extraction_focus".into(),
+        description: "Set what the belief capture node should focus on when extracting beliefs from upstream results. Free-text guidance that shapes gatekeeper extraction.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "guidance": {
+                    "type": "string",
+                    "description": "What to focus on when extracting beliefs (e.g., 'Extract all vulnerability findings, severity assessments, and fix recommendations')"
+                }
+            },
+            "required": ["guidance"]
+        }),
+    }
+}
+
+fn set_tag_vocabulary_tool() -> Tool {
+    Tool {
+        name: "set_tag_vocabulary".into(),
+        description: "Set the allowed semantic tags for extracted beliefs. The gatekeeper can only use these tags, ensuring downstream queries match exactly.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "tags": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Allowed semantic tags (e.g., ['vulnerability', 'severity', 'fix', 'risk'])"
+                }
+            },
+            "required": ["tags"]
+        }),
+    }
+}
+
+fn set_contradiction_handling_tool() -> Tool {
+    Tool {
+        name: "set_contradiction_handling".into(),
+        description: "Set how contradictions between upstream sources are handled during belief extraction.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "type": "string",
+                    "enum": ["flag", "resolve", "keep_both"],
+                    "description": "flag: preserve both with tension note. resolve: pick the stronger claim. keep_both: store without annotation."
+                }
+            },
+            "required": ["mode"]
+        }),
+    }
+}
+
+fn set_confidence_threshold_tool() -> Tool {
+    Tool {
+        name: "set_confidence_threshold".into(),
+        description: "Set the minimum confidence level for extracted beliefs. Beliefs below this threshold are filtered out.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "threshold": {
+                    "type": "string",
+                    "enum": ["low", "medium", "high"],
+                    "description": "low: keep everything. medium: filter speculative claims. high: only strong evidence."
+                }
+            },
+            "required": ["threshold"]
+        }),
+    }
+}
+
+// ============================================================================
+// Room Archetype Tool Definitions
+// ============================================================================
+
+fn set_meeting_purpose_tool() -> Tool {
+    Tool {
+        name: "set_meeting_purpose".into(),
+        description: "Set the meeting purpose for this room node. Describes what the agents will discuss, debate, or review.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "description": "What the room meeting should accomplish (e.g., 'Review security audit findings, prioritize fixes, and agree on a remediation timeline')"
+                }
+            },
+            "required": ["description"]
+        }),
+    }
+}
+
+fn add_member_tool() -> Tool {
+    Tool {
+        name: "add_member".into(),
+        description: "Add a member to the room meeting. Each member has a name, role, and perspective that shapes their contributions.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Member name (e.g., 'Security Lead', 'Skeptic', 'Pragmatist')"
+                },
+                "role": {
+                    "type": "string",
+                    "description": "What this member does in the meeting (e.g., 'Presents findings and recommends priorities')"
+                },
+                "perspective": {
+                    "type": "string",
+                    "description": "Perspective or bias that shapes this member's contributions (e.g., 'Risk-averse, wants comprehensive fixes')"
+                }
+            },
+            "required": ["name", "role"]
+        }),
+    }
+}
+
+fn update_member_tool() -> Tool {
+    Tool {
+        name: "update_member".into(),
+        description: "Update an existing room member's role or perspective. Identifies the member by name.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name of the member to update (case-insensitive match)"
+                },
+                "role": {
+                    "type": "string",
+                    "description": "New role description"
+                },
+                "perspective": {
+                    "type": "string",
+                    "description": "New perspective or bias"
+                }
+            },
+            "required": ["name"]
+        }),
+    }
+}
+
+fn remove_member_tool() -> Tool {
+    Tool {
+        name: "remove_member".into(),
+        description: "Remove a member from the room meeting.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name of the member to remove (case-insensitive match)"
+                }
+            },
+            "required": ["name"]
+        }),
+    }
+}
+
+fn set_max_turns_tool() -> Tool {
+    Tool {
+        name: "set_max_turns".into(),
+        description: "Set the maximum number of discussion turns for the room meeting.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer",
+                    "description": "Maximum turns (1-100). Typically 8-15 turns is sufficient."
+                }
+            },
+            "required": ["count"]
+        }),
+    }
+}
+
+fn set_interaction_mode_tool() -> Tool {
+    Tool {
+        name: "set_interaction_mode".into(),
+        description: "Set how agents take turns in the room meeting.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "type": "string",
+                    "enum": ["round_robin", "moderated", "open_floor"],
+                    "description": "round_robin: strict rotation by display order. moderated: gatekeeper selects speakers each turn. open_floor: agents respond to whoever they find most compelling."
                 }
             },
             "required": ["mode"]

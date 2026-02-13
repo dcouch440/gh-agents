@@ -378,6 +378,67 @@ mod tests {
             async fn remove_roster_agent(&self, _: Uuid) -> Result<()> {
                 unimplemented!()
             }
+            async fn get_extraction_plan(
+                &self,
+                _: Uuid,
+            ) -> Result<Option<crate::db::BeliefExtractionPlanRow>> {
+                unimplemented!()
+            }
+            async fn upsert_extraction_plan(
+                &self,
+                _: Uuid,
+                _: &str,
+                _: &[String],
+                _: &str,
+                _: &str,
+            ) -> Result<crate::db::BeliefExtractionPlanRow> {
+                unimplemented!()
+            }
+            // Room step config stubs
+            async fn get_room_step_config(
+                &self,
+                _: Uuid,
+            ) -> Result<Option<crate::db::RoomStepConfigRow>> {
+                unimplemented!()
+            }
+            async fn upsert_room_step_config(
+                &self,
+                _: Uuid,
+                _: &str,
+                _: i32,
+                _: &str,
+                _: bool,
+            ) -> Result<crate::db::RoomStepConfigRow> {
+                unimplemented!()
+            }
+            async fn list_room_step_members(
+                &self,
+                _: Uuid,
+            ) -> Result<Vec<crate::db::RoomStepMemberRow>> {
+                unimplemented!()
+            }
+            async fn add_room_step_member(
+                &self,
+                _: Uuid,
+                _: &str,
+                _: &str,
+                _: &str,
+                _: i32,
+            ) -> Result<crate::db::RoomStepMemberRow> {
+                unimplemented!()
+            }
+            async fn update_room_step_member(
+                &self,
+                _: Uuid,
+                _: Option<String>,
+                _: Option<String>,
+                _: Option<String>,
+            ) -> Result<crate::db::RoomStepMemberRow> {
+                unimplemented!()
+            }
+            async fn remove_room_step_member(&self, _: Uuid) -> Result<()> {
+                unimplemented!()
+            }
         }
 
         // Create test data

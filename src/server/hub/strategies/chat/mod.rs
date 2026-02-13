@@ -188,6 +188,16 @@ impl ChatStrategy {
             | "set_failure_mode" => WorkflowEventKind::StepConfigUpdated {
                 step_id: ctx.step_id,
             },
+            // Belief capture tools — all emit StepConfigUpdated for frontend refetch
+            "set_extraction_focus" | "set_tag_vocabulary" | "set_contradiction_handling"
+            | "set_confidence_threshold" => WorkflowEventKind::StepConfigUpdated {
+                step_id: ctx.step_id,
+            },
+            // Room tools — all emit StepConfigUpdated for frontend refetch
+            "set_meeting_purpose" | "add_member" | "update_member" | "remove_member"
+            | "set_max_turns" | "set_interaction_mode" => WorkflowEventKind::StepConfigUpdated {
+                step_id: ctx.step_id,
+            },
             _ => return,
         };
 
@@ -449,6 +459,20 @@ fn resolve_step_tools(execution_mode: &str) -> Vec<Tool> {
             "set_capabilities",
             "set_failure_mode",
         ],
+        "belief_capture" => &[
+            "set_extraction_focus",
+            "set_tag_vocabulary",
+            "set_contradiction_handling",
+            "set_confidence_threshold",
+        ],
+        "room" => &[
+            "set_meeting_purpose",
+            "add_member",
+            "update_member",
+            "remove_member",
+            "set_max_turns",
+            "set_interaction_mode",
+        ],
         _ => &[],
     };
     UNIVERSAL_TOOLS
@@ -529,6 +553,54 @@ async fn dispatch_step_tool(
                     step_id: ctx.step_id,
                 };
                 let result = crate::server::tools::task_force::execute_task_force_tool(
+                    name,
+                    input,
+                    state.repos().workflows.as_ref(),
+                    &tool_ctx,
+                )
+                .await;
+                return Some(result);
+            }
+            None
+        }
+        "belief_capture" => {
+            const BELIEF_CAPTURE_TOOLS: &[&str] = &[
+                "set_extraction_focus",
+                "set_tag_vocabulary",
+                "set_contradiction_handling",
+                "set_confidence_threshold",
+            ];
+            if BELIEF_CAPTURE_TOOLS.contains(&name) {
+                let tool_ctx = crate::server::tools::belief_capture::BeliefCaptureToolContext {
+                    workflow_id: ctx.workflow_id,
+                    step_id: ctx.step_id,
+                };
+                let result = crate::server::tools::belief_capture::execute_belief_capture_tool(
+                    name,
+                    input,
+                    state.repos().workflows.as_ref(),
+                    &tool_ctx,
+                )
+                .await;
+                return Some(result);
+            }
+            None
+        }
+        "room" => {
+            const ROOM_TOOLS: &[&str] = &[
+                "set_meeting_purpose",
+                "add_member",
+                "update_member",
+                "remove_member",
+                "set_max_turns",
+                "set_interaction_mode",
+            ];
+            if ROOM_TOOLS.contains(&name) {
+                let tool_ctx = crate::server::tools::room_config::RoomConfigToolContext {
+                    workflow_id: ctx.workflow_id,
+                    step_id: ctx.step_id,
+                };
+                let result = crate::server::tools::room_config::execute_room_config_tool(
                     name,
                     input,
                     state.repos().workflows.as_ref(),
