@@ -47,6 +47,7 @@ pub(crate) mod for_each;
 pub(crate) mod resume;
 pub(crate) mod room_step;
 pub(crate) mod single;
+pub(crate) mod task_force;
 pub mod utils;
 
 pub(crate) use dag_state::{
@@ -69,6 +70,7 @@ pub use resume::{resume_dag_from_approval, resume_workflow_via_engine};
 use for_each::{detect_for_each_chains, execute_for_each_chain, execute_for_each_step};
 use room_step::execute_room_step;
 use single::execute_single_step;
+use task_force::execute_task_force_step;
 
 // ── Routing Context ─────────────────────────────────────────────────────────
 
@@ -322,6 +324,47 @@ pub async fn execute_workflow_via_engine(
         // Documenter steps — phased pipeline, no agent needed
         if step.execution_mode == "documenter" {
             let step_result = execute_documenter_step(
+                engine,
+                state,
+                ctx,
+                step,
+                steps,
+                edges,
+                &mut var_outputs,
+                &mut completed,
+                &mut completed_envelopes,
+                &port_meta,
+                &mut total_input_tokens,
+                &mut total_output_tokens,
+                &mut total_cost_usd,
+                cancel,
+            )
+            .await;
+
+            if let Err(ref e) = step_result {
+                if !matches!(e, HubError::AwaitingUser { .. }) {
+                    broadcast_workflow_event(
+                        state,
+                        ctx,
+                        workflow_id,
+                        WorkflowEventKind::StepFailed {
+                            step_id: step.id,
+                            step_name: step
+                                .output_variable_name
+                                .clone()
+                                .unwrap_or_else(|| step.id.to_string()),
+                            error: format!("{}", e),
+                        },
+                    );
+                }
+            }
+            step_result?;
+            continue;
+        }
+
+        // Task force steps — sequential multi-agent pipeline, no agent_id needed
+        if step.execution_mode == "task_force" {
+            let step_result = execute_task_force_step(
                 engine,
                 state,
                 ctx,

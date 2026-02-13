@@ -218,6 +218,13 @@ pub enum WorkflowEventKind {
         #[serde(skip_serializing_if = "Option::is_none")]
         document_name: Option<String>,
     },
+    TaskForceAgentProgress {
+        step_id: Uuid,
+        agent_name: String,
+        agent_index: usize,
+        total_agents: usize,
+        status: String,
+    },
     Completed {
         #[serde(skip_serializing_if = "Option::is_none")]
         duration_ms: Option<u64>,
@@ -271,6 +278,7 @@ impl WorkflowEvent {
             WorkflowEventKind::StepPaused { .. } => "step_paused",
             WorkflowEventKind::ForEachProgress { .. } => "for_each_progress",
             WorkflowEventKind::DocumenterPhaseProgress { .. } => "documenter_phase_progress",
+            WorkflowEventKind::TaskForceAgentProgress { .. } => "task_force_agent_progress",
             WorkflowEventKind::Completed { .. } => "completed",
             WorkflowEventKind::Failed { .. } => "failed",
             WorkflowEventKind::Resumed { .. } => "resumed",

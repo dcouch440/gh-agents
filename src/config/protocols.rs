@@ -125,6 +125,15 @@ pub mod vars {
         pub const RESEARCH_CONTENT: &str = "Agent.research_content";
     }
 
+    /// Variables for task force runtime agent prompts.
+    pub mod task_force {
+        pub const AGENT_NAME: &str = "TaskForce.agent_name";
+        pub const ROLE_DESCRIPTION: &str = "TaskForce.role_description";
+        pub const TASK_DESCRIPTION: &str = "TaskForce.task_description";
+        pub const TEAM_ROSTER: &str = "TaskForce.team_roster";
+        pub const PREVIOUS_OUTPUTS: &str = "TaskForce.previous_outputs";
+    }
+
     /// Variables assembled by the platform (config, context, runtime state).
     pub mod system {
         pub const DOC_NAME: &str = "System.doc_name";
@@ -159,6 +168,13 @@ pub static NODE_ASSISTANT: Lazy<ProtocolConfig> = Lazy::new(|| {
         "../../config/protocols/node_assistant/config.yaml"
     ))
     .expect("Failed to parse config/protocols/node_assistant/config.yaml")
+});
+
+pub static TASK_FORCE: Lazy<ProtocolConfig> = Lazy::new(|| {
+    serde_yaml::from_str(include_str!(
+        "../../config/protocols/task_force/config.yaml"
+    ))
+    .expect("Failed to parse config/protocols/task_force/config.yaml")
 });
 
 // ---------------------------------------------------------------------------
@@ -223,6 +239,13 @@ pub mod roles {
     /// Room archetype block, injected via `{{.System.archetype_block}}`.
     pub const NODE_ASSISTANT_ROOM_BLOCK: &str =
         include_str!("../../config/protocols/node_assistant/room/block.md");
+
+    /// Task force runtime agent prompt template.
+    pub static TASK_FORCE_AGENT: RoleDefinition = RoleDefinition {
+        system: include_str!("../../config/protocols/task_force/agent/system.md"),
+        prompt: include_str!("../../config/protocols/task_force/agent/prompt.md"),
+        response: None,
+    };
 }
 
 // ---------------------------------------------------------------------------
@@ -374,6 +397,10 @@ mod tests {
         assert!(!roles::NODE_ASSISTANT_TASK_FORCE_BLOCK.is_empty());
         assert!(!roles::NODE_ASSISTANT_BELIEF_CAPTURE_BLOCK.is_empty());
         assert!(!roles::NODE_ASSISTANT_ROOM_BLOCK.is_empty());
+
+        assert!(!roles::TASK_FORCE_AGENT.system.is_empty());
+        assert!(!roles::TASK_FORCE_AGENT.prompt.is_empty());
+        assert!(roles::TASK_FORCE_AGENT.response.is_none());
     }
 
     #[test]
@@ -383,6 +410,15 @@ mod tests {
         assert_eq!(assistant.temperature, 0.4);
         assert_eq!(assistant.max_rounds, 15);
         assert_eq!(assistant.context_budget, 480_000);
+    }
+
+    #[test]
+    fn task_force_config_parses() {
+        let cfg = &*TASK_FORCE;
+        let agent = cfg.agent("agent");
+        assert_eq!(agent.temperature, 0.3);
+        assert_eq!(agent.max_rounds, 15);
+        assert_eq!(agent.context_budget, 480_000);
     }
 
     #[test]
@@ -548,6 +584,11 @@ table has 2.3B rows — migration must be zero-downtime. Mobile push via FCM/APN
             vars::system::CURRENT_CONFIG,
             vars::system::GRAPH_CONTEXT,
             vars::system::ARCHETYPE_BLOCK,
+            vars::task_force::AGENT_NAME,
+            vars::task_force::ROLE_DESCRIPTION,
+            vars::task_force::TASK_DESCRIPTION,
+            vars::task_force::TEAM_ROSTER,
+            vars::task_force::PREVIOUS_OUTPUTS,
         ]);
 
         let all_roles: &[(&str, &RoleDefinition)] = &[
@@ -557,6 +598,7 @@ table has 2.3B rows — migration must be zero-downtime. Mobile push via FCM/APN
             ("assistant", &roles::DOCUMENTER_ASSISTANT),
             ("gatekeeper", &roles::MEETING_GATEKEEPER),
             ("node_assistant", &roles::NODE_ASSISTANT_BASE),
+            ("task_force_agent", &roles::TASK_FORCE_AGENT),
         ];
 
         let re = regex::Regex::new(r"\{\{\.([^}]+)\}\}").unwrap();
