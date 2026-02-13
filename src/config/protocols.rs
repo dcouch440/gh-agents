@@ -146,12 +146,12 @@ pub mod vars {
 
     /// Variables for the Agent Designer pre-lifecycle prompt generation.
     pub mod designer {
-        pub const TASK_DESCRIPTION: &str = "Designer.task_description";
-        pub const FAILURE_MODE: &str = "Designer.failure_mode";
-        pub const DOWNSTREAM_CONTEXT: &str = "Designer.downstream_context";
-        pub const AGENT_ROSTER: &str = "Designer.agent_roster";
+        pub const ARCHETYPE: &str = "Designer.archetype";
+        pub const CONTEXT_DESCRIPTION: &str = "Designer.context_description";
+        pub const AGENT_DEFINITIONS: &str = "Designer.agent_definitions";
         pub const UPSTREAM_CONTEXT: &str = "Designer.upstream_context";
-        pub const CAPABILITY_DESCRIPTIONS: &str = "Designer.capability_descriptions";
+        pub const AVAILABLE_TOOLS: &str = "Designer.available_tools";
+        pub const ARCHETYPE_GUIDANCE: &str = "Designer.archetype_guidance";
     }
 
     /// Variables assembled by the platform (config, context, runtime state).
@@ -672,12 +672,12 @@ table has 2.3B rows — migration must be zero-downtime. Mobile push via FCM/APN
             vars::belief_capture::SOURCE_STEP_NAME,
             vars::belief_capture::SOURCE_TYPE,
             vars::belief_capture::SOURCE_CONTENT,
-            vars::designer::TASK_DESCRIPTION,
-            vars::designer::FAILURE_MODE,
-            vars::designer::DOWNSTREAM_CONTEXT,
-            vars::designer::AGENT_ROSTER,
+            vars::designer::ARCHETYPE,
+            vars::designer::CONTEXT_DESCRIPTION,
+            vars::designer::AGENT_DEFINITIONS,
             vars::designer::UPSTREAM_CONTEXT,
-            vars::designer::CAPABILITY_DESCRIPTIONS,
+            vars::designer::AVAILABLE_TOOLS,
+            vars::designer::ARCHETYPE_GUIDANCE,
         ]);
 
         let all_roles: &[(&str, &RoleDefinition)] = &[

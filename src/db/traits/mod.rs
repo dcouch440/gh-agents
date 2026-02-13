@@ -709,13 +709,24 @@ pub trait WorkflowRepo: Send + Sync {
 
     // --- Agent Designer ---
 
-    /// Create a new agent designer run record for token tracking.
+    /// Create a new agent designer run record for token tracking (task-force-specific).
     async fn create_designer_run(
         &self,
         workflow_execution_id: Uuid,
         stage_execution_id: Uuid,
         step_id: Uuid,
         mission_brief_id: Uuid,
+        model_id: &str,
+    ) -> Result<AgentDesignerRunRow>;
+
+    /// Create a designer run record for any archetype.
+    async fn create_designer_run_generic(
+        &self,
+        workflow_execution_id: Uuid,
+        stage_execution_id: Uuid,
+        step_id: Uuid,
+        archetype: &str,
+        phase: &str,
         model_id: &str,
     ) -> Result<AgentDesignerRunRow>;
 
@@ -728,11 +739,25 @@ pub trait WorkflowRepo: Send + Sync {
         cost_usd: f32,
     ) -> Result<()>;
 
-    /// Store a designer-generated prompt pair and tool assignment for one agent.
+    /// Store a designer-generated prompt pair and tool assignment for one agent (task-force-specific).
     async fn create_designer_output(
         &self,
         designer_run_id: Uuid,
         agent_roster_entry_id: Uuid,
+        agent_name: &str,
+        assigned_tools: &[String],
+        generated_system_prompt: &str,
+        generated_task_prompt: &str,
+        design_reasoning: &str,
+        execution_order: i32,
+    ) -> Result<AgentDesignerOutputRow>;
+
+    /// Store a designer-generated prompt pair for any archetype.
+    async fn create_designer_output_generic(
+        &self,
+        designer_run_id: Uuid,
+        source_entity_id: &str,
+        source_archetype: &str,
         agent_name: &str,
         assigned_tools: &[String],
         generated_system_prompt: &str,

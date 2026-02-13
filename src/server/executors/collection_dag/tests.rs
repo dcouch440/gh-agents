@@ -484,6 +484,31 @@ mod tests {
             ) -> Result<crate::db::AgentDesignerOutputRow> {
                 unimplemented!()
             }
+            async fn create_designer_run_generic(
+                &self,
+                _: Uuid,
+                _: Uuid,
+                _: Uuid,
+                _: &str,
+                _: &str,
+                _: &str,
+            ) -> Result<crate::db::AgentDesignerRunRow> {
+                unimplemented!()
+            }
+            async fn create_designer_output_generic(
+                &self,
+                _: Uuid,
+                _: &str,
+                _: &str,
+                _: &str,
+                _: &[String],
+                _: &str,
+                _: &str,
+                _: &str,
+                _: i32,
+            ) -> Result<crate::db::AgentDesignerOutputRow> {
+                unimplemented!()
+            }
             async fn list_designer_outputs(
                 &self,
                 _: Uuid,

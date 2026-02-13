@@ -645,14 +645,16 @@ pub struct TaskAgentRosterRow {
 // Agent Designer Row Types
 // ============================================================================
 
-/// Row type for agent designer execution runs (one per task force step execution).
+/// Row type for agent designer execution runs.
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct AgentDesignerRunRow {
     pub id: Uuid,
     pub workflow_execution_id: Uuid,
     pub stage_execution_id: Uuid,
     pub step_id: Uuid,
-    pub mission_brief_id: Uuid,
+    pub mission_brief_id: Option<Uuid>,
+    pub archetype: String,
+    pub phase: String,
     pub model_id: String,
     pub input_tokens: i64,
     pub output_tokens: i64,
@@ -660,18 +662,20 @@ pub struct AgentDesignerRunRow {
     pub created_at: DateTime<Utc>,
 }
 
-/// Row type for designer-generated agent prompt outputs (one per roster agent).
+/// Row type for designer-generated agent prompt outputs.
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct AgentDesignerOutputRow {
     pub id: Uuid,
     pub designer_run_id: Uuid,
-    pub agent_roster_entry_id: Uuid,
+    pub agent_roster_entry_id: Option<Uuid>,
     pub agent_name: String,
     pub assigned_tools: Vec<String>,
     pub generated_system_prompt: String,
     pub generated_task_prompt: String,
     pub design_reasoning: String,
     pub execution_order: i32,
+    pub source_entity_id: String,
+    pub source_archetype: String,
     pub created_at: DateTime<Utc>,
 }
 

@@ -40,9 +40,11 @@ pub fn broadcast_workflow_event(
 
 // ── Submodules ──────────────────────────────────────────────────────────────
 
+pub(crate) mod agent_designer;
 pub(crate) mod belief_capture;
 pub(crate) mod container;
 pub(crate) mod dag_state;
+pub(crate) mod designer_input;
 pub mod documenter;
 pub(crate) mod for_each;
 pub(crate) mod resume;
@@ -700,6 +702,7 @@ async fn execute_documenter_step(
         &prompt,
         cancel,
         &upstream_docs,
+        completed_envelopes,
     );
     let result = executor.execute(&port_meta.step_outputs).await?;
 

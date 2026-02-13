@@ -2118,14 +2118,41 @@ impl WorkflowRepo for PgRepo {
         model_id: &str,
     ) -> Result<AgentDesignerRunRow> {
         let row = sqlx::query_as::<_, AgentDesignerRunRow>(
-            "INSERT INTO agent_designer_runs (workflow_execution_id, stage_execution_id, step_id, mission_brief_id, model_id) \
-             VALUES ($1, $2, $3, $4, $5) \
+            "INSERT INTO agent_designer_runs \
+             (workflow_execution_id, stage_execution_id, step_id, mission_brief_id, archetype, phase, model_id) \
+             VALUES ($1, $2, $3, $4, 'task_force', '', $5) \
              RETURNING *",
         )
         .bind(workflow_execution_id)
         .bind(stage_execution_id)
         .bind(step_id)
         .bind(mission_brief_id)
+        .bind(model_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn create_designer_run_generic(
+        &self,
+        workflow_execution_id: Uuid,
+        stage_execution_id: Uuid,
+        step_id: Uuid,
+        archetype: &str,
+        phase: &str,
+        model_id: &str,
+    ) -> Result<AgentDesignerRunRow> {
+        let row = sqlx::query_as::<_, AgentDesignerRunRow>(
+            "INSERT INTO agent_designer_runs \
+             (workflow_execution_id, stage_execution_id, step_id, archetype, phase, model_id) \
+             VALUES ($1, $2, $3, $4, $5, $6) \
+             RETURNING *",
+        )
+        .bind(workflow_execution_id)
+        .bind(stage_execution_id)
+        .bind(step_id)
+        .bind(archetype)
+        .bind(phase)
         .bind(model_id)
         .fetch_one(&self.pool)
         .await?;
@@ -2164,12 +2191,48 @@ impl WorkflowRepo for PgRepo {
     ) -> Result<AgentDesignerOutputRow> {
         let row = sqlx::query_as::<_, AgentDesignerOutputRow>(
             "INSERT INTO agent_designer_outputs \
-             (designer_run_id, agent_roster_entry_id, agent_name, assigned_tools, generated_system_prompt, generated_task_prompt, design_reasoning, execution_order) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
+             (designer_run_id, agent_roster_entry_id, agent_name, assigned_tools, \
+              generated_system_prompt, generated_task_prompt, design_reasoning, execution_order, \
+              source_entity_id, source_archetype) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'task_force') \
              RETURNING *",
         )
         .bind(designer_run_id)
         .bind(agent_roster_entry_id)
+        .bind(agent_name)
+        .bind(assigned_tools)
+        .bind(generated_system_prompt)
+        .bind(generated_task_prompt)
+        .bind(design_reasoning)
+        .bind(execution_order)
+        .bind(agent_roster_entry_id.to_string())
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn create_designer_output_generic(
+        &self,
+        designer_run_id: Uuid,
+        source_entity_id: &str,
+        source_archetype: &str,
+        agent_name: &str,
+        assigned_tools: &[String],
+        generated_system_prompt: &str,
+        generated_task_prompt: &str,
+        design_reasoning: &str,
+        execution_order: i32,
+    ) -> Result<AgentDesignerOutputRow> {
+        let row = sqlx::query_as::<_, AgentDesignerOutputRow>(
+            "INSERT INTO agent_designer_outputs \
+             (designer_run_id, source_entity_id, source_archetype, agent_name, assigned_tools, \
+              generated_system_prompt, generated_task_prompt, design_reasoning, execution_order) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
+             RETURNING *",
+        )
+        .bind(designer_run_id)
+        .bind(source_entity_id)
+        .bind(source_archetype)
         .bind(agent_name)
         .bind(assigned_tools)
         .bind(generated_system_prompt)
