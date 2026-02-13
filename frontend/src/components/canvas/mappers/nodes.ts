@@ -7,6 +7,8 @@ import type { ContextNodeData } from '../ContextNode'
 import { DOCUMENT_NODE } from '../DocumentNode'
 import type { DocumentNodeData } from '../DocumentNode'
 import { CanvasNodeKind } from '../canvasKinds'
+import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from '../DynamicNode/archetypes'
+import type { DynamicNodeData } from '../DynamicNode/DynamicNode'
 import type { StepNodeLookups } from './types'
 import { isDocumenterStep } from './protocolGroups'
 
@@ -43,29 +45,34 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
     const toolNames = step.agent_id ? (lookups.toolsByAgent.get(step.agent_id) ?? []) : []
     const protocolInfo = lookups.protocolsByStep.get(step.id)
 
-    if (isDocumenterStep(step, lookups.protocolsByStep)) {
+    // Route known archetypes to DynamicNode
+    const archetype = resolveArchetype(step, lookups.protocolsByStep, step.id)
+    if (archetype !== Archetype.BLANK) {
+      const config = ARCHETYPE_CONFIGS[archetype]
+      const dynamicData: DynamicNodeData = {
+        kind: CanvasNodeKind.PROTOCOL,
+        archetype,
+        label: step.name ?? config.label,
+        description: step.description,
+        documentNames: [],
+        upstreamStepNames,
+        promptValue: step.prompt_template,
+        modelId: agent?.model_id ?? null,
+        agentName: agent?.name ?? null,
+      }
       return {
         id: step.id,
-        type: 'documenterNode',
+        type: 'dynamicNode',
         position: { x: step.position_x ?? 0, y: step.position_y ?? 0 },
         style: {
           width: FORM_NODE.DEFAULT_WIDTH,
           height: FORM_NODE.DEFAULT_HEIGHT,
         },
-        data: {
-          kind: CanvasNodeKind.PROTOCOL,
-          label: step.name ?? 'Documenter Protocol',
-          documentNames: [],
-          upstreamStepNames,
-          promptValue: step.prompt_template,
-          modelId: agent?.model_id ?? null,
-          agentName: agent?.name ?? null,
-          description: step.description,
-          isProtocol: true,
-        },
+        data: dynamicData,
       }
     }
 
+    // Fallback: existing StepNode for single, for_each, etc.
     const groupEntry = lookups.protocolGroups.get(step.id)
     return {
       id: step.id,

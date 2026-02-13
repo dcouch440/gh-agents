@@ -4,7 +4,9 @@ import Typography from '@mui/material/Typography'
 import type { SxProps, Theme } from '@mui/material/styles'
 import { useStore, workflowStore, protocolStore, canvasStore } from '@/stores'
 import { Collections } from '@/utils/collections'
-import { DEFAULT_STEP_TYPE_COLOR, PROTOCOL_TYPE_COLORS, PROTOCOL_LABELS, STEP_TYPE_COLORS } from './constants'
+import { DEFAULT_STEP_TYPE_COLOR, STEP_TYPE_COLORS } from './constants'
+import { Archetype, ARCHETYPE_CONFIGS } from './DynamicNode/archetypes'
+import type { Archetype as ArchetypeType } from './DynamicNode/archetypes'
 
 const VIEWPORT_PADDING = 8
 
@@ -48,8 +50,14 @@ const COLOR_DOT_SX: SxProps<Theme> = {
   flexShrink: 0,
 }
 
+const ARCHETYPE_MENU_ORDER: ArchetypeType[] = [
+  Archetype.DOCUMENTER,
+  Archetype.TASK_FORCE,
+  Archetype.ROOM,
+  Archetype.BLANK,
+]
+
 function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
-  const protocolTypes = useStore(protocolStore.store, protocolStore.selectTypes)
   const allProtocols = useStore(protocolStore.store, protocolStore.selectAll)
   const protocolsByType = useMemo(() => Collections.keyBy(allProtocols, (p) => p.protocol_type), [allProtocols])
 
@@ -69,32 +77,45 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
 
   if (!position) return null
 
-  const handleAddProtocol = (event: React.MouseEvent, protocolType: string) => {
+  const handleAddArchetype = (event: React.MouseEvent, archetype: ArchetypeType) => {
     event.stopPropagation()
     event.preventDefault()
-    const label = PROTOCOL_LABELS[protocolType] ?? protocolType
-    const protocol = protocolsByType.get(protocolType)
-    const createAndLink = async () => {
-      const step = await workflowStore.createStep({
-        name: `New ${label}`,
-        execution_mode: 'documenter',
-        agent_id: protocol?.agent?.id,
-        output_schema_id: protocol?.output_schema?.id,
-        prompt_template_id: protocol?.prompt_template?.id,
+    const config = ARCHETYPE_CONFIGS[archetype]
+
+    // For documenter, preserve existing protocol-linking behavior
+    if (archetype === Archetype.DOCUMENTER) {
+      const protocol = protocolsByType.get('documenter')
+      const createAndLink = async () => {
+        const step = await workflowStore.createStep({
+          name: `New ${config.label}`,
+          execution_mode: config.executionMode,
+          agent_id: protocol?.agent?.id,
+          output_schema_id: protocol?.output_schema?.id,
+          prompt_template_id: protocol?.prompt_template?.id,
+          prompt_template: '',
+          position_x: Math.round(position.flowX),
+          position_y: Math.round(position.flowY),
+        })
+        if (step && protocol) {
+          canvasStore.linkStepProtocol(step.id, {
+            protocolId: protocol.id,
+            protocolType: protocol.protocol_type,
+            protocolName: protocol.name,
+            portNames: protocol.ports.map((p) => p.port_name),
+          })
+        }
+      }
+      void createAndLink()
+    } else {
+      void workflowStore.createStep({
+        name: `New ${config.label}`,
+        execution_mode: config.executionMode,
         prompt_template: '',
         position_x: Math.round(position.flowX),
         position_y: Math.round(position.flowY),
       })
-      if (step && protocol) {
-        canvasStore.linkStepProtocol(step.id, {
-          protocolId: protocol.id,
-          protocolType: protocol.protocol_type,
-          protocolName: protocol.name,
-          portNames: protocol.ports.map((p) => p.port_name),
-        })
-      }
     }
-    void createAndLink()
+
     onClose()
   }
 
@@ -146,22 +167,23 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
         </Box>
       ) : (
         <>
-          <Typography sx={SECTION_LABEL_SX}>Protocols</Typography>
-          {protocolTypes
-            .filter((pt) => pt.name === 'documenter')
-            .map((pt) => (
+          <Typography sx={SECTION_LABEL_SX}>Archetypes</Typography>
+          {ARCHETYPE_MENU_ORDER.map((archetype) => {
+            const config = ARCHETYPE_CONFIGS[archetype]
+            return (
               <Box
-                key={pt.name}
-                data-testid="ctx-add-documenter"
+                key={archetype}
+                data-testid={`ctx-add-${archetype}`}
                 onClick={(event) => {
-                  handleAddProtocol(event, pt.name)
+                  handleAddArchetype(event, archetype)
                 }}
                 sx={MENU_ITEM_SX}
               >
-                <Box sx={{ ...COLOR_DOT_SX, backgroundColor: PROTOCOL_TYPE_COLORS[pt.name] ?? DEFAULT_STEP_TYPE_COLOR }} />
-                <Typography sx={{ fontSize: 12, color: 'text.primary' }}>{PROTOCOL_LABELS[pt.name] ?? pt.name}</Typography>
+                <Box sx={{ ...COLOR_DOT_SX, backgroundColor: config.color }} />
+                <Typography sx={{ fontSize: 12, color: 'text.primary' }}>{config.label}</Typography>
               </Box>
-            ))}
+            )
+          })}
           <Box sx={{ mx: 1.5, my: 0.5, borderTop: 1, borderColor: 'divider' }} />
           <Typography sx={SECTION_LABEL_SX}>Utilities</Typography>
           <Box data-testid="ctx-add-context" onClick={handleAddContext} sx={MENU_ITEM_SX}>

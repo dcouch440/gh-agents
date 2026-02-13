@@ -1,12 +1,12 @@
 import type { NodeTypes } from '@xyflow/react'
 import { StepNode } from './StepNode'
-import { DocumenterNode } from './DocumenterNode'
+import { DynamicNode } from './DynamicNode'
 import { ContextNode } from './ContextNode'
 import { DocumentNode } from './DocumentNode'
 
 const nodeTypes: NodeTypes = {
   stepNode: StepNode,
-  documenterNode: DocumenterNode,
+  dynamicNode: DynamicNode,
   contextNode: ContextNode,
   documentNode: DocumentNode,
 }
