@@ -1,10 +1,12 @@
 //! Task force step execution within the DAG.
 //!
 //! When the DAG encounters a step with `execution_mode = "task_force"`, this
-//! module loads the mission brief and agent roster, then executes each roster
-//! agent sequentially. Each agent sees the full plan context plus all previous
-//! agents' outputs. Combined results are wrapped in a `StepExecutionEnvelope`.
+//! module loads the mission brief and agent roster, runs the Agent Designer
+//! pre-lifecycle to generate optimized prompts, then executes each roster
+//! agent sequentially with designed prompts. Combined results are wrapped
+//! in a `StepExecutionEnvelope`.
 
+pub(super) mod designer;
 mod tests;
 
 use std::collections::HashMap;
@@ -15,7 +17,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::config::protocols::{roles, vars, TASK_FORCE};
+use crate::config::protocols::TASK_FORCE;
 use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::server::hub::capability_resolver::resolve_capabilities_to_tools;
 use crate::server::hub::engine::ExecutionEngine;
@@ -37,8 +39,9 @@ use super::{
 
 /// Execute a task force step within the DAG.
 ///
-/// Loads the mission brief and agent roster, then executes each roster agent
-/// sequentially. Each agent's capabilities are resolved to tools at runtime.
+/// Loads the mission brief and agent roster, runs the Agent Designer
+/// pre-lifecycle to generate optimized prompts and tool assignments, then
+/// executes each roster agent sequentially with designed prompts.
 /// The combined output is a JSON object keyed by agent name.
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn execute_task_force_step(
@@ -83,10 +86,7 @@ pub(super) async fn execute_task_force_step(
         .await
         .map_err(|e| HubError::Internal(anyhow!("failed to load mission brief: {}", e)))?
         .ok_or_else(|| {
-            HubError::Internal(anyhow!(
-                "task_force step {} has no mission brief",
-                step.id
-            ))
+            HubError::Internal(anyhow!("task_force step {} has no mission brief", step.id))
         })?;
 
     // 3. Load agent roster (sorted by execution_order)
@@ -148,14 +148,10 @@ pub(super) async fn execute_task_force_step(
     )
     .await;
 
-    // 6. Build team roster description
-    let team_roster = build_team_roster_string(&roster);
+    // 6. Create protocol execution recorder
+    let recorder = ProtocolExecutionRecorder::new(&*state.repos().protocols, step.id, ctx.run_id);
 
-    // 7. Create protocol execution recorder
-    let recorder =
-        ProtocolExecutionRecorder::new(&*state.repos().protocols, step.id, ctx.run_id);
-
-    // 8. Create optional container
+    // 7. Create optional container
     let managed_container = create_optional_container(
         ctx.container_config.as_ref(),
         ctx.wg_client.as_deref(),
@@ -163,15 +159,28 @@ pub(super) async fn execute_task_force_step(
     )
     .await?;
 
-    // 9. Sequential agent execution loop
+    // 8. Run Agent Designer pre-lifecycle to generate optimized prompts
+    let (designed_prompts, designer_usage) = designer::run_agent_designer(
+        engine,
+        state,
+        ctx,
+        step,
+        &brief,
+        &roster,
+        completed_envelopes,
+        cancel,
+    )
+    .await?;
+
+    // 9. Sequential agent execution loop (using designer-generated prompts)
     let mut agent_outputs: Vec<(String, String)> = Vec::new();
-    let mut step_in_tokens: i64 = 0;
-    let mut step_out_tokens: i64 = 0;
-    let mut step_cost: f32 = 0.0;
-    let total_agents = roster.len();
+    let mut step_in_tokens: i64 = designer_usage.input_tokens;
+    let mut step_out_tokens: i64 = designer_usage.output_tokens;
+    let mut step_cost: f32 = designer_usage.cost_usd;
+    let total_agents = designed_prompts.len();
     let agent_cfg = TASK_FORCE.agent("agent");
 
-    for (idx, roster_agent) in roster.iter().enumerate() {
+    for (idx, designed) in designed_prompts.iter().enumerate() {
         // Check cancellation
         if cancel.is_some_and(|t| t.is_cancelled()) {
             destroy_optional_container(&managed_container, ctx.wg_client.as_deref()).await;
@@ -185,7 +194,7 @@ pub(super) async fn execute_task_force_step(
             step.workflow_id,
             WorkflowEventKind::TaskForceAgentProgress {
                 step_id: step.id,
-                agent_name: roster_agent.name.clone(),
+                agent_name: designed.agent_name.clone(),
                 agent_index: idx,
                 total_agents,
                 status: "started".to_string(),
@@ -197,50 +206,32 @@ pub(super) async fn execute_task_force_step(
             .create_phase(&format!("agent_{}", idx), None, Some(&prompt))
             .await?;
 
-        // Resolve capabilities to tools
+        // Resolve capabilities from designer-assigned tools
         let (tools, tool_names) =
-            resolve_capabilities_to_tools(&roster_agent.capabilities, &*state.repos().tool_capabilities)
+            resolve_capabilities_to_tools(&designed.tools, &*state.repos().tool_capabilities)
                 .await
                 .unwrap_or_else(|e| {
                     warn!(
-                        agent = %roster_agent.name,
+                        agent = %designed.agent_name,
                         "Capability resolution failed: {}", e
                     );
                     (vec![], vec![])
                 });
 
-        // Build previous outputs block
+        // Inject previous outputs at runtime (designer can't know these ahead of time)
         let previous_outputs = build_previous_outputs_block(&agent_outputs);
+        let task_prompt = if agent_outputs.is_empty() {
+            designed.task_prompt.clone()
+        } else {
+            format!(
+                "{}\n\n<previous_agent_outputs>\n{}\n</previous_agent_outputs>",
+                designed.task_prompt, previous_outputs
+            )
+        };
 
-        // Resolve system prompt and user prompt via template
-        let template_vars = HashMap::from([
-            (
-                vars::task_force::AGENT_NAME.to_string(),
-                roster_agent.name.clone(),
-            ),
-            (
-                vars::task_force::ROLE_DESCRIPTION.to_string(),
-                roster_agent.role_description.clone(),
-            ),
-            (
-                vars::task_force::TASK_DESCRIPTION.to_string(),
-                brief.task_description.clone(),
-            ),
-            (
-                vars::task_force::TEAM_ROSTER.to_string(),
-                team_roster.clone(),
-            ),
-            (
-                vars::task_force::PREVIOUS_OUTPUTS.to_string(),
-                previous_outputs,
-            ),
-            (vars::user::PROMPT.to_string(), prompt.clone()),
-        ]);
-        let protocol_ctx = roles::TASK_FORCE_AGENT.resolve(&template_vars);
-
-        // Build strategy
+        // Build strategy with designer-generated system prompt
         let strategy = TaskForceAgentStrategy::new(TaskForceAgentConfig {
-            system_prompt: protocol_ctx.system_prompt,
+            system_prompt: designed.system_prompt.clone(),
             model_id: agent_cfg.model_id.clone(),
             temperature: agent_cfg.temperature,
             max_rounds: agent_cfg.max_rounds,
@@ -257,13 +248,7 @@ pub(super) async fn execute_task_force_step(
         let inner_recorder = ExecutionRecorder::new(&**state.repo(), None, None);
         let result = engine
             .clone_with_provider()
-            .execute(
-                &strategy,
-                &protocol_ctx.user_prompt,
-                &NullSink,
-                &inner_recorder,
-                cancel,
-            )
+            .execute(&strategy, &task_prompt, &NullSink, &inner_recorder, cancel)
             .await;
 
         match result {
@@ -277,7 +262,7 @@ pub(super) async fn execute_task_force_step(
                 step_out_tokens += exec_result.output_tokens as i64;
                 step_cost += cost;
 
-                agent_outputs.push((roster_agent.name.clone(), exec_result.content.clone()));
+                agent_outputs.push((designed.agent_name.clone(), exec_result.content.clone()));
 
                 recorder
                     .update_phase(
@@ -293,7 +278,7 @@ pub(super) async fn execute_task_force_step(
                     .await;
 
                 info!(
-                    agent = %roster_agent.name,
+                    agent = %designed.agent_name,
                     idx = idx,
                     tokens_in = exec_result.input_tokens,
                     tokens_out = exec_result.output_tokens,
@@ -307,7 +292,7 @@ pub(super) async fn execute_task_force_step(
                     step.workflow_id,
                     WorkflowEventKind::TaskForceAgentProgress {
                         step_id: step.id,
-                        agent_name: roster_agent.name.clone(),
+                        agent_name: designed.agent_name.clone(),
                         agent_index: idx,
                         total_agents,
                         status: "completed".to_string(),
@@ -336,7 +321,7 @@ pub(super) async fn execute_task_force_step(
                     step.workflow_id,
                     WorkflowEventKind::TaskForceAgentProgress {
                         step_id: step.id,
-                        agent_name: roster_agent.name.clone(),
+                        agent_name: designed.agent_name.clone(),
                         agent_index: idx,
                         total_agents,
                         status: "failed".to_string(),
@@ -346,26 +331,23 @@ pub(super) async fn execute_task_force_step(
                 match brief.failure_mode.as_str() {
                     "fail_fast" => {
                         warn!(
-                            agent = %roster_agent.name,
+                            agent = %designed.agent_name,
                             error = %err_msg,
                             "Task force agent failed (fail_fast)"
                         );
-                        destroy_optional_container(
-                            &managed_container,
-                            ctx.wg_client.as_deref(),
-                        )
-                        .await;
+                        destroy_optional_container(&managed_container, ctx.wg_client.as_deref())
+                            .await;
                         return Err(e);
                     }
                     _ => {
                         // skip_and_continue (or any other mode)
                         warn!(
-                            agent = %roster_agent.name,
+                            agent = %designed.agent_name,
                             error = %err_msg,
                             "Task force agent failed, skipping ({})", brief.failure_mode
                         );
                         agent_outputs.push((
-                            roster_agent.name.clone(),
+                            designed.agent_name.clone(),
                             format!("[AGENT FAILED: {}]", err_msg),
                         ));
                     }
@@ -457,6 +439,7 @@ pub(super) async fn execute_task_force_step(
 // ── Helper functions ─────────────────────────────────────────────────────
 
 /// Build a human-readable team roster string for prompt injection.
+#[cfg(test)]
 fn build_team_roster_string(roster: &[crate::db::TaskAgentRosterRow]) -> String {
     roster
         .iter()
@@ -493,8 +476,8 @@ fn compose_combined_output(agent_outputs: &[(String, String)]) -> JsonValue {
     let mut composite = serde_json::Map::new();
     for (name, output) in agent_outputs {
         let key = name.to_lowercase().replace(' ', "_");
-        let value: JsonValue = serde_json::from_str(output)
-            .unwrap_or_else(|_| JsonValue::String(output.clone()));
+        let value: JsonValue =
+            serde_json::from_str(output).unwrap_or_else(|_| JsonValue::String(output.clone()));
         composite.insert(key, value);
     }
     JsonValue::Object(composite)

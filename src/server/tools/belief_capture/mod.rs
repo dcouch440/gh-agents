@@ -56,7 +56,9 @@ async fn ensure_extraction_plan(
                 .await
             {
                 Ok(plan) => Ok(plan.id),
-                Err(e) => Err(json!({ "error": format!("Failed to create extraction plan: {}", e) })),
+                Err(e) => {
+                    Err(json!({ "error": format!("Failed to create extraction plan: {}", e) }))
+                }
             }
         }
         Err(e) => Err(json!({ "error": format!("Failed to load extraction plan: {}", e) })),

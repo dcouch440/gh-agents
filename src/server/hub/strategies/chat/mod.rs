@@ -189,13 +189,19 @@ impl ChatStrategy {
                 step_id: ctx.step_id,
             },
             // Belief capture tools — all emit StepConfigUpdated for frontend refetch
-            "set_extraction_focus" | "set_tag_vocabulary" | "set_contradiction_handling"
+            "set_extraction_focus"
+            | "set_tag_vocabulary"
+            | "set_contradiction_handling"
             | "set_confidence_threshold" => WorkflowEventKind::StepConfigUpdated {
                 step_id: ctx.step_id,
             },
             // Room tools — all emit StepConfigUpdated for frontend refetch
-            "set_meeting_purpose" | "add_member" | "update_member" | "remove_member"
-            | "set_max_turns" | "set_interaction_mode" => WorkflowEventKind::StepConfigUpdated {
+            "set_meeting_purpose"
+            | "add_member"
+            | "update_member"
+            | "remove_member"
+            | "set_max_turns"
+            | "set_interaction_mode" => WorkflowEventKind::StepConfigUpdated {
                 step_id: ctx.step_id,
             },
             _ => return,

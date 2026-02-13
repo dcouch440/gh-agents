@@ -40,6 +40,7 @@ pub fn broadcast_workflow_event(
 
 // ── Submodules ──────────────────────────────────────────────────────────────
 
+pub(crate) mod belief_capture;
 pub(crate) mod container;
 pub(crate) mod dag_state;
 pub mod documenter;
@@ -49,7 +50,6 @@ pub(crate) mod room_step;
 pub(crate) mod single;
 pub(crate) mod task_force;
 pub mod utils;
-pub(crate) mod belief_capture;
 
 pub(crate) use dag_state::{
     prefetch_port_metadata, resolve_output_key, wrap_in_envelope, PortMetadata,
@@ -68,11 +68,11 @@ pub use utils::{
 pub use resume::{resume_dag_from_approval, resume_workflow_via_engine};
 
 // Internal imports for the main orchestration loop
+use belief_capture::execute_belief_capture_step;
 use for_each::{detect_for_each_chains, execute_for_each_chain, execute_for_each_step};
 use room_step::execute_room_step;
 use single::execute_single_step;
 use task_force::execute_task_force_step;
-use belief_capture::execute_belief_capture_step;
 
 // ── Routing Context ─────────────────────────────────────────────────────────
 

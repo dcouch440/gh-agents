@@ -1,5 +1,6 @@
 //! ExecutionStrategy implementations.
 
+pub mod agent_designer;
 pub mod belief_capture;
 pub mod chat;
 pub mod dag_step;
@@ -7,6 +8,7 @@ pub mod documenter;
 pub mod room_speaker;
 pub mod task_force;
 
+pub use agent_designer::{AgentDesignerConfig, AgentDesignerStrategy};
 pub use belief_capture::{BeliefCaptureExtractorConfig, BeliefCaptureExtractorStrategy};
 pub use chat::{ChatConfig, ChatStrategy, StepChatContext};
 pub use dag_step::DagStepStrategy;

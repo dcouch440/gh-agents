@@ -13,17 +13,17 @@ use crate::db::traits::{
     ToolRouterRepo, UserRepo, WorkflowCollectionRepo, WorkflowRepo, WorkflowStepAgentRepo,
 };
 use crate::db::{
-    AgentExecutionRow, AgentRow, BeliefExtractionPlanRow, BeliefRow, ChatMessageRow, CollectionRunRow,
+    AgentDesignerOutputRow, AgentDesignerRunRow, AgentExecutionRow, AgentRow,
+    BeliefExtractionPlanRow, BeliefRow, ChatMessageRow, CollectionRunRow,
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
     DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow,
     ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow, ResultRow,
     RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomStepConfigRow,
     RoomStepMemberRow, RoomTranscriptEntry, RouterRequestRow, SessionRow, StepDocumentRow,
-    StepInputRow, StepOutputRow,
-    StepRoutingRuleRow, SystemConfigRow, TaskAgentRosterRow, TaskMissionBriefRow, TokenLedgerRow,
-    ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow, ToolRow, WorkflowCollectionRow,
-    WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow,
-    WorkflowStepProtocolRow, WorkflowStepRow,
+    StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow, TaskAgentRosterRow,
+    TaskMissionBriefRow, TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow,
+    ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
+    WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -2105,6 +2105,93 @@ impl WorkflowRepo for PgRepo {
             .execute(&self.pool)
             .await?;
         Ok(())
+    }
+
+    // --- Agent Designer ---
+
+    async fn create_designer_run(
+        &self,
+        workflow_execution_id: Uuid,
+        stage_execution_id: Uuid,
+        step_id: Uuid,
+        mission_brief_id: Uuid,
+        model_id: &str,
+    ) -> Result<AgentDesignerRunRow> {
+        let row = sqlx::query_as::<_, AgentDesignerRunRow>(
+            "INSERT INTO agent_designer_runs (workflow_execution_id, stage_execution_id, step_id, mission_brief_id, model_id) \
+             VALUES ($1, $2, $3, $4, $5) \
+             RETURNING *",
+        )
+        .bind(workflow_execution_id)
+        .bind(stage_execution_id)
+        .bind(step_id)
+        .bind(mission_brief_id)
+        .bind(model_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn update_designer_run_tokens(
+        &self,
+        run_id: Uuid,
+        input_tokens: i64,
+        output_tokens: i64,
+        cost_usd: f32,
+    ) -> Result<()> {
+        sqlx::query(
+            "UPDATE agent_designer_runs SET input_tokens = $2, output_tokens = $3, cost_usd = $4 WHERE id = $1",
+        )
+        .bind(run_id)
+        .bind(input_tokens)
+        .bind(output_tokens)
+        .bind(cost_usd)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn create_designer_output(
+        &self,
+        designer_run_id: Uuid,
+        agent_roster_entry_id: Uuid,
+        agent_name: &str,
+        assigned_tools: &[String],
+        generated_system_prompt: &str,
+        generated_task_prompt: &str,
+        design_reasoning: &str,
+        execution_order: i32,
+    ) -> Result<AgentDesignerOutputRow> {
+        let row = sqlx::query_as::<_, AgentDesignerOutputRow>(
+            "INSERT INTO agent_designer_outputs \
+             (designer_run_id, agent_roster_entry_id, agent_name, assigned_tools, generated_system_prompt, generated_task_prompt, design_reasoning, execution_order) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
+             RETURNING *",
+        )
+        .bind(designer_run_id)
+        .bind(agent_roster_entry_id)
+        .bind(agent_name)
+        .bind(assigned_tools)
+        .bind(generated_system_prompt)
+        .bind(generated_task_prompt)
+        .bind(design_reasoning)
+        .bind(execution_order)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn list_designer_outputs(
+        &self,
+        designer_run_id: Uuid,
+    ) -> Result<Vec<AgentDesignerOutputRow>> {
+        let rows = sqlx::query_as::<_, AgentDesignerOutputRow>(
+            "SELECT * FROM agent_designer_outputs WHERE designer_run_id = $1 ORDER BY execution_order",
+        )
+        .bind(designer_run_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
     }
 }
 

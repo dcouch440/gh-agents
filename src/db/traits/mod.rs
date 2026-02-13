@@ -9,17 +9,17 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::db::{
-    AgentExecutionRow, AgentGuidanceRow, AgentRow, BeliefExtractionPlanRow, BeliefRow, ChatMessageRow,
-    CollectionRunRow, CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow,
-    DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow,
+    AgentDesignerOutputRow, AgentDesignerRunRow, AgentExecutionRow, AgentGuidanceRow, AgentRow,
+    BeliefExtractionPlanRow, BeliefRow, ChatMessageRow, CollectionRunRow,
+    CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
+    DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow,
     ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow, ResultRow,
     RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomStepConfigRow,
     RoomStepMemberRow, RoomTranscriptEntry, RouterRequestRow, SessionRow, StepDocumentRow,
-    StepInputRow, StepOutputRow, StepRoutingRuleRow,
-    SystemConfigRow, TaskAgentRosterRow, TaskMissionBriefRow, TokenLedgerRow, ToolCapabilityRow,
-    ToolRouterModeRow, ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow,
-    WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepProtocolRow,
-    WorkflowStepRow,
+    StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow, TaskAgentRosterRow,
+    TaskMissionBriefRow, TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow,
+    ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
+    WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -706,6 +706,46 @@ pub trait WorkflowRepo: Send + Sync {
     ) -> Result<RoomStepMemberRow>;
 
     async fn remove_room_step_member(&self, member_id: Uuid) -> Result<()>;
+
+    // --- Agent Designer ---
+
+    /// Create a new agent designer run record for token tracking.
+    async fn create_designer_run(
+        &self,
+        workflow_execution_id: Uuid,
+        stage_execution_id: Uuid,
+        step_id: Uuid,
+        mission_brief_id: Uuid,
+        model_id: &str,
+    ) -> Result<AgentDesignerRunRow>;
+
+    /// Update designer run with token usage after completion.
+    async fn update_designer_run_tokens(
+        &self,
+        run_id: Uuid,
+        input_tokens: i64,
+        output_tokens: i64,
+        cost_usd: f32,
+    ) -> Result<()>;
+
+    /// Store a designer-generated prompt pair and tool assignment for one agent.
+    async fn create_designer_output(
+        &self,
+        designer_run_id: Uuid,
+        agent_roster_entry_id: Uuid,
+        agent_name: &str,
+        assigned_tools: &[String],
+        generated_system_prompt: &str,
+        generated_task_prompt: &str,
+        design_reasoning: &str,
+        execution_order: i32,
+    ) -> Result<AgentDesignerOutputRow>;
+
+    /// List all designer outputs for a run, ordered by execution_order.
+    async fn list_designer_outputs(
+        &self,
+        designer_run_id: Uuid,
+    ) -> Result<Vec<AgentDesignerOutputRow>>;
 }
 
 // ============================================================================
