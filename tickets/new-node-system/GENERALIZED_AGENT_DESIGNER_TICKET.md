@@ -12,7 +12,7 @@ Extract the Agent Designer from the task force into a **shared pre-lifecycle mod
 
 The same Agent Designer — same beliefs, same output schema, same DB tracking — generates prompts for all of them. Each archetype provides its own input (mission brief, document definitions, meeting config) through a shared interface.
 
-**This ticket also replaces Phase 7 (Belief Injection into Rooms).** Instead of manually formatting and appending beliefs to room agent system prompts, beliefs flow through the designer as upstream context. The designer curates which beliefs each room member receives based on their perspective.
+**This ticket also replaces Phase 7 (Belief Injection into Rooms).** Instead of manually formatting and appending beliefs to room agent system prompts, beliefs flow through the designer as upstream context. The designer curates which beliefs each room member receives based on their perspective. This is a direct application of [BOCA](../proto/paper.md)'s core insight: a knowledgeable agent (the designer) *authors* curated context per consumer rather than forwarding raw content uniformly.
 
 **Dependency:** Phase 6 (Belief Capture Runtime) must land first. Phase 6 produces beliefs in DB. This ticket consumes them.
 
